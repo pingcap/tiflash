@@ -407,26 +407,24 @@ try
         const auto & page2 = page_storage->readImpl(TEST_NAMESPACE_ID, 2, nullptr, nullptr, false);
         ASSERT_FALSE(page2.isValid());
 
-        std::vector<PageStorage::PageReadFields> fields;
-        PageStorage::PageReadFields field1;
-        field1.first = 4;
-        field1.second = {0, 1, 2};
-        fields.emplace_back(field1);
-
-        PageStorage::PageReadFields field2;
-        field2.first = 6;
-        field2.second = {0, 1, 2};
-        fields.emplace_back(field2);
+        std::vector<PageStorage::PageReadFields> fields{
+            {4, {0, 1, 2}},
+            {6, {0, 1, 2}},
+            {2, {0, 1, 2}},
+            {5, {0, 1, 2}},
+        };
 
         page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
         ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_FALSE(page_maps[6].isValid());
-
+        ASSERT_EQ(page_maps[4].fieldSize(), 3);
+        ASSERT_EQ(page_maps[4].data.size(), 20 + 20 + 30);
         // the invalid page ids in input param are returned with INVALID_ID
+        ASSERT_GT(page_maps.count(6), 0);
+        ASSERT_EQ(page_maps[6].isValid(), false);
         ASSERT_GT(page_maps.count(2), 0);
-        ASSERT_EQ(page_maps[2].page_id, INVALID_PAGE_ID);
+        ASSERT_EQ(page_maps[2].isValid(), false);
         ASSERT_GT(page_maps.count(5), 0);
-        ASSERT_EQ(page_maps[5].page_id, INVALID_PAGE_ID);
+        ASSERT_EQ(page_maps[5].isValid(), false);
     }
 }
 CATCH
