@@ -36,12 +36,17 @@ if (ARCH_AARCH64)
     # [1] https://en.wikipedia.org/wiki/AArch64
     option (TIFLASH_ENABLE_ASIMD_SUPPORT "Enable Advanced SIMD support." ON)
     option (TIFLASH_ENABLE_SVE_SUPPORT "Enable Scalable Vector Extension support." OFF)
-    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." OFF)
+    # TODO: default ON, to be changed after CI is updated
+    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." ON)
 
     if (NO_ARMV81_OR_HIGHER)
         # crc32 is optional in v8.0 and mandatory in v8.1. Enable it as __crc32()* is used in lot's of places and even very old ARM CPUs
         # support it.
         set (COMPILER_FLAGS "${COMPILER_FLAGS} -march=armv8+crc")
+        if (TIFLASH_ENABLE_ASIMD_SUPPORT)
+            set (COMPILER_FLAGS "${COMPILER_FLAGS}+simd")
+            add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
+        endif ()
     else ()
         # ARMv8.2 is quite ancient but the lowest common denominator supported by both Graviton 2 and 3 processors [1]. In particular, it
         # includes LSE (made mandatory with ARMv8.1) which provides nice speedups without having to fall back to compat flag
