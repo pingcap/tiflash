@@ -19,9 +19,9 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
-BroadcastOrPassThroughWriter<StreamWriterPtr>::BroadcastOrPassThroughWriter(
-    StreamWriterPtr writer_,
+template <class ExchangeWriterPtr>
+BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
+    ExchangeWriterPtr writer_,
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
@@ -35,31 +35,31 @@ BroadcastOrPassThroughWriter<StreamWriterPtr>::BroadcastOrPassThroughWriter(
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
         sendExecutionSummary();
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::sendExecutionSummary()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
     summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
     writer->sendExecutionSummary(response);
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::flush()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
         encodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -75,8 +75,8 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
         encodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
 {
     if (unlikely(blocks.empty()))
         return;

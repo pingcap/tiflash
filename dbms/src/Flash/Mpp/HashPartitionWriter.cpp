@@ -20,9 +20,9 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
-HashPartitionWriter<StreamWriterPtr>::HashPartitionWriter(
-    StreamWriterPtr writer_,
+template <class ExchangeWriterPtr>
+HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
+    ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     Int64 batch_send_min_limit_,
@@ -42,31 +42,31 @@ HashPartitionWriter<StreamWriterPtr>::HashPartitionWriter(
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::finishWrite()
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
         sendExecutionSummary();
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::sendExecutionSummary()
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
     summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
     writer->sendExecutionSummary(response);
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::flush()
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
         partitionAndEncodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -82,8 +82,8 @@ void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
         partitionAndEncodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
@@ -121,8 +121,8 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
     writePackets(tracked_packets);
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {

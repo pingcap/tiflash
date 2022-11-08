@@ -22,12 +22,12 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
+template <class ExchangeWriterPtr>
 class HashPartitionWriter : public DAGResponseWriter
 {
 public:
     HashPartitionWriter(
-        StreamWriterPtr writer_,
+        ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 batch_send_min_limit_,
@@ -47,7 +47,7 @@ private:
 private:
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;
-    StreamWriterPtr writer;
+    ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;

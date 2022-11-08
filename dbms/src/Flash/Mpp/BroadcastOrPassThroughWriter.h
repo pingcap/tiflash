@@ -22,12 +22,12 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
+template <class ExchangeWriterPtr>
 class BroadcastOrPassThroughWriter : public DAGResponseWriter
 {
 public:
     BroadcastOrPassThroughWriter(
-        StreamWriterPtr writer_,
+        ExchangeWriterPtr writer_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
@@ -43,7 +43,7 @@ private:
 private:
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;
-    StreamWriterPtr writer;
+    ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
