@@ -1249,7 +1249,12 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
     // pipeline so that we can batch the incoming edit when doing IO.
 
+    Stopwatch watch;
+
     std::unique_lock apply_lock(apply_mutex);
+
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
+    watch.restart();
 
     UInt64 max_sequence = sequence.load();
     const auto edit_size = edit.size();
