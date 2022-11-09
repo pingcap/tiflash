@@ -79,8 +79,8 @@ protected:
         {
             return {};
         }
-        Stopwatch watch_read;
         addReadTaskPoolToScheduler();
+        Stopwatch watch_read;
         SCOPE_EXIT({
             GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_shared).Observe(watch_read.elapsedSeconds());
         });
