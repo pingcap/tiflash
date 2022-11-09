@@ -363,7 +363,6 @@ try
     // must to be consumed
     GTEST_ASSERT_EQ(result_size >= 1 && result_size <= 2, true);
     GTEST_ASSERT_EQ(dynamic_cast<MockPacketWriter *>(writer_ptr.get())->write_packet_vec[result_size - 1], "Cancel");
-    std::cout << "what is err" << std::endl;
 }
 CATCH
 
