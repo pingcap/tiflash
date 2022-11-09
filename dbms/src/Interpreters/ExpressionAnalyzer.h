@@ -82,7 +82,6 @@ public:
       */
 
     /// Before aggregation:
-    bool appendArrayJoin(ExpressionActionsChain & chain, bool only_types);
     bool appendJoin(ExpressionActionsChain & chain, bool only_types);
     bool appendWhere(ExpressionActionsChain & chain, bool only_types);
     bool appendGroupBy(ExpressionActionsChain & chain, bool only_types);
@@ -137,10 +136,8 @@ private:
       */
     NameSet required_result_columns;
 
-    /// Columns after ARRAY JOIN, JOIN, and/or aggregation.
+    /// Columns after JOIN, and/or aggregation.
     NamesAndTypesList aggregated_columns;
-
-    NamesAndTypesList array_join_columns;
 
     /// The main table in FROM clause, if exists.
     StoragePtr storage;
@@ -175,18 +172,6 @@ private:
 
     using SetOfASTs = std::set<const IAST *>;
     using MapOfASTs = std::map<ASTPtr, ASTPtr>;
-
-    /// Which column is needed to be ARRAY-JOIN'ed to get the specified.
-    /// For example, for `SELECT s.v ... ARRAY JOIN a AS s` will get "s.v" -> "a.v".
-    NameToNameMap array_join_result_to_source;
-
-    /// For the ARRAY JOIN section, mapping from the alias to the full column name.
-    /// For example, for `ARRAY JOIN [1,2] AS b` "b" -> "array(1,2)" will enter here.
-    NameToNameMap array_join_alias_to_name;
-
-    /// The backward mapping for array_join_alias_to_name.
-    NameToNameMap array_join_name_to_alias;
-
 
     /// All new temporary tables obtained by performing the GLOBAL IN/JOIN subqueries.
     Tables external_tables;
@@ -246,10 +231,6 @@ private:
       */
     void addExternalStorage(ASTPtr & subquery_or_table_name);
 
-    void getArrayJoinedColumns();
-    void getArrayJoinedColumnsImpl(const ASTPtr & ast);
-    void addMultipleArrayJoinAction(ExpressionActionsPtr & actions) const;
-
     void addJoinAction(ExpressionActionsPtr & actions, bool only_types) const;
 
     struct ScopeStack;
@@ -307,7 +288,7 @@ private:
     void translateQualifiedNamesImpl(ASTPtr & ast, const String & database_name, const String & table_name, const String & alias);
 
     /** Sometimes we have to calculate more columns in SELECT clause than will be returned from query.
-      * This is the case when we have DISTINCT or arrayJoin: we require more columns in SELECT even if we need less columns in result.
+      * This is the case when we have DISTINCT : we require more columns in SELECT even if we need less columns in result.
       */
     void removeUnneededColumnsFromSelectClause();
 };

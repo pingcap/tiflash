@@ -152,6 +152,7 @@ try
             *dag_context_ptr);
         for (const auto & block : blocks)
             dag_writer->write(block);
+        dag_writer->flush();
         dag_writer->finishWrite();
 
         // 4. Start to check write_report.

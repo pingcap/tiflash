@@ -98,30 +98,6 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, Block & block, const ColumnNumbe
         return ColumnNullable::create(src_not_nullable, result_null_map_column);
 }
 
-
-struct NullPresence
-{
-    bool has_nullable = false;
-    bool has_null_constant = false;
-};
-
-NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
-{
-    NullPresence res;
-
-    for (const auto & arg : args)
-    {
-        const auto & elem = block.getByPosition(arg);
-
-        if (!res.has_nullable)
-            res.has_nullable = elem.type->isNullable();
-        if (!res.has_null_constant)
-            res.has_null_constant = elem.type->onlyNull();
-    }
-
-    return res;
-}
-
 NullPresence getNullPresense(const ColumnsWithTypeAndName & args)
 {
     NullPresence res;
@@ -145,6 +121,23 @@ bool allArgumentsAreConstants(const Block & block, const ColumnNumbers & args)
     return true;
 }
 } // namespace
+
+NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
+{
+    NullPresence res;
+
+    for (const auto & arg : args)
+    {
+        const auto & elem = block.getByPosition(arg);
+
+        if (!res.has_nullable)
+            res.has_nullable = elem.type->isNullable();
+        if (!res.has_null_constant)
+            res.has_null_constant = elem.type->onlyNull();
+    }
+
+    return res;
+}
 
 bool IExecutableFunction::defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result) const
 {

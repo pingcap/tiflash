@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
@@ -35,6 +36,10 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_ps_wal_compact[];
+}
 namespace PS::V3
 {
 PageStorageImpl::PageStorageImpl(
@@ -194,31 +199,6 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
             page_map[page_id_not_found] = page_not_found;
         }
         return page_map;
-    }
-}
-
-PageIds PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot("");
-    }
-
-    PageIdV3Internals page_id_v3s;
-    for (auto p_id : page_ids)
-        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
-
-    if (throw_on_not_exist)
-    {
-        auto page_entries = page_directory->getByIDs(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
-        return {};
-    }
-    else
-    {
-        auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
-        return page_ids_not_found;
     }
 }
 
@@ -407,9 +387,13 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
 
     GCTimeStatistics statistics;
 
+    // TODO: rewrite the GC process and split it into smaller interface
+    bool force_wal_compact = false;
+    fiu_do_on(FailPoints::force_ps_wal_compact, { force_wal_compact = true; });
+
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    if (page_directory->tryDumpSnapshot(read_limiter, write_limiter))
+    if (page_directory->tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact))
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
@@ -417,6 +401,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
 
     const auto & del_entries = page_directory->gcInMemEntries();
     statistics.gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+
+    SYNC_FOR("before_PageStorageImpl::doGC_fullGC_prepare");
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -451,6 +437,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
         return statistics;
     }
 
+    SYNC_FOR("before_PageStorageImpl::doGC_fullGC_commit");
+
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
@@ -467,6 +455,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+
+    SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 
     cleanExternalPage(gc_watch, statistics);
     statistics.stage = GCStageType::FullGC;

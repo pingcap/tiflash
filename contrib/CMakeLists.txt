@@ -1,3 +1,5 @@
+set_property(DIRECTORY PROPERTY EXCLUDE_FROM_ALL 1)
+
 if (NOT MSVC)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-old-style-cast")
 endif ()
@@ -166,11 +168,11 @@ SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testi
 add_subdirectory(benchmark)
 
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
-if (NOT (APPLE AND ARCH_AARCH64))
+if (NOT (OS_DARWIN AND ARCH_AARCH64))
     add_subdirectory(cpu_features)
 endif()
 
-if (ARCH_AARCH64 AND ARCH_LINUX)
+if (ARCH_AARCH64 AND OS_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)
 endif ()
 
