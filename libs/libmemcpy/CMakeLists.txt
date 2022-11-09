@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: optimize for small size memory
 option(USE_FOLLY_MEMCPY_AS_MEMCPY "use folly memcpy as default `memcpy` and `memmove`" OFF)
 
 set (memcpy_sources)
