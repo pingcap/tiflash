@@ -101,6 +101,4 @@ public:
 
     String toString() const;
 };
-
-Field parseMyDuration(const String & str, int8_t fsp);
 } // namespace DB

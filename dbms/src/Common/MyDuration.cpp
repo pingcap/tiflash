@@ -57,47 +57,6 @@ Int32 MyDuration::microSecond() const
     return (std::abs(nanos) / NANOS_PER_MICRO) % 1000000;
 }
 
-
-std::pair<MyDuration, bool> matchDuration(const String & str, int8_t fsp)
-{
-    if (fsp < 0 || fsp > 6)
-        return {MyDuration(), false};
-
-    if (str.empty())
-        return {MyDuration(), false};
-
-    bool negative = false;
-    String rest;
-    if (str[0] == '-')
-    {
-        negative = true;
-        rest = str.substr(1);
-    }
-    else
-        rest = str;
-
-    UInt64 hhmmss[3] = {0};
-    UInt64 frac = 0;
-
-    Int64 d = (hhmmss[0] * 3600 + hhmmss[1] * 60 + hhmmss[2]) * 1000000000 + frac * 1000;
-    if (negative)
-        d = -d;
-    MyDuration duration(d, fsp);
-    return {duration, true};
-}
-
-Field parseMyDuration(const String & str, int8_t fsp)
-{
-    auto matched = matchDuration(str, fsp);
-    if (matched.second)
-    {
-        MyDuration duration = matched.first;
-        return duration.nanoSecond();
-    }
-    // try fall-back to datetime
-    return 0ll;
-}
-
 String MyDuration::toString() const
 {
     auto [sign, hour, minute, second, microsecond] = splitDuration();

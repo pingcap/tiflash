@@ -230,21 +230,7 @@ private:
     template <Func F>
     static void dispatch(const ColumnPtr col_from, PaddedPODArray<Int64> & vec_to)
     {
-        if (const auto * from = checkAndGetColumn<ColumnString>(col_from.get()); from)
-        {
-            const auto & data = from->getChars();
-            const auto & offsets = from->getOffsets();
-            if (checkColumnConst<ColumnString>(from))
-            {
-                StringRef string_ref(data.data(), offsets[0] - 1);
-                constantString<F>(string_ref, from->size(), vec_to);
-            }
-            else
-            {
-                vectorString<F>(data, offsets, vec_to);
-            }
-        }
-        else if (const auto * from = checkAndGetColumn<ColumnInt64>(col_from.get()); from)
+        if (const auto * from = checkAndGetColumn<ColumnInt64>(col_from.get()); from)
         {
             const auto & data = from->getData();
             if (checkColumnConst<ColumnInt64>(from))
@@ -255,37 +241,6 @@ private:
             {
                 vectorDuration<F>(data, vec_to);
             }
-        }
-    }
-
-    template <Func F>
-    static void constantString(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
-    {
-        vec_to.resize(size);
-        auto from_value = get<Int64>(parseMyDuration(from.toString(), 6));
-        const auto & const_value = F(from_value);
-        for (size_t i = 0; i < size; ++i)
-        {
-            vec_to[i] = const_value;
-        }
-    }
-
-    template <Func F>
-    static void vectorString(
-        const ColumnString::Chars_t & vec_from,
-        const ColumnString::Offsets & offsets_from,
-        PaddedPODArray<Int64> & vec_to)
-    {
-        vec_to.resize(offsets_from.size() + 1);
-        size_t current_offset = 0;
-        for (size_t i = 0; i < offsets_from.size(); i++)
-        {
-            size_t next_offset = offsets_from[i];
-            size_t string_size = next_offset - current_offset - 1;
-            StringRef string_value(&vec_from[current_offset], string_size);
-            auto nano = get<Int64>(parseMyDuration(string_value.toString(), 6));
-            vec_to[i] = F(nano);
-            current_offset = next_offset;
         }
     }
 
