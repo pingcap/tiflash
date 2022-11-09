@@ -82,8 +82,6 @@ public:
         /// After return, the items in to_read could be reordered, but won't be removed or added.
         PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
-        void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
-
         struct FieldReadInfo
         {
             PageId page_id;
