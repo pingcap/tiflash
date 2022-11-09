@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <Common/MyDuration.h>
 #include <Common/typeid_cast.h>
-#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeMyDuration.h>
