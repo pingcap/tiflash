@@ -240,7 +240,7 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
     MemoryTrackerSetter setter(true, mem_tracker.get());
     Stopwatch watch_read;
     auto block = stream->read();
-    GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_normal).Observe(watch_read.elapsedSeconds());
+    GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_shared_fetch).Observe(watch_read.elapsedSeconds());
     if (block)
     {
         pushBlock(std::move(block));
