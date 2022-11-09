@@ -121,7 +121,9 @@ struct StoreStats
     Float64 avg_stable_rows = 0;
     Float64 avg_stable_size = 0;
 
+    // statistics about column file in delta
     UInt64 total_pack_count_in_delta = 0;
+    UInt64 max_pack_count_in_delta = 0;
     Float64 avg_pack_count_in_delta = 0;
     Float64 avg_pack_rows_in_delta = 0;
     Float64 avg_pack_size_in_delta = 0;
@@ -135,25 +137,16 @@ struct StoreStats
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
     String storage_stable_oldest_snapshot_tracing_id;
-    UInt64 storage_stable_num_pages = 0;
-    UInt64 storage_stable_num_normal_pages = 0;
-    UInt64 storage_stable_max_page_id = 0;
 
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
     String storage_delta_oldest_snapshot_tracing_id;
-    UInt64 storage_delta_num_pages = 0;
-    UInt64 storage_delta_num_normal_pages = 0;
-    UInt64 storage_delta_max_page_id = 0;
 
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
     String storage_meta_oldest_snapshot_tracing_id;
-    UInt64 storage_meta_num_pages = 0;
-    UInt64 storage_meta_num_normal_pages = 0;
-    UInt64 storage_meta_max_page_id = 0;
 
     UInt64 background_tasks_length = 0;
 };
@@ -235,6 +228,7 @@ public:
                     const String & db_name,
                     const String & table_name_,
                     TableID physical_table_id_,
+                    bool has_replica,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,

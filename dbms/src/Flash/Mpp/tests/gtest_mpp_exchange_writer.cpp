@@ -110,24 +110,29 @@ public:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-using MockStreamWriterChecker = std::function<void(mpp::MPPDataPacket &, uint16_t)>;
+using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketPtr &, uint16_t)>;
 
-struct MockStreamWriter
+struct MockExchangeWriter
 {
-    MockStreamWriter(MockStreamWriterChecker checker_,
-                     uint16_t part_num_)
+    MockExchangeWriter(MockExchangeWriterChecker checker_,
+                       uint16_t part_num_)
         : checker(checker_)
         , part_num(part_num_)
     {}
 
-    void write(mpp::MPPDataPacket & packet) { checker(packet, 0); }
-    void write(mpp::MPPDataPacket & packet, uint16_t part_id) { checker(packet, part_id); }
-    void write(tipb::SelectResponse &, uint16_t) { FAIL() << "cannot reach here, only consider CH Block format"; }
+    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet) { checker(packet, 0); }
+    void partitionWrite(const TrackedMppDataPacketPtr & packet, uint16_t part_id) { checker(packet, part_id); }
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
+    void sendExecutionSummary(tipb::SelectResponse & response)
+    {
+        auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+        tracked_packet->serializeByResponse(response);
+        checker(tracked_packet, 0);
+    }
     uint16_t getPartitionNum() const { return part_num; }
 
 private:
-    MockStreamWriterChecker checker;
+    MockExchangeWriterChecker checker;
     uint16_t part_num;
 };
 
@@ -142,32 +147,32 @@ try
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 4096;
 
-    const bool should_send_exec_summary_at_last = true;
-
     // 1. Build Block.
     auto block = prepareUniformBlock(block_rows);
 
-    // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    // 2. Build MockExchangeWriter.
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed.
         // Because block.rows(1024) < fine_grained_shuffle_batch_size(4096),
         // batchWriteFineGrainedShuffle() only called once, so will only be one packet for each partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/false,
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
+    dag_writer->prepare(block.cloneEmpty());
     dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -175,11 +180,13 @@ try
     ASSERT_EQ(write_report.size(), part_num);
     for (const auto & ele : write_report)
     {
-        const mpp::MPPDataPacket & packet = ele.second;
-        ASSERT_EQ(packet.chunks_size(), packet.stream_ids_size());
-        for (int i = 0; i < packet.chunks_size(); ++i)
+        const TrackedMppDataPacketPtr & packet = ele.second;
+        ASSERT_TRUE(packet);
+        ASSERT_EQ(fine_grained_shuffle_stream_count, packet->getPacket().stream_ids_size());
+        ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+        for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
         {
-            decoded_blocks.push_back(CHBlockChunkCodec::decode(packet.chunks(i), block));
+            decoded_blocks.push_back(CHBlockChunkCodec::decode(packet->getPacket().chunks(i), block));
         }
     }
     ASSERT_EQ(decoded_blocks.size(), fine_grained_shuffle_stream_count * part_num);
@@ -199,8 +206,6 @@ try
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
 
-    const bool should_send_exec_summary_at_last = true;
-
     // 1. Build Block.
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
@@ -210,24 +215,26 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, std::vector<mpp::MPPDataPacket>> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
-        write_report[part_id].emplace_back(std::move(packet));
+    // 2. Build MockExchangeWriter.
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/false,
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
+    dag_writer->prepare(blocks[0].cloneEmpty());
     for (const auto & block : blocks)
         dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -239,12 +246,12 @@ try
         size_t part_decoded_block_rows = 0;
         for (const auto & packet : ele.second)
         {
-            ASSERT_EQ(packet.chunks_size(), packet.stream_ids_size());
-            for (int i = 0; i < packet.chunks_size(); ++i)
+            ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
             {
-                auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+                auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
                 part_decoded_block_rows += decoded_block.rows();
-                rows_of_stream_ids[packet.stream_ids(i)] += decoded_block.rows();
+                rows_of_stream_ids[packet->getPacket().stream_ids(i)] += decoded_block.rows();
             }
         }
         ASSERT_EQ(part_decoded_block_rows, per_part_rows);
@@ -255,35 +262,35 @@ try
 }
 CATCH
 
-TEST_F(TestMPPExchangeWriter, emptyBlockForFineGrainedShuffleWriter)
+TEST_F(TestMPPExchangeWriter, testSendExecutionSummaryForFineGrainedShuffleWriter)
 try
 {
     const uint16_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 4096;
-    const bool should_send_exec_summary_at_last = true;
 
-    std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed. There is at most one packet per partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/true,
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
-    ASSERT_EQ(write_report.cbegin()->second.chunks_size(), 0);
+    ASSERT_EQ(write_report.cbegin()->second->getPacket().chunks_size(), 0);
 }
 CATCH
 
@@ -295,8 +302,6 @@ try
     const size_t batch_send_min_limit = 108;
     const uint16_t part_num = 4;
 
-    const bool should_send_exec_summary_at_last = true;
-
     // 1. Build Blocks.
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
@@ -306,23 +311,24 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, std::vector<mpp::MPPDataPacket>> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
-        write_report[part_id].emplace_back(std::move(packet));
+    // 2. Build MockExchangeWriter.
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
         batch_send_min_limit,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/false,
         *dag_context_ptr);
     for (const auto & block : blocks)
         dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -333,9 +339,9 @@ try
         size_t decoded_block_rows = 0;
         for (const auto & packet : ele.second)
         {
-            for (int i = 0; i < packet.chunks_size(); ++i)
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
             {
-                auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+                auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
                 decoded_block_rows += decoded_block.rows();
             }
         }
@@ -344,33 +350,33 @@ try
 }
 CATCH
 
-TEST_F(TestMPPExchangeWriter, emptyBlockForHashPartitionWriter)
+TEST_F(TestMPPExchangeWriter, testSendExecutionSummaryForHashPartitionWriter)
 try
 {
     const size_t batch_send_min_limit = 108;
     const uint16_t part_num = 4;
-    const bool should_send_exec_summary_at_last = true;
 
-    std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed. There is at most one packet per partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
-    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
         batch_send_min_limit,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/true,
         *dag_context_ptr);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
-    ASSERT_EQ(write_report.cbegin()->second.chunks_size(), 0);
+    ASSERT_EQ(write_report.cbegin()->second->getPacket().chunks_size(), 0);
 }
 CATCH
 
@@ -381,8 +387,6 @@ try
     const size_t block_num = 64;
     const size_t batch_send_min_limit = 108;
 
-    const bool should_send_exec_summary_at_last = true;
-
     // 1. Build Blocks.
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
@@ -392,22 +396,23 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockStreamWriter.
-    std::vector<mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    // 2. Build MockExchangeWriter.
+    TrackedMppDataPacketPtrs write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
-        write_report.emplace_back(std::move(packet));
+        write_report.emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/false,
         *dag_context_ptr);
     for (const auto & block : blocks)
         dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -415,9 +420,9 @@ try
     size_t decoded_block_rows = 0;
     for (const auto & packet : write_report)
     {
-        for (int i = 0; i < packet.chunks_size(); ++i)
+        for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
         {
-            auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+            auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
             decoded_block_rows += decoded_block.rows();
         }
     }
@@ -425,29 +430,29 @@ try
 }
 CATCH
 
-TEST_F(TestMPPExchangeWriter, emptyBlockForBroadcastOrPassThroughWriter)
+TEST_F(TestMPPExchangeWriter, testSendExecutionSummaryForBroadcastOrPassThroughWriter)
 try
 {
     const size_t batch_send_min_limit = 108;
-    const bool should_send_exec_summary_at_last = true;
 
-    std::vector<mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    TrackedMppDataPacketPtrs write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
-        write_report.emplace_back(std::move(packet));
+        write_report.emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1);
 
-    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
-        should_send_exec_summary_at_last,
+        /*should_send_exec_summary_at_last=*/true,
         *dag_context_ptr);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
-    ASSERT_EQ(write_report.back().chunks_size(), 0);
+    ASSERT_EQ(write_report.back()->getPacket().chunks_size(), 0);
 }
 CATCH
 

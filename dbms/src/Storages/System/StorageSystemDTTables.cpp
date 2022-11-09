@@ -74,6 +74,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
         {"avg_stable_size", std::make_shared<DataTypeFloat64>()},
 
         {"total_pack_count_in_delta", std::make_shared<DataTypeUInt64>()},
+        {"max_pack_count_in_delta", std::make_shared<DataTypeUInt64>()},
         {"avg_pack_count_in_delta", std::make_shared<DataTypeFloat64>()},
         {"avg_pack_rows_in_delta", std::make_shared<DataTypeFloat64>()},
         {"avg_pack_size_in_delta", std::make_shared<DataTypeFloat64>()},
@@ -87,25 +88,16 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
         {"storage_stable_oldest_snapshot_lifetime", std::make_shared<DataTypeFloat64>()},
         {"storage_stable_oldest_snapshot_thread_id", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_oldest_snapshot_tracing_id", std::make_shared<DataTypeString>()},
-        {"storage_stable_num_pages", std::make_shared<DataTypeUInt64>()},
-        {"storage_stable_num_normal_pages", std::make_shared<DataTypeUInt64>()},
-        {"storage_stable_max_page_id", std::make_shared<DataTypeUInt64>()},
 
         {"storage_delta_num_snapshots", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_oldest_snapshot_lifetime", std::make_shared<DataTypeFloat64>()},
         {"storage_delta_oldest_snapshot_thread_id", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_oldest_snapshot_tracing_id", std::make_shared<DataTypeString>()},
-        {"storage_delta_num_pages", std::make_shared<DataTypeUInt64>()},
-        {"storage_delta_num_normal_pages", std::make_shared<DataTypeUInt64>()},
-        {"storage_delta_max_page_id", std::make_shared<DataTypeUInt64>()},
 
         {"storage_meta_num_snapshots", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_oldest_snapshot_lifetime", std::make_shared<DataTypeFloat64>()},
         {"storage_meta_oldest_snapshot_thread_id", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_oldest_snapshot_tracing_id", std::make_shared<DataTypeString>()},
-        {"storage_meta_num_pages", std::make_shared<DataTypeUInt64>()},
-        {"storage_meta_num_normal_pages", std::make_shared<DataTypeUInt64>()},
-        {"storage_meta_max_page_id", std::make_shared<DataTypeUInt64>()},
 
         {"background_tasks_length", std::make_shared<DataTypeUInt64>()},
     }));
@@ -196,6 +188,7 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(stat.avg_stable_size);
 
             res_columns[j++]->insert(stat.total_pack_count_in_delta);
+            res_columns[j++]->insert(stat.max_pack_count_in_delta);
             res_columns[j++]->insert(stat.avg_pack_count_in_delta);
             res_columns[j++]->insert(stat.avg_pack_rows_in_delta);
             res_columns[j++]->insert(stat.avg_pack_size_in_delta);
@@ -209,25 +202,16 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(stat.storage_stable_oldest_snapshot_lifetime);
             res_columns[j++]->insert(stat.storage_stable_oldest_snapshot_thread_id);
             res_columns[j++]->insert(stat.storage_stable_oldest_snapshot_tracing_id);
-            res_columns[j++]->insert(stat.storage_stable_num_pages);
-            res_columns[j++]->insert(stat.storage_stable_num_normal_pages);
-            res_columns[j++]->insert(stat.storage_stable_max_page_id);
 
             res_columns[j++]->insert(stat.storage_delta_num_snapshots);
             res_columns[j++]->insert(stat.storage_delta_oldest_snapshot_lifetime);
             res_columns[j++]->insert(stat.storage_delta_oldest_snapshot_thread_id);
             res_columns[j++]->insert(stat.storage_delta_oldest_snapshot_tracing_id);
-            res_columns[j++]->insert(stat.storage_delta_num_pages);
-            res_columns[j++]->insert(stat.storage_delta_num_normal_pages);
-            res_columns[j++]->insert(stat.storage_delta_max_page_id);
 
             res_columns[j++]->insert(stat.storage_meta_num_snapshots);
             res_columns[j++]->insert(stat.storage_meta_oldest_snapshot_lifetime);
             res_columns[j++]->insert(stat.storage_meta_oldest_snapshot_thread_id);
             res_columns[j++]->insert(stat.storage_meta_oldest_snapshot_tracing_id);
-            res_columns[j++]->insert(stat.storage_meta_num_pages);
-            res_columns[j++]->insert(stat.storage_meta_num_normal_pages);
-            res_columns[j++]->insert(stat.storage_meta_max_page_id);
 
             res_columns[j++]->insert(stat.background_tasks_length);
         }

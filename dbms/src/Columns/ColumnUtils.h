@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
+#pragma once
 
-int main(int argc, char ** argv)
+#include <Columns/IColumn.h>
+
+namespace DB
 {
-    return DB::PageStorageCtl::mainEntry(argc, argv);
-}
+bool columnEqual(const ColumnPtr & expected, const ColumnPtr & actual, String & unequal_msg);
+} // namespace DB

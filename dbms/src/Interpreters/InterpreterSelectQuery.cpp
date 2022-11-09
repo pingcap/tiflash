@@ -402,8 +402,6 @@ InterpreterSelectQuery::AnalysisResult InterpreterSelectQuery::analyzeExpression
 
         res.need_aggregate = query_analyzer->hasAggregation();
 
-        query_analyzer->appendArrayJoin(chain, !res.first_stage);
-
         if (query_analyzer->appendJoin(chain, !res.first_stage))
         {
             res.has_join = true;

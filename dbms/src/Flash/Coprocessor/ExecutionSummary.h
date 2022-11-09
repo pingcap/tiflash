@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsRandom.h>
+#pragma once
+
+#include <common/types.h>
 
 namespace DB
 {
-namespace detail
+/// do not need be thread safe since it is only used in single thread env
+struct ExecutionSummary
 {
-void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed)
-{
-    generator.seed(intHash64(randomSeed() ^ intHash64(additional_seed)));
-}
-} // namespace detail
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_rows = 0;
+    UInt64 num_iterations = 0;
+    UInt64 concurrency = 0;
+    ExecutionSummary() = default;
 
-
-void registerFunctionsRandom(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionRand>();
-    factory.registerFunction<FunctionRand64>();
-    factory.registerFunction<FunctionRandConstant>();
-}
+    void merge(const ExecutionSummary & other, bool streaming_call);
+};
 
 } // namespace DB

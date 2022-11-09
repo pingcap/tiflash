@@ -37,12 +37,15 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
     void write(const Block & block) override;
+    void flush() override;
     void finishWrite() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks();
 
+    void sendExecutionSummary();
+
+private:
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
     StreamWriterPtr writer;

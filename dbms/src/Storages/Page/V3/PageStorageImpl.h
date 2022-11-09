@@ -66,8 +66,6 @@ public:
 
     PageMap readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    PageIds readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
-
     PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
     Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
@@ -91,7 +89,6 @@ public:
     DB::PageEntry getEntry(PageId page_id) { return getEntryImpl(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return readImpl(TEST_NAMESPACE_ID, page_id, nullptr, nullptr, true); }
     PageMap read(const PageIds & page_ids) { return readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true); }
-    PageIds read(const PageIds & page_ids, const PageHandler & handler) { return readImpl(TEST_NAMESPACE_ID, page_ids, handler, nullptr, nullptr, true); }
     PageMap read(const std::vector<PageReadFields> & page_fields) { return readImpl(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr, true); }
     // clang-format on
 #endif
@@ -116,22 +113,29 @@ private:
 
         UInt64 total_cost_ms = 0;
 
-        UInt64 dump_snapshots_ms = 0;
-        UInt64 gc_in_mem_entries_ms = 0;
-        UInt64 blobstore_remove_entries_ms = 0;
-        UInt64 blobstore_get_gc_stats_ms = 0;
+        UInt64 compact_wal_ms = 0;
+        UInt64 compact_directory_ms = 0;
+        UInt64 compact_spacemap_ms = 0;
         // Full GC
+        UInt64 full_gc_prepare_ms = 0;
         UInt64 full_gc_get_entries_ms = 0;
         UInt64 full_gc_blobstore_copy_ms = 0;
         UInt64 full_gc_apply_ms = 0;
 
         // GC external page
-        UInt64 clean_external_page_ms = 0;
         UInt64 num_external_callbacks = 0;
+        // Breakdown the duration for cleaning external pages
         // ms is usually too big for these operation, store by ns (10^-9)
         UInt64 external_page_scan_ns = 0;
         UInt64 external_page_get_alive_ns = 0;
         UInt64 external_page_remove_ns = 0;
+
+    private:
+        // Total time of cleaning external pages
+        UInt64 clean_external_page_ms = 0;
+
+    public:
+        void finishCleanExternalPage(UInt64 clean_cost_ms);
 
         String toLogging() const;
     };

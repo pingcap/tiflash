@@ -292,7 +292,11 @@ public:
 
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
+    {
+        data.push_back(*reinterpret_cast<const T *>(pos));
+        return pos + sizeof(T);
+    }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
@@ -369,6 +373,11 @@ public:
     MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override
     {
         return this->template scatterImpl<Self>(num_columns, selector);
+    }
+
+    void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector) const override
+    {
+        this->template scatterToImpl<Self>(columns, selector);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

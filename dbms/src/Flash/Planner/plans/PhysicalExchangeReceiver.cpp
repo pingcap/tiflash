@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
@@ -84,7 +83,6 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
                                                                                    execId(),
                                                                                    /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }

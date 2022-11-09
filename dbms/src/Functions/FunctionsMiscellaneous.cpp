@@ -75,9 +75,6 @@ extern const int FUNCTION_THROW_IF_VALUE_IS_NON_ZERO;
   * in(x, set) - function for evaluating the IN
   * notIn(x, set) - and NOT IN.
   *
-  * arrayJoin(arr) - a special function - it can not be executed directly;
-  *                     is used only to get the result type of the corresponding expression.
-  *
   * replicate(x, arr) - creates an array of the same size as arr, all elements of which are equal to x;
   *                  for example: replicate(1, ['a', 'b', 'c']) = [1, 1, 1].
   *
@@ -792,7 +789,7 @@ public:
         }
         /// Second argument must be ColumnSet.
         ColumnPtr column_set_ptr = block.getByPosition(arguments[1]).column;
-        const ColumnSet * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
+        const auto * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
         if (!column_set)
             throw Exception("Second argument for function '" + getName() + "' must be Set; found " + column_set_ptr->getName(),
                             ErrorCodes::ILLEGAL_COLUMN);
@@ -800,9 +797,9 @@ public:
         Block block_of_key_columns;
 
         /// First argument may be tuple or single column.
-        const ColumnTuple * tuple = typeid_cast<const ColumnTuple *>(left_arg.column.get());
+        const auto * tuple = typeid_cast<const ColumnTuple *>(left_arg.column.get());
         const ColumnConst * const_tuple = checkAndGetColumnConst<ColumnTuple>(left_arg.column.get());
-        const DataTypeTuple * type_tuple = typeid_cast<const DataTypeTuple *>(left_arg.type.get());
+        const auto * type_tuple = typeid_cast<const DataTypeTuple *>(left_arg.type.get());
 
         ColumnPtr materialized_tuple;
         if (const_tuple)
@@ -1005,57 +1002,6 @@ public:
 };
 
 
-class FunctionArrayJoin : public IFunction
-{
-public:
-    static constexpr auto name = "arrayJoin";
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionArrayJoin>();
-    }
-
-
-    /// Get the function name.
-    String getName() const override
-    {
-        return name;
-    }
-
-    size_t getNumberOfArguments() const override
-    {
-        return 1;
-    }
-
-    /** It could return many different values for single argument. */
-    bool isDeterministic() const override { return false; }
-
-    bool isDeterministicInScopeOfQuery() const override
-    {
-        return false;
-    }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        const DataTypeArray * arr = checkAndGetDataType<DataTypeArray>(&*arguments[0]);
-        if (!arr)
-            throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return arr->getNestedType();
-    }
-
-    void executeImpl(Block & /*block*/, const ColumnNumbers & /*arguments*/, size_t /*result*/) const override
-    {
-        throw Exception("Function " + getName() + " must not be executed directly.", ErrorCodes::FUNCTION_IS_SPECIAL);
-    }
-
-    /// Because of function cannot be executed directly.
-    bool isSuitableForConstantFolding() const override
-    {
-        return false;
-    }
-};
-
-
 FunctionPtr FunctionReplicate::create(const Context &)
 {
     return std::make_shared<FunctionReplicate>();
@@ -1063,7 +1009,7 @@ FunctionPtr FunctionReplicate::create(const Context &)
 
 DataTypePtr FunctionReplicate::getReturnTypeImpl(const DataTypes & arguments) const
 {
-    const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(&*arguments[1]);
+    const auto * array_type = checkAndGetDataType<DataTypeArray>(&*arguments[1]);
     if (!array_type)
         throw Exception("Second argument for function " + getName() + " must be array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1074,7 +1020,7 @@ void FunctionReplicate::executeImpl(Block & block, const ColumnNumbers & argumen
 {
     ColumnPtr first_column = block.getByPosition(arguments[0]).column;
 
-    const ColumnArray * array_column = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[1]).column.get());
+    const auto * array_column = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[1]).column.get());
     ColumnPtr temp_column;
 
     if (!array_column)
@@ -1136,8 +1082,8 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        Int64 min = extractConstant<Int64>(block, arguments, 1, "Second"); /// The level at which the line has zero length.
-        Int64 max = extractConstant<Int64>(block, arguments, 2, "Third"); /// The level at which the line has the maximum length.
+        auto min = extractConstant<Int64>(block, arguments, 1, "Second"); /// The level at which the line has zero length.
+        auto max = extractConstant<Int64>(block, arguments, 2, "Third"); /// The level at which the line has the maximum length.
 
         /// The maximum width of the bar in characters, by default.
         Float64 max_width = arguments.size() == 4 ? extractConstant<Float64>(block, arguments, 3, "Fourth") : 80;
@@ -1220,7 +1166,7 @@ private:
     template <typename T>
     static bool executeNumber(const IColumn & src, ColumnString & dst, Int64 min, Int64 max, Float64 max_width)
     {
-        if (const ColumnVector<T> * col = checkAndGetColumn<ColumnVector<T>>(&src))
+        if (const auto * col = checkAndGetColumn<ColumnVector<T>>(&src))
         {
             fill(col->getData(), dst.getChars(), dst.getOffsets(), min, max, max_width);
             return true;
@@ -1512,7 +1458,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        const DataTypeAggregateFunction * type = checkAndGetDataType<DataTypeAggregateFunction>(&*arguments[0]);
+        const auto * type = checkAndGetDataType<DataTypeAggregateFunction>(&*arguments[0]);
         if (!type)
             throw Exception("Argument for function " + getName() + " must have type AggregateFunction - state of aggregate function.",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1522,7 +1468,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnAggregateFunction * column_with_states
+        const auto * column_with_states
             = typeid_cast<const ColumnAggregateFunction *>(&*block.getByPosition(arguments.at(0)).column);
         if (!column_with_states)
             throw Exception("Illegal column " + block.getByPosition(arguments.at(0)).column->getName()
@@ -1535,9 +1481,9 @@ public:
 
         auto deleter = [&agg_func](char * ptr) {
             agg_func.destroy(ptr);
-            free(ptr);
+            free(ptr); // NOLINT(cppcoreguidelines-no-malloc)
         };
-        std::unique_ptr<char, decltype(deleter)> place{reinterpret_cast<char *>(malloc(agg_func.sizeOfData())), deleter};
+        std::unique_ptr<char, decltype(deleter)> place{reinterpret_cast<char *>(malloc(agg_func.sizeOfData())), deleter}; // NOLINT(cppcoreguidelines-no-malloc)
 
         agg_func.create(place.get()); /// Not much exception-safe. If an exception is thrown out, destroy will be called in vain.
 
@@ -1724,7 +1670,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        const DataTypeAggregateFunction * type = checkAndGetDataType<DataTypeAggregateFunction>(&*arguments[0]);
+        const auto * type = checkAndGetDataType<DataTypeAggregateFunction>(&*arguments[0]);
         if (!type)
             throw Exception("Argument for function " + getName() + " must have type AggregateFunction - state of aggregate function.",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1734,7 +1680,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnAggregateFunction * column_with_states
+        const auto * column_with_states
             = typeid_cast<const ColumnAggregateFunction *>(&*block.getByPosition(arguments.at(0)).column);
         if (!column_with_states)
             throw Exception("Illegal column " + block.getByPosition(arguments.at(0)).column->getName()
@@ -1967,7 +1913,6 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     factory.registerFunction<FunctionIgnore>();
     factory.registerFunction<FunctionIndexHint>();
     factory.registerFunction<FunctionIdentity>();
-    factory.registerFunction<FunctionArrayJoin>();
     factory.registerFunction<FunctionReplicate>();
     factory.registerFunction<FunctionBar>();
     factory.registerFunction<FunctionHasColumnInTable>();

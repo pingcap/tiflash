@@ -665,14 +665,14 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(const DBInfoPtr & new_d
     auto new_table_info = getter.getTableInfo(new_db_info->id, table_id);
     if (new_table_info == nullptr)
     {
-        throw Exception(fmt::format("miss table id in TiKV {}", table_id));
+        throw TiFlashException(fmt::format("miss table id in TiKV {}", table_id), Errors::DDL::StaleSchema);
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_id);
     if (storage == nullptr)
     {
-        throw Exception(fmt::format("miss table id in Flash {}", table_id));
+        throw TiFlashException(fmt::format("miss table id in TiFlash {}", table_id), Errors::DDL::MissingTable);
     }
 
     applyRenameLogicalTable(new_db_info, new_table_info, storage);
