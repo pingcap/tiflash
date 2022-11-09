@@ -35,6 +35,7 @@ include (cmake/target.cmake)
 include (cmake/tools.cmake)
 include (cmake/find_rust.cmake)
 include (cmake/add_warning.cmake)
+include (cmake/utils.cmake)
 
 option(ENABLE_PCH "Enable `Precompiled header`" OFF)
 
@@ -321,8 +322,6 @@ include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
 
-include (cmake/print_flags.cmake)
-
 # Enable tests by default when build type is debug
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     set (ENABLE_TESTS_DEFAULT ON)
@@ -383,9 +382,6 @@ if (ARCH_AMD64)
     endif()
 
     check_cxx_compiler_flag("-mmovbe" TIFLASH_COMPILER_MOVBE_SUPPORT)
-    if (TIFLASH_COMPILER_MOVBE_SUPPORT)
-        set(COMPILER_MOVBE_FLAG "-mmovbe")
-    endif()
 else()
     add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
 endif()
@@ -402,3 +398,5 @@ include (cmake/print_include_directories.cmake)
 # with a large number of threads.
 include (cmake/sequential.cmake)
 build_sequentially (symbolization tiflash_proxy)
+
+print_flags ()
