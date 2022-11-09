@@ -49,7 +49,7 @@ struct TiFlashSecurityConfig
 public:
     TiFlashSecurityConfig() = default;
 
-    TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+    TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
     {
         if (config.has("security"))
         {

@@ -219,7 +219,7 @@ public:
     ConfigurationPtr getUsersConfig();
 
     /// Security configuration settings.
-    void setSecurityConfig(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+    void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
     TiFlashSecurityConfig & getSecurityConfig();
 

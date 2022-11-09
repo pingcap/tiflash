@@ -24,7 +24,7 @@ namespace Poco
 class Logger;
 namespace Util
 {
-class LayeredConfiguration;
+class AbstractConfiguration;
 }
 } // namespace Poco
 
@@ -52,7 +52,7 @@ struct TiFlashRaftConfig
 public:
     TiFlashRaftConfig() = default;
 
-    static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+    static TiFlashRaftConfig parseSettings(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 };
 
 } // namespace DB

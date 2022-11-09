@@ -35,6 +35,7 @@ target_link_libraries (server_for_test PUBLIC clickhouse_common_io clickhouse_st
 
 add_library (clickhouse-server-lib
     HTTPHandler.cpp
+    CertificateReloader.cpp
     FlashGrpcServerHolder.cpp
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp

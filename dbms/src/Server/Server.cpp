@@ -54,6 +54,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Server/CertificateReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/MetricsTransmitter.h>
@@ -1100,6 +1101,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
+#if Poco_NetSSL_FOUND
+            CertificateReloader::instance().tryLoad(*config);
+#endif
+            global_context->setSecurityConfig(*config, log);
         },
         /* already_loaded = */ true);
 
@@ -1255,7 +1260,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), global_context->getSecurityConfig(), raft_config, log); // todo ywq 
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), global_context->getSecurityConfig(), raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);

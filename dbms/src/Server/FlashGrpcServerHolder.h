@@ -30,12 +30,6 @@ namespace DB
 using MockStorage = tests::MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
-struct SecureData
-{
-    bool server_credential_reloaded = false;
-    TiFlashSecurityConfig security_config;
-    TiFlashSecurityConfig new_security_config;
-};
 class FlashGrpcServerHolder
 {
 public:
@@ -63,8 +57,6 @@ private:
     std::shared_ptr<std::atomic<bool>> is_shutdown;
 
     grpc::ServerBuilder builder;
-
-    void * secure_data;
 
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;

@@ -571,10 +571,11 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
-void Context::setSecurityConfig(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
 {
     auto lock = getLock();
     auto security_config = TiFlashSecurityConfig(config, log);
+    // ywq todo
     if (shared->security_config.shouldUpdate(security_config))
     {
         shared->security_config = security_config;
