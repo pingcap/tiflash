@@ -2390,6 +2390,15 @@
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A",
               "step": 40
+            },
+            {
+              "exemplar": true,
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"async_poller.*\"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "Limit",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -2413,7 +2422,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:55",
               "decimals": 1,
               "format": "percentunit",
               "label": null,
@@ -2423,7 +2431,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:56",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -2512,6 +2519,15 @@
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A",
               "step": 40
+            },
+            {
+              "exemplar": true,
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"GRPCComp.*\"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "Limit",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -2535,7 +2551,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:55",
               "decimals": 1,
               "format": "percentunit",
               "label": null,
@@ -2545,7 +2560,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:56",
               "format": "short",
               "label": null,
               "logBase": 1,
