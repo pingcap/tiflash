@@ -62,18 +62,6 @@ struct MockWriter
     void partitionWrite(const TrackedMppDataPacketPtr &, uint16_t) { FAIL() << "cannot reach here."; }
     void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet)
     {
-        if (add_summary)
-        {
-            tipb::SelectResponse response;
-            auto * summary_ptr = response.add_execution_summaries();
-            auto summary = mockExecutionSummary();
-            summary_ptr->set_time_processed_ns(summary.time_processed_ns);
-            summary_ptr->set_num_produced_rows(summary.num_produced_rows);
-            summary_ptr->set_num_iterations(summary.num_iterations);
-            summary_ptr->set_concurrency(summary.concurrency);
-            summary_ptr->set_executor_id("Executor_0");
-            packet->serializeByResponse(response);
-        }
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
@@ -81,6 +69,16 @@ struct MockWriter
     }
     void write(tipb::SelectResponse & response)
     {
+        if (add_summary)
+        {
+            auto * summary_ptr = response.add_execution_summaries();
+            auto summary = mockExecutionSummary();
+            summary_ptr->set_time_processed_ns(summary.time_processed_ns);
+            summary_ptr->set_num_produced_rows(summary.num_produced_rows);
+            summary_ptr->set_num_iterations(summary.num_iterations);
+            summary_ptr->set_concurrency(summary.concurrency);
+            summary_ptr->set_executor_id("Executor_0");
+        }
         ++total_packets;
         if (!response.chunks().empty())
             total_bytes += response.ByteSizeLong();
@@ -296,7 +294,7 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
-            true,
+            /*should_send_exec_summary_at_last=*/true,
             *dag_context_ptr);
 
         // 2. encode all blocks
@@ -320,12 +318,14 @@ public:
             writer,
             0,
             batch_send_min_limit,
-            true,
+            /*should_send_exec_summary_at_last=*/true,
             *dag_context_ptr);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
             dag_writer->write(block);
+        dag_writer->flush();
+        writer->add_summary = true;
         dag_writer->finishWrite();
     }
 
@@ -353,8 +353,10 @@ public:
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
         std::shared_ptr<MockWriter> & writer)
     {
+        assert(receiver_stream);
         /// Check Execution Summary
         auto summary = receiver_stream->getRemoteExecutionSummaries(0);
+        ASSERT_TRUE(summary != nullptr);
         ASSERT_EQ(summary->size(), 1);
         ASSERT_EQ(summary->begin()->first, "Executor_0");
         ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary->begin()->second));
