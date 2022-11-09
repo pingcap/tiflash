@@ -22,7 +22,8 @@
 #pragma GCC diagnostic pop
 
 /**
- * https://github.com/pingcap/tidb/blob/release-3.0/types/json/binary.go
+ * https://github.com/pingcap/tidb/blob/release-6.4/types/json_binary.go
+ * https://github.com/pingcap/tidb/blob/release-6.4/types/json_constants.go
    The binary JSON format from MySQL 5.7 is as follows:
    JSON doc ::= type value
    type ::=
@@ -37,12 +38,20 @@
        0x0a |       // uint64
        0x0b |       // double
        0x0c |       // utf8mb4 string
+       0x0d |       // opaque value
+       0x0e |       // date
+       0x0f |       // datetime
+       0x10 |       // timestamp
+       0x11 |       // time
    value ::=
        object  |
        array   |
        literal |
        number  |
        string  |
+       opaque  |
+       time    |
+       duration |
    object ::= element-count size key-entry* value-entry* key* value*
    array ::= element-count size value-entry* value*
    // number of members in object or number of elements in array
@@ -72,6 +81,10 @@
                              // field. So we need 1 byte to represent
                              // lengths up to 127, 2 bytes to represent
                              // lengths up to 16383, and so on...
+   opaque ::= typeId data-length byte*
+   time ::= uint64
+   duration ::= uint64 uint32
+   typeId ::= byte
  */
 namespace DB
 {
@@ -89,13 +102,22 @@ extern const UInt8 TYPE_CODE_INT64 = 0x09; // TypeCodeInt64 indicates the JSON i
 extern const UInt8 TYPE_CODE_UINT64 = 0x0a; // TypeCodeUint64 indicates the JSON is a unsigned integer.
 extern const UInt8 TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
 extern const UInt8 TYPE_CODE_STRING = 0x0c; // TypeCodeString indicates the JSON is a string.
+extern const UInt8 TYPE_CODE_Opaque = 0x0d; // TypeCodeOpaque indicates the JSON is an opaque.
+extern const UInt8 TYPE_CODE_Date = 0x0e; // TypeCodeDate indicates the JSON is a date.
+extern const UInt8 TYPE_CODE_Datetime = 0x0f; // TypeCodeDatetime indicates the JSON is a datetime.
+extern const UInt8 TYPE_CODE_Timestamp = 0x10; // TypeCodeTimestamp indicates the JSON is a timestamp.
+extern const UInt8 TYPE_CODE_Duration = 0x11; // TypeCodeDuration indicates the JSON is a duration.
+
 extern const UInt8 LITERAL_NIL = 0x00; // LiteralNil represents JSON null.
 extern const UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
 extern const UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
 
 constexpr size_t VALUE_ENTRY_SIZE = 5;
+constexpr size_t VALUE_TYPE_SIZE = 1;
 constexpr size_t KEY_ENTRY_LENGTH = 6;
 constexpr size_t PREFIX_LENGTH = 8;
+constexpr size_t DATA_SIZE_OFF = 4;
+constexpr size_t KEY_LENGTH_OFF = 4;
 
 using JsonArrayPtr = Poco::JSON::Array::Ptr;
 using JsonObjectPtr = Poco::JSON::Object::Ptr;
