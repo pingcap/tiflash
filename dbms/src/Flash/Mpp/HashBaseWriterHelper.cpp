@@ -30,15 +30,7 @@ void materializeBlock(Block & input_block)
 void materializeBlocks(std::vector<Block> & blocks)
 {
     for (auto & block : blocks)
-    {
-        for (size_t i = 0; i < block.columns(); ++i)
-        {
-            auto & element = block.getByPosition(i);
-            auto & src = element.column;
-            if (ColumnPtr converted = src->convertToFullColumnIfConst())
-                src = converted;
-        }
-    }
+        materializeBlock(block);
 }
 
 std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num)
@@ -98,6 +90,15 @@ void scatterColumns(const Block & input_block,
             result_columns[bucket_idx][col_id] = std::move(part_columns[bucket_idx]);
         }
     }
+}
+
+DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num)
+{
+    DB::TrackedMppDataPacketPtrs tracked_packets;
+    tracked_packets.reserve(partition_num);
+    for (size_t i = 0; i < partition_num; ++i)
+        tracked_packets.emplace_back(std::make_shared<TrackedMppDataPacket>());
+    return tracked_packets;
 }
 
 void scatterColumnsInplace(const Block & block,

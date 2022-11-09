@@ -86,10 +86,13 @@ struct MemTrackerWrapper
 
     void switchMemTracker(MemoryTracker * new_memory_tracker)
     {
-        int bak_size = size;
-        freeAll();
-        memory_tracker = new_memory_tracker;
-        alloc(bak_size);
+        if (new_memory_tracker != memory_tracker)
+        {
+            int bak_size = size;
+            freeAll();
+            memory_tracker = new_memory_tracker;
+            alloc(bak_size);
+        }
     }
     ~MemTrackerWrapper()
     {
@@ -119,6 +122,11 @@ struct TrackedMppDataPacket
 
     explicit TrackedMppDataPacket(MemoryTracker * memory_tracker)
         : mem_tracker_wrapper(memory_tracker)
+    {}
+
+    TrackedMppDataPacket(const mpp::MPPDataPacket & data, size_t size, MemoryTracker * memory_tracker)
+        : mem_tracker_wrapper(size, memory_tracker)
+        , packet(data)
     {}
 
     void addChunk(std::string && value)
@@ -190,11 +198,21 @@ struct TrackedMppDataPacket
         return packet;
     }
 
+    std::shared_ptr<DB::TrackedMppDataPacket> copy() const
+    {
+        return std::make_shared<TrackedMppDataPacket>(
+            packet,
+            mem_tracker_wrapper.size,
+            mem_tracker_wrapper.memory_tracker);
+    }
+
     MemTrackerWrapper mem_tracker_wrapper;
     mpp::MPPDataPacket packet;
     bool need_recompute = false;
     String error_message;
 };
+using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+using TrackedMppDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
 
 struct TrackedSelectResp
 {
