@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
@@ -82,19 +83,32 @@ void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
         });
 }
 
+void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Executor * executor)
+{
+    TiDBTableScan table_scan(executor, executor_id, dagContext());
+    if (unlikely(context.isTest()))
+        pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
+    else
+        pushBack(PhysicalTableScan::build(executor_id, log, table_scan));
+    dagContext().table_scan_executor_id = executor_id;
+}
+
 void PhysicalPlan::build(const String & executor_id, const tipb::Executor * executor)
 {
     assert(executor);
     switch (executor->tp())
     {
     case tipb::ExecType::TypeLimit:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
         pushBack(PhysicalLimit::build(executor_id, log, executor->limit(), popBack()));
         break;
     case tipb::ExecType::TypeTopN:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
         pushBack(PhysicalTopN::build(context, executor_id, log, executor->topn(), popBack()));
         break;
     case tipb::ExecType::TypeSelection:
     {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
         auto child = popBack();
         if (pushDownSelection(child, executor_id, executor->selection()))
             pushBack(child);
@@ -104,10 +118,12 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
         pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
         break;
     case tipb::ExecType::TypeExchangeSender:
     {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
         buildFinalProjection(fmt::format("{}_", executor_id), true);
         if (unlikely(context.isExecutorTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
@@ -121,6 +137,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeExchangeReceiver:
     {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
         if (unlikely(context.isExecutorTest()))
             pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver()));
         else
@@ -132,27 +149,28 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         break;
     }
     case tipb::ExecType::TypeProjection:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
         break;
     case tipb::ExecType::TypeWindow:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
         pushBack(PhysicalWindow::build(context, executor_id, log, executor->window(), FineGrainedShuffle(executor), popBack()));
         break;
     case tipb::ExecType::TypeSort:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();
         pushBack(PhysicalWindowSort::build(context, executor_id, log, executor->sort(), FineGrainedShuffle(executor), popBack()));
         break;
     case tipb::ExecType::TypeTableScan:
-    case tipb::ExecType::TypePartitionTableScan:
-    {
-        TiDBTableScan table_scan(executor, executor_id, dagContext());
-        if (unlikely(context.isTest()))
-            pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
-        else
-            pushBack(PhysicalTableScan::build(executor_id, log, table_scan));
-        dagContext().table_scan_executor_id = executor_id;
+        GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
+        buildTableScan(executor_id, executor);
         break;
-    }
+    case tipb::ExecType::TypePartitionTableScan:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
+        buildTableScan(executor_id, executor);
+        break;
     case tipb::ExecType::TypeJoin:
     {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_join).Increment();
         /// Both sides of the join need to have non-root-final-projection to ensure that
         /// there are no duplicate columns in the blocks on the build and probe sides.
         buildFinalProjection(fmt::format("{}_r_", executor_id), false);
