@@ -53,8 +53,6 @@ public:
 
     virtual PageMap read(const PageIds & page_ids) const = 0;
 
-    virtual void read(const PageIds & page_ids, PageHandler & handler) const = 0;
-
     using PageReadFields = PageStorage::PageReadFields;
     virtual PageMap read(const std::vector<PageReadFields> & page_fields) const = 0;
 
@@ -101,11 +99,6 @@ public:
     PageMap read(const PageIds & page_ids) const override
     {
         return storage->read(ns_id, page_ids, read_limiter, snap);
-    }
-
-    void read(const PageIds & page_ids, PageHandler & handler) const override
-    {
-        storage->read(ns_id, page_ids, handler, read_limiter, snap);
     }
 
     using PageReadFields = PageStorage::PageReadFields;
@@ -216,12 +209,6 @@ public:
         }
 
         return page_maps;
-    }
-
-    void read(const PageIds & page_ids, PageHandler & handler) const override
-    {
-        const auto & page_ids_not_found = storage_v3->read(ns_id, page_ids, handler, read_limiter, toConcreteV3Snapshot(), false);
-        storage_v2->read(ns_id, page_ids_not_found, handler, read_limiter, toConcreteV2Snapshot());
     }
 
     using PageReadFields = PageStorage::PageReadFields;
@@ -404,11 +391,6 @@ DB::Page PageReader::read(PageId page_id) const
 PageMap PageReader::read(const PageIds & page_ids) const
 {
     return impl->read(page_ids);
-}
-
-void PageReader::read(const PageIds & page_ids, PageHandler & handler) const
-{
-    impl->read(page_ids, handler);
 }
 
 PageMap PageReader::read(const std::vector<PageStorage::PageReadFields> & page_fields) const

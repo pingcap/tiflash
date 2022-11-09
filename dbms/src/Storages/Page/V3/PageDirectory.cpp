@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/assert_cast.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -35,6 +36,7 @@
 #include <type_traits>
 #include <utility>
 
+
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
 
@@ -52,6 +54,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
+extern const char pause_before_full_gc_prepare[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -1209,10 +1212,13 @@ void PageDirectory::applyRefEditRecord(
             resolved_ver));
     }
 
+    SYNC_FOR("before_PageDirectory::applyRefEditRecord_create_ref");
+
     // use the resolved_id to collapse ref chain 3->2, 2->1 ==> 3->1
     bool is_ref_created = version_list->createNewRef(version, resolved_id);
     if (is_ref_created)
     {
+        SYNC_FOR("before_PageDirectory::applyRefEditRecord_incr_ref_count");
         // Add the ref-count of being-ref entry
         if (auto resolved_iter = mvcc_table_directory.find(resolved_id); resolved_iter != mvcc_table_directory.end())
         {
@@ -1229,6 +1235,7 @@ void PageDirectory::applyRefEditRecord(
                 resolved_ver));
         }
     }
+    SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
 }
 
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
@@ -1377,6 +1384,10 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             // do scan on the version list without lock on `mvcc_table_directory`.
             auto page_id = iter->first;
             const auto & version_entries = iter->second;
+            fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
+                if (page_id.low == 101)
+                    SYNC_FOR("before_PageDirectory::getEntriesByBlobIds_id_101");
+            });
             auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries, ref_ids_maybe_rewrite);
             total_page_size += single_page_size;
             if (single_page_size != 0)
