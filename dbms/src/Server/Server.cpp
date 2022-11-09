@@ -526,7 +526,7 @@ public:
         , server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
-        auto & security_config = server.global_context->getSecurityConfig(); // bug...
+        auto & security_config = server.global_context->getSecurityConfig();
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT

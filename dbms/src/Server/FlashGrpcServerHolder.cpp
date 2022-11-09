@@ -14,11 +14,14 @@
 #include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
 
+#include <memory>
+
+#include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
+#include "Common/TiFlashSecurity.h"
 #include "Core/Types.h"
-#include "grpc/grpc.h"
 #include "grpc/grpc_security.h"
-#include "grpcpp/security/credentials.h"
-#include "grpcpp/security/server_credentials.h"
+#include "grpc/grpc_security_constants.h"
+
 
 namespace DB
 {
@@ -84,12 +87,74 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
 }
 } // namespace
 
+struct SecureConfig
+{
+    std::shared_ptr<TiFlashSecurityConfig> config;
+};
+
+void * secure_config = new SecureConfig;
+
+static grpc_ssl_certificate_config_reload_status
+ssl_server_certificate_config_callback(
+    void * user_data,
+    grpc_ssl_server_certificate_config ** config)
+{
+    if (config == nullptr)
+    {
+        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_FAIL;
+    }
+    auto * cfg = static_cast<SecureConfig *>(user_data);
+    if (cfg->config->shouldUpdate(*cfg->config))
+    {
+        auto options = cfg->config->readAndCacheSecurityInfo();
+
+        grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
+        *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
+                                                            &pem_key_cert_pair,
+                                                            1);
+        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
+    }
+    else
+    {
+        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
+    }
+}
+
+grpc_server_credentials * grpc_ssl_server_credentials_create_with_fetcher(
+    grpc_ssl_client_certificate_request_type client_certificate_request)
+{
+    grpc_ssl_server_credentials_options * options = grpc_ssl_server_credentials_create_options_using_config_fetcher(
+        client_certificate_request,
+        ssl_server_certificate_config_callback,
+        secure_config);
+
+    return grpc_ssl_server_credentials_create_with_options(options);
+}
+
+std::shared_ptr<grpc::ServerCredentials> sslServerCredentialsWithFetcher()
+{
+    grpc_server_credentials * c_creds = grpc_ssl_server_credentials_create_with_fetcher(
+        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+    return std::shared_ptr<grpc::ServerCredentials>(
+        new grpc::SecureServerCredentials(c_creds));
+}
+
 FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::LayeredConfiguration & config_, TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config, const LoggerPtr & log_)
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
     background_task.begin();
-    initSecurityConfig(security_config, raft_config.flash_server_addr);
+    grpc::ServerBuilder builder;
+    auto * cfg = static_cast<SecureConfig *>(secure_config);
+    cfg->config = std::make_shared<TiFlashSecurityConfig>(security_config);
+    if (security_config.has_tls_config)
+    {
+        builder.AddListeningPort(raft_config.flash_server_addr, sslServerCredentialsWithFetcher());
+    }
+    else
+    {
+        builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+    }
 
     /// Init and register flash service.
     bool enable_async_server = context.getSettingsRef().enable_async_server;
@@ -97,8 +162,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
         flash_service = std::make_unique<AsyncFlashService>();
     else
         flash_service = std::make_unique<FlashService>();
-
-    flash_service->init(security_config, context);
+    flash_service->init(*cfg->config, context);
 
     diagnostics_service = std::make_unique<DiagnosticsService>(context, config_);
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
@@ -126,7 +190,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
             notify_cqs.emplace_back(builder.AddCompletionQueue());
         }
     }
-    // flash_grpc_server = builder.BuildAndStart();
+    flash_grpc_server = builder.BuildAndStart();
     if (!flash_grpc_server)
     {
         throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
@@ -150,58 +214,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
             thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
         }
     }
-}
-
-void FlashGrpcServerHolder::initSecurityConfig(TiFlashSecurityConfig & security_config, const String & flash_server_addr)
-{
-    if (security_config.has_tls_config)
-    {
-        initServerBuilder(flash_server_addr);
-    }
-    else
-    {
-        builder.AddListeningPort(flash_server_addr, grpc::InsecureServerCredentials());
-    }
-}
-
-static grpc_ssl_certificate_config_reload_status ssl_server_certificate_config_callback(
-    void * user_data,
-    grpc_ssl_server_certificate_config ** config)
-{
-    // LOG_INFO() // todo add log to ensure it
-    if (config == nullptr)
-    {
-        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_FAIL;
-    }
-    auto * secure_data = static_cast<SecureData *>(user_data);
-    if (!secure_data->security_config.shouldUpdate(secure_data->new_security_config))
-    {
-        auto options = secure_data->security_config.readAndCacheSecurityInfo();
-        grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
-        *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
-                                                            &pem_key_cert_pair,
-                                                            1);
-        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
-    }
-    else
-    {
-        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
-    }
-}
-
-void FlashGrpcServerHolder::initServerBuilder(const String & flash_server_addr)
-{
-    grpc_ssl_server_credentials_options * options = grpc_ssl_server_credentials_create_options_using_config_fetcher(
-        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY,
-        ssl_server_certificate_config_callback,
-        this->secure_data);
-
-    // grpc::SslServerCredentialsOptions op =  grpc::SslServerCredentialsOptions(options);
-
-    // grpc::SslServerCredentials cred = grpc::SslServerCredentials(op);
-    grpc_server_credentials * ssl_creds = grpc_ssl_server_credentials_create_with_options(options);
-    grpc_server_add_secure_http2_port(flash_grpc_server->c_server(), flash_server_addr.c_str(), ssl_creds);
-    // grpc_server_add_secure_http2_port(server, , ssl_creds);
 }
 
 FlashGrpcServerHolder::~FlashGrpcServerHolder()
