@@ -16,7 +16,6 @@
 
 #include <common/DateLUTImpl.h>
 #include <common/ErrorHandlers.h>
-#include <Core/Field.h>
 #include <fmt/format.h>
 
 namespace DB
