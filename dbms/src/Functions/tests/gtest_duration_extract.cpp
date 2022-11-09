@@ -62,6 +62,8 @@ try
         ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumn<false>({duration_value}, 6)));
         // const duration
         ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumnConst(1, {duration_value}, 6)));
+        // null
+        ASSERT_COLUMN_EQ(toNullableVec<Int64>({std::nullopt}), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumn({std::nullopt}, 6)));
     }
 }
 CATCH
