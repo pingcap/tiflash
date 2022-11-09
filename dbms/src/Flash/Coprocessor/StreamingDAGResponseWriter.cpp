@@ -65,21 +65,24 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
+    assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
-    {
-        encodeThenWriteBlocks<true>();
-    }
-    else
-    {
-        encodeThenWriteBlocks<false>();
-    }
+        sendExecutionSummary();
+}
+
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::sendExecutionSummary()
+{
+    tipb::SelectResponse response;
+    summary_collector.addExecuteSummaries(response);
+    writer->write(response);
 }
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        encodeThenWriteBlocks<false>();
+        encodeThenWriteBlocks();
 }
 
 template <class StreamWriterPtr>
@@ -96,26 +99,17 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        encodeThenWriteBlocks<false>();
+        encodeThenWriteBlocks();
 }
 
 template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
-    TrackedSelectResp response;
-    if constexpr (send_exec_summary_at_last)
-        summary_collector.addExecuteSummaries(response.getResponse());
-    response.setEncodeType(dag_context.encode_type);
-    if (blocks.empty())
-    {
-        if constexpr (send_exec_summary_at_last)
-        {
-            writer->write(response.getResponse());
-        }
+    if (unlikely(blocks.empty()))
         return;
-    }
 
+    TrackedSelectResp response;
+    response.setEncodeType(dag_context.encode_type);
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         /// passthrough data to a non-TiFlash node, like sending data to TiSpark

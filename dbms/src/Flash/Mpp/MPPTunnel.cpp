@@ -69,7 +69,6 @@ MPPTunnel::MPPTunnel(
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get(req_id, tunnel_id))
-
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -132,7 +131,7 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 }
 
 // TODO: consider to hold a buffer
-void MPPTunnel::write(const mpp::MPPDataPacket & data)
+void MPPTunnel::write(const TrackedMppDataPacketPtr & data)
 {
     LOG_TRACE(log, "ready to write");
     {
@@ -144,7 +143,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data)
 
     if (tunnel_sender->push(data))
     {
-        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.bytes += data->getPacket().ByteSizeLong();
         connection_profile_info.packets += 1;
         return;
     }

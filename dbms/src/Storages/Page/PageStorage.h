@@ -169,15 +169,6 @@ public:
         return readImpl(ns_id, page_ids, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    /**
-     * If throw_on_not_exist is false, Also we do have some of page_id not found.
-     * Then the return value will record the all of page_id which not found.
-     */
-    PageIds read(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
-    {
-        return readImpl(ns_id, page_ids, handler, read_limiter, snapshot, throw_on_not_exist);
-    }
-
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
 
@@ -223,8 +214,6 @@ protected:
 
     virtual PageMap readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageIds readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
-
     virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
@@ -260,8 +249,6 @@ public:
     DB::Page read(PageId page_id) const;
 
     PageMap read(const PageIds & page_ids) const;
-
-    void read(const PageIds & page_ids, PageHandler & handler) const;
 
     using PageReadFields = PageStorage::PageReadFields;
     PageMap read(const std::vector<PageReadFields> & page_fields) const;
