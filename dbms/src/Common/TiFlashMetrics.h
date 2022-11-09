@@ -149,8 +149,8 @@ namespace DB
         F(type_flush, {{"type", "flush"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_split, {{"type", "split"}}, ExpBuckets{0.001, 2, 20}))                                                                     \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter,                                                     \
-        F(type_v2, {"type", "exec"}),                                                                                                     \
-        F(type_v2_low, {"type", "low_write"}),                                                                                            \
+        F(type_v2, {"type", "v2"}),                                                                                                       \
+        F(type_v2_low, {"type", "v2_low"}),                                                                                               \
         F(type_v3, {"type", "v3"}),                                                                                                       \
         F(type_v3_mvcc_dumped, {"type", "v3_mvcc_dumped"}),                                                                               \
         F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
