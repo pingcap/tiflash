@@ -578,7 +578,9 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
                                                       UInt64 max_version,
                                                       size_t expected_block_size)
 {
+    Stopwatch watch_read;
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
+    GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_sub_snap).Observe(watch_read.elapsedSeconds());
     if (!segment_snap)
         return {};
     return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);

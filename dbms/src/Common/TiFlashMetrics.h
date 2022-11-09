@@ -234,6 +234,13 @@ namespace DB
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+    M(tiflash_storage_read_duration_seconds, "Bucketed histogram read duration", Histogram,                                               \
+        F(type_block_read_shared, {{"type", "block_read_shared"}}, ExpBuckets{0.001, 2, 20}),                                             \
+        F(type_block_read_normal, {{"type", "block_read_normal"}}, ExpBuckets{0.001, 2, 20}),                                             \
+        F(type_block_read_sub_stable, {{"type", "block_read_sub_stable"}}, ExpBuckets{0.001, 2, 20}),                                     \
+        F(type_block_read_sub_deltaindex, {{"type", "block_read_sub_deltaindex"}}, ExpBuckets{0.001, 2, 20}),                             \
+        F(type_block_read_sub_mvcc, {{"type", "block_read_sub_mvcc"}}, ExpBuckets{0.001, 2, 20}),                                         \
+        F(type_block_read_sub_snap, {{"type", "block_read_sub_snap"}}, ExpBuckets{0.001, 2, 20}))                                         \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

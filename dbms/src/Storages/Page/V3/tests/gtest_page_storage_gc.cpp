@@ -37,7 +37,6 @@ extern const char pause_before_full_gc_prepare[];
 } // namespace FailPoints
 namespace PS::V3::tests
 {
-
 struct FullGCParam
 {
     bool keep_snap;

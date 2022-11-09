@@ -37,8 +37,6 @@ namespace DB
 {
 namespace PS::V3::tests
 {
-
-
 #define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                               \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
     entries.createNewEntry(PageVersion(VERSION), entry_v##VERSION);

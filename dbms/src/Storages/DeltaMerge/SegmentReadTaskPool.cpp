@@ -238,7 +238,9 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
+    Stopwatch watch_read;
     auto block = stream->read();
+    GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_normal).Observe(watch_read.elapsedSeconds());
     if (block)
     {
         pushBlock(std::move(block));

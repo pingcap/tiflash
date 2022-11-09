@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
 
@@ -94,6 +95,10 @@ public:
     {
         Block res;
 
+        Stopwatch watch_read;
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_sub_stable).Observe(watch_read.elapsedSeconds());
+        });
         while (current_stream != children.end())
         {
             res = (*current_stream)->read();
