@@ -16,6 +16,7 @@
 
 #include <Common/MyDuration.h>
 #include <Common/typeid_cast.h>
+#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeMyDuration.h>
@@ -233,25 +234,7 @@ private:
         if (const auto * from = checkAndGetColumn<ColumnInt64>(col_from.get()); from)
         {
             const auto & data = from->getData();
-            if (checkColumnConst<ColumnInt64>(from))
-            {
-                constantDuration<F>(from->getInt(0), from->size(), vec_to);
-            }
-            else
-            {
-                vectorDuration<F>(data, vec_to);
-            }
-        }
-    }
-
-    template <Func F>
-    static void constantDuration(const Int64 & from, size_t size, PaddedPODArray<Int64> & vec_to)
-    {
-        vec_to.resize(size);
-        const auto & const_value = F(from);
-        for (size_t i = 0; i < size; ++i)
-        {
-            vec_to[i] = const_value;
+            vectorDuration<F>(data, vec_to);
         }
     }
 

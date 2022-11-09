@@ -56,8 +56,8 @@ private:
 public:
     MyDuration() = default;
     explicit MyDuration(Int64 nanos_)
-    : nanos(nanos_)
-    , fsp(DefaultFsp)
+        : nanos(nanos_)
+        , fsp(DefaultFsp)
     {
         if (nanos_ > MAX_NANOS || nanos_ < -MAX_NANOS)
         {
