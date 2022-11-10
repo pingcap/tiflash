@@ -100,9 +100,6 @@ std::pair<size_t, size_t> getReceiverSourceNumInfo(const PhysicalPlanNodePtr & n
     }
     default:
     {
-        if (node->childrenSize() == 0)
-            return std::make_pair(0, 0);
-
         auto res = std::make_pair(0, 0);
         for (size_t i = 0; i < node->childrenSize(); ++i)
         {
@@ -120,9 +117,9 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Join & join,
+    const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & left,
-    const PhysicalPlanNodePtr & right,
-    const FineGrainedShuffle & fine_grained_shuffle)
+    const PhysicalPlanNodePtr & right)
 {
     assert(left);
     assert(right);

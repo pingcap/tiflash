@@ -29,9 +29,9 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Join & join,
+        const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & left,
-        const PhysicalPlanNodePtr & right,
-        const FineGrainedShuffle & fine_grained_shuffle);
+        const PhysicalPlanNodePtr & right);
 
     PhysicalJoin(
         const String & executor_id_,
