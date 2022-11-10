@@ -65,7 +65,7 @@ public:
 
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(100ULL * DB::MB);
+                writer->setBufferSizeRange(100ULL * DB::MB, 100ULL * DB::MB);
                 writer->setBatchBufferLimit(8ULL * DB::GB);
                 writer->setBatchBufferPageRange(1000000);
             });
@@ -86,7 +86,7 @@ public:
             stop_watch.start();
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(4);
-                writer->setBatchBufferSize(2ULL * DB::MB);
+                writer->setBufferSizeRange(2ULL * DB::MB, 2ULL * DB::MB);
                 writer->setBatchBufferLimit(1ULL * DB::GB);
                 writer->setBatchBufferPageRange(1000000);
             });
@@ -96,14 +96,14 @@ public:
             onDumpResult();
         }
 
-        gc = std::make_shared<PSGc>(ps);
+        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
         gc->doGcOnce();
         gc_time_ms = gc->getElapsedMilliseconds();
         {
             stop_watch.start();
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(4);
-                writer->setBatchBufferSize(2ULL * DB::MB);
+                writer->setBufferSizeRange(2ULL * DB::MB, 2ULL * DB::MB);
                 writer->setBatchBufferLimit(1ULL * DB::GB);
                 writer->setBatchBufferPageRange(1000000);
             });
@@ -123,7 +123,7 @@ public:
 
     void onFailed() override
     {
-        LOG_WARNING(StressEnv::logger, fmt::format("GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000));
+        LOG_WARNING(StressEnv::logger, "GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000);
     }
 
 private:
