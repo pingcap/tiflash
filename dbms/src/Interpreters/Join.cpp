@@ -164,8 +164,7 @@ Join::Join(
         throw Exception("Not supported: non left join with left conditions");
     if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
-    LOG_INFO(log, "FineGrainedShuffle flag {}", enable_fine_grained_shuffle);
-    LOG_INFO(log, "FineGrainedShuffle count {}", fine_grained_shuffle_count);
+    LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}, partition num {}", enable_fine_grained_shuffle, fine_grained_shuffle_count, shuffle_partition_num);
 }
 
 void Join::setBuildTableState(BuildTableState state_)
@@ -1153,7 +1152,7 @@ void NO_INLINE joinBlockImplTypeCase(
     IColumn::Selector selector;
     if (enable_fine_grained_shuffle && rows > 0)
     {
-        WeakHash32 hash(0);
+        WeakHash32 hash(0); /// hash will be resize and reset in computeHashAndFillSelector function
         HashBaseWriterHelper::computeHashAndFillSelector(rows,
                                                          key_columns,
                                                          collators,
