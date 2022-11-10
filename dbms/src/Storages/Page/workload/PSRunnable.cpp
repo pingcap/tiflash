@@ -132,7 +132,7 @@ bool PSWriter::runImpl()
 RandomPageId PSWriter::genRandomPageId()
 {
     // std::normal_distribution<> distribution{static_cast<double>(max_page_id) / 2, 150};
-    std::uniform_int_distribution dist(0UL, max_page_id - 1);
+    std::uniform_int_distribution<> dist(0UL, max_page_id - 1);
     return RandomPageId(static_cast<DB::PageId>(std::round(dist(gen))));
 }
 
