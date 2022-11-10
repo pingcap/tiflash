@@ -54,7 +54,8 @@ private:
     // cqs and notify_cqs are used for processing async grpc events (currently only EstablishMPPConnection).
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
-    std::shared_ptr<ThreadManager> thread_manager;
+    std::vector<std::thread> cq_workers;
+    std::vector<std::thread> notify_cq_workers;
     CollectProcInfoBackgroundTask background_task;
 };
 

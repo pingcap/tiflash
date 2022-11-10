@@ -43,15 +43,7 @@ struct StreamWriter
     explicit StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)
     {}
-    void write(mpp::MPPDataPacket &)
-    {
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &) do not support writing MPPDataPacket!");
-    }
-    void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
-    {
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
-    }
-    void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
+    void write(tipb::SelectResponse & response)
     {
         ::coprocessor::BatchResponse resp;
         if (!response.SerializeToString(resp.mutable_data()))
@@ -63,8 +55,6 @@ struct StreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    // a helper function
-    uint16_t getPartitionNum() { return 0; }
 };
 
 using StreamWriterPtr = std::shared_ptr<StreamWriter>;

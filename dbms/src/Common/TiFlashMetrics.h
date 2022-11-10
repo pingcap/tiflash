@@ -154,17 +154,31 @@ namespace DB
         F(type_flush, {{"type", "flush"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_split, {{"type", "split"}}, ExpBuckets{0.001, 2, 20}))                                                                     \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter,                                                     \
-        F(type_exec, {"type", "exec"}),                                                                                                   \
-        F(type_low_write, {"type", "low_write"}),                                                                                         \
+        F(type_v2, {"type", "v2"}),                                                                                                       \
+        F(type_v2_low, {"type", "v2_low"}),                                                                                               \
         F(type_v3, {"type", "v3"}),                                                                                                       \
         F(type_v3_mvcc_dumped, {"type", "v3_mvcc_dumped"}),                                                                               \
         F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
-        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \
-        F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+        F(type_v2, {{"type", "v2"}}, ExpBuckets{0.0005, 2, 20}),                                                                          \
+        F(type_v2_compact, {{"type", "v2_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                          \
+        /* Below are metrics for PageStorage V3 */                                                                                        \
+        F(type_compact_wal, {{"type", "compact_wal"}},             ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_compact_spacemap, {{"type", "compact_spacemap"}},   ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_fullgc_rewrite, {{"type", "fullgc_rewrite"}},       ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_fullgc_commit, {{"type", "fullgc_commit"}},         ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                            \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                          \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                        \
+    M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                         \
+        F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
+        F(type_blob,  {{"type", "blob"}},  ExpBuckets{0.0001, 2, 20}),                                                                    \
+        /* the bucket range for apply in memory is 50us ~ 120s */                                                                         \
+        F(type_latch,  {{"type", "latch"}},   ExpBuckets{0.00005, 1.8, 26}),                                                              \
+        F(type_wal,    {{"type", "wal"}},     ExpBuckets{0.00005, 1.8, 26}),                                                              \
+        F(type_commit, {{"type", "commmit"}}, ExpBuckets{0.00005, 1.8, 26}))                                                              \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
     M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
@@ -188,6 +202,7 @@ namespace DB
         F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))                                                                     \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
+    /* required by DBaaS */                                                                                                               \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
     M(tiflash_object_count, "Number of objects", Gauge,                                                                                   \
@@ -245,7 +260,7 @@ namespace DB
 struct ExpBuckets
 {
     const double start;
-    const int base;
+    const double base;
     const size_t size;
 
     // NOLINTNEXTLINE(google-explicit-constructor)
