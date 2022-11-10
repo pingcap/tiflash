@@ -400,6 +400,11 @@ private:
 private:
     PageId max_page_id;
     std::atomic<UInt64> sequence;
+
+    // Used for avoid concurrently apply edits to wal and mvcc_table_directory.
+    mutable std::shared_mutex apply_mutex;
+
+    // Used to protect mvcc_table_directory between apply threads and read threads
     mutable std::shared_mutex table_rw_mutex;
     MVCCMapType mvcc_table_directory;
 
