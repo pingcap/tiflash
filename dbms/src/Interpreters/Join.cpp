@@ -1151,6 +1151,9 @@ void NO_INLINE joinBlockImplTypeCase(
     IColumn::Selector selector;
     if (enable_fine_grained_shuffle && rows > 0)
     {
+        /// TODO: add a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs
+        /// Note: Not checked, if inconsistency will happen in heterogeneous envs
+        /// Currently, the compute cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
         WeakHash32 hash(0); /// hash will be resize and reset in computeHashAndFillSelector function
         HashBaseWriterHelper::computeHashAndFillSelector(rows,
                                                          key_columns,
