@@ -327,6 +327,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
         TrackedMppDataPacketPtr res;
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
+            GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(res->packet.ByteSizeLong());
             if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";

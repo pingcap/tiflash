@@ -49,7 +49,7 @@ struct StreamWriter
         if (!response.SerializeToString(resp.mutable_data()))
             throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
 
-        GET_METRIC(tiflash_coprocessor_response_bytes, type_batch_cop).Increment(resp.mutable_data()->size());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_batch_cop).Increment(resp.ByteSizeLong());
 
         std::lock_guard lk(write_mutex);
         if (!writer->Write(resp))
