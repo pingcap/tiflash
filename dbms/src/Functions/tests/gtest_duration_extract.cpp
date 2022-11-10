@@ -49,9 +49,13 @@ try
         "hour_microsecond",
         "hour_second",
         "hour_minute",
+        "day_microsecond",
+        "day_second",
+        "day_minute",
+        "day_hour",
     };
     MyDuration duration_value(1, 838, 34, 56, 123456, 6);
-    std::vector<Int64> results{838, 34, 56, 123456, 56123456, 3456123456, 3456, 8383456123456, 8383456, 83834};
+    std::vector<Int64> results{838, 34, 56, 123456, 56123456, 3456123456, 3456, 8383456123456, 8383456, 83834, 8383456123456, 8383456, 83834, 838};
 
     for (size_t i = 0; i < units.size(); ++i)
     {

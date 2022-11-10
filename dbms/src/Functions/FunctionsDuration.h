@@ -128,7 +128,7 @@ struct ExtractMyDurationImpl
     static Int64 extractMinuteMicrosecond(Int64 nano)
     {
         MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.minutes() * 100000000LL + duration.seconds() * 1000000LL + duration.microSecond());
+        return signMultiplier(duration) * ((duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
     }
 
     static Int64 extractMinuteSecond(Int64 nano)
@@ -140,7 +140,7 @@ struct ExtractMyDurationImpl
     static Int64 extractHourMicrosecond(Int64 nano)
     {
         MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.hours() * 10000000000LL + duration.minutes() * 100000000LL + duration.seconds() * 1000000LL + duration.microSecond());
+        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
     }
 
     static Int64 extractHourSecond(Int64 nano)
@@ -153,6 +153,30 @@ struct ExtractMyDurationImpl
     {
         MyDuration duration(nano);
         return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+
+    static Int64 extractDayMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractDaySecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractDayMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+
+    static Int64 extractDayHour(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.hours();
     }
 };
 
@@ -219,6 +243,14 @@ public:
             dispatch<ExtractMyDurationImpl::extractHourSecond>(col_from, vec_to);
         else if (unit == "hour_minute")
             dispatch<ExtractMyDurationImpl::extractHourMinute>(col_from, vec_to);
+        else if (unit == "day_microsecond")
+            dispatch<ExtractMyDurationImpl::extractDayMicrosecond>(col_from, vec_to);
+        else if (unit == "day_second")
+            dispatch<ExtractMyDurationImpl::extractDaySecond>(col_from, vec_to);
+        else if (unit == "day_minute")
+            dispatch<ExtractMyDurationImpl::extractDayMinute>(col_from, vec_to);
+        else if (unit == "day_hour")
+            dispatch<ExtractMyDurationImpl::extractDayHour>(col_from, vec_to);
         else
             throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
 
