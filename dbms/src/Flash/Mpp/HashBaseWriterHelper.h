@@ -25,6 +25,7 @@ void materializeBlocks(std::vector<Block> & input_blocks);
 
 std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num);
 
+/// Will resize 'hash' and 'selector' inside to ensure enough space
 void computeHashAndFillSelector(const Block & block,
                                 const std::vector<Int64> & partition_col_ids,
                                 const TiDB::TiDBCollators & collators,
@@ -33,6 +34,7 @@ void computeHashAndFillSelector(const Block & block,
                                 WeakHash32 & hash,
                                 IColumn::Selector & selector);
 
+/// Will resize 'hash' and 'selector' inside to ensure enough space
 void computeHashAndFillSelector(size_t rows,
                                 const ColumnRawPtrs & key_columns,
                                 const TiDB::TiDBCollators & collators,
