@@ -77,7 +77,7 @@ void UnaryDAGResponseWriter::finishWrite()
         encodeChunkToDAGResponse();
     }
     appendWarningsToDAGResponse();
-    summary_collector.addExecuteSummaries(*dag_response, false);
+    summary_collector.addExecuteSummaries(*dag_response);
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)
