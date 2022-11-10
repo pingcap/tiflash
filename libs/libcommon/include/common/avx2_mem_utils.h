@@ -62,6 +62,11 @@ FLATTEN_INLINE_PURE static inline T read(const void * data)
     T val = *reinterpret_cast<const S *>(data);
     return val;
 }
+template <typename S>
+FLATTEN_INLINE static inline void write(void * tar, const S & src)
+{
+    *reinterpret_cast<S *>(tar) = src;
+}
 FLATTEN_INLINE_PURE static inline Block32 load_block32(const void * p)
 {
     return _mm256_loadu_si256(reinterpret_cast<const Block32 *>(p));
@@ -69,6 +74,22 @@ FLATTEN_INLINE_PURE static inline Block32 load_block32(const void * p)
 FLATTEN_INLINE_PURE static inline Block16 load_block16(const void * p)
 {
     return _mm_loadu_si128(reinterpret_cast<const Block16 *>(p));
+}
+template <bool aligned = false>
+FLATTEN_INLINE static inline void write_block16(void * p, const Block16 & src)
+{
+    if constexpr (aligned)
+        _mm_store_si128(reinterpret_cast<Block16 *>(p), src);
+    else
+        _mm_storeu_si128(reinterpret_cast<Block16 *>(p), src);
+}
+template <bool aligned = false>
+FLATTEN_INLINE static inline void write_block32(void * p, const Block32 & src)
+{
+    if constexpr (aligned)
+        _mm256_store_si256(reinterpret_cast<Block32 *>(p), src);
+    else
+        _mm256_storeu_si256(reinterpret_cast<Block32 *>(p), src);
 }
 FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(const void * p1, const void * p2)
 {
@@ -504,4 +525,107 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         return check_block32x4_eq(p1 + n - loop_block32x4_size, p2 + n - loop_block32x4_size);
     }
 }
+
+template <size_t bytes>
+ALWAYS_INLINE inline void memcpy_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size);
+
+template <size_t n>
+ALWAYS_INLINE inline void memcpy_block32_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size);
+
+template <typename T>
+ALWAYS_INLINE inline void memcpy_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= sizeof(T));
+    auto a = mem_utils::details::read<T>(src);
+    auto b = mem_utils::details::read<T>(src + size - sizeof(T));
+    mem_utils::details::write(dst, a);
+    mem_utils::details::write(dst + size - sizeof(T), b);
+}
+
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<2>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 2 && size <= 4);
+    using T = uint16_t;
+    static_assert(sizeof(T) == 2);
+    memcpy_ignore_overlap<T>(dst, src, size);
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<4>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 4 && size <= 8);
+    using T = uint32_t;
+    static_assert(sizeof(T) == 4);
+    memcpy_ignore_overlap<T>(dst, src, size);
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<8>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 8 && size <= 16);
+    using T = uint64_t;
+    static_assert(sizeof(T) == 8);
+    memcpy_ignore_overlap<T>(dst, src, size);
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<16>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 16 && size <= 32);
+    auto c0 = mem_utils::details::load_block16(src);
+    auto c1 = mem_utils::details::load_block16(src + size - 16);
+    mem_utils::details::write_block16(dst, c0);
+    mem_utils::details::write_block16(dst + size - 16, c1);
+}
+#define LOAD_HEAD(n) auto c_head_##n = mem_utils::details::load_block32(src + BLOCK32_SIZE * (n));
+#define WRITE_HEAD(n) mem_utils::details::write_block32(dst + BLOCK32_SIZE * (n), c_head_##n);
+#define LOAD_END(n) auto c_end_##n = mem_utils::details::load_block32(src + size - BLOCK32_SIZE * ((n) + 1));
+#define WRITE_END(n) mem_utils::details::write_block32(dst + size - BLOCK32_SIZE * ((n) + 1), c_end_##n);
+
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<32>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 32 && size <= 64);
+    LOAD_HEAD(0)
+    LOAD_END(0)
+    WRITE_HEAD(0)
+    WRITE_END(0)
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<64>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 64 && size <= 128);
+    LOAD_HEAD(0)
+    LOAD_HEAD(1)
+    LOAD_END(1)
+    LOAD_END(0)
+    WRITE_HEAD(0)
+    WRITE_HEAD(1)
+    WRITE_END(1)
+    WRITE_END(0)
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<128>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 128 && size <= 256);
+    LOAD_HEAD(0)
+    LOAD_HEAD(1)
+    LOAD_HEAD(2)
+    LOAD_HEAD(3)
+    LOAD_END(3)
+    LOAD_END(2)
+    LOAD_END(1)
+    LOAD_END(0)
+    WRITE_HEAD(0)
+    WRITE_HEAD(1)
+    WRITE_HEAD(2)
+    WRITE_HEAD(3)
+    WRITE_END(3)
+    WRITE_END(2)
+    WRITE_END(1)
+    WRITE_END(0)
+}
+#undef LOAD_HEAD
+#undef WRITE_HEAD
+#undef LOAD_END
+#undef WRITE_END
+
 } // namespace mem_utils::details

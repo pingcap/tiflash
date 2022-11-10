@@ -15,7 +15,9 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -42,7 +44,7 @@
 
 #include <pcg_random.hpp>
 #include <thread>
-#endif
+#endif // FIU_ENABLE
 
 namespace CurrentMetrics
 {
@@ -1242,10 +1244,15 @@ void PageDirectory::applyRefEditRecord(
 
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
-    // Note that we need to make sure increasing `sequence` in order, so it
-    // also needs to be protected by `write_lock` throughout the `apply`
-    // TODO: It is totally serialized, make it a pipeline
+    Stopwatch watch;
+    // In order to make the changes in `edit` be atomically published to the reading snapshots,
+    // `sequence` must be updated after the edit is fully applied into this directory.
+    // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
+    // pipeline so that we can batch the incoming edit when doing IO.
     std::unique_lock write_lock(table_rw_mutex);
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
+    watch.restart();
+
     const UInt64 last_sequence = sequence.load();
     // new sequence allocated in this edit
     UInt64 new_sequence = last_sequence + 1;
@@ -1259,6 +1266,9 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         new_sequence += 1;
     }
     wal->apply(ser::serializeTo(edit), write_limiter);
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
+    watch.restart();
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
