@@ -194,11 +194,11 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 /// Return pair: first for the ExchangeReceiver node count; second for the total sum of source num
 std::pair<size_t, size_t> getReceiverSourceNumInfo(IBlockInputStream & stream)
 {
-    if (const ExchangeReceiverInputStream * receiver_input_stream_ptr = dynamic_cast<const ExchangeReceiverInputStream *>(&stream))
+    if (const auto * receiver_input_stream_ptr = dynamic_cast<const ExchangeReceiverInputStream *>(&stream))
     {
         return std::make_pair(1, receiver_input_stream_ptr->getSourceNum());
     }
-    if (const MockExchangeReceiverInputStream * mock_receiver_input_stream_ptr = dynamic_cast<const MockExchangeReceiverInputStream *>(&stream))
+    if (const auto * mock_receiver_input_stream_ptr = dynamic_cast<const MockExchangeReceiverInputStream *>(&stream))
     {
         return std::make_pair(1, mock_receiver_input_stream_ptr->getSourceNum());
     }

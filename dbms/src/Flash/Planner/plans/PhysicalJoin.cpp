@@ -88,13 +88,13 @@ std::pair<size_t, size_t> getReceiverSourceNumInfo(const PhysicalPlanNodePtr & n
     {
     case PlanType::PlanTypeEnum::ExchangeReceiver:
     {
-        const PhysicalExchangeReceiver * receiver_ptr = dynamic_cast<const PhysicalExchangeReceiver *>(node.get());
+        const auto * receiver_ptr = dynamic_cast<const PhysicalExchangeReceiver *>(node.get());
         RUNTIME_ASSERT(receiver_ptr);
         return std::make_pair(1, receiver_ptr->getSourceNum());
     }
     case PlanType::PlanTypeEnum::MockExchangeReceiver:
     {
-        const PhysicalMockExchangeReceiver * mock_receiver_ptr = dynamic_cast<const PhysicalMockExchangeReceiver *>(node.get());
+        const auto * mock_receiver_ptr = dynamic_cast<const PhysicalMockExchangeReceiver *>(node.get());
         RUNTIME_ASSERT(mock_receiver_ptr);
         return std::make_pair(1, mock_receiver_ptr->getSourceNum());
     }

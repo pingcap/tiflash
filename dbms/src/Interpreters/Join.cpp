@@ -724,7 +724,6 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             }
         }
     }
-    return;
 }
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
