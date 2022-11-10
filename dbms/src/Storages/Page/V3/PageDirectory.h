@@ -354,10 +354,18 @@ public:
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
+    // Approximate number of pages in memory
     size_t numPages() const
     {
         std::shared_lock read_lock(table_rw_mutex);
         return mvcc_table_directory.size();
+    }
+
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        auto u = wal->getFileUsageStatistics();
+        u.num_pages = numPages();
+        return u;
     }
 
     // No copying and no moving
