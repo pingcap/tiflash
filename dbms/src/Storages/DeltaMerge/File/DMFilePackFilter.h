@@ -142,6 +142,7 @@ private:
             for (auto & handle_filter : handle_filters)
             {
                 auto res = handle_filter->batchRoughCheck(pack_count, param);
+                #pragma clang loop unroll(enable)
                 for (size_t i = 0; i < pack_count; ++i)
                 {
                     handle_res[i] = handle_res[i] || res[i];
