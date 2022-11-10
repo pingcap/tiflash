@@ -82,7 +82,7 @@ struct StressEnv
     size_t timeout_s = 0;
     size_t read_delay_ms = 0;
     size_t num_writer_slots = 1;
-    size_t avg_page_size = 1024 * 1024;
+    size_t avg_page_size = 2 * 1024 * 1024;
     size_t status_interval = 5;
     size_t situation_mask = 0;
     bool verify = true;

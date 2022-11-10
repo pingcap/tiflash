@@ -55,7 +55,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely") //
         ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots (for V2)") //
         ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay") //
-        ("avg_page_size", value<UInt32>()->default_value(1 * 1024 * 1024), "avg size for each page(bytes). 1MiB by default") //
+        ("avg_page_size", value<UInt32>()->default_value(2 * 1024 * 1024), "avg size for each page(bytes). 2 MiB by default") //
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
         ("failpoints", value<std::vector<std::string>>(), "failpoint(s) to enable") //
         ("gc_interval", value<UInt32>()->default_value(30), "GC interval(seconds). 0 means no gc") //

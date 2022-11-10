@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
 
@@ -57,10 +58,13 @@ public:
             LOG_INFO(StressEnv::logger, "All pages have been init.");
         }
 
+        RUNTIME_CHECK(options.avg_page_size > 1000);
+
         stop_watch.start();
 
         startWriter<PSWriter>(options.num_writers, [this](std::shared_ptr<PSWriter> w) {
-            w->setBufferSizeRange(options.avg_page_size, options.avg_page_size);
+            // A small random range
+            w->setBufferSizeRange(options.avg_page_size - 1000 / 2, options.avg_page_size + 1000 / 2);
         });
         const size_t read_delay_ms = options.read_delay_ms;
         startReader<PSReader>(options.num_readers, [read_delay_ms](std::shared_ptr<PSReader> reader) -> void {
