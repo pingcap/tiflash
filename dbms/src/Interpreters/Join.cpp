@@ -24,6 +24,7 @@
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
@@ -121,6 +122,7 @@ Join::Join(
     const String & req_id,
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
+    size_t shuffle_partition_num_,
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
@@ -148,6 +150,7 @@ Join::Join(
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
+    , shuffle_partition_num(shuffle_partition_num_)
 {
     if (other_condition_ptr != nullptr)
     {
@@ -524,7 +527,6 @@ void Join::init(const Block & sample_block, size_t build_concurrency_)
     initMapImpl(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
     setSampleBlock(sample_block);
 }
-
 
 namespace
 {
@@ -1139,7 +1141,8 @@ void NO_INLINE joinBlockImplTypeCase(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count)
+    size_t fine_grained_shuffle_count,
+    size_t shuffle_partition_num)
 {
     size_t num_columns_to_add = right_indexes.size();
 
@@ -1147,26 +1150,20 @@ void NO_INLINE joinBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
     Arena pool;
-
-    std::vector<UInt64> selector;
-    if (enable_fine_grained_shuffle)
+    IColumn::Selector selector;
+    if (enable_fine_grained_shuffle && rows > 0)
     {
-        WeakHash32 hash(rows);
-        for (size_t i = 0; i < key_columns.size(); i++)
-            key_columns[i]->updateWeakHash32(hash, collators[i], sort_key_containers[i]);
-        const auto & hash_data = hash.getData();
-        // partition each row
-        selector.resize(rows);
-        for (size_t row = 0; row < rows; ++row)
-        {
-            /// Row from interval [(2^32 / bucket_num) * i, (2^32 / bucket_num) * (i + 1)) goes to bucket with number i.
-            selector[row] = hash_data[row]; /// [0, 2^32)
-            selector[row] *= 3 * fine_grained_shuffle_count; /// [0, bucket_num * 2^32), selector stores 64 bit values.
-            selector[row] >>= 32u; /// [0, bucket_num)
-            selector[row] %= fine_grained_shuffle_count; /// [0, bucket_num)
-        }
+        WeakHash32 hash(0);
+        HashBaseWriterHelper::computeHashAndFillSelector(rows,
+                                                         key_columns,
+                                                         collators,
+                                                         sort_key_containers,
+                                                         shuffle_partition_num * fine_grained_shuffle_count,
+                                                         hash,
+                                                         selector);
     }
 
+    size_t segment_size = map.getSegmentSize();
     for (size_t i = 0; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
@@ -1186,16 +1183,21 @@ void NO_INLINE joinBlockImplTypeCase(
             size_t segment_index = 0;
             if (enable_fine_grained_shuffle)
             {
-                segment_index = selector[i];
+                /// In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id
+                auto packet_stream_id = selector[i] % fine_grained_shuffle_count;
+                /// Relies on the facts that:
+                /// In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
+                /// In Join, build_concurrency decides map's segment size, and build_steam_id decides the segment index
+                segment_index = packet_stream_id % segment_size;
             }
             else
             {
                 size_t hash_value = 0;
                 bool zero_flag = ZeroTraits::check(key);
-                if (map.getSegmentSize() > 0 && !zero_flag)
+                if (segment_size > 0 && !zero_flag)
                 {
                     hash_value = map.hash(key);
-                    segment_index = hash_value % map.getSegmentSize();
+                    segment_index = hash_value % segment_size;
                 }
             }
 
@@ -1242,7 +1244,8 @@ void joinBlockImplType(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count)
+    size_t fine_grained_shuffle_count,
+    size_t shuffle_partition_num)
 {
     if (null_map)
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, true>(
@@ -1258,7 +1261,8 @@ void joinBlockImplType(
             right_indexes,
             collators,
             enable_fine_grained_shuffle,
-            fine_grained_shuffle_count);
+            fine_grained_shuffle_count,
+            shuffle_partition_num);
     else
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, false>(
             map,
@@ -1273,7 +1277,8 @@ void joinBlockImplType(
             right_indexes,
             collators,
             enable_fine_grained_shuffle,
-            fine_grained_shuffle_count);
+            fine_grained_shuffle_count,
+            shuffle_partition_num);
 }
 } // namespace
 
@@ -1621,7 +1626,8 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
             right_indexes,                                                                                                                     \
             collators,                                                                                                                         \
             enable_fine_grained_shuffle,                                                                                                       \
-            fine_grained_shuffle_count);                                                                                                       \
+            fine_grained_shuffle_count,                                                                                                        \
+            shuffle_partition_num);                                                                                                            \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M

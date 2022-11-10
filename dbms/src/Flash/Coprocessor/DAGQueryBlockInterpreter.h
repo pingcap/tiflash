@@ -80,7 +80,8 @@ private:
         const Names & key_names,
         const TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions,
-        bool is_final_agg);
+        bool is_final_agg,
+        bool enable_fine_grained_shuffle);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info = "");
     void handleExchangeSender(DAGPipeline & pipeline);
     void handleMockExchangeSender(DAGPipeline & pipeline);

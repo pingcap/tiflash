@@ -39,7 +39,10 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
+#include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
+#include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -77,6 +80,40 @@ void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context 
     }
 }
 } // namespace
+
+/// Return pair: first for the ExchangeReceiver node count; second for the total sum of source num
+std::pair<size_t, size_t> getReceiverSourceNumInfo(const PhysicalPlanNodePtr & node)
+{
+    switch (node->tp())
+    {
+    case PlanType::PlanTypeEnum::ExchangeReceiver:
+    {
+        const PhysicalExchangeReceiver * receiver_ptr = dynamic_cast<const PhysicalExchangeReceiver *>(node.get());
+        RUNTIME_ASSERT(receiver_ptr);
+        return std::make_pair(1, receiver_ptr->getSourceNum());
+    }
+    case PlanType::PlanTypeEnum::MockExchangeReceiver:
+    {
+        const PhysicalMockExchangeReceiver * mock_receiver_ptr = dynamic_cast<const PhysicalMockExchangeReceiver *>(node.get());
+        RUNTIME_ASSERT(mock_receiver_ptr);
+        return std::make_pair(1, mock_receiver_ptr->getSourceNum());
+    }
+    default:
+    {
+        if (node->childrenSize() == 0)
+            return std::make_pair(0, 0);
+
+        auto res = std::make_pair(0, 0);
+        for (size_t i = 0; i < node->childrenSize(); ++i)
+        {
+            auto tem = getReceiverSourceNumInfo(node->children(i));
+            res.first += tem.first;
+            res.second += tem.second;
+        }
+        return res;
+    }
+    }
+}
 
 PhysicalPlanNodePtr PhysicalJoin::build(
     const Context & context,
@@ -143,6 +180,14 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
+    size_t shuffle_partition_num = 0;
+    if (fine_grained_shuffle.enable())
+    {
+        auto receiver_source_num_info = getReceiverSourceNumInfo(build_plan);
+        RUNTIME_ASSERT(receiver_source_num_info.first == 1);
+        shuffle_partition_num = receiver_source_num_info.second;
+    }
+
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -152,6 +197,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         log->identifier(),
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
+        shuffle_partition_num,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,

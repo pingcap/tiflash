@@ -97,7 +97,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)

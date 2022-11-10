@@ -50,8 +50,15 @@ StorageJoin::StorageJoin(
                 ErrorCodes::NO_SUCH_COLUMN_IN_TABLE};
 
     /// NOTE StorageJoin doesn't use join_use_nulls setting.
-
-    join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, kind, strictness, /*req_id=*/"", false, 0);
+    join = std::make_shared<Join>(key_names,
+                                  key_names,
+                                  false /* use_nulls */,
+                                  kind,
+                                  strictness,
+                                  "" /*req_id=*/,
+                                  false /*enable_fine_grained_shuffle_*/,
+                                  0 /*fine_grained_shuffle_count_*/,
+                                  0 /*shuffle_partition_num_*/);
     join->init(getSampleBlock().sortColumns());
     restore();
 }

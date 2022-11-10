@@ -49,25 +49,14 @@ std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t
     return dest_tbl_cols;
 }
 
-void computeHash(const Block & block,
-                 uint32_t num_bucket,
-                 const TiDB::TiDBCollators & collators,
-                 std::vector<String> & partition_key_containers,
-                 const std::vector<Int64> & partition_col_ids,
-                 WeakHash32 & hash,
-                 IColumn::Selector & selector)
+void fillSelector(size_t rows,
+                  const WeakHash32 & hash,
+                  uint32_t num_bucket,
+                  IColumn::Selector & selector)
 {
-    size_t num_rows = block.rows();
-    // compute hash values
-    for (size_t i = 0; i < partition_col_ids.size(); ++i)
-    {
-        const auto & column = block.getByPosition(partition_col_ids[i]).column;
-        column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
-    }
-
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
-    for (size_t i = 0; i < num_rows; ++i)
+    for (size_t i = 0; i < rows; ++i)
     {
         /// Row from interval [(2^32 / num_bucket) * i, (2^32 / num_bucket) * (i + 1)) goes to bucket with number i.
         selector[i] = hash_data[i]; /// [0, 2^32)
@@ -76,17 +65,64 @@ void computeHash(const Block & block,
     }
 }
 
+void computeHashAndFillSelector(const Block & block,
+                                const std::vector<Int64> & partition_col_ids,
+                                const TiDB::TiDBCollators & collators,
+                                std::vector<String> & partition_key_containers,
+                                uint32_t num_bucket,
+                                WeakHash32 & hash,
+                                IColumn::Selector & selector)
+{
+    size_t rows = block.rows();
+    if (rows == 0)
+        return;
+
+    hash.getData().resize(rows);
+    hash.reset(rows);
+    selector.resize(rows);
+    /// compute hash values
+    for (size_t i = 0; i < partition_col_ids.size(); ++i)
+    {
+        const auto & column = block.getByPosition(partition_col_ids[i]).column;
+        column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
+    }
+    /// fill selector using computed hash
+    fillSelector(rows, hash, num_bucket, selector);
+}
+
+void computeHashAndFillSelector(size_t rows,
+                                const ColumnRawPtrs & key_columns,
+                                const TiDB::TiDBCollators & collators,
+                                std::vector<String> & partition_key_containers,
+                                uint32_t num_bucket,
+                                WeakHash32 & hash,
+                                IColumn::Selector & selector)
+{
+    if (rows == 0)
+        return;
+
+    hash.getData().resize(rows);
+    hash.reset(rows);
+    selector.resize(rows);
+    for (size_t i = 0; i < key_columns.size(); i++)
+        key_columns[i]->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
+
+    fillSelector(rows, hash, num_bucket, selector);
+}
+
 void scatterColumns(const Block & input_block,
-                    uint32_t bucket_num,
+                    const std::vector<Int64> & partition_col_ids,
                     const TiDB::TiDBCollators & collators,
                     std::vector<String> & partition_key_containers,
-                    const std::vector<Int64> & partition_col_ids,
+                    uint32_t bucket_num,
                     std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
-    size_t rows = input_block.rows();
-    WeakHash32 hash(rows);
-    IColumn::Selector selector(rows);
-    computeHash(input_block, bucket_num, collators, partition_key_containers, partition_col_ids, hash, selector);
+    if (input_block.rows() == 0)
+        return;
+
+    WeakHash32 hash(0);
+    IColumn::Selector selector;
+    computeHashAndFillSelector(input_block, partition_col_ids, collators, partition_key_containers, bucket_num, hash, selector);
 
     for (size_t col_id = 0; col_id < input_block.columns(); ++col_id)
     {
@@ -101,20 +137,19 @@ void scatterColumns(const Block & input_block,
 }
 
 void scatterColumnsInplace(const Block & block,
-                           uint32_t bucket_num,
+                           const std::vector<Int64> & partition_col_ids,
                            const TiDB::TiDBCollators & collators,
                            std::vector<String> & partition_key_containers,
-                           const std::vector<Int64> & partition_col_ids,
+                           uint32_t bucket_num,
                            WeakHash32 & hash,
                            IColumn::Selector & selector,
                            std::vector<IColumn::ScatterColumns> & scattered)
 {
-    size_t num_rows = block.rows();
+    if (block.rows() == 0)
+        return;
+
     // compute hash values
-    hash.getData().resize(num_rows);
-    hash.reset(num_rows);
-    selector.resize(num_rows);
-    computeHash(block, bucket_num, collators, partition_key_containers, partition_col_ids, hash, selector);
+    computeHashAndFillSelector(block, partition_col_ids, collators, partition_key_containers, bucket_num, hash, selector);
 
     // partition
     for (size_t i = 0; i < block.columns(); ++i)

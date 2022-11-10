@@ -429,7 +429,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     {
         if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
         {
-            for (size_t i = 0; i < max_streams_; ++i)
+            size_t channel_count = std::min(max_streams_, fine_grained_shuffle_stream_count_);
+            for (size_t i = 0; i < channel_count; ++i)
             {
                 msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
             }

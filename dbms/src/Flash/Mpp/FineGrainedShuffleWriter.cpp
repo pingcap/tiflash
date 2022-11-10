@@ -135,7 +135,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
-            HashBaseWriterHelper::scatterColumnsInplace(block, num_bucket, collators, partition_key_containers_for_reuse, partition_col_ids, hash, selector, scattered);
+            HashBaseWriterHelper::scatterColumnsInplace(block, partition_col_ids, collators, partition_key_containers_for_reuse, num_bucket, hash, selector, scattered);
             blocks.pop_back();
         }
 
