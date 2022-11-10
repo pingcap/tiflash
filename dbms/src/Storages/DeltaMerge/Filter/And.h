@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class And : public LogicalOp
 {
 public:
@@ -46,9 +45,17 @@ public:
         return res;
     }
 
-    // TODO: override applyOptimize()
+    RSResults batchRoughCheck(size_t pack_count, const RSCheckParam & param) override
+    {
+        RSResults result(pack_count);
+        for (size_t i = 0; i < pack_count; ++i)
+        {
+            result[i] = roughCheck(i, param);
+        }
+        return result;
+    }
+
+    // TODO: override Optimize()
 };
 
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

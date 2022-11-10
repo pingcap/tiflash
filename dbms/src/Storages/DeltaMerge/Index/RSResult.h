@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 struct Attr
 {
     String col_name;
@@ -74,6 +73,4 @@ inline RSResult operator&&(RSResult v0, RSResult v1)
     return Some;
 }
 
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

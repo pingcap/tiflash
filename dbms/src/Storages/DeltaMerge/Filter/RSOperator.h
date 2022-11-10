@@ -19,14 +19,14 @@
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 using RSOperators = std::vector<RSOperatorPtr>;
 using Fields = std::vector<Field>;
+using RSResults = std::vector<RSResult>;
 
 inline static const RSOperatorPtr EMPTY_FILTER{};
 
@@ -52,9 +52,8 @@ public:
     virtual String name() = 0;
     virtual String toDebugString() = 0;
 
-    // TODO: implement a batch check version
-
     virtual RSResult roughCheck(size_t pack_id, const RSCheckParam & param) = 0;
+    virtual RSResults batchRoughCheck(size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual Attrs getAttrs() = 0;
 
@@ -117,12 +116,20 @@ public:
 };
 
 #define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex) \
-    auto it = param.indexes.find(attr.col_id);                             \
-    if (it == param.indexes.end())                                         \
+    auto it = (param).indexes.find((attr).col_id);                         \
+    if (it == (param).indexes.end())                                       \
         return Some;                                                       \
-    auto rsindex = it->second;                                             \
-    if (!rsindex.type->equals(*attr.type))                                 \
+    auto(rsindex) = it->second;                                            \
+    if (!(rsindex).type->equals(*(attr).type))                             \
         return Some;
+
+#define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res) \
+    auto it = (param).indexes.find((attr).col_id);                                  \
+    if (it == (param).indexes.end())                                                \
+        return (res);                                                               \
+    auto(rsindex) = it->second;                                                     \
+    if (!(rsindex).type->equals(*(attr).type))                                      \
+        return (res);
 
 
 // logical
@@ -139,15 +146,12 @@ RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_d
 // set
 RSOperatorPtr createIn(const Attr & attr, const Fields & values);
 RSOperatorPtr createNotIn(const Attr & attr, const Fields & values);
-//
+// like
 RSOperatorPtr createLike(const Attr & attr, const Field & value);
 RSOperatorPtr createNotLike(const Attr & attr, const Field & values);
-//
+// is null
 RSOperatorPtr createIsNull(const Attr & attr);
-//
+// unsupported
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not);
 
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

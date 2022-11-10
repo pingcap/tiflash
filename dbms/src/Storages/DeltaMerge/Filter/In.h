@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class In : public RSOperator
 {
     Attr attr;
@@ -57,9 +56,20 @@ public:
             res = res || rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
         return res;
     }
+
+    RSResults batchRoughCheck(size_t pack_count, const RSCheckParam & param) override
+    {
+        RSResults results(pack_count, RSResult::Some);
+        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
+        for (size_t i = 0; i < pack_count; ++i)
+        {
+            auto res = rsindex.minmax->checkEqual(i, values[0], rsindex.type);
+            for (size_t j = 1; j < values.size(); ++j)
+                res = res || rsindex.minmax->checkEqual(i, values[j], rsindex.type);
+            results[i] = res;
+        }
+        return results;
+    }
 };
 
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

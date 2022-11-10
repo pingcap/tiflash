@@ -31,10 +31,9 @@ extern const Event DMFileFilterAftPKAndPackSet;
 extern const Event DMFileFilterAftRoughSet;
 } // namespace ProfileEvents
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 using IdSet = std::set<UInt64>;
 using IdSetPtr = std::shared_ptr<IdSet>;
 
@@ -140,13 +139,12 @@ private:
             {
                 handle_res[i] = RSResult::None;
             }
-            for (size_t i = 0; i < pack_count; ++i)
+            for (auto & handle_filter : handle_filters)
             {
-                for (auto & handle_filter : handle_filters)
+                auto res = handle_filter->batchRoughCheck(pack_count, param);
+                for (size_t i = 0; i < pack_count; ++i)
                 {
-                    handle_res[i] = handle_res[i] || handle_filter->roughCheck(i, param);
-                    if (handle_res[i] == RSResult::All)
-                        break;
+                    handle_res[i] = handle_res[i] || res[i];
                 }
             }
         }
@@ -305,5 +303,4 @@ private:
     ReadLimiterPtr read_limiter;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class LessEqual : public ColCmpVal
 {
 public:
@@ -35,9 +34,18 @@ public:
         return !rsindex.minmax->checkGreater(pack_id, value, rsindex.type, null_direction);
     }
 
+    RSResults batchRoughCheck(size_t pack_count, const RSCheckParam & param) override
+    {
+        RSResults results(pack_count, RSResult::Some);
+        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
+        for (size_t i = 0; i < pack_count; ++i)
+        {
+            results[i] = !rsindex.minmax->checkGreater(i, value, rsindex.type, null_direction);
+        }
+        return results;
+    }
+
     RSOperatorPtr switchDirection() override { return createGreater(attr, value, null_direction); }
 };
 
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM
