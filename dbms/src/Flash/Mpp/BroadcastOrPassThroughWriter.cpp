@@ -19,9 +19,9 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
-BroadcastOrPassThroughWriter<StreamWriterPtr>::BroadcastOrPassThroughWriter(
-    StreamWriterPtr writer_,
+template <class ExchangeWriterPtr>
+BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
+    ExchangeWriterPtr writer_,
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
@@ -35,28 +35,31 @@ BroadcastOrPassThroughWriter<StreamWriterPtr>::BroadcastOrPassThroughWriter(
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::finishWrite()
 {
+    assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
-    {
-        encodeThenWriteBlocks<true>();
-    }
-    else
-    {
-        encodeThenWriteBlocks<false>();
-    }
+        sendExecutionSummary();
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::flush()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::sendExecutionSummary()
+{
+    tipb::SelectResponse response;
+    summary_collector.addExecuteSummaries(response);
+    writer->sendExecutionSummary(response);
+}
+
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        encodeThenWriteBlocks<false>();
+        encodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -69,39 +72,27 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        encodeThenWriteBlocks<false>();
+        encodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
+template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
 {
-    TrackedMppDataPacket tracked_packet(current_memory_tracker);
-    if constexpr (send_exec_summary_at_last)
-    {
-        TrackedSelectResp response;
-        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
-        tracked_packet.serializeByResponse(response.getResponse());
-    }
-    if (blocks.empty())
-    {
-        if constexpr (send_exec_summary_at_last)
-        {
-            writer->write(tracked_packet.getPacket());
-        }
+    if (unlikely(blocks.empty()))
         return;
-    }
+
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
     while (!blocks.empty())
     {
         const auto & block = blocks.back();
         chunk_codec_stream->encode(block, 0, block.rows());
         blocks.pop_back();
-        tracked_packet.addChunk(chunk_codec_stream->getString());
+        tracked_packet->addChunk(chunk_codec_stream->getString());
         chunk_codec_stream->clear();
     }
     assert(blocks.empty());
     rows_in_blocks = 0;
-    writer->write(tracked_packet.getPacket());
+    writer->broadcastOrPassThroughWrite(tracked_packet);
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

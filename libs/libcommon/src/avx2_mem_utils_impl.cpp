@@ -16,9 +16,7 @@
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 
-#ifndef TIFLASH_USE_AVX2_COMPILE_FLAG
-static_assert(false, "`libs/libcommon/src/avx2_mem_utils_impl.cpp` need flag `-mavx2` to inline related functions");
-#endif
+ASSERT_USE_AVX2_COMPILE_FLAG
 
 namespace mem_utils
 {

@@ -100,7 +100,9 @@ DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing
 
 FileUsageStatistics PageStorageImpl::getFileUsageStatistics() const
 {
-    return blob_store.getFileUsageStatistics();
+    auto u = blob_store.getFileUsageStatistics();
+    u.merge(page_directory->getFileUsageStatistics());
+    return u;
 }
 
 SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
@@ -123,8 +125,12 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     if (unlikely(write_batch.empty()))
         return;
 
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
+
     // Persist Page data to BlobStore
     auto edit = blob_store.write(write_batch, write_limiter);
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_blob).Observe(watch.elapsedSeconds());
     page_directory->apply(std::move(edit), write_limiter);
 }
 
@@ -191,7 +197,6 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     {
         auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_id_v3s, snapshot);
         PageMap page_map = blob_store.read(page_entries, read_limiter);
-
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             Page page_not_found;
@@ -209,8 +214,10 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
         snapshot = this->getSnapshot("");
     }
 
-    BlobStore::FieldReadInfos read_infos;
+    // get the entries from directory, keep track
+    // for not found page_ids
     PageIds page_ids_not_found;
+    BlobStore::FieldReadInfos read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
         const auto & [id, entry] = throw_on_not_exist ? page_directory->getByID(buildV3Id(ns_id, page_id), snapshot) : page_directory->getByIDOrNull(buildV3Id(ns_id, page_id), snapshot);
@@ -225,8 +232,9 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
             page_ids_not_found.emplace_back(id);
         }
     }
-    PageMap page_map = blob_store.read(read_infos, read_limiter);
 
+    // read page data from blob_store
+    PageMap page_map = blob_store.read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
         Page page_not_found;
@@ -285,21 +293,26 @@ String PageStorageImpl::GCTimeStatistics::toLogging() const
     };
     return fmt::format("GC finished{}."
                        " [total time={}ms]"
-                       " [dump snapshots={}ms] [gc in mem entries={}ms]"
-                       " [blobstore remove entries={}ms] [blobstore get status={}ms]"
-                       " [get gc entries={}ms] [blobstore full gc={}ms]"
+                       " [compact wal={}ms] [compact directory={}ms] [compact spacemap={}ms]"
+                       " [gc status={}ms] [gc entries={}ms] [gc data={}ms]"
                        " [gc apply={}ms]"
                        "{}", // a placeholder for external page gc at last
                        stage_suffix,
                        total_cost_ms,
-                       dump_snapshots_ms,
-                       gc_in_mem_entries_ms,
-                       blobstore_remove_entries_ms,
-                       blobstore_get_gc_stats_ms,
+                       compact_wal_ms,
+                       compact_directory_ms,
+                       compact_spacemap_ms,
+                       full_gc_prepare_ms,
                        full_gc_get_entries_ms,
                        full_gc_blobstore_copy_ms,
                        full_gc_apply_ms,
                        get_external_msg());
+}
+
+void PageStorageImpl::GCTimeStatistics::finishCleanExternalPage(UInt64 clean_cost_ms)
+{
+    clean_external_page_ms = clean_cost_ms;
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_clean_external).Observe(clean_external_page_ms / 1000.0);
 }
 
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
@@ -331,7 +344,7 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         auto iter = callbacks_container.begin();
         if (iter == callbacks_container.end()) // empty
         {
-            statistics.clean_external_page_ms = gc_watch.elapsedMillisecondsFromLastTime();
+            statistics.finishCleanExternalPage(gc_watch.elapsedMillisecondsFromLastTime());
             return;
         }
 
@@ -372,7 +385,7 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         }
     }
 
-    statistics.clean_external_page_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.finishCleanExternalPage(gc_watch.elapsedMillisecondsFromLastTime());
 }
 
 PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
@@ -397,10 +410,12 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
-    statistics.dump_snapshots_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
     const auto & del_entries = page_directory->gcInMemEntries();
-    statistics.gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
 
     SYNC_FOR("before_PageStorageImpl::doGC_fullGC_prepare");
 
@@ -408,12 +423,17 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
     blob_store.remove(del_entries);
-    statistics.blobstore_remove_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_spacemap_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap).Observe(statistics.compact_spacemap_ms / 1000.0);
 
-    // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `full GC`.
-    // Blobs that do not need to do full GC will also do ftruncate to reduce space amplification.
+    // Note that if full GC is not executed, below metrics won't be shown on grafana but it should
+    // only take few ms to fininsh these in-memory operations. Check them out by the logs if
+    // the total time cost not match.
+
+    // 3. Check whether there are BlobFiles that need to do `full GC`.
+    // This function will also try to use `ftruncate` to reduce space amplification.
     const auto & blob_ids_need_gc = blob_store.getGCStats();
-    statistics.blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.full_gc_prepare_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_ids_need_gc.empty())
     {
         cleanExternalPage(gc_watch, statistics);
@@ -444,6 +464,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
     statistics.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_rewrite).Observe( //
+        (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms) / 1000.0);
     RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
     // 6. MVCC gc apply
@@ -455,6 +477,7 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_commit).Observe(statistics.full_gc_apply_ms / 1000.0);
 
     SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 

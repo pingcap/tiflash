@@ -18,6 +18,7 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -29,13 +30,20 @@
 
 namespace DB::PS::V3
 {
+struct LogFile
+{
+    String filename;
+    size_t bytes;
+};
+using LogFiles = std::vector<LogFile>;
+
 LogFilenameSet WALStoreReader::listAllFiles(
     const PSDiskDelegatorPtr & delegator,
     LoggerPtr logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
-    std::vector<std::pair<String, Strings>> all_filenames;
-    Strings filenames;
+    std::vector<std::pair<String, LogFiles>> all_filenames;
+    LogFiles filenames;
     for (const auto & parent_path : delegator->listPaths())
     {
         String wal_parent_path = parent_path + WALStore::wal_folder_prefix;
@@ -47,17 +55,20 @@ LogFilenameSet WALStoreReader::listAllFiles(
         }
 
         filenames.clear();
-        directory.list(filenames);
+        Poco::DirectoryIterator end;
+        for (Poco::DirectoryIterator it(directory); it != end; ++it)
+        {
+            filenames.emplace_back(LogFile{.filename = it.name(), .bytes = it->getSize()});
+        }
         all_filenames.emplace_back(std::make_pair(wal_parent_path, std::move(filenames)));
-        filenames.clear();
     }
 
     LogFilenameSet log_files;
     for (const auto & [parent_path, filenames] : all_filenames)
     {
-        for (const auto & filename : filenames)
+        for (const auto & file : filenames)
         {
-            auto name = LogFilename::parseFrom(parent_path, filename, logger);
+            auto name = LogFilename::parseFrom(parent_path, file.filename, logger, file.bytes);
             switch (name.stage)
             {
             case LogFileStage::Normal:

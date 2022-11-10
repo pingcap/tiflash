@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
 
 namespace DB::PS::tests
@@ -50,13 +51,9 @@ private:
     {
         DB::PageStorageConfig config;
         initPageStorage(config, name());
-        PSWriter::fillAllPages(ps);
+        initPages(MAX_PAGE_ID_DEFAULT);
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
-
-        stress_time = std::make_shared<StressTimeout>(60);
-        stress_time->start();
+        startBackgroundTimer();
         {
             stop_watch.start();
             startReader<PSReader>(options.num_readers, [](std::shared_ptr<PSReader> reader) -> void {

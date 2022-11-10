@@ -71,21 +71,21 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         for (const auto & execution_summary : resp.execution_summaries())
         {
-            if (execution_summary.has_executor_id())
+            if (likely(execution_summary.has_executor_id()))
             {
-                const auto & executor_id = execution_summary.executor_id();
-                execution_summaries[index][executor_id].time_processed_ns = execution_summary.time_processed_ns();
-                execution_summaries[index][executor_id].num_produced_rows = execution_summary.num_produced_rows();
-                execution_summaries[index][executor_id].num_iterations = execution_summary.num_iterations();
-                execution_summaries[index][executor_id].concurrency = execution_summary.concurrency();
+                auto & remote_execution_summary = execution_summaries[index][execution_summary.executor_id()];
+                remote_execution_summary.time_processed_ns = execution_summary.time_processed_ns();
+                remote_execution_summary.num_produced_rows = execution_summary.num_produced_rows();
+                remote_execution_summary.num_iterations = execution_summary.num_iterations();
+                remote_execution_summary.concurrency = execution_summary.concurrency();
             }
         }
         execution_summaries_inited[index].store(true);
     }
 
-    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, bool is_streaming_call)
+    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
-        if (resp.execution_summaries_size() == 0)
+        if (unlikely(resp.execution_summaries_size() == 0))
             return;
 
         if (!execution_summaries_inited[index].load())
@@ -93,10 +93,16 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             initRemoteExecutionSummaries(resp, index);
             return;
         }
+        if constexpr (is_streaming_reader)
+            throw Exception(
+                fmt::format(
+                    "There are more than one execution summary packet of index {} in streaming reader, "
+                    "this should not happen",
+                    index));
         auto & execution_summaries_map = execution_summaries[index];
         for (const auto & execution_summary : resp.execution_summaries())
         {
-            if (execution_summary.has_executor_id())
+            if (likely(execution_summary.has_executor_id()))
             {
                 const auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
@@ -104,26 +110,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                     LOG_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
                     continue;
                 }
-                auto & current_execution_summary = execution_summaries_map[executor_id];
-                if (is_streaming_call)
-                {
-                    current_execution_summary.time_processed_ns
-                        = std::max(current_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
-                    current_execution_summary.num_produced_rows
-                        = std::max(current_execution_summary.num_produced_rows, execution_summary.num_produced_rows());
-                    current_execution_summary.num_iterations
-                        = std::max(current_execution_summary.num_iterations, execution_summary.num_iterations());
-                    current_execution_summary.concurrency
-                        = std::max(current_execution_summary.concurrency, execution_summary.concurrency());
-                }
-                else
-                {
-                    current_execution_summary.time_processed_ns
-                        = std::max(current_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
-                    current_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
-                    current_execution_summary.num_iterations += execution_summary.num_iterations();
-                    current_execution_summary.concurrency += execution_summary.concurrency();
-                }
+                auto & remote_execution_summary = execution_summaries_map[executor_id];
+                remote_execution_summary.time_processed_ns = std::max(remote_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
+                remote_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
+                remote_execution_summary.num_iterations += execution_summary.num_iterations();
+                remote_execution_summary.concurrency += execution_summary.concurrency();
             }
         }
     }
@@ -145,29 +136,21 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
                 throw Exception(result.resp->error().DebugString());
             }
-            /// only the last response contains execution summaries
-            if (result.resp != nullptr)
-            {
-                if constexpr (is_streaming_reader)
-                {
-                    addRemoteExecutionSummaries(*result.resp, result.call_index, true);
-                }
-                else
-                {
-                    addRemoteExecutionSummaries(*result.resp, 0, false);
-                }
-            }
-
-            const auto & decode_detail = result.decode_detail;
-            total_rows += decode_detail.rows;
 
             size_t index = 0;
             if constexpr (is_streaming_reader)
                 index = result.call_index;
 
-            connection_profile_infos[index].packets += decode_detail.packets;
-            connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+            /// only the last response contains execution summaries
+            if (result.resp != nullptr)
+                addRemoteExecutionSummaries(*result.resp, index);
 
+            const auto & decode_detail = result.decode_detail;
+            auto & connection_profile_info = connection_profile_infos[index];
+            connection_profile_info.packets += decode_detail.packets;
+            connection_profile_info.bytes += decode_detail.packet_bytes;
+
+            total_rows += decode_detail.rows;
             LOG_TRACE(
                 log,
                 "recv {} rows from remote for {}, total recv row num: {}",
@@ -198,7 +181,7 @@ public:
         execution_summaries.resize(source_num);
         connection_profile_infos.resize(source_num);
         sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
-        constexpr size_t squash_rows_limit = 8192;
+        static constexpr size_t squash_rows_limit = 8192;
         if constexpr (is_streaming_reader)
             decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, squash_rows_limit);
     }

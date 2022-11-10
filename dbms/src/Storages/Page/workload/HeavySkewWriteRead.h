@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/workload/PSStressEnv.h>
 #include <Storages/Page/workload/PSWorkload.h>
 
 namespace DB::PS::tests
@@ -38,8 +39,8 @@ private:
     String desc() override
     {
         return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {} ."
-                           "Please cleanup folder after this test."
+                           "`paths` will only used first one. which is {}. Data will store in {}. "
+                           "Please cleanup folder after this test. "
                            "The current workload will elapse near 60 seconds",
                            options.paths[0],
                            options.paths[0] + "/" + name());
@@ -51,28 +52,21 @@ private:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
+        startBackgroundTimer();
 
-        stress_time = std::make_shared<StressTimeout>(60);
-        stress_time->start();
         {
             stop_watch.start();
-            startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
+            const auto num_writers = options.num_writers;
+            startWriter<PSWindowWriter>(num_writers, [&](std::shared_ptr<PSWindowWriter> writer) {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferRange(10 * 1024, 1 * DB::MB);
-                writer->setWindowSize(500);
-                writer->setNormalDistributionSigma(13);
+                writer->setBufferSizeRange(0, options.avg_page_size * 2);
+                writer->setNormalDistributionSigma(250);
             });
 
-            auto num_writers = options.num_writers;
-
-            startReader<PSWindowReader>(options.num_readers, [num_writers](std::shared_ptr<PSWindowReader> reader) -> void {
-                reader->setPageReadOnce(5);
+            startReader<PSWindowReader>(options.num_readers, [](std::shared_ptr<PSWindowReader> reader) {
+                reader->setReadPageNums(5);
                 reader->setReadDelay(0);
-                reader->setWriterNums(num_writers);
-                reader->setWindowSize(100);
-                reader->setNormalDistributionSigma(9);
+                reader->setNormalDistributionSigma(250);
             });
 
             pool.joinAll();
