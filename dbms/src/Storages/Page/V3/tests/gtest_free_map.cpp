@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/Page/V3/spacemap/RBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
