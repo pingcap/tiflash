@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Server/RaftConfigParser.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -49,6 +48,7 @@
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
+#include <Server/RaftConfigParser.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -573,15 +573,14 @@ ConfigurationPtr Context::getUsersConfig()
 
 void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
 {
+    LOG_INFO(log, "set secuirty config.");
     auto lock = getLock();
     auto security_config = TiFlashSecurityConfig(config, log);
     // ywq todo
     if (shared->security_config.shouldUpdate(security_config))
     {
+        LOG_INFO(log, "update secuirty config.");
         shared->security_config = security_config;
-        auto raft_config = TiFlashRaftConfig::parseSettings(config, log);
-        auto cluster_config = security_config.getClusterConfig(raft_config);
-        global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
     }
 }
 

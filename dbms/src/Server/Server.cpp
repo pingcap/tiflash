@@ -286,17 +286,6 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
-{
-    pingcap::ClusterConfig config;
-    config.tiflash_engine_key = raft_config.engine_key;
-    config.tiflash_engine_value = raft_config.engine_value;
-    config.ca_path = security_config.ca_path;
-    config.cert_path = security_config.cert_path;
-    config.key_path = security_config.key_path;
-    return config;
-}
-
 LoggerPtr grpc_log;
 
 void printGRPCLog(gpr_log_func_args * args)
@@ -607,6 +596,7 @@ public:
                     {
                         LOG_ERROR(log, "https_port is set but tls config is not set");
                     }
+                    // ywq todo consider it.
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                                                                              security_config.key_path,
                                                                              security_config.cert_path,
@@ -970,6 +960,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// ===== Paths related configuration initialized end ===== ///
 
+    // ywq todo
     global_context->setSecurityConfig(config(), log);
     Redact::setRedactLog(global_context->getSecurityConfig().redact_info_log);
 
@@ -1096,15 +1087,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
         [&](ConfigurationPtr config) {
+            LOG_INFO(log, "ywq test config reload every 2 seconds.");
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
 #if Poco_NetSSL_FOUND
-            CertificateReloader::instance().tryLoad(*config);
+            // CertificateReloader::instance().tryLoad(*config);
+            // ywq todo
 #endif
             global_context->setSecurityConfig(*config, log);
+            // ywq todo move into setSecurity config..
+            // update
+            auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
+            auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
+            global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
         },
         /* already_loaded = */ true);
 
@@ -1157,7 +1155,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config);
+        auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1302,7 +1300,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, global_context->getSecurityConfig()); // todo maybe bug.
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, global_context->getSecurityConfig());
 
         SessionCleaner session_cleaner(*global_context);
 

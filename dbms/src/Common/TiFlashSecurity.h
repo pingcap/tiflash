@@ -153,7 +153,7 @@ public:
         return options;
     }
 
-    pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config) const
+    pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log) const
     {
         pingcap::ClusterConfig config;
         config.tiflash_engine_key = raft_config.engine_key;
@@ -161,6 +161,7 @@ public:
         config.ca_path = ca_path;
         config.cert_path = cert_path;
         config.key_path = key_path;
+        LOG_INFO(log, "ywq test ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         return config;
     }
 

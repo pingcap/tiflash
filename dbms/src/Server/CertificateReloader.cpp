@@ -1,8 +1,11 @@
 #include "CertificateReloader.h"
+#include <cstddef>
+#include <memory>
 
 #if Poco_NetSSL_FOUND
 
 
+#include <Common/Exception.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SSLManager.h>
 #include <Poco/Net/Utility.h>
@@ -29,6 +32,8 @@ extern const int CANNOT_STAT;
 /// This is callback for OpenSSL. It will be called on every connection to obtain a certificate and private key.
 int CertificateReloader::setCertificate(SSL * ssl)
 {
+    LOG_INFO(log, "ywq test setCetificate callaback");
+
     auto current = data.get();
     if (!current)
         return -1;
@@ -52,19 +57,28 @@ void CertificateReloader::init()
 {
     LOG_DEBUG(log, "Initializing certificate reloader.");
 
-    /// Set a callback for OpenSSL to allow get the updated cert and key.
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                                                                             key_file.path,
+                                                                             cert_file.path,
+                                                                             ca_file.path,
+                                                                             Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+    SSL_CTX_set_cert_cb(context->sslContext(), callSetCertificate, nullptr);
 
-    auto * ctx = Poco::Net::SSLManager::instance().defaultServerContext()->sslContext();
+    auto* ctx = Poco::Net::SSLManager::instance().defaultServerContext()->sslContext();
     SSL_CTX_set_cert_cb(ctx, callSetCertificate, nullptr);
+    
     init_was_not_made = false;
+    LOG_INFO(log, "ywq test init was not made {}", init_was_not_made);
 }
 
 
 void CertificateReloader::tryLoad(const Poco::Util::AbstractConfiguration & config)
 {
+    LOG_INFO(log, "start loading certificate.");
     /// If at least one of the files is modified - recreate
     std::string new_cert_path = config.getString("security.cert_path", "");
     std::string new_key_path = config.getString("security.key_path", "");
+    std::string new_ca_path = config.getString("security.ca_path", "");
 
     /// For empty paths (that means, that user doesn't want to use certificates)
     /// no processing required
@@ -76,10 +90,11 @@ void CertificateReloader::tryLoad(const Poco::Util::AbstractConfiguration & conf
     {
         bool cert_file_changed = cert_file.changeIfModified(std::move(new_cert_path), log);
         bool key_file_changed = key_file.changeIfModified(std::move(new_key_path), log);
+        bool ca_file_changed = ca_file.changeIfModified(std::move(new_ca_path), log);
 
-        if (cert_file_changed || key_file_changed)
+        if (cert_file_changed || key_file_changed || ca_file_changed)
         {
-            LOG_DEBUG(log, "Reloading certificate ({}) and key ({}).", cert_file.path, key_file.path);
+            LOG_DEBUG(log, "Reloading certificate ({}) and key ({}) and ca({}).", cert_file.path, key_file.path, ca_file.path);
             data.set(std::make_unique<const Data>(cert_file.path, key_file.path));
             LOG_INFO(log, "Reloaded certificate ({}) and key ({}).", cert_file.path, key_file.path);
         }
@@ -93,7 +108,7 @@ void CertificateReloader::tryLoad(const Poco::Util::AbstractConfiguration & conf
         catch (...)
         {
             init_was_not_made = true;
-            // LOG_ERROR(log, getCurrentExceptionMessage(false)); // todo
+            LOG_ERROR(log, getCurrentExceptionMessage(false));
         }
     }
 }

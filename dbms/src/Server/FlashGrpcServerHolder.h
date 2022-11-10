@@ -46,17 +46,9 @@ public:
 
     std::unique_ptr<FlashService> & flashService();
 
-    void reloadSecurityConfig(TiFlashSecurityConfig & security_config);
-
-private:
-    void initSecurityConfig(TiFlashSecurityConfig & security_config, const String & flash_server_addr);
-    void initServerBuilder(const String & flash_server_addr);
-
 private:
     const LoggerPtr & log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
-
-    grpc::ServerBuilder builder;
 
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;

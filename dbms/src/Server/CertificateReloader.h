@@ -65,6 +65,7 @@ private:
 
     File cert_file{"certificate"};
     File key_file{"key"};
+    File ca_file{"ca"};
 
     struct Data
     {
