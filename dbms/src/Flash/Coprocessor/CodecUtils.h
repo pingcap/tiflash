@@ -12,9 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
+#pragma once
 
-int main(int argc, char ** argv)
+#include <DataTypes/IDataType.h>
+
+namespace DB
 {
-    return DB::PageStorageCtl::mainEntry(argc, argv);
-}
+namespace CodecUtils
+{
+struct DataTypeWithTypeName
+{
+    DataTypeWithTypeName(const DataTypePtr & t, const String & n)
+        : type(t)
+        , name(n)
+    {
+    }
+
+    DataTypePtr type;
+    String name;
+};
+
+void checkColumnSize(size_t expected, size_t actual);
+void checkDataTypeName(size_t column_index, const String & expected, const String & actual);
+} // namespace CodecUtils
+} // namespace DB

@@ -16,7 +16,6 @@
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set (COMPILER_GCC 1)
-    set (MOST_DEBUGGABLE_LEVEL -Og)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
     set (COMPILER_APPLE_CLANG 1)
     set (COMPILER_CLANG 1) # Safe to treat AppleClang as a regular Clang, in general.
@@ -33,14 +32,10 @@ execute_process(COMMAND ${CMAKE_CXX_COMPILER} --version OUTPUT_VARIABLE COMPILER
 message (STATUS "Using compiler:\n${COMPILER_SELF_IDENTIFICATION}")
 
 # Require minimum compiler versions
-set (CLANG_MINIMUM_VERSION 5)
-set (GCC_MINIMUM_VERSION 7)
+set (CLANG_MINIMUM_VERSION 12)
 
 if (COMPILER_GCC)
-    message (WARNING "GCC is not officially supported, and may not work.")
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${GCC_MINIMUM_VERSION})
-        message (FATAL_ERROR "Compilation with GCC version ${CMAKE_CXX_COMPILER_VERSION} is not supported, minimum required version is ${GCC_MINIMUM_VERSION}")
-    endif ()
+    message (FATAL_ERROR "GCC is not officially supported.")
 elseif (COMPILER_CLANG)
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${CLANG_MINIMUM_VERSION})
         message (FATAL_ERROR "Compilation with Clang version ${CMAKE_CXX_COMPILER_VERSION} is unsupported, the minimum required version is ${CLANG_MINIMUM_VERSION}.")
@@ -64,9 +59,7 @@ endif ()
 if (NOT LINKER_NAME)
     if (OS_DARWIN AND COMPILER_APPLE_CLANG)
         set (LINKER_NAME "ld")
-    elseif (COMPILER_CLANG AND LLD_PATH)
-        set (LINKER_NAME "lld")
-    elseif (COMPILER_GCC AND LLD_PATH)
+    elseif (LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
         message (WARNING "Linking with gold is not recommended. Please use lld.")
@@ -83,15 +76,13 @@ endif()
 
 # Archiver
 
-if (COMPILER_GCC)
-    find_program (LLVM_AR_PATH NAMES "llvm-ar" "llvm-ar-15" "llvm-ar-14" "llvm-ar-13" "llvm-ar-12")
-else ()
-    find_program (LLVM_AR_PATH NAMES "llvm-ar-${COMPILER_VERSION_MAJOR}" "llvm-ar")
-endif ()
+find_program (LLVM_AR_PATH NAMES "llvm-ar-${COMPILER_VERSION_MAJOR}" "llvm-ar")
 
 if (LLVM_AR_PATH)
     set (CMAKE_AR "${LLVM_AR_PATH}")
     message(STATUS "Using archiver: ${CMAKE_AR}")
+elseif (OS_DARWIN AND COMPILER_APPLE_CLANG)
+    message (STATUS "Using archiver: <default>")
 else ()
     message (FATAL_ERROR "Cannot find ar.")
 endif ()
@@ -99,15 +90,13 @@ endif ()
 
 # Ranlib
 
-if (COMPILER_GCC)
-    find_program (LLVM_RANLIB_PATH NAMES "llvm-ranlib" "llvm-ranlib-15" "llvm-ranlib-14" "llvm-ranlib-13" "llvm-ranlib-12")
-else ()
-    find_program (LLVM_RANLIB_PATH NAMES "llvm-ranlib-${COMPILER_VERSION_MAJOR}" "llvm-ranlib")
-endif ()
+find_program (LLVM_RANLIB_PATH NAMES "llvm-ranlib-${COMPILER_VERSION_MAJOR}" "llvm-ranlib")
 
 if (LLVM_RANLIB_PATH)
     set (CMAKE_RANLIB "${LLVM_RANLIB_PATH}")
     message(STATUS "Using ranlib: ${CMAKE_RANLIB}")
+elseif (OS_DARWIN AND COMPILER_APPLE_CLANG)
+    message (STATUS "Using ranlib: <default>")
 else ()
     message (FATAL_ERROR "Cannot find ranlib.")
 endif ()
@@ -115,15 +104,13 @@ endif ()
 
 # Objcopy
 
-if (COMPILER_GCC)
-    find_program (OBJCOPY_PATH NAMES "llvm-objcopy" "llvm-objcopy-15" "llvm-objcopy-14" "llvm-objcopy-13" "llvm-objcopy-12" "objcopy")
-else ()
-    find_program (OBJCOPY_PATH NAMES "llvm-objcopy-${COMPILER_VERSION_MAJOR}" "llvm-objcopy" "objcopy")
-endif ()
+find_program (OBJCOPY_PATH NAMES "llvm-objcopy-${COMPILER_VERSION_MAJOR}" "llvm-objcopy" "objcopy")
 
 if (OBJCOPY_PATH)
     set (CMAKE_OBJCOPY "${OBJCOPY_PATH}")
     message (STATUS "Using objcopy: ${OBJCOPY_PATH}")
+elseif (OS_DARWIN AND COMPILER_APPLE_CLANG)
+    message (STATUS "Using objcopy: <default>")
 else ()
     message (FATAL_ERROR "Cannot find objcopy.")
 endif ()

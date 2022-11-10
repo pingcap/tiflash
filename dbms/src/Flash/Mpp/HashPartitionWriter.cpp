@@ -15,14 +15,14 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
-#include <Flash/Mpp/HashParitionWriter.h>
+#include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
 namespace DB
 {
-template <class StreamWriterPtr>
-HashPartitionWriter<StreamWriterPtr>::HashPartitionWriter(
-    StreamWriterPtr writer_,
+template <class ExchangeWriterPtr>
+HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
+    ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     Int64 batch_send_min_limit_,
@@ -42,21 +42,31 @@ HashPartitionWriter<StreamWriterPtr>::HashPartitionWriter(
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::finishWrite()
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::finishWrite()
 {
+    assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
-    {
-        partitionAndEncodeThenWriteBlocks<true>();
-    }
-    else
-    {
-        partitionAndEncodeThenWriteBlocks<false>();
-    }
+        sendExecutionSummary();
 }
 
-template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::sendExecutionSummary()
+{
+    tipb::SelectResponse response;
+    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    writer->sendExecutionSummary(response);
+}
+
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::flush()
+{
+    if (rows_in_blocks > 0)
+        partitionAndEncodeThenWriteBlocks();
+}
+
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -69,14 +79,13 @@ void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        partitionAndEncodeThenWriteBlocks<false>();
+        partitionAndEncodeThenWriteBlocks();
 }
 
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
-    std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
+    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
     if (!blocks.empty())
     {
@@ -90,7 +99,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::computeHash(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -100,7 +109,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 if (dest_block_rows > 0)
                 {
                     chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
+                    tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
                 }
             }
@@ -109,31 +118,18 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
         rows_in_blocks = 0;
     }
 
-    writePackets<send_exec_summary_at_last>(tracked_packets);
+    writePackets(tracked_packets);
 }
 
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDataPacket> & packets)
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
 {
-    size_t part_id = 0;
-
-    if constexpr (send_exec_summary_at_last)
+    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
-        tipb::SelectResponse response;
-        summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
-        /// Sending the response to only one node, default the first one.
-        assert(!packets.empty());
-        packets[0].serializeByResponse(response);
-        writer->write(packets[0].getPacket(), 0);
-        part_id = 1;
-    }
-
-    for (; part_id < packets.size(); ++part_id)
-    {
-        auto & packet = packets[part_id].getPacket();
-        if (packet.chunks_size() > 0)
-            writer->write(packet, part_id);
+        const auto & packet = packets[part_id];
+        assert(packet);
+        if (likely(packet->getPacket().chunks_size() > 0))
+            writer->partitionWrite(packet, part_id);
     }
 }
 

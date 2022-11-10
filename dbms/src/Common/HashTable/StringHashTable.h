@@ -255,8 +255,8 @@ public:
     // NOTE: It relies on Little Endianness
     template <typename Self, typename KeyHolder, typename Func>
     static auto
-#if defined(ADDRESS_SANITIZER)
-        NO_INLINE NO_SANITIZE_ADDRESS
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
+        NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
 #else
         ALWAYS_INLINE
 #endif

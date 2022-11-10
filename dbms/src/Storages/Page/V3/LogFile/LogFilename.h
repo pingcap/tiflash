@@ -20,7 +20,7 @@
 
 namespace DB::PS::V3
 {
-enum LogFileStage
+enum class LogFileStage
 {
     Invalid,
     Temporary,
@@ -32,12 +32,13 @@ struct LogFilename
     const LogFileStage stage;
     const Format::LogNumberType log_num;
     const Format::LogNumberType level_num;
+    const size_t bytes_on_disk;
     const String parent_path;
 
     static constexpr const char * LOG_FILE_PREFIX_NORMAL = "log";
     static constexpr const char * LOG_FILE_PREFIX_TEMP = ".temp.log";
 
-    static LogFilename parseFrom(const String & parent_path, const String & filename, LoggerPtr log);
+    static LogFilename parseFrom(const String & parent_path, const String & filename, LoggerPtr log, size_t bytes = 0);
 
     inline String filename(LogFileStage file_stage) const
     {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -20,6 +21,7 @@
 #include <Storages/Page/V3/WALStore.h>
 
 #include <memory>
+#include <optional>
 
 namespace DB
 {
@@ -62,7 +64,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
             // We should restore the entry to `blob_stats` even if it is marked as "deleted",
             // or we will mistakenly reuse the space to write other blobs down into that space.
             // So we need to use `getLastEntry` instead of `getEntry(version)` here.
-            if (auto entry = entries->getLastEntry(); entry)
+            if (auto entry = entries->getLastEntry(std::nullopt); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }
@@ -75,14 +77,24 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
     return dir;
 }
 
-PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
+// just for test
+PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
+
+    // Allocate mock sequence to run gc
+    UInt64 mock_sequence = 0;
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version.sequence = ++mock_sequence;
+    }
+
     loadEdit(dir, edit);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
+    RUNTIME_CHECK(dir->sequence, mock_sequence);
 
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
@@ -102,7 +114,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileP
             // We should restore the entry to `blob_stats` even if it is marked as "deleted",
             // or we will mistakenly reuse the space to write other blobs down into that space.
             // So we need to use `getLastEntry` instead of `getEntry(version)` here.
-            if (auto entry = entries->getLastEntry(); entry)
+            if (auto entry = entries->getLastEntry(std::nullopt); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }
@@ -121,6 +133,8 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
 
+        if (dump_entries)
+            LOG_INFO(Logger::get(), PageEntriesEdit::toDebugString(r));
         applyRecord(dir, r);
     }
 }
@@ -182,8 +196,18 @@ void PageDirectoryFactory::applyRecord(
                 restored_version);
             break;
         case EditRecordType::UPSERT:
-            version_list->createNewEntry(restored_version, r.entry);
+        {
+            auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
+            if (id_to_deref.low != INVALID_PAGE_ID)
+            {
+                // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page
+                auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);
+                RUNTIME_CHECK_MSG(deref_iter != dir->mvcc_table_directory.end(), "Can't find [page_id={}] to deref when applying upsert", id_to_deref);
+                auto deref_res = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, restored_version, 1, nullptr);
+                RUNTIME_ASSERT(!deref_res);
+            }
             break;
+        }
         }
     }
     catch (DB::Exception & e)

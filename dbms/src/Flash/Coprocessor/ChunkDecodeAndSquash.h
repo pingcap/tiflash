@@ -12,25 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsRandom.h>
+#pragma once
+
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/CodecUtils.h>
 
 namespace DB
 {
-namespace detail
-{
-void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed)
-{
-    generator.seed(intHash64(randomSeed() ^ intHash64(additional_seed)));
-}
-} // namespace detail
 
-
-void registerFunctionsRandom(FunctionFactory & factory)
+class CHBlockChunkDecodeAndSquash
 {
-    factory.registerFunction<FunctionRand>();
-    factory.registerFunction<FunctionRand64>();
-    factory.registerFunction<FunctionRandConstant>();
-}
+public:
+    CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
+    ~CHBlockChunkDecodeAndSquash() = default;
+    std::optional<Block> decodeAndSquash(const String &);
+    std::optional<Block> flush();
+
+private:
+    CHBlockChunkCodec codec;
+    std::optional<Block> accumulated_block;
+    size_t rows_limit;
+};
+
 
 } // namespace DB

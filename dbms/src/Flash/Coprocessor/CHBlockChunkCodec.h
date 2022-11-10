@@ -15,16 +15,34 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/CodecUtils.h>
 
 namespace DB
 {
-class CHBlockChunkCodec : public ChunkCodec
+class CHBlockChunkDecodeAndSquash;
+
+class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
     CHBlockChunkCodec() = default;
+    CHBlockChunkCodec(const Block & header_);
+    CHBlockChunkCodec(const DAGSchema & schema);
+
     Block decode(const String &, const DAGSchema & schema) override;
     static Block decode(const String &, const Block & header);
     std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types) override;
+
+private:
+    friend class CHBlockChunkDecodeAndSquash;
+    void readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTypeAndName & column);
+    void readBlockMeta(ReadBuffer & istr, size_t & columns, size_t & rows) const;
+    static void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows);
+    /// 'reserve_size' used for Squash usage, and takes effect when 'reserve_size' > 0
+    Block decodeImpl(ReadBuffer & istr, size_t reserve_size = 0);
+
+    Block header;
+    std::vector<CodecUtils::DataTypeWithTypeName> header_datatypes;
+    std::vector<String> output_names;
 };
 
 } // namespace DB
