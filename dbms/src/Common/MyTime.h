@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MyDuration.h>
 #include <Core/Field.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/DateLUTImpl.h>
@@ -129,6 +130,8 @@ struct MyDateTime : public MyTimeBase
 
     String toString(int fsp) const;
 
+    MyDuration convertToMyDuration(int fsp);
+
     static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &, UInt8 fsp);
 };
 
@@ -178,7 +181,7 @@ private:
 
     // Parsing method. Parse from ctx.view[ctx.pos].
     // If success, update `datetime`, `ctx` and return true.
-    // If fail, return false.
+    // If fails, return false.
     using ParserCallback = std::function<bool(MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
     std::vector<ParserCallback> parsers;
 };
@@ -196,6 +199,8 @@ static CheckTimeFunc DefaultCheckTimeFunc = noNeedCheckTime;
 Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
 Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat);
+
+Field parseMyDuration(const String & str, int8_t fsp = DefaultFsp);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 

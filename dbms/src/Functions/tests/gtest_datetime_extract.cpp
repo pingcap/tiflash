@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnString.h>
 #include <Common/Exception.h>
-#include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsDateTime.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -26,7 +24,6 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
-#include <Poco/Types.h>
 
 #pragma GCC diagnostic pop
 
@@ -39,62 +36,41 @@ class TestDateTimeExtract : public DB::tests::FunctionTest
 {
 };
 
-// Disabled for now, since we haven't supported ExtractFromString yet
-TEST_F(TestDateTimeExtract, DISABLED_ExtractFromString)
+TEST_F(TestDateTimeExtract, ExtractFromString)
 try
 {
-    const Context context = TiFlashTestEnv::getContext();
-
-    auto & factory = FunctionFactory::instance();
-
     std::vector<String> units{
-        "year",
-        "quarter",
-        "month",
-        "week",
-        "day",
         "day_microsecond",
         "day_second",
         "day_minute",
         "day_hour",
-        "year_month",
     };
     String datetime_value{"2021/1/29 12:34:56.123456"};
-    std::vector<Int64> results{2021, 1, 1, 4, 29, 29123456123456, 29123456, 291234, 2912, 202101};
+    std::vector<Int64> results{29123456123456, 29123456, 291234, 2912};
 
     for (size_t i = 0; i < units.size(); ++i)
     {
         const auto & unit = units[i];
-        Block block;
+        const auto & result = results[i];
+        // nullable/non-null string
+        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({datetime_value})));
+        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toVec<String>({datetime_value})));
+        // const string
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), createConstColumn<String>(1, {datetime_value})));
+    }
 
-        MutableColumnPtr col_units = ColumnString::create();
-        col_units->insert(Field(unit.c_str(), unit.size()));
-        col_units = ColumnConst::create(col_units->getPtr(), 1);
+    datetime_value = "12:34:56.123456";
+    results = {123456123456, 123456, 1234, 12};
 
-        auto col_datetime = ColumnString::create();
-        col_datetime->insert(Field(datetime_value.data(), datetime_value.size()));
-        ColumnWithTypeAndName unit_ctn = ColumnWithTypeAndName(std::move(col_units), std::make_shared<DataTypeString>(), "unit");
-        ColumnWithTypeAndName datetime_ctn
-            = ColumnWithTypeAndName(std::move(col_datetime), std::make_shared<DataTypeString>(), "datetime_value");
-        block.insert(unit_ctn);
-        block.insert(datetime_ctn);
-        // for result from extract
-        block.insert({});
-
-        // test extract
-        auto func_builder_ptr = factory.tryGet("extractMyDateTime", context);
-        ASSERT_TRUE(func_builder_ptr != nullptr);
-
-        ColumnNumbers arg_cols_idx{0, 1};
-        size_t res_col_idx = 2;
-        func_builder_ptr->build({unit_ctn, datetime_ctn})->execute(block, arg_cols_idx, res_col_idx);
-        const IColumn * ctn_res = block.getByPosition(res_col_idx).column.get();
-        const auto * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
-
-        Field res_field;
-        col_res->get(0, res_field);
-        Int64 s = res_field.get<Int64>();
-        EXPECT_EQ(results[i], s);
+    for (size_t i = 0; i < units.size(); ++i)
+    {
+        const auto & unit = units[i];
+        const auto & result = results[i];
+        // nullable/non-null string
+        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({datetime_value})));
+        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toVec<String>({datetime_value})));
+        // const string
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), createConstColumn<String>(1, {datetime_value})));
     }
 }
 CATCH
@@ -102,10 +78,6 @@ CATCH
 TEST_F(TestDateTimeExtract, ExtractFromMyDateTime)
 try
 {
-    const Context context = TiFlashTestEnv::getContext();
-
-    auto & factory = FunctionFactory::instance();
-
     std::vector<String> units{
         "year",
         "quarter",
@@ -124,37 +96,14 @@ try
     for (size_t i = 0; i < units.size(); ++i)
     {
         const auto & unit = units[i];
-        Block block;
-
-        MutableColumnPtr col_units = ColumnString::create();
-        col_units->insert(Field(unit.c_str(), unit.size()));
-        col_units = ColumnConst::create(col_units->getPtr(), 1);
-
-        auto col_datetime = ColumnUInt64::create();
-        col_datetime->insert(Field(datetime_value.toPackedUInt()));
-        ColumnWithTypeAndName unit_ctn = ColumnWithTypeAndName(std::move(col_units), std::make_shared<DataTypeString>(), "unit");
-        ColumnWithTypeAndName datetime_ctn
-            = ColumnWithTypeAndName(std::move(col_datetime), std::make_shared<DataTypeMyDateTime>(), "datetime_value");
-
-        block.insert(unit_ctn);
-        block.insert(datetime_ctn);
-        // for result from extract
-        block.insert({});
-
-        // test extract
-        auto func_builder_ptr = factory.tryGet("extractMyDateTime", context);
-        ASSERT_TRUE(func_builder_ptr != nullptr);
-
-        ColumnNumbers arg_cols_idx{0, 1};
-        size_t res_col_idx = 2;
-        func_builder_ptr->build({unit_ctn, datetime_ctn})->execute(block, arg_cols_idx, res_col_idx);
-        const IColumn * ctn_res = block.getByPosition(res_col_idx).column.get();
-        const auto * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
-
-        Field res_field;
-        col_res->get(0, res_field);
-        Int64 s = res_field.get<Int64>();
-        EXPECT_EQ(results[i], s);
+        const auto & result = results[i];
+        // nullable/non-null datetime
+        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumn({datetime_value}, 6)));
+        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumn<false>({datetime_value}, 6)));
+        // const datetime
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumnConst(1, {datetime_value}, 6)));
+        // null
+        ASSERT_COLUMN_EQ(toNullableVec<Int64>({std::nullopt}), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumn({std::nullopt}, 6)));
     }
 }
 CATCH

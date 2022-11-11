@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MyTime.h>
+#include <Common/MyDuration.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
@@ -262,35 +263,39 @@ bool isPunctuation(char c)
     return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
 }
 
-std::tuple<std::vector<String>, String, bool, String, String, String, String> splitDatetime(String format)
+std::tuple<std::vector<String>, String, bool, String, String, String, String, bool> splitDatetime(String format)
 {
     std::vector<String> seps;
     String frac;
-    bool has_tz = false;
+    bool has_tz = false, truncated = false;
     auto [tz_idx, tz_sign, tz_hour, tz_sep, tz_minute] = getTimeZone(format);
     if (tz_idx > 0)
     {
         has_tz = true;
-        while (tz_idx > 0 && isPunctuation(format[tz_idx - 1]))
+        for (; tz_idx > 0 && isPunctuation(format[tz_idx - 1]); tz_idx--)
         {
             // in case of multiple separators, e.g. 2020-10--10
-            tz_idx--;
         }
         format = format.substr(0, tz_idx);
     }
-    int frac_idx = getFracIndex(format);
+    size_t frac_idx = getFracIndex(format);
     if (frac_idx > 0)
     {
-        frac = format.substr(frac_idx + 1);
-        while (frac_idx > 0 && isPunctuation(format[frac_idx - 1]))
+        size_t frac_end = frac_idx + 1;
+        for (; frac_end < format.length() && isdigit(format[frac_end]); frac_end++)
+        {
+            //
+        }
+        truncated = (frac_end != format.length());
+        frac = format.substr(frac_idx + 1, frac_end);
+        for (; frac_idx > 0 && isPunctuation(format[frac_idx - 1]); frac_idx--)
         {
             // in case of multiple separators, e.g. 2020-10-10 11:00:00..123456
-            frac_idx--;
         }
         format = format.substr(0, frac_idx);
     }
     seps = parseDateFormat(format);
-    return std::make_tuple(std::move(seps), std::move(frac), std::move(has_tz), std::move(tz_sign), std::move(tz_hour), std::move(tz_sep), std::move(tz_minute));
+    return std::make_tuple(std::move(seps), std::move(frac), std::move(has_tz), std::move(tz_sign), std::move(tz_hour), std::move(tz_sep), std::move(tz_minute), std::move(truncated));
 }
 
 
@@ -677,6 +682,50 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDa
     return getDatetime(number, result);
 }
 
+// returns frac, overflow, matched. eg., "999" fsp=2 will overflow.
+std::tuple<UInt32, bool, bool> parseFrac(const String & str, int8_t fsp)
+{
+    if (str.empty())
+    {
+        return {0, false, true};
+    }
+    if (fsp == -1)
+    {
+        fsp = 6;
+    }
+    if (fsp < 0 || fsp > 6)
+    {
+        return {0, false, false};
+    }
+    try
+    {
+        int len = str.length();
+        if (fsp >= len)
+        {
+            UInt32 tmp = std::stoul(str);
+            return {tmp * std::pow(10, 6 - len), false, true};
+        }
+
+        // Round when fsp < string length.
+        UInt32 tmp = std::stoul(str.substr(0, fsp + 1));
+        tmp = (tmp + 5) / 10;
+        if (tmp >= std::pow(10, fsp))
+        {
+            // overflow
+            return {0, true, true};
+        }
+        // Get the final frac, with 6 digit number
+        //  1236 round 3 -> 124 -> 124000
+        //  0312 round 2 -> 3 -> 30000
+        //  999 round 2 -> 100 -> overflow
+        return {tmp * std::pow(10, 6 - fsp), false, true};
+    }
+    catch (std::exception & e)
+    {
+        return {0, false, false};
+    }
+}
+
 // isFloat is true means that the input string is float format like "1212.111"
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, bool isFloat)
 {
@@ -686,17 +735,15 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 
     bool hhmmss = false;
 
-    auto [seps, frac_str, has_tz, tz_sign, tz_hour, tz_sep, tz_minute] = splitDatetime(str);
+    auto [seps, frac_str, has_tz, tz_sign, tz_hour, tz_sep, tz_minute, truncated_or_incorrect] = splitDatetime(str);
 
-    bool truncated_or_incorrect = false;
-
-    // no_absorb tests if can absorb FSP or TZ
-    auto no_absorb = [](const std::vector<String> & seps) {
+    // no_absorb tests if it can absorb FSP or TZ
+    auto no_absorb = [](const std::vector<String> & s) {
         // if we have more than 5 parts (i.e. 6), the tailing part can't be absorbed
         // or if we only have 1 part, but its length is longer than 4, then it is at least YYMMD, in this case, FSP can
         // not be absorbed, and it will be handled later, and the leading sign prevents TZ from being absorbed, because
         // if date part has no separators, we can't use -/+ as separators between date & time.
-        return seps.size() > 5 || (seps.size() == 1 && seps[0].size() > 4);
+        return s.size() > 5 || (s.size() == 1 && s[0].size() > 4);
     };
 
     if (!frac_str.empty() && !isFloat)
@@ -710,7 +757,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 
     if (has_tz && !tz_sign.empty())
     {
-        // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
+        // if tz_sign is empty, it's certain that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
         if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
         {
@@ -729,6 +776,10 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 
     switch (seps.size())
     {
+    case 0:
+    {
+        return {Field(), is_date};
+    }
     // No delimiter
     case 1:
     {
@@ -736,16 +787,12 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         if (isFloat)
         {
             MyDateTime date_time(0);
-            if (seps[0] == "0")
-            {
-                return {date_time.toPackedUInt(), is_date};
-            }
             if (numberToDateTime(std::stoll(seps[0]), date_time))
             {
                 return {Field(), is_date};
             }
             std::tie(year, month, day, hour, minute, second) = std::tuple(date_time.year, date_time.month, date_time.day, date_time.hour, date_time.minute, date_time.second);
-            if (l >= 9 && l <= 14)
+            if (seps[0] == "0" || (l >= 9 && l <= 14))
             {
                 hhmmss = true;
             }
@@ -822,33 +869,38 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             // We must handle float => string => datetime, the difference is that fractional
             // part of float type is discarded directly, while fractional part of string type
             // is parsed to HH:MM:SS.
-            int ret = 0;
-            switch (frac_str.size())
+            if (!isFloat)
             {
-            case 0:
-                is_date = true;
-                break;
-            case 1:
-            case 2:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT(cert-err34-c): check conversion error manually
-                truncated_or_incorrect = (ret != 1);
-                break;
+                // '20170118.123423' => 2017-01-18 12:34:23.234
+                int ret = 0;
+                switch (frac_str.size())
+                {
+                case 0:
+                    is_date = true;
+                    break;
+                case 1:
+                case 2:
+                {
+                    ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT(cert-err34-c): check conversion error manually
+                    truncated_or_incorrect = (ret != 1);
+                    break;
+                }
+                case 3:
+                case 4:
+                {
+                    ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
+                    truncated_or_incorrect = (ret != 2);
+                    break;
+                }
+                default:
+                {
+                    ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
+                    truncated_or_incorrect = (ret != 3);
+                    break;
+                }
+                }
             }
-            case 3:
-            case 4:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
-                truncated_or_incorrect = (ret != 2);
-                break;
-            }
-            default:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
-                truncated_or_incorrect = (ret != 3);
-                break;
-            }
-            }
+            // 20170118.123423 => 2017-01-18 00:00:00
         }
         if (l == 9 || l == 10)
         {
@@ -866,6 +918,10 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             return {Field(), is_date};
         }
         break;
+    }
+    case 2:
+    {
+        return {Field(), is_date};
     }
     case 3:
     {
@@ -900,23 +956,24 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     }
     default:
     {
-        return {Field(), is_date};
+        // For case like `2020-05-28 23:59:59 00:00:00`, the seps should be > 6, the reluctant parts should be truncated.
+        seps.resize(6);
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second}))
+            return {Field(), is_date};
+        hhmmss = true;
     }
     }
 
-    // If str is sepereated by delimiters, the first one is year, and if the year is 2 digit,
+    // If str is separated by delimiters, the first one is year, and if the year is 2 digit,
     // we should adjust it.
     // TODO: adjust year is very complex, now we only consider the simplest way.
     if (seps[0].size() <= 2 && !isFloat)
     {
-        if (year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && frac_str.empty())
-        {
-            // Skip a special case "00-00-00".
-        }
-        else
+        if (!(year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && frac_str.empty()))
         {
             year = adjustYear(year);
         }
+        // Skip a special case "00-00-00".
     }
 
     UInt32 micro_second = 0;
@@ -924,34 +981,11 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     {
         // If input string is "20170118.999", without hhmmss, fsp is meaningless.
         // TODO: this case is not only meaningless, but erroneous, please confirm.
-        if (static_cast<size_t>(fsp) >= frac_str.size())
+        bool overflow, matched;
+        std::tie(micro_second, overflow, matched) = parseFrac(frac_str, fsp);
+        if (!matched)
         {
-            micro_second = std::stoul(frac_str);
-            micro_second = micro_second * std::pow(10, 6 - frac_str.size());
-        }
-        else
-        {
-            auto result_frac = frac_str.substr(0, fsp + 1);
-            micro_second = std::stoul(result_frac);
-            micro_second = (micro_second + 5) / 10;
-            // Overflow
-            if (micro_second >= std::pow(10, fsp))
-            {
-                MyDateTime datetime(year, month, day, hour, minute, second, 0);
-                UInt64 result = addSeconds(datetime.toPackedUInt(), 1);
-                MyDateTime result_datetime(result);
-                year = result_datetime.year;
-                month = result_datetime.month;
-                day = result_datetime.day;
-                hour = result_datetime.hour;
-                minute = result_datetime.minute;
-                second = result_datetime.second;
-                micro_second = 0;
-            }
-            else
-            {
-                micro_second = micro_second * std::pow(10, 6 - fsp);
-            }
+            return {Field(), is_date};
         }
     }
 
@@ -1006,6 +1040,254 @@ Field parseMyDateTime(const String & str, int8_t fsp, CheckTimeFunc checkTimeFun
 Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc)
 {
     return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc, true).first;
+}
+
+// returns fraction, overflow, matched
+std::tuple<UInt32, bool, bool> matchFrac(String & str, int8_t fsp)
+{
+    if (str.empty() || str[0] != '.')
+    {
+        return {0, false, false};
+    }
+    str = str.substr(1);
+    auto [result, idx, matched] = number(str);
+    if (!matched)
+    {
+        return {0, false, false};
+    }
+    String digits = str.substr(0, idx);
+    str = str.substr(idx);
+    return parseFrac(digits, fsp);
+}
+
+bool matchHHMMSSDelimited(String & str, int * hhmmss, bool requireColon)
+{
+    auto [hour, idx, matched] = number(str);
+    if (!matched)
+    {
+        return false;
+    }
+    String rest = str.substr(idx);
+    hhmmss[0] = hour;
+
+    for (int i = 1; i < 3; i++)
+    {
+        auto [remain, matched1] = matchColon(rest);
+        if (matched1)
+        {
+            int num;
+            std::tie(num, idx, matched) = number(remain);
+            if (!matched)
+            {
+                return false;
+            }
+            hhmmss[i] = num;
+            rest = remain.substr(idx);
+        }
+        else
+        {
+            if (i == 1 && requireColon)
+            {
+                return false;
+            }
+            break;
+        }
+    }
+
+    str = rest;
+    return true;
+}
+
+bool matchHHMMSSCompact(String & str, int * hhmmss)
+{
+    auto [num, idx, matched] = number(str);
+    if (!matched)
+    {
+        return false;
+    }
+    hhmmss[0] = num / 10000;
+    hhmmss[1] = (num / 100) % 100;
+    hhmmss[2] = num % 100;
+    str = str.substr(idx);
+    return true;
+}
+
+bool matchDayHHMMSS(String & str, int & day, int * hhmmss)
+{
+    // Day HH:MM:SS
+    auto [result, idx, matched] = number(str);
+    if (!matched)
+    {
+        return false;
+    }
+    day = result;
+    String rest;
+    std::tie(rest, matched) = space1(str.substr(idx));
+    if (!matched)
+    {
+        return false;
+    }
+    str = rest;
+    return matchHHMMSSDelimited(str, hhmmss, false);
+}
+
+void hhmmssAddOverflow(int * hhmmss, bool & overflow)
+{
+    int mod[3] = {-1, 60, 60};
+    for (int i = 2; i >= 0 && overflow; i--)
+    {
+        hhmmss[i]++;
+        if (hhmmss[i] == mod[i])
+        {
+            overflow = true;
+            hhmmss[i] = 0;
+        }
+        else
+        {
+            overflow = false;
+        }
+    }
+}
+
+bool checkHHMMSS(const int * hhmmss)
+{
+    return hhmmss[1] < 60 && hhmmss[2] < 60;
+}
+
+// duration, matched
+std::pair<MyDuration, bool> matchDuration(const String & str, int8_t fsp)
+{
+    if (fsp < 0 || fsp > 6 || str.empty())
+    {
+        return {MyDuration(), false};
+    }
+    bool negative = str[0] == '-';
+    String rest;
+    if (negative)
+    {
+        rest = str.substr(1);
+    }
+    else
+    {
+        rest = str;
+    }
+    rest = space0(rest);
+    int chars_len = rest.length();
+
+    int hhmmss[3] = {0, 0, 0};
+    int day;
+
+    if (matchDayHHMMSS(rest, day, hhmmss))
+    {
+        hhmmss[0] += 24 * day;
+    }
+    else if (!matchHHMMSSDelimited(rest, hhmmss, true) && !matchHHMMSSCompact(rest, hhmmss))
+    {
+        return {MyDuration(), false};
+    }
+
+    rest = space0(rest);
+    auto [frac, overflow, matched] = matchFrac(rest, fsp);
+    if (!matched || (rest.length() > 0 && chars_len >= 12))
+    {
+        return {MyDuration(), false};
+    }
+
+    if (overflow)
+    {
+        hhmmssAddOverflow(hhmmss, overflow);
+        frac = 0;
+    }
+
+    if (!checkHHMMSS(hhmmss))
+    {
+        return {MyDuration(), false};
+    }
+
+    if (hhmmss[0] > MyDuration::MAX_HOUR_PART)
+    {
+        if (negative)
+        {
+            return {MyDuration(-MyDuration::MAX_NANOS, fsp), true};
+        }
+        else
+        {
+            return {MyDuration(MyDuration::MAX_NANOS, fsp), true};
+        }
+    }
+
+    Int64 nanosecond = (hhmmss[0] * 3600 + hhmmss[1] * 60 + hhmmss[2]) * 1000000000LL + frac * 1000LL;
+    if (negative)
+    {
+        nanosecond = -nanosecond;
+    }
+    return {MyDuration(nanosecond, fsp), true};
+}
+
+bool canFallbackToDateTime(const String & str)
+{
+    auto [digits, rest, matched] = digit(str, 1);
+    if (!matched)
+    {
+        return false;
+    }
+    if (digits.length() == 12 || digits.length() == 14)
+    {
+        return true;
+    }
+    std::tie(rest, matched) = anyPunct(rest);
+    if (!matched)
+    {
+        return false;
+    }
+    String tmp;
+    std::tie(tmp, rest, matched) = digit(rest, 1);
+    if (!matched)
+    {
+        return false;
+    }
+    std::tie(rest, matched) = anyPunct(rest);
+    if (!matched)
+    {
+        return false;
+    }
+    std::tie(tmp, rest, matched) = digit(rest, 1);
+    if (!matched)
+    {
+        return false;
+    }
+    return !rest.empty() && (rest[0] == ' ' || rest[0] == 'T');
+}
+
+Field parseMyDuration(const String & str, int8_t fsp)
+{
+    String rest = Poco::trim(str);
+    auto [duration, matched] = matchDuration(rest, fsp);
+    if (matched)
+    {
+        return Field(duration.nanoSecond());
+    }
+    if (!canFallbackToDateTime(rest))
+    {
+        return Field();
+    }
+    Field packed_uint_value = parseMyDateTime(rest, fsp);
+    if (packed_uint_value.isNull())
+    {
+        return Field();
+    }
+    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+    MyDateTime datetime(packed_uint);
+    duration = datetime.convertToMyDuration(fsp);
+
+    return Field(duration.nanoSecond());
+}
+
+MyDuration MyDateTime::convertToMyDuration(int fsp)
+{
+    Int64 frac = micro_second * 1000LL;
+    // TODO: check convert validation
+    return MyDuration((hour * 3600LL + minute * 60LL + second) * 1000000000LL + frac, fsp);
 }
 
 String MyDateTime::toString(int fsp) const
