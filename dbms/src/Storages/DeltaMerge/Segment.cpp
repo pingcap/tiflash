@@ -457,6 +457,12 @@ bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & rang
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
+    Stopwatch watch_read;
+    [&](){
+        if (metric == CurrentMetrics::DT_SnapshotOfRead) {
+            SCOPE_EXIT({ GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_sub_snap).Observe(watch_read.elapsedSeconds()); });
+        }
+    }();
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
@@ -578,9 +584,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
                                                       UInt64 max_version,
                                                       size_t expected_block_size)
 {
-    Stopwatch watch_read;
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
-    GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_sub_snap).Observe(watch_read.elapsedSeconds());
     if (!segment_snap)
         return {};
     return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);

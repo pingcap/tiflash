@@ -240,6 +240,11 @@ namespace DB
         F(type_block_read_sub_deltaindex, {{"type", "block_read_sub_deltaindex"}}, ExpBuckets{0.001, 2, 20}),                             \
         F(type_block_read_sub_mvcc, {{"type", "block_read_sub_mvcc"}}, ExpBuckets{0.001, 2, 20}),                                         \
         F(type_block_read_sub_snap, {{"type", "block_read_sub_snap"}}, ExpBuckets{0.001, 2, 20}))                                         \
+    M(tiflash_storage_read_count, "Total number of storage's read task", Counter,                                                         \
+        F(type_block_read_sub_deltaindex, {{"type", "block_read_sub_deltaindex"}}),                                                       \
+        F(type_block_read_sub_mvcc, {{"type", "block_read_sub_mvcc"}}),                                                                   \
+        F(type_block_read_shared_fetch, {{"type", "block_read_shared_fetch"}}),                                                           \
+        F(type_block_read_normal, {{"type", "block_read_normal"}}))                                                                       \
 // clang-format on
 
 struct ExpBuckets
