@@ -15,8 +15,11 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <grpcpp/completion_queue.h>
 
+#include <cassert>
 #include <tuple>
+#include <assert.h>
 
 namespace pingcap
 {
@@ -81,16 +84,20 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     pingcap::kv::Cluster * cluster;
     const ExchangeRecvRequest & request;
     pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
-    grpc::ClientContext client_context;
+    ::grpc::ClientContext client_context;
+    ::grpc::CompletionQueue *cq; // won't be null
     std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
 
     AsyncGrpcExchangePacketReader(
         pingcap::kv::Cluster * cluster_,
-        const ExchangeRecvRequest & req)
+        ::grpc::CompletionQueue * cq_,
+        const ExchangeRecvRequest & req_)
         : cluster(cluster_)
-        , request(req)
-        , call(req.req)
+        , request(req_)
+        , call(req_.req)
+        , cq(cq_)
     {
+        assert(cq != nullptr);
     }
 
     void init(UnaryCallback<bool> * callback) override
@@ -99,7 +106,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
             request.req->sender_meta().address(),
             &client_context,
             call,
-            GRPCCompletionQueuePool::global_instance->pickQueue(),
+            *cq,
             callback);
     }
 
@@ -245,9 +252,10 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 void GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
     AsyncExchangePacketReaderPtr & reader,
+    ::grpc::CompletionQueue *cq,
     UnaryCallback<bool> * callback) const
 {
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
+    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
     reader->init(callback);
 }
 

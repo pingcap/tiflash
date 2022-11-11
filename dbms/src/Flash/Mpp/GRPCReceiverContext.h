@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <common/types.h>
+#include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>
@@ -87,6 +88,7 @@ public:
     void makeAsyncReader(
         const ExchangeRecvRequest & request,
         AsyncExchangePacketReaderPtr & reader,
+        ::grpc::CompletionQueue *cq,
         UnaryCallback<bool> * callback) const;
 
     static Status getStatusOK()
