@@ -58,7 +58,7 @@ template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    summary_collector.addExecuteSummaries(response);
     writer->sendExecutionSummary(response);
 }
 
