@@ -168,7 +168,6 @@ public:
     bool updated()
     {
         auto new_options = readSecurityInfo();
-        // ywq todo check update time is better
         LOG_INFO(log, "cert check if change path, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         auto updated = new_options.pem_root_certs != options.pem_root_certs || new_options.pem_cert_chain != options.pem_cert_chain || new_options.pem_private_key != options.pem_private_key;
 

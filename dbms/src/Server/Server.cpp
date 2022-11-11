@@ -506,6 +506,12 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
         do_init_stores();
     }
 }
+// struct SecureConfig
+// {
+//     TiFlashSecurityConfig * config = nullptr;
+// };
+
+// static SecureConfig * secure_config = new SecureConfig;
 
 class Server::TcpHttpServersHolder
 {
@@ -517,6 +523,7 @@ public:
     {
         auto & config = server.config();
         auto & security_config = server.global_context->getSecurityConfig();
+        // secure_config->config = &security_config;
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
@@ -596,12 +603,12 @@ public:
                     {
                         LOG_ERROR(log, "https_port is set but tls config is not set");
                     }
-                    // ywq todo consider it.
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                                                                              security_config.key_path,
                                                                              security_config.cert_path,
                                                                              security_config.ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+                    SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
                     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
                         = [&](const Poco::Crypto::X509Certificate & cert) {
                               if (security_config.allowed_common_names.empty())
@@ -614,6 +621,7 @@ public:
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
+                    // ywq todo
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -673,6 +681,8 @@ public:
                                                                              security_config.key_path,
                                                                              security_config.cert_path,
                                                                              security_config.ca_path);
+                                                                             // ywq todo
+                    SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -959,8 +969,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
 
     /// ===== Paths related configuration initialized end ===== ///
-
-    // ywq todo
     global_context->setSecurityConfig(config(), log);
     Redact::setRedactLog(global_context->getSecurityConfig().redact_info_log);
 
@@ -1093,12 +1101,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
 #if Poco_NetSSL_FOUND
-        // CertificateReloader::instance().tryLoad(*config);
-        // ywq todo
+        // ywq todo reload poco ssl.CertificateReloader::instance().tryLoad(*config);
 #endif
+            // todo test client-c
             global_context->setSecurityConfig(*config, log);
-            // ywq todo move into setSecurity config..
-            // update
             auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
             auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
             global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));

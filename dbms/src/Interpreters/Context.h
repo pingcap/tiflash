@@ -33,8 +33,6 @@
 #include <thread>
 #include <unordered_set>
 
-#include "Poco/Util/LayeredConfiguration.h"
-
 namespace pingcap
 {
 struct ClusterConfig;

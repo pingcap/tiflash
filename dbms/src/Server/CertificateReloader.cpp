@@ -65,9 +65,6 @@ void CertificateReloader::init()
                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
     SSL_CTX_set_cert_cb(context->sslContext(), callSetCertificate, nullptr);
 
-    auto * ctx = Poco::Net::SSLManager::instance().defaultServerContext()->sslContext();
-    SSL_CTX_set_cert_cb(ctx, callSetCertificate, nullptr);
-
     init_was_not_made = false;
     LOG_INFO(log, "ywq test init was not made {}", init_was_not_made);
 }

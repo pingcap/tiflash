@@ -19,7 +19,7 @@
 #include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
 #include "Common/TiFlashSecurity.h"
 #include "Core/Types.h"
-#include "grpc/grpc_security.h"
+// #include "grpc/grpc_security.h"
 
 
 namespace DB
@@ -86,13 +86,6 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
 }
 } // namespace
 
-struct SecureConfig
-{
-    TiFlashSecurityConfig * config = nullptr;
-};
-
-void * secure_config = new SecureConfig;
-
 static grpc_ssl_certificate_config_reload_status
 ssl_server_certificate_config_callback(
     void * user_data,
@@ -145,8 +138,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     background_task.begin();
     grpc::ServerBuilder builder;
     auto * cfg = static_cast<SecureConfig *>(secure_config);
-    // ywq todo cfg should be updated.
-    // must a shared ptr.
     cfg->config = &security_config;
 
     if (security_config.has_tls_config)

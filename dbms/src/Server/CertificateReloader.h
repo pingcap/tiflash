@@ -12,6 +12,7 @@
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
+#include <ext/singleton.h>
 #include <filesystem>
 #include <string>
 
@@ -25,7 +26,7 @@ namespace DB
 ///   On changed config, CertificateReloader reloads certs from disk.
 /// 2. Implement `SSL_CTX_set_cert_cb` to set certificate for a new connection:
 ///   OpenSSL invokes a callback to setup a connection.
-class CertificateReloader
+class CertificateReloader : public ext::Singleton<CertificateReloader>
 {
 public:
     using stat_t = struct stat;
