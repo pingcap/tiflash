@@ -350,7 +350,6 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
                 err_msg = "grpc writes failed.";
                 break;
             }
-            GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(res->packet.ByteSizeLong());
         }
         /// write the last error packet if needed
         if (send_queue.getStatus() == MPMCQueueStatus::CANCELLED)
