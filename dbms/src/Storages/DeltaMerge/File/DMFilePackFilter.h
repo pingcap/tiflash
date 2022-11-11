@@ -189,9 +189,11 @@ private:
                 tryLoadIndex(attr.col_id);
             }
 
+            auto res = filter->batchRoughCheck(pack_count, param);
+#pragma clang loop unroll(enable)
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (filter->roughCheck(i, param) != None);
+                use_packs[i] = (static_cast<bool>(use_packs[i])) && (res[i] != None);
             }
         }
 
