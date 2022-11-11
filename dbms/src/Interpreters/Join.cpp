@@ -1199,6 +1199,7 @@ void NO_INLINE joinBlockImplTypeCase(
         {
             auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
             auto key = keyHolderGetKey(key_holder);
+            size_t hash_value = 0;
             size_t segment_index = 0;
             if (enable_fine_grained_shuffle)
             {
@@ -1211,7 +1212,6 @@ void NO_INLINE joinBlockImplTypeCase(
             }
             else
             {
-                size_t hash_value = 0;
                 bool zero_flag = ZeroTraits::check(key);
                 if (segment_size > 0 && !zero_flag)
                 {
@@ -1222,7 +1222,7 @@ void NO_INLINE joinBlockImplTypeCase(
 
             auto & internal_map = map.getSegmentTable(segment_index);
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = internal_map.find(key);
+            auto it = (segment_size > 0 && !enable_fine_grained_shuffle) ? internal_map.find(key, hash_value) : internal_map.find(key);
             if (it != internal_map.end())
             {
                 it->getMapped().setUsed();
