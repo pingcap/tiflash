@@ -107,6 +107,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
     if (fine_grained_shuffle.enable())
     {
         /// For fine_grained_shuffle, just do aggregation in streams independently
+        RUNTIME_CHECK(pipeline.streams_with_non_joined_data.empty());
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
@@ -114,6 +115,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
                 context.getFileProvider(),
                 true,
                 log->identifier());
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
     else if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)

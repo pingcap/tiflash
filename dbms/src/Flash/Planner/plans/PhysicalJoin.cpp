@@ -88,14 +88,12 @@ std::pair<size_t, size_t> getReceiverSourceNumInfo(const PhysicalPlanNodePtr & n
     {
     case PlanType::PlanTypeEnum::ExchangeReceiver:
     {
-        const auto * receiver_ptr = dynamic_cast<const PhysicalExchangeReceiver *>(node.get());
-        RUNTIME_ASSERT(receiver_ptr);
+        auto receiver_ptr = std::static_pointer_cast<PhysicalExchangeReceiver>(node);
         return std::make_pair(1, receiver_ptr->getSourceNum());
     }
     case PlanType::PlanTypeEnum::MockExchangeReceiver:
     {
-        const auto * mock_receiver_ptr = dynamic_cast<const PhysicalMockExchangeReceiver *>(node.get());
-        RUNTIME_ASSERT(mock_receiver_ptr);
+        auto mock_receiver_ptr = std::static_pointer_cast<PhysicalMockExchangeReceiver>(node);
         return std::make_pair(1, mock_receiver_ptr->getSourceNum());
     }
     default:
@@ -181,7 +179,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     if (fine_grained_shuffle.enable())
     {
         auto receiver_source_num_info = getReceiverSourceNumInfo(build_plan);
-        RUNTIME_ASSERT(receiver_source_num_info.first == 1);
+        RUNTIME_CHECK(receiver_source_num_info.first == 1);
         shuffle_partition_num = receiver_source_num_info.second;
     }
 
@@ -266,6 +264,8 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
+    if (fine_grained_shuffle.enable())
+        join_build_extra_info = fmt::format("{} {}", join_build_extra_info, String(enableFineGrainedShuffleExtraInfo));
     auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
     auto build_streams = [&](BlockInputStreams & streams) {
         size_t build_index = 0;

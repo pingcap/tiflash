@@ -309,11 +309,13 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     auto build_streams = [&](BlockInputStreams & streams) {
         size_t build_index = 0;
+        auto extra_info = fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id);
+        if (enableFineGrainedShuffle(fine_grained_shuffle_count))
+            extra_info = fmt::format("{} {}", extra_info, String(enableFineGrainedShuffleExtraInfo));
         for (auto & stream : streams)
         {
             stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, build_index++, log->identifier());
-            stream->setExtraInfo(
-                fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
+            stream->setExtraInfo(extra_info);
             join_execute_info.join_build_streams.push_back(stream);
         }
     };
@@ -437,7 +439,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     if (enable_fine_grained_shuffle)
     {
         /// Go straight forward without merging phase when enable_fine_grained_shuffle
-        LOG_INFO(log, "Apply FineGrainedShuffle optimization for aggregation!");
+        RUNTIME_CHECK(pipeline.streams_with_non_joined_data.empty());
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
@@ -445,6 +447,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
                 context.getFileProvider(),
                 true,
                 log->identifier());
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
