@@ -191,7 +191,6 @@ void EstablishCallData::tryConnectTunnel()
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
-    GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(packet.ByteSizeLong());
     responder.Write(packet, this);
 }
 
