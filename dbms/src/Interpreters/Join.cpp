@@ -1203,11 +1203,13 @@ void NO_INLINE joinBlockImplTypeCase(
             size_t segment_index = 0;
             if (enable_fine_grained_shuffle)
             {
-                /// In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id
+                /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
+                /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
+                /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
+                /// 1. In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id
+                /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
+                /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
                 auto packet_stream_id = selector[i] % fine_grained_shuffle_count;
-                /// Relies on the facts that:
-                /// In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
-                /// In Join, build_concurrency decides map's segment size, and build_steam_id decides the segment index
                 segment_index = packet_stream_id % segment_size;
             }
             else

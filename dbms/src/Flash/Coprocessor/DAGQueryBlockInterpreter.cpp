@@ -276,7 +276,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     if (enableFineGrainedShuffle(fine_grained_shuffle_count))
     {
         auto receiver_source_num_info = getReceiverSourceNumInfo(*build_pipeline.firstStream());
-        RUNTIME_ASSERT(receiver_source_num_info.first == 1);
+        RUNTIME_CHECK(receiver_source_num_info.first == 1);
         shuffle_partition_num = receiver_source_num_info.second;
     }
     JoinPtr join_ptr = std::make_shared<Join>(

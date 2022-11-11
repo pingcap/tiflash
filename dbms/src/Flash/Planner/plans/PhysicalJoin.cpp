@@ -79,7 +79,7 @@ void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context 
         restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
     }
 }
-} // namespace
+
 
 /// Return pair: first for the ExchangeReceiver node count; second for the total sum of source num
 std::pair<size_t, size_t> getReceiverSourceNumInfo(const PhysicalPlanNodePtr & node)
@@ -109,6 +109,7 @@ std::pair<size_t, size_t> getReceiverSourceNumInfo(const PhysicalPlanNodePtr & n
     }
     }
 }
+} // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
     const Context & context,
