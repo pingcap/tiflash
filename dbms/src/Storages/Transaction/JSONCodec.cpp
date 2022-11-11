@@ -113,11 +113,11 @@ extern const UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
 extern const UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
 
 constexpr size_t VALUE_ENTRY_SIZE = 5;
-constexpr size_t VALUE_TYPE_SIZE = 1;
+//constexpr size_t VALUE_TYPE_SIZE = 1;
 constexpr size_t KEY_ENTRY_LENGTH = 6;
 constexpr size_t PREFIX_LENGTH = 8;
-constexpr size_t DATA_SIZE_OFF = 4;
-constexpr size_t KEY_LENGTH_OFF = 4;
+//constexpr size_t DATA_SIZE_OFF = 4;
+//constexpr size_t KEY_LENGTH_OFF = 4;
 
 using JsonArrayPtr = Poco::JSON::Array::Ptr;
 using JsonObjectPtr = Poco::JSON::Object::Ptr;
