@@ -32,18 +32,16 @@ public:
         }
     }
 
-    void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
+    void addExecuteSummaries(tipb::SelectResponse & response);
 
 private:
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
         ExecutionSummary & current,
-        const String & executor_id,
-        bool delta_mode);
+        const String & executor_id) const;
 
 private:
     DAGContext & dag_context;
-    std::unordered_map<String, ExecutionSummary> previous_execution_stats;
     std::unordered_set<String> local_executors;
 };
 } // namespace DB

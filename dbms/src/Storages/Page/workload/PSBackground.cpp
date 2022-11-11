@@ -71,7 +71,7 @@ void PSGc::start()
     gc_timer.start(Poco::TimerCallback<PSGc>(*this, &PSGc::onTime));
 }
 
-void PSScanner::onTime(Poco::Timer & /*timer*/)
+void PSSnapStatGetter::onTime(Poco::Timer & /*timer*/)
 {
     try
     {
@@ -94,9 +94,9 @@ void PSScanner::onTime(Poco::Timer & /*timer*/)
     }
 }
 
-void PSScanner::start()
+void PSSnapStatGetter::start()
 {
-    scanner_timer.start(Poco::TimerCallback<PSScanner>(*this, &PSScanner::onTime));
+    scanner_timer.start(Poco::TimerCallback<PSSnapStatGetter>(*this, &PSSnapStatGetter::onTime));
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
