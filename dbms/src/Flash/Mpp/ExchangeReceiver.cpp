@@ -338,10 +338,11 @@ private:
     {
         if (retriable())
         {
+            ++retry_times;
+
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
             alarm.Set(cq, Clock::now() + std::chrono::seconds(1), this);
-            ++retry_times;
         }
         else
         {
