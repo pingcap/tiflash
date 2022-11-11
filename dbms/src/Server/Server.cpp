@@ -1087,15 +1087,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
         [&](ConfigurationPtr config) {
-            LOG_INFO(log, "ywq test config reload every 2 seconds.");
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
 #if Poco_NetSSL_FOUND
-            // CertificateReloader::instance().tryLoad(*config);
-            // ywq todo
+        // CertificateReloader::instance().tryLoad(*config);
+        // ywq todo
 #endif
             global_context->setSecurityConfig(*config, log);
             // ywq todo move into setSecurity config..

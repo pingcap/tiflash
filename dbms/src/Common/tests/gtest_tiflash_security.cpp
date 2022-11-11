@@ -96,11 +96,9 @@ key_path="security/key.pem"
         security_config.options.pem_root_certs = "2.1";
         security_config.options.pem_cert_chain = "2.2";
         security_config.options.pem_private_key = "2.3";
-        grpc::SslCredentialsOptions options = security_config.readAndCacheSecurityInfo();
+        grpc::SslCredentialsOptions options = security_config.readSecurityInfo();
 
         LOG_INFO(log, "read cert option [root_certs={}] [cert_chain={}] [private_key={}]", options.pem_root_certs, options.pem_cert_chain, options.pem_private_key);
-
-        ASSERT_TRUE(old_security_config.shouldUpdate(security_config));
     }
 }
 CATCH

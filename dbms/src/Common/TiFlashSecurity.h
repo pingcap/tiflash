@@ -37,6 +37,7 @@ struct TiFlashSecurityConfig
     String ca_path;
     String cert_path;
     String key_path;
+    LoggerPtr log;
 
     bool redact_info_log = false;
 
@@ -49,7 +50,8 @@ struct TiFlashSecurityConfig
 public:
     TiFlashSecurityConfig() = default;
 
-    TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
+    TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log_)
+        : log(log_)
     {
         if (config.has("security"))
         {
@@ -139,18 +141,16 @@ public:
         return false;
     }
 
-    grpc::SslCredentialsOptions readAndCacheSecurityInfo()
+    grpc::SslCredentialsOptions readSecurityInfo()
     {
-        if (inited)
-        {
-            return options;
-        }
-        options.pem_root_certs = readFile(ca_path);
-        options.pem_cert_chain = readFile(cert_path);
-        options.pem_private_key = readFile(key_path);
-        std::cout << "ywq test pem cert chain: " << options.pem_cert_chain << std::endl;
-        inited = true;
-        return options;
+        grpc::SslCredentialsOptions new_options;
+        new_options.pem_root_certs = readFile(ca_path);
+        new_options.pem_cert_chain = readFile(cert_path);
+        new_options.pem_private_key = readFile(key_path);
+
+        LOG_INFO(log, "read root_certs: {}, cert_chain: {}, pem_private_key: {} ", options.pem_root_certs, options.pem_cert_chain, options.pem_private_key);
+
+        return new_options;
     }
 
     pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log) const
@@ -161,14 +161,25 @@ public:
         config.ca_path = ca_path;
         config.cert_path = cert_path;
         config.key_path = key_path;
-        LOG_INFO(log, "ywq test ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+        LOG_INFO(log, "ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         return config;
     }
 
-    bool shouldUpdate(TiFlashSecurityConfig & other) const
+    bool updated()
     {
-        auto other_options = other.readAndCacheSecurityInfo();
-        return other_options.pem_root_certs != options.pem_root_certs || other_options.pem_cert_chain != options.pem_cert_chain || other_options.pem_private_key != options.pem_private_key;
+        auto new_options = readSecurityInfo();
+        // ywq todo check update time is better
+        LOG_INFO(log, "cert check if change path, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+        auto updated = new_options.pem_root_certs != options.pem_root_certs || new_options.pem_cert_chain != options.pem_cert_chain || new_options.pem_private_key != options.pem_private_key;
+
+        if (updated)
+        {
+            LOG_INFO(log, "cert updated in security config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+            options.pem_root_certs = new_options.pem_root_certs;
+            options.pem_cert_chain = new_options.pem_cert_chain;
+            options.pem_private_key = new_options.pem_private_key;
+        }
+        return updated;
     }
 
 private:

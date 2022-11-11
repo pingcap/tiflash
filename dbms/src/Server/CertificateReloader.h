@@ -4,15 +4,16 @@
 
 #if Poco_NetSSL_FOUND
 
-#include <string>
-#include <filesystem>
-#include <Poco/Logger.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <openssl/ssl.h>
-#include <openssl/x509v3.h>
 #include <Poco/Crypto/RSAKey.h>
 #include <Poco/Crypto/X509Certificate.h>
+#include <Poco/Logger.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <common/MultiVersion.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+
+#include <filesystem>
+#include <string>
 
 
 namespace DB
@@ -55,7 +56,9 @@ private:
     struct File
     {
         const char * description;
-        explicit File(const char * description_) : description(description_) {}
+        explicit File(const char * description_)
+            : description(description_)
+        {}
 
         std::string path;
         std::filesystem::file_time_type modification_time;
@@ -79,6 +82,6 @@ private:
     bool init_was_not_made = true;
 };
 
-}
+} // namespace DB
 
 #endif

@@ -576,12 +576,7 @@ void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, cons
     LOG_INFO(log, "set secuirty config.");
     auto lock = getLock();
     auto security_config = TiFlashSecurityConfig(config, log);
-    // ywq todo
-    if (shared->security_config.shouldUpdate(security_config))
-    {
-        LOG_INFO(log, "update secuirty config.");
-        shared->security_config = security_config;
-    }
+    shared->security_config = security_config;
 }
 
 TiFlashSecurityConfig & Context::getSecurityConfig()

@@ -1,4 +1,5 @@
 #include "CertificateReloader.h"
+
 #include <cstddef>
 #include <memory>
 
@@ -58,15 +59,15 @@ void CertificateReloader::init()
     LOG_DEBUG(log, "Initializing certificate reloader.");
 
     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             key_file.path,
-                                                                             cert_file.path,
-                                                                             ca_file.path,
-                                                                             Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+                                                             key_file.path,
+                                                             cert_file.path,
+                                                             ca_file.path,
+                                                             Poco::Net::Context::VerificationMode::VERIFY_STRICT);
     SSL_CTX_set_cert_cb(context->sslContext(), callSetCertificate, nullptr);
 
-    auto* ctx = Poco::Net::SSLManager::instance().defaultServerContext()->sslContext();
+    auto * ctx = Poco::Net::SSLManager::instance().defaultServerContext()->sslContext();
     SSL_CTX_set_cert_cb(ctx, callSetCertificate, nullptr);
-    
+
     init_was_not_made = false;
     LOG_INFO(log, "ywq test init was not made {}", init_was_not_made);
 }

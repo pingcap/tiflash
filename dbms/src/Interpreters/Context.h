@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "Poco/Util/LayeredConfiguration.h"
+#include <Common/TiFlashSecurity.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
@@ -24,7 +24,6 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/MultiVersion.h>
-#include <Common/TiFlashSecurity.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -33,6 +32,8 @@
 #include <mutex>
 #include <thread>
 #include <unordered_set>
+
+#include "Poco/Util/LayeredConfiguration.h"
 
 namespace pingcap
 {
@@ -489,7 +490,6 @@ public:
     MockStorage mockStorage() const;
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
-
 
 
 private:
