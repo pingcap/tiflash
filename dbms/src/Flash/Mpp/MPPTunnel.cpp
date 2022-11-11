@@ -131,7 +131,7 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 }
 
 // Update metric for tunnel's response bytes
-static void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+static inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
 {
     switch (mode) {
     case TunnelSenderMode::LOCAL:
