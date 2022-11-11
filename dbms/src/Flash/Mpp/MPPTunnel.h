@@ -17,7 +17,6 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
-#include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -212,6 +211,7 @@ public:
     using Base = TunnelSender;
     using Base::Base;
     TrackedMppDataPacketPtr readForLocal();
+
 private:
     bool cancel_reason_sent = false;
 };
