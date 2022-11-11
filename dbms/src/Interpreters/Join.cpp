@@ -769,7 +769,7 @@ void insertFromBlockImplType(
     {
         if (enable_fine_grained_shuffle)
         {
-            insertFromBlockImplTypeCaseWithFineGrainedShuffle<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCaseWithFineGrainedShuffle<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
         else if (insert_concurrency > 1)
         {
