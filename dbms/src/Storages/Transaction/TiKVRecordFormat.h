@@ -65,6 +65,7 @@ static const char ASYNC_COMMIT_PREFIX = 'a';
 static const char ROLLBACK_TS_PREFIX = 'r';
 static const char FLAG_OVERLAPPED_ROLLBACK = 'R';
 static const char GC_FENCE_PREFIX = 'F';
+static const char LAST_CHANGE_PREFIX = 'l';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -72,7 +73,6 @@ static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
 // Key format is here:
-// https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
 // https://github.com/tikv/tikv/blob/289ce2ddac505d7883ec616c078e184c00844d17/src/util/codec/bytes.rs#L33-L63
 inline TiKVKey encodeAsTiKVKey(const String & ori_str)
 {

@@ -1385,10 +1385,10 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     set_element_types.push_back(sample_block.getByName(left_arg_name).type);
 
     // todo if this is a single value in, then convert it to equal expr
-    SetPtr set = std::make_shared<Set>(SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
-    TiDB::TiDBCollators collators;
-    collators.push_back(getCollatorFromExpr(expr));
-    set->setCollators(collators);
+    SetPtr set = std::make_shared<Set>(
+        SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode),
+        TiDB::TiDBCollators{getCollatorFromExpr(expr)});
+
     auto remaining_exprs = set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }

@@ -76,7 +76,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             exchange_type,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
-            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            /*should_send_exec_summary_at_last=*/stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dag_context,
             fine_grained_shuffle.enable(),
             fine_grained_shuffle.stream_count,

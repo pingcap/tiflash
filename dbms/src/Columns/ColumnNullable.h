@@ -103,6 +103,11 @@ public:
         return scatterImpl<ColumnNullable>(num_columns, selector);
     }
 
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override
+    {
+        scatterToImpl<ColumnNullable>(columns, selector);
+    }
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void forEachSubcolumn(ColumnCallback callback) override

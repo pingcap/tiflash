@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set (FULL_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-set (FULL_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-set (FULL_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-message (STATUS "compiler C   = ${CMAKE_C_COMPILER} ${FULL_C_FLAGS}")
-message (STATUS "compiler CXX = ${CMAKE_CXX_COMPILER} ${FULL_CXX_FLAGS}")
-message (STATUS "LINKER_FLAGS = ${FULL_EXE_LINKER_FLAGS}")
+if (CMAKE_SYSTEM MATCHES "Linux")
+    set (OS_LINUX 1)
+elseif (CMAKE_SYSTEM MATCHES "FreeBSD")
+    set (OS_FREEBSD 1)
+elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    set (OS_DARWIN 1)
+endif ()

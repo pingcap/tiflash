@@ -21,7 +21,6 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataStreams/SizeLimits.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
@@ -95,7 +94,6 @@ public:
     Join(const Names & key_names_left_,
          const Names & key_names_right_,
          bool use_nulls_,
-         const SizeLimits & limits,
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
@@ -113,7 +111,7 @@ public:
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
-    bool insertFromBlock(const Block & block);
+    void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
@@ -158,8 +156,6 @@ public:
         std::shared_lock lock(rwlock);
         return getNotJoinedStreamConcurrencyInternal();
     }
-
-    bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
 
     enum BuildTableState
     {
@@ -228,6 +224,8 @@ public:
     M(key32)                       \
     M(key64)                       \
     M(key_string)                  \
+    M(key_strbinpadding)           \
+    M(key_strbin)                  \
     M(key_fixed_string)            \
     M(keys128)                     \
     M(keys256)                     \
@@ -253,10 +251,13 @@ public:
         std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
         std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_string;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbinpadding;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbin;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
         std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
         std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
         std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
+        // TODO: add more cases like Aggregator
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
@@ -285,7 +286,6 @@ private:
     bool use_nulls;
 
     size_t build_concurrency;
-    std::atomic_bool build_set_exceeded;
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
@@ -320,7 +320,7 @@ private:
 private:
     Type type = Type::EMPTY;
 
-    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
+    Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const;
 
     Sizes key_sizes;
 
@@ -334,9 +334,6 @@ private:
     BuildTableState build_table_state;
 
     const LoggerPtr log;
-
-    /// Limits for maximum map size.
-    SizeLimits limits;
 
     Block totals;
     std::atomic<size_t> total_input_build_rows{0};
@@ -379,7 +376,7 @@ private:
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
       */
-    bool insertFromBlockInternal(Block * stored_block, size_t stream_index);
+    void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;

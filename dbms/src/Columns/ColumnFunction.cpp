@@ -141,6 +141,11 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     return columns;
 }
 
+void ColumnFunction::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const
+{
+    throw TiFlashException("ColumnFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
+}
+
 void ColumnFunction::insertDefault()
 {
     for (auto & column : captured_columns)

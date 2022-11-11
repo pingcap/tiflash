@@ -137,16 +137,13 @@ private:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
+        startBackgroundTimer();
 
-        stress_time = std::make_shared<StressTimeout>(100);
-        stress_time->start();
         {
             stop_watch.start();
             startWriter<PSIncreaseWriter>(options.num_writers, [](std::shared_ptr<PSIncreaseWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(10 * 1024);
+                writer->setBufferSizeRange(10ULL * 1024, 10ULL * 1024);
                 writer->setPageRange(single_writer_page_nums);
             });
 
@@ -161,17 +158,17 @@ private:
         size_t page_writen = (single_writer_page_nums * options.num_writers);
         assert(page_writen != 0);
 
-        LOG_INFO(StressEnv::logger, fmt::format("After gen: {} pages"
-                                                "virtual memory used: {} MB,"
-                                                "resident memory used: {} MB,"
-                                                "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
-                                                "It is estimated that {} pages can be stored in the resident memory.",
-                                                page_writen,
-                                                virtual_used / DB::MB,
-                                                resident_used / DB::MB,
-                                                total_mem,
-                                                std::round(virtual_used) ? (total_mem / ((double)virtual_used / page_writen)) : 0,
-                                                std::round(resident_used) ? (total_mem / ((double)resident_used / page_writen)) : 0));
+        LOG_INFO(StressEnv::logger, "After gen: {} pages"
+                                    "virtual memory used: {} MB,"
+                                    "resident memory used: {} MB,"
+                                    "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
+                                    "It is estimated that {} pages can be stored in the resident memory.",
+                 page_writen,
+                 virtual_used / DB::MB,
+                 resident_used / DB::MB,
+                 total_mem,
+                 std::round(virtual_used) ? (total_mem / ((double)virtual_used / page_writen)) : 0,
+                 std::round(resident_used) ? (total_mem / ((double)resident_used / page_writen)) : 0);
     }
 };
 } // namespace DB::PS::tests
