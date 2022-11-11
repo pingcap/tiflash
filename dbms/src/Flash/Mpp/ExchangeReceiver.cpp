@@ -271,7 +271,7 @@ public:
                     finish_status.error_code(),
                     finish_status.error_message(),
                     retry_times);
-                retryOrDone("Exchange receiver meet error : " + finish_status.error_message());
+                retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
             }
             break;
         default:

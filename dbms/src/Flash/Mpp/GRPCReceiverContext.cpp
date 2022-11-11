@@ -19,7 +19,6 @@
 
 #include <cassert>
 #include <tuple>
-#include <assert.h>
 
 namespace pingcap
 {
