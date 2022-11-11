@@ -83,9 +83,10 @@ namespace DB
         F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}))                                                       \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter,                                                        \
         F(type_cop, {{"type", "cop"}}),           \
-        F(type_batch_cop, {{"type", "batch"}}),                                                         \
+        F(type_batch_cop, {{"type", "batch_cop"}}),                                                         \
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}),                                             \
-        F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}),                                           \
+        F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                           \
+        F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                           \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                 \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \

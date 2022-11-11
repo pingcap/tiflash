@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -211,6 +212,12 @@ public:
     using Base = TunnelSender;
     using Base::Base;
     TrackedMppDataPacketPtr readForLocal();
+
+    bool push(const TrackedMppDataPacketPtr & data) override
+    {
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn_local).Increment(data->getPacket().ByteSizeLong());
+        return TunnelSender::push(data);
+    }
 
 private:
     bool cancel_reason_sent = false;
