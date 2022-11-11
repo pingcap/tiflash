@@ -108,6 +108,7 @@ protected:
 
             Stopwatch watch_read;
             Block res = cur_stream->read(res_filter, return_filter);
+            GET_METRIC(tiflash_storage_read_count, type_block_read_normal).Increment();
             GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_normal).Observe(watch_read.elapsedSeconds());
 
             if (res)

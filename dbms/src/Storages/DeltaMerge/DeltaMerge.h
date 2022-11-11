@@ -159,6 +159,7 @@ public:
     {
         Stopwatch watch_read;
         SCOPE_EXIT({
+            GET_METRIC(tiflash_storage_read_count, type_block_read_sub_deltaindex).Increment();
             GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_sub_deltaindex).Observe(watch_read.elapsedSeconds());
         });
         if constexpr (skippable_place)
