@@ -19,19 +19,6 @@
 namespace mem_utils::details
 {
 
-FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(
-    const void * s,
-    const Block32 & check_block)
-{
-    /*
-    vpcmpeqb  ymm0, ymm0, ymmword ptr [...]
-    */
-    // `_mm256_loadu_si256` and `_mm256_load_si256` are same in such case
-    const auto block = load_block32(s);
-    uint32_t mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(block, check_block));
-    return mask;
-}
-
 template <typename F>
 ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * src, ssize_t n, const char *& res, const Block32 & check_block, F && callback)
 {

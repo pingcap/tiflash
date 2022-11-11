@@ -160,7 +160,7 @@ endif ()
 
 check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_AVX_SUPPORT
-    "-mavx2"
+    "${TIFLASH_COMPILER_AVX2_FLAG}"
     src/mem_utils_avx2.cpp
     src/crc64_avx2.cpp
     src/avx2_mem_utils_impl.cpp
@@ -173,7 +173,12 @@ check_then_add_sources_compile_flag (
 )
 check_then_add_sources_compile_flag (
     TIFLASH_COMPILER_MOVBE_SUPPORT
-    "-mmovbe" 
+    "${TIFLASH_COMPILER_MOVBE_FLAG}" 
+    src/avx2_mem_utils_impl.cpp
+)
+check_then_add_sources_compile_flag (
+    TIFLASH_COMPILER_BMI2_SUPPORT
+    "${TIFLASH_COMPILER_BMI2_FLAG}" 
     src/avx2_mem_utils_impl.cpp
 )
 

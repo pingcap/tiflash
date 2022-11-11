@@ -171,7 +171,8 @@ elseif (ARCH_AMD64)
         set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
-    set (TEST_FLAG "-mavx -mavx2")
+    set (TIFLASH_COMPILER_AVX2_FLAG "-mavx2")
+    set (TEST_FLAG "${TIFLASH_COMPILER_AVX2_FLAG}")
     set (CMAKE_REQUIRED_FLAGS "${TEST_FLAG} -O0")
     check_cxx_source_compiles("
         #include <immintrin.h>

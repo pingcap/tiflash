@@ -39,7 +39,7 @@ add_executable (gtests_libcommon
     gtest_crc64.cpp
     gtest_logger.cpp
     gtest_arithmetic_overflow.cpp
-    )
+)
 
 add_sources_compile_flag_avx2 (gtest_mem_utils_opt.cpp)
 
