@@ -32,6 +32,9 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#if __has_include(<charconv>)
+#include <charconv>
+#endif
 #include <ext/range.h>
 #include <magic_enum.hpp>
 
@@ -5782,6 +5785,219 @@ private:
     }
 };
 
+class FunctionOctInt : public IFunction
+{
+public:
+    static constexpr auto name = "octInt";
+    FunctionOctInt() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionOctInt>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        const auto & first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeOctInt<UInt8>(block, arguments, result)
+            || executeOctInt<UInt16>(block, arguments, result)
+            || executeOctInt<UInt32>(block, arguments, result)
+            || executeOctInt<UInt64>(block, arguments, result)
+            || executeOctInt<Int8>(block, arguments, result)
+            || executeOctInt<Int16>(block, arguments, result)
+            || executeOctInt<Int32>(block, arguments, result)
+            || executeOctInt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeOctInt(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        size_t size = col->size();
+
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & res_chars = col_res->getChars();
+        // Convert a UInt64 to oct, will cost 23 bytes at most
+        res_chars.reserve(size * 23);
+        ColumnString::Offsets & res_offsets = col_res->getOffsets();
+        res_offsets.resize(size);
+
+        auto res_chars_iter = res_chars.begin();
+        for (size_t i = 0; i < size; ++i)
+        {
+            UInt64 number = col->getUInt(i);
+
+            res_chars_iter = fmt::format_to(res_chars_iter, "{:o}", number);
+            *(++res_chars_iter) = 0;
+            // Add the size of printed string and a tailing zero
+            res_offsets[i] = res_chars_iter - res_chars.begin();
+        }
+        res_chars.resize(res_chars_iter - res_chars.begin());
+
+        block.getByPosition(result).column = std::move(col_res);
+
+        return true;
+    }
+};
+
+
+struct OctStringImpl
+{
+    static String execute(const String & arg)
+    {
+        bool is_negative = false, is_overflow = false;
+        // Removing the leading space
+        auto begin_pos_iter = std::find_if_not(arg.begin(), arg.end(), isWhitespaceASCII);
+        if (begin_pos_iter == arg.end())
+        {
+            return "0";
+        }
+        if (*begin_pos_iter == '-')
+        {
+            is_negative = true;
+            ++begin_pos_iter;
+        }
+        else if (*begin_pos_iter == '+')
+        {
+            ++begin_pos_iter;
+        }
+
+        // Special treatment for case `   pingcap16`
+        if (!std::isdigit(*begin_pos_iter))
+        {
+            return "0";
+        }
+        auto begin_pos = begin_pos_iter - arg.begin();
+
+#if __has_include(<charconv>)
+        UInt64 value = std::numeric_limits<UInt64>::max();
+        auto from_chars_res = std::from_chars(arg.data() + begin_pos, arg.data() + arg.size(), value);
+        if (from_chars_res.ec != std::errc{})
+        {
+            if (from_chars_res.ec != std::errc::result_out_of_range)
+            {
+                return "";
+            }
+            is_overflow = true;
+        }
+#else
+        UInt64 value = strtoull(arg.c_str() + begin_pos, nullptr, 10);
+        if (errno)
+        {
+            if (errno != ERANGE)
+            {
+                errno = 0;
+                return "";
+            }
+            errno = 0;
+            is_overflow = true;
+        }
+#endif
+
+        if (is_negative && !is_overflow)
+        {
+            value = -value;
+        }
+
+        return fmt::format("{:o}", value);
+    }
+
+    template <typename Column>
+    static void execute(const Column * arg_col0, ColumnString & res_col)
+    {
+        for (size_t i = 0; i < arg_col0->size(); ++i)
+        {
+            // we want some String operation in OctStringImpl so we call toString here
+            String result = execute(arg_col0->getDataAt(i).toString());
+            res_col.insertData(result.c_str(), result.size());
+        }
+    }
+};
+class FunctionOctString : public IFunction
+{
+public:
+    static constexpr auto name = "octString";
+    FunctionOctString() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionOctString>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        const auto & first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_res = ColumnString::create();
+            OctStringImpl::execute(col, *col_res);
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+        {
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -5872,5 +6088,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSpace>();
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
+    factory.registerFunction<FunctionOctInt>();
+    factory.registerFunction<FunctionOctString>();
 }
 } // namespace DB
