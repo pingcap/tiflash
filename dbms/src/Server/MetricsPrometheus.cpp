@@ -119,7 +119,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         }
         return security_config.allowed_common_names.count(cert.commonName()) > 0;
     };
-
+    // ywq todo....
     context->setAdhocVerification(check_common_name);
 
     Poco::Net::SecureServerSocket socket(context);

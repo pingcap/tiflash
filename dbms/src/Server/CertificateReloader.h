@@ -31,14 +31,9 @@ public:
     using stat_t = struct stat;
     void initSSLCallback(Poco::Net::Context::Ptr context);
 
-    /// Handle configuration reload
-    void tryLoad(const Poco::Util::AbstractConfiguration & config);
-
     /// A callback for OpenSSL
     int setCertificate(SSL * ssl);
-
     std::shared_ptr<TiFlashSecurityConfig> config;
-
 private:
     Poco::Logger * log = &Poco::Logger::get("CertificateReloader");
 };

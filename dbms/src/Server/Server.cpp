@@ -604,7 +604,6 @@ public:
                                                                              security_config->cert_path,
                                                                              security_config->ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    // SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
                     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
                         = [&](const Poco::Crypto::X509Certificate & cert) {
                               if (security_config->allowed_common_names.empty())
@@ -617,7 +616,6 @@ public:
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
-                    // ywq todo
                     CertificateReloader::instance().initSSLCallback(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
@@ -678,8 +676,6 @@ public:
                                                                              security_config->key_path,
                                                                              security_config->cert_path,
                                                                              security_config->ca_path);
-                    // ywq todo
-                    // SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
                     CertificateReloader::instance().initSSLCallback(context);
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
@@ -698,7 +694,7 @@ public:
                 }
                 else if (security_config->has_tls_config)
                 {
-                    LOG_INFO(log, "tcp_port is closed because tls config is set");
+                    LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
                 /// At least one of TCP and HTTP servers must be created.
@@ -1098,10 +1094,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
-#if Poco_NetSSL_FOUND
-        // ywq todo reload poco ssl.CertificateReloader::instance().tryLoad(*config);
-#endif
-            // todo test client-c
             global_context->setSecurityConfig(*config, log);
             auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
             auto cluster_config = global_context->getSecurityConfig()->getClusterConfig(raft_config, log);
