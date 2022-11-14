@@ -159,7 +159,7 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
-    TiFlashSecurityConfig security_config;
+    std::shared_ptr<TiFlashSecurityConfig> security_config;
 
     class SessionKeyHash
     {
@@ -575,11 +575,10 @@ void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, cons
 {
     LOG_INFO(log, "Setting secuirty config.");
     auto lock = getLock();
-    auto security_config = TiFlashSecurityConfig(config, log);
-    shared->security_config = security_config;
+    shared->security_config = std::make_shared<TiFlashSecurityConfig>(config, log);
 }
 
-TiFlashSecurityConfig & Context::getSecurityConfig()
+std::shared_ptr<TiFlashSecurityConfig> Context::getSecurityConfig()
 {
     auto lock = getLock();
     return shared->security_config;

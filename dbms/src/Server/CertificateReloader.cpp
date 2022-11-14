@@ -25,22 +25,19 @@ int callSetCertificate(SSL * ssl, [[maybe_unused]] void * arg)
 
 } // namespace
 
-namespace ErrorCodes
-{
-extern const int CANNOT_STAT;
-}
-
 /// This is callback for OpenSSL. It will be called on every connection to obtain a certificate and private key.
 int CertificateReloader::setCertificate(SSL * ssl)
 {
     LOG_INFO(log, "ywq test setCetificate callaback");
 
-    auto current = data.get();
-    if (!current)
-        return -1;
+    if (config->updated())
+    {
+        Poco::Crypto::X509Certificate cert(config->cert_path);
+        Poco::Crypto::EVPPKey key("", config->key_path);
+        SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
+        SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
+    }
 
-    SSL_use_certificate(ssl, const_cast<X509 *>(current->cert.certificate()));
-    SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(current->key)));
 
     int err = SSL_check_private_key(ssl);
     if (err != 1)
@@ -54,90 +51,74 @@ int CertificateReloader::setCertificate(SSL * ssl)
 }
 
 
-void CertificateReloader::init()
+void CertificateReloader::initSSLCallback(Poco::Net::Context::Ptr context)
 {
-    LOG_DEBUG(log, "Initializing certificate reloader.");
-
-    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                             key_file.path,
-                                                             cert_file.path,
-                                                             ca_file.path,
-                                                             Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+    LOG_DEBUG(log, "ywq test Initializing certificate reloader for context");
     SSL_CTX_set_cert_cb(context->sslContext(), callSetCertificate, nullptr);
-
-    init_was_not_made = false;
-    LOG_INFO(log, "ywq test init was not made {}", init_was_not_made);
+    // LOG_INFO(log, "ywq test init was not made {}", init_was_not_made);
 }
 
 
-void CertificateReloader::tryLoad(const Poco::Util::AbstractConfiguration & config)
-{
-    LOG_INFO(log, "start loading certificate.");
-    /// If at least one of the files is modified - recreate
-    std::string new_cert_path = config.getString("security.cert_path", "");
-    std::string new_key_path = config.getString("security.key_path", "");
-    std::string new_ca_path = config.getString("security.ca_path", "");
+// void CertificateReloader::tryLoad(const Poco::Util::AbstractConfiguration & config)
+// {
+//     LOG_INFO(log, "start loading certificate.");
+//     /// If at least one of the files is modified - recreate
+//     std::string new_cert_path = config.getString("security.cert_path", "");
+//     std::string new_key_path = config.getString("security.key_path", "");
+//     std::string new_ca_path = config.getString("security.ca_path", "");
 
-    /// For empty paths (that means, that user doesn't want to use certificates)
-    /// no processing required
-    if (new_cert_path.empty() || new_key_path.empty())
-    {
-        LOG_INFO(log, "One of paths is empty. Cannot apply new configuration for certificates. Fill all paths and try again.");
-    }
-    else
-    {
-        bool cert_file_changed = cert_file.changeIfModified(std::move(new_cert_path), log);
-        bool key_file_changed = key_file.changeIfModified(std::move(new_key_path), log);
-        bool ca_file_changed = ca_file.changeIfModified(std::move(new_ca_path), log);
+//     /// For empty paths (that means, that user doesn't want to use certificates)
+//     /// no processing required
+//     if (new_cert_path.empty() || new_key_path.empty())
+//     {
+//         LOG_INFO(log, "One of paths is empty. Cannot apply new configuration for certificates. Fill all paths and try again.");
+//     }
+//     else
+//     {
+//         bool cert_file_changed = cert_file.changeIfModified(std::move(new_cert_path), log);
+//         bool key_file_changed = key_file.changeIfModified(std::move(new_key_path), log);
+//         bool ca_file_changed = ca_file.changeIfModified(std::move(new_ca_path), log);
 
-        if (cert_file_changed || key_file_changed || ca_file_changed)
-        {
-            LOG_DEBUG(log, "Reloading certificate ({}) and key ({}) and ca({}).", cert_file.path, key_file.path, ca_file.path);
-            data.set(std::make_unique<const Data>(cert_file.path, key_file.path));
-            LOG_INFO(log, "Reloaded certificate ({}) and key ({}).", cert_file.path, key_file.path);
-        }
+//         if (cert_file_changed || key_file_changed || ca_file_changed)
+//         {
+//             LOG_DEBUG(log, "Reloading certificate ({}) and key ({}) and ca({}).", cert_file.path, key_file.path, ca_file.path);
+//             LOG_INFO(log, "Reloaded certificate ({}) and key ({}).", cert_file.path, key_file.path);
+//         }
 
-        /// If callback is not set yet
-        try
-        {
-            if (init_was_not_made)
-                init();
-        }
-        catch (...)
-        {
-            init_was_not_made = true;
-            LOG_ERROR(log, getCurrentExceptionMessage(false));
-        }
-    }
-}
-
-
-CertificateReloader::Data::Data(std::string cert_path, std::string key_path)
-    : cert(cert_path)
-    , key(/* public key */ "", /* private key */ key_path)
-{
-}
+//         /// If callback is not set yet
+//         try
+//         {
+//             if (init_was_not_made)
+//                 init();
+//         }
+//         catch (...)
+//         {
+//             init_was_not_made = true;
+//             LOG_ERROR(log, getCurrentExceptionMessage(false));
+//         }
+//     }
+// }
 
 
-bool CertificateReloader::File::changeIfModified(std::string new_path, Poco::Logger * logger)
-{
-    std::error_code ec;
-    std::filesystem::file_time_type new_modification_time = std::filesystem::last_write_time(new_path, ec);
-    if (ec)
-    {
-        LOG_ERROR(logger, "Cannot obtain modification time for {} file {}, skipping update.", description, new_path);
-        return false;
-    }
+// bool CertificateReloader::File::changeIfModified(std::string new_path, Poco::Logger * logger)
+// {
+//     std::error_code ec;
+//     std::filesystem::file_time_type new_modification_time = std::filesystem::last_write_time(new_path, ec);
+//     if (ec)
+//     {
+//         LOG_ERROR(logger, "Cannot obtain modification time for {} file {}, skipping update.", description, new_path);
+//         return false;
+//     }
 
-    if (new_path != path || new_modification_time != modification_time)
-    {
-        path = new_path;
-        modification_time = new_modification_time;
-        return true;
-    }
+//     if (new_path != path || new_modification_time != modification_time)
+//     {
+//         path = new_path;
+//         modification_time = new_modification_time;
+//         return true;
+//     }
 
-    return false;
-}
+//     return false;
+// }
 
 } // namespace DB
 

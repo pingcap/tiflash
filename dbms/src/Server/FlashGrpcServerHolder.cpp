@@ -86,6 +86,13 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
 }
 } // namespace
 
+struct SecureConfig
+{
+    TiFlashSecurityConfig * config = nullptr;
+};
+
+static SecureConfig * secure_config = new SecureConfig;
+
 static grpc_ssl_certificate_config_reload_status
 ssl_server_certificate_config_callback(
     void * user_data,

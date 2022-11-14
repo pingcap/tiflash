@@ -229,6 +229,7 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
+
 struct TiFlashProxyConfig
 {
     static const std::string config_prefix;
@@ -506,12 +507,6 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
         do_init_stores();
     }
 }
-// struct SecureConfig
-// {
-//     TiFlashSecurityConfig * config = nullptr;
-// };
-
-// static SecureConfig * secure_config = new SecureConfig;
 
 class Server::TcpHttpServersHolder
 {
@@ -522,8 +517,9 @@ public:
         , server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
-        auto & security_config = server.global_context->getSecurityConfig();
-        // secure_config->config = &security_config;
+        auto security_config = server.global_context->getSecurityConfig();
+
+        CertificateReloader::instance().config = security_config;
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
@@ -599,29 +595,30 @@ public:
                 if (config.has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
-                    if (!security_config.has_tls_config)
+                    if (!security_config->has_tls_config)
                     {
                         LOG_ERROR(log, "https_port is set but tls config is not set");
                     }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             security_config.key_path,
-                                                                             security_config.cert_path,
-                                                                             security_config.ca_path,
+                                                                             security_config->key_path,
+                                                                             security_config->cert_path,
+                                                                             security_config->ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
+                    // SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
                     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
                         = [&](const Poco::Crypto::X509Certificate & cert) {
-                              if (security_config.allowed_common_names.empty())
+                              if (security_config->allowed_common_names.empty())
                               {
                                   return true;
                               }
-                              return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                              return security_config->allowed_common_names.count(cert.commonName()) > 0;
                           };
                     context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
                     // ywq todo
+                    CertificateReloader::instance().initSSLCallback(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -637,7 +634,7 @@ public:
                 else
                 {
                     /// HTTP
-                    if (security_config.has_tls_config)
+                    if (security_config->has_tls_config)
                     {
                         throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
                     }
@@ -655,7 +652,7 @@ public:
                 /// TCP
                 if (config.has("tcp_port"))
                 {
-                    if (security_config.has_tls_config)
+                    if (security_config->has_tls_config)
                     {
                         LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
@@ -668,21 +665,22 @@ public:
 
                     LOG_INFO(log, "Listening tcp: {}", address.toString());
                 }
-                else if (security_config.has_tls_config)
+                else if (security_config->has_tls_config)
                 {
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
                 /// TCP with SSL
-                if (config.has("tcp_port_secure") && !security_config.has_tls_config)
+                if (config.has("tcp_port_secure") && !security_config->has_tls_config)
                 {
 #if Poco_NetSSL_FOUND
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             security_config.key_path,
-                                                                             security_config.cert_path,
-                                                                             security_config.ca_path);
-                                                                             // ywq todo
-                    SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
+                                                                             security_config->key_path,
+                                                                             security_config->cert_path,
+                                                                             security_config->ca_path);
+                    // ywq todo
+                    // SSL_CTX_set_cert_cb(context->sslContext(), loadSSLCert, nullptr);
+                    CertificateReloader::instance().initSSLCallback(context);
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -698,7 +696,7 @@ public:
                                     ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
-                else if (security_config.has_tls_config)
+                else if (security_config->has_tls_config)
                 {
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
@@ -970,7 +968,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// ===== Paths related configuration initialized end ===== ///
     global_context->setSecurityConfig(config(), log);
-    Redact::setRedactLog(global_context->getSecurityConfig().redact_info_log);
+    Redact::setRedactLog(global_context->getSecurityConfig()->redact_info_log);
 
     // Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : all_normal_path)
@@ -1106,7 +1104,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // todo test client-c
             global_context->setSecurityConfig(*config, log);
             auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-            auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
+            auto cluster_config = global_context->getSecurityConfig()->getClusterConfig(raft_config, log);
             global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
         },
         /* already_loaded = */ true);
@@ -1160,7 +1158,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
+        auto cluster_config = global_context->getSecurityConfig()->getClusterConfig(raft_config, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1263,7 +1261,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), global_context->getSecurityConfig(), raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), *global_context->getSecurityConfig(), raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
@@ -1305,7 +1303,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, global_context->getSecurityConfig());
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, *global_context->getSecurityConfig());
 
         SessionCleaner session_cleaner(*global_context);
 

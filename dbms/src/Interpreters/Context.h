@@ -220,7 +220,7 @@ public:
     /// Security configuration settings.
     void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
-    TiFlashSecurityConfig & getSecurityConfig();
+    std::shared_ptr<TiFlashSecurityConfig> getSecurityConfig();
 
     /// Must be called before getClientInfo.
     void setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address, const String & quota_key);
