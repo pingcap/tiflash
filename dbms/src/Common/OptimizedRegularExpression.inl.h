@@ -347,7 +347,7 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
                 pos = strstr(subject, required_substring.data());
 
             if (nullptr == pos)
-                return 0;
+                return false;
         }
 
         return re2->Match(StringPieceType(subject, subject_size), 0, subject_size, RegexType::UNANCHORED, nullptr, 0);
@@ -367,12 +367,12 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
             pos = strstr(subject, required_substring.data());
 
         if (pos == nullptr)
-            return 0;
+            return false;
         else
         {
             match.offset = pos - subject;
             match.length = required_substring.size();
-            return 1;
+            return true;
         }
     }
     else
@@ -386,18 +386,18 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
                 pos = strstr(subject, required_substring.data());
 
             if (nullptr == pos)
-                return 0;
+                return false;
         }
 
         StringPieceType piece;
 
         if (!RegexType::PartialMatch(StringPieceType(subject, subject_size), *re2, &piece))
-            return 0;
+            return false;
         else
         {
             match.offset = piece.data() - subject;
             match.length = piece.length();
-            return 1;
+            return true;
         }
     }
 }
@@ -530,33 +530,19 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const c
     const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
-    size_t matched_index = 0;
     StringPieceType expr_sp(expr, expr_size);
-    size_t matched_str_size = 0;
-    String matched_str; // store the matched substring
-
-    // RegexType::FindAndConsume will truncate expr_sp each time it is called.
-    // expr_sp_before_truncated stores the string before expr_sp is truncated so that
-    // we can find the matched index of the substr
-    StringPieceType expr_sp_before_truncated;
+    StringPieceType matched_str;
 
     while (occur > 0)
     {
-        expr_sp_before_truncated = expr_sp;
         bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
             return 0;
 
-        // byte_offset is used for locating the substr's start index in the string
-        // so we need to update it each time.
-        matched_index = expr_sp_before_truncated.find(matched_str);
-        matched_str_size = matched_str.size();
-        byte_offset += matched_index + matched_str_size;
-
         --occur;
     }
 
-    byte_offset -= matched_str_size;
+    byte_offset = matched_str.data() - subject;
     return ret_op == 0 ? bytePos2Utf8Pos(subject, byte_offset + 1) : bytePos2Utf8Pos(subject, byte_offset + matched_str.size() + 1);
 }
 

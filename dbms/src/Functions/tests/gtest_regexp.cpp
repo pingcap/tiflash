@@ -2210,6 +2210,86 @@ TEST_F(Regexp, testRegexpCustomerCases)
     }
 }
 
+namespace
+{
+template<typename T>
+std::vector<Int64> getResultVec(const std::vector<T> & test_cases)
+{
+    std::vector<Int64> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.result);
+    
+    return vecs;
+}
+
+template<typename T>
+std::vector<String> getExprVec(const std::vector<T> & test_cases)
+{
+    std::vector<String> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.expression);
+    
+    return vecs;
+}
+
+template<typename T>
+std::vector<String> getPatVec(const std::vector<T> & test_cases)
+{
+    std::vector<String> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.pattern);
+    
+    return vecs;
+}
+
+template<typename T>
+std::vector<Int64> getPosVec(const std::vector<T> & test_cases)
+{
+    std::vector<Int64> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.position);
+    
+    return vecs;
+}
+
+template<typename T>
+std::vector<Int64> getOccurVec(const std::vector<T> & test_cases)
+{
+    std::vector<Int64> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.occurrence);
+    
+    return vecs;
+}
+
+template<typename T>
+std::vector<Int64> getRetOpVec(const std::vector<T> & test_cases)
+{
+    std::vector<Int64> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.return_option);
+    
+    return vecs;
+}
+
+template<typename T>
+std::vector<String> getMatchTypeVec(const std::vector<T> & test_cases)
+{
+    std::vector<String> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.match_type);
+    
+    return vecs;
+}
+}
+
 struct RegexpInstrCase
 {
     RegexpInstrCase(Int64 res, const String & expr, const String & pat, Int64 pos = 1, Int64 occur = 1, Int64 ret_op = 0, const String & mt = "")
@@ -2232,76 +2312,6 @@ struct RegexpInstrCase
         , return_option(ret_op)
         , match_type(mt)
         {}
-
-    static std::vector<Int64> getResultVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<Int64> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.result);
-        
-        return vecs;
-    }
-
-    static std::vector<String> getExprVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<String> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.expression);
-        
-        return vecs;
-    }
-
-    static std::vector<String> getPatVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<String> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.pattern);
-        
-        return vecs;
-    }
-
-    static std::vector<Int64> getPosVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<Int64> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.position);
-        
-        return vecs;
-    }
-
-    static std::vector<Int64> getOccurVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<Int64> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.occurrence);
-        
-        return vecs;
-    }
-
-    static std::vector<Int64> getRetOpVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<Int64> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.return_option);
-        
-        return vecs;
-    }
-
-    static std::vector<String> getMatchTypeVec(const std::vector<RegexpInstrCase> & test_cases)
-    {
-        std::vector<String> vecs;
-        vecs.reserve(test_cases.size());
-        for (const auto & elem : test_cases)
-            vecs.push_back(elem.match_type);
-        
-        return vecs;
-    }
 
     static void setVecsWithoutNullMap(int param_num, const std::vector<RegexpInstrCase> test_cases, std::vector<Int64> & results, std::vector<String> & exprs, std::vector<String> & pats, std::vector<Int64> & positions, std::vector<Int64> & occurs, std::vector<Int64> & ret_ops, std::vector<String> & match_types)
     {
@@ -2537,7 +2547,7 @@ TEST_F(Regexp, RegexpInstr)
                       {6, "ab\naB", "^ab$", 3, 1, 1, "mi"},
                       {4, "pp跑ppのaaa", "(跑|の|P)", 2, 2, 1, "i"}};
         RegexpInstrCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
-        results = RegexpInstrCase::getResultVec(test_cases);
+        results = getResultVec(test_cases);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
                              "regexp_instr",
@@ -2558,7 +2568,7 @@ TEST_F(Regexp, RegexpInstr)
                       {0, "ttiFl", "tifl", 1, 1, 0, "iccc"},
                       {0, "ttiFl", "tifl", 1, 1, 0, "icic"}};
         RegexpInstrCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
-        results = RegexpInstrCase::getResultVec(test_cases);
+        results = getResultVec(test_cases);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
                              "regexp_instr",
