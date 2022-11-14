@@ -208,6 +208,7 @@ private:
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
+    const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;
 
@@ -226,7 +227,6 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    bool enable_fine_grained_shuffle_flag = false;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
