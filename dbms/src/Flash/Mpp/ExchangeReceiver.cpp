@@ -376,8 +376,8 @@ private:
     }
 
     std::shared_ptr<RPCContext> rpc_context;
-    ::grpc::Alarm alarm;
-    ::grpc::CompletionQueue * cq; // won't be null and do not delete this pointer
+    grpc::Alarm alarm;
+    grpc::CompletionQueue * cq; // won't be null and do not delete this pointer
     const Request * request; // won't be null
     MPMCQueue<Self *> * notify_queue; // won't be null
     std::vector<MsgChannelPtr> * msg_channels; // won't be null
