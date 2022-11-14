@@ -260,7 +260,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name);
 
-    String appendCastIfNeeded(
+    String appendCastForFunctionExpr(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         const String & expr_name);
