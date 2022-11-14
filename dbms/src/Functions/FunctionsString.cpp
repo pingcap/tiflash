@@ -328,7 +328,6 @@ struct ReverseUTF8Impl
     }
 };
 
-
 template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int),
@@ -4913,6 +4912,682 @@ private:
     }
 };
 
+<<<<<<< HEAD
+=======
+class FunctionHexStr : public IFunction
+{
+public:
+    static constexpr auto name = "hexStr";
+    FunctionHexStr() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexStr>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_res = ColumnString::create();
+            vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
+            auto col_res = ColumnFixedString::create(col->getN() * 2);
+            vectorFixed(col->getChars(), col->getN(), col_res->getChars());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+private:
+    static constexpr UInt8 hexTable[17] = "0123456789ABCDEF";
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        // every string contains a tailing zero, which will not be hexed, so minus size to remove these doubled zeros
+        res_data.resize(data.size() * 2 - size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            for (size_t j = prev_offset; j < offsets[i] - 1; ++j)
+            {
+                ColumnString::Offset pos = j * 2 - i;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+            // the last element written by the previous loop is:
+            // `(offsets[i] - 2) * 2 - i + 1 = offsets[i] * 2 - i - 3`
+            // then the zero should be written to `offsets[i] * 2 - i - 2`
+            res_data[offsets[i] * 2 - i - 2] = 0;
+            res_offsets[i] = offsets[i] * 2 - i - 1;
+
+            prev_offset = offsets[i];
+        }
+    }
+
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t length, ColumnString::Chars_t & res_data)
+    {
+        size_t size = data.size() / length;
+        res_data.resize(data.size() * 2);
+
+        for (size_t i = 0; i < size; ++i)
+            for (size_t j = i * length; j < (i + 1) * length; ++j)
+            {
+                ColumnString::Offset pos = j * 2;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+    }
+};
+
+class FunctionHexInt : public IFunction
+{
+public:
+    static constexpr auto name = "hexInt";
+    FunctionHexInt() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexInt>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isNumber())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeHexInt<UInt8>(block, arguments, result)
+            || executeHexInt<UInt16>(block, arguments, result)
+            || executeHexInt<UInt32>(block, arguments, result)
+            || executeHexInt<UInt64>(block, arguments, result)
+            || executeHexInt<Int8>(block, arguments, result)
+            || executeHexInt<Int16>(block, arguments, result)
+            || executeHexInt<Int32>(block, arguments, result)
+            || executeHexInt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeHexInt(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        size_t size = col->size();
+
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & res_chars = col_res->getChars();
+        // Convert a UInt64 to hex, will cost 17 bytes at most
+        res_chars.reserve(size * 17);
+        ColumnString::Offsets & res_offsets = col_res->getOffsets();
+        res_offsets.resize(size);
+
+        auto res_chars_iter = res_chars.begin();
+        for (size_t i = 0; i < size; ++i)
+        {
+            UInt64 number = col->getUInt(i);
+
+            res_chars_iter = fmt::format_to(res_chars_iter, "{:X}", number);
+            *(++res_chars_iter) = 0;
+            // Add the size of printed string and a tailing zero
+            res_offsets[i] = res_chars_iter - res_chars.begin();
+        }
+        res_chars.resize(res_chars_iter - res_chars.begin());
+
+        block.getByPosition(result).column = std::move(col_res);
+
+        return true;
+    }
+};
+
+class FunctionBin : public IFunction
+{
+public:
+    static constexpr auto name = "bin";
+    static constexpr size_t word_size = 8;
+    FunctionBin() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionBin>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    template <typename T>
+    static void executeOneUIntOrInt(T data, char *& out)
+    {
+        auto x = static_cast<Int64>(data); // NOLINT
+        bool was_nonzero = false;
+        bool was_first_nonzero_byte = true;
+        for (int offset = (sizeof(Int64) - 1) * 8; offset >= 0; offset -= 8)
+        {
+            UInt8 byte = x >> offset;
+            /// Skip leading zeros
+            if (byte == 0 && !was_nonzero && offset)
+                continue;
+            was_nonzero = true;
+            if (was_first_nonzero_byte)
+            {
+                out += writeNoZeroPrefixBinByte(byte, out);
+                was_first_nonzero_byte = false;
+            }
+            else
+            {
+                writeBinByte(byte, out);
+                out += word_size;
+            }
+        }
+        *out = '\0';
+        ++out;
+    }
+
+    template <typename T>
+    bool tryExecuteUIntOrInt(const IColumn * col, ColumnPtr & col_res) const
+    {
+        auto * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
+        static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1; /// Including trailing zero byte.
+        if (col_vec)
+        {
+            auto col_str = ColumnString::create();
+            ColumnString::Chars_t & out_vec = col_str->getChars();
+            ColumnString::Offsets & out_offsets = col_str->getOffsets();
+            const typename ColumnVector<T>::Container & in_vec = col_vec->getData();
+            size_t size = in_vec.size();
+            out_offsets.resize(size);
+            out_vec.resize(size * (word_size + 1) + MAX_LENGTH); /// word_size+1 is length of one byte in hex/bin plus zero byte.
+            size_t pos = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                /// Manual exponential growth, so as not to rely on the linear amortized work time of `resize` (no one guarantees it).
+                if (pos + MAX_LENGTH > out_vec.size())
+                    out_vec.resize(out_vec.size() * word_size + MAX_LENGTH);
+                char * begin = reinterpret_cast<char *>(&out_vec[pos]);
+                char * end = begin;
+                executeOneUIntOrInt(in_vec[i], end);
+                pos += end - begin;
+                out_offsets[i] = pos;
+            }
+            out_vec.resize(pos);
+            col_res = std::move(col_str);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * column = block.getByPosition(arguments[0]).column.get();
+        ColumnPtr res_column;
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column)
+            || tryExecuteUIntOrInt<UInt16>(column, res_column)
+            || tryExecuteUIntOrInt<UInt32>(column, res_column)
+            || tryExecuteUIntOrInt<UInt64>(column, res_column)
+            || tryExecuteUIntOrInt<Int8>(column, res_column)
+            || tryExecuteUIntOrInt<Int16>(column, res_column)
+            || tryExecuteUIntOrInt<Int32>(column, res_column)
+            || tryExecuteUIntOrInt<Int64>(column, res_column))
+        {
+            block.getByPosition(result).column = std::move(res_column);
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+};
+
+class FunctionElt : public IFunction
+{
+public:
+    static constexpr auto name = "elt";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionElt>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        for (const auto arg_idx : ext::range(1, arguments.size()))
+        {
+            const auto arg = removeNullable(arguments[arg_idx]);
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeElt<UInt8>(block, arguments, result)
+            || executeElt<UInt16>(block, arguments, result)
+            || executeElt<UInt32>(block, arguments, result)
+            || executeElt<UInt64>(block, arguments, result)
+            || executeElt<Int8>(block, arguments, result)
+            || executeElt<Int16>(block, arguments, result)
+            || executeElt<Int32>(block, arguments, result)
+            || executeElt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    using NullMapMutablePtr = COWPtrHelper<DB::ColumnVectorHelper, DB::ColumnVector<unsigned char>>::MutablePtr;
+
+    template <typename IntType>
+    static bool executeElt(Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto * col_arg0 = block.getByPosition(arguments[0]).column.get();
+
+        if (const auto * col = checkAndGetColumnConst<ColumnVector<IntType>>(col_arg0, true))
+        {
+            return constColumn<IntType>(col, block, arguments, result);
+        }
+        else
+        {
+            return vectorColumn<IntType>(col_arg0, block, arguments, result);
+        }
+    }
+
+    static void fillResultColumnNull(ColumnPtr & dst, size_t nrow)
+    {
+        dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});
+    }
+
+    static void fillResultColumnFromOther(ColumnPtr & dst, const ColumnPtr & src)
+    {
+        dst = makeNullable(src->cloneResized(src->size()));
+    }
+
+    /// fill the ith element of result column from the ith element of another column
+    /// Note that for efficiency purpose, following preconditions should be satisfied
+    /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
+    /// 2. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
+    /// 3. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
+    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, const size_t dsti)
+    {
+        if (src->isNullAt(dsti))
+        {
+            res_null_map->getData()[dsti] = true;
+            res_chars.push_back(0);
+            res_offsets[dsti] = dsti == 0 ? 1 : (res_offsets[dsti - 1] + 1);
+            return;
+        }
+
+        /// no need to set res_null_map, since its default value is 0
+
+        /// src col might be ColumnConst(Nullable(ColumnString)) or ColumnCost(ColumnString) or Nullable(ColumnString) or ColumnString
+        /// if it is ColumnConst(...) then we should treat its first element as the ith element
+        size_t srci = dsti;
+        const auto * col_nullable_str = src->isColumnConst()
+            ? (srci = 0, checkAndGetColumnConst<ColumnString>(src.get(), true)->getDataColumnPtr().get())
+            : src.get();
+
+        const auto * col_str = col_nullable_str->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnString>(col_nullable_str)
+            : checkAndGetColumn<ColumnString>(col_nullable_str);
+
+        const auto & src_data = col_str->getChars();
+        const auto & src_offsets = col_str->getOffsets();
+
+        const auto start_offset = StringUtil::offsetAt(src_offsets, srci);
+        const auto str_size = StringUtil::sizeAt(src_offsets, srci);
+
+        const size_t old_size = res_chars.size();
+        const size_t new_size = old_size + str_size;
+
+        res_chars.resize(new_size);
+        memcpy(&res_chars[old_size], &src_data[start_offset], str_size);
+        res_offsets[dsti] = new_size;
+    }
+
+    template <typename IntType>
+    static bool constColumn(const ColumnConst * col, Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto nrow = col->size();
+
+        if (col->onlyNull())
+        {
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
+            return true;
+        }
+
+        /// get the first argument from the const column which still might be nullable
+        const auto arg0 = col->getDataColumnPtr()->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col->getDataColumnPtr().get())->getInt(0)
+            : col->getInt(0);
+
+        if (arg0 < 1 || arg0 >= static_cast<Int64>(arguments.size()))
+        {
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
+        }
+        else
+        {
+            fillResultColumnFromOther(block.getByPosition(result).column, block.getByPosition(arguments[arg0]).column);
+        }
+        return true;
+    }
+
+    template <typename IntType>
+    static bool vectorColumn(const IColumn * col, Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto narg = arguments.size();
+        const auto nrow = col->size();
+        const auto col_arg0 = col->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
+            : checkAndGetColumn<ColumnVector<IntType>>(col);
+
+        if (!col_arg0)
+        {
+            return false;
+        }
+
+        const auto & arg0_vec = col_arg0->getData();
+
+        auto res_null_map = ColumnUInt8::create(nrow, false);
+        auto res_col = ColumnString::create();
+        auto & res_chars = res_col->getChars();
+        auto & res_offsets = res_col->getOffsets();
+
+        res_offsets.resize_fill(nrow);
+
+        for (size_t i = 0; i < nrow; ++i)
+        {
+            const auto arg0 = arg0_vec[i];
+
+            if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<Int64>(arg0) >= static_cast<Int64>(narg))
+            {
+                res_null_map->getData()[i] = true;
+                res_chars.push_back(0);
+                res_offsets[i] = i == 0 ? 1 : (res_offsets[i - 1] + 1);
+            }
+            else
+            {
+                fillResultColumnEntry(res_null_map, res_chars, res_offsets, block.getByPosition(arguments[arg0]).column, i);
+            }
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res_col), std::move(res_null_map));
+        return true;
+    }
+};
+
+// internal function.
+// `abc.def` ==> 'fed.cba'
+// `-abc.def` ==> '-fed.cba'
+// `abc.def0000` ==> 'fed.cba'
+// `-abc.def0000` ==> '-fed.cba'
+// `abc.de0000f` ==> 'f0000ed.cba'
+// `-abc.de0000f` ==> '-f0000ed.cba'
+// `abc.de0000f0000` ==> 'f0000ed.cba'
+// `-abc.de0000f0000` ==> '-f0000ed.cba'
+// `0.def` ==> 'fed.'
+// `-0.def` ==> '-fed.'
+// `0.def0000` ==> 'fed.'
+// `-0.def0000` ==> '-fed.'
+// `0.de0000f` ==> 'f0000ed.'
+// `-0.de0000f` ==> '-f0000ed.'
+// `0.de0000f0000` ==> 'f0000ed.'
+// `-0.de0000f0000` ==> '-f0000ed.'
+// `abc` ==> 'cba'
+// `-abc` ==> '-cba'
+// `abc.00` ==> 'cba'
+// `-abc.00` ==> '-cba'
+// `abc0000` ==> '0000cba'
+// `-abc0000` ==> '-0000cba'
+// `abc0000.00` ==> '0000cba'
+// `-abc0000.00` ==> '-0000cba'
+// `0` ==> ''
+// `0.00` ==> ''
+class FunctionFormatDecimal : public IFunction
+{
+public:
+    static constexpr auto name = "formatDecimal";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionFormatDecimal>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & base_type = block.getByPosition(arguments[0]).type;
+        bool is_types_valid = getDecimalType(base_type, [&](const auto & decimal_type, bool) {
+            using DecimalType = std::decay_t<decltype(decimal_type)>;
+            using DecimalFieldType = typename DecimalType::FieldType;
+            static_assert(IsDecimal<DecimalFieldType>);
+            using IntType = typename DecimalFieldType::NativeType;
+            using DecimalColVec = ColumnDecimal<DecimalFieldType>;
+
+            const auto & col_arg = block.getByPosition(arguments[0]);
+            if (const auto * col = checkAndGetColumn<DecimalColVec>(col_arg.column.get()))
+            {
+                auto precision = maxDecimalPrecision<DecimalFieldType>();
+                auto scale = decimal_type.getScale();
+                auto col_res = ColumnString::create();
+                format<DecimalColVec, IntType>(col, precision, scale, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        });
+
+        if (!is_types_valid)
+            throw Exception(
+                fmt::format("Illegal types {} arguments of function {}", base_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    template <typename F>
+    static bool getDecimalType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename DecimalColVec, typename IntType>
+    static void format(
+        const DecimalColVec * col,
+        PrecType precision,
+        ScaleType scale,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        auto & data = col->getData();
+        size_t size = data.size();
+        res_data.resize(size * (precision + 3));
+        res_offsets.resize(size);
+
+        ColumnString::Offset cur_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & decimal = data[i];
+            if (decimal.value == std::numeric_limits<IntType>::min())
+                // for IntType::min, `value = -value` may cause overflow, so use Int256 here.
+                doFormat<Int256>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+            else
+                doFormat<IntType>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+        }
+    }
+
+    template <typename IntType>
+    static void doFormat(
+        IntType value,
+        ScaleType scale,
+        ColumnString::Offset & cur_offset,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        if (value < 0)
+        {
+            res_data[cur_offset++] = '-';
+            value = -value;
+        }
+        // fill decimal part
+        if (scale > 0 && value > 0)
+        {
+            size_t scale_i = 0;
+            // return false if the decimal part is all 0.
+            auto remove_tailing_zero = [&]() {
+                while (value > 0 && scale_i < scale)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    ++scale_i;
+                    if (d != 0)
+                    {
+                        res_data[cur_offset++] = d + '0';
+                        return true;
+                    }
+                }
+                return false;
+            };
+            auto fill_decimal_part = [&]() {
+                for (; value > 0 && scale_i < scale; ++scale_i)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    res_data[cur_offset++] = d + '0';
+                }
+                res_data[cur_offset++] = '.';
+            };
+            if (remove_tailing_zero())
+                fill_decimal_part();
+        }
+        // fill integer part
+        while (value > 0)
+        {
+            int d = static_cast<int>(value % 10);
+            value = value / 10;
+            res_data[cur_offset++] = d + '0';
+        }
+        res_data[cur_offset++] = 0;
+        res_offset = cur_offset;
+    }
+};
+
+>>>>>>> 25e5c1c66e (*.: Use String as the common type for Decimal in join when an Exception occurs (#6179))
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -4997,5 +5672,15 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
+<<<<<<< HEAD
+=======
+    factory.registerFunction<FunctionHexStr>();
+    factory.registerFunction<FunctionHexInt>();
+    factory.registerFunction<FunctionRepeat>();
+    factory.registerFunction<FunctionSpace>();
+    factory.registerFunction<FunctionBin>();
+    factory.registerFunction<FunctionElt>();
+    factory.registerFunction<FunctionFormatDecimal>();
+>>>>>>> 25e5c1c66e (*.: Use String as the common type for Decimal in join when an Exception occurs (#6179))
 }
 } // namespace DB
