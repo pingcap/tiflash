@@ -122,7 +122,7 @@ JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypeP
             // fix https://github.com/pingcap/tiflash/issues/4519
             // String is the common type for all types, it is always safe to choose String.
             // But then we need to use `FunctionFormatDecimal` to format decimal.
-            // Such as 0.1000000000 and 0.10000000000000000000.
+            // For example 0.1000000000 is equal to 0.10000000000000000000, but the original strings are not equal.
             RUNTIME_ASSERT(!left_type->onlyNull() || !right_type->onlyNull());
             auto fall_back_type = std::make_shared<DataTypeString>();
             bool make_nullable = left_type->isNullable() || right_type->isNullable();
@@ -158,7 +158,8 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
     if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
         for (size_t i = 0; i < join_key_size; ++i)
         {
-            if (removeNullable(join_key_types[i].key_type)->isString())
+            // Don't need to check the collate for decimal format string.
+            if (removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal)
             {
                 if (unlikely(join.probe_types(i).collate() != join.build_types(i).collate()))
                     throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);

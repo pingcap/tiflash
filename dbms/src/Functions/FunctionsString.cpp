@@ -5913,33 +5913,38 @@ private:
             res_data[cur_offset++] = '-';
             value = -value;
         }
+        // fill decimal part
         if (scale > 0 && value > 0)
         {
-            bool add_dot = false;
             size_t scale_i = 0;
-            // Ignore trailing zero.
-            while (value > 0 && scale_i < scale)
-            {
-                int d = static_cast<int>(value % 10);
-                value /= 10;
-                ++scale_i;
-                if (d != 0)
+            // return false if the decimal part is all 0.
+            auto remove_tailing_zero = [&]() {
+                while (value > 0 && scale_i < scale)
                 {
-                    res_data[cur_offset++] = d + '0';
-                    add_dot = true;
-                    break;
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    ++scale_i;
+                    if (d != 0)
+                    {
+                        res_data[cur_offset++] = d + '0';
+                        return true;
+                    }
                 }
-            }
-            for (; value > 0 && scale_i < scale; ++scale_i)
-            {
-                int d = static_cast<int>(value % 10);
-                value /= 10;
-                res_data[cur_offset++] = d + '0';
-                add_dot = true;
-            }
-            if (add_dot)
+                return false;
+            };
+            auto fill_decimal_part = [&]() {
+                for (; value > 0 && scale_i < scale; ++scale_i)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    res_data[cur_offset++] = d + '0';
+                }
                 res_data[cur_offset++] = '.';
+            };
+            if (remove_tailing_zero())
+                fill_decimal_part();
         }
+        // fill integer part
         while (value > 0)
         {
             int d = static_cast<int>(value % 10);
