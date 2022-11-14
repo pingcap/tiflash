@@ -191,30 +191,6 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     analyzer = std::move(storage_interpreter.analyzer);
 }
 
-/// Return pair: first for the ExchangeReceiver node count; second for the total sum of source num
-std::pair<size_t, size_t> getReceiverSourceNumInfo(IBlockInputStream & stream)
-{
-    if (const auto * receiver_input_stream_ptr = dynamic_cast<const ExchangeReceiverInputStream *>(&stream))
-    {
-        return std::make_pair(1, receiver_input_stream_ptr->getSourceNum());
-    }
-    if (const auto * mock_receiver_input_stream_ptr = dynamic_cast<const MockExchangeReceiverInputStream *>(&stream))
-    {
-        return std::make_pair(1, mock_receiver_input_stream_ptr->getSourceNum());
-    }
-    else
-    {
-        auto res = std::make_pair(0, 0);
-        stream.forEachChild([&](IBlockInputStream & child) {
-            auto tem = getReceiverSourceNumInfo(child);
-            res.first += tem.first;
-            res.second += tem.second;
-            return false;
-        });
-        return res;
-    }
-}
-
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)
 {
     if (unlikely(input_streams_vec.size() != 2))
@@ -272,13 +248,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
-    size_t shuffle_partition_num = 0;
-    if (enableFineGrainedShuffle(fine_grained_shuffle_count))
-    {
-        auto receiver_source_num_info = getReceiverSourceNumInfo(*build_pipeline.firstStream());
-        RUNTIME_CHECK(receiver_source_num_info.first == 1);
-        shuffle_partition_num = receiver_source_num_info.second;
-    }
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -288,7 +257,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         log->identifier(),
         enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
-        shuffle_partition_num,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,

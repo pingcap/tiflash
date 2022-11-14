@@ -48,6 +48,7 @@ void fillSelector(size_t rows,
 {
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
+    selector.resize(rows);
     for (size_t i = 0; i < rows; ++i)
     {
         /// Row from interval [(2^32 / num_bucket) * i, (2^32 / num_bucket) * (i + 1)) goes to bucket with number i.
@@ -57,13 +58,32 @@ void fillSelector(size_t rows,
     }
 }
 
-void computeHashAndFillSelector(const Block & block,
-                                const std::vector<Int64> & partition_col_ids,
-                                const TiDB::TiDBCollators & collators,
-                                std::vector<String> & partition_key_containers,
-                                uint32_t num_bucket,
-                                WeakHash32 & hash,
-                                IColumn::Selector & selector)
+/// For FineGrainedShuffle, the selector algorithm should satisfy the requirement:
+//  the FineGrainedShuffleStreamIndex can be calculated using hash_data and fine_grained_shuffle_stream_count values, without the presence of part_num.
+void fillSelectorForFineGrainedShuffle(size_t rows,
+                                       const WeakHash32 & hash,
+                                       uint32_t part_num,
+                                       uint32_t fine_grained_shuffle_stream_count,
+                                       IColumn::Selector & selector)
+{
+    // fill selector array with most significant bits of hash values
+    const auto & hash_data = hash.getData();
+    selector.resize(rows);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to bucket with number i.
+        selector[i] = hash_data[i]; /// [0, 2^32)
+        selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, part_num)
+        selector[i] = selector[i] * fine_grained_shuffle_stream_count + hash_data[i] % fine_grained_shuffle_stream_count; /// map to [0, part_num * fine_grained_shuffle_stream_count]
+    }
+}
+
+void computeHash(const Block & block,
+                 const std::vector<Int64> & partition_col_ids,
+                 const TiDB::TiDBCollators & collators,
+                 std::vector<String> & partition_key_containers,
+                 WeakHash32 & hash)
 {
     size_t rows = block.rows();
     if (rows == 0)
@@ -71,35 +91,27 @@ void computeHashAndFillSelector(const Block & block,
 
     hash.getData().resize(rows);
     hash.reset(rows);
-    selector.resize(rows);
     /// compute hash values
     for (size_t i = 0; i < partition_col_ids.size(); ++i)
     {
         const auto & column = block.getByPosition(partition_col_ids[i]).column;
         column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
     }
-    /// fill selector using computed hash
-    fillSelector(rows, hash, num_bucket, selector);
 }
 
-void computeHashAndFillSelector(size_t rows,
-                                const ColumnRawPtrs & key_columns,
-                                const TiDB::TiDBCollators & collators,
-                                std::vector<String> & partition_key_containers,
-                                uint32_t num_bucket,
-                                WeakHash32 & hash,
-                                IColumn::Selector & selector)
+void computeHash(size_t rows,
+                 const ColumnRawPtrs & key_columns,
+                 const TiDB::TiDBCollators & collators,
+                 std::vector<String> & partition_key_containers,
+                 WeakHash32 & hash)
 {
     if (rows == 0)
         return;
 
     hash.getData().resize(rows);
     hash.reset(rows);
-    selector.resize(rows);
     for (size_t i = 0; i < key_columns.size(); i++)
         key_columns[i]->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
-
-    fillSelector(rows, hash, num_bucket, selector);
 }
 
 void scatterColumns(const Block & input_block,
@@ -113,8 +125,10 @@ void scatterColumns(const Block & input_block,
         return;
 
     WeakHash32 hash(0);
+    computeHash(input_block, partition_col_ids, collators, partition_key_containers, hash);
+
     IColumn::Selector selector;
-    computeHashAndFillSelector(input_block, partition_col_ids, collators, partition_key_containers, bucket_num, hash, selector);
+    fillSelector(input_block.rows(), hash, bucket_num, selector);
 
     for (size_t col_id = 0; col_id < input_block.columns(); ++col_id)
     {
@@ -137,20 +151,24 @@ DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num)
     return tracked_packets;
 }
 
-void scatterColumnsInplace(const Block & block,
-                           const std::vector<Int64> & partition_col_ids,
-                           const TiDB::TiDBCollators & collators,
-                           std::vector<String> & partition_key_containers,
-                           uint32_t bucket_num,
-                           WeakHash32 & hash,
-                           IColumn::Selector & selector,
-                           std::vector<IColumn::ScatterColumns> & scattered)
+void scatterColumnsForFineGrainedShuffle(const Block & block,
+                                         const std::vector<Int64> & partition_col_ids,
+                                         const TiDB::TiDBCollators & collators,
+                                         std::vector<String> & partition_key_containers,
+                                         uint32_t part_num,
+                                         uint32_t fine_grained_shuffle_stream_count,
+                                         WeakHash32 & hash,
+                                         IColumn::Selector & selector,
+                                         std::vector<IColumn::ScatterColumns> & scattered)
 {
     if (block.rows() == 0)
         return;
 
     // compute hash values
-    computeHashAndFillSelector(block, partition_col_ids, collators, partition_key_containers, bucket_num, hash, selector);
+    computeHash(block, partition_col_ids, collators, partition_key_containers, hash);
+
+    /// fill selector using computed hash
+    fillSelectorForFineGrainedShuffle(block.rows(), hash, part_num, fine_grained_shuffle_stream_count, selector);
 
     // partition
     for (size_t i = 0; i < block.columns(); ++i)

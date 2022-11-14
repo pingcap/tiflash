@@ -122,7 +122,6 @@ Join::Join(
     const String & req_id,
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
-    size_t shuffle_partition_num_,
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
@@ -150,7 +149,6 @@ Join::Join(
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
-    , shuffle_partition_num(shuffle_partition_num_)
 {
     if (other_condition_ptr != nullptr)
     {
@@ -164,7 +162,7 @@ Join::Join(
         throw Exception("Not supported: non left join with left conditions");
     if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
-    LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}, partition num {}", enable_fine_grained_shuffle, fine_grained_shuffle_count, shuffle_partition_num);
+    LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
 void Join::setBuildTableState(BuildTableState state_)
@@ -1156,8 +1154,7 @@ void NO_INLINE joinBlockImplTypeCase(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count,
-    size_t shuffle_partition_num)
+    size_t fine_grained_shuffle_count)
 {
     size_t num_columns_to_add = right_indexes.size();
 
@@ -1165,24 +1162,22 @@ void NO_INLINE joinBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
     Arena pool;
-    IColumn::Selector selector;
+    WeakHash32 shuffle_hash(0); /// reproduce hash values in FinedGrainedShuffleWriter
     if (enable_fine_grained_shuffle && rows > 0)
     {
         /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs
         /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
         ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
         /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-        WeakHash32 hash(0); /// hash will be resize and reset in computeHashAndFillSelector function
-        HashBaseWriterHelper::computeHashAndFillSelector(rows,
-                                                         key_columns,
-                                                         collators,
-                                                         sort_key_containers,
-                                                         shuffle_partition_num * fine_grained_shuffle_count,
-                                                         hash,
-                                                         selector);
+        HashBaseWriterHelper::computeHash(rows,
+                                          key_columns,
+                                          collators,
+                                          sort_key_containers,
+                                          shuffle_hash);
     }
 
     size_t segment_size = map.getSegmentSize();
+    const auto & shuffle_hash_data = shuffle_hash.getData();
     for (size_t i = 0; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
@@ -1200,6 +1195,12 @@ void NO_INLINE joinBlockImplTypeCase(
             auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
             auto key = keyHolderGetKey(key_holder);
             size_t hash_value = 0;
+            bool zero_flag = ZeroTraits::check(key);
+            if (segment_size > 0 && !zero_flag)
+            {
+                hash_value = map.hash(key);
+            }
+
             size_t segment_index = 0;
             if (enable_fine_grained_shuffle)
             {
@@ -1209,22 +1210,20 @@ void NO_INLINE joinBlockImplTypeCase(
                 /// 1. In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id by '% fine_grained_shuffle_count'
                 /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
                 /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
-                auto packet_stream_id = selector[i] % fine_grained_shuffle_count;
+                auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
                 segment_index = packet_stream_id % segment_size;
             }
             else
             {
-                bool zero_flag = ZeroTraits::check(key);
                 if (segment_size > 0 && !zero_flag)
                 {
-                    hash_value = map.hash(key);
                     segment_index = hash_value % segment_size;
                 }
             }
 
             auto & internal_map = map.getSegmentTable(segment_index);
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = (segment_size > 0 && !enable_fine_grained_shuffle) ? internal_map.find(key, hash_value) : internal_map.find(key);
+            auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
             if (it != internal_map.end())
             {
                 it->getMapped().setUsed();
@@ -1265,8 +1264,7 @@ void joinBlockImplType(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count,
-    size_t shuffle_partition_num)
+    size_t fine_grained_shuffle_count)
 {
     if (null_map)
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, true>(
@@ -1282,8 +1280,7 @@ void joinBlockImplType(
             right_indexes,
             collators,
             enable_fine_grained_shuffle,
-            fine_grained_shuffle_count,
-            shuffle_partition_num);
+            fine_grained_shuffle_count);
     else
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, false>(
             map,
@@ -1298,8 +1295,7 @@ void joinBlockImplType(
             right_indexes,
             collators,
             enable_fine_grained_shuffle,
-            fine_grained_shuffle_count,
-            shuffle_partition_num);
+            fine_grained_shuffle_count);
 }
 } // namespace
 
@@ -1647,8 +1643,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
             right_indexes,                                                                                                                     \
             collators,                                                                                                                         \
             enable_fine_grained_shuffle,                                                                                                       \
-            fine_grained_shuffle_count,                                                                                                        \
-            shuffle_partition_num);                                                                                                            \
+            fine_grained_shuffle_count);                                                                                                       \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M

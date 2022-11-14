@@ -99,7 +99,6 @@ public:
          const String & req_id,
          bool enable_fine_grained_shuffle_,
          size_t fine_grained_shuffle_count_,
-         size_t shuffle_partition_num_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
@@ -350,7 +349,6 @@ private:
     bool initialized = false;
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
-    size_t shuffle_partition_num = 0;
 
     size_t getBuildConcurrencyInternal() const
     {

@@ -57,8 +57,7 @@ StorageJoin::StorageJoin(
                                   strictness,
                                   "" /*req_id=*/,
                                   false /*enable_fine_grained_shuffle_*/,
-                                  0 /*fine_grained_shuffle_count_*/,
-                                  0 /*shuffle_partition_num_*/);
+                                  0 /*fine_grained_shuffle_count_*/);
     join->init(getSampleBlock().sortColumns());
     restore();
 }
