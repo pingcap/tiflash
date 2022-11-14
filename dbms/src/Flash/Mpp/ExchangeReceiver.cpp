@@ -151,6 +151,7 @@ enum class AsyncRequestStage
     WAIT_MAKE_READER,
     WAIT_BATCH_READ,
     WAIT_FINISH,
+    WAIT_RETRY,
     FINISHED,
 };
 
@@ -195,6 +196,9 @@ public:
     {
         switch (stage)
         {
+        case AsyncRequestStage::WAIT_RETRY:
+            start();
+            break;
         case AsyncRequestStage::WAIT_MAKE_READER:
         {
             // Use lock to ensure reader is created already in reactor thread
@@ -339,6 +343,7 @@ private:
         if (retriable())
         {
             ++retry_times;
+            stage = AsyncRequestStage::WAIT_RETRY;
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
