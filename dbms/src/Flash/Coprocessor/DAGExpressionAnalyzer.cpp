@@ -8,6 +8,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsConditional.h>
 #include <Functions/FunctionsTiDBConversion.h>
@@ -18,6 +19,10 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
+<<<<<<< HEAD
+=======
+#include <WindowFunctions/WindowFunctionFactory.h>
+>>>>>>> 25e5c1c66e (*.: Use String as the common type for Decimal in join when an Exception occurs (#6179))
 
 namespace DB
 {
@@ -752,8 +757,12 @@ void DAGExpressionAnalyzer::appendJoin(
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+<<<<<<< HEAD
     const DataTypes & key_types,
     Names & key_names,
+=======
+    const JoinKeyTypes & join_key_types,
+>>>>>>> 25e5c1c66e (*.: Use String as the common type for Decimal in join when an Exception occurs (#6179))
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
@@ -771,10 +780,13 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
 
         String key_name = getActions(key, actions);
         DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
-        if (!removeNullable(current_type)->equals(*removeNullable(key_types[i])))
+        const auto & join_key_type = join_key_types[i];
+        if (!removeNullable(current_type)->equals(*removeNullable(join_key_type.key_type)))
         {
             /// need to convert to key type
-            key_name = appendCast(key_types[i], actions, key_name);
+            key_name = join_key_type.is_incompatible_decimal
+                ? applyFunction("formatDecimal", {key_name}, actions, nullptr)
+                : appendCast(join_key_type.key_type, actions, key_name);
             has_actions = true;
         }
         if (!has_actions && (!left || is_right_out_join))
@@ -812,6 +824,28 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         ret |= has_actions;
     }
 
+<<<<<<< HEAD
+=======
+    return std::make_pair(has_actions_of_keys, std::move(key_names));
+}
+
+bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
+    ExpressionActionsChain & chain,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const JoinKeyTypes & join_key_types,
+    Names & key_names,
+    bool left,
+    bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    String & filter_column_name)
+{
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+
+    bool ret = false;
+    std::tie(ret, key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
+
+>>>>>>> 25e5c1c66e (*.: Use String as the common type for Decimal in join when an Exception occurs (#6179))
     if (!filters.empty())
     {
         ret = true;
