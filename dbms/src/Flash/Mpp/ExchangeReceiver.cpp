@@ -236,8 +236,8 @@ public:
             }
             else
             {
-                retryOrDone("Exchange receiver meet error : send async stream request fail");
                 LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+                retryOrDone("Exchange receiver meet error : send async stream request fail");
             }
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
