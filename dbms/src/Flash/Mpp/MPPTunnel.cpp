@@ -43,6 +43,23 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
         return "unknown";
     }
 }
+
+// Update metric for tunnel's response bytes
+inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+{
+    switch (mode)
+    {
+    case TunnelSenderMode::LOCAL:
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn_local).Increment(pushed_data_size);
+        break;
+    case TunnelSenderMode::ASYNC_GRPC:
+    case TunnelSenderMode::SYNC_GRPC:
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(pushed_data_size);
+        break;
+    default:
+        throw DB::Exception("Illegal TunnelSenderMode");
+    }
+}
 } // namespace
 
 MPPTunnel::MPPTunnel(
@@ -143,7 +160,9 @@ void MPPTunnel::write(const TrackedMppDataPacketPtr & data)
 
     if (tunnel_sender->push(data))
     {
-        connection_profile_info.bytes += data->getPacket().ByteSizeLong();
+        auto pushed_data_size = data->getPacket().ByteSizeLong();
+        updateMetric(pushed_data_size, mode);
+        connection_profile_info.bytes += pushed_data_size;
         connection_profile_info.packets += 1;
         return;
     }

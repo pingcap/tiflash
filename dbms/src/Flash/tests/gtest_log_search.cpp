@@ -41,7 +41,7 @@ inline Int64 getTimezoneAndOffset(int tz_sign, int tz_hour, int tz_min)
 
 inline void getTimezoneString(char * tzs, int tz_sign, int tz_hour, int tz_min)
 {
-    sprintf(tzs, "%c%02d:%02d", tz_sign > 0 ? '+' : '-', tz_hour, tz_min);
+    snprintf(tzs, 10, "%c%02d:%02d", tz_sign > 0 ? '+' : '-', tz_hour, tz_min);
 }
 
 TEST_F(LogSearchTest, LogSearch)
