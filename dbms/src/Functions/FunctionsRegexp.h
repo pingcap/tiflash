@@ -833,56 +833,61 @@ public:
     static void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing)
     {
         if (is_str)
+            checkStringTypeArg(arg, has_nullable_col, has_data_type_nothing);
+        else
+            checkIntTypeArg(arg, has_nullable_col, has_data_type_nothing);
+    }
+
+private:
+    static void checkStringTypeArg(const DataTypePtr & arg, bool * has_nullable_col, bool * has_data_type_nothing)
+    {
+        if (arg->isNullable())
         {
-            // Check string type argument
-            if (arg->isNullable())
-            {
-                *has_nullable_col = true;
-                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                assert(null_type != nullptr);
+            *has_nullable_col = true;
+            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+            assert(null_type != nullptr);
 
-                const auto & nested_type = null_type->getNestedType();
+            const auto & nested_type = null_type->getNestedType();
 
-                // It may be DataTypeNothing if it's not string
-                if (!nested_type->isString())
-                {
-                    if (nested_type->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-            else
+            // It may be DataTypeNothing if it's not string
+            if (!nested_type->isString())
             {
-                if (!arg->isString())
+                if (nested_type->getTypeId() != TypeIndex::Nothing)
                     throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                else
+                    *has_data_type_nothing = true;
             }
         }
         else
         {
-            // Check int type argument
-            if (arg->isNullable())
-            {
-                *has_nullable_col = true;
-                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                assert(null_type != nullptr);
+            if (!arg->isString())
+                throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
 
-                const auto & nested_type = null_type->getNestedType();
+    static void checkIntTypeArg(const DataTypePtr & arg, bool * has_nullable_col, bool * has_data_type_nothing)
+    {
+        if (arg->isNullable())
+        {
+            *has_nullable_col = true;
+            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+            assert(null_type != nullptr);
 
-                // It may be DataTypeNothing if it's not string
-                if (!nested_type->isInteger())
-                {
-                    if (nested_type->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-            else
+            const auto & nested_type = null_type->getNestedType();
+
+            // It may be DataTypeNothing if it's not string
+            if (!nested_type->isInteger())
             {
-                if (!arg->isInteger())
+                if (nested_type->getTypeId() != TypeIndex::Nothing)
                     throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                else
+                    *has_data_type_nothing = true;
             }
+        }
+        else
+        {
+            if (!arg->isInteger())
+                throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 };
