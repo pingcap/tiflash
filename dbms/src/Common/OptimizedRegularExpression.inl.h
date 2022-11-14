@@ -18,6 +18,7 @@
 #include <Common/Exception.h>
 #include <common/defines.h>
 #include <common/types.h>
+#include <common/StringRef.h>
 
 #include <iostream>
 
@@ -347,7 +348,7 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
                 pos = strstr(subject, required_substring.data());
 
             if (nullptr == pos)
-                return 0;
+                return false;
         }
 
         return re2->Match(StringPieceType(subject, subject_size), 0, subject_size, RegexType::UNANCHORED, nullptr, 0);
@@ -367,12 +368,12 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
             pos = strstr(subject, required_substring.data());
 
         if (pos == nullptr)
-            return 0;
+            return false;
         else
         {
             match.offset = pos - subject;
             match.length = required_substring.size();
-            return 1;
+            return true;
         }
     }
     else
@@ -386,18 +387,18 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
                 pos = strstr(subject, required_substring.data());
 
             if (nullptr == pos)
-                return 0;
+                return false;
         }
 
         StringPieceType piece;
 
         if (!RegexType::PartialMatch(StringPieceType(subject, subject_size), *re2, &piece))
-            return 0;
+            return false;
         else
         {
             match.offset = piece.data() - subject;
             match.length = piece.length();
-            return 1;
+            return true;
         }
     }
 }
@@ -497,7 +498,7 @@ static inline Int64 bytePos2Utf8Pos(const char * str, Int64 byte_pos)
 }
 
 template <bool thread_safe>
-Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const char * expr, size_t expr_size, size_t pos, Int64 occur)
+Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(const char * expr, size_t expr_size, size_t pos, Int64 occur)
 {
     if (occur != 1)
         return 0;
@@ -509,11 +510,17 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const 
     return pos;
 }
 
-static inline void checkArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
+static inline void checkInstrArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
     if (unlikely(ret_op != 0 && ret_op != 1))
         throw DB::Exception("Incorrect argument to regexp function: return_option must be 1 or 0");
 
+    if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
+        throw DB::Exception("Index out of bounds in regular function.");
+}
+
+static inline void checkSubstrArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+{
     if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
         throw DB::Exception("Index out of bounds in regular function.");
 }
@@ -524,7 +531,7 @@ static inline void makeOccurValid(Int64 & occur)
 }
 
 template <bool thread_safe>
-Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
+Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
@@ -561,19 +568,57 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const c
 }
 
 template <bool thread_safe>
+StringRef OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur)
+{
+    size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
+    const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
+    size_t expr_size = subject_size - byte_offset;
+
+    StringPieceType expr_sp(expr, expr_size);
+    StringRef matched_str; // store the matched substring
+
+    while (occur > 0)
+    {
+        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
+        if (!success)
+            return "";
+
+        --occur;
+    }
+
+    return matched_str;
+}
+
+template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
     Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
 
-    checkArgs(utf8_total_len, subject_size, pos, ret_op);
+    checkInstrArgs(utf8_total_len, subject_size, pos, ret_op);
 
     makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
-        return processEmptyStringExpr(subject, subject_size, pos, occur);
+        return processInstrEmptyStringExpr(subject, subject_size, pos, occur);
 
     size_t byte_pos = utf8Pos2bytePos(subject, pos);
-    return getSubstrMatchedIndex(subject, subject_size, byte_pos, occur, ret_op);
+    return instrImpl(subject, subject_size, byte_pos, occur, ret_op);
+}
+
+template <bool thread_safe>
+StringRef OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur)
+{
+    Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
+
+    checkSubstrArgs(utf8_total_len, subject_size, pos);
+
+    makeOccurValid(occur);
+
+    if (unlikely(subject_size == 0))
+        return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
+
+    size_t byte_pos = utf8Pos2bytePos(subject, pos);
+    return substrImpl(subject, subject_size, byte_pos, occur);
 }
 
 #undef MIN_LENGTH_FOR_STRSTR
