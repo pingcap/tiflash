@@ -43,7 +43,7 @@ std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t
 
 void fillSelector(size_t rows,
                   const WeakHash32 & hash,
-                  uint32_t num_bucket,
+                  uint32_t part_num,
                   IColumn::Selector & selector)
 {
     // fill selector array with most significant bits of hash values
@@ -51,10 +51,10 @@ void fillSelector(size_t rows,
     selector.resize(rows);
     for (size_t i = 0; i < rows; ++i)
     {
-        /// Row from interval [(2^32 / num_bucket) * i, (2^32 / num_bucket) * (i + 1)) goes to bucket with number i.
+        /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to partition with number i.
         selector[i] = hash_data[i]; /// [0, 2^32)
-        selector[i] *= num_bucket; /// [0, num_bucket * 2^32), selector stores 64 bit values.
-        selector[i] >>= 32u; /// [0, num_bucket)
+        selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, part_num)
     }
 }
 
@@ -71,7 +71,7 @@ void fillSelectorForFineGrainedShuffle(size_t rows,
     selector.resize(rows);
     for (size_t i = 0; i < rows; ++i)
     {
-        /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to bucket with number i.
+        /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to partition with number i.
         selector[i] = hash_data[i]; /// [0, 2^32)
         selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
         selector[i] >>= 32u; /// [0, part_num)
