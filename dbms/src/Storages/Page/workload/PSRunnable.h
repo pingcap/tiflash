@@ -17,10 +17,9 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 
-const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
-
 namespace DB::PS::tests
 {
+static constexpr PageId MAX_PAGE_ID_DEFAULT = 1000;
 class PSRunnable : public Poco::Runnable
 {
 public:
@@ -36,24 +35,55 @@ public:
     size_t pages_used = 0;
 };
 
+// The random page id for adding and removing
+struct RandomPageId
+{
+    // The new page id to add to pagestorage
+    DB::PageId page_id;
+    // The page ids to removed from pagestorage
+    DB::PageIdSet page_id_to_remove;
+
+    explicit RandomPageId(DB::PageId new_page_id)
+        : page_id(new_page_id)
+    {}
+
+    RandomPageId(DB::PageId new_page_id, DB::PageIdSet page_id_to_remove_)
+        : page_id(new_page_id)
+        , page_id_to_remove(page_id_to_remove_)
+    {
+    }
+};
+
+// The shared status inside workload
+struct GlobalStat
+{
+    // shared status between PSWindowWriter and PSWindowReader
+    std::mutex mtx_page_id;
+    // The page ids between [left_id_boundary, right_id_boundary)
+    // and exists in `commit_ids` && not exists in `pending_remove_ids`
+    // is readable
+    std::atomic<DB::PageId> right_id_boundary = 0;
+    std::atomic<DB::PageId> left_id_boundary = 0;
+    std::set<DB::PageId> commit_ids;
+    std::set<DB::PageId> pending_remove_ids;
+
+    void commit(const RandomPageId & c);
+};
+
 class PSWriter : public PSRunnable
 {
-    static size_t approx_page_mb;
-
 public:
-    PSWriter(const PSPtr & ps_, DB::UInt32 index_)
+    PSWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
         : ps(ps_)
         , index(index_)
+        , global_stat(global_stat_)
     {
         gen.seed(time(nullptr));
     }
 
     ~PSWriter() override
     {
-        if (memory != nullptr)
-        {
-            free(memory);
-        }
+        memory.reset();
     }
 
     String description() override
@@ -61,26 +91,28 @@ public:
         return fmt::format("(Stress Test Writer {})", index);
     }
 
-    static void setApproxPageSize(size_t size_mb);
+    void setBufferSizeRange(size_t min, size_t max);
 
-    static DB::ReadBufferPtr genRandomData(DB::PageId pageId, DB::MemHolder & holder);
-
-    virtual void updatedRandomData();
-
-    static void fillAllPages(const PSPtr & ps);
+    virtual DB::ReadBufferPtr getRandomData();
 
     bool runImpl() override;
 
+    void write(const RandomPageId & r);
+
 protected:
-    virtual DB::PageId genRandomPageId();
+    virtual RandomPageId genRandomPageId();
 
 protected:
     PSPtr ps;
     DB::UInt32 index = 0;
     std::mt19937 gen;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
-    char * memory = nullptr;
-    DB::ReadBufferPtr buff_ptr;
+    std::unique_ptr<char[]> memory;
+
+    size_t buffer_size_min = 1 * 1024 * 1024;
+    size_t buffer_size_max = 1 * 1024 * 1024;
+
+    const std::unique_ptr<GlobalStat> & global_stat;
 };
 
 
@@ -89,11 +121,11 @@ protected:
 class PSCommonWriter : public PSWriter
 {
 public:
-    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_)
-        : PSWriter(ps_, index_)
+    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSWriter(ps_, index_, global_stat_)
     {}
 
-    void updatedRandomData() override;
+    DB::ReadBufferPtr getRandomData() override;
 
     String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
@@ -101,36 +133,24 @@ public:
 
     void setBatchBufferNums(size_t numbers);
 
-    void setBatchBufferSize(size_t size);
-
     void setBatchBufferLimit(size_t size_limit);
 
     void setBatchBufferPageRange(size_t max_page_id_);
 
-    void setBatchBufferRange(size_t min, size_t max);
-
     void setFieldSize(const DB::PageFieldSizes & data_sizes);
 
 protected:
-    std::vector<DB::ReadBufferPtr> buff_ptrs;
     size_t batch_buffer_nums = 100;
-    size_t batch_buffer_size = 1 * DB::MB;
     size_t batch_buffer_limit = 0;
 
-    size_t buffer_size_min = 0;
-    size_t buffer_size_max = 0;
-
     DB::PageFieldSizes data_sizes = {};
-
-    DB::PageId genRandomPageId() override;
-    virtual size_t genBufferSize();
 };
-
 
 // PSWindowsWriter can better simulate the user's workload in cooperation with PSWindowsReader
 // It can also be used as an independent writer to imitate user writing.
 // When the user is using TiFlash, The Pageid which in PageStorage should be continuously incremented.
-// In the meantime, The PageId near the end may be constantly updated.So PSWindowsWriter looks like:
+// In the meantime, The PageId near the end may be constantly updated. So the page ids updated by
+// this class looks like:
 //
 //
 //  | Pageid 1          Pageid 100                           Pageid N |
@@ -138,25 +158,23 @@ protected:
 //                                                           |              |
 //                                                           |    window    |
 //
-// Every time the pageid written will be generated from the "window" range.
-// And The random from the window should conform to the normal distribution.
+// Every time the page_id written will be generated by a uniform dist.
 // When random number bigger than Pageid N, it will be Pageid N + 1, it means new page come.
 // When random number smaller than Pageid N, it means Page updated.
+// And `genRandomPageId` will also return the page_id that is not likely to be updated later.
 class PSWindowWriter : public PSCommonWriter
 {
 public:
-    PSWindowWriter(const PSPtr & ps_, DB::UInt32 index_)
-        : PSCommonWriter(ps_, index_)
+    PSWindowWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSCommonWriter(ps_, index_, global_stat_)
     {}
 
     String description() override { return fmt::format("(Stress Test Window Writer {})", index); }
 
-    void setWindowSize(size_t window_size);
-
     void setNormalDistributionSigma(size_t sigma);
 
 protected:
-    DB::PageId genRandomPageId() override;
+    RandomPageId genRandomPageId() override;
 
 protected:
     size_t window_size = 100;
@@ -166,8 +184,8 @@ protected:
 class PSIncreaseWriter : public PSCommonWriter
 {
 public:
-    PSIncreaseWriter(const PSPtr & ps_, DB::UInt32 index_)
-        : PSCommonWriter(ps_, index_)
+    PSIncreaseWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSCommonWriter(ps_, index_, global_stat_)
     {}
 
     String description() override { return fmt::format("(Stress Test Increase Writer {})", index); }
@@ -177,7 +195,7 @@ public:
     void setPageRange(size_t page_range);
 
 protected:
-    DB::PageId genRandomPageId() override;
+    RandomPageId genRandomPageId() override;
 
 protected:
     size_t begin_page_id = 1;
@@ -187,9 +205,10 @@ protected:
 class PSReader : public PSRunnable
 {
 public:
-    PSReader(const PSPtr & ps_, DB::UInt32 index_)
+    PSReader(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
         : ps(ps_)
         , index(index_)
+        , global_stat(global_stat_)
     {
         gen.seed(time(nullptr));
     }
@@ -197,8 +216,6 @@ public:
     String description() override { return fmt::format("(Stress Test PSReader {})", index); }
 
     bool runImpl() override;
-
-    void setPageReadOnce(size_t page_read_once);
 
     void setReadDelay(size_t delay_ms);
 
@@ -213,9 +230,10 @@ protected:
     PSPtr ps;
     std::mt19937 gen;
     size_t heavy_read_delay_ms = 0;
-    size_t page_read_once = 5;
+    size_t num_pages_read = 5;
     DB::UInt32 index = 0;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
+    const std::unique_ptr<GlobalStat> & global_stat;
 };
 
 // PSWindowReader can better simulate the user's workload in cooperation with PSWindowsWriter
@@ -233,23 +251,17 @@ protected:
 class PSWindowReader : public PSReader
 {
 public:
-    PSWindowReader(const PSPtr & ps_, DB::UInt32 index_)
-        : PSReader(ps_, index_)
+    PSWindowReader(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSReader(ps_, index_, global_stat_)
     {}
 
-    void setWindowSize(size_t window_size);
-
     void setNormalDistributionSigma(size_t sigma);
-
-    void setWriterNums(size_t writer_nums);
 
 protected:
     DB::PageIds genRandomPageIds() override;
 
 protected:
-    size_t window_size = 100;
     size_t sigma = 11;
-    size_t writer_nums = 0;
     std::mt19937 gen;
 };
 
@@ -259,8 +271,8 @@ protected:
 class PSSnapshotReader : public PSReader
 {
 public:
-    PSSnapshotReader(const PSPtr & ps_, DB::UInt32 index_)
-        : PSReader(ps_, index_)
+    PSSnapshotReader(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSReader(ps_, index_, global_stat_)
     {}
 
     bool runImpl() override;

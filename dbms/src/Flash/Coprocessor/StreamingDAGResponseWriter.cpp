@@ -74,7 +74,7 @@ template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response, /*delta_mode=*/true);
+    summary_collector.addExecuteSummaries(response);
     writer->write(response);
 }
 
