@@ -27,6 +27,9 @@ enum class ExtraCastAfterTSMode
     AppendDurationCast
 };
 
+struct JoinKeyType;
+using JoinKeyTypes = std::vector<JoinKeyType>;
+
 class DAGExpressionAnalyzerHelper;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   */
@@ -112,7 +115,7 @@ public:
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         Names & key_names,
         bool left,
         bool is_right_out_join,
@@ -166,6 +169,21 @@ private:
         const String & expr_name,
         bool force_uint8);
 
+<<<<<<< HEAD
+=======
+    bool buildExtraCastsAfterTS(
+        const ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
+    std::pair<bool, Names> buildJoinKey(
+        const ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const JoinKeyTypes & join_key_types,
+        bool left,
+        bool is_right_out_join);
+
+>>>>>>> 25e5c1c66e (*.: Use String as the common type for Decimal in join when an Exception occurs (#6179))
     String applyFunction(
         const String & func_name,
         const Names & arg_names,
