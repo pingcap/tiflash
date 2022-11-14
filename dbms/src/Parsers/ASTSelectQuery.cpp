@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <Common/FieldVisitors.h>
-#include <Parsers/ASTSetQuery.h>
-#include <Parsers/ASTFunction.h>
+#include <Common/typeid_cast.h>
 #include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
@@ -28,9 +28,9 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 
 ASTPtr ASTSelectQuery::clone() const
@@ -38,7 +38,12 @@ ASTPtr ASTSelectQuery::clone() const
     auto res = std::make_shared<ASTSelectQuery>(*this);
     res->children.clear();
 
-#define CLONE(member) if (member) { res->member = member->clone(); res->children.push_back(res->member); }
+#define CLONE(member)                         \
+    if (member)                               \
+    {                                         \
+        res->member = (member)->clone();      \
+        res->children.push_back(res->member); \
+    }
 
     /** NOTE Members must clone exactly in the same order,
         *  in which they were inserted into `children` in ParserSelectQuery.
@@ -191,11 +196,11 @@ static const ASTTableExpression * getFirstTableExpression(const ASTSelectQuery &
     if (!select.tables)
         return {};
 
-    const ASTTablesInSelectQuery & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*select.tables);
+    const auto & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*select.tables);
     if (tables_in_select_query.children.empty())
         return {};
 
-    const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*tables_in_select_query.children[0]);
+    const auto & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*tables_in_select_query.children[0]);
     if (!tables_element.table_expression)
         return {};
 
@@ -207,40 +212,15 @@ static ASTTableExpression * getFirstTableExpression(ASTSelectQuery & select)
     if (!select.tables)
         return {};
 
-    ASTTablesInSelectQuery & tables_in_select_query = static_cast<ASTTablesInSelectQuery &>(*select.tables);
+    auto & tables_in_select_query = static_cast<ASTTablesInSelectQuery &>(*select.tables);
     if (tables_in_select_query.children.empty())
         return {};
 
-    ASTTablesInSelectQueryElement & tables_element = static_cast<ASTTablesInSelectQueryElement &>(*tables_in_select_query.children[0]);
+    auto & tables_element = static_cast<ASTTablesInSelectQueryElement &>(*tables_in_select_query.children[0]);
     if (!tables_element.table_expression)
         return {};
 
     return static_cast<ASTTableExpression *>(tables_element.table_expression.get());
-}
-
-static const ASTArrayJoin * getFirstArrayJoin(const ASTSelectQuery & select)
-{
-    if (!select.tables)
-        return {};
-
-    const ASTTablesInSelectQuery & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*select.tables);
-    if (tables_in_select_query.children.empty())
-        return {};
-
-    const ASTArrayJoin * array_join = nullptr;
-    for (const auto & child : tables_in_select_query.children)
-    {
-        const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
-        if (tables_element.array_join)
-        {
-            if (!array_join)
-                array_join = static_cast<const ASTArrayJoin *>(tables_element.array_join.get());
-            else
-                throw Exception("Support for more than one ARRAY JOIN in query is not implemented", ErrorCodes::NOT_IMPLEMENTED);
-        }
-    }
-
-    return array_join;
 }
 
 static const ASTTablesInSelectQueryElement * getFirstTableJoin(const ASTSelectQuery & select)
@@ -248,14 +228,14 @@ static const ASTTablesInSelectQueryElement * getFirstTableJoin(const ASTSelectQu
     if (!select.tables)
         return {};
 
-    const ASTTablesInSelectQuery & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*select.tables);
+    const auto & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*select.tables);
     if (tables_in_select_query.children.empty())
         return {};
 
     const ASTTablesInSelectQueryElement * joined_table = nullptr;
     for (const auto & child : tables_in_select_query.children)
     {
-        const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
+        const auto & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
         if (tables_element.table_join)
         {
             if (!joined_table)
@@ -339,26 +319,6 @@ bool ASTSelectQuery::final() const
 }
 
 
-ASTPtr ASTSelectQuery::array_join_expression_list() const
-{
-    const ASTArrayJoin * array_join = getFirstArrayJoin(*this);
-    if (!array_join)
-        return {};
-
-    return array_join->expression_list;
-}
-
-
-bool ASTSelectQuery::array_join_is_left() const
-{
-    const ASTArrayJoin * array_join = getFirstArrayJoin(*this);
-    if (!array_join)
-        return {};
-
-    return array_join->kind == ASTArrayJoin::Kind::Left;
-}
-
-
 const ASTTablesInSelectQueryElement * ASTSelectQuery::join() const
 {
     return getFirstTableJoin(*this);
@@ -422,5 +382,4 @@ void ASTSelectQuery::replaceDatabaseAndTable(const String & database_name, const
     }
 }
 
-};
-
+}; // namespace DB

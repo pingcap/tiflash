@@ -1351,6 +1351,7 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
             ErrorCodes::BAD_ARGUMENTS);
 }
 
+// Used by `manage table xxx status` in ch-client
 BlockInputStreamPtr StorageDeltaMerge::status()
 {
     Block block;
@@ -1384,6 +1385,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME, 2));
 
+#define INSERT_STR(NAME)             \
+    name_col->insert(String(#NAME)); \
+    value_col->insert(stat.NAME);
+
     INSERT_INT(segment_count)
     INSERT_INT(total_rows)
     INSERT_SIZE(total_size)
@@ -1415,6 +1420,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_FLOAT(avg_stable_rows)
 
     INSERT_INT(total_pack_count_in_delta)
+    INSERT_INT(max_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_rows_in_delta)
     INSERT_SIZE(avg_pack_size_in_delta)
@@ -1425,19 +1431,19 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_SIZE(avg_pack_size_in_stable)
 
     INSERT_INT(storage_stable_num_snapshots);
-    INSERT_INT(storage_stable_num_pages);
-    INSERT_INT(storage_stable_num_normal_pages)
-    INSERT_INT(storage_stable_max_page_id);
+    INSERT_FLOAT(storage_stable_oldest_snapshot_lifetime);
+    INSERT_INT(storage_stable_num_snapshots);
+    INSERT_STR(storage_stable_oldest_snapshot_tracing_id);
 
     INSERT_INT(storage_delta_num_snapshots);
-    INSERT_INT(storage_delta_num_pages);
-    INSERT_INT(storage_delta_num_normal_pages)
-    INSERT_INT(storage_delta_max_page_id);
+    INSERT_FLOAT(storage_delta_oldest_snapshot_lifetime);
+    INSERT_INT(storage_delta_num_snapshots);
+    INSERT_STR(storage_delta_oldest_snapshot_tracing_id);
 
     INSERT_INT(storage_meta_num_snapshots);
-    INSERT_INT(storage_meta_num_pages);
-    INSERT_INT(storage_meta_num_normal_pages)
-    INSERT_INT(storage_meta_max_page_id);
+    INSERT_FLOAT(storage_meta_oldest_snapshot_lifetime);
+    INSERT_INT(storage_meta_num_snapshots);
+    INSERT_STR(storage_meta_oldest_snapshot_tracing_id);
 
     INSERT_INT(background_tasks_length);
 
@@ -1445,6 +1451,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
 #undef INSERT_SIZE
 #undef INSERT_RATE
 #undef INSERT_FLOAT
+#undef INSERT_STR
 
     return std::make_shared<OneBlockInputStream>(block);
 }

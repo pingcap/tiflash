@@ -175,6 +175,11 @@ public:
         return this->template scatterImpl<Self>(num_columns, selector);
     }
 
+    void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector) const override
+    {
+        return this->template scatterToImpl<Self>(columns, selector);
+    }
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     //bool structureEquals(const IColumn & rhs) const override

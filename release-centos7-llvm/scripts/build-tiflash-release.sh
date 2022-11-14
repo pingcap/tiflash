@@ -81,3 +81,6 @@ cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"
 ldd "${INSTALL_DIR}/tiflash"
+
+# show version
+${INSTALL_DIR}/tiflash version

@@ -89,7 +89,7 @@ try
         size_t res_col_idx = 2;
         func_builder_ptr->build({unit_ctn, datetime_ctn})->execute(block, arg_cols_idx, res_col_idx);
         const IColumn * ctn_res = block.getByPosition(res_col_idx).column.get();
-        const ColumnInt64 * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
+        const auto * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
 
         Field res_field;
         col_res->get(0, res_field);
@@ -149,7 +149,7 @@ try
         size_t res_col_idx = 2;
         func_builder_ptr->build({unit_ctn, datetime_ctn})->execute(block, arg_cols_idx, res_col_idx);
         const IColumn * ctn_res = block.getByPosition(res_col_idx).column.get();
-        const ColumnInt64 * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
+        const auto * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
 
         Field res_field;
         col_res->get(0, res_field);

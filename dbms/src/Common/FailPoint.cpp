@@ -69,7 +69,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_mpp_hash_build)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
-    M(exception_between_schema_change_in_the_same_diff)
+    M(exception_between_schema_change_in_the_same_diff)           \
+    M(force_ps_wal_compact)                                       \
+    M(pause_before_full_gc_prepare)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -90,7 +92,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
     M(unblock_query_init_after_write)                        \
-    M(exception_in_merged_task_init)
+    M(exception_in_merged_task_init)                         \
+    M(force_fail_in_flush_region_data)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \

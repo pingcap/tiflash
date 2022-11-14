@@ -61,6 +61,7 @@ public:
     grpc_call * grpcCall() override;
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
+    void startEstablishConnection();
     void setToWaitingTunnelState()
     {
         state = WAITING_TUNNEL;
@@ -132,5 +133,6 @@ private:
 
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::unique_ptr<Stopwatch> stopwatch;
+    double waiting_task_time_ms = 0;
 };
 } // namespace DB

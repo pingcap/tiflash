@@ -87,6 +87,7 @@ public:
 protected:
     std::tuple<ContextPtr, grpc::Status> createDBContextForTest() const;
     std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
+    grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
     const TiFlashSecurityConfig * security_config = nullptr;
     Context * context = nullptr;

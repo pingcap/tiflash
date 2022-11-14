@@ -254,7 +254,13 @@ public:
     // 3. Funcs are named callables that can be force_inlined
     // NOTE: It relies on Little Endianness
     template <typename Self, typename KeyHolder, typename Func>
-    static auto ALWAYS_INLINE dispatch(Self & self, KeyHolder && key_holder, Func && func)
+    static auto
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
+        NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
+#else
+        ALWAYS_INLINE
+#endif
+        dispatch(Self & self, KeyHolder && key_holder, Func && func)
     {
         StringHashTableHash hash;
         const StringRef & x = keyHolderGetKey(key_holder);

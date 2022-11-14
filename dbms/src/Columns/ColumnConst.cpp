@@ -97,6 +97,20 @@ MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & se
     return res;
 }
 
+void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector) const
+{
+    if (s != selector.size())
+        throw Exception(
+            fmt::format("Size of selector ({}) doesn't match size of column ({})", selector.size(), s),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    ColumnIndex num_columns = columns.size();
+    std::vector<size_t> counts = countColumnsSizeInSelector(num_columns, selector);
+
+    for (size_t i = 0; i < num_columns; ++i)
+        columns[i]->insertRangeFrom(*this, 0, counts[i]);
+}
+
 void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res) const
 {
     res.resize(s);

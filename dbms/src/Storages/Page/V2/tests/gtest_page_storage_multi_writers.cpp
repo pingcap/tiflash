@@ -224,16 +224,16 @@ public:
                 LOG_TRACE(&Poco::Logger::get("root"), e.displayText());
             }
 #else
-            PageIds pageIds;
+            PageIds page_ids;
             for (size_t i = 0; i < 5; ++i)
             {
-                pageIds.emplace_back(random() % ctx.MAX_PAGE_ID);
+                page_ids.emplace_back(random() % ctx.MAX_PAGE_ID);
             }
             try
             {
-                // std::function<void(PageId page_id, const Page &)>;
-                PageHandler handler = [&](PageId page_id, const Page & page) {
-                    (void)page_id;
+                auto page_map = storage->read(page_ids);
+                for (const auto & page : page_map)
+                {
                     // use `sleep` to mock heavy read
                     if (heavy_read_delay_ms > 0)
                     {
@@ -241,9 +241,8 @@ public:
                         usleep(heavy_read_delay_ms * 1000);
                     }
                     ++pages_read;
-                    bytes_read += page.data.size();
-                };
-                storage->read(pageIds, handler);
+                    bytes_read += page.second.data.size();
+                }
             }
             catch (DB::Exception & e)
             {

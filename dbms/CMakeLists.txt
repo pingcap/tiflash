@@ -23,7 +23,6 @@ set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
 
 include (cmake/version.cmake)
-message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_version.h.in ${CONFIG_VERSION})
 
@@ -106,6 +105,11 @@ add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
+add_sources_compile_flag_avx2 (
+    src/Columns/ColumnString.cpp
+    src/Columns/ColumnsCommon.cpp
+)
+
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
 list (APPEND clickhouse_common_io_headers ${fiu_include_dirs})
@@ -135,7 +139,7 @@ list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
 target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
-if (ARCH_FREEBSD)
+if (OS_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
@@ -371,11 +375,11 @@ if (ENABLE_TESTS)
 endif ()
 
 # dbms
-add_target_pch("pch-dbms.h" dbms flash_service)
+add_target_pch("pch-dbms.h" flash_service)
 add_target_pch("pch-common.h" clickhouse_common_io clickhouse_aggregate_functions)
 
-# disable PCH for `clickhouse_functions` temporarily because some source files need to use specific cxx flags
-# add_target_pch("pch-common.h" clickhouse_functions)
+# disable PCH for `clickhouse_functions`, `dbms` temporarily because some source files need to use specific cxx flags
+# add_target_pch("pch-common.h" clickhouse_functions dbms)
 
 add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
 
@@ -393,3 +397,5 @@ add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
 # poco
 add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
 add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" XML Foundation JSON)
+
+message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
