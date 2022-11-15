@@ -1204,6 +1204,7 @@ void NO_INLINE joinBlockImplTypeCase(
             size_t segment_index = 0;
             if (enable_fine_grained_shuffle)
             {
+                RUNTIME_CHECK(segment_size > 0);
                 /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
                 /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
                 /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
