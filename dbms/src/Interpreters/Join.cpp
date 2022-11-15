@@ -587,7 +587,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
     Block * stored_block,
     ConstNullMapPtr null_map,
     Join::RowRefList * rows_not_inserted_to_map,
-    size_t,
+    size_t stream_index,
     Arena & pool)
 {
     KeyGetter key_getter(key_columns, key_sizes, collators);
@@ -607,7 +607,14 @@ void NO_INLINE insertFromBlockImplTypeCase(
             continue;
         }
 
-        Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(0), key_getter, stored_block, i, pool, sort_key_containers);
+        size_t segment_index = stream_index;
+        Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(
+            map.getSegmentTable(segment_index),
+            key_getter,
+            stored_block,
+            i,
+            pool,
+            sort_key_containers);
     }
 }
 
@@ -693,46 +700,6 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
     }
 }
 
-template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
-void NO_INLINE insertFromBlockImplTypeCaseWithFineGrainedShuffle(
-    Map & map,
-    size_t rows,
-    const ColumnRawPtrs & key_columns,
-    const Sizes & key_sizes,
-    const TiDB::TiDBCollators & collators,
-    Block * stored_block,
-    ConstNullMapPtr null_map,
-    Join::RowRefList * rows_not_inserted_to_map,
-    size_t stream_index,
-    Arena & pool)
-{
-    KeyGetter key_getter(key_columns, key_sizes, collators);
-    std::vector<std::string> sort_key_containers(key_columns.size());
-    for (size_t i = 0; i < rows; ++i)
-    {
-        /// null value
-        if (has_null_map && (*null_map)[i])
-        {
-            if (rows_not_inserted_to_map)
-            {
-                /// for right/full out join, need to record the rows not inserted to map
-                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
-            }
-            continue;
-        }
-
-        size_t segment_index = stream_index;
-        Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(
-            map.getSegmentTable(segment_index),
-            key_getter,
-            stored_block,
-            i,
-            pool,
-            sort_key_containers);
-    }
-}
-
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
 void insertFromBlockImplType(
     Map & map,
@@ -750,36 +717,31 @@ void insertFromBlockImplType(
 {
     if (null_map)
     {
-        if (enable_fine_grained_shuffle)
-        {
-            insertFromBlockImplTypeCaseWithFineGrainedShuffle<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
-        }
-        else if (insert_concurrency > 1)
+        if (insert_concurrency > 1 && !enable_fine_grained_shuffle)
         {
             insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
         else
         {
+            if (!enable_fine_grained_shuffle)
+                RUNTIME_CHECK(stream_index == 0);
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
     }
     else
     {
-        if (enable_fine_grained_shuffle)
-        {
-            insertFromBlockImplTypeCaseWithFineGrainedShuffle<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
-        }
-        else if (insert_concurrency > 1)
+        if (insert_concurrency > 1 && !enable_fine_grained_shuffle)
         {
             insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
         else
         {
+            if (!enable_fine_grained_shuffle)
+                RUNTIME_CHECK(stream_index == 0);
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
     }
 }
-
 
 template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void insertFromBlockImpl(
