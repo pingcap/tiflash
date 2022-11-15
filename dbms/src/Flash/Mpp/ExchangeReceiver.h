@@ -147,7 +147,7 @@ public:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     size_t getSourceNum() const { return source_num; }
-    uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0;}
+    uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
 
     int computeNewThreadCount() const { return thread_count; }
 
