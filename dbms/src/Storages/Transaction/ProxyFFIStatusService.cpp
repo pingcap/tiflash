@@ -19,6 +19,13 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
+#include <fmt/printf.h>
+
+#include <string>
+#include <string_view>
+
+#include "Flash/Coprocessor/tzg-metrics.h"
+#include "magic_enum.hpp"
 
 namespace DB
 {
@@ -113,11 +120,75 @@ HttpRequestRes HandleHttpRequestStoreStatus(
             .view = BaseBuffView{name->data(), name->size()}}};
 }
 
+HttpRequestRes HandleHttpRequestCompressStatus(
+    EngineStoreServerWrap *,
+    std::string_view path,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    uint64_t compressed_size;
+    uint64_t uncompressed_size;
+    uint64_t package;
+    tzg::SnappyStatistic::Method method;
+    tzg::SnappyStatistic::globalInstance().load(compressed_size, uncompressed_size, package, method);
+
+    // double f_compressed_size_mb = compressed_size * 1.0 / 1024 / 1024;
+    // double f_uncompressed_size_mb = uncompressed_size * 1.0 / 1024 / 1024;
+    auto * res = RawCppString::New(fmt::format("package: {}, compressed_size: {}, uncompressed_size: {}, compress_rate: {:.2f}, method: {}",
+                                               package,
+                                               compressed_size,
+                                               uncompressed_size,
+                                               uncompressed_size ? double(compressed_size) / uncompressed_size : 0.0,
+                                               magic_enum::enum_name(method)));
+    static const std::string_view clean_str = "tzg-compress-and-clean";
+    if (path.find(clean_str) != path.npos)
+    {
+        tzg::SnappyStatistic::globalInstance().clear();
+        res->append(", clean statistic");
+    }
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{res->data(), res->size()}}};
+}
+
+HttpRequestRes HandleHttpRequestSetCompressMethod(
+    EngineStoreServerWrap *,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto method_str(path.substr(api_name.size()));
+    auto method = magic_enum::enum_cast<tzg::SnappyStatistic::Method>(method_str);
+    if (method)
+    {
+        tzg::SnappyStatistic::globalInstance().setMethod(*method);
+        auto * res = RawCppString::New(fmt::format("Set compress method to {}", method_str));
+        return HttpRequestRes{
+            .status = HttpRequestStatus::Ok,
+            .res = CppStrWithView{
+                .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{res->data(), res->size()}}};
+    }
+    else
+    {
+        return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
+    }
+}
+
+
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(EngineStoreServerWrap *, std::string_view, const std::string &, std::string_view, std::string_view);
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
-    {"/tiflash/store-status", HandleHttpRequestStoreStatus}};
+    {"/tiflash/store-status", HandleHttpRequestStoreStatus},
+    {"/tiflash/tzg-compress", HandleHttpRequestCompressStatus},
+    {"/tiflash/tzg-compress-and-clean", HandleHttpRequestCompressStatus},
+    {"/tiflash/set-tzg-compress-method/", HandleHttpRequestSetCompressMethod},
+};
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {

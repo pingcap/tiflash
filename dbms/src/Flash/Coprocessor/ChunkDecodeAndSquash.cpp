@@ -15,6 +15,10 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/ReadBufferFromString.h>
 
+#include "Flash/Coprocessor/tzg-metrics.h"
+#include "IO/CompressedReadBuffer.h"
+#include "IO/CompressedStream.h"
+
 namespace DB
 {
 CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
@@ -46,10 +50,19 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
     }
     else
     {
+        std::unique_ptr<ReadBuffer> compress_buffer;
+        ReadBuffer * istr_ptr = &istr;
+        auto mm = static_cast<CompressionMethod>(tzg::SnappyStatistic::globalInstance().getMethod());
+        if (mm != CompressionMethod::NONE)
+        {
+            compress_buffer = std::make_unique<CompressedReadBuffer<false>>(istr);
+            istr_ptr = compress_buffer.get();
+        }
+
         /// Dimensions
         size_t columns = 0;
         size_t rows = 0;
-        codec.readBlockMeta(istr, columns, rows);
+        codec.readBlockMeta(*istr_ptr, columns, rows);
 
         if (rows)
         {
@@ -57,8 +70,8 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             for (size_t i = 0; i < columns; ++i)
             {
                 ColumnWithTypeAndName column;
-                codec.readColumnMeta(i, istr, column);
-                CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
+                codec.readColumnMeta(i, *istr_ptr, column);
+                CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), *istr_ptr, rows);
             }
             accumulated_block->setColumns(std::move(mutable_columns));
         }

@@ -12,19 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if (NOT NO_WERROR)
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} mavx2")
+    set (SNAPPY_REQUIRE_AVX2 ON)
 endif ()
 
-add_subdirectory (libcommon)
-add_subdirectory (libpocoext)
-add_subdirectory (libdaemon)
-add_subdirectory (libsnappy)
-add_subdirectory (libmemcpy)
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fomit-frame-pointer")
+#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fomit-frame-pointer")
 
-if (GLIBC_COMPATIBILITY)
-    add_subdirectory (libglibc-compatibility)
-endif ()
+set (SNAPPY_BUILD_TESTS OFF CACHE BOOL "Build Snappy's own tests.")
+set (SNAPPY_BUILD_BENCHMARKS OFF CACHE BOOL "Build Snappy for fuzzing.")
 
-add_subdirectory (libsymbolization)
+add_subdirectory (snappy)

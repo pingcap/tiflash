@@ -108,11 +108,15 @@ add_headers_only(dbms src/Server)
 add_sources_compile_flag_avx2 (
     src/Columns/ColumnString.cpp
     src/Columns/ColumnsCommon.cpp
+    src/Columns/ColumnVector.cpp
+    src/DataTypes/DataTypeString.cpp
 )
 check_then_add_sources_compile_flag (
     TIFLASH_COMPILER_BMI2_SUPPORT
     "${TIFLASH_COMPILER_BMI2_FLAG}" 
     src/Columns/ColumnsCommon.cpp
+    src/Columns/ColumnVector.cpp
+    src/DataTypes/DataTypeString.cpp
 )
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
@@ -206,6 +210,13 @@ target_link_libraries (clickhouse_common_io
     magic_enum
     libsymbolization
 )
+
+target_link_libraries (
+    clickhouse_common_io
+    PRIVATE
+    snappy
+)
+
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms

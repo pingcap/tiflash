@@ -18,7 +18,13 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedWriteBuffer.h>
 #include <IO/ReadBufferFromString.h>
+
+#include <memory>
+
+#include "Flash/Coprocessor/tzg-metrics.h"
 
 namespace DB
 {
@@ -80,6 +86,80 @@ size_t getExtraInfoSize(const Block & block)
     return size;
 }
 
+/*
+class SnappyCompressWriteBuffer final : public BufferWithOwnMemory<WriteBuffer>
+{
+    WriteBuffer & out;
+    PODArray<char> compressed_buffer;
+
+    explicit SnappyCompressWriteBuffer(WriteBuffer & out_)
+        : out(out_)
+    {
+    }
+
+    void nextImpl() override
+    {
+        if (!offset())
+            return;
+        size_t uncompressed_size = offset();
+        size_t compressed_size = snappy::MaxCompressedLength(uncompressed_size);
+        compressed_buffer.resize(compressed_size);
+        snappy::RawCompress(working_buffer.begin(), uncompressed_size, compressed_buffer.data(), &compressed_size);
+        out.write(compressed_buffer.data(), compressed_size);
+    };
+};
+
+class SnappyUncompressWriteBuffer final : public BufferWithOwnMemory<ReadBuffer>
+{
+    ReadBuffer * compressed_in;
+    PODArray<char> own_compressed_buffer;
+
+    explicit SnappyUncompressWriteBuffer(ReadBuffer * in_)
+        : BufferWithOwnMemory<ReadBuffer>(0)
+        , in(in_)
+    {}
+
+    bool nextImpl() override
+    {
+        if (compressed_in->eof())
+            return false;
+        own_compressed_buffer.resize(COMPRESSED_BLOCK_HEADER_SIZE);
+        compressed_in->readStrict(&own_compressed_buffer[0], COMPRESSED_BLOCK_HEADER_SIZE);
+        auto method = own_compressed_buffer[0];
+        auto size_compressed = unalignedLoad<UInt32>(&own_compressed_buffer[1]);
+        auto size_decompressed = unalignedLoad<UInt32>(&own_compressed_buffer[5]);
+
+        if (size_compressed > DBMS_MAX_COMPRESSED_SIZE)
+            throw Exception("Too large size_compressed. Most likely corrupted data.");
+
+        if (compressed_in->offset() >= COMPRESSED_BLOCK_HEADER_SIZE
+            && compressed_in->position() + size_compressed - COMPRESSED_BLOCK_HEADER_SIZE <= compressed_in->buffer().end())
+        {
+            compressed_in->position() -= COMPRESSED_BLOCK_HEADER_SIZE;
+            compressed_buffer = compressed_in->position();
+            compressed_in->position() += size_compressed;
+        }
+        else
+        {
+            own_compressed_buffer.resize(size_compressed);
+            compressed_buffer = &own_compressed_buffer[0];
+            compressed_in->readStrict(compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed - COMPRESSED_BLOCK_HEADER_SIZE);
+        }
+
+        if constexpr (has_checksum)
+        {
+            if (!disable_checksum[0] && checksum != CityHash_v1_0_2::CityHash128(compressed_buffer, size_compressed))
+                throw Exception("Checksum doesn't match: corrupted data.", ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            return size_compressed + sizeof(checksum);
+        }
+        else
+        {
+            return size_compressed;
+        }
+    }
+};
+*/
+
 void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
@@ -117,24 +197,34 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
 
     assert(output == nullptr);
-    output = std::make_unique<WriteBufferFromOwnString>(block.bytes() + getExtraInfoSize(block));
+    size_t init_size = block.bytes() + getExtraInfoSize(block);
+    output = std::make_unique<WriteBufferFromOwnString>(init_size);
+    std::unique_ptr<WriteBuffer> compress_buffer;
+    WriteBuffer * ostr_ptr = output.get();
+    auto mm = static_cast<CompressionMethod>(tzg::SnappyStatistic::globalInstance().getMethod());
+    if (mm != CompressionMethod::NONE)
+    {
+        compress_buffer = std::make_unique<CompressedWriteBuffer<false>>(*output, CompressionSettings(mm), init_size);
+        ostr_ptr = compress_buffer.get();
+    }
 
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();
 
-    writeVarUInt(columns, *output);
-    writeVarUInt(rows, *output);
+    writeVarUInt(columns, *ostr_ptr);
+    writeVarUInt(rows, *ostr_ptr);
+
 
     for (size_t i = 0; i < columns; i++)
     {
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
-        writeStringBinary(column.name, *output);
-        writeStringBinary(column.type->getName(), *output);
+        writeStringBinary(column.name, *ostr_ptr);
+        writeStringBinary(column.type->getName(), *ostr_ptr);
 
         if (rows)
-            writeData(*column.type, column.column, *output, 0, 0);
+            writeData(*column.type, column.column, *ostr_ptr, 0, 0);
     }
 }
 
@@ -146,7 +236,17 @@ std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::v
 Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 {
     Block res;
-    if (istr.eof())
+
+    std::unique_ptr<ReadBuffer> compress_buffer;
+    ReadBuffer * istr_ptr = &istr;
+    auto mm = static_cast<CompressionMethod>(tzg::SnappyStatistic::globalInstance().getMethod());
+    if (mm != CompressionMethod::NONE)
+    {
+        compress_buffer = std::make_unique<CompressedReadBuffer<false>>(istr);
+        istr_ptr = compress_buffer.get();
+    }
+
+    if (istr_ptr->eof())
     {
         return res;
     }
@@ -154,12 +254,12 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
     /// Dimensions
     size_t columns = 0;
     size_t rows = 0;
-    readBlockMeta(istr, columns, rows);
+    readBlockMeta(*istr_ptr, columns, rows);
 
     for (size_t i = 0; i < columns; ++i)
     {
         ColumnWithTypeAndName column;
-        readColumnMeta(i, istr, column);
+        readColumnMeta(i, *istr_ptr, column);
 
         /// Data
         MutableColumnPtr read_column = column.type->createColumn();
@@ -169,7 +269,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
             read_column->reserve(rows);
 
         if (rows) /// If no rows, nothing to read.
-            readData(*column.type, *read_column, istr, rows);
+            readData(*column.type, *read_column, *istr_ptr, rows);
 
         column.column = std::move(read_column);
         res.insert(std::move(column));
