@@ -568,34 +568,30 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subjec
 }
 
 template <bool thread_safe>
-StringRef OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur)
+bool OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subject, size_t subject_size, StringRef & res, Int64 byte_pos, Int64 occur)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
     StringPieceType expr_sp(expr, expr_size);
-    StringRef matched_str; // store the matched substring
-
     while (occur > 0)
     {
-        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
+        bool success = RegexType::FindAndConsume(&expr_sp, *re2, res);
         if (!success)
-            return "";
+            return false;
 
         --occur;
     }
 
-    return matched_str;
+    return true;
 }
 
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
     Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
-
     checkInstrArgs(utf8_total_len, subject_size, pos, ret_op);
-
     makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
@@ -606,19 +602,17 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
 }
 
 template <bool thread_safe>
-StringRef OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur)
+bool OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, StringRef & res, Int64 pos, Int64 occur)
 {
     Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
-
     checkSubstrArgs(utf8_total_len, subject_size, pos);
-
     makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
         return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
 
     size_t byte_pos = utf8Pos2bytePos(subject, pos);
-    return substrImpl(subject, subject_size, byte_pos, occur);
+    return substrImpl(subject, subject_size, res, byte_pos, occur);
 }
 
 #undef MIN_LENGTH_FOR_STRSTR

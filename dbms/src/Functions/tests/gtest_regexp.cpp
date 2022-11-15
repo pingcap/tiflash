@@ -2767,6 +2767,7 @@ struct RegexpSubstrCase
 // TODO add empty column test
 TEST_F(Regexp, RegexpSubstr)
 {
+    std::cout << "test 1\n";
     // Test: All columns are const
     {
         for (size_t row_size = 1; row_size < 3; ++row_size)
@@ -2776,20 +2777,20 @@ TEST_F(Regexp, RegexpSubstr)
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "123"),
                                     createConstColumn<String>(row_size, "12.")));
-            ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 0),
+            ASSERT_COLUMN_EQ(createOnlyNullColumnConst(row_size),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "123"),
                                     createConstColumn<String>(row_size, "12."),
                                     createConstColumn<UInt64>(row_size, 2)));
-            ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 4),
+            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "12"),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "11212"),
                                     createConstColumn<String>(row_size, "12"),
                                     createConstColumn<UInt8>(row_size, 2),
                                     createConstColumn<UInt64>(row_size, 2)));
-            ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 6),
+            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "12"),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "11212"),
@@ -2797,7 +2798,7 @@ TEST_F(Regexp, RegexpSubstr)
                                     createConstColumn<UInt64>(row_size, 2),
                                     createConstColumn<Int16>(row_size, 2),
                                     createConstColumn<Int32>(row_size, 1)));
-            ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 6),
+            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "ab"),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "aabab"),
@@ -2808,7 +2809,7 @@ TEST_F(Regexp, RegexpSubstr)
                                     createConstColumn<String>(row_size, "i")));
         }
     }
-
+std::cout << "test 2\n";
     // Test: null const
     {
         size_t row_size = 2;
@@ -2868,7 +2869,7 @@ TEST_F(Regexp, RegexpSubstr)
     std::vector<Int64> occurs;
     std::vector<Int64> return_options;
     std::vector<String> match_types;
-
+std::cout << "test 3\n";
     // Test: All columns are pure vector
     {
         // test regexp_instr(vector, vector)
@@ -2979,7 +2980,7 @@ TEST_F(Regexp, RegexpSubstr)
                              utf8mb4_general_ci_collator));
 
     }
-
+std::cout << "test 4\n";
     // Test: Args include nullable columns
     {
         // test regexp_instr(nullable vector, vector)
@@ -3052,7 +3053,7 @@ TEST_F(Regexp, RegexpSubstr)
                             createColumn<Int64>(return_options),
                             createNullableVectorColumn<String>(match_types, null_maps[RegexpInstrCase::MATCH_TYPE_NULL_MAP_IDX])));
     }
-
+std::cout << "test 5\n";
     // Test: const, nullable and pure vector columns appear together
     {
         // test regexp_instr(nullable vector, vector, nullable vector, vector, const vector, vector)
@@ -3071,7 +3072,7 @@ TEST_F(Regexp, RegexpSubstr)
                             createConstColumn<Int32>(test_cases.size(), 0),
                             createColumn<String>(match_types)));
     }
-
+std::cout << "test 6\n";
     // Test: Invalid parameter handling
     {
         // test empty pattern

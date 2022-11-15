@@ -75,6 +75,10 @@ struct NameRegexpInstr
 {
     static constexpr auto name = "regexp_instr";
 };
+struct NameRegexpSubstr
+{
+    static constexpr auto name = "regexp_substr";
+};
 struct NameReplaceRegexpOne
 {
     static constexpr auto name = "replaceRegexpOne";
@@ -1599,10 +1603,7 @@ public:
         if (has_data_type_nothing)
             return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
 
-        if (has_nullable_col)
-            return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>());
-        else
-            return std::make_shared<DataTypeString>();
+        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>());
     }
 
     template <typename ExprT, typename PatT, typename PosT, typename OccurT, typename MatchTypeT>
@@ -1642,8 +1643,12 @@ public:
             String match_type = match_type_param.getString(0);
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
-            StringRef res = regexp.substr(expr.c_str(), expr.size(), pos, occur);
-            res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(res)));
+            StringRef res_ref;
+            bool success = regexp.substr(expr.c_str(), expr.size(), res_ref, pos, occur);
+            if (success)
+                res_arg.column = res_arg.type->createColumnConst(col_size, toField(res_ref));
+            else
+                res_arg.column = res_arg.type->createColumnConst(col_size, Null());
             return;
         }
 
@@ -1677,19 +1682,16 @@ public:
         String match_type;
         StringRef res_ref;
 
+        auto nullmap_col = ColumnUInt8::create();
+        typename ColumnUInt8::Container & null_map = nullmap_col->getData();
+        null_map.resize(col_size);
+
         // Start to execute instr
         if (canMemorize<PatT, MatchTypeT>())
         {
-            // Codes in this if branch execute instr with memorized regexp
-
             const auto & regexp = memorize(pat_param, match_type_param, collator);
             if constexpr (has_nullable_col)
             {
-                // Process nullable columns with memorized regexp
-                auto nullmap_col = ColumnUInt8::create();
-                typename ColumnUInt8::Container & null_map = nullmap_col->getData();
-                null_map.resize(col_size);
-
                 for (size_t i = 0; i < col_size; ++i)
                 {
                     if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
@@ -1698,45 +1700,32 @@ public:
                         continue;
                     }
 
-                    null_map[i] = 0;
-
                     expr_param.getStringRef(i, expr_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    res_ref = regexp->substr(expr_ref.data, expr_ref.size, pos, occur);
-                    col_res->insertData(res_ref.data, res_ref.size);
+                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
-                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
-                // Process pure vector columns with memorized regexp.
-                // columns are impossible to be a nullable column here.
-
                 for (size_t i = 0; i < col_size; ++i)
                 {
                     expr_param.getStringRef(i, expr_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    res_ref = regexp->instr(expr_ref.data, expr_ref.size, pos, occur);
-                    col_res->insertData(res_ref.data, res_ref.size);
+                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
-                res_arg.column = std::move(col_res);
             }
         }
         else
         {
-            // Codes in this if branch execute instr without memorized regexp
-
+            auto nullmap_col = ColumnUInt8::create();
+            typename ColumnUInt8::Container & null_map = nullmap_col->getData();
+            null_map.resize(col_size);
             if constexpr (has_nullable_col)
             {
-                // Process nullable columns without memorized regexp
-                auto nullmap_col = ColumnUInt8::create();
-                typename ColumnUInt8::Container & null_map = nullmap_col->getData();
-                null_map.resize(col_size);
-
                 for (size_t i = 0; i < col_size; ++i)
                 {
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
@@ -1745,48 +1734,40 @@ public:
                         continue;
                     }
 
-                    null_map[i] = 0;
-
-                    expr_param.getStringRef(i, expr_ref);
                     pat = pat_param.getString(i);
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
+                    expr_param.getStringRef(i, expr_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
                     auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    res_ref = regexp->substr(expr_ref.data, expr_ref.size, pos, occur);
-                    col_res->insertData(res_ref.data, res_ref.size);
+                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
-
-                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
-                // Process pure vector columns without memorized regexp
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    expr_param.getStringRef(i, expr_ref);
                     pat = pat_param.getString(i);
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
+
+                    expr_param.getStringRef(i, expr_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
                     auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    res_ref = regexp->substr(expr_ref.data, expr_ref.size, pos, occur);
-                    col_res->insertData(res_ref.data, res_ref.size);
+                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
-
-                res_arg.column = std::move(col_res);
             }
         }
-
 #undef GET_OCCUR_VALUE
 #undef GET_POS_VALUE
+        res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1833,6 +1814,29 @@ public:
     }
 
 private:
+    void executeAndSetResult(
+            Regexps::Pool::Pointer & regexp,
+            ColumnString::MutablePtr & col_res,
+            typename ColumnUInt8::Container & null_map,
+            size_t idx,
+            const char * subject,
+            size_t subject_size,
+            StringRef & res_ref,
+            Int64 pos,
+            Int64 occur) const
+    {
+        bool success = regexp->substr(subject, subject_size, res_ref, pos, occur);
+        if (success)
+        {
+            col_res->insertData(res_ref.data, res_ref.size);
+            null_map[idx] = 1;
+        }
+        else
+        {
+            null_map[idx] = 0;
+        }
+    }
+
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 

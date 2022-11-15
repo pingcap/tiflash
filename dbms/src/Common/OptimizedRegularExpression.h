@@ -115,14 +115,14 @@ public:
     }
 
     Int64 instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op);
-    StringRef substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur);
+    bool substr(const char * subject, size_t subject_size, StringRef & res, Int64 pos, Int64 occur);
 
 private:
     Int64 processInstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
     Int64 instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op);
 
     Int64 processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
-    StringRef substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur);
+    bool substrImpl(const char * subject, size_t subject_size, StringRef & res, Int64 byte_pos, Int64 occur);
 
     bool is_trivial;
     bool required_substring_is_prefix;
