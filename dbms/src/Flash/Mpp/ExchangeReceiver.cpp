@@ -204,8 +204,15 @@ public:
             // Use lock to ensure reader is created already in reactor thread
             std::unique_lock lock(mu);
             if (!ok)
+            {
                 reader.reset();
-            notifyReactor();
+                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+                retryOrDone("Exchange receiver meet error : send async stream request fail");
+            }
+            else
+            {
+                notifyReactor();
+            }
             break;
         }
         case AsyncRequestStage::WAIT_BATCH_READ:
@@ -232,17 +239,9 @@ public:
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
-            if (reader)
-            {
-                stage = AsyncRequestStage::WAIT_BATCH_READ;
-                read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
-            }
-            else
-            {
-                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
-                retryOrDone("Exchange receiver meet error : send async stream request fail");
-            }
+            stage = AsyncRequestStage::WAIT_BATCH_READ;
+            read_packet_index = 0;
+            reader->read(packets[0], thisAsUnaryCallback());
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
             LOG_TRACE(log, "Received {} packets.", read_packet_index);
