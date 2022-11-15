@@ -174,6 +174,8 @@ public:
         if (updated)
         {
             LOG_INFO(log, "cert updated in security config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+            LOG_INFO(log, "new cert is {}", new_options.pem_root_certs);
+
             options.pem_root_certs = new_options.pem_root_certs;
             options.pem_cert_chain = new_options.pem_cert_chain;
             options.pem_private_key = new_options.pem_private_key;

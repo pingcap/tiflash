@@ -17,9 +17,6 @@
 #include <memory>
 
 #include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
-#include "Common/TiFlashSecurity.h"
-#include "Core/Types.h"
-// #include "grpc/grpc_security.h"
 
 
 namespace DB
@@ -94,7 +91,7 @@ struct SecureConfig
 static SecureConfig * secure_config = new SecureConfig;
 
 static grpc_ssl_certificate_config_reload_status
-ssl_server_certificate_config_callback(
+sslServerCertificateConfigCallback(
     void * user_data,
     grpc_ssl_server_certificate_config ** config)
 {
@@ -119,12 +116,12 @@ ssl_server_certificate_config_callback(
     }
 }
 
-grpc_server_credentials * grpc_ssl_server_credentials_create_with_fetcher(
+grpc_server_credentials * grpcSslServerCredentialsCreateWithFetcher(
     grpc_ssl_client_certificate_request_type client_certificate_request)
 {
     grpc_ssl_server_credentials_options * options = grpc_ssl_server_credentials_create_options_using_config_fetcher(
         client_certificate_request,
-        ssl_server_certificate_config_callback,
+        sslServerCertificateConfigCallback,
         secure_config);
 
     return grpc_ssl_server_credentials_create_with_options(options);
@@ -132,7 +129,7 @@ grpc_server_credentials * grpc_ssl_server_credentials_create_with_fetcher(
 
 std::shared_ptr<grpc::ServerCredentials> sslServerCredentialsWithFetcher()
 {
-    grpc_server_credentials * c_creds = grpc_ssl_server_credentials_create_with_fetcher(
+    grpc_server_credentials * c_creds = grpcSslServerCredentialsCreateWithFetcher(
         GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
     return std::shared_ptr<grpc::ServerCredentials>(
         new grpc::SecureServerCredentials(c_creds));
@@ -144,7 +141,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
 {
     background_task.begin();
     grpc::ServerBuilder builder;
-    auto * cfg = static_cast<SecureConfig *>(secure_config);
+    auto * cfg = secure_config;
     cfg->config = &security_config;
 
     if (security_config.has_tls_config)
