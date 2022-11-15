@@ -235,13 +235,13 @@ MetricsPrometheus::~MetricsPrometheus()
 void MetricsPrometheus::run()
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
+    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); ++event)
     {
         const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
         tiflash_metrics.registered_profile_events[event]->Set(value);
     }
 
-    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
+    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); ++metric)
     {
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
         tiflash_metrics.registered_current_metrics[metric]->Set(value);
