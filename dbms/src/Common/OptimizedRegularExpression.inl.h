@@ -510,6 +510,23 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(c
     return pos;
 }
 
+template <bool thread_safe>
+bool OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(const char * expr, size_t expr_size, StringRef & res, size_t byte_pos, Int64 occur)
+{
+    if (occur != 1 || byte_pos != 1)
+        return false;
+    
+    StringPieceType expr_sp(expr, expr_size);
+    StringPieceType matched_str;
+    bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
+    if (!success)
+        return false;
+
+    res.data = matched_str.data();
+    res.size = matched_str.size();
+    return true;
+}
+
 static inline void checkInstrArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
     if (unlikely(ret_op != 0 && ret_op != 1))
@@ -527,7 +544,7 @@ static inline void checkSubstrArgs(Int64 utf8_total_len, size_t subject_size, In
 
 static inline void makeOccurValid(Int64 & occur)
 {
-    occur = occur < 0 ? 1 : occur;
+    occur = occur < 1 ? 1 : occur;
 }
 
 template <bool thread_safe>
@@ -539,7 +556,6 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subjec
 
     StringPieceType expr_sp(expr, expr_size);
     StringPieceType matched_str;
-
     while (occur > 0)
     {
         bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
@@ -561,15 +577,18 @@ bool OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subjec
     size_t expr_size = subject_size - byte_offset;
 
     StringPieceType expr_sp(expr, expr_size);
+    StringPieceType matched_str;
     while (occur > 0)
     {
-        bool success = RegexType::FindAndConsume(&expr_sp, *re2, res);
+        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
             return false;
 
         --occur;
     }
 
+    res.data = matched_str.data();
+    res.size = matched_str.size();
     return true;
 }
 
@@ -595,7 +614,7 @@ bool OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, s
     makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
-        return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
+        return processSubstrEmptyStringExpr(subject, subject_size, res, pos, occur);
 
     size_t byte_pos = utf8Pos2bytePos(subject, pos);
     return substrImpl(subject, subject_size, res, byte_pos, occur);

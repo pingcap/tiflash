@@ -121,7 +121,7 @@ private:
     Int64 processInstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
     Int64 instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op);
 
-    Int64 processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
+    bool processSubstrEmptyStringExpr(const char * expr, size_t expr_size, StringRef & res, size_t byte_pos, Int64 occur);
     bool substrImpl(const char * subject, size_t subject_size, StringRef & res, Int64 byte_pos, Int64 occur);
 
     bool is_trivial;

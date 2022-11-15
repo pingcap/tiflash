@@ -2772,92 +2772,75 @@ TEST_F(Regexp, RegexpSubstr)
     {
         for (size_t row_size = 1; row_size < 3; ++row_size)
         {
-            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "123"),
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, "123"),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "123"),
                                     createConstColumn<String>(row_size, "12.")));
-            ASSERT_COLUMN_EQ(createOnlyNullColumnConst(row_size),
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, {}),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "123"),
                                     createConstColumn<String>(row_size, "12."),
                                     createConstColumn<UInt64>(row_size, 2)));
-            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "12"),
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, "12"),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "11212"),
                                     createConstColumn<String>(row_size, "12"),
                                     createConstColumn<UInt8>(row_size, 2),
                                     createConstColumn<UInt64>(row_size, 2)));
-            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "12"),
-                                executeFunction(
-                                    "regexp_substr",
-                                    createConstColumn<String>(row_size, "11212"),
-                                    createConstColumn<String>(row_size, "12"),
-                                    createConstColumn<UInt64>(row_size, 2),
-                                    createConstColumn<Int16>(row_size, 2),
-                                    createConstColumn<Int32>(row_size, 1)));
-            ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, "ab"),
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, "ab"),
                                 executeFunction(
                                     "regexp_substr",
                                     createConstColumn<String>(row_size, "aabab"),
                                     createConstColumn<String>(row_size, "aB"),
                                     createConstColumn<UInt16>(row_size, 2),
                                     createConstColumn<Int8>(row_size, 2),
-                                    createConstColumn<UInt32>(row_size, 1),
                                     createConstColumn<String>(row_size, "i")));
         }
     }
 std::cout << "test 2\n";
     // Test: null const
     {
-        size_t row_size = 2;
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
-                            executeFunction(
-                                "regexp_instr",
-                                createConstColumn<Nullable<String>>(row_size, {}),
-                                createConstColumn<String>(row_size, "123")));
-        
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
-                            executeFunction(
-                                "regexp_instr",
-                                createConstColumn<String>(row_size, "123"),
-                                createConstColumn<Nullable<String>>(row_size, {})));
+        for (size_t row_size = 1; row_size < 3; ++row_size)
+        {
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, {}),
+                                executeFunction(
+                                    "regexp_substr",
+                                    createConstColumn<Nullable<String>>(row_size, {}),
+                                    createConstColumn<String>(row_size, "123")));
+            
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, {}),
+                                executeFunction(
+                                    "regexp_substr",
+                                    createConstColumn<String>(row_size, "123"),
+                                    createConstColumn<Nullable<String>>(row_size, {})));
 
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
-                            executeFunction(
-                                "regexp_instr",
-                                createConstColumn<String>(row_size, "123"),
-                                createConstColumn<String>(row_size, "12."),
-                                createConstColumn<Nullable<UInt8>>(row_size, {})));
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, {}),
+                                executeFunction(
+                                    "regexp_substr",
+                                    createConstColumn<String>(row_size, "123"),
+                                    createConstColumn<String>(row_size, "12."),
+                                    createConstColumn<Nullable<UInt8>>(row_size, {})));
 
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
-                            executeFunction(
-                                "regexp_instr",
-                                createConstColumn<String>(row_size, "123"),
-                                createConstColumn<String>(row_size, "12."),
-                                createConstColumn<Int8>(row_size, 2),
-                                createConstColumn<Nullable<UInt8>>(row_size, {})));
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, {}),
+                                executeFunction(
+                                    "regexp_substr",
+                                    createConstColumn<String>(row_size, "123"),
+                                    createConstColumn<String>(row_size, "12."),
+                                    createConstColumn<Int8>(row_size, 2),
+                                    createConstColumn<Nullable<UInt8>>(row_size, {})));
 
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
-                            executeFunction(
-                                "regexp_instr",
-                                createConstColumn<String>(row_size, "123"),
-                                createConstColumn<String>(row_size, "12."),
-                                createConstColumn<Int8>(row_size, 2),
-                                createConstColumn<Int8>(row_size, 2),
-                                createConstColumn<Nullable<UInt8>>(row_size, {})));
-
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
-                            executeFunction(
-                                "regexp_instr",
-                                createConstColumn<String>(row_size, "123"),
-                                createConstColumn<String>(row_size, "12."),
-                                createConstColumn<Int8>(row_size, 2),
-                                createConstColumn<Int8>(row_size, 2),
-                                createConstColumn<Int8>(row_size, 2),
-                                createConstColumn<Nullable<String>>(row_size, {})));
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(row_size, {}),
+                                executeFunction(
+                                    "regexp_substr",
+                                    createConstColumn<String>(row_size, "123"),
+                                    createConstColumn<String>(row_size, "12."),
+                                    createConstColumn<Int8>(row_size, 2),
+                                    createConstColumn<Int8>(row_size, 2),
+                                    createConstColumn<Nullable<String>>(row_size, {})));
+        }
     }
 
     std::vector<RegexpInstrCase> test_cases;

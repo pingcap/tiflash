@@ -106,10 +106,10 @@ inline String addMatchTypeForPattern(const String & pattern, const String & matc
     return fmt::format("{}({})", mode, pattern);
 }
 
-inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
+inline std::unique_ptr<Regexps::Regexp> createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
     String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
-    return Regexps::get<false, true>(final_pattern, getDefaultFlags());
+    return std::make_unique<Regexps::Regexp>(final_pattern, getDefaultFlags());
 }
 
 // Only int types used in ColumnsNumber.h can be valid
@@ -1585,21 +1585,19 @@ public:
                 return;
             }
 
-            int flags = getDefaultFlags();
-            String expr = expr_param.getString(0);
             String pat = pat_param.getString(0);
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            Int64 pos = PosT::isConst() ? pos_const_val : get_pos_func(pos_container, 0);
-            Int64 occur = OccurT::isConst() ? occur_const_val : get_occur_func(occur_container, 0);
+            int flags = getDefaultFlags();
+            String expr = expr_param.getString(0);
             String match_type = match_type_param.getString(0);
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
             StringRef res_ref;
-            bool success = regexp.substr(expr.c_str(), expr.size(), res_ref, pos, occur);
+            bool success = regexp.substr(expr.c_str(), expr.size(), res_ref, pos_const_val, occur_const_val);
             if (success)
-                res_arg.column = res_arg.type->createColumnConst(col_size, toField(res_ref));
+                res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(res_ref)));
             else
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
             return;
@@ -1747,7 +1745,7 @@ public:
         // Go through cases to get arguments
         switch(arg_num)
         {
-        case REGEXP_INSTR_MAX_PARAM_NUM:
+        case REGEXP_SUBSTR_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[4]).column;
         case REGEXP_MIN_PARAM_NUM + 2:
             col_occur = block.getByPosition(arguments[3]).column;
@@ -1768,7 +1766,7 @@ public:
 
 private:
     void executeAndSetResult(
-            Regexps::Pool::Pointer & regexp,
+            const std::unique_ptr<Regexps::Regexp> & regexp,
             ColumnString::MutablePtr & col_res,
             typename ColumnUInt8::Container & null_map,
             size_t idx,
