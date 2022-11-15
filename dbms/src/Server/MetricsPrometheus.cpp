@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "MetricsPrometheus.h"
+#include "CertificateReloader.h"
 
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
@@ -112,16 +113,16 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         security_config.ca_path,
         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
-    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
         {
             return true;
         }
         return security_config.allowed_common_names.count(cert.commonName()) > 0;
     };
-    // ywq todo....
-    context->setAdhocVerification(check_common_name);
 
+    context->setAdhocVerification(check_common_name);
+    CertificateReloader::instance().initSSLCallback(context);
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;

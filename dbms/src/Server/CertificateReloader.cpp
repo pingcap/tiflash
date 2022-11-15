@@ -40,16 +40,14 @@ int callSetCertificate(SSL * ssl, [[maybe_unused]] void * arg)
 /// This is callback for OpenSSL. It will be called on every connection to obtain a certificate and private key.
 int CertificateReloader::setCertificate(SSL * ssl)
 {
-    LOG_INFO(log, "ywq test setCetificate callaback");
-
-    // if (config->updated())
-    // {
-    Poco::Crypto::X509Certificate cert(config->cert_path);
-    LOG_INFO(log, "ywq test cert common name: {}", cert.commonName());
-    Poco::Crypto::EVPPKey key("", config->key_path);
-    SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
-    SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
-    // }
+    if (config->updated())
+    {
+        LOG_INFO(log, "SSL certificate updated");
+        Poco::Crypto::X509Certificate cert(config->cert_path);
+        Poco::Crypto::EVPPKey key("", config->key_path);
+        SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
+        SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
+    }
 
     int err = SSL_check_private_key(ssl);
     if (err != 1)
@@ -64,7 +62,6 @@ int CertificateReloader::setCertificate(SSL * ssl)
 
 void CertificateReloader::initSSLCallback(Poco::Net::Context::Ptr context)
 {
-    LOG_DEBUG(log, "ywq test Initializing certificate reloader for context");
     SSL_CTX_set_cert_cb(context->sslContext(), callSetCertificate, nullptr);
 }
 } // namespace DB

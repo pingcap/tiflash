@@ -604,15 +604,14 @@ public:
                                                                              security_config->cert_path,
                                                                              security_config->ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    auto check_common_name
-                        = [&](const Poco::Crypto::X509Certificate & cert) {
-                              if (security_config->allowed_common_names.empty())
-                              {
-                                  return true;
-                              }
-                              LOG_INFO(log, "ywq test common name: {}", cert.commonName());
-                              return security_config->allowed_common_names.count(cert.commonName()) > 0;
-                          };
+                    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+                        auto security_config = CertificateReloader::instance().config;
+                        if (security_config->allowed_common_names.empty())
+                        {
+                            return true;
+                        }
+                        return security_config->allowed_common_names.count(cert.commonName()) > 0;
+                    };
                     context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 
