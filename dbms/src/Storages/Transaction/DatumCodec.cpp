@@ -15,7 +15,7 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/Operators.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/JSONCodec.h>
+#include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 
@@ -354,7 +354,7 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
     case TiDB::CodecFlagDecimal:
         return DecodeDecimal(cursor, raw_value);
     case TiDB::CodecFlagJson:
-        return DecodeJsonAsBinary(cursor, raw_value);
+        return JsonBinary::DecodeJsonAsBinary(cursor, raw_value);
     default:
         throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
@@ -394,7 +394,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
         SkipDecimal(cursor, raw_value);
         return;
     case TiDB::CodecFlagJson:
-        SkipJson(cursor, raw_value);
+        JsonBinary::SkipJson(cursor, raw_value);
         return;
     default:
         throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
