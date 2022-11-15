@@ -102,13 +102,11 @@ BlockIO executeQuery(Context & context, bool internal)
 {
     if (context.getSettingsRef().enable_planner)
     {
-        std::cout << "executeQuery into  PlanQuerySource " << std::endl;
         PlanQuerySource plan(context);
         return executeDAG(plan, context, internal);
     }
     else
     {
-        std::cout << "executeQuery into DAGQuerySource " << std::endl;
         DAGQuerySource dag(context);
         return executeDAG(dag, context, internal);
     }

@@ -101,7 +101,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
-                current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time); // 为什么这是 max 啊，这不是多个 stream 么？
+                current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
                 current.num_iterations += p_stream->getProfileInfo().blocks;
 

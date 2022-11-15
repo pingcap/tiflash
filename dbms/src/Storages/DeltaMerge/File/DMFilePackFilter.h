@@ -206,7 +206,6 @@ private:
             filter_rate = (after_read_packs - after_filter) * 100.0 / after_read_packs;
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
-
         LOG_DEBUG(log,
                   "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
                   ", read_packs: {}, pack_count: {}",

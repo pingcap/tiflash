@@ -109,7 +109,6 @@ public:
         children.insert(children.end(), additional_inputs_at_end.begin(), additional_inputs_at_end.end());
 
         size_t num_children = children.size();
-        std::cout << "UnionBlockInputStream child size is " << children.size();
         if (num_children > 1)
         {
             Block header = children.at(0)->getHeader();

@@ -184,7 +184,6 @@ protected:
     mutable std::shared_mutex children_mutex;
     bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
 
-
 private:
     TableLockHolders table_locks;
 

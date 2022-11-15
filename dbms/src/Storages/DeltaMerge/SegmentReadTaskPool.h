@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+
 namespace DB
 {
 namespace DM
@@ -257,7 +258,6 @@ private:
     std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;
-
     BlockStat blk_stat;
     LoggerPtr log;
 
