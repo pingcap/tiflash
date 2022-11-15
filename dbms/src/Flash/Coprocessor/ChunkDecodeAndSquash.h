@@ -20,21 +20,12 @@
 
 namespace DB
 {
-class IChunkDecodeAndSquash
-{
-public:
-    virtual ~IChunkDecodeAndSquash() = default;
-    /// The returned optional value can only have block that block.operator bool() is true
-    virtual std::optional<Block> decodeAndSquash(const String &) = 0;
-    /// Return value should be false if 'flush' is invoked consecutively more than once
-    virtual std::optional<Block> flush() = 0;
-};
 
-class CHBlockChunkDecodeAndSquash final : public IChunkDecodeAndSquash
+class CHBlockChunkDecodeAndSquash
 {
 public:
-    explicit CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
-    virtual ~CHBlockChunkDecodeAndSquash() = default;
+    CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
+    ~CHBlockChunkDecodeAndSquash() = default;
     std::optional<Block> decodeAndSquash(const String &);
     std::optional<Block> flush();
 

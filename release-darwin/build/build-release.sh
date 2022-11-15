@@ -15,8 +15,14 @@
 
 set -ueox pipefail
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+SCRIPTPATH="$(
+      cd "$(dirname "$0")"
+      pwd -P
+)"
+SRCPATH=${1:-$(
+      cd $SCRIPTPATH/../..
+      pwd -P
+)}
 PATH=$PATH:/root/.cargo/bin
 NPROC=${NPROC:-$(sysctl -n hw.physicalcpu || grep -c ^processor /proc/cpuinfo)}
 CMAKE_BUILD_TYPE="RELWITHDEBINFO"
@@ -41,3 +47,6 @@ otool -L "$FILE"
 set +e
 echo "show ccache stats"
 ccache -s
+
+# show version
+${FILE} version

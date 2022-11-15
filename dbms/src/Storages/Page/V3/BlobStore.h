@@ -68,8 +68,6 @@ public:
 
     Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
 
-    void read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
-
     struct FieldReadInfo
     {
         PageIdV3Internal page_id;

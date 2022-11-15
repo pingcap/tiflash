@@ -29,6 +29,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/Page/V3/tests/gtest_page_storage.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -49,45 +51,6 @@ extern const char force_set_page_file_write_errno[];
 
 namespace PS::V3::tests
 {
-class PageStorageTest : public DB::base::TiFlashStorageTestBasic
-{
-public:
-    void SetUp() override
-    {
-        TiFlashStorageTestBasic::SetUp();
-        log = Logger::get();
-        auto path = getTemporaryPath();
-        createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        page_storage = std::make_shared<PageStorageImpl>("test.t", delegator, config, file_provider);
-        page_storage->restore();
-    }
-
-    std::shared_ptr<PageStorageImpl> reopenWithConfig(const PageStorageConfig & config_)
-    {
-        auto path = getTemporaryPath();
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto storage = std::make_shared<PageStorageImpl>("test.t", delegator, config_, file_provider);
-        storage->restore();
-        return storage;
-    }
-
-    size_t getLogFileNum()
-    {
-        auto log_files = WALStoreReader::listAllFiles(delegator, log);
-        return log_files.size();
-    }
-
-protected:
-    FileProviderPtr file_provider;
-    std::unique_ptr<StoragePathPool> path_pool;
-    PSDiskDelegatorPtr delegator;
-    PageStorageConfig config;
-    std::shared_ptr<PageStorageImpl> page_storage;
-
-    LoggerPtr log;
-};
 
 TEST_F(PageStorageTest, WriteRead)
 try
@@ -444,33 +407,24 @@ try
         const auto & page2 = page_storage->readImpl(TEST_NAMESPACE_ID, 2, nullptr, nullptr, false);
         ASSERT_FALSE(page2.isValid());
 
-        std::vector<PageStorage::PageReadFields> fields;
-        PageStorage::PageReadFields field1;
-        field1.first = 4;
-        field1.second = {0, 1, 2};
-        fields.emplace_back(field1);
-
-        PageStorage::PageReadFields field2;
-        field2.first = 6;
-        field2.second = {0, 1, 2};
-        fields.emplace_back(field2);
+        std::vector<PageStorage::PageReadFields> fields{
+            {4, {0, 1, 2}},
+            {6, {0, 1, 2}},
+            {2, {0, 1, 2}},
+            {5, {0, 1, 2}},
+        };
 
         page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
         ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_FALSE(page_maps[6].isValid());
-
-        PageIds page_ids_not_found = page_storage->readImpl(
-            TEST_NAMESPACE_ID,
-            page_ids,
-            [](PageId /*page_id*/, const Page & /*page*/) {},
-            nullptr,
-            nullptr,
-            false);
-
-        std::sort(page_ids_not_found.begin(), page_ids_not_found.end());
-        ASSERT_EQ(page_ids_not_found.size(), 2);
-        ASSERT_EQ(page_ids_not_found[0], 2);
-        ASSERT_EQ(page_ids_not_found[1], 5);
+        ASSERT_EQ(page_maps[4].fieldSize(), 3);
+        ASSERT_EQ(page_maps[4].data.size(), 20 + 20 + 30);
+        // the invalid page ids in input param are returned with INVALID_ID
+        ASSERT_GT(page_maps.count(6), 0);
+        ASSERT_EQ(page_maps[6].isValid(), false);
+        ASSERT_GT(page_maps.count(2), 0);
+        ASSERT_EQ(page_maps[2].isValid(), false);
+        ASSERT_GT(page_maps.count(5), 0);
+        ASSERT_EQ(page_maps[5].isValid(), false);
     }
 }
 CATCH
@@ -478,37 +432,27 @@ CATCH
 TEST_F(PageStorageTest, WriteMultipleBatchRead1)
 try
 {
-    const UInt64 tag = 0;
-    const size_t buf_sz = 1024;
-    char c_buff[buf_sz];
-    for (size_t i = 0; i < buf_sz; ++i)
-    {
-        c_buff[i] = i % 0xff;
-    }
-
     {
         WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(0, tag, buff, buf_sz);
+        batch.putPage(0, default_tag, getDefaultBuffer(), buf_sz);
         page_storage->write(std::move(batch));
     }
     {
         WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, tag, buff, buf_sz);
+        batch.putPage(1, default_tag, getDefaultBuffer(), buf_sz);
         page_storage->write(std::move(batch));
     }
 
     DB::Page page0 = page_storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
+    ASSERT_EQ(page0.page_id, 0);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = page_storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
+    ASSERT_EQ(page1.page_id, 1);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
