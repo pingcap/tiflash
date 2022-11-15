@@ -19,7 +19,7 @@
 
 namespace DB
 {
-/** List of zero, single or multiple JOIN-ed tables or subqueries in SELECT query, with ARRAY JOINs and SAMPLE, FINAL modifiers.
+/** List of zero, single or multiple JOIN-ed tables or subqueries in SELECT query, with SAMPLE and FINAL modifiers.
   *
   * Table expression is:
   *  [database_name.]table_name
@@ -46,9 +46,6 @@ namespace DB
   *  USING (a, b c)
   *  USING a, b, c
   *  ON expr...
-  *
-  * Also, tables may be ARRAY JOIN-ed with one or more arrays or nested columns:
-  *  [LEFT|INNER|] ARRAY JOIN name [AS alias], ...
   */
 
 
@@ -128,36 +125,14 @@ struct ASTTableJoin : public IAST
 };
 
 
-/// Specification of ARRAY JOIN.
-struct ASTArrayJoin : public IAST
-{
-    enum class Kind
-    {
-        Inner, /// If array is empty, row will not present (default).
-        Left, /// If array is empty, leave row with default values instead of array elements.
-    };
-
-    Kind kind = Kind::Inner;
-
-    /// List of array or nested names to JOIN, possible with aliases.
-    ASTPtr expression_list;
-
-    using IAST::IAST;
-    String getID() const override { return "ArrayJoin"; }
-    ASTPtr clone() const override;
-    void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
-};
-
-
 /// Element of list.
 struct ASTTablesInSelectQueryElement : public IAST
 {
-    /** For first element of list, either table_expression or array_join element could be non-nullptr.
-      * For former elements, either table_join and table_expression are both non-nullptr, or array_join is non-nullptr.
+    /** For first element of list, table_expression could be non-nullptr.
+      * For former elements, table_join and table_expression are both non-nullptr.
       */
     ASTPtr table_join; /// How to JOIN a table, if table_expression is non-nullptr.
     ASTPtr table_expression; /// Table.
-    ASTPtr array_join; /// Arrays to JOIN.
 
     using IAST::IAST;
     String getID() const override { return "TablesInSelectQueryElement"; }

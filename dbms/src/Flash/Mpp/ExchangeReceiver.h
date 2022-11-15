@@ -18,6 +18,7 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
@@ -142,10 +143,11 @@ public:
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
         const Block & header,
-        size_t stream_id);
+        size_t stream_id,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     size_t getSourceNum() const { return source_num; }
-    uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
+    uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
 
     int computeNewThreadCount() const { return thread_count; }
 
@@ -177,10 +179,14 @@ private:
     bool setEndState(ExchangeReceiverState new_state);
     String getStatusString();
 
+    ExchangeReceiverResult handleUnnormalChannel(
+        std::queue<Block> & block_queue,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
+
     DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::queue<Block> & block_queue,
-        const Block & header);
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     void connectionDone(
         bool meet_error,
@@ -193,7 +199,8 @@ private:
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,
         const Block & header,
-        const std::shared_ptr<ReceivedMessage> & recv_msg);
+        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
     std::shared_ptr<RPCContext> rpc_context;
@@ -201,7 +208,8 @@ private:
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
-    const size_t max_streams;
+    const bool enable_fine_grained_shuffle_flag;
+    const size_t output_stream_count;
     const size_t max_buffer_size;
 
     std::shared_ptr<ThreadManager> thread_manager;
@@ -219,7 +227,6 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    uint64_t fine_grained_shuffle_stream_count;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

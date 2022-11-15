@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 
 namespace DB
@@ -38,6 +39,11 @@ public:
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
+
+    size_t getSourceNum() const
+    {
+        return mpp_exchange_receiver->getSourceNum();
+    }
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;

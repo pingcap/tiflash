@@ -29,6 +29,13 @@ namespace DB
 {
 class Context;
 
+struct JoinKeyType
+{
+    DataTypePtr key_type;
+    bool is_incompatible_decimal;
+};
+using JoinKeyTypes = std::vector<JoinKeyType>;
+
 namespace JoinInterpreterHelper
 {
 struct TiFlashJoin
@@ -40,7 +47,7 @@ struct TiFlashJoin
     ASTTableJoin::Kind kind;
     size_t build_side_index = 0;
 
-    DataTypes join_key_types;
+    JoinKeyTypes join_key_types;
     TiDB::TiDBCollators join_key_collators;
 
     ASTTableJoin::Strictness strictness;
@@ -123,11 +130,9 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     const Context & context,
     const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
-
-std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency);
 } // namespace JoinInterpreterHelper
 } // namespace DB

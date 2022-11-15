@@ -77,9 +77,9 @@ grpc::Status CoprocessorHandler::execute()
         {
         case COP_REQ_TYPE_DAG:
         {
-            GET_METRIC(tiflash_coprocessor_request_count, type_cop_dag).Increment();
-            GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Increment();
-            SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Decrement(); });
+            GET_METRIC(tiflash_coprocessor_request_count, type_cop_executing).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_executing).Increment();
+            SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_executing).Decrement(); });
 
             tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());

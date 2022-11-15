@@ -29,7 +29,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -88,6 +87,7 @@ struct AnalysisResult
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
     bool is_final_agg = false;
+    bool enable_fine_grained_shuffle_agg = false;
 };
 
 AnalysisResult analyzeExpressions(
@@ -113,6 +113,7 @@ AnalysisResult analyzeExpressions(
     if (query_block.aggregation)
     {
         res.is_final_agg = AggregationInterpreterHelper::isFinalAgg(query_block.aggregation->aggregation());
+        res.enable_fine_grained_shuffle_agg = enableFineGrainedShuffle(query_block.aggregation->fine_grained_shuffle_stream_count());
 
         std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
             chain,
@@ -190,7 +191,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     analyzer = std::move(storage_interpreter.analyzer);
 }
 
-void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
+void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)
 {
     if (unlikely(input_streams_vec.size() != 2))
     {
@@ -251,10 +252,11 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         probe_key_names,
         build_key_names,
         true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
+        enableFineGrainedShuffle(fine_grained_shuffle_count),
+        fine_grained_shuffle_count,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -268,18 +270,25 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
 
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
+    size_t join_build_concurrency = std::max(build_pipeline.streams.size(), build_pipeline.streams_with_non_joined_data.size());
 
     /// build side streams
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
-    build_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-        stream->setExtraInfo(
-            fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
-        join_execute_info.join_build_streams.push_back(stream);
-    });
+    auto build_streams = [&](BlockInputStreams & streams) {
+        size_t build_index = 0;
+        auto extra_info = fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id);
+        if (enableFineGrainedShuffle(fine_grained_shuffle_count))
+            extra_info = fmt::format("{} {}", extra_info, String(enableFineGrainedShuffleExtraInfo));
+        for (auto & stream : streams)
+        {
+            stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, build_index++, log->identifier());
+            stream->setExtraInfo(extra_info);
+            join_execute_info.join_build_streams.push_back(stream);
+        }
+    };
+    build_streams(build_pipeline.streams);
+    build_streams(build_pipeline.streams_with_non_joined_data);
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
 
@@ -378,7 +387,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
     const Names & key_names,
     const TiDB::TiDBCollators & collators,
     AggregateDescriptions & aggregate_descriptions,
-    bool is_final_agg)
+    bool is_final_agg,
+    bool enable_fine_grained_shuffle)
 {
     executeExpression(pipeline, expression_actions_ptr, log, "before aggregation");
 
@@ -394,9 +404,24 @@ void DAGQueryBlockInterpreter::executeAggregation(
         aggregate_descriptions,
         is_final_agg);
 
-    /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    if (enable_fine_grained_shuffle)
     {
+        /// Go straight forward without merging phase when enable_fine_grained_shuffle
+        RUNTIME_CHECK(pipeline.streams_with_non_joined_data.empty());
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<AggregatingBlockInputStream>(
+                stream,
+                params,
+                context.getFileProvider(),
+                true,
+                log->identifier());
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
+        });
+        recordProfileStreams(pipeline, query_block.aggregation_name);
+    }
+    else if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    {
+        /// If there are several sources, then we perform parallel aggregation
         const Settings & settings = context.getSettingsRef();
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
@@ -479,7 +504,6 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
                                                                                    query_block.source_name,
                                                                                    /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
@@ -587,7 +611,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueryForSet right_query;
-        handleJoin(query_block.source->join(), pipeline, right_query);
+        handleJoin(query_block.source->join(), pipeline, right_query, query_block.source->fine_grained_shuffle_stream_count());
         recordProfileStreams(pipeline, query_block.source_name);
         dagContext().addSubquery(query_block.source_name, std::move(right_query));
     }
@@ -659,7 +683,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.before_aggregation)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg, res.enable_fine_grained_shuffle_agg);
     }
     if (res.before_having)
     {

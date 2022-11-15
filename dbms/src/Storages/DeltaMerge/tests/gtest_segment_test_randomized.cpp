@@ -57,6 +57,12 @@ public:
             {
                 auto op_idx = dist(random);
                 actions[op_idx].second(this);
+
+                // If there were check errors, there is no need to proceed. Let's just stop here.
+                if (::testing::Test::HasFailure())
+                    return;
+
+                verifySegmentsIsEmpty();
             }
         }
 
@@ -69,8 +75,8 @@ protected:
     const std::vector<std::pair<double /* probability */, std::function<void(SegmentRandomizedTest *)>>> actions = {
         {1.0, &SegmentRandomizedTest::writeRandomSegment},
         {0.1, &SegmentRandomizedTest::deleteRangeRandomSegment},
-        {1.0, &SegmentRandomizedTest::splitRandomSegment},
-        {1.0, &SegmentRandomizedTest::splitAtRandomSegment},
+        {0.5, &SegmentRandomizedTest::splitRandomSegment},
+        {0.5, &SegmentRandomizedTest::splitAtRandomSegment},
         {0.25, &SegmentRandomizedTest::mergeRandomSegments},
         {1.0, &SegmentRandomizedTest::mergeDeltaRandomSegment},
         {1.0, &SegmentRandomizedTest::flushCacheRandomSegment},
@@ -86,6 +92,23 @@ protected:
      * [rand_max, +∞). Hack: This segment is intentionally removed from the "segments" map to avoid being picked up.
      */
     PageId outbound_right_seg{};
+
+    void verifySegmentsIsEmpty()
+    {
+        // For all segments, when isEmpty() == true, verify the result against getSegmentRowNum.
+        for (const auto & seg_it : segments)
+        {
+            const auto seg_id = seg_it.first;
+            if (isSegmentDefinitelyEmpty(seg_id))
+            {
+                auto rows = getSegmentRowNum(seg_id);
+                RUNTIME_CHECK(rows == 0);
+
+                rows = getSegmentRowNumWithoutMVCC(seg_id);
+                RUNTIME_CHECK(rows == 0);
+            }
+        }
+    }
 
     void writeRandomSegment()
     {
@@ -120,6 +143,10 @@ protected:
     {
         if (segments.empty())
             return;
+        // Just don't have too many segments, because it greatly reduces our efficiency of testing
+        // correlated actions.
+        if (segments.size() > 10)
+            return;
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
         LOG_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
@@ -129,6 +156,8 @@ protected:
     void splitAtRandomSegment()
     {
         if (segments.empty())
+            return;
+        if (segments.size() > 10)
             return;
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
@@ -314,7 +343,7 @@ try
     SegmentTestOptions options;
     options.is_common_handle = true;
     reloadWithOptions(options);
-    run(50000, /* min key */ -5000000, /* max key */ 5000000);
+    run(50000, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
 

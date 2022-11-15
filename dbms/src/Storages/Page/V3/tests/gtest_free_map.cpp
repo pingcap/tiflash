@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/Page/V3/spacemap/RBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -372,6 +370,7 @@ TEST_P(SpaceMapTest, TestSearchIsExpansion)
     ASSERT_EQ(expansion, true);
 
     ASSERT_TRUE(smap->markUsed(90, 10));
+    smap->updateAccurateMaxCapacity();
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
     ASSERT_EQ(expansion, false);
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
@@ -467,8 +466,61 @@ TEST_P(SpaceMapTest, TestGetUsedBoundary)
 INSTANTIATE_TEST_CASE_P(
     Type,
     SpaceMapTest,
-    testing::Values(
-        SpaceMap::SMAP64_RBTREE,
-        SpaceMap::SMAP64_STD_MAP));
+    testing::Values(SpaceMap::SMAP64_STD_MAP));
 
+TEST(SpaceMapSTDMapTest, TestMarkFreeSearch)
+{
+    auto smap = SpaceMap::createSpaceMap(SpaceMap::SMAP64_STD_MAP, 0, 100);
+    STDMapSpaceMapPtr smap_std = std::dynamic_pointer_cast<STDMapSpaceMap>(smap);
+    UInt64 offset;
+    UInt64 max_cap;
+    bool expansion = true;
+    {
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 0);
+        ASSERT_EQ(max_cap, 75);
+        ASSERT_EQ(expansion, true);
+
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 50);
+        ASSERT_EQ(expansion, true);
+    }
+    {
+        ASSERT_TRUE(smap->markFree(25, 25));
+        // After calling `markFree`, the `hint_biggest_offset` and `hint_biggest_cap` is not accurate.
+        ASSERT_EQ(smap_std->hint_biggest_offset, 50);
+        ASSERT_EQ(smap_std->hint_biggest_cap, 50);
+
+        // Allocate a space the same size as current actual `biggest_cap`
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(75);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 0);
+        ASSERT_EQ(expansion, true);
+    }
+
+    ASSERT_TRUE(smap->markFree(0, 100));
+    {
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 0);
+        ASSERT_EQ(max_cap, 75);
+        ASSERT_EQ(expansion, true);
+
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 50);
+        ASSERT_EQ(expansion, true);
+    }
+    {
+        ASSERT_TRUE(smap->markFree(25, 25));
+        ASSERT_EQ(smap_std->hint_biggest_offset, 50);
+        ASSERT_EQ(smap_std->hint_biggest_cap, 50);
+
+        // Allocate a space smaller than current actual `biggest_cap`
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(50);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 25);
+        ASSERT_EQ(expansion, true);
+    }
+}
 } // namespace DB::PS::V3::tests

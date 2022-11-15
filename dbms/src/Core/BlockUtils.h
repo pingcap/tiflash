@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsFormatting.h>
+#pragma once
+
+#include <Columns/ColumnUtils.h>
+#include <Core/Block.h>
 
 namespace DB
 {
-void registerFunctionsFormatting(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionBitmaskToList>();
-    factory.registerFunction<FunctionFormatReadableSize>();
-}
+bool blockEqual(const Block & expected, const Block & actual, String & unequal_msg);
 
+String formatBlockData(const Block & block);
 } // namespace DB

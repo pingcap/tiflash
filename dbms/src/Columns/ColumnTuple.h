@@ -80,6 +80,7 @@ public:
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     ColumnPtr replicate(const Offsets & offsets) const override;
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const override;
     void gather(ColumnGathererStream & gatherer_stream) override;
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
     void getExtremes(Field & min, Field & max) const override;

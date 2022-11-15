@@ -40,6 +40,10 @@ public:
 
 protected:
     Block readImpl() override;
+    void readPrefixImpl() override
+    {
+        writer->prepare(getHeader());
+    }
     void readSuffixImpl() override
     {
         writer->finishWrite();

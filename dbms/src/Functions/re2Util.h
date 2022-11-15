@@ -12,9 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
+#pragma once
 
-int main(int argc, char ** argv)
+#include <Common/Exception.h>
+#include <Common/config.h>
+#include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/CollatorUtils.h>
+#include <re2/re2.h>
+
+
+#if USE_RE2_ST
+#include <re2_st/re2.h>
+#else
+#define re2_st re2
+#endif
+
+namespace DB
 {
-    return DB::PageStorageCtl::mainEntry(argc, argv);
-}
+namespace re2Util
+{
+re2_st::RE2::Options getDefaultRe2Options();
+String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator = nullptr);
+} // namespace re2Util
+} // namespace DB

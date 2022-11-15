@@ -22,30 +22,32 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
+template <class ExchangeWriterPtr>
 class HashPartitionWriter : public DAGResponseWriter
 {
 public:
     HashPartitionWriter(
-        StreamWriterPtr writer_,
+        ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
     void write(const Block & block) override;
+    void flush() override;
     void finishWrite() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void partitionAndEncodeThenWriteBlocks();
 
-    template <bool send_exec_summary_at_last>
-    void writePackets(std::vector<TrackedMppDataPacket> & packets);
+    void writePackets(TrackedMppDataPacketPtrs & packets);
 
+    void sendExecutionSummary();
+
+private:
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;
-    StreamWriterPtr writer;
+    ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;

@@ -61,6 +61,15 @@ public:
     grpc_call * grpcCall() override;
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
+    void startEstablishConnection();
+    void setToWaitingTunnelState()
+    {
+        state = WAITING_TUNNEL;
+    }
+    bool isWaitingTunnelState()
+    {
+        return state == WAITING_TUNNEL;
+    }
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -71,6 +80,8 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
+    void tryConnectTunnel();
+
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
     /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
@@ -79,6 +90,7 @@ private:
     /// Keep it in mind if you want to change any logic here.
 
     void initRpc();
+
     /// The packet will be written to grpc.
     void write(const mpp::MPPDataPacket & packet);
     /// Called when an application error happens.
@@ -111,6 +123,7 @@ private:
     enum CallStatus
     {
         NEW_REQUEST,
+        WAITING_TUNNEL,
         PROCESSING,
         ERR_HANDLE,
         FINISH
@@ -120,5 +133,6 @@ private:
 
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::unique_ptr<Stopwatch> stopwatch;
+    double waiting_task_time_ms = 0;
 };
 } // namespace DB
