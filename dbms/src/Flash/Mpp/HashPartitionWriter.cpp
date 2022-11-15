@@ -122,14 +122,14 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
-        const auto & packet = packets[part_id];
+        auto & packet = packets[part_id];
         assert(packet);
         if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(packet, part_id);
+            writer->partitionWrite(std::move(packet), part_id);
     }
 }
 

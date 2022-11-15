@@ -59,13 +59,13 @@ struct MockWriter
         return summary;
     }
 
-    void partitionWrite(const TrackedMppDataPacketPtr &, uint16_t) { FAIL() << "cannot reach here."; }
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet)
+    void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet)
     {
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
-        queue->push(packet);
+        queue->push(std::move(packet));
     }
     void write(tipb::SelectResponse & response)
     {
