@@ -23,7 +23,7 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
     try
     {
         data_stream->readPrefix();
-        if (result_handler.isDefault())
+        if (result_handler.isIgnored())
         {
             while (data_stream->read())
                 continue;

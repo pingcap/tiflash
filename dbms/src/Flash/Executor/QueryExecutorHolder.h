@@ -26,6 +26,7 @@ public:
     void set(QueryExecutorPtr && query_executor_)
     {
         std::lock_guard lock(mu);
+        assert(!query_executor);
         query_executor = std::move(query_executor_);
     }
 
@@ -38,17 +39,11 @@ public:
         return res;
     }
 
-    QueryExecutor & get()
+    QueryExecutor * operator->()
     {
         std::lock_guard lock(mu);
         RUNTIME_CHECK(query_executor != nullptr);
-        return *query_executor;
-    }
-
-    bool isHolding()
-    {
-        std::lock_guard lock(mu);
-        return query_executor != nullptr;
+        return query_executor.get();
     }
 
 private:

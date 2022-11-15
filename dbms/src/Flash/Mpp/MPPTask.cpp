@@ -100,7 +100,7 @@ void MPPTask::abortDataStreams(AbortType abort_type)
     if (auto query_executor = query_executor_holder.tryGet(); query_executor)
     {
         assert(query_executor.value());
-        query_executor.value()->cancel(is_kill);
+        (*query_executor)->cancel(is_kill);
     }
 }
 
@@ -370,15 +370,17 @@ void MPPTask::runImpl()
         }
         mpp_task_statistics.start();
 
-        auto result = query_executor_holder.get().execute();
-        if (unlikely(!result.is_success))
-            err_msg = result.err_msg;
-        else
+        auto result = query_executor_holder->execute();
+        if (likely(result.is_success))
         {
             // finish receiver
             receiver_set->close();
             // finish MPPTunnel
             finishWrite();
+        }
+        else
+        {
+            err_msg = result.err_msg;
         }
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
@@ -391,7 +393,8 @@ void MPPTask::runImpl()
     }
     catch (...)
     {
-        err_msg = getCurrentExceptionMessage(true, true);
+        auto catch_err_msg = getCurrentExceptionMessage(true, true);
+        err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
     if (err_msg.empty())
@@ -512,13 +515,15 @@ bool MPPTask::scheduleThisTask(ScheduleState state)
 
 int MPPTask::estimateCountOfNewThreads()
 {
+    auto query_executor = query_executor_holder.tryGet();
     RUNTIME_CHECK_MSG(
-        query_executor_holder.isHolding() && dag_context->tunnel_set != nullptr,
+        query_executor && dag_context->tunnel_set != nullptr,
         "It should not estimate the threads for the uninitialized task {}",
         id.toString());
 
     // Estimated count of new threads from query executor(including ExchangeReceiver), remote MppTunnels s.
-    return query_executor_holder.get().estimateNewThreadCount() + 1
+    assert(query_executor.value());
+    return (*query_executor)->estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
 }
 

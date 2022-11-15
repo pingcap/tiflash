@@ -116,7 +116,6 @@ BlockIO executeQuery(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    auto io = executeQuery(context, internal);
-    return std::make_unique<DataStreamExecutor>(io.process_list_entry, io);
+    return std::make_unique<DataStreamExecutor>(executeQuery(context, internal));
 }
 } // namespace DB

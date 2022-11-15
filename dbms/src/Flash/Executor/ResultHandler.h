@@ -26,12 +26,13 @@ public:
     using Handler = std::function<void(const Block &)>;
     explicit ResultHandler(Handler handler_)
         : handler(handler_)
+        , is_ignored(false)
     {}
     ResultHandler()
-        : is_default(true)
+        : is_ignored(true)
     {}
 
-    bool isDefault() const { return is_default; }
+    bool isIgnored() const { return is_ignored; }
 
     void operator()(const Block & block) const
     {
@@ -41,6 +42,6 @@ public:
 private:
     Handler handler;
 
-    bool is_default = false;
+    bool is_ignored;
 };
 } // namespace DB

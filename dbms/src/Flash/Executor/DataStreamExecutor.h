@@ -23,8 +23,8 @@ namespace DB
 class DataStreamExecutor : public QueryExecutor
 {
 public:
-    explicit DataStreamExecutor(const ProcessListEntryPtr & process_list_entry_, const BlockIO & block_io)
-        : QueryExecutor(process_list_entry_)
+    explicit DataStreamExecutor(const BlockIO & block_io)
+        : QueryExecutor(block_io.process_list_entry)
         , data_stream(block_io.in)
     {
         assert(data_stream);

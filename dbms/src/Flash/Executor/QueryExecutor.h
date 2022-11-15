@@ -29,8 +29,7 @@ struct ExecutionResult
 
     void verify()
     {
-        if (!is_success)
-            throw Exception(err_msg);
+        RUNTIME_CHECK(is_success, err_msg);
     }
 
     static ExecutionResult success()
