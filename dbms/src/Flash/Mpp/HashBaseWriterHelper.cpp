@@ -75,7 +75,7 @@ void fillSelectorForFineGrainedShuffle(size_t rows,
         selector[i] = hash_data[i]; /// [0, 2^32)
         selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
         selector[i] >>= 32u; /// [0, part_num)
-        selector[i] = selector[i] * fine_grained_shuffle_stream_count + hash_data[i] % fine_grained_shuffle_stream_count; /// map to [0, part_num * fine_grained_shuffle_stream_count]
+        selector[i] = selector[i] * fine_grained_shuffle_stream_count + hash_data[i] % fine_grained_shuffle_stream_count; /// map to [0, part_num * fine_grained_shuffle_stream_count)
     }
 }
 
@@ -86,7 +86,7 @@ void computeHash(const Block & block,
                  WeakHash32 & hash)
 {
     size_t rows = block.rows();
-    if (rows == 0)
+    if unlikely (rows == 0)
         return;
 
     hash.getData().resize(rows);
@@ -105,7 +105,7 @@ void computeHash(size_t rows,
                  std::vector<String> & partition_key_containers,
                  WeakHash32 & hash)
 {
-    if (rows == 0)
+    if unlikely (rows == 0)
         return;
 
     hash.getData().resize(rows);
@@ -121,7 +121,7 @@ void scatterColumns(const Block & input_block,
                     uint32_t bucket_num,
                     std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
-    if (input_block.rows() == 0)
+    if unlikely (input_block.rows() == 0)
         return;
 
     WeakHash32 hash(0);
@@ -161,7 +161,7 @@ void scatterColumnsForFineGrainedShuffle(const Block & block,
                                          IColumn::Selector & selector,
                                          std::vector<IColumn::ScatterColumns> & scattered)
 {
-    if (block.rows() == 0)
+    if unlikely (block.rows() == 0)
         return;
 
     // compute hash values
