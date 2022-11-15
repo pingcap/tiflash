@@ -50,7 +50,7 @@ public:
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
         column_cache = std::make_shared<ColumnCache>();
-        dm_context = std::make_unique<DMContext>( //
+        dm_context = std::make_shared<DMContext>( //
             *db_context,
             *path_pool,
             *storage_pool,
@@ -61,12 +61,12 @@ public:
             db_context->getSettingsRef());
     }
 
-    DMContext & dmContext() { return *dm_context; }
+    DMContextPtr & dmContext() { return dm_context; }
 
     Context & dbContext() { return *db_context; }
 
 private:
-    std::unique_ptr<DMContext> dm_context;
+    std::shared_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
@@ -97,7 +97,7 @@ try
     }
 
     // test read
-    ColumnFileBig column_file_big(dmContext(), dm_file, RowKeyRange::newAll(false, 1));
+    ColumnFileBig column_file_big(*dmContext(), dm_file, RowKeyRange::newAll(false, 1));
     ColumnDefinesPtr column_defines = std::make_shared<ColumnDefines>();
     column_defines->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
     column_defines->emplace_back(getVersionColumnDefine());
@@ -166,24 +166,24 @@ CATCH
 TEST_F(ColumnFileTest, SerializeColumnFilePersisted)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(dmContext()->storage_pool, dmContext()->getWriteLimiter());
     MemoryWriteBuffer buff;
     {
         ColumnFilePersisteds column_file_persisteds;
         size_t rows = 100; // arbitrary value
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, rows, false);
         auto schema = std::make_shared<Block>(block.cloneEmpty());
-        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(*dmContext(), block, 0, rows, wbs, schema));
         column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
-        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(*dmContext(), block, 0, rows, wbs, schema));
         column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
-        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(*dmContext(), block, 0, rows, wbs, schema));
         serializeSavedColumnFilesInV3Format(buff, column_file_persisteds);
     }
 
     {
         auto read_buff = buff.tryGetReadBuffer();
-        auto column_file_persisteds = deserializeSavedColumnFilesInV3Format(dmContext(), RowKeyRange::newAll(false, 1), *read_buff);
+        auto column_file_persisteds = deserializeSavedColumnFilesInV3Format(*dmContext(), RowKeyRange::newAll(false, 1), *read_buff);
         ASSERT_EQ(column_file_persisteds.size(), 5);
         ASSERT_EQ(column_file_persisteds[0]->tryToTinyFile()->getSchema(), column_file_persisteds[2]->tryToTinyFile()->getSchema());
         ASSERT_EQ(column_file_persisteds[2]->tryToTinyFile()->getSchema(), column_file_persisteds[4]->tryToTinyFile()->getSchema());

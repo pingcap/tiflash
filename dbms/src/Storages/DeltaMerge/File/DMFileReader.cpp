@@ -17,14 +17,16 @@
 #include <DataTypes/IDataType.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Poco/File.h>
+#include <Poco/Thread_STD.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
-#include "Poco/Thread_STD.h"
 
 namespace CurrentMetrics
 {
@@ -206,6 +208,7 @@ DMFileReader::Stream::Stream(
 }
 
 DMFileReader::DMFileReader(
+    const DMContextPtr & dm_context_,
     const DMFilePtr & dmfile_,
     const ColumnDefines & read_columns_,
     bool is_common_handle_,
@@ -228,7 +231,8 @@ DMFileReader::DMFileReader(
     bool read_one_pack_every_time_,
     const String & tracing_id_,
     bool enable_col_sharing_cache)
-    : dmfile(dmfile_)
+    : dm_context(dm_context_)
+    , dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
     , read_one_pack_every_time(read_one_pack_every_time_)
@@ -292,6 +296,11 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
+        if (dm_context->db_context.getDAGContext()->collect_execution_summaries)
+        {
+            dm_context->full_table_scan_context_ptr->skip_packs_count += 1;
+            dm_context->full_table_scan_context_ptr->skip_rows_count += pack_stats[next_pack_id].rows;
+        }
     }
     return next_pack_id < use_packs.size();
 }
@@ -364,6 +373,13 @@ Block DMFileReader::read()
     {
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
+
+    if (dm_context->db_context.getDAGContext()->collect_execution_summaries)
+    {
+        dm_context->full_table_scan_context_ptr->scan_packs_count += read_packs;
+        dm_context->full_table_scan_context_ptr->scan_rows_count += read_rows;
+    }
+
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_scan);

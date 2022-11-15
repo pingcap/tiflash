@@ -80,7 +80,7 @@ public:
     }
 
     ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
+    getReader(const DMContextPtr & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
 
     bool isAppendable() const override
     {

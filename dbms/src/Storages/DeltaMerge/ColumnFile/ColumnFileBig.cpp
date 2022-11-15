@@ -49,7 +49,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
 }
 
 ColumnFileReaderPtr
-ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileBig::getReader(const DMContextPtr & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
 }
@@ -86,10 +86,10 @@ void ColumnFileBigReader::initStream()
     if (file_stream)
         return;
 
-    DMFileBlockInputStreamBuilder builder(context.db_context);
+    DMFileBlockInputStreamBuilder builder(context->db_context);
     file_stream = builder
-                      .setTracingID(context.tracing_id)
-                      .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
+                      .setTracingID(context->tracing_id)
+                      .build(context, column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
     header = file_stream->getHeader();
     // If we only need to read pk and version columns, then cache columns data in memory.

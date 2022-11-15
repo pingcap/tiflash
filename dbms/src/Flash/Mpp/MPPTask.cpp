@@ -372,6 +372,8 @@ void MPPTask::runImpl()
         while (from->read())
             continue;
 
+        std::cout << " mpp task " << from->getName() << std::endl;
+
         // finish DataStream
         from->readSuffix();
         // finish receiver

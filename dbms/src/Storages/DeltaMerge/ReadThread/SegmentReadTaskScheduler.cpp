@@ -66,7 +66,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
 
     // If pool->valid(), read blocks.
     // If !pool->valid(), read path will clean it.
-    auto merged_task = merged_task_pool.pop(pool->poolId());
+    auto merged_task = merged_task_pool.pop(pool->poolId()); // 这里真的拿得到数据么
     if (merged_task != nullptr)
     {
         GET_METRIC(tiflash_storage_read_thread_counter, type_sche_from_cache).Increment();

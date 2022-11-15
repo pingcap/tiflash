@@ -69,7 +69,7 @@ size_t SegmentTestBasic::getSegmentRowNumWithoutMVCC(PageId segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
-    auto in = segment->getInputStreamModeRaw(*dm_context, *tableColumns());
+    auto in = segment->getInputStreamModeRaw(dm_context, *tableColumns());
     return getInputStreamNRows(in);
 }
 
@@ -77,7 +77,7 @@ size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
-    auto in = segment->getInputStreamModeNormal(*dm_context, *tableColumns(), {segment->getRowKeyRange()});
+    auto in = segment->getInputStreamModeNormal(dm_context, *tableColumns(), {segment->getRowKeyRange()});
     return getInputStreamNRows(in);
 }
 
@@ -87,7 +87,7 @@ bool SegmentTestBasic::isSegmentDefinitelyEmpty(PageId segment_id)
     auto segment = segments[segment_id];
     auto snapshot = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfReadRaw);
     RUNTIME_CHECK(snapshot != nullptr);
-    return segment->isDefinitelyEmpty(*dm_context, snapshot);
+    return segment->isDefinitelyEmpty(dm_context, snapshot);
 }
 
 std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment::SplitMode split_mode, bool check_rows)
@@ -100,7 +100,7 @@ std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment:
 
     LOG_DEBUG(logger, "begin split, segment_id={} split_mode={} rows={}", segment_id, magic_enum::enum_name(split_mode), origin_segment_row_num);
 
-    auto [left, right] = origin_segment->split(*dm_context, tableColumns(), /* use a calculated split point */ std::nullopt, split_mode);
+    auto [left, right] = origin_segment->split(dm_context, tableColumns(), /* use a calculated split point */ std::nullopt, split_mode);
     if (!left && !right)
     {
         LOG_DEBUG(logger, "split not succeeded, segment_id={} split_mode={} rows={}", segment_id, magic_enum::enum_name(split_mode), origin_segment_row_num);
@@ -147,7 +147,7 @@ std::optional<PageId> SegmentTestBasic::splitSegmentAt(PageId segment_id, Int64 
 
     LOG_DEBUG(logger, "begin splitAt, segment_id={} split_at={} split_at_key={} split_mode={} rows={}", segment_id, split_at, split_at_key.toDebugString(), magic_enum::enum_name(split_mode), origin_segment_row_num);
 
-    auto [left, right] = origin_segment->split(*dm_context, tableColumns(), split_at_key, split_mode);
+    auto [left, right] = origin_segment->split(dm_context, tableColumns(), split_at_key, split_mode);
     if (!left && !right)
     {
         LOG_DEBUG(logger, "splitAt not succeeded, segment_id={} split_at={} split_mode={} rows={}", segment_id, split_at, magic_enum::enum_name(split_mode), origin_segment_row_num);
@@ -195,7 +195,7 @@ void SegmentTestBasic::mergeSegment(const std::vector<PageId> & segments_id, boo
 
     LOG_DEBUG(logger, "begin merge, segments=[{}] each_rows=[{}]", fmt::join(segments_id, ","), fmt::join(segments_rows, ","));
 
-    SegmentPtr merged_segment = Segment::merge(*dm_context, tableColumns(), segments_to_merge);
+    SegmentPtr merged_segment = Segment::merge(dm_context, tableColumns(), segments_to_merge);
     if (!merged_segment)
     {
         LOG_DEBUG(logger, "merge not succeeded, segments=[{}] each_rows=[{}]", fmt::join(segments_id, ","), fmt::join(segments_rows, ","));
@@ -223,7 +223,7 @@ void SegmentTestBasic::mergeSegmentDelta(PageId segment_id, bool check_rows)
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNum(segment_id);
-    SegmentPtr merged_segment = segment->mergeDelta(*dm_context, tableColumns());
+    SegmentPtr merged_segment = segment->mergeDelta(dm_context, tableColumns());
     segments[merged_segment->segmentId()] = merged_segment;
     if (check_rows)
     {

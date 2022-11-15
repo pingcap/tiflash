@@ -20,6 +20,7 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/FullTableScanContext.h>
 
 namespace DB
 {
@@ -88,6 +89,8 @@ struct DMContext : private boost::noncopyable
 
     String tracing_id;
 
+    std::shared_ptr<FullTableScanContext> full_table_scan_context_ptr;
+
 public:
     DMContext(const Context & db_context_,
               StoragePathPool & path_pool_,
@@ -124,6 +127,7 @@ public:
         , enable_skippable_place(settings.dt_enable_skippable_place)
         , tracing_id(tracing_id_)
     {
+        full_table_scan_context_ptr = std::make_shared<FullTableScanContext>();
     }
 
     WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }

@@ -16,6 +16,8 @@
 
 #include <common/types.h>
 
+#include "Storages/DeltaMerge/FullTableScanContext.h"
+
 namespace DB
 {
 /// do not need be thread safe since it is only used in single thread env
@@ -25,6 +27,9 @@ struct ExecutionSummary
     UInt64 num_produced_rows = 0;
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
+
+    std::shared_ptr<DB::DM::FullTableScanContext> full_table_scan_context = std::make_shared<DB::DM::FullTableScanContext>();
+
     ExecutionSummary() = default;
 
     void merge(const ExecutionSummary & other, bool streaming_call);

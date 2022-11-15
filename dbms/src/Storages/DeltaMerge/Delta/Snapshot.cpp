@@ -58,7 +58,7 @@ RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
 // ================================================
 
 DeltaValueReader::DeltaValueReader(
-    const DMContext & context,
+    const DMContextPtr & context,
     const DeltaSnapshotPtr & delta_snap_,
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)

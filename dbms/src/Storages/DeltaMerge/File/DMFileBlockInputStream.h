@@ -54,8 +54,9 @@ public:
 
     bool getSkippedRows(size_t & skip_rows) override { return reader.getSkippedRows(skip_rows); }
 
-    Block read() override { 
-        return reader.read(); 
+    Block read() override
+    {
+        return reader.read();
     }
 
 private:
@@ -74,12 +75,13 @@ public:
     // - current settings from this context
     // - current read limiter form this context
     // - current file provider from this context
-    explicit DMFileBlockInputStreamBuilder(const Context & context);
+    explicit DMFileBlockInputStreamBuilder(const Context & dm_context);
 
     // Build the final stream ptr.
     // Empty `rowkey_ranges` means not filter by rowkey
     // Should not use the builder again after `build` is called.
     DMFileBlockInputStreamPtr build(
+        const DMContextPtr & dm_context,
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges);
@@ -206,7 +208,7 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context 
     return builder
         .setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
         .onlyReadOnePackEveryTime()
-        .build(file, cols, DB::DM::RowKeyRanges{});
+        .build(nullptr, file, cols, DB::DM::RowKeyRanges{});
 }
 
 } // namespace DM

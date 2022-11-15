@@ -186,7 +186,7 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
     }
 }
 
-void StableValueSpace::calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle)
+void StableValueSpace::calculateStableProperty(const DMContextPtr & context, const RowKeyRange & rowkey_range, bool is_common_handle)
 {
     property.gc_hint_version = std::numeric_limits<UInt64>::max();
     property.num_versions = 0;
@@ -219,12 +219,12 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             //
             // If we pass `segment_range` instead,
             // then the returned stream is a `SkippableBlockInputStream` which will complicate the implementation
-            DMFileBlockInputStreamBuilder builder(context.db_context);
+            DMFileBlockInputStreamBuilder builder(context->db_context);
             BlockInputStreamPtr data_stream = builder
                                                   .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
                                                   .onlyReadOnePackEveryTime()
-                                                  .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
-                                                  .build(file, read_columns, RowKeyRanges{rowkey_range});
+                                                  .setTracingID(fmt::format("{}-calculateStableProperty", context->tracing_id))
+                                                  .build(context, file, read_columns, RowKeyRanges{rowkey_range});
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -252,14 +252,14 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         }
         auto pack_filter = DMFilePackFilter::loadFrom(
             file,
-            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            context->db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
             {rowkey_range},
             EMPTY_FILTER,
             {},
-            context.db_context.getFileProvider(),
-            context.getReadLimiter(),
-            context.tracing_id);
+            context->db_context.getFileProvider(),
+            context->getReadLimiter(),
+            context->tracing_id);
         const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
@@ -336,7 +336,7 @@ void StableValueSpace::drop(const FileProviderPtr & file_provider)
 
 SkippableBlockInputStreamPtr
 StableValueSpace::Snapshot::getInputStream(
-    const DMContext & context,
+    const DMContextPtr & context,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
     const RSOperatorPtr & filter,
@@ -351,14 +351,14 @@ StableValueSpace::Snapshot::getInputStream(
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
-        DMFileBlockInputStreamBuilder builder(context.db_context);
+        DMFileBlockInputStreamBuilder builder(context->db_context);
         builder
             .enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
-            .setTracingID(context.tracing_id)
+            .setTracingID(context->tracing_id)
             .setRowsThreshold(expected_block_size);
-        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
+        streams.push_back(builder.build(context, stable->files[i], read_columns, rowkey_ranges));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }

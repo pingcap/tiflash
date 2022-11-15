@@ -28,7 +28,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setFromSettings(context.getSettingsRef());
 }
 
-DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr & dmfile, const ColumnDefines & read_columns, const RowKeyRanges & rowkey_ranges)
+DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMContextPtr & dm_context, const DMFilePtr & dmfile, const ColumnDefines & read_columns, const RowKeyRanges & rowkey_ranges)
 {
     RUNTIME_CHECK(dmfile->getStatus() == DMFile::Status::READABLE, dmfile->fileId(), DMFile::statusString(dmfile->getStatus()));
 
@@ -53,6 +53,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
 
     DMFileReader reader(
+        dm_context,
         dmfile,
         read_columns,
         is_common_handle,
@@ -74,5 +75,5 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         enable_read_thread);
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader), enable_read_thread);
-} 
+}
 } // namespace DB::DM

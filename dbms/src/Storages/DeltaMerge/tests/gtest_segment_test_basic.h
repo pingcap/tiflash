@@ -120,7 +120,7 @@ protected:
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool> storage_pool;
     /// dm_context
-    std::unique_ptr<DMContext> dm_context;
+    std::shared_ptr<DMContext> dm_context;
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
 

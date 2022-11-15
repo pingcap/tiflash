@@ -752,7 +752,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
+        segmentMergeDelta(dm_context, segment, MergeDeltaReason::Manual);
     }
 
     LOG_INFO(log, "Finish table mergeDeltaAll");
@@ -785,7 +785,7 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
 
         if (segment->flushCache(*dm_context))
         {
-            const auto new_segment = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
+            const auto new_segment = segmentMergeDelta(dm_context, segment, MergeDeltaReason::Manual);
             if (new_segment)
             {
                 const auto segment_end = new_segment->getRowKeyRange().end;
@@ -922,6 +922,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         if (enable_read_thread)
         {
             stream = std::make_shared<UnorderedInputStream>(
+                dm_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
@@ -1005,6 +1006,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         if (enable_read_thread)
         {
             stream = std::make_shared<UnorderedInputStream>(
+                dm_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
@@ -1257,7 +1259,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                     GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_delete_range).Observe(watch.elapsedSeconds());
             });
 
-            return segmentMergeDelta(*dm_context, segment, MergeDeltaReason::ForegroundWrite);
+            return segmentMergeDelta(dm_context, segment, MergeDeltaReason::ForegroundWrite);
         }
         return {};
     };
@@ -1292,7 +1294,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_split).Observe(watch.elapsedSeconds());
             });
 
-            return segmentSplit(*dm_context, my_segment, SegmentSplitReason::ForegroundWrite).first != nullptr;
+            return segmentSplit(dm_context, my_segment, SegmentSplitReason::ForegroundWrite).first != nullptr;
         }
         return false;
     };

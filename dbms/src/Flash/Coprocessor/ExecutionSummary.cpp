@@ -25,6 +25,8 @@ void ExecutionSummary::merge(const ExecutionSummary & other, bool streaming_call
         num_produced_rows = std::max(num_produced_rows, other.num_produced_rows);
         num_iterations = std::max(num_iterations, other.num_iterations);
         concurrency = std::max(concurrency, other.concurrency);
+
+        full_table_scan_context->merge(other.full_table_scan_context.get());
     }
     else
     {
@@ -32,6 +34,8 @@ void ExecutionSummary::merge(const ExecutionSummary & other, bool streaming_call
         num_produced_rows += other.num_produced_rows;
         num_iterations += other.num_iterations;
         concurrency += other.concurrency;
+
+        full_table_scan_context->merge(other.full_table_scan_context.get());
     }
 }
 } // namespace DB

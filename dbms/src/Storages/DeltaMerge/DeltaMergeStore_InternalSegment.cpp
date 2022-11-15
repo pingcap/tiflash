@@ -35,7 +35,7 @@ namespace DB
 {
 namespace DM
 {
-SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
+SegmentPair DeltaMergeStore::segmentSplit(const DMContextPtr & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
 {
     LOG_INFO(
         log,
@@ -43,7 +43,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         magic_enum::enum_name(opt_split_mode),
         magic_enum::enum_name(reason),
         (opt_split_at.has_value() ? fmt::format(" force_split_at={}", opt_split_at->toDebugString()) : ""),
-        dm_context.min_version,
+        dm_context->min_version,
         segment->info());
 
     SegmentSnapshotPtr segment_snap;
@@ -58,7 +58,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
+        segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Split - Give up segmentSplit because snapshot failed, segment={}", segment->simpleInfo());
@@ -110,7 +110,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
     });
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
 
     Segment::SplitMode seg_split_mode;
     switch (opt_split_mode)
@@ -159,11 +159,11 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        std::tie(new_left, new_right) = segment->applySplit(segment_lock, dm_context, segment_snap, wbs, split_info);
+        std::tie(new_left, new_right) = segment->applySplit(segment_lock, *dm_context, segment_snap, wbs, split_info);
 
         wbs.writeMeta();
 
-        segment->abandon(dm_context);
+        segment->abandon(*dm_context);
         segments.erase(range.getEnd());
         id_to_segment.erase(segment->segmentId());
 
@@ -175,8 +175,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         if constexpr (DM_RUN_CHECK)
         {
-            new_left->check(dm_context, "After split left");
-            new_right->check(dm_context, "After split right");
+            new_left->check(*dm_context, "After split left");
+            new_right->check(*dm_context, "After split right");
         }
 
         duplicated_bytes = new_left->getDelta()->getBytes();
@@ -201,12 +201,12 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     }
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context->db_context);
 
     return {new_left, new_right};
 }
 
-SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason)
+SegmentPtr DeltaMergeStore::segmentMerge(const DMContextPtr & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason)
 {
     RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_segments.size());
 
@@ -214,7 +214,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         log,
         "Merge - Begin, reason={} safe_point={} segments_to_merge={}",
         magic_enum::enum_name(reason),
-        dm_context.min_version,
+        dm_context->min_version,
         Segment::simpleInfo(ordered_segments));
 
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
@@ -235,7 +235,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
         for (const auto & seg : ordered_segments)
         {
-            auto snap = seg->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+            auto snap = seg->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
             if (!snap)
             {
                 LOG_DEBUG(log, "Merge - Give up segmentMerge because snapshot failed, segment={}", seg->simpleInfo());
@@ -278,7 +278,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         }
     });
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
     auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
@@ -304,13 +304,13 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         for (const auto & seg : ordered_segments)
             locks.emplace_back(seg->mustGetUpdateLock());
 
-        merged = Segment::applyMerge(locks, dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
+        merged = Segment::applyMerge(locks, *dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
 
         wbs.writeMeta();
 
         for (const auto & seg : ordered_segments)
         {
-            seg->abandon(dm_context);
+            seg->abandon(*dm_context);
             segments.erase(seg->getRowKeyRange().getEnd());
             id_to_segment.erase(seg->segmentId());
         }
@@ -319,7 +319,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         id_to_segment.emplace(merged->segmentId(), merged);
 
         if constexpr (DM_RUN_CHECK)
-            merged->check(dm_context, "After segment merge");
+            merged->check(*dm_context, "After segment merge");
 
         LOG_INFO(
             log,
@@ -336,13 +336,13 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
     GET_METRIC(tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context->db_context);
 
     return merged;
 }
 
 SegmentPtr DeltaMergeStore::segmentMergeDelta(
-    DMContext & dm_context,
+    const DMContextPtr & dm_context,
     const SegmentPtr & segment,
     const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
@@ -351,7 +351,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         log,
         "MergeDelta - Begin, reason={} safe_point={} segment={}",
         magic_enum::enum_name(reason),
-        dm_context.min_version,
+        dm_context->min_version,
         segment->info());
 
     ColumnDefinesPtr schema_snap;
@@ -367,7 +367,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         // Try to generate a new snapshot if there is no pre-allocated one
         if (!segment_snap)
-            segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+            segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
 
         if (unlikely(!segment_snap))
         {
@@ -424,7 +424,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         }
     });
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();
@@ -443,7 +443,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        new_segment = segment->applyMergeDelta(segment_lock, dm_context, segment_snap, wbs, new_stable);
+        new_segment = segment->applyMergeDelta(segment_lock, *dm_context, segment_snap, wbs, new_stable);
 
         wbs.writeMeta();
 
@@ -456,11 +456,11 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[new_segment->segmentId()] = new_segment;
 
-        segment->abandon(dm_context);
+        segment->abandon(*dm_context);
 
         if constexpr (DM_RUN_CHECK)
         {
-            new_segment->check(dm_context, "After segmentMergeDelta");
+            new_segment->check(*dm_context, "After segmentMergeDelta");
         }
 
         LOG_INFO(
@@ -476,7 +476,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     GET_METRIC(tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context->db_context);
 
     return new_segment;
 }

@@ -15,7 +15,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 namespace CurrentMetrics
 {
@@ -158,7 +157,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
     BlockInputStreamPtr stream;
     auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-    stream = t->segment->getInputStream(read_mode, *dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
+    stream = t->segment->getInputStream(read_mode, dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
     LOG_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, t->segment->segmentId());
     return stream;
 }
@@ -240,7 +239,6 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
-    std::cout << " SegmentReadTaskPool::readOneBlock " << get_perf_context()->toDebugString() << std::endl;
     if (block)
     {
         pushBlock(std::move(block));

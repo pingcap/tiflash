@@ -44,7 +44,7 @@ private:
     Block readPKVersion(size_t offset, size_t limit);
 
 public:
-    ColumnFileSetReader(const DMContext & context_,
+    ColumnFileSetReader(const DMContextPtr & context_,
                         const ColumnFileSetSnapshotPtr & snapshot_,
                         const ColumnDefinesPtr & col_defs_,
                         const RowKeyRange & segment_range_);
@@ -76,7 +76,7 @@ private:
     size_t next_file_index = 0;
 
 public:
-    ColumnFileSetInputStream(const DMContext & context_,
+    ColumnFileSetInputStream(const DMContextPtr & context_,
                              const ColumnFileSetSnapshotPtr & delta_snap_,
                              const ColumnDefinesPtr & col_defs_,
                              const RowKeyRange & segment_range_)

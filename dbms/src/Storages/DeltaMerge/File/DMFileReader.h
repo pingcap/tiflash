@@ -16,6 +16,7 @@
 
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
@@ -24,7 +25,6 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
-#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 namespace DB
 {
@@ -70,6 +70,7 @@ public:
     using ColumnStreams = std::map<String, StreamPtr>;
 
     DMFileReader(
+        const DMContextPtr & dm_context_,
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,
         bool is_common_handle_,
@@ -130,6 +131,8 @@ private:
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
+    DMContextPtr dm_context;
+
     DMFilePtr dmfile;
     ColumnDefines read_columns;
     ColumnStreams column_streams;

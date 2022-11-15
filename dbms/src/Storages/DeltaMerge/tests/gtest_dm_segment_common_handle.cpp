@@ -33,7 +33,7 @@ namespace tests
 class SegmentCommonHandleTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    SegmentCommonHandleTest() {}
+    SegmentCommonHandleTest() = default;
 
 public:
     static void SetUpTestCase() {}
@@ -41,7 +41,7 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        table_columns_ = std::make_shared<ColumnDefines>();
+        table_columns = std::make_shared<ColumnDefines>();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -59,15 +59,15 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(Logger::get(), *dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+        return Segment::newSegment(Logger::get(), *dm_context, table_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
     }
 
     // setColumns should update dm_context at the same time
     void setColumns(const ColumnDefinesPtr & columns)
     {
-        *table_columns_ = *columns;
+        *table_columns = *columns;
 
-        dm_context_ = std::make_unique<DMContext>(*db_context,
+        dm_context = std::make_shared<DMContext>(*db_context,
                                                   *path_pool,
                                                   *storage_pool,
                                                   /*min_version_*/ 0,
@@ -77,18 +77,18 @@ protected:
                                                   db_context->getSettingsRef());
     }
 
-    const ColumnDefinesPtr & tableColumns() const { return table_columns_; }
+    const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    DMContext & dmContext() { return *dm_context_; }
+    DMContextPtr & dmContext() { return dm_context; }
 
 private:
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    ColumnDefinesPtr table_columns_;
+    ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
-    std::unique_ptr<DMContext> dm_context_;
+    std::shared_ptr<DMContext> dm_context;
 
 protected:
     // the segment we are going to test
@@ -112,7 +112,7 @@ try
                                                          is_common_handle,
                                                          rowkey_column_size);
         // write to segment
-        segment->write(dmContext(), block);
+        segment->write(*dmContext(), block);
         // estimate segment
         auto estimated_rows = segment->getEstimatedRows();
         ASSERT_EQ(estimated_rows, block.rows());
@@ -123,7 +123,7 @@ try
 
     {
         // check segment
-        segment->check(dmContext(), "test");
+        segment->check(*dmContext(), "test");
     }
 
     { // Round 1
@@ -158,7 +158,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
     }
 
     { // Round 2
@@ -197,7 +197,7 @@ try
                                                          is_common_handle,
                                                          rowkey_column_size);
         // write to segment
-        segment->write(dmContext(), block);
+        segment->write(*dmContext(), block);
         // estimate segment
         auto estimated_rows = segment->getEstimatedRows();
         ASSERT_EQ(estimated_rows, block.rows());
@@ -208,7 +208,7 @@ try
 
     {
         // check segment
-        segment->check(dmContext(), "test");
+        segment->check(*dmContext(), "test");
     }
 
     RowKeyRanges read_ranges{
@@ -252,7 +252,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
         ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write_2);
     }
 
@@ -278,13 +278,13 @@ try
 }
 CATCH
 
-class SegmentDeletion_Common_Handle_test : public SegmentCommonHandleTest
+class SegmentDeletionCommonHandleTest : public SegmentCommonHandleTest
     , //
                                            public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 };
 
-TEST_P(SegmentDeletion_Common_Handle_test, DeleteDataInDelta)
+TEST_P(SegmentDeletionCommonHandleTest, DeleteDataInDelta)
 try
 {
     const size_t num_rows_write = 100;
@@ -299,7 +299,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -312,7 +312,7 @@ try
 
     {
         // test delete range [1,99) for data in delta
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 99, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 99, rowkey_column_size)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -345,7 +345,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentDeletion_Common_Handle_test, DeleteDataInStable)
+TEST_P(SegmentDeletionCommonHandleTest, DeleteDataInStable)
 try
 {
     const size_t num_rows_write = 100;
@@ -360,7 +360,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -378,7 +378,7 @@ try
 
     {
         // test delete range [1,99) for data in stable
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 99, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 99, rowkey_column_size)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
 
@@ -414,7 +414,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentDeletion_Common_Handle_test, DeleteDataInStableAndDelta)
+TEST_P(SegmentDeletionCommonHandleTest, DeleteDataInStableAndDelta)
 try
 {
     const size_t num_rows_write = 100;
@@ -429,7 +429,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
         // flush [0, 50) to segment's stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
@@ -447,7 +447,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
     }
 
     if (read_before_delete)
@@ -459,7 +459,7 @@ try
 
     {
         // test delete range [1,99) for data in stable and delta
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 99, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 99, rowkey_column_size)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -493,7 +493,7 @@ try
 CATCH
 
 INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange,
-                        SegmentDeletion_Common_Handle_test,
+                        SegmentDeletionCommonHandleTest,
                         testing::Combine(testing::Bool(), testing::Bool()));
 
 TEST_F(SegmentCommonHandleTest, DeleteRead)
@@ -510,7 +510,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
     }
 
     {
@@ -520,9 +520,9 @@ try
 
     {
         // Test delete range [70, 100)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size)});
         // flush segment
-        segment->flushCache(dmContext());
+        segment->flushCache(*dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -548,9 +548,9 @@ try
 
     {
         // Test delete range [63, 70)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size)});
         // flush segment
-        segment->flushCache(dmContext());
+        segment->flushCache(*dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -576,9 +576,9 @@ try
 
     {
         // Test delete range [1, 32)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
-        segment->flushCache(dmContext());
+        segment->flushCache(*dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -606,9 +606,9 @@ try
     {
         // Test delete range [1, 32)
         // delete should be idempotent
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
-        segment->flushCache(dmContext());
+        segment->flushCache(*dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -635,9 +635,9 @@ try
     {
         // Test delete range [0, 2)
         // There is an overlap range [0, 1)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 2, rowkey_column_size)});
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 2, rowkey_column_size)});
         // flush segment
-        segment->flushCache(dmContext());
+        segment->flushCache(*dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -676,7 +676,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
     }
 
     {
@@ -759,7 +759,7 @@ try
 
                 ASSERT_EQ(c1->size(), c2->size());
 
-                for (Int64 i = 0; i < Int64(c1->size()); i++)
+                for (Int64 i = 0; i < static_cast<Int64>(c1->size()); i++)
                 {
                     if (iter1->name == DMTestEnv::pk_name)
                     {
@@ -790,12 +790,12 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(*dmContext(), std::move(block));
         // flush segment
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), *dmContext(), segment->segmentId());
 
     {
         // test compare
@@ -806,8 +806,8 @@ try
 
     {
         // Do some update and restore again
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 32, rowkey_column_size)});
-        new_segment = segment->restoreSegment(Logger::get(), dmContext(), segment->segmentId());
+        segment->write(*dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 32, rowkey_column_size)});
+        new_segment = segment->restoreSegment(Logger::get(), *dmContext(), segment->segmentId());
     }
 
     {
@@ -822,7 +822,7 @@ CATCH
 TEST_F(SegmentCommonHandleTest, MassiveSplit)
 try
 {
-    Settings settings = dmContext().db_context.getSettings();
+    Settings settings = dmContext()->db_context.getSettings();
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 
@@ -848,7 +848,7 @@ try
                 EXTRA_HANDLE_COLUMN_STRING_TYPE,
                 is_common_handle,
                 rowkey_column_size);
-            segment->write(dmContext(), std::move(block));
+            segment->write(*dmContext(), std::move(block));
             num_batches_written += 1;
         }
 
@@ -856,9 +856,9 @@ try
             // Delete some records so that the following condition can be satisfied:
             // if pk % 5 < 2, then the record would be deleted
             // if pk % 5 >= 2, then the record would be reserved
-            segment->write(dmContext(),
-                           DMTestEnv::getRowKeyRangeForClusteredIndex(Int64((num_batches_written - 1) * num_rows_per_write),
-                                                                      Int64((num_batches_written - 1) * num_rows_per_write + 2),
+            segment->write(*dmContext(),
+                           DMTestEnv::getRowKeyRangeForClusteredIndex(static_cast<Int64>((num_batches_written - 1) * num_rows_per_write),
+                                                                      static_cast<Int64>((num_batches_written - 1) * num_rows_per_write + 2),
                                                                       rowkey_column_size));
         }
 
@@ -869,7 +869,7 @@ try
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)
         {
-            temp.push_back(Int64(i));
+            temp.push_back(static_cast<Int64>(i));
         }
 
         {
