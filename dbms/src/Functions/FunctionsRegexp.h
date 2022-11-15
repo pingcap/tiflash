@@ -1453,7 +1453,7 @@ public:
         ParamVariant RET_OP_PV_VAR_NAME(col_return_option, col_size, 0);
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        GET_ACTUAL_PARAMS_AND_EXECUTE()
+        // GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1648,6 +1648,7 @@ public:
                     if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
                     {
                         null_map[i] = 1;
+                        col_res->insertData("", 0);
                         continue;
                     }
 
@@ -1672,9 +1673,6 @@ public:
         }
         else
         {
-            auto nullmap_col = ColumnUInt8::create();
-            typename ColumnUInt8::Container & null_map = nullmap_col->getData();
-            null_map.resize(col_size);
             if constexpr (has_nullable_col)
             {
                 for (size_t i = 0; i < col_size; ++i)
@@ -1682,6 +1680,7 @@ public:
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
                         null_map[i] = 1;
+                        col_res->insertData("", 0);
                         continue;
                     }
 
@@ -1780,11 +1779,12 @@ private:
         if (success)
         {
             col_res->insertData(res_ref.data, res_ref.size);
-            null_map[idx] = 1;
+            null_map[idx] = 0;
         }
         else
         {
-            null_map[idx] = 0;
+            col_res->insertData("", 0);
+            null_map[idx] = 1;
         }
     }
 
