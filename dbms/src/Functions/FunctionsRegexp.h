@@ -133,57 +133,10 @@ Int64 getIntFromField(Field & field)
 
 enum class IntType { UInt8 = 0, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64 };
 
-Int64 getUInt8(const void * container, size_t idx)
+template <typename T>
+Int64 getInt(const void * container, size_t idx)
 {
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt8>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getUInt16(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt16>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getUInt32(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt32>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getUInt64(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt64>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getUInt128(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt128>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getInt8(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int8>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getInt16(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int16>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getInt32(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int32>::Container *>(container);
-    return static_cast<Int64>((*tmp)[idx]);
-}
-
-Int64 getInt64(const void * container, size_t idx)
-{
-    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int64>::Container *>(container);
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<T>::Container *>(container);
     return static_cast<Int64>((*tmp)[idx]);
 }
 
@@ -194,23 +147,23 @@ GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
     switch (int_type)
     {
     case IntType::UInt8:
-        return getUInt8;
+        return &getInt<UInt8>;
     case IntType::UInt16:
-        return getUInt16;
+        return &getInt<UInt16>;
     case IntType::UInt32:
-        return getUInt32;
+        return &getInt<UInt32>;
     case IntType::UInt64:
-        return getUInt64;
+        return &getInt<UInt64>;
     case IntType::UInt128:
-        return getUInt128;
+        return &getInt<UInt128>;
     case IntType::Int8:
-        return getInt8;
+        return &getInt<Int8>;
     case IntType::Int16:
-        return getInt16;
+        return &getInt<Int16>;
     case IntType::Int32:
-        return getInt32;
+        return &getInt<Int32>;
     case IntType::Int64:
-        return getInt64;
+        return &getInt<Int64>;
     default:
         throw Exception("Unexpected int type");
     }

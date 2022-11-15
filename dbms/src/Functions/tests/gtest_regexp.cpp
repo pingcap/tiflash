@@ -2212,7 +2212,7 @@ TEST_F(Regexp, testRegexpCustomerCases)
 
 namespace
 {
-template <typename T>
+template<typename T>
 std::vector<Int64> getResultVec(const std::vector<T> & test_cases)
 {
     std::vector<Int64> vecs;
@@ -2223,7 +2223,7 @@ std::vector<Int64> getResultVec(const std::vector<T> & test_cases)
     return vecs;
 }
 
-template <typename T>
+template<typename T>
 std::vector<String> getExprVec(const std::vector<T> & test_cases)
 {
     std::vector<String> vecs;
@@ -2234,7 +2234,7 @@ std::vector<String> getExprVec(const std::vector<T> & test_cases)
     return vecs;
 }
 
-template <typename T>
+template<typename T>
 std::vector<String> getPatVec(const std::vector<T> & test_cases)
 {
     std::vector<String> vecs;
@@ -2245,7 +2245,7 @@ std::vector<String> getPatVec(const std::vector<T> & test_cases)
     return vecs;
 }
 
-template <typename T>
+template<typename T>
 std::vector<Int64> getPosVec(const std::vector<T> & test_cases)
 {
     std::vector<Int64> vecs;
@@ -2256,7 +2256,7 @@ std::vector<Int64> getPosVec(const std::vector<T> & test_cases)
     return vecs;
 }
 
-template <typename T>
+template<typename T>
 std::vector<Int64> getOccurVec(const std::vector<T> & test_cases)
 {
     std::vector<Int64> vecs;
@@ -2267,7 +2267,7 @@ std::vector<Int64> getOccurVec(const std::vector<T> & test_cases)
     return vecs;
 }
 
-template <typename T>
+template<typename T>
 std::vector<Int64> getRetOpVec(const std::vector<T> & test_cases)
 {
     std::vector<Int64> vecs;
@@ -2278,7 +2278,7 @@ std::vector<Int64> getRetOpVec(const std::vector<T> & test_cases)
     return vecs;
 }
 
-template <typename T>
+template<typename T>
 std::vector<String> getMatchTypeVec(const std::vector<T> & test_cases)
 {
     std::vector<String> vecs;

@@ -537,33 +537,19 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subjec
     const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
-    size_t matched_index = 0;
     StringPieceType expr_sp(expr, expr_size);
-    size_t matched_str_size = 0;
-    String matched_str; // store the matched substring
-
-    // RegexType::FindAndConsume will truncate expr_sp each time it is called.
-    // expr_sp_before_truncated stores the string before expr_sp is truncated so that
-    // we can find the matched index of the substr
-    StringPieceType expr_sp_before_truncated;
+    StringPieceType matched_str;
 
     while (occur > 0)
     {
-        expr_sp_before_truncated = expr_sp;
         bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
             return 0;
 
-        // byte_offset is used for locating the substr's start index in the string
-        // so we need to update it each time.
-        matched_index = expr_sp_before_truncated.find(matched_str);
-        matched_str_size = matched_str.size();
-        byte_offset += matched_index + matched_str_size;
-
         --occur;
     }
 
-    byte_offset -= matched_str_size;
+    byte_offset = matched_str.data() - subject;
     return ret_op == 0 ? bytePos2Utf8Pos(subject, byte_offset + 1) : bytePos2Utf8Pos(subject, byte_offset + matched_str.size() + 1);
 }
 
