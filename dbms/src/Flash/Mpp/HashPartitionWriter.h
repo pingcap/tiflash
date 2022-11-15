@@ -40,7 +40,7 @@ public:
 private:
     void partitionAndEncodeThenWriteBlocks();
 
-    void writePackets(const TrackedMppDataPacketPtrs & packets);
+    void writePackets(TrackedMppDataPacketPtrs & packets);
 
     void sendExecutionSummary();
 
