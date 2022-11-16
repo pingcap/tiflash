@@ -147,7 +147,7 @@ public:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     size_t getSourceNum() const { return source_num; }
-    uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
+    uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
 
     int computeNewThreadCount() const { return thread_count; }
 
@@ -208,7 +208,8 @@ private:
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
-    const size_t max_streams;
+    const bool enable_fine_grained_shuffle_flag;
+    const size_t output_stream_count;
     const size_t max_buffer_size;
 
     std::shared_ptr<ThreadManager> thread_manager;
@@ -226,7 +227,6 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    uint64_t fine_grained_shuffle_stream_count;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

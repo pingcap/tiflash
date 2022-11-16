@@ -416,20 +416,20 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     uint64_t fine_grained_shuffle_stream_count_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
-    , max_streams(max_streams_)
+    , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
+    , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
-    , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
 {
     try
     {
-        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
+        if (enable_fine_grained_shuffle_flag)
         {
-            for (size_t i = 0; i < max_streams_; ++i)
+            for (size_t i = 0; i < output_stream_count; ++i)
             {
                 msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
             }
@@ -498,7 +498,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         else
         {
             thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
-                if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+                if (enable_fine_grained_shuffle_flag)
                     readLoop<true>(req);
                 else
                     readLoop<false>(req);
@@ -511,7 +511,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     if (!async_requests.empty())
     {
         thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] {
-            if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+            if (enable_fine_grained_shuffle_flag)
                 reactor<true>(async_requests);
             else
                 reactor<false>(async_requests);
@@ -787,7 +787,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
                 assert(recv_msg->chunks.empty());
                 // Fine grained shuffle should only be enabled when sending data to TiFlash node.
                 // So all data should be encoded into MPPDataPacket.chunks.
-                RUNTIME_CHECK_MSG(!enableFineGrainedShuffle(fine_grained_shuffle_stream_count), "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
+                RUNTIME_CHECK_MSG(!enable_fine_grained_shuffle_flag, "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
                 result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
             }
             else if (!recv_msg->chunks.empty())
