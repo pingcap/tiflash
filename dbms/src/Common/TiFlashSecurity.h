@@ -154,7 +154,7 @@ public:
         return new_options;
     }
 
-    pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log) const
+    pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log)
     {
         std::unique_lock lock(mu);
         pingcap::ClusterConfig config;
