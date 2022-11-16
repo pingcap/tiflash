@@ -121,6 +121,8 @@ try
     {
         checkParseMyDateTime(str, expected, type_with_fraction);
     }
+    DataTypeMyDateTime tp(2);
+    checkParseMyDateTime("2010-12-31 23:59:59.99999", "2011-01-01 00:00:00.00", tp);
 }
 catch (Exception & e)
 {

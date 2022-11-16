@@ -594,6 +594,39 @@ bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32)
     return true;
 }
 
+UInt64 addSeconds(UInt64 t, Int64 delta)
+{
+    // todo support zero date
+    if (t == 0)
+    {
+        return t;
+    }
+    MyDateTime my_time(t);
+    Int64 current_second = my_time.hour * MyTimeBase::SECOND_IN_ONE_HOUR + my_time.minute * MyTimeBase::SECOND_IN_ONE_MINUTE + my_time.second;
+    current_second += delta;
+    if (current_second >= 0)
+    {
+        Int64 days = current_second / MyTimeBase::SECOND_IN_ONE_DAY;
+        current_second = current_second % MyTimeBase::SECOND_IN_ONE_DAY;
+        if (days != 0)
+            addDays(my_time, days);
+    }
+    else
+    {
+        Int64 days = (-current_second) / MyTimeBase::SECOND_IN_ONE_DAY;
+        if ((-current_second) % MyTimeBase::SECOND_IN_ONE_DAY != 0)
+        {
+            days++;
+        }
+        current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
+        addDays(my_time, -days);
+    }
+    my_time.hour = current_second / MyTimeBase::SECOND_IN_ONE_HOUR;
+    my_time.minute = (current_second % MyTimeBase::SECOND_IN_ONE_HOUR) / MyTimeBase::SECOND_IN_ONE_MINUTE;
+    my_time.second = current_second % MyTimeBase::SECOND_IN_ONE_MINUTE;
+    return my_time.toPackedUInt();
+}
+
 // Return true if the time is invalid.
 inline bool getDatetime(const Int64 & num, MyDateTime & result)
 {
@@ -995,11 +1028,12 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     }
 
     UInt32 micro_second = 0;
-    if (hhmmss && !frac_str.empty())
+    bool overflow;
+    if (hhmmss)
     {
         // If input string is "20170118.999", without hhmmss, fsp is meaningless.
         // TODO: this case is not only meaningless, but erroneous, please confirm.
-        bool overflow, matched;
+        bool matched;
         std::tie(micro_second, overflow, matched) = parseFrac(frac_str, fsp);
         if (!matched)
         {
@@ -1013,6 +1047,13 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     }
 
     MyDateTime result(year, month, day, hour, minute, second, micro_second);
+
+    if (overflow)
+    {
+        // fraction part overflow, add one second to result
+        MyDateTime tmp(addSeconds(result.toPackedUInt(), 1));
+        result = tmp;
+    }
 
     if (has_tz)
     {
@@ -1594,39 +1635,6 @@ bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 &
     }
     result = MyDateTime(year, month, day, hour, minute, second, microsecond);
     return false;
-}
-
-UInt64 addSeconds(UInt64 t, Int64 delta)
-{
-    // todo support zero date
-    if (t == 0)
-    {
-        return t;
-    }
-    MyDateTime my_time(t);
-    Int64 current_second = my_time.hour * MyTimeBase::SECOND_IN_ONE_HOUR + my_time.minute * MyTimeBase::SECOND_IN_ONE_MINUTE + my_time.second;
-    current_second += delta;
-    if (current_second >= 0)
-    {
-        Int64 days = current_second / MyTimeBase::SECOND_IN_ONE_DAY;
-        current_second = current_second % MyTimeBase::SECOND_IN_ONE_DAY;
-        if (days != 0)
-            addDays(my_time, days);
-    }
-    else
-    {
-        Int64 days = (-current_second) / MyTimeBase::SECOND_IN_ONE_DAY;
-        if ((-current_second) % MyTimeBase::SECOND_IN_ONE_DAY != 0)
-        {
-            days++;
-        }
-        current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
-        addDays(my_time, -days);
-    }
-    my_time.hour = current_second / MyTimeBase::SECOND_IN_ONE_HOUR;
-    my_time.minute = (current_second % MyTimeBase::SECOND_IN_ONE_HOUR) / MyTimeBase::SECOND_IN_ONE_MINUTE;
-    my_time.second = current_second % MyTimeBase::SECOND_IN_ONE_MINUTE;
-    return my_time.toPackedUInt();
 }
 
 void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulated_days_per_month)
