@@ -58,6 +58,8 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
     String,
     PreHandledSnapshotWithFiles,
     WakerNotifier,
+    WriteBatch,
+    UniversalPage,
 };
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
@@ -130,6 +132,20 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
 // 0: try, but can fail.
 // 1: try until succeed.
 uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term);
+RawCppPtr CreateWriteBatch();
+void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value);
+void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id);
+uint64_t WriteBatchSize(RawVoidPtr ptr);
+uint8_t WriteBatchIsEmpty(RawVoidPtr ptr);
+void WriteBatchMerge(RawVoidPtr lhs, RawVoidPtr rhs);
+void WriteBatchClear(RawVoidPtr ptr);
+void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr);
+PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
+PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
+void GcPageWithViewVec(PageWithView * inner, uint64_t len);
+void PurgePageStorage(const EngineStoreServerWrap * server);
+CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_page_id);
+uint8_t IsPSEmpty(const EngineStoreServerWrap * server);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);
@@ -166,6 +182,20 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
         .fn_need_flush_data = NeedFlushData,
         .fn_try_flush_data = TryFlushData,
+        .fn_create_write_batch = CreateWriteBatch,
+        .fn_write_batch_put_page = WriteBatchPutPage,
+        .fn_write_batch_del_page = WriteBatchDelPage,
+        .fn_write_batch_size = WriteBatchSize,
+        .fn_write_batch_is_empty = WriteBatchIsEmpty,
+        .fn_write_batch_merge = WriteBatchMerge,
+        .fn_write_batch_clear = WriteBatchClear,
+        .fn_consume_write_batch = ConsumeWriteBatch,
+        .fn_handle_read_page = HandleReadPage,
+        .fn_handle_scan_page = HandleScanPage,
+        .fn_gc_page_with_view_vec = GcPageWithViewVec,
+        .fn_handle_purge_pagestorage = PurgePageStorage,
+        .fn_handle_seek_ps_key = SeekPSKey,
+        .fn_ps_is_empty = IsPSEmpty,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,

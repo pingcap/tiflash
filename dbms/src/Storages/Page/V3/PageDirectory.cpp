@@ -1404,6 +1404,19 @@ void PageDirectory<Trait>::applyRefEditRecord(
 }
 
 template <typename Trait>
+typename Trait::PageIds PageDirectory<Trait>::getLowerBound(const typename Trait::PageId & start)
+{
+    typename Trait::PageIds page_ids;
+
+    std::shared_lock read_lock(table_rw_mutex);
+    if (auto iter = mvcc_table_directory.lower_bound(start); iter != mvcc_table_directory.end())
+    {
+        page_ids.emplace_back(iter->first);
+    }
+    return page_ids;
+}
+
+template <typename Trait>
 void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.

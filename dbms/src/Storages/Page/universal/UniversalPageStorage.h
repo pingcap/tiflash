@@ -124,6 +124,11 @@ public:
         return false;
     }
 
+    bool isEmpty() const
+    {
+        return page_directory->numPages() == 0;
+    }
+
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) { UNUSED(callbacks); }
@@ -212,6 +217,38 @@ public:
             const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
             acceptor(uni_storage.blob_store->read(page_id_and_entry));
         }
+    }
+
+    void traverse2(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::UniversalPage page)> & acceptor)
+    {
+        // always traverse with the latest snapshot
+        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
+        const auto page_ids = uni_storage.page_directory->getRangePageIds(start, end);
+        for (const auto & page_id : page_ids)
+        {
+            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
+            acceptor(uni_storage.blob_store->read(page_id_and_entry));
+        }
+    }
+
+    UniversalPage read(const UniversalPageId & page_id)
+    {
+        // always traverse with the latest snapshot
+        auto snapshot = uni_storage.getSnapshot(fmt::format("read_{}", page_id));
+        const auto page_id_and_entry = uni_storage.page_directory->getByIDOrNull(page_id, snapshot);
+        if (page_id_and_entry.second.isValid())
+        {
+            return uni_storage.blob_store->read(page_id_and_entry);
+        }
+        else
+        {
+            return UniversalPage({});
+        }
+    }
+
+    UniversalPageIds getLowerBound(const UniversalPageId & page_id)
+    {
+        return uni_storage.page_directory->getLowerBound(page_id);
     }
 
 private:
