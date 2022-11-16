@@ -1028,7 +1028,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     }
 
     UInt32 micro_second = 0;
-    bool overflow;
+    bool overflow = false;
     if (hhmmss)
     {
         // If input string is "20170118.999", without hhmmss, fsp is meaningless.
