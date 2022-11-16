@@ -28,8 +28,14 @@
 #include <vector>
 
 #if defined(__SSE4_2__)
-#include <nmmintrin.h>
-#include <smmintrin.h>
+    #include <smmintrin.h>
+    #include <nmmintrin.h>
+    #define CRC_INT _mm_crc32_u64
+#endif
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+    #include <arm_acle.h>
+    #define CRC_INT __crc32cd
 #endif
 
 
@@ -76,7 +82,7 @@ struct StringRef
 
     ALWAYS_INLINE inline int compare(const StringRef & tar) const
     {
-        return mem_utils::CompareStrView({*this}, {tar});
+        return mem_utils::CompareStrView(this->data, tar.data);
     }
 };
 
@@ -93,7 +99,7 @@ using StringRefs = std::vector<StringRef>;
 // - otherwise, use `mem_utils::avx2_mem_equal`(under x86-64 with avx2)
 inline bool operator==(StringRef lhs, StringRef rhs)
 {
-    return mem_utils::IsStrViewEqual({lhs}, {rhs});
+    return mem_utils::IsStrViewEqual(lhs.data, rhs.data);
 }
 
 inline bool operator!=(StringRef lhs, StringRef rhs)
@@ -139,7 +145,7 @@ inline UInt64 shiftMix(UInt64 val)
     return val ^ (val >> 47);
 }
 
-inline UInt64 rotateByAtLeast1(UInt64 val, int shift)
+inline UInt64 rotateByAtLeast1(UInt64 val, UInt8 shift)
 {
     return (val >> shift) | (val << (64 - shift));
 }
@@ -161,7 +167,7 @@ inline size_t hashLessThan8(const char * data, size_t size)
         uint8_t b = data[size >> 1];
         uint8_t c = data[size - 1];
         uint32_t y = static_cast<uint32_t>(a) + (static_cast<uint32_t>(b) << 8);
-        uint32_t z = size + (static_cast<uint32_t>(c) << 2);
+        uint32_t z = static_cast<uint32_t>(size) + (static_cast<uint32_t>(c) << 2);
         return shiftMix(y * k2 ^ z * k3) * k2;
     }
 
@@ -172,9 +178,9 @@ inline size_t hashLessThan8(const char * data, size_t size)
 {
     if (size > 8)
     {
-        UInt64 a = unalignedLoad<UInt64>(data);
-        UInt64 b = unalignedLoad<UInt64>(data + size - 8);
-        return hashLen16(a, rotateByAtLeast1(b + size, size)) ^ b;
+        auto a = unalignedLoad<UInt64>(data);
+        auto b = unalignedLoad<UInt64>(data + size - 8);
+        return hashLen16(a, rotateByAtLeast1(b + size, static_cast<UInt8>(size))) ^ b;
     }
 
     return hashLessThan8(data, size);
@@ -182,7 +188,7 @@ inline size_t hashLessThan8(const char * data, size_t size)
 
 struct CRC32Hash
 {
-    size_t operator()(StringRef x) const
+    unsigned operator() (StringRef x) const
     {
         const char * pos = x.data;
         size_t size = x.size;
@@ -192,22 +198,22 @@ struct CRC32Hash
 
         if (size < 8)
         {
-            return hashLessThan8(x.data, x.size);
+            return static_cast<unsigned>(hashLessThan8(x.data, x.size));
         }
 
         const char * end = pos + size;
-        size_t res = -1ULL;
+        unsigned res = -1U;
 
         do
         {
-            UInt64 word = unalignedLoad<UInt64>(pos);
-            res = _mm_crc32_u64(res, word);
+            auto word = unalignedLoad<UInt64>(pos);
+            res = static_cast<unsigned>(CRC_INT(res, word));
 
             pos += 8;
         } while (pos + 8 < end);
 
-        UInt64 word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
-        res = _mm_crc32_u64(res, word);
+        auto word = unalignedLoad<UInt64>(end - 8);    /// I'm not sure if this is normal.
+        res = static_cast<unsigned>(CRC_INT(res, word));
 
         return res;
     }
@@ -221,7 +227,7 @@ struct StringRefHash : CRC32Hash
 
 struct CRC32Hash
 {
-    size_t operator()(StringRef /* x */) const { throw std::logic_error{"Not implemented CRC32Hash without SSE"}; }
+    unsigned operator()(StringRef /* x */) const { throw std::logic_error{"Not implemented CRC32Hash without SSE"}; }
 };
 
 struct StringRefHash : StringRefHash64

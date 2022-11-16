@@ -43,6 +43,7 @@
 #include <common/mem_utils.h>
 #include <fmt/core.h>
 
+#include <cstddef>
 #include <limits>
 #include <type_traits>
 
@@ -380,11 +381,7 @@ struct StringComparisonImpl
 
             /// if partial compare result is 0, it means the common part of the two strings are exactly the same, then need to
             /// further compare the string length, otherwise we can get the compare result from partial compare result.
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            int res = mem_utils::avx2_mem_cmp(a_data.raw_data(), b_data.raw_data(), std::min(a_size, b_size));
-#else
-            int res = memcmp(a_data.raw_data(), b_data.raw_data(), std::min(a_size, b_size));
-#endif
+            int res = mem_utils::CompareStrView(a_data.raw_data(), b_data.raw_data(), std::min(a_size, b_size));
             c[0] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
         for (size_t i = 1; i < size; ++i)
@@ -392,11 +389,7 @@ struct StringComparisonImpl
             size_t a_size = a_offsets[i] - a_offsets[i - 1];
             size_t b_size = b_offsets[i] - b_offsets[i - 1];
 
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            int res = mem_utils::avx2_mem_cmp(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], std::min(a_size, b_size));
-#else
-            int res = memcmp(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], std::min(a_size, b_size));
-#endif
+            int res = mem_utils::CompareStrView(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], std::min(a_size, b_size));
             c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
     }
@@ -416,21 +409,13 @@ struct StringComparisonImpl
         /// Trailing zero byte of the smaller string is included in the comparison.
         {
             size_t a_size = a_offsets[0];
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            int res = mem_utils::avx2_mem_cmp(a_data.raw_data(), b.data(), std::min(a_size, b_size));
-#else
-            int res = memcmp(a_data.raw_data(), b.data(), std::min(a_size, b_size));
-#endif
+            int res = mem_utils::CompareStrView(a_data.raw_data(), b.data(), std::min(a_size, b_size));
             c[0] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
         for (size_t i = 1; i < size; ++i)
         {
             size_t a_size = a_offsets[i] - a_offsets[i - 1];
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            int res = mem_utils::avx2_mem_cmp(a_data.raw_data() + a_offsets[i - 1], b.data(), std::min(a_size, b_size));
-#else
-            int res = memcmp(a_data.raw_data() + a_offsets[i - 1], b.data(), std::min(a_size, b_size));
-#endif
+            int res = mem_utils::CompareStrView(a_data.raw_data() + a_offsets[i - 1], b.data(), std::min(a_size, b_size));
             c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
     }
@@ -449,14 +434,8 @@ struct StringComparisonImpl
         const std::string_view & b,
         ResultType & c)
     {
-        size_t a_size = a.size();
-        size_t b_size = b.size();
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        int res = mem_utils::avx2_mem_cmp(a.data(), b.data(), std::min(a_size, b_size));
-#else
-        int res = memcmp(a.data(), b.data(), std::min(a_size, b_size));
-#endif
-        c = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
+        int res = mem_utils::CompareStrView(a.data(), b.data());
+        c = Op::apply(res, 0);
     }
 };
 
@@ -479,22 +458,13 @@ struct StringEqualsImpl
         {
             size_t a_size = a_offsets[0] - 1;
             size_t b_size = b_offsets[0] - 1;
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            c[0] = positive == (a_size == b_size && mem_utils::avx2_mem_equal(a_data.raw_data(), b_data.raw_data(), a_size));
-#else
-            c[0] = positive == (a_size == b_size && !memcmp(a_data.raw_data(), b_data.raw_data(), a_size));
-#endif
+            c[0] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data(), b_data.raw_data(), a_size));
         }
         for (size_t i = 1; i < size; ++i)
         {
             size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
             size_t b_size = b_offsets[i] - b_offsets[i - 1] - 1;
-
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            c[i] = positive == (a_size == b_size && mem_utils::avx2_mem_equal(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], a_size));
-#else
-            c[i] = positive == (a_size == b_size && !memcmp(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], a_size));
-#endif
+            c[i] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], a_size));
         }
     }
 
@@ -510,23 +480,34 @@ struct StringEqualsImpl
 
         ColumnString::Offset b_size = b.size();
 
+        if (b_size == 0)
         {
-            size_t a_size = a_offsets[0] - 1;
-
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            c[0] = positive == (a_size == b_size && mem_utils::avx2_mem_equal(a_data.raw_data(), b.data(), a_size));
-#else
-            c[0] = positive == (a_size == b_size && !memcmp(a_data.raw_data(), b.data(), a_size));
-#endif
+            /*
+             * Add the fast path of string comparison if the string constant is empty
+             * and b_size is 0. If a_size is also 0, both of string a and b are empty
+             * string. There is no need to call mem_utils::IsStrViewEqual() for string comparison.
+             */
+            {
+                size_t a_size = a_offsets[0] - 1;
+                c[0] = positive == (a_size == 0);
+            }
+            for (size_t i = 1; i < size; ++i)
+            {
+                auto a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+                c[i] = positive == (a_size == 0);
+            }
         }
-        for (size_t i = 1; i < size; ++i)
+        else
         {
-            size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            c[i] = positive == (a_size == b_size && mem_utils::avx2_mem_equal(a_data.raw_data() + a_offsets[i - 1], b.data(), a_size));
-#else
-            c[i] = positive == (a_size == b_size && !memcmp(a_data.raw_data() + a_offsets[i - 1], b.data(), a_size));
-#endif
+            {
+                size_t a_size = a_offsets[0] - 1;
+                c[0] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data(), b.data(), a_size));
+            }
+            for (size_t i = 1; i < size; ++i)
+            {
+                size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+                c[i] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data() + a_offsets[i - 1], b.data(), a_size));
+            }
         }
     }
 

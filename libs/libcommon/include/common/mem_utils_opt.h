@@ -84,6 +84,19 @@ FLATTEN_INLINE_PURE static inline bool IsStrViewEqual(const std::string_view & l
 #endif
 }
 
+FLATTEN_INLINE_PURE static inline bool IsStrViewEqual(const std::string_view & lhs, const std::string_view & rhs, const size_t size)
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+#ifdef __AVX2__
+    return mem_utils::details::avx2_mem_equal(lhs.data(), rhs.data(), size);
+#else
+    return mem_utils::avx2_mem_equal(lhs.data(), rhs.data(), size);
+#endif
+#else
+    return 0 == std::memcmp(lhs.data(), rhs.data(), size);
+#endif
+}
+
 // same function like `std::string_view.compare(std::string_view)`
 FLATTEN_INLINE_PURE static inline int CompareStrView(const std::string_view & lhs, const std::string_view & rhs)
 {
@@ -103,6 +116,21 @@ FLATTEN_INLINE_PURE static inline int CompareStrView(const std::string_view & lh
     return ret;
 #else
     return lhs.compare(rhs);
+#endif
+}
+
+FLATTEN_INLINE_PURE static inline int CompareStrView(const std::string_view & lhs, const std::string_view & rhs, const size_t size)
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+
+#ifdef __AVX2__
+    return mem_utils::details::avx2_mem_cmp(lhs.data(), rhs.data(), size);
+#else
+    return mem_utils::avx2_mem_cmp(lhs.data(), rhs.data(), size);
+#endif
+
+#else
+    return std::memcmp(lhs.data(), rhs.data(), size);
 #endif
 }
 
