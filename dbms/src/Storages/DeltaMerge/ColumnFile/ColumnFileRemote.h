@@ -13,20 +13,20 @@
 // limitations under the License.
 
 #pragma once
-
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 
 namespace DB
 {
 namespace DM
 {
-class ColumnFileInMemory;
-using ColumnFileInMemoryPtr = std::shared_ptr<ColumnFileInMemory>;
+class ColumnFileRemote;
+using ColumnFileRemotePtr = std::shared_ptr<ColumnFileRemote>;
 
-/// A column file which is only resides in memory
-class ColumnFileInMemory : public ColumnFile
+/// A column file which is stored in remote store service like S3.
+class ColumnFileRemote : public ColumnFile
 {
-    friend class ColumnFileInMemoryReader;
+    friend class ColumnFileRemoteReader;
 
 private:
     BlockPtr schema;
@@ -34,12 +34,11 @@ private:
     UInt64 rows = 0;
     UInt64 bytes = 0;
 
-    // whether this instance can append any more data.
-    bool disable_append = false;
+    /// The id of data page which stores the data of this column file.
+    PageId remote_data_page_id;
 
-    // The cache data in memory.
-    CachePtr cache;
     // Used to map column id to column instance in a Block.
+    // TODO: save it in `schema`?
     ColIdToOffset colid_to_offset;
 
 private:
@@ -53,9 +52,9 @@ private:
     }
 
 public:
-    explicit ColumnFileInMemory(const BlockPtr & schema_, const CachePtr & cache_ = nullptr)
+    explicit ColumnFileRemote(const BlockPtr & schema_)
         : schema(schema_)
-        , cache(cache_ ? cache_ : std::make_shared<Cache>(*schema_))
+        , remote_data_page_id(0)
     {
         colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
@@ -67,68 +66,48 @@ public:
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; };
 
-    CachePtr getCache() { return cache; }
-
     /// The schema of this pack.
     BlockPtr getSchema() const { return schema; }
     /// Replace the schema with a new schema, and the new schema instance should be exactly the same as the previous one.
     void resetIdenticalSchema(BlockPtr schema_) { schema = schema_; }
 
-    ColumnFileInMemoryPtr clone()
+    ColumnFileRemotePtr clone()
     {
-        return std::make_shared<ColumnFileInMemory>(*this);
+        return std::make_shared<ColumnFileRemote>(*this);
     }
 
     ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
-
-    bool isAppendable() const override
-    {
-        return !disable_append;
-    }
-    void disableAppend() override
-    {
-        disable_append = true;
-    }
-    bool append(DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes) override;
-
-    Block readDataForFlush() const;
+    getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
 
     bool mayBeFlushedFrom(ColumnFile *) const override { return false; }
 
     String toString() const override
     {
-        String s = "{in_memory_file,rows:" + DB::toString(rows) //
-            + ",bytes:" + DB::toString(bytes) //
-            + ",disable_append:" + DB::toString(disable_append) //
-            + ",schema:" + (schema ? schema->dumpStructure() : "none") //
-            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
-        return s;
+        return fmt::format("{{remote_file,rows:{}"
+                           ",bytes:{},schema:{}}",
+                           rows,
+                           bytes,
+                           schema ? schema->dumpJsonStructure() : "none");
     }
 };
 
 
-class ColumnFileInMemoryReader : public ColumnFileReader
+class ColumnFileRemoteReader : public ColumnFileReader
 {
 private:
-    const ColumnFileInMemory & memory_file;
+    const ColumnFileRemote & memory_file;
+    const StorageSnapshotPtr storage_snap;
     const ColumnDefinesPtr col_defs;
 
     Columns cols_data_cache;
     bool read_done = false;
 
 public:
-    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_,
-                             const ColumnDefinesPtr & col_defs_,
-                             const Columns & cols_data_cache_)
+    ColumnFileRemoteReader(const ColumnFileRemote & memory_file_,
+                           const StorageSnapshotPtr & storage_snap_,
+                           const ColumnDefinesPtr & col_defs_)
         : memory_file(memory_file_)
-        , col_defs(col_defs_)
-        , cols_data_cache(cols_data_cache_)
-    {
-    }
-
-    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
-        : memory_file(memory_file_)
+        , storage_snap(storage_snap_)
         , col_defs(col_defs_)
     {
     }

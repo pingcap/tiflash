@@ -37,7 +37,7 @@ private:
     UInt64 rows = 0;
     UInt64 bytes = 0;
 
-    /// The id of data page which stores the data of this pack.
+    /// The id of data page which stores the data of this column file.
     PageId data_page_id;
 
     /// The members below are not serialized.
@@ -46,6 +46,7 @@ private:
     /// Currently this field is unused.
     CachePtr cache;
     /// Used to map column id to column instance in a Block.
+    // TODO: save it in `schema`?
     ColIdToOffset colid_to_offset;
 
 private:

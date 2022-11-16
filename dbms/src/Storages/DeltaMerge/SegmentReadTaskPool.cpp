@@ -318,4 +318,30 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     }
 }
 
+RemoteReadTaskPtr RemoteReadTask::buildFrom(TableID physical_table_id, SegmentReadTasks & tasks)
+{
+    auto read_tasks = std::make_shared<RemoteReadTask>();
+    read_tasks->table_id = physical_table_id;
+    for (const auto & task : tasks)
+    {
+        auto seg_task = std::make_shared<RemoteSegmentReadTask>();
+        seg_task->segment = task->segment;
+        seg_task->ranges = task->ranges;
+        seg_task->segment_snap = task->read_snapshot;
+
+        // delta snapshot
+        // const auto &delta = task->read_snapshot->delta;
+
+        // stable snapshot
+        const auto & stable = task->read_snapshot->stable;
+        for (const auto & dmf : stable->getDMFiles())
+        {
+            // here directly return the file id for read node download it from remote
+            seg_task->stable_files.emplace_back(dmf->fileId());
+        }
+        read_tasks->tasks.emplace_back(std::move(seg_task));
+    }
+    return read_tasks;
+}
+
 } // namespace DB::DM

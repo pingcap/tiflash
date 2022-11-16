@@ -34,8 +34,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap = std::make_shared<DeltaValueSnapshot>(type);
-    snap->is_update = for_update;
+    auto snap = std::make_shared<DeltaValueSnapshot>(type, for_update);
     snap->_delta = this->shared_from_this();
 
     auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);

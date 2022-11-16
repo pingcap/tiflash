@@ -129,6 +129,10 @@ struct ContextShared
     PathPool path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config; /// Global configuration settings.
 
+    /// The remote data souce service to store/read data.
+    // Now it is a mount point of juicefs.
+    String remote_data_source;
+
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
     String default_profile_name; /// Default profile name used for default values.
@@ -539,6 +543,18 @@ void Context::setPathPool(
         global_capacity_,
         file_provider_,
         enable_raft_compatible_mode);
+}
+
+void Context::setRemoteDataServiceSource(const String & source)
+{
+    auto lock = getLock();
+    shared->remote_data_source = source;
+}
+
+const String & Context::remoteDataServiceSource() const
+{
+    auto lock = getLock();
+    return shared->remote_data_source;
 }
 
 void Context::setConfig(const ConfigurationPtr & config)

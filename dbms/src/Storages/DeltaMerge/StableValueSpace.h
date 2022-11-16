@@ -135,7 +135,8 @@ public:
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-    struct Snapshot : public std::enable_shared_from_this<Snapshot>
+    struct Snapshot
+        : public std::enable_shared_from_this<Snapshot>
         , private boost::noncopyable
     {
         StableValueSpacePtr stable;
@@ -151,7 +152,7 @@ public:
 
         ColumnCachePtrs column_caches;
 
-        Snapshot(StableValueSpacePtr stable_)
+        explicit Snapshot(StableValueSpacePtr stable_)
             : stable(stable_)
             , log(stable->log)
         {}

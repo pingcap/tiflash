@@ -51,6 +51,7 @@ static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 ///         |-- ColumnFileTiny
 ///         |-- ColumnFileDeleteRange
 ///         |-- ColumnFileBig
+///         |-- ColumnFileRemote
 class ColumnFile
 {
 protected:

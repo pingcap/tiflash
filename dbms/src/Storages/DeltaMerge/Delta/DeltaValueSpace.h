@@ -33,6 +33,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h"
+
 namespace DB
 {
 namespace DM
@@ -299,7 +301,7 @@ class DeltaValueSnapshot
     friend class DeltaValueSpace;
 
 private:
-    bool is_update;
+    const bool is_update;
 
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;
@@ -309,7 +311,7 @@ private:
     ColumnFileSetSnapshotPtr persisted_files_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
-    DeltaValueSpacePtr _delta;
+    DeltaValueSpacePtr _delta; // NOLINT(readability-identifier-naming)
 
     const CurrentMetrics::Metric type;
 
@@ -319,8 +321,7 @@ public:
         // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
-        auto c = std::make_shared<DeltaValueSnapshot>(type);
-        c->is_update = is_update;
+        auto c = std::make_shared<DeltaValueSnapshot>(type, is_update);
         c->shared_delta_index = shared_delta_index;
         c->mem_table_snap = mem_table_snap->clone();
         c->persisted_files_snap = persisted_files_snap->clone();
@@ -330,8 +331,9 @@ public:
         return c;
     }
 
-    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_)
-        : type(type_)
+    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_, bool is_update_)
+        : is_update(is_update_)
+        , type(type_)
     {
         CurrentMetrics::add(type);
     }
@@ -369,11 +371,13 @@ private:
     DeltaSnapshotPtr delta_snap;
     // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
     // We only keep this member here to prevent it from being released.
-    DeltaIndexCompactedPtr _compacted_delta_index;
+    DeltaIndexCompactedPtr _compacted_delta_index; // NOLINT(readability-identifier-naming)
 
     ColumnFileSetReaderPtr mem_table_reader;
 
     ColumnFileSetReaderPtr persisted_files_reader;
+
+    ColumnFileSetReaderPtr remote_files_reader;
 
     // The columns expected to read. Note that we will do reading exactly in this column order.
     ColumnDefinesPtr col_defs;

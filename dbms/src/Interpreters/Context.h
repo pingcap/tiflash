@@ -203,6 +203,9 @@ public:
                      PathCapacityMetricsPtr global_capacity_,
                      FileProviderPtr file_provider);
 
+    void setRemoteDataServiceSource(const String & source);
+    const String & remoteDataServiceSource() const;
+
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
     /// Global application configuration settings.

@@ -14,56 +14,49 @@
 
 #pragma once
 
-#include <Common/FailPoint.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace FailPoints
-{
-extern const char pause_when_reading_from_dt_stream[];
-} // namespace FailPoints
 
-namespace DM
+class RemoteSegmentThreadInpuStream : public IProfilingBlockInputStream
 {
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
-
-class DMSegmentThreadInputStream : public IProfilingBlockInputStream
-{
-    static constexpr auto NAME = "DeltaMergeSegmentThread";
+    static constexpr auto NAME = "RemoteSegmentThread";
 
 public:
-    /// If handle_real_type_ is empty, means do not convert handle column back to real type.
-    DMSegmentThreadInputStream(
+    RemoteSegmentThreadInpuStream(
         const DMContextPtr & dm_context_,
-        const SegmentReadTaskPoolPtr & task_pool_,
-        AfterSegmentRead after_segment_read_,
+        const RemoteReadTaskPtr read_tasks_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
         UInt64 max_version_,
         size_t expected_block_size_,
         ReadMode read_mode_,
-        const int extra_table_id_index,
+        const int extra_table_id_index_,
         const TableID physical_table_id_,
         const String & req_id)
         : dm_context(dm_context_)
-        , task_pool(task_pool_)
-        , after_segment_read(after_segment_read_)
+        , read_tasks(read_tasks_)
         , columns_to_read(columns_to_read_)
         , filter(filter_)
         , header(toEmptyBlock(columns_to_read))
         , max_version(max_version_)
-        , expected_block_size(expected_block_size_)
+        , expected_block_size(std::max(expected_block_size_, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)))
         , read_mode(read_mode_)
-        , extra_table_id_index(extra_table_id_index)
+        , extra_table_id_index(extra_table_id_index_)
         , physical_table_id(physical_table_id_)
+        , cur_segment_id(0)
         , log(Logger::get(req_id))
     {
+        // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
         if (extra_table_id_index != InvalidColumnID)
         {
             ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
@@ -91,80 +84,80 @@ protected:
         {
             while (!cur_stream)
             {
-                auto task = task_pool->nextTask();
+                auto task = read_tasks->nextTask();
                 if (!task)
                 {
                     done = true;
-                    LOG_DEBUG(log, "Read done");
+                    LOG_DEBUG(log, "Read from remote done");
                     return {};
                 }
-                cur_segment = task->segment;
-
-                auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-                cur_stream = task->segment->getInputStream(read_mode, *dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, max_version, block_size);
-                LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
+                cur_segment_id = task->segment->segmentId();
+                // TODO:
+                cur_stream = task->segment->getInputStream(
+                    read_mode,
+                    *dm_context,
+                    columns_to_read,
+                    task->segment_snap,
+                    task->ranges,
+                    filter,
+                    max_version,
+                    expected_block_size);
+                LOG_TRACE(log, "Start to read segment, segment={}", cur_segment_id);
             }
-            FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
             Block res = cur_stream->read(res_filter, return_filter);
-
-            if (res)
+            if (!res)
             {
-                if (extra_table_id_index != InvalidColumnID)
-                {
-                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
-                    ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
-                    size_t row_number = res.rows();
-                    auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
-                    col.column = std::move(col_data);
-                    res.insert(extra_table_id_index, std::move(col));
-                }
-                if (!res.rows())
-                    continue;
-                else
-                {
-                    total_rows += res.rows();
-                    return res;
-                }
+                LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment_id);
+                cur_segment_id = 0;
+                cur_stream = {};
+                // try read from next task
+                continue;
+            }
+
+            // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
+            if (extra_table_id_index != InvalidColumnID)
+            {
+                ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+                ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
+                size_t row_number = res.rows();
+                auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
+                col.column = std::move(col_data);
+                res.insert(extra_table_id_index, std::move(col));
+            }
+
+            if (!res.rows())
+            {
+                // try read from next task
+                continue;
             }
             else
             {
-                after_segment_read(dm_context, cur_segment);
-                LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
-                cur_segment = {};
-                cur_stream = {};
+                total_rows += res.rows();
+                return res;
             }
         }
     }
 
-    void readSuffixImpl() override
-    {
-        LOG_DEBUG(log, "finish read {} rows from storage", total_rows);
-    }
-
 private:
     DMContextPtr dm_context;
-    SegmentReadTaskPoolPtr task_pool;
-    AfterSegmentRead after_segment_read;
+    RemoteReadTaskPtr read_tasks;
     ColumnDefines columns_to_read;
     RSOperatorPtr filter;
     Block header;
     const UInt64 max_version;
     const size_t expected_block_size;
     const ReadMode read_mode;
-    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
     const TableID physical_table_id;
 
+    size_t total_rows = 0;
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
-
-    SegmentPtr cur_segment;
+    UInt64 cur_segment_id;
 
     LoggerPtr log;
-    size_t total_rows = 0;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
