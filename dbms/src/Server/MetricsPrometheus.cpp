@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "MetricsPrometheus.h"
-#include "CertificateReloader.h"
 
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
@@ -35,6 +34,8 @@
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
+
+#include "CertificateReloader.h"
 
 namespace DB
 {
