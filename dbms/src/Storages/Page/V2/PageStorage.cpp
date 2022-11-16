@@ -66,13 +66,13 @@ void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)
 {
     for (const auto & record : edit.getRecords())
     {
-        if (record.type == WriteBatch::WriteType::DEL)
+        if (record.type == WriteBatchWriteType::DEL)
             deletes++;
-        else if (record.type == WriteBatch::WriteType::PUT)
+        else if (record.type == WriteBatchWriteType::PUT)
             puts++;
-        else if (record.type == WriteBatch::WriteType::REF)
+        else if (record.type == WriteBatchWriteType::REF)
             refs++;
-        else if (record.type == WriteBatch::WriteType::UPSERT)
+        else if (record.type == WriteBatchWriteType::UPSERT)
             upserts++;
     }
 }
@@ -159,7 +159,7 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
 
 PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
-                         const Config & config_,
+                         const PageStorageConfig & config_,
                          const FileProviderPtr & file_provider_,
                          bool no_more_insert_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
@@ -187,7 +187,7 @@ PageStorage::PageStorage(String name,
 }
 
 
-static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorage::Config & config)
+static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorageConfig & config)
 {
     return pf.getDataFileAppendPos() < config.file_roll_size && pf.getMetaFileAppendPos() < config.file_meta_roll_size;
 }
@@ -697,53 +697,6 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, c
     return page_map;
 }
 
-PageIds PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot("");
-    }
-
-    if (!throw_on_not_exist)
-    {
-        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
-    for (auto page_id : page_ids)
-    {
-        const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
-        if (!page_entry)
-            throw Exception(fmt::format("Page {} not found", page_id), ErrorCodes::LOGICAL_ERROR);
-        auto file_id_level = page_entry->fileIdLevel();
-        auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
-        page_id_and_entries.emplace_back(page_id, *page_entry);
-        if (file_reader == nullptr)
-        {
-            try
-            {
-                file_reader = getReader(file_id_level);
-            }
-            catch (DB::Exception & e)
-            {
-                e.addMessage(fmt::format("(while reading Page[{}] of {})", page_id, storage_name));
-                throw;
-            }
-        }
-    }
-
-    for (auto & [file_id_level, entries_and_reader] : file_read_infos)
-    {
-        (void)file_id_level;
-        auto & page_id_and_entries = entries_and_reader.first;
-        auto & reader = entries_and_reader.second;
-
-        reader->read(page_id_and_entries, handler, read_limiter);
-    }
-
-    return {};
-}
-
 PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
@@ -917,9 +870,9 @@ struct GcContext
     size_t num_files_remove_data = 0;
     size_t num_bytes_remove_data = 0;
 
-    PageStorage::Config calculateGcConfig(const PageStorage::Config & config) const
+    PageStorageConfig calculateGcConfig(const PageStorageConfig & config) const
     {
-        PageStorage::Config res = config;
+        PageStorageConfig res = config;
         // Each legacy is about serval hundred KiB or serval MiB
         // It means each time `gc` is called, we will read `num_legacy_file` * serval MiB
         // Do more agressive GC if there are too many Legacy files
@@ -1175,10 +1128,10 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
 
     Stopwatch watch;
     if (gc_type == GCType::LowWrite)
-        GET_METRIC(tiflash_storage_page_gc_count, type_low_write).Increment();
+        GET_METRIC(tiflash_storage_page_gc_count, type_v2_low).Increment();
     else
-        GET_METRIC(tiflash_storage_page_gc_count, type_exec).Increment();
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_exec).Observe(watch.elapsedSeconds()); });
+        GET_METRIC(tiflash_storage_page_gc_count, type_v2).Increment();
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2).Observe(watch.elapsedSeconds()); });
 
 
 #if !defined(NDEBUG)
@@ -1232,7 +1185,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction)
         {
-            GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_migrate).Observe(watch_migrate.elapsedSeconds());
+            GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2_compact).Observe(watch_migrate.elapsedSeconds());
         }
     }
 

@@ -39,7 +39,7 @@ class RegionBlockReaderTest : public ::testing::Test
 {
 public:
     RegionBlockReaderTest()
-        : logger(Logger::get("RegionBlockReaderTest"))
+        : logger(Logger::get())
     {}
 
 protected:

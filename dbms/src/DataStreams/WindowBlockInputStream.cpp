@@ -15,6 +15,8 @@
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -23,12 +25,11 @@ extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id)
-    : log(Logger::get(NAME, req_id))
+WindowTransformAction::WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id)
+    : log(Logger::get(req_id))
     , window_description(window_description_)
 {
-    children.push_back(input);
-    output_header = input->getHeader();
+    output_header = input_header;
     for (const auto & add_column : window_description_.add_columns)
     {
         output_header.insert({add_column.type, add_column.name});
@@ -39,8 +40,20 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     initialPartitionAndOrderColumnIndices();
 }
 
+void WindowTransformAction::cleanUp()
+{
+    if (!window_blocks.empty())
+        window_blocks.erase(window_blocks.begin(), window_blocks.end());
+    input_is_finished = true;
+}
 
-void WindowBlockInputStream::initialPartitionAndOrderColumnIndices()
+WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id)
+    : action(input->getHeader(), window_description_, req_id)
+{
+    children.push_back(input);
+}
+
+void WindowTransformAction::initialPartitionAndOrderColumnIndices()
 {
     partition_column_indices.reserve(window_description.partition_by.size());
     for (const auto & column : window_description.partition_by)
@@ -57,7 +70,7 @@ void WindowBlockInputStream::initialPartitionAndOrderColumnIndices()
     }
 }
 
-void WindowBlockInputStream::initialWorkspaces()
+void WindowTransformAction::initialWorkspaces()
 {
     // Initialize window function workspaces.
     workspaces.reserve(window_description.window_functions_descriptions.size());
@@ -77,9 +90,7 @@ bool WindowBlockInputStream::returnIfCancelledOrKilled()
 {
     if (isCancelledOrThrowIfKilled())
     {
-        if (!window_blocks.empty())
-            window_blocks.erase(window_blocks.begin(), window_blocks.end());
-        input_is_finished = true;
+        action.cleanUp();
         return true;
     }
     return false;
@@ -88,30 +99,30 @@ bool WindowBlockInputStream::returnIfCancelledOrKilled()
 Block WindowBlockInputStream::readImpl()
 {
     const auto & stream = children.back();
-    while (!input_is_finished)
+    while (!action.input_is_finished)
     {
         if (returnIfCancelledOrKilled())
             return {};
 
-        if (Block output_block = tryGetOutputBlock())
+        if (Block output_block = action.tryGetOutputBlock())
             return output_block;
 
         Block block = stream->read();
         if (!block)
-            input_is_finished = true;
+            action.input_is_finished = true;
         else
-            appendBlock(block);
-        tryCalculate();
+            action.appendBlock(block);
+        action.tryCalculate();
     }
 
     if (returnIfCancelledOrKilled())
         return {};
     // return last partition block, if already return then return null
-    return tryGetOutputBlock();
+    return action.tryGetOutputBlock();
 }
 
 // Judge whether current_partition_row is end row of partition in current block
-bool WindowBlockInputStream::isDifferentFromPrevPartition(UInt64 current_partition_row)
+bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partition_row)
 {
     const auto reference_columns = inputAt(prev_frame_start);
     const auto compared_columns = inputAt(partition_end);
@@ -147,7 +158,7 @@ bool WindowBlockInputStream::isDifferentFromPrevPartition(UInt64 current_partiti
     return false;
 }
 
-void WindowBlockInputStream::advancePartitionEnd()
+void WindowTransformAction::advancePartitionEnd()
 {
     RUNTIME_ASSERT(!partition_ended, log, "partition_ended should be false here.");
     const RowNumber end = blocksEnd();
@@ -224,7 +235,7 @@ void WindowBlockInputStream::advancePartitionEnd()
     // Went until the end of data and didn't find the new partition.
     assert(!partition_ended && partition_end == blocksEnd());
 }
-Int64 WindowBlockInputStream::getPartitionEndRow(size_t block_rows)
+Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
 {
     Int64 left = partition_end.row;
     Int64 right = block_rows - 1;
@@ -244,7 +255,7 @@ Int64 WindowBlockInputStream::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
-void WindowBlockInputStream::advanceFrameStart()
+void WindowTransformAction::advanceFrameStart()
 {
     if (frame_started)
     {
@@ -272,11 +283,11 @@ void WindowBlockInputStream::advanceFrameStart()
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "The frame begin type '{}' is not implemented",
-            window_description.frame.begin_type);
+            magic_enum::enum_name(window_description.frame.begin_type));
     }
 }
 
-bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) const
+bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) const
 {
     if (x == y)
     {
@@ -327,7 +338,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
     }
 }
 
-void WindowBlockInputStream::advanceFrameEndCurrentRow()
+void WindowTransformAction::advanceFrameEndCurrentRow()
 {
     assert(frame_end.block == partition_end.block
            || frame_end.block + 1 == partition_end.block);
@@ -341,7 +352,7 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
     frame_ended = true;
 }
 
-void WindowBlockInputStream::advanceFrameEnd()
+void WindowTransformAction::advanceFrameEnd()
 {
     // frame_end must be greater or equal than frame_start, so if the
     // frame_start is already past the current frame_end, we can start
@@ -371,11 +382,11 @@ void WindowBlockInputStream::advanceFrameEnd()
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame end type '{}' is not implemented",
-                        window_description.frame.end_type);
+                        magic_enum::enum_name(window_description.frame.end_type));
     }
 }
 
-void WindowBlockInputStream::writeOutCurrentRow()
+void WindowTransformAction::writeOutCurrentRow()
 {
     assert(current_row < partition_end);
     assert(current_row.block >= first_block_number);
@@ -383,11 +394,11 @@ void WindowBlockInputStream::writeOutCurrentRow()
     for (size_t wi = 0; wi < workspaces.size(); ++wi)
     {
         auto & ws = workspaces[wi];
-        ws.window_function->windowInsertResultInto(this->shared_from_this(), wi, ws.arguments);
+        ws.window_function->windowInsertResultInto(*this, wi, ws.arguments);
     }
 }
 
-Block WindowBlockInputStream::tryGetOutputBlock()
+Block WindowTransformAction::tryGetOutputBlock()
 {
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
@@ -414,7 +425,7 @@ Block WindowBlockInputStream::tryGetOutputBlock()
     return {};
 }
 
-bool WindowBlockInputStream::onlyHaveRowNumber()
+bool WindowTransformAction::onlyHaveRowNumber()
 {
     for (const auto & workspace : workspaces)
     {
@@ -424,7 +435,7 @@ bool WindowBlockInputStream::onlyHaveRowNumber()
     return true;
 }
 
-bool WindowBlockInputStream::onlyHaveRowNumberAndRank()
+bool WindowTransformAction::onlyHaveRowNumberAndRank()
 {
     for (const auto & workspace : workspaces)
     {
@@ -434,7 +445,7 @@ bool WindowBlockInputStream::onlyHaveRowNumberAndRank()
     return true;
 }
 
-void WindowBlockInputStream::releaseAlreadyOutputWindowBlock()
+void WindowTransformAction::releaseAlreadyOutputWindowBlock()
 {
     // We don't really have to keep the entire partition, and it can be big, so
     // we want to drop the starting blocks to save memory. We can drop the old
@@ -462,7 +473,7 @@ void WindowBlockInputStream::releaseAlreadyOutputWindowBlock()
     }
 }
 
-void WindowBlockInputStream::appendBlock(Block & current_block)
+void WindowTransformAction::appendBlock(Block & current_block)
 {
     assert(!input_is_finished);
     assert(current_block);
@@ -487,7 +498,7 @@ void WindowBlockInputStream::appendBlock(Block & current_block)
     window_block.input_columns = current_block.getColumns();
 }
 
-void WindowBlockInputStream::tryCalculate()
+void WindowTransformAction::tryCalculate()
 {
     // Start the calculations. First, advance the partition end.
     for (;;)
@@ -597,7 +608,7 @@ void WindowBlockInputStream::tryCalculate()
     }
 }
 
-void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
+void WindowTransformAction::appendInfo(FmtBuffer & buffer) const
 {
     buffer.append(", function: {");
     buffer.joinStr(
@@ -614,7 +625,12 @@ void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
         boundaryTypeToString(window_description.frame.end_type));
 }
 
-void WindowBlockInputStream::advanceRowNumber(RowNumber & x) const
+void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    action.appendInfo(buffer);
+}
+
+void WindowTransformAction::advanceRowNumber(RowNumber & x) const
 {
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
@@ -632,7 +648,7 @@ void WindowBlockInputStream::advanceRowNumber(RowNumber & x) const
     ++x.block;
 }
 
-bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
+bool WindowTransformAction::lead(RowNumber & x, size_t offset) const
 {
     assert(frame_started);
     assert(frame_ended);
@@ -658,7 +674,7 @@ bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
     return lead(x, new_offset);
 }
 
-bool WindowBlockInputStream::lag(RowNumber & x, size_t offset) const
+bool WindowTransformAction::lag(RowNumber & x, size_t offset) const
 {
     assert(frame_started);
     assert(frame_ended);

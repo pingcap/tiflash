@@ -44,7 +44,7 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const String & req_id)
     : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
     , network_transfer_limits(network_transfer_limits)
-    , log(Logger::get(name, req_id))
+    , log(Logger::get(req_id))
 {
     init(input);
 }
@@ -55,7 +55,7 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const SizeLimits & network_transfer_limits,
     const String & req_id)
     : network_transfer_limits(network_transfer_limits)
-    , log(Logger::get(name, req_id))
+    , log(Logger::get(req_id))
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
@@ -211,14 +211,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             {
                 if (!subquery.set->insertFromBlock(block, /*fill_set_elements=*/false))
                     done_with_set = true;
-            }
-
-            if (!done_with_join)
-            {
-                // move building hash tables into `HashJoinBuildBlockInputStream`, so that fetch block and insert block into a hash table are
-                // running into a thread, avoiding generating more threads.
-                if (subquery.join->isBuildSetExceeded())
-                    done_with_join = true;
             }
 
             if (!done_with_table)

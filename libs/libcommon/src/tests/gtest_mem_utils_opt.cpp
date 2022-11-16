@@ -181,8 +181,6 @@ TEST(MemUtilsTestOPT, CompareStr)
     }
 }
 
-#endif
-
 template <ssize_t overlap_offset, typename F>
 void TestMemCopyFunc(size_t size, F && fn_memcpy)
 {
@@ -225,19 +223,12 @@ void TestMemCopyFunc(size_t size, F && fn_memcpy)
     }
 }
 
-#if defined(__SSE2__)
-
 TEST(MemUtilsTestOPT, Memcopy)
 {
-    for (size_t size = 0; size < 256; ++size)
+    for (size_t size = 0; size < 600; ++size)
     {
-        TestMemCopyFunc<0>(size, __folly_memcpy);
-        {
-            // test memmove
-            TestMemCopyFunc<3>(size, __folly_memcpy);
-            TestMemCopyFunc<-3>(size, __folly_memcpy);
-        }
-        TestMemCopyFunc<0>(size, inline_memcpy);
+        TestMemCopyFunc<0>(size, mem_utils::avx2_inline_memcpy);
+        TestMemCopyFunc<0>(size, sse2_inline_memcpy);
     }
 }
 

@@ -72,15 +72,19 @@ endif()
 # We don't want to build C# extensions.
 set(gRPC_BUILD_CSHARP_EXT OFF)
 
+no_warning(deprecated-builtins)
 add_subdirectory("${_gRPC_SOURCE_DIR}" "${_gRPC_BINARY_DIR}")
 
 # clean up some clang warnings
 target_no_warning(grpc deprecated-declarations)
 target_no_warning(grpc non-c-typedef-for-linkage)
 target_no_warning(grpc implicit-const-int-float-conversion)
+target_no_warning(grpc unused-but-set-variable)
+target_no_warning(grpc unused-function)
 target_no_warning(grpc++ deprecated-declarations)
 target_no_warning(grpc++ non-c-typedef-for-linkage)
 target_no_warning(grpc++ implicit-const-int-float-conversion)
+target_no_warning(grpc++ unused-but-set-variable)
 
 execute_process(
   COMMAND grep "//gpr_log(GPR_DEBUG, \"cannot set inq fd=%d errno=%d\", tcp->fd, errno);" "${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_posix.cc"

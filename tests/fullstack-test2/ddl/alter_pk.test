@@ -62,7 +62,7 @@ mysql> alter table test.t drop primary key;
 mysql> drop table if exists test.t_case;
 ## create table with `source` is nullable
 ## insert some data and left `source` to be empty
-mysql> create table test.t_case (`case_no` varchar(32) not null,`source` varchar(20) default null,`p` varchar(12) DEFAULT NULL,primary key (`case_no`));
+mysql> create table test.t_case (`case_no` varchar(32) not null,`source` varchar(20) default null,`p` varchar(12) DEFAULT NULL,primary key (`case_no`) NONCLUSTERED);
 mysql> insert into test.t_case(case_no) values ("1"), ("2"), ("3"), ("4");
 
 ## drop the primary key, fill the `source` to be non-empty
@@ -88,7 +88,7 @@ mysql> select case_no,p,source from test.t_case;
 # issue 5859, case 2
 mysql> drop table if exists test.t_case;
 ## create table with `case_no`
-mysql> create table test.t_case (`case_no` varchar(32) not null,`p` varchar(12) DEFAULT NULL,primary key (`case_no`));
+mysql> create table test.t_case (`case_no` varchar(32) not null,`p` varchar(12) DEFAULT NULL,primary key (`case_no`) NONCLUSTERED);
 mysql> insert into test.t_case(case_no) values ("1"), ("2"), ("3"), ("4");
 
 mysql> alter table test.t_case add column `source` varchar(20) not null;

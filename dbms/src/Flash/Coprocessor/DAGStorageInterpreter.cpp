@@ -290,7 +290,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , table_scan(table_scan_)
     , push_down_filter(push_down_filter_)
     , max_streams(max_streams_)
-    , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
+    , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
@@ -519,7 +519,9 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+        std::multimap<std::string, std::string> meta_data;
+        meta_data.emplace("is_remote_read", "true");
+        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"), std::move(meta_data));
         all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
     }
     return all_tasks;
@@ -528,6 +530,7 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
 void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)
 {
     std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
+    GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(static_cast<double>(all_tasks.size()));
 
     const DAGSchema & schema = remote_requests[0].schema;
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
@@ -657,7 +660,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        query_info.req_id = fmt::format("{} Table<{}>", log->identifier(), table_id);
+        query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
         query_info.is_fast_scan = table_scan.isFastScan();
         return query_info;

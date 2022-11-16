@@ -30,8 +30,6 @@ namespace DM
 {
 namespace tests
 {
-
-
 class DeltaMergeStoreGCTest
     : public SimplePKTestBasic
 {
@@ -140,46 +138,6 @@ try
 CATCH
 
 
-TEST_F(DeltaMergeStoreGCMergeTest, MergeWhileFlushing)
-try
-{
-    fill(-1000, 1000);
-
-    ensureSegmentBreakpoints({0, 50, 100});
-
-    // Currently, when there is a flush in progress, the segment merge in GC thread will be blocked.
-
-    auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
-    auto sp_merge_flush_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::segmentMerge|retry_flush");
-
-    auto th_flush = std::async([&]() {
-        // Flush the first segment that GC will touch with.
-        flush(-10, 0);
-    });
-
-    sp_flush_commit.waitAndPause();
-
-    auto th_gc = std::async([&]() {
-        auto gc_n = store->onSyncGc(1, gc_options);
-        ASSERT_EQ(gc_n, 1);
-        ASSERT_EQ(store->segments.size(), 1);
-    });
-
-    // Expect merge triggered by GC is retrying... because there is a flush in progress.
-    sp_merge_flush_retry.waitAndPause();
-
-    // Finish the flush.
-    sp_flush_commit.next();
-    sp_flush_commit.disable();
-    th_flush.wait();
-
-    // The merge in GC should continue without any further retries.
-    sp_merge_flush_retry.next();
-    th_gc.wait();
-}
-CATCH
-
-
 class DeltaMergeStoreGCMergeDeltaTest : public DeltaMergeStoreGCTest
 {
 public:
@@ -193,6 +151,22 @@ public:
 protected:
     GCOptions gc_options{};
 };
+
+
+TEST_F(DeltaMergeStoreGCMergeDeltaTest, DeleteRangeInMemTable)
+try
+{
+    fill(100, 600);
+    flush();
+    mergeDelta();
+
+    deleteRange(-100, 1000);
+
+    auto gc_n = store->onSyncGc(100, gc_options);
+    ASSERT_EQ(1, gc_n);
+    ASSERT_EQ(0, getSegmentAt(0)->getStable()->getDMFilesRows());
+}
+CATCH
 
 
 TEST_F(DeltaMergeStoreGCMergeDeltaTest, AfterLogicalSplit)
@@ -315,43 +289,43 @@ try
         mergeDelta();
 
         auto pack_n = static_cast<size_t>(std::ceil(200.0 / static_cast<double>(pack_size)));
-        EXPECT_EQ(pack_n, getSegmentAt(0)->getStable()->getDMFilesPacks());
+        ASSERT_EQ(pack_n, getSegmentAt(0)->getStable()->getDMFilesPacks());
 
         auto gc_n = store->onSyncGc(100, gc_options);
-        EXPECT_EQ(0, gc_n);
+        ASSERT_EQ(0, gc_n);
 
         ensureSegmentBreakpoints({10, 190}, /* logical_split */ true);
         gc_n = store->onSyncGc(100, gc_options);
-        EXPECT_EQ(0, gc_n);
+        ASSERT_EQ(0, gc_n);
 
         mergeDelta(0, 1);
         mergeDelta(190, 191);
 
-        EXPECT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
-        EXPECT_EQ(10, getSegmentAt(190)->getStable()->getDMFilesRows());
+        ASSERT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
+        ASSERT_EQ(10, getSegmentAt(190)->getStable()->getDMFilesRows());
 
-        EXPECT_EQ(pack_n, getSegmentAt(50)->getStable()->getDMFilesPacks());
-        EXPECT_EQ(200, getSegmentAt(50)->getStable()->getDMFilesRows());
+        ASSERT_EQ(pack_n, getSegmentAt(50)->getStable()->getDMFilesPacks());
+        ASSERT_EQ(200, getSegmentAt(50)->getStable()->getDMFilesRows());
 
         if (pack_size == 200)
         {
             // The segment [10, 190) only overlaps with 1 pack and is contained by the pack.
             // Even it contains most of the data, it will still be GCed.
             gc_n = store->onSyncGc(50, gc_options);
-            EXPECT_EQ(1, gc_n);
-            EXPECT_EQ(1, getSegmentAt(150)->getStable()->getDMFilesPacks());
-            EXPECT_EQ(180, getSegmentAt(150)->getStable()->getDMFilesRows());
+            ASSERT_EQ(1, gc_n);
+            ASSERT_EQ(1, getSegmentAt(150)->getStable()->getDMFilesPacks());
+            ASSERT_EQ(180, getSegmentAt(150)->getStable()->getDMFilesRows());
 
             // There should be no more GCs.
             gc_n = store->onSyncGc(100, gc_options);
-            EXPECT_EQ(0, gc_n);
+            ASSERT_EQ(0, gc_n);
         }
         else if (pack_size == 7)
         {
             // When pack size is small, we will more precisely know that most of the DTFile is still valid.
             // So in this case, no GC will happen.
             gc_n = store->onSyncGc(50, gc_options);
-            EXPECT_EQ(0, gc_n);
+            ASSERT_EQ(0, gc_n);
         }
         else
         {
@@ -373,20 +347,20 @@ try
     mergeDelta();
 
     auto gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(0, gc_n);
+    ASSERT_EQ(0, gc_n);
 
     ensureSegmentBreakpoints({10}, /* logical_split */ true);
     gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(0, gc_n);
+    ASSERT_EQ(0, gc_n);
 
     mergeDelta(0, 1);
-    EXPECT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
-    EXPECT_EQ(400, getSegmentAt(150)->getStable()->getDMFilesRows());
+    ASSERT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
+    ASSERT_EQ(400, getSegmentAt(150)->getStable()->getDMFilesRows());
 
     gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(0, gc_n);
-    EXPECT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
-    EXPECT_EQ(400, getSegmentAt(150)->getStable()->getDMFilesRows());
+    ASSERT_EQ(0, gc_n);
+    ASSERT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
+    ASSERT_EQ(400, getSegmentAt(150)->getStable()->getDMFilesRows());
 }
 CATCH
 
@@ -402,26 +376,26 @@ try
     mergeDelta();
 
     auto gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(0, gc_n);
+    ASSERT_EQ(0, gc_n);
 
     ensureSegmentBreakpoints({10}, /* logical_split */ true);
     gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(0, gc_n);
+    ASSERT_EQ(0, gc_n);
 
     mergeDelta(100, 101);
-    EXPECT_EQ(400, getSegmentAt(0)->getStable()->getDMFilesRows());
-    EXPECT_EQ(390, getSegmentAt(150)->getStable()->getDMFilesRows());
+    ASSERT_EQ(400, getSegmentAt(0)->getStable()->getDMFilesRows());
+    ASSERT_EQ(390, getSegmentAt(150)->getStable()->getDMFilesRows());
 
     gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(1, gc_n);
-    EXPECT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
-    EXPECT_EQ(390, getSegmentAt(150)->getStable()->getDMFilesRows());
+    ASSERT_EQ(1, gc_n);
+    ASSERT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
+    ASSERT_EQ(390, getSegmentAt(150)->getStable()->getDMFilesRows());
 
     // GC again does not introduce new changes
     gc_n = store->onSyncGc(100, gc_options);
-    EXPECT_EQ(0, gc_n);
-    EXPECT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
-    EXPECT_EQ(390, getSegmentAt(150)->getStable()->getDMFilesRows());
+    ASSERT_EQ(0, gc_n);
+    ASSERT_EQ(10, getSegmentAt(0)->getStable()->getDMFilesRows());
+    ASSERT_EQ(390, getSegmentAt(150)->getStable()->getDMFilesRows());
 }
 CATCH
 
@@ -486,12 +460,12 @@ try
             for (size_t gc_round = 0; gc_round < 10; gc_round++)
                 store->onSyncGc(100, gc_options);
 
-            // Check whether we have reclaimed everything
-            EXPECT_EQ(store->segments.size(), 1);
-            EXPECT_EQ(getSegmentAt(0)->getStable()->getDMFilesPacks(), 0);
-
             // No more GCs are needed.
-            EXPECT_EQ(0, store->onSyncGc(100, gc_options));
+            ASSERT_EQ(0, store->onSyncGc(100, gc_options));
+
+            // Check whether we have reclaimed everything
+            ASSERT_EQ(store->segments.size(), 1);
+            ASSERT_EQ(getSegmentAt(0)->getStable()->getDMFilesPacks(), 0);
         }
     }
 }

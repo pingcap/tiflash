@@ -116,6 +116,7 @@ void ExecutorTest::executeExecutor(
         for (auto block_size : block_sizes)
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            auto res = executeStreams(request, concurrency);
             auto test_info_msg = [&]() {
                 const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
                 assert(test_info);
@@ -128,7 +129,8 @@ void ExecutorTest::executeExecutor(
                     "    enable_planner: {}\n"
                     "    concurrency: {}\n"
                     "    block_size: {}\n"
-                    "    dag_request: \n{}",
+                    "    dag_request: \n{}"
+                    "    result_block: \n{}",
                     test_info->file(),
                     test_info->line(),
                     test_info->test_case_name(),
@@ -136,9 +138,10 @@ void ExecutorTest::executeExecutor(
                     enable_planner,
                     concurrency,
                     block_size,
-                    ExecutorSerializer().serialize(request.get()));
+                    ExecutorSerializer().serialize(request.get()),
+                    getColumnsContent(res));
             };
-            ASSERT_TRUE(assert_func(executeStreams(request, concurrency))) << test_info_msg();
+            ASSERT_TRUE(assert_func(res)) << test_info_msg();
         }
     }
     WRAP_FOR_DIS_ENABLE_PLANNER_END
@@ -147,7 +150,8 @@ void ExecutorTest::executeExecutor(
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
 {
     executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
-        return columnsEqual(expect_columns, res, /*_restrict=*/false);
+        return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
+                                                                      << getColumnsContent(expect_columns);
     });
 }
 
@@ -228,6 +232,24 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context, /*internal=*/true).in);
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)
+{
+    DAGProperties properties;
+    // disable mpp
+    context.context.setExecutorTest();
+    properties.is_mpp_query = false;
+    properties.start_ts = 1;
+    auto [query_tasks, func_wrap_output_stream] = compileQuery(
+        context.context,
+        query,
+        [&](const String & database_name, const String & table_name) {
+            return context.mockStorage().getTableInfo(database_name + "." + table_name);
+        },
+        properties);
+
+    return executeStreams(query_tasks[0].dag_request, concurrency);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

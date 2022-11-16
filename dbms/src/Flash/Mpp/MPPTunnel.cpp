@@ -43,6 +43,23 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
         return "unknown";
     }
 }
+
+// Update metric for tunnel's response bytes
+inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+{
+    switch (mode)
+    {
+    case TunnelSenderMode::LOCAL:
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn_local).Increment(pushed_data_size);
+        break;
+    case TunnelSenderMode::ASYNC_GRPC:
+    case TunnelSenderMode::SYNC_GRPC:
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(pushed_data_size);
+        break;
+    default:
+        throw DB::Exception("Illegal TunnelSenderMode");
+    }
+}
 } // namespace
 
 MPPTunnel::MPPTunnel(
@@ -68,8 +85,7 @@ MPPTunnel::MPPTunnel(
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
-    , log(Logger::get("MPPTunnel", req_id, tunnel_id))
-
+    , log(Logger::get(req_id, tunnel_id))
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -124,15 +140,14 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
         case TunnelStatus::Finished:
             return;
         default:
-            RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", status);
+            RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", static_cast<Int32>(status));
         }
     }
     if (wait_sender_finish)
         waitForSenderFinish(false);
 }
 
-// TODO: consider to hold a buffer
-void MPPTunnel::write(const mpp::MPPDataPacket & data)
+void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 {
     LOG_TRACE(log, "ready to write");
     {
@@ -142,9 +157,11 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
 
-    if (tunnel_sender->push(data))
+    auto pushed_data_size = data->getPacket().ByteSizeLong();
+    if (tunnel_sender->push(std::move(data)))
     {
-        connection_profile_info.bytes += data.ByteSizeLong();
+        updateMetric(pushed_data_size, mode);
+        connection_profile_info.bytes += pushed_data_size;
         connection_profile_info.packets += 1;
         return;
     }
@@ -192,7 +209,7 @@ void MPPTunnel::connect(PacketWriter * writer)
             break;
         }
         default:
-            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode in connect: {}", mode);
+            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode in connect: {}", static_cast<Int32>(mode));
         }
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
@@ -208,7 +225,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
             throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
 
         LOG_TRACE(log, "ready to connect async");
-        RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", mode);
+        RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", magic_enum::enum_name(mode));
         RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
 
         auto kick_func_for_test = call_data->getKickFuncForTest();
@@ -301,7 +318,7 @@ StringRef MPPTunnel::statusToString()
     case TunnelStatus::Finished:
         return "Finished";
     default:
-        RUNTIME_ASSERT(false, log, "Unknown TaskStatus {}", status);
+        RUNTIME_ASSERT(false, log, "Unknown TaskStatus {}", static_cast<Int32>(status));
     }
 }
 

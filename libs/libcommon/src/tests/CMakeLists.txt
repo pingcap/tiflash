@@ -40,6 +40,9 @@ add_executable (gtests_libcommon
     gtest_logger.cpp
     gtest_arithmetic_overflow.cpp
     )
+
+add_sources_compile_flag_avx2 (gtest_mem_utils_opt.cpp)
+
 target_link_libraries (gtests_libcommon gtest_main common memcpy)
 add_check(gtests_libcommon)
 
@@ -47,6 +50,7 @@ set (bench_libcommon_sources bench_mem_utils.cpp)
 
 if (NOT USE_INTERNAL_MEMCPY)
     list (APPEND bench_libcommon_sources bench_memcpy.cpp)
+    add_sources_compile_flag_avx2 (bench_memcpy.cpp)
 endif ()
 
 add_executable(bench_libcommon
@@ -54,6 +58,7 @@ add_executable(bench_libcommon
     # bench_logger.cpp 
     ${bench_libcommon_sources}
 )
+
 target_link_libraries(bench_libcommon benchmark::benchmark_main common m memcpy)
 
 add_executable (dump_variable dump_variable.cpp)

@@ -88,7 +88,13 @@ public:
     // This function is mostly the same as StringHashTable::dispatch, but with
     // added bucket computation. See the comments there.
     template <typename Self, typename Func, typename KeyHolder>
-    static auto ALWAYS_INLINE dispatch(Self & self, KeyHolder && key_holder, Func && func)
+    static auto
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
+        NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
+#else
+        ALWAYS_INLINE
+#endif
+        dispatch(Self & self, KeyHolder && key_holder, Func && func)
     {
         StringHashTableHash hash;
         const StringRef & x = keyHolderGetKey(key_holder);

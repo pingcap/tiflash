@@ -18,12 +18,15 @@
 #include <Common/LRUCache.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 
 #include <mutex>
@@ -64,8 +67,6 @@ public:
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
     Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
-
-    void read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
     struct FieldReadInfo
     {

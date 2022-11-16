@@ -98,6 +98,8 @@
     M(DMFlushDeltaCache)                       \
     M(DMFlushDeltaCacheNS)                     \
     M(DMCleanReadRows)                         \
+    M(DMSegmentIsEmptyFastPath)                \
+    M(DMSegmentIsEmptySlowPath)                \
                                                \
     M(FileFSync)                               \
                                                \
