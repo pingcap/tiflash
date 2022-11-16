@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TargetSpecific.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
 namespace ProfileEvents
@@ -19,10 +20,9 @@ namespace ProfileEvents
 extern const Event DMCleanReadRows;
 } // namespace ProfileEvents
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 template <int MODE>
 void DMVersionFilterBlockInputStream<MODE>::readPrefix()
 {
@@ -41,8 +41,13 @@ void DMVersionFilterBlockInputStream<MODE>::readSuffix()
     });
 }
 
+// clang-format off
+/// Vectorized version
+TIFLASH_MULTITARGET_FUNCTION(
+TIFLASH_MULTITARGET_FUNCTION_HEADER(
 template <int MODE>
-Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
+Block
+), DMVersionFilterBlockInputStream<MODE>::readImpl, TIFLASH_MULTITARGET_FUNCTION_BODY((FilterPtr & res_filter, bool return_filter) /// NOLINT
 {
     while (true)
     {
@@ -414,10 +419,32 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             return res;
         }
     }
+})
+)
+// clang-format on
+
+template <int MODE>
+Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
+{
+    if (TargetSpecific::AVX512Checker::runtimeSupport())
+    {
+        return readImplAVX512(res_filter, return_filter);
+    }
+    else if (TargetSpecific::AVXChecker::runtimeSupport())
+    {
+        return readImplAVX2(res_filter, return_filter);
+    }
+    else if (TargetSpecific::SSE4Checker::runtimeSupport())
+    {
+        return readImplSSE4(res_filter, return_filter);
+    }
+    else
+    {
+        return readImpl(res_filter, return_filter);
+    }
 }
 
 template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>;
 template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>;
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

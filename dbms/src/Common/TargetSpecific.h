@@ -730,7 +730,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
   *         }
   *         else if (TargetSpecific::AVXChecker::runtimeSupport())
   *         {
-  *             testFunctionImplAVX(value);
+  *             testFunctionImplAVX2(value);
   *         }
   *         else if (TargetSpecific::SSE4Checker::runtimeSupport())
   *         {
@@ -764,7 +764,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
     FUNCTION_HEADER \
     \
     AVX_FUNCTION_SPECIFIC_ATTRIBUTE \
-    name##AVX \
+    name##AVX2 \
     FUNCTION_BODY \
     \
     FUNCTION_HEADER \

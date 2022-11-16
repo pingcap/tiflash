@@ -94,7 +94,7 @@ elseif (ARCH_AMD64)
     # and note that the compile will succeed even if the host machine does not support the instruction set
     # so we do not set the flags to avoid core dump in old machines
     option (TIFLASH_ENABLE_AVX_SUPPORT "Use AVX/AVX2 instructions on x86_64" ON)
-    option (TIFLASH_ENABLE_AVX512_SUPPORT "Use AVX512 instructions on x86_64" ON)
+    option (TIFLASH_ENABLE_AVX512_SUPPORT "Use AVX512 instructions on x86_64" OFF)
 
     option (NO_SSE42_OR_HIGHER "Disable SSE42 or higher on x86_64 for maximum compatibility with older/embedded hardware." OFF)
     if (NO_SSE42_OR_HIGHER)

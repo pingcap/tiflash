@@ -113,7 +113,7 @@ struct AggregateFunctionSumData
         }
         else if (TargetSpecific::AVXChecker::runtimeSupport())
         {
-            addManyImplAVX(ptr, count);
+            addManyImplAVX2(ptr, count);
         }
         else if (TargetSpecific::SSE4Checker::runtimeSupport())
         {
