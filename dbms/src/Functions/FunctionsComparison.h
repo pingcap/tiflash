@@ -73,7 +73,6 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 template <typename A, typename B, typename Op>
 struct NumComparisonImpl
 {
-
     // clang-format off
     /// Vectorized version
     TIFLASH_MULTITARGET_FUNCTION(

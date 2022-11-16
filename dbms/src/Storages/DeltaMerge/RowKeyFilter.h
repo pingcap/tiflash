@@ -88,7 +88,7 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
         return {};
 
     std::vector<std::pair<size_t, size_t>> offset_and_limits;
-    for (const auto& rowkey_range : rowkey_ranges)
+    for (const auto & rowkey_range : rowkey_ranges)
     {
         offset_and_limits.emplace_back(getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_pos).column, 0, block.rows()));
     }
@@ -184,7 +184,7 @@ public:
             /// If clean read optimized, only first row's (the smallest) handle is returned as a ColumnConst.
             if (rowkey_column.column->isColumnConst())
             {
-                for (const auto& rowkey_range : rowkey_ranges)
+                for (const auto & rowkey_range : rowkey_ranges)
                 {
                     if (rowkey_range.check(rowkey_column.getRowKeyValue(0)))
                         return block;
