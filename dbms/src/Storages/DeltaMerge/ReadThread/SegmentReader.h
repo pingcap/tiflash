@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -31,10 +32,8 @@ class SegmentReaderPool
 public:
     SegmentReaderPool(int thread_count, const std::vector<int> & cpus);
     ~SegmentReaderPool();
-    SegmentReaderPool(const SegmentReaderPool &) = delete;
-    SegmentReaderPool & operator=(const SegmentReaderPool &) = delete;
-    SegmentReaderPool(SegmentReaderPool &&) = delete;
-    SegmentReaderPool & operator=(SegmentReaderPool &&) = delete;
+
+    DISALLOW_COPY_AND_MOVE(SegmentReaderPool);
 
     void addTask(MergedTaskPtr && task);
     std::vector<std::thread::id> getReaderIds() const;
@@ -66,6 +65,10 @@ public:
 
     void addTask(MergedTaskPtr && task);
     bool isSegmentReader() const;
+
+    // Explicitly, release reader_pools and reader_ids.
+    // Threads need to be stop before Context::shutdown().
+    void stop();
 
 private:
     SegmentReaderPoolManager();

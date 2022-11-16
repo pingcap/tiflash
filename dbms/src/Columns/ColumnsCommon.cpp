@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#if __SSE2__
-#include <emmintrin.h>
-#endif
-
 #include <Columns/ColumnsCommon.h>
 #include <Columns/IColumn.h>
-
+#include <common/memcpy.h>
 
 namespace DB
 {
@@ -146,7 +142,7 @@ struct ResultOffsetsBuilder
     {
         const auto offsets_size_old = res_offsets.size();
         res_offsets.resize(offsets_size_old + SIMD_BYTES);
-        memcpy(&res_offsets[offsets_size_old], src_offsets_pos, SIMD_BYTES * sizeof(IColumn::Offset));
+        inline_memcpy(&res_offsets[offsets_size_old], src_offsets_pos, SIMD_BYTES * sizeof(IColumn::Offset));
 
         if (!first)
         {
@@ -194,7 +190,7 @@ void filterArraysImplGeneric(
 {
     const size_t size = src_offsets.size();
     if (size != filt.size())
-        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(fmt::format("size of filter {} doesn't match size of column {}", filt.size(), size), ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     ResultOffsetsBuilder result_offsets_builder(res_offsets);
 
@@ -223,7 +219,7 @@ void filterArraysImplGeneric(
 
         const auto elems_size_old = res_elems.size();
         res_elems.resize(elems_size_old + size);
-        memcpy(&res_elems[elems_size_old], &src_elems[offset], size * sizeof(T));
+        inline_memcpy(&res_elems[elems_size_old], &src_elems[offset], size * sizeof(T));
     };
 
 #if __SSE2__
@@ -233,7 +229,7 @@ void filterArraysImplGeneric(
 
     while (filt_pos < filt_end_aligned)
     {
-        const auto mask = _mm_movemask_epi8(_mm_cmpgt_epi8(
+        uint32_t mask = _mm_movemask_epi8(_mm_cmpgt_epi8(
             _mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)),
             zero_vec));
 
@@ -254,13 +250,16 @@ void filterArraysImplGeneric(
             /// copy elements for SIMD_BYTES arrays at once
             const auto elems_size_old = res_elems.size();
             res_elems.resize(elems_size_old + chunk_size);
-            memcpy(&res_elems[elems_size_old], &src_elems[chunk_offset], chunk_size * sizeof(T));
+            inline_memcpy(&res_elems[elems_size_old], &src_elems[chunk_offset], chunk_size * sizeof(T));
         }
         else
         {
-            for (size_t i = 0; i < SIMD_BYTES; ++i)
-                if (filt_pos[i])
-                    copy_array(offsets_pos + i);
+            while (mask)
+            {
+                size_t index = __builtin_ctz(mask);
+                copy_array(offsets_pos + index);
+                mask = mask & (mask - 1);
+            }
         }
 
         filt_pos += SIMD_BYTES;

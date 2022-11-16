@@ -49,35 +49,14 @@ String getColumnTypeName(const Column column)
 template <typename Columns>
 void toString(const Columns & columns, FmtBuffer & buf)
 {
-    assert(columns.size() > 0);
-    int bound = columns.size() - 1;
-    for (int i = 0; i < bound; ++i)
+    if (!columns.empty())
     {
-        buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
-    }
-    buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
-}
-} // namespace
-
-String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
-{
-    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    if (dag_request->has_root_executor())
-    {
-        serialize(dag_request->root_executor(), 0);
-        return buf.toString();
-    }
-    else
-    {
-        FmtBuffer buffer;
-        String prefix;
-        traverseExecutors(dag_request, [this, &prefix](const tipb::Executor & executor) {
-            assert(executor.has_executor_id());
-            buf.fmtAppend("{}{}\n", prefix, executor.executor_id());
-            prefix.append(" ");
-            return true;
-        });
-        return buffer.toString();
+        int bound = columns.size() - 1;
+        for (int i = 0; i < bound; ++i)
+        {
+            buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
+        }
+        buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
     }
 }
 
@@ -263,8 +242,55 @@ void serializeSort(const String & executor_id, const tipb::Sort & sort [[maybe_u
         ", ");
     buf.append("}\n");
 }
+} // namespace
 
-void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t level)
+String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
+{
+    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+    if (dag_request->has_root_executor())
+    {
+        serializeTreeStruct(dag_request->root_executor(), 0);
+    }
+    else
+    {
+        serializeListStruct(dag_request);
+    }
+    return buf.toString();
+}
+
+void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_request)
+{
+    String prefix;
+    traverseExecutors(dag_request, [this, &prefix](const tipb::Executor & executor) {
+        buf.append(prefix);
+        switch (executor.tp())
+        {
+        case tipb::ExecType::TypeTableScan:
+            serializeTableScan("TableScan", executor.tbl_scan(), buf);
+            break;
+        case tipb::ExecType::TypeSelection:
+            serializeSelection("Selection", executor.selection(), buf);
+            break;
+        case tipb::ExecType::TypeAggregation:
+        // stream agg is not supported, treated as normal agg
+        case tipb::ExecType::TypeStreamAgg:
+            serializeAggregation("Aggregation", executor.aggregation(), buf);
+            break;
+        case tipb::ExecType::TypeTopN:
+            serializeTopN("TopN", executor.topn(), buf);
+            break;
+        case tipb::ExecType::TypeLimit:
+            serializeLimit("Limit", executor.limit(), buf);
+            break;
+        default:
+            throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
+        }
+        prefix.append(" ");
+        return true;
+    });
+}
+
+void ExecutorSerializer::serializeTreeStruct(const tipb::Executor & root_executor, size_t level)
 {
     auto append_str = [&level, this](const tipb::Executor & executor) {
         assert(executor.has_executor_id());
@@ -324,7 +350,7 @@ void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t 
         if (executor.has_join())
         {
             for (const auto & child : executor.join().children())
-                serialize(child, level);
+                serializeTreeStruct(child, level);
             return false;
         }
         return true;

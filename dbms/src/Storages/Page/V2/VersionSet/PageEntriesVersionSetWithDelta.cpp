@@ -331,7 +331,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
             }
             if (snapshot_lifetime > exist_stale_snapshot)
             {
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Suspicious stale snapshot detected lifetime {:.3f} seconds, created from thread_id {}, tracing_id {}",
                     snapshot_lifetime,
@@ -364,9 +364,9 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         stats.longest_living_from_thread_id,               \
         stats.longest_living_from_tracing_id
         if (stats.longest_living_seconds > exist_stale_snapshot)
-            LOG_FMT_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
+            LOG_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
         else
-            LOG_FMT_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);
+            LOG_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);
     }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
@@ -375,7 +375,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     {
         if (unlikely(snap == nullptr))
         {
-            LOG_FMT_WARNING(log, "{} gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.", name);
+            LOG_WARNING(log, "{} gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.", name);
             continue;
         }
         collectLiveFilesFromVersionList(*snap->version(), live_files, live_normal_pages, need_scan_page_ids);
@@ -433,17 +433,17 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
     {
         switch (rec.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT:
             this->applyPut(rec);
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             this->applyDel(rec);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             this->applyRef(rec);
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
         }
@@ -452,7 +452,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
 
 void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 {
-    assert(rec.type == WriteBatch::WriteType::PUT);
+    assert(rec.type == WriteBatchWriteType::PUT);
     /// Note that any changes on `current_version` will break the consistency of `view`.
     /// We should postpone changes to the last of this function.
 
@@ -493,7 +493,7 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 
 void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 {
-    assert(rec.type == WriteBatch::WriteType::DEL);
+    assert(rec.type == WriteBatchWriteType::DEL);
     /// Note that any changes on `current_version` will break the consistency of `view`.
     /// We should postpone changes to the last of this function.
 
@@ -509,7 +509,7 @@ void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 
 void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
 {
-    assert(rec.type == WriteBatch::WriteType::REF);
+    assert(rec.type == WriteBatchWriteType::REF);
     /// Note that any changes on `current_version` will break the consistency of `view`.
     /// We should postpone changes to the last of this function.
 
@@ -542,7 +542,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // The Page to be ref is not exist.
         if (ignore_invalid_ref)
         {
-            LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
+            LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
         }
         else
         {
@@ -563,14 +563,14 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
     {
         switch (rec.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT:
             current->put(rec.page_id, rec.entry);
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             current->del(rec.page_id);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             // Shorten ref-path in case there is RefPage to RefPage
             try
             {
@@ -578,10 +578,10 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             }
             catch (DB::Exception & e)
             {
-                LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
+                LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
             }
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
             break;
         }

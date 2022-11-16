@@ -52,7 +52,7 @@ const char * auto_config_build[]{
     "USE_UNWIND",
     "@USE_UNWIND@",
     "USE_LLVM_LIBUNWIND",
-    "@USE_LLVM_LIBUNWIND@"
+    "@USE_LLVM_LIBUNWIND@",
     "USE_ICU",
     "@USE_ICU@",
     "USE_RE2_ST",

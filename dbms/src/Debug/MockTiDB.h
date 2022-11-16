@@ -37,21 +37,30 @@ public:
     public:
         Table(const String & database_name, DatabaseID database_id, const String & table_name, TiDB::TableInfo && table_info);
 
-        TableID id() { return table_info.id; }
-        DatabaseID dbID() { return database_id; }
+        TableID id() const { return table_info.id; }
+        DatabaseID dbID() const { return database_id; }
 
         ColumnID allocColumnID() { return ++col_id; }
 
-        bool isPartitionTable() { return table_info.is_partition_table; }
+        bool isPartitionTable() const { return table_info.is_partition_table; }
 
-        std::vector<TableID> getPartitionIDs()
+        std::vector<TableID> getPartitionIDs() const
         {
             std::vector<TableID> partition_ids;
             std::for_each(
                 table_info.partition.definitions.begin(),
                 table_info.partition.definitions.end(),
-                [&](const TiDB::PartitionDefinition & part_def) { partition_ids.emplace_back(part_def.id); });
+                [&](const auto & part_def) { partition_ids.emplace_back(part_def.id); });
             return partition_ids;
+        }
+
+        bool existPartitionID(TableID part_id) const
+        {
+            const auto & part_def = find_if(
+                table_info.partition.definitions.begin(),
+                table_info.partition.definitions.end(),
+                [&part_id](const auto & part_def) { return part_def.id == part_id; });
+            return part_def != table_info.partition.definitions.end();
         }
 
         TiDB::TableInfo table_info;
@@ -89,7 +98,8 @@ public:
 
     DatabaseID newDataBase(const String & database_name);
 
-    void newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool);
+    TableID newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool);
+    TableID newPartition(TableID belong_logical_table, const String & partition_name, Timestamp tso, bool);
 
     void dropPartition(const String & database_name, const String & table_name, TableID partition_id);
 
@@ -135,13 +145,15 @@ public:
 
     std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
 
-    Int64 getVersion() { return version; }
+    Int64 getVersion() const { return version; }
 
     TableID newTableID() { return table_id_allocator++; }
 
 private:
+    TableID newPartitionImpl(const TablePtr & logical_table, TableID partition_id, const String & partition_name, Timestamp tso, bool is_add_part);
     TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
+    TablePtr getTableByID(TableID table_id);
 
 private:
     std::mutex tables_mutex;

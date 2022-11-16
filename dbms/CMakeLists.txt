@@ -23,7 +23,6 @@ set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
 
 include (cmake/version.cmake)
-message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_version.h.in ${CONFIG_VERSION})
 
@@ -66,6 +65,7 @@ add_headers_and_sources(dbms src/DataStreams)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
+add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
@@ -99,11 +99,17 @@ add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
 add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
 add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
 add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
+add_headers_and_sources(dbms src/Storages/Page/V3/Blob)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
+
+add_sources_compile_flag_avx2 (
+    src/Columns/ColumnString.cpp
+    src/Columns/ColumnsCommon.cpp
+)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
@@ -134,7 +140,7 @@ list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
 target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
-if (ARCH_FREEBSD)
+if (OS_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
@@ -193,6 +199,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    magic_enum
     libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
@@ -213,6 +220,12 @@ target_link_libraries (dbms
     absl::synchronization
     croaring
 )
+
+# always add GmSSL include dir to the include path for static analysis
+target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+if (USE_GM_SSL)
+    target_link_libraries(dbms gmssl)
+endif ()
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
@@ -305,8 +318,36 @@ if (ENABLE_TESTS)
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
+    target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
     target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
+
+    install (TARGETS gtests_dbms
+            COMPONENT tiflash-gtest
+            DESTINATION "."
+            RUNTIME_DEPENDENCY_SET tiflash-gtest-dependency)
+    install (RUNTIME_DEPENDENCY_SET tiflash-gtest-dependency
+            COMPONENT tiflash-gtest
+            DESTINATION "."
+            PRE_EXCLUDE_REGEXES
+                "libdl.*"
+                "libc-.*"
+                "libc\\..*"
+                "libgcc_s.*"
+                "librt.*"
+                "libm.*"
+                "ld-linux-x86-64.*"
+                "ld-linux-aarch64.*"
+                "libpthread.*"# exclude libc dependencies
+            DIRECTORIES ${TIFLASH_GTEST_DEPENDENCY_DIRECTORIES})
+
+    if (USE_GM_SSL)
+        target_link_libraries(gtests_dbms gmssl)
+        target_include_directories(gtests_dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+        install (TARGETS gmssl
+                COMPONENT tiflash-gtest
+                DESTINATION ".")
+    endif ()
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
@@ -335,40 +376,12 @@ if (ENABLE_TESTS)
     add_check(bench_dbms)
 endif ()
 
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set (COVERAGE_LCOV_EXCLUDES
-        "/Library/Developer/CommandLineTools/usr/include/*"
-        "/usr/include/*"
-        "/usr/local/*"
-        "/usr/lib/*"
-        "${CMAKE_SOURCE_DIR}/cmake-build-*/*"
-        "${CMAKE_SOURCE_DIR}/contrib/*"
-        )
-    set (COVERAGE_GCOVR_EXCLUDES ${COVERAGE_LCOV_EXCLUDES})
-
-    if (TEST_COVERAGE_XML)
-        setup_target_for_coverage_gcovr_xml (
-            NAME tiflash_gcovr_coverage
-            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
-            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
-            EXECUTABLE echo "please run gtests manually"
-        )
-    else ()
-        setup_target_for_coverage_lcov (
-            NAME tiflash_coverage_lcov
-            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
-            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
-            EXECUTABLE echo "please run gtests manually"
-        )
-    endif ()
-endif ()
-
 # dbms
-add_target_pch("pch-dbms.h" dbms flash_service)
+add_target_pch("pch-dbms.h" flash_service)
 add_target_pch("pch-common.h" clickhouse_common_io clickhouse_aggregate_functions)
 
-# disable PCH for `clickhouse_functions` temporarily because some source files need to use specific cxx flags
-# add_target_pch("pch-common.h" clickhouse_functions)
+# disable PCH for `clickhouse_functions`, `dbms` temporarily because some source files need to use specific cxx flags
+# add_target_pch("pch-common.h" clickhouse_functions dbms)
 
 add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
 
@@ -386,3 +399,5 @@ add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
 # poco
 add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
 add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" XML Foundation JSON)
+
+message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")

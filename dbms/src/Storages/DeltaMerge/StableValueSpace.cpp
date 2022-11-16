@@ -128,22 +128,36 @@ size_t StableValueSpace::getBytes() const
     return valid_bytes;
 }
 
-size_t StableValueSpace::getBytesOnDisk() const
+size_t StableValueSpace::getDMFilesBytesOnDisk() const
 {
-    // If this stable value space is logical splitted, some file may not used,
-    // and this will return more bytes than actual used.
     size_t bytes = 0;
     for (const auto & file : files)
         bytes += file->getBytesOnDisk();
     return bytes;
 }
 
-size_t StableValueSpace::getPacks() const
+size_t StableValueSpace::getDMFilesPacks() const
 {
     size_t packs = 0;
     for (const auto & file : files)
         packs += file->getPacks();
     return packs;
+}
+
+size_t StableValueSpace::getDMFilesRows() const
+{
+    size_t rows = 0;
+    for (const auto & file : files)
+        rows += file->getRows();
+    return rows;
+}
+
+size_t StableValueSpace::getDMFilesBytes() const
+{
+    size_t bytes = 0;
+    for (const auto & file : files)
+        bytes += file->getBytes();
+    return bytes;
 }
 
 String StableValueSpace::getDMFilesString()
@@ -194,7 +208,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         DMFile::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
-            LOG_FMT_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
+            LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
             ColumnDefines read_columns;
             read_columns.emplace_back(getExtraHandleColumnDefine(is_common_handle));
             read_columns.emplace_back(getVersionColumnDefine());
@@ -298,11 +312,10 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap = std::make_shared<Snapshot>();
+    auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
     snap->valid_rows = valid_rows;
     snap->valid_bytes = valid_bytes;
-    snap->stable = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -333,7 +346,7 @@ StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read)
 {
-    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
+    LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
     std::vector<size_t> rows;
     streams.reserve(stable->files.size());
@@ -398,6 +411,60 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     size_t approx_rows = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
     size_t approx_bytes = std::max(avg_pack_bytes, total_match_bytes - avg_pack_bytes / 2);
     return {approx_rows, approx_bytes};
+}
+
+StableValueSpace::Snapshot::AtLeastRowsAndBytesResult //
+StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const
+{
+    AtLeastRowsAndBytesResult ret{};
+
+    // Usually, this method will be called for some "cold" key ranges.
+    // Loading the index into cache may pollute the cache and make the hot index cache invalid.
+    // So don't refill the cache if the index does not exist.
+    for (size_t file_idx = 0; file_idx < stable->files.size(); ++file_idx)
+    {
+        const auto & file = stable->files[file_idx];
+        auto filter = DMFilePackFilter::loadFrom(
+            file,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
+            {range},
+            RSOperatorPtr{},
+            IdSetPtr{},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            context.tracing_id);
+        const auto & handle_filter_result = filter.getHandleRes();
+        if (file_idx == 0)
+        {
+            // TODO: this check may not be correct when support multiple files in a stable, let's just keep it now for simplicity
+            if (handle_filter_result.empty())
+                ret.first_pack_intersection = RSResult::None;
+            else
+                ret.first_pack_intersection = handle_filter_result.front();
+        }
+        if (file_idx == stable->files.size() - 1)
+        {
+            // TODO: this check may not be correct when support multiple files in a stable, let's just keep it now for simplicity
+            if (handle_filter_result.empty())
+                ret.last_pack_intersection = RSResult::None;
+            else
+                ret.last_pack_intersection = handle_filter_result.back();
+        }
+
+        const auto & pack_stats = file->getPackStats();
+        for (size_t pack_idx = 0; pack_idx < pack_stats.size(); ++pack_idx)
+        {
+            // Only count packs that are fully contained by the range.
+            if (handle_filter_result[pack_idx] == RSResult::All)
+            {
+                ret.rows += pack_stats[pack_idx].rows;
+                ret.bytes += pack_stats[pack_idx].bytes;
+            }
+        }
+    }
+
+    return ret;
 }
 
 } // namespace DM

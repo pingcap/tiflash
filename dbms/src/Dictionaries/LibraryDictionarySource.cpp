@@ -168,7 +168,7 @@ LibraryDictionarySource::~LibraryDictionarySource()
 
 BlockInputStreamPtr LibraryDictionarySource::loadAll()
 {
-    LOG_FMT_TRACE(log, "loadAll {}", toString());
+    LOG_TRACE(log, "loadAll {}", toString());
 
     auto columns_holder = std::make_unique<ClickHouseLibrary::CString[]>(dict_struct.attributes.size());
     ClickHouseLibrary::CStrings columns{
@@ -194,7 +194,7 @@ BlockInputStreamPtr LibraryDictionarySource::loadAll()
 
 BlockInputStreamPtr LibraryDictionarySource::loadIds(const std::vector<UInt64> & ids)
 {
-    LOG_FMT_TRACE(log, "loadIds {} size = {}", toString(), ids.size());
+    LOG_TRACE(log, "loadIds {} size = {}", toString(), ids.size());
 
     const ClickHouseLibrary::VectorUInt64 ids_data{ext::bit_cast<decltype(ClickHouseLibrary::VectorUInt64::data)>(ids.data()), ids.size()};
     auto columns_holder = std::make_unique<ClickHouseLibrary::CString[]>(dict_struct.attributes.size());
@@ -222,7 +222,7 @@ BlockInputStreamPtr LibraryDictionarySource::loadIds(const std::vector<UInt64> &
 
 BlockInputStreamPtr LibraryDictionarySource::loadKeys(const Columns & key_columns, const std::vector<std::size_t> & requested_rows)
 {
-    LOG_FMT_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
+    LOG_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
 
     auto columns_holder = std::make_unique<ClickHouseLibrary::CString[]>(key_columns.size());
     ClickHouseLibrary::CStrings columns_pass{

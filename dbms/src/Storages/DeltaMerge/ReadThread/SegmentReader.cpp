@@ -42,9 +42,9 @@ public:
 
     ~SegmentReader()
     {
-        LOG_FMT_DEBUG(log, "SegmentReader stop begin");
+        LOG_DEBUG(log, "Stop begin");
         t.join();
-        LOG_FMT_DEBUG(log, "SegmentReader stop end");
+        LOG_DEBUG(log, "Stop end");
     }
 
     std::thread::id getId() const
@@ -70,11 +70,11 @@ private:
         if (ret != 0)
         {
             // It can be failed due to some CPU core cannot access, such as CPU offline.
-            LOG_FMT_ERROR(log, "sched_setaffinity cpus {} fail: {}", cpus, std::strerror(errno));
+            LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={}", cpus, std::strerror(errno));
         }
         else
         {
-            LOG_FMT_DEBUG(log, "sched_setaffinity cpus {} succ", cpus);
+            LOG_DEBUG(log, "sched_setaffinity succ, cpus={}", cpus);
         }
 #endif
     }
@@ -91,16 +91,9 @@ private:
         {
             if (!task_queue.pop(merged_task))
             {
-                LOG_FMT_INFO(log, "pop fail, stop {}", isStop());
+                LOG_INFO(log, "Pop fail, stop={}", isStop());
                 return;
             }
-
-            SCOPE_EXIT({
-                if (!merged_task->allStreamsFinished())
-                {
-                    SegmentReadTaskScheduler::instance().pushMergedTask(merged_task);
-                }
-            });
 
             int read_count = 0;
             while (!merged_task->allStreamsFinished() && !isStop())
@@ -114,12 +107,19 @@ private:
             }
             if (read_count <= 0)
             {
-                LOG_FMT_DEBUG(log, "pool {} seg_id {} read_count {}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
+                LOG_DEBUG(log, "All finished, pool_ids={} segment_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
+            }
+            // If `merged_task` is pushed back to `MergedTaskPool`, it can be accessed by another read thread if it is scheduled.
+            // So do not push back to `MergedTaskPool` when exception happened since current read thread can still access to this `merged_task` object and set exception message to it.
+            // If exception happens, `merged_task` will be released by `shared_ptr` automatically.
+            if (!merged_task->allStreamsFinished())
+            {
+                SegmentReadTaskScheduler::instance().pushMergedTask(merged_task);
             }
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(log, "ErrMsg: {} StackTrace {}", e.message(), e.getStackTrace().toString());
+            LOG_ERROR(log, "ErrMsg: {} StackTrace {}", e.message(), e.getStackTrace().toString());
             if (merged_task != nullptr)
             {
                 merged_task->setException(e);
@@ -127,7 +127,7 @@ private:
         }
         catch (std::exception & e)
         {
-            LOG_FMT_ERROR(log, "ErrMsg: {}", e.what());
+            LOG_ERROR(log, "ErrMsg: {}", e.what());
             if (merged_task != nullptr)
             {
                 merged_task->setException(DB::Exception(e.what()));
@@ -160,6 +160,8 @@ private:
     std::vector<int> cpus;
 };
 
+// ===== SegmentReaderPool ===== //
+
 void SegmentReaderPool::addTask(MergedTaskPtr && task)
 {
     if (!task_queue.push(std::forward<MergedTaskPtr>(task), nullptr))
@@ -171,12 +173,12 @@ void SegmentReaderPool::addTask(MergedTaskPtr && task)
 SegmentReaderPool::SegmentReaderPool(int thread_count, const std::vector<int> & cpus)
     : log(&Poco::Logger::get("SegmentReaderPool"))
 {
-    LOG_FMT_INFO(log, "Create SegmentReaderPool thread_count {} cpus {} start", thread_count, cpus);
+    LOG_INFO(log, "Create start, thread_count={} cpus={}", thread_count, cpus);
     for (int i = 0; i < thread_count; i++)
     {
         readers.push_back(std::make_unique<SegmentReader>(task_queue, cpus));
     }
-    LOG_FMT_INFO(log, "Create SegmentReaderPool thread_count {} cpus {} end", thread_count, cpus);
+    LOG_INFO(log, "Create end, thread_count={} cpus={}", thread_count, cpus);
 }
 
 SegmentReaderPool::~SegmentReaderPool()
@@ -198,6 +200,8 @@ std::vector<std::thread::id> SegmentReaderPool::getReaderIds() const
     return ids;
 }
 
+// ===== SegmentReaderPoolManager ===== //
+
 SegmentReaderPoolManager::SegmentReaderPoolManager()
     : log(&Poco::Logger::get("SegmentReaderPoolManager"))
 {}
@@ -207,7 +211,7 @@ SegmentReaderPoolManager::~SegmentReaderPoolManager() = default;
 void SegmentReaderPoolManager::init(const ServerInfo & server_info)
 {
     auto numa_nodes = getNumaNodes(log);
-    LOG_FMT_INFO(log, "numa_nodes {} => {}", numa_nodes.size(), numa_nodes);
+    LOG_INFO(log, "numa_nodes {} => {}", numa_nodes.size(), numa_nodes);
     for (const auto & node : numa_nodes)
     {
         int thread_count = node.empty() ? server_info.cpu_info.logical_cores : node.size();
@@ -215,7 +219,7 @@ void SegmentReaderPoolManager::init(const ServerInfo & server_info)
         auto ids = reader_pools.back()->getReaderIds();
         reader_ids.insert(ids.begin(), ids.end());
     }
-    LOG_FMT_INFO(log, "readers count {}", reader_ids.size());
+    LOG_INFO(log, "num_readers={}", reader_ids.size());
 }
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
@@ -232,5 +236,11 @@ void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
 bool SegmentReaderPoolManager::isSegmentReader() const
 {
     return reader_ids.find(std::this_thread::get_id()) != reader_ids.end();
+}
+
+void SegmentReaderPoolManager::stop()
+{
+    reader_pools.clear();
+    reader_ids.clear();
 }
 } // namespace DB::DM

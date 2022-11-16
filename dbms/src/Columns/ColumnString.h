@@ -19,7 +19,7 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-#include <string.h>
+#include <common/memcpy.h>
 
 
 class ICollator;
@@ -119,13 +119,7 @@ public:
     void insert(const Field & x) override
     {
         const auto & s = DB::get<const String &>(x);
-        const size_t old_size = chars.size();
-        const size_t size_to_append = s.size() + 1;
-        const size_t new_size = old_size + size_to_append;
-
-        chars.resize(new_size);
-        memcpy(&chars[old_size], s.c_str(), size_to_append);
-        offsets.push_back(new_size);
+        insertData(s.data(), s.size());
     }
 
 #if !__clang__
@@ -169,15 +163,23 @@ public:
         }
     }
 
-    void insertData(const char * pos, size_t length) override
+    template <bool add_terminating_zero>
+    ALWAYS_INLINE inline void insertDataImpl(const char * pos, size_t length)
     {
         const size_t old_size = chars.size();
-        const size_t new_size = old_size + length + 1;
+        const size_t new_size = old_size + length + (add_terminating_zero ? 1 : 0);
 
         chars.resize(new_size);
-        memcpy(&chars[old_size], pos, length);
-        chars[old_size + length] = 0;
+        inline_memcpy(&chars[old_size], pos, length);
+
+        if constexpr (add_terminating_zero)
+            chars[old_size + length] = 0;
         offsets.push_back(new_size);
+    }
+
+    void insertData(const char * pos, size_t length) override
+    {
+        return insertDataImpl<true>(pos, length);
     }
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
@@ -188,12 +190,7 @@ public:
 
     void insertDataWithTerminatingZero(const char * pos, size_t length) override
     {
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + length;
-
-        chars.resize(new_size);
-        memcpy(&chars[old_size], pos, length);
-        offsets.push_back(new_size);
+        return insertDataImpl<false>(pos, length);
     }
 
     void popBack(size_t n) override
@@ -211,43 +208,49 @@ public:
 
         StringRef res;
 
-        if (collator != nullptr)
+        if (likely(collator != nullptr))
         {
             // Skip last zero byte.
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
+            auto sort_key = collator->sortKeyFastPath(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             src = sort_key.data;
         }
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
-        memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), src, string_size);
+        std::memcpy(pos, &string_size, sizeof(string_size));
+        inline_memcpy(pos + sizeof(string_size), src, string_size);
         res.data = pos;
         return res;
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
+    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) override
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
 
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + string_size;
-        chars.resize(new_size);
-        memcpy(&chars[old_size], pos, string_size);
-
-        offsets.push_back(new_size);
-        return pos + string_size;
+        if (likely(collator))
+        {
+            // https://github.com/pingcap/tiflash/pull/6135
+            // - Generate empty string column
+            // - Make size of `offsets` as previous way for func `ColumnString::size()`
+            offsets.push_back(0);
+            return pos + string_size;
+        }
+        else
+        {
+            insertDataWithTerminatingZero(pos, string_size);
+            return pos + string_size;
+        }
     }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-        if (collator != nullptr)
+        if (likely(collator != nullptr))
         {
             // Skip last zero byte.
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
+            auto sort_key = collator->sortKeyFastPath(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
             hash.update(sort_key.data, sort_key.size);
@@ -278,16 +281,7 @@ public:
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
         const auto & rhs = static_cast<const ColumnString &>(rhs_);
-
-        const size_t size = sizeAt(n);
-        const size_t rhs_size = rhs.sizeAt(m);
-
-        int cmp = memcmp(&chars[offsetAt(n)], &rhs.chars[rhs.offsetAt(m)], std::min(size, rhs_size));
-
-        if (cmp != 0)
-            return cmp;
-        else
-            return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
+        return getDataAtWithTerminatingZero(n).compare(rhs.getDataAtWithTerminatingZero(m));
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
@@ -312,6 +306,11 @@ public:
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         return scatterImpl<ColumnString>(num_columns, selector);
+    }
+
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override
+    {
+        scatterToImpl<ColumnString>(columns, selector);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

@@ -58,7 +58,7 @@ WindowFunctionPtr WindowFunctionFactory::getImpl(
     /// Find by exact match.
     auto it = window_functions.find(name);
     if (it != window_functions.end())
-        return it->second(name, argument_types);
+        return it->second(argument_types);
 
     throw Exception("Unknown window function " + name, ErrorCodes::UNKNOWN_WINDOW_FUNCTION);
 }

@@ -71,19 +71,19 @@ public:
         }
     }
 
-    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DAGContext * ctx)
+    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DAGContext *)
     {
         if (expect_error)
         {
             MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-            EXPECT_TRUE(numberToDateTime(input, datetime, ctx));
+            EXPECT_TRUE(numberToDateTime(input, datetime));
             return;
         }
 
         try
         {
             MyDateTime source(0, 0, 0, 0, 0, 0, 0);
-            numberToDateTime(input, source, ctx);
+            numberToDateTime(input, source);
             EXPECT_EQ(source.year, expected.year) << "Original time number: " << input;
             EXPECT_EQ(source.month, expected.month) << "Original time number: " << input;
             EXPECT_EQ(source.day, expected.day) << "Original time number: " << input;

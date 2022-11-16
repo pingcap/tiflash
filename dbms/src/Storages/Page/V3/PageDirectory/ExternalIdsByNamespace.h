@@ -17,6 +17,10 @@
 #include <Common/nocopyable.h>
 #include <Storages/Page/PageDefines.h>
 
+#include <list>
+#include <memory>
+#include <mutex>
+#include <set>
 #include <unordered_map>
 
 namespace DB::PS::V3
@@ -42,6 +46,16 @@ public:
     // `ns_id` will not be cleaned. We need this method to
     // cleanup all external id ptrs.
     void unregisterNamespace(NamespaceId ns_id);
+
+    // Check whether `ns_id` exist. Expose for testing.
+    // Note that the result is meaningless unless `getAliveIds`
+    // or `unregisterNamespace` is called to cleanup invalid
+    // external ids.
+    bool existNamespace(NamespaceId ns_id) const
+    {
+        std::lock_guard map_guard(mu);
+        return ids_by_ns.count(ns_id) > 0;
+    }
 
     DISALLOW_COPY_AND_MOVE(ExternalIdsByNamespace);
 

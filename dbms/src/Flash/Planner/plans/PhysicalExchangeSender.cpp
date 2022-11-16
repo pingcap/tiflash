@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
 
@@ -59,46 +59,31 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
 
-    int stream_id = 0;
-
+    String extra_info;
     if (fine_grained_shuffle.enable())
     {
-        pipeline.transform([&](auto & stream) {
-            // construct writer
-            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, true>>(
-                dag_context.tunnel_set,
-                partition_col_ids,
-                partition_col_collators,
-                exchange_type,
-                context.getSettingsRef().dag_records_per_chunk,
-                context.getSettingsRef().batch_send_min_limit,
-                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-                dag_context,
-                fine_grained_shuffle.stream_count,
-                fine_grained_shuffle.batch_size);
-            stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
-        });
+        extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
     }
-    else
-    {
-        pipeline.transform([&](auto & stream) {
-            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, false>>(
-                dag_context.tunnel_set,
-                partition_col_ids,
-                partition_col_collators,
-                exchange_type,
-                context.getSettingsRef().dag_records_per_chunk,
-                context.getSettingsRef().batch_send_min_limit,
-                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-                dag_context,
-                fine_grained_shuffle.stream_count,
-                fine_grained_shuffle.batch_size);
-            stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-        });
-    }
+    int stream_id = 0;
+    pipeline.transform([&](auto & stream) {
+        // construct writer
+        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+            dag_context.tunnel_set,
+            partition_col_ids,
+            partition_col_collators,
+            exchange_type,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
+            /*should_send_exec_summary_at_last=*/stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            dag_context,
+            fine_grained_shuffle.enable(),
+            fine_grained_shuffle.stream_count,
+            fine_grained_shuffle.batch_size);
+        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+        stream->setExtraInfo(extra_info);
+    });
 }
 
 void PhysicalExchangeSender::finalize(const Names & parent_require)

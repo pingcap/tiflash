@@ -71,56 +71,49 @@ std::vector<std::vector<int>> getLinuxNumaNodes()
     if (!nodes.exists() || !nodes.isDirectory())
     {
         auto cpus = getCPUs(cpus_dir_name);
-        if (cpus.empty())
+        RUNTIME_CHECK_MSG(!cpus.empty(), "Not recognize CPU: {}", cpus_dir_name);
+        numa_nodes.push_back(std::move(cpus));
+        return numa_nodes;
+    }
+
+    // get the cpu id from each NUMA node
+    Poco::DirectoryIterator end;
+    for (Poco::DirectoryIterator iter(nodes); iter != end; ++iter)
+    {
+        if (!isNodeDir(iter.name()))
         {
-            throw Exception("Not recognize CPU: " + cpus_dir_name);
+            continue;
         }
+        auto dir_name = nodes_dir_name + "/" + iter.name();
+        auto cpus = getCPUs(dir_name);
+        RUNTIME_CHECK_MSG(!cpus.empty(), "Not recognize CPU: {}", nodes_dir_name);
         numa_nodes.push_back(std::move(cpus));
     }
-    else
-    {
-        Poco::DirectoryIterator end;
-        for (Poco::DirectoryIterator iter(nodes); iter != end; ++iter)
-        {
-            if (!isNodeDir(iter.name()))
-            {
-                continue;
-            }
-            auto dir_name = nodes_dir_name + "/" + iter.name();
-            auto cpus = getCPUs(dir_name);
-            if (cpus.empty())
-            {
-                throw Exception("Not recognize CPU: " + nodes_dir_name);
-            }
-            numa_nodes.push_back(std::move(cpus));
-        }
-    }
-    if (numa_nodes.empty())
-    {
-        throw Exception("Not recognize CPU");
-    }
+    RUNTIME_CHECK_MSG(!numa_nodes.empty(), "Not recognize CPU");
     return numa_nodes;
 }
 
 std::vector<std::vector<int>> getNumaNodes(Poco::Logger * log)
 {
+#ifndef __APPLE__ // Apple macbooks does not support NUMA
     try
     {
         return getLinuxNumaNodes();
     }
     catch (Exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.message());
+        LOG_WARNING(log, "{}", e.message());
     }
     catch (std::exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.what());
+        LOG_WARNING(log, "{}", e.what());
     }
     catch (...)
     {
-        LOG_FMT_WARNING(log, "Unknow Error");
+        LOG_WARNING(log, "Unknown Error");
     }
-    LOG_FMT_WARNING(log, "Cannot recognize the CPU NUMA infomation, use the CPU as 'one numa node'");
+#endif
+    LOG_WARNING(log, "Cannot recognize the CPU NUMA infomation, use the CPU as 'one numa node'");
     std::vector<std::vector<int>> numa_nodes(1); // "One numa node"
     return numa_nodes;
 }

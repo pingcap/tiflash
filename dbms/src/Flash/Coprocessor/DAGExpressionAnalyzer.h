@@ -43,6 +43,9 @@ enum class ExtraCastAfterTSMode
     AppendDurationCast
 };
 
+struct JoinKeyType;
+using JoinKeyTypes = std::vector<JoinKeyType>;
+
 class DAGExpressionAnalyzerHelper;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   */
@@ -83,7 +86,10 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    void appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step);
+    void appendWindowColumns(
+        WindowDescription & window_description,
+        const tipb::Window & window,
+        const ExpressionActionsPtr & actions);
 
     WindowDescription buildWindowDescription(const tipb::Window & window);
 
@@ -154,7 +160,7 @@ public:
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         Names & key_names,
         bool left,
         bool is_right_out_join,
@@ -223,6 +229,22 @@ private:
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
 
+    void buildLeadLag(
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions,
+        const String & window_func_name,
+        WindowDescription & window_description,
+        NamesAndTypes & source_columns,
+        NamesAndTypes & window_columns);
+
+    void buildCommonWindowFunc(
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions,
+        const String & window_func_name,
+        WindowDescription & window_description,
+        NamesAndTypes & source_columns,
+        NamesAndTypes & window_columns);
+
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,
         const tipb::Expr & arg,
@@ -241,7 +263,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name);
 
-    String appendCastIfNeeded(
+    String appendCastForFunctionExpr(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         const String & expr_name);
@@ -269,7 +291,7 @@ private:
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         bool left,
         bool is_right_out_join);
 

@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string_view>
 
 namespace mem_utils::details
@@ -40,7 +41,7 @@ ALWAYS_INLINE static inline T clear_rightmost_bit_one(const T value)
 ALWAYS_INLINE static inline uint32_t rightmost_bit_one_index(const uint32_t value)
 {
     assert(value != 0);
-    return _tzcnt_u32(value);
+    return __builtin_ctz(value);
 }
 
 using Block32 = __m256i;
@@ -61,6 +62,11 @@ FLATTEN_INLINE_PURE static inline T read(const void * data)
     T val = *reinterpret_cast<const S *>(data);
     return val;
 }
+template <typename S>
+FLATTEN_INLINE static inline void write(void * tar, const S & src)
+{
+    *reinterpret_cast<S *>(tar) = src;
+}
 FLATTEN_INLINE_PURE static inline Block32 load_block32(const void * p)
 {
     return _mm256_loadu_si256(reinterpret_cast<const Block32 *>(p));
@@ -68,6 +74,22 @@ FLATTEN_INLINE_PURE static inline Block32 load_block32(const void * p)
 FLATTEN_INLINE_PURE static inline Block16 load_block16(const void * p)
 {
     return _mm_loadu_si128(reinterpret_cast<const Block16 *>(p));
+}
+template <bool aligned = false>
+FLATTEN_INLINE static inline void write_block16(void * p, const Block16 & src)
+{
+    if constexpr (aligned)
+        _mm_store_si128(reinterpret_cast<Block16 *>(p), src);
+    else
+        _mm_storeu_si128(reinterpret_cast<Block16 *>(p), src);
+}
+template <bool aligned = false>
+FLATTEN_INLINE static inline void write_block32(void * p, const Block32 & src)
+{
+    if constexpr (aligned)
+        _mm256_store_si256(reinterpret_cast<Block32 *>(p), src);
+    else
+        _mm256_storeu_si256(reinterpret_cast<Block32 *>(p), src);
 }
 FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(const void * p1, const void * p2)
 {
@@ -91,20 +113,6 @@ FLATTEN_INLINE_PURE static inline int cmp_block1(const void * p1, const void * p
     return int32_t(read<uint8_t>(p1)) - int32_t(read<uint8_t>(p2));
 }
 
-FLATTEN_INLINE_PURE static inline int cmp_block8(const void * p1, const void * p2)
-{
-    // the left most bit may be 1, use std::memcmp(,,8) to use `sbb`
-    /*
-        bswap   rcx
-        bswap   rdx
-        xor     eax, eax
-        cmp     rcx, rdx
-        seta    al
-        sbb     eax, 0
-    */
-    return std::memcmp(p1, p2, 8);
-}
-
 FLATTEN_INLINE_PURE static inline int cmp_block16(const char * p1, const char * p2)
 {
     uint32_t mask = get_block16_cmp_eq_mask(p1, p2); // mask is up to 0xffff
@@ -112,18 +120,37 @@ FLATTEN_INLINE_PURE static inline int cmp_block16(const char * p1, const char * 
     if (unlikely(mask != 0))
     {
         auto pos = rightmost_bit_one_index(mask);
-        return cmp_block1(p1 + pos, p2 + pos);
+        int ret = cmp_block1(p1 + pos, p2 + pos);
+        if (ret == 0)
+        {
+            __builtin_unreachable();
+        }
+        else
+        {
+            return ret;
+        }
     }
     return 0;
 }
-FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1, const char * p2)
+
+template <bool must_not_eq = false>
+FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1,
+                                                  const char * p2)
 {
     uint32_t mask = get_block32_cmp_eq_mask(p1, p2); // mask is up to 0xffffffff
     mask -= Block32Mask;
-    if (unlikely(mask != 0))
+    if (must_not_eq || unlikely(mask != 0))
     {
         auto pos = rightmost_bit_one_index(mask);
-        return cmp_block1(p1 + pos, p2 + pos);
+        int ret = cmp_block1(p1 + pos, p2 + pos);
+        if (ret == 0)
+        {
+            __builtin_unreachable();
+        }
+        else
+        {
+            return ret;
+        }
     }
     return 0;
 }
@@ -150,42 +177,66 @@ FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const 
 
 FLATTEN_INLINE_PURE static inline int cmp_block32x4(const char * a, const char * b)
 {
-    if (check_block32x4_eq(a, b))
+    if (likely(check_block32x4_eq(a, b)))
         return 0;
-    for (size_t i = 0; i < AVX2_UNROLL_NUM - 1; ++i)
+    for (size_t i = 0; i < (AVX2_UNROLL_NUM - 1); ++i)
     {
-        if (auto ret = cmp_block32(a + i * BLOCK32_SIZE, (b + i * BLOCK32_SIZE)); ret)
+        if (auto ret = cmp_block32(a + i * BLOCK32_SIZE, (b + i * BLOCK32_SIZE)); unlikely(ret))
             return ret;
     }
-    return cmp_block32(a + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE, (b + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE));
-}
-FLATTEN_INLINE_PURE static inline uint32_t swap_u32(uint32_t val)
-{
-    return __builtin_bswap32(val);
-}
-FLATTEN_INLINE_PURE static inline uint64_t swap_u64(uint64_t val)
-{
-    return __builtin_bswap64(val);
-}
-
-[[maybe_unused]] FLATTEN_INLINE_PURE static inline uint32_t read_u32_swap(const void * data)
-{
-    return swap_u32(read<uint32_t>(data));
-}
-
-[[maybe_unused]] FLATTEN_INLINE_PURE static inline uint64_t read_u64_swap(const void * data)
-{
-    return swap_u64(read<uint64_t>(data));
+    return cmp_block32<true>(a + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE, (b + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE));
 }
 
 // ref: https://github.com/lattera/glibc/blob/master/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
-FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char * p2, size_t n)
+FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char * p2, size_t n) noexcept
 {
     constexpr size_t loop_block32x4_size = AVX2_UNROLL_NUM * BLOCK32_SIZE;
 
     // n <= 32
     if (likely(n <= BLOCK32_SIZE))
     {
+#if !defined(AVX2_MEM_CMP_NORMAL_IF_ELSE)
+
+#ifdef M
+        static_assert(false, "`M` is defined");
+#else
+#define M(x)                                  \
+    case (x):                                 \
+    {                                         \
+        return __builtin_memcmp(p1, p2, (x)); \
+    }
+#endif
+        switch (n)
+        {
+            M(0);
+            M(1);
+            M(2);
+            M(3);
+            M(4);
+            M(5);
+            M(6);
+            M(7);
+            M(8);
+            M(9);
+            M(10);
+            M(11);
+            M(12);
+            M(13);
+            M(14);
+            M(15);
+            M(16);
+        default:
+        {
+            // 17~32
+            if (auto ret = cmp_block16(p1, p2); ret)
+                return ret;
+            return cmp_block16(p1 + n - BLOCK16_SIZE, p2 + n - BLOCK16_SIZE);
+        }
+        }
+#undef M
+
+#else
+        // an optional way to check small str
         if (unlikely(n < 2))
         {
             // 0~1
@@ -245,6 +296,7 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
                 return ret;
             return cmp_block16(p1 + n - BLOCK16_SIZE, p2 + n - BLOCK16_SIZE);
         }
+#endif
     }
     //  8 * 32 < n
     if (unlikely(8 * BLOCK32_SIZE < n))
@@ -255,10 +307,10 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
             return ret;
         {
             // align addr of one data pointer
-            auto offset = BLOCK32_SIZE - OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE);
-            p1 += offset;
-            p2 += offset;
-            n -= offset;
+            auto offset = ssize_t(OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE)) - BLOCK32_SIZE;
+            p1 -= offset;
+            p2 -= offset;
+            n += offset;
         }
 
         for (; n >= loop_block32x4_size;)
@@ -312,13 +364,15 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
     }
 }
 
-FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
+FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const char * p2, size_t n) noexcept
 {
     constexpr size_t loop_block32x4_size = AVX2_UNROLL_NUM * BLOCK32_SIZE;
 
     // n <= 32
     if (likely(n <= BLOCK32_SIZE))
     {
+#if !defined(AVX2_MEM_EQ_NORMAL_IF_ELSE)
+
 #ifdef M
         static_assert(false, "`M` is defined");
 #else
@@ -359,8 +413,8 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         }
 #undef M
 
-// an optional way to check small str
-#if defined(AVX2_MEM_EQ_NORMAL_IF_ELSE)
+#else
+        // an optional way to check small str
         if (unlikely(n < 2))
         {
             // 0~1
@@ -415,10 +469,10 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             return false;
         {
             // align addr of one data pointer
-            auto offset = BLOCK32_SIZE - OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE);
-            p1 += offset;
-            p2 += offset;
-            n -= offset;
+            auto offset = ssize_t(OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE)) - BLOCK32_SIZE;
+            p1 -= offset;
+            p2 -= offset;
+            n += offset;
         }
 
         for (; n >= loop_block32x4_size;)
@@ -471,4 +525,107 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         return check_block32x4_eq(p1 + n - loop_block32x4_size, p2 + n - loop_block32x4_size);
     }
 }
+
+template <size_t bytes>
+ALWAYS_INLINE inline void memcpy_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size);
+
+template <size_t n>
+ALWAYS_INLINE inline void memcpy_block32_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size);
+
+template <typename T>
+ALWAYS_INLINE inline void memcpy_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= sizeof(T));
+    auto a = mem_utils::details::read<T>(src);
+    auto b = mem_utils::details::read<T>(src + size - sizeof(T));
+    mem_utils::details::write(dst, a);
+    mem_utils::details::write(dst + size - sizeof(T), b);
+}
+
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<2>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 2 && size <= 4);
+    using T = uint16_t;
+    static_assert(sizeof(T) == 2);
+    memcpy_ignore_overlap<T>(dst, src, size);
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<4>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 4 && size <= 8);
+    using T = uint32_t;
+    static_assert(sizeof(T) == 4);
+    memcpy_ignore_overlap<T>(dst, src, size);
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<8>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 8 && size <= 16);
+    using T = uint64_t;
+    static_assert(sizeof(T) == 8);
+    memcpy_ignore_overlap<T>(dst, src, size);
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<16>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 16 && size <= 32);
+    auto c0 = mem_utils::details::load_block16(src);
+    auto c1 = mem_utils::details::load_block16(src + size - 16);
+    mem_utils::details::write_block16(dst, c0);
+    mem_utils::details::write_block16(dst + size - 16, c1);
+}
+#define LOAD_HEAD(n) auto c_head_##n = mem_utils::details::load_block32(src + BLOCK32_SIZE * (n));
+#define WRITE_HEAD(n) mem_utils::details::write_block32(dst + BLOCK32_SIZE * (n), c_head_##n);
+#define LOAD_END(n) auto c_end_##n = mem_utils::details::load_block32(src + size - BLOCK32_SIZE * ((n) + 1));
+#define WRITE_END(n) mem_utils::details::write_block32(dst + size - BLOCK32_SIZE * ((n) + 1), c_end_##n);
+
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<32>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 32 && size <= 64);
+    LOAD_HEAD(0)
+    LOAD_END(0)
+    WRITE_HEAD(0)
+    WRITE_END(0)
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<64>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 64 && size <= 128);
+    LOAD_HEAD(0)
+    LOAD_HEAD(1)
+    LOAD_END(1)
+    LOAD_END(0)
+    WRITE_HEAD(0)
+    WRITE_HEAD(1)
+    WRITE_END(1)
+    WRITE_END(0)
+}
+template <>
+ALWAYS_INLINE inline void memcpy_ignore_overlap<128>(char * __restrict dst, const char * __restrict src, size_t size)
+{
+    assert(size >= 128 && size <= 256);
+    LOAD_HEAD(0)
+    LOAD_HEAD(1)
+    LOAD_HEAD(2)
+    LOAD_HEAD(3)
+    LOAD_END(3)
+    LOAD_END(2)
+    LOAD_END(1)
+    LOAD_END(0)
+    WRITE_HEAD(0)
+    WRITE_HEAD(1)
+    WRITE_HEAD(2)
+    WRITE_HEAD(3)
+    WRITE_END(3)
+    WRITE_END(2)
+    WRITE_END(1)
+    WRITE_END(0)
+}
+#undef LOAD_HEAD
+#undef WRITE_HEAD
+#undef LOAD_END
+#undef WRITE_END
+
 } // namespace mem_utils::details

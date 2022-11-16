@@ -364,7 +364,7 @@ struct StringComparisonWithCollatorImpl
         size_t a_n = a.size();
         size_t b_n = b.size();
 
-        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a_n, reinterpret_cast<const char *>(b.data()), b_n);
+        int res = collator->compareFastPath(reinterpret_cast<const char *>(a.data()), a_n, reinterpret_cast<const char *>(b.data()), b_n);
         c = Op::apply(res, 0);
     }
 };

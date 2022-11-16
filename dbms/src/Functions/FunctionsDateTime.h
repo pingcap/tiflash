@@ -899,7 +899,7 @@ struct AddSecondsImpl
     // TODO: need do these in vector mode in the future
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
-        Field packed_uint_value = parseMyDateTime(str);
+        Field packed_uint_value = parseMyDateTime(str, 6, checkTimeValid);
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
         UInt64 result = AddSecondsImpl::execute(packed_uint, delta, time_zone);
         MyDateTime myDateTime(result);
@@ -983,7 +983,7 @@ struct AddDaysImpl
 
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
-        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, true);
+        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, checkTimeValid);
         Field packed_uint_value = value_and_is_date.first;
         bool is_date = value_and_is_date.second;
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
@@ -1051,7 +1051,7 @@ struct AddMonthsImpl
 
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
-        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, true);
+        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, checkTimeValid);
         Field packed_uint_value = value_and_is_date.first;
         bool is_date = value_and_is_date.second;
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
@@ -2802,17 +2802,6 @@ public:
             dispatch<ExtractMyDateTimeImpl::extractDayHour>(col_from, vec_to);
         else if (unit == "year_month")
             dispatch<ExtractMyDateTimeImpl::extractYearMonth>(col_from, vec_to);
-        /// TODO: support ExtractDuration
-        // else if (unit == "hour");
-        // else if (unit == "minute");
-        // else if (unit == "second");
-        // else if (unit == "microsecond");
-        // else if (unit == "second_microsecond");
-        // else if (unit == "minute_microsecond");
-        // else if (unit == "minute_second");
-        // else if (unit == "hour_microsecond");
-        // else if (unit == "hour_second");
-        // else if (unit == "hour_minute");
         else
             throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
 

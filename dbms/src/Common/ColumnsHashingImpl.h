@@ -128,21 +128,21 @@ public:
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
 
     template <typename Data>
-    ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
+    ALWAYS_INLINE inline EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return emplaceImpl(key_holder, data);
     }
 
     template <typename Data>
-    ALWAYS_INLINE FindResult findKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
+    ALWAYS_INLINE inline FindResult findKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
     template <typename Data>
-    ALWAYS_INLINE size_t getHash(const Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
+    ALWAYS_INLINE inline size_t getHash(const Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return data.hash(keyHolderGetKey(key_holder));
@@ -167,7 +167,7 @@ protected:
     }
 
     template <typename Data, typename KeyHolder>
-    ALWAYS_INLINE EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data)
+    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -220,7 +220,7 @@ protected:
     }
 
     template <typename Data, typename Key>
-    ALWAYS_INLINE FindResult findKeyImpl(Key key, Data & data)
+    ALWAYS_INLINE inline FindResult findKeyImpl(Key key, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {

@@ -50,7 +50,7 @@ public:
     // Format message with fmt::format, like the logging functions.
     template <typename... Args>
     Exception(int code, const std::string & fmt, Args &&... args)
-        : Exception(fmt::format(fmt, std::forward<Args>(args)...), code)
+        : Exception(FmtBuffer().fmtAppend(fmt, std::forward<Args>(args)...).toString(), code)
     {}
 
     Exception(const std::string & msg, const std::string & arg, int code = 0)
@@ -203,7 +203,7 @@ const LoggerPtr & getDefaultFatalLogger();
 template <typename... Args>
 inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
 {
-    if (logger->fatal())
+    if (logger->is(Poco::Message::Priority::PRIO_FATAL))
     {
         auto message = generateLogMessage(
             logger->name(),
@@ -225,10 +225,28 @@ inline void log(const char * filename, int lineno, const char * condition, const
 {
     log(filename, lineno, condition, getDefaultFatalLogger(), fmt_str, std::forward<Args>(args)...);
 }
+
+/**
+ * Roughly check whether the passed in string may be a string literal expression.
+ */
+constexpr auto maybeStringLiteralExpr(const std::string_view sv)
+{
+    return sv.front() == '"' && sv.back() == '"';
+}
 } // namespace exception_details
 
-#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem) \
-    .fmtAppend(", " BOOST_PP_STRINGIZE(elem) " = {}", elem)
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem)                                                       \
+    .fmtAppend(                                                                                                \
+        [] {                                                                                                   \
+            static_assert(                                                                                     \
+                !::DB::exception_details::maybeStringLiteralExpr(                                              \
+                    BOOST_PP_STRINGIZE(elem)),                                                                 \
+                    "Unexpected " BOOST_PP_STRINGIZE(elem) ": Seems that you may be passing a string literal " \
+                                                           "to RUNTIME_CHECK? Use RUNTIME_CHECK_MSG instead. " \
+                                                           "See tiflash/pull/5777 for details.");              \
+            return ", " BOOST_PP_STRINGIZE(elem) " = {}";                                                      \
+        }(),                                                                                                   \
+        elem)
 
 #define INTERNAL_RUNTIME_CHECK_APPEND_ARGS(...) \
     BOOST_PP_SEQ_FOR_EACH(INTERNAL_RUNTIME_CHECK_APPEND_ARG, _, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
@@ -264,7 +282,7 @@ inline void log(const char * filename, int lineno, const char * condition, const
         if (unlikely(!(condition)))                                         \
         {                                                                   \
             throw ::DB::Exception(                                          \
-                FmtBuffer().append("Check " #condition " failed")           \
+                ::DB::FmtBuffer().append("Check " #condition " failed")     \
                     INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(__VA_ARGS__) \
                         .toString(),                                        \
                 ::DB::ErrorCodes::LOGICAL_ERROR);                           \
@@ -279,15 +297,15 @@ inline void log(const char * filename, int lineno, const char * condition, const
  * RUNTIME_CHECK_MSG(a != b, "invariant not meet, a = {}, b = {}", a, b);
  * ```
  */
-#define RUNTIME_CHECK_MSG(condition, fmt, ...)                                                                \
-    do                                                                                                        \
-    {                                                                                                         \
-        if (unlikely(!(condition)))                                                                           \
-        {                                                                                                     \
-            throw ::DB::Exception(                                                                            \
-                FmtBuffer().append("Check " #condition " failed: ").fmtAppend(fmt, ##__VA_ARGS__).toString(), \
-                ::DB::ErrorCodes::LOGICAL_ERROR);                                                             \
-        }                                                                                                     \
+#define RUNTIME_CHECK_MSG(condition, fmt, ...)                                                                      \
+    do                                                                                                              \
+    {                                                                                                               \
+        if (unlikely(!(condition)))                                                                                 \
+        {                                                                                                           \
+            throw ::DB::Exception(                                                                                  \
+                ::DB::FmtBuffer().append("Check " #condition " failed: ").fmtAppend(fmt, ##__VA_ARGS__).toString(), \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                                                                   \
+        }                                                                                                           \
     } while (false)
 
 /**
@@ -309,7 +327,7 @@ inline void log(const char * filename, int lineno, const char * condition, const
     {                                                                  \
         if (unlikely(!(condition)))                                    \
         {                                                              \
-            exception_details::log(                                    \
+            ::DB::exception_details::log(                              \
                 &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
                 __LINE__,                                              \
                 #condition,                                            \

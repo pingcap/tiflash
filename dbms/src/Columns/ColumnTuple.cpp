@@ -117,7 +117,7 @@ void ColumnTuple::insert(const Field & x)
 
 void ColumnTuple::insertFrom(const IColumn & src_, size_t n)
 {
-    const ColumnTuple & src = static_cast<const ColumnTuple &>(src_);
+    const auto & src = static_cast<const ColumnTuple &>(src_);
 
     const size_t tuple_size = columns.size();
     if (src.columns.size() != tuple_size)
@@ -241,6 +241,30 @@ MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & se
     }
 
     return res;
+}
+
+void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const
+{
+    const size_t tuple_size = columns.size();
+    ColumnIndex scattered_num_columns = scatterColumns.size();
+    std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
+    for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
+    {
+        for (size_t scatter_idx = 0; scatter_idx < scattered_num_columns; ++scatter_idx)
+        {
+            auto col = static_cast<ColumnTuple &>(scatterColumns[scatter_idx]->assumeMutableRef()).columns[tuple_element_idx]->assumeMutable();
+            scattered_tuple_elements[tuple_element_idx].push_back(std::move(col));
+        }
+        columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
+    }
+
+    for (size_t scattered_idx = 0; scattered_idx < scattered_num_columns; ++scattered_idx)
+    {
+        MutableColumns new_columns(tuple_size);
+        for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
+            new_columns[tuple_element_idx] = std::move(scattered_tuple_elements[tuple_element_idx][scattered_idx]);
+        scatterColumns[scattered_idx] = ColumnTuple::create(std::move(new_columns));
+    }
 }
 
 int ColumnTuple::compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const

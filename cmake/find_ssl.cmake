@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Default value on mac is ON to make development easy.
+# On other platform it is OFF because we should release tiflash binary built with openssl.
 option(USE_INTERNAL_SSL_LIBRARY "Set to FALSE to use system *ssl library instead of bundled" ${NOT_UNBUNDLED})
 
 if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/boringssl/README.md")
@@ -23,10 +25,17 @@ if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/boringssl/README.md")
     set(MISSING_INTERNAL_SSL_LIBRARY 1)
 endif()
 
+if (NOT OS_DARWIN)
+    option(USE_GM_SSL "Set to FALSE to disable GmSSL" ${USE_INTERNAL_SSL_LIBRARY})
+else()
+    # Avoid link to GmSSL when compile on macos because GmSSL only supports dynamic link which complicate the binary package
+    option(USE_GM_SSL "Set to FALSE to disable GmSSL" 0)
+endif()
+
 set (OPENSSL_USE_STATIC_LIBS ${USE_STATIC_LIBRARIES})
 
 if (NOT USE_INTERNAL_SSL_LIBRARY)
-    if (APPLE)
+    if (OS_DARWIN)
         set (OPENSSL_ROOT_DIR "/usr/local/opt/openssl@1.1" CACHE INTERNAL "")
         # https://rt.openssl.org/Ticket/Display.html?user=guest&pass=guest&id=2232
         if (USE_STATIC_LIBRARIES)
@@ -133,4 +142,4 @@ if(OPENSSL_FOUND AND NOT USE_INTERNAL_SSL_LIBRARY)
     endif()
 endif()
 
-message (STATUS "Using ssl=${USE_SSL}: ${OPENSSL_INCLUDE_DIR} : ${OPENSSL_LIBRARIES}")
+message (STATUS "Using ssl=${USE_SSL} gmssl=${USE_GM_SSL}: ${OPENSSL_INCLUDE_DIR} : ${OPENSSL_LIBRARIES}")

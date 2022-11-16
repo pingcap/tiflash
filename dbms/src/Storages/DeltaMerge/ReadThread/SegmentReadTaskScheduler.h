@@ -55,13 +55,13 @@ private:
     SegmentReadTaskScheduler();
 
     // Choose segment to read.
-    // Returns <MergedTaskPtr, run_next_schedule_immediatly>
+    // Returns <MergedTaskPtr, run_next_schedule_immediately>
     std::pair<MergedTaskPtr, bool> scheduleMergedTask();
 
     void setStop();
     bool isStop() const;
     bool schedule();
-    void schedThread();
+    void schedLoop();
 
     SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids);
     // <seg_id, pool_ids>

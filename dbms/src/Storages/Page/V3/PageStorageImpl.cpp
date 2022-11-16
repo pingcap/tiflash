@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageDefines.h>
@@ -22,8 +24,11 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+
+#include <mutex>
 
 namespace DB
 {
@@ -31,25 +36,29 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_ps_wal_compact[];
+}
 namespace PS::V3
 {
 PageStorageImpl::PageStorageImpl(
     String name,
     PSDiskDelegatorPtr delegator_,
-    const Config & config_,
+    const PageStorageConfig & config_,
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
-    , log(Logger::get("PageStorage", name))
-    , blob_store(name, file_provider_, delegator, parseBlobConfig(config_))
+    , log(Logger::get(name))
+    , blob_store(name, file_provider_, delegator, BlobConfig::from(config_))
 {
-    LOG_FMT_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
+    LOG_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::reloadConfig()
 {
-    blob_store.reloadConfig(parseBlobConfig(config));
+    blob_store.reloadConfig(BlobConfig::from(config));
 }
 
 void PageStorageImpl::restore()
@@ -61,7 +70,7 @@ void PageStorageImpl::restore()
     PageDirectoryFactory factory;
     page_directory = factory
                          .setBlobStore(blob_store)
-                         .create(storage_name, file_provider, delegator, parseWALConfig(config));
+                         .create(storage_name, file_provider, delegator, WALConfig::from(config));
 }
 
 PageId PageStorageImpl::getMaxId()
@@ -91,7 +100,9 @@ DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing
 
 FileUsageStatistics PageStorageImpl::getFileUsageStatistics() const
 {
-    return blob_store.getFileUsageStatistics();
+    auto u = blob_store.getFileUsageStatistics();
+    u.merge(page_directory->getFileUsageStatistics());
+    return u;
 }
 
 SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
@@ -114,8 +125,12 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     if (unlikely(write_batch.empty()))
         return;
 
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
+
     // Persist Page data to BlobStore
     auto edit = blob_store.write(write_batch, write_limiter);
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_blob).Observe(watch.elapsedSeconds());
     page_directory->apply(std::move(edit), write_limiter);
 }
 
@@ -128,7 +143,7 @@ DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageId page_id, S
 
     try
     {
-        const auto & [id, entry] = page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
+        const auto & [id, entry] = page_directory->getByIDOrNull(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
@@ -144,7 +159,7 @@ DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageId page_id, S
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.message());
+        LOG_WARNING(log, "{}", e.message());
         return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
     }
 }
@@ -156,7 +171,7 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const Read
         snapshot = this->getSnapshot("");
     }
 
-    auto page_entry = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
+    auto page_entry = throw_on_not_exist ? page_directory->getByID(buildV3Id(ns_id, page_id), snapshot) : page_directory->getByIDOrNull(buildV3Id(ns_id, page_id), snapshot);
     return blob_store.read(page_entry, read_limiter);
 }
 
@@ -175,14 +190,13 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
 
     if (throw_on_not_exist)
     {
-        auto page_entries = page_directory->get(page_id_v3s, snapshot);
+        auto page_entries = page_directory->getByIDs(page_id_v3s, snapshot);
         return blob_store.read(page_entries, read_limiter);
     }
     else
     {
-        auto [page_entries, page_ids_not_found] = page_directory->getOrNull(page_id_v3s, snapshot);
+        auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_id_v3s, snapshot);
         PageMap page_map = blob_store.read(page_entries, read_limiter);
-
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             Page page_not_found;
@@ -193,31 +207,6 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     }
 }
 
-PageIds PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot("");
-    }
-
-    PageIdV3Internals page_id_v3s;
-    for (auto p_id : page_ids)
-        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
-
-    if (throw_on_not_exist)
-    {
-        auto page_entries = page_directory->get(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
-        return {};
-    }
-    else
-    {
-        auto [page_entries, page_ids_not_found] = page_directory->getOrNull(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
-        return page_ids_not_found;
-    }
-}
-
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
@@ -225,11 +214,13 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
         snapshot = this->getSnapshot("");
     }
 
-    BlobStore::FieldReadInfos read_infos;
+    // get the entries from directory, keep track
+    // for not found page_ids
     PageIds page_ids_not_found;
+    BlobStore::FieldReadInfos read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
-        const auto & [id, entry] = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
+        const auto & [id, entry] = throw_on_not_exist ? page_directory->getByID(buildV3Id(ns_id, page_id), snapshot) : page_directory->getByIDOrNull(buildV3Id(ns_id, page_id), snapshot);
 
         if (entry.isValid())
         {
@@ -241,8 +232,9 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
             page_ids_not_found.emplace_back(id);
         }
     }
-    PageMap page_map = blob_store.read(read_infos, read_limiter);
 
+    // read page data from blob_store
+    PageMap page_map = blob_store.read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
         Page page_not_found;
@@ -268,7 +260,7 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
     const auto & page_ids = page_directory->getAllPageIds();
     for (const auto & valid_page : page_ids)
     {
-        const auto & page_id_and_entry = page_directory->get(valid_page, snapshot);
+        const auto & page_id_and_entry = page_directory->getByID(valid_page, snapshot);
         acceptor(blob_store.read(page_id_and_entry));
     }
 }
@@ -301,21 +293,26 @@ String PageStorageImpl::GCTimeStatistics::toLogging() const
     };
     return fmt::format("GC finished{}."
                        " [total time={}ms]"
-                       " [dump snapshots={}ms] [gc in mem entries={}ms]"
-                       " [blobstore remove entries={}ms] [blobstore get status={}ms]"
-                       " [get gc entries={}ms] [blobstore full gc={}ms]"
+                       " [compact wal={}ms] [compact directory={}ms] [compact spacemap={}ms]"
+                       " [gc status={}ms] [gc entries={}ms] [gc data={}ms]"
                        " [gc apply={}ms]"
                        "{}", // a placeholder for external page gc at last
                        stage_suffix,
                        total_cost_ms,
-                       dump_snapshots_ms,
-                       gc_in_mem_entries_ms,
-                       blobstore_remove_entries_ms,
-                       blobstore_get_gc_stats_ms,
+                       compact_wal_ms,
+                       compact_directory_ms,
+                       compact_spacemap_ms,
+                       full_gc_prepare_ms,
                        full_gc_get_entries_ms,
                        full_gc_blobstore_copy_ms,
                        full_gc_apply_ms,
                        get_external_msg());
+}
+
+void PageStorageImpl::GCTimeStatistics::finishCleanExternalPage(UInt64 clean_cost_ms)
+{
+    clean_external_page_ms = clean_cost_ms;
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_clean_external).Observe(clean_external_page_ms / 1000.0);
 }
 
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
@@ -336,28 +333,59 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
 // TODO: `clean_external_page` for all tables may slow down the whole gc process when there are lots of table.
 void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics)
 {
-    // TODO: `callbacks_mutex` is being held during the whole `cleanExternalPage`, meaning gc will block
-    // creating/dropping table, need to refine it later.
-    std::scoped_lock lock{callbacks_mutex};
-    statistics.num_external_callbacks = callbacks_container.size();
-    if (!callbacks_container.empty())
+    // Fine grained lock on `callbacks_mutex`.
+    // So that adding/removing a storage will not be blocked for the whole
+    // processing time of `cleanExternalPage`.
+    std::shared_ptr<ExternalPageCallbacks> ns_callbacks;
     {
-        Stopwatch external_watch;
-        for (const auto & [ns_id, callbacks] : callbacks_container)
+        std::scoped_lock lock{callbacks_mutex};
+        // check and get the begin iter
+        statistics.num_external_callbacks = callbacks_container.size();
+        auto iter = callbacks_container.begin();
+        if (iter == callbacks_container.end()) // empty
         {
-            // Note that we must call `scanner` before `getAliveExternalIds`
-            // Or some committed external ids is not included and we may
-            // remove the external page by accident with `remover`.
-            const auto pending_external_pages = callbacks.scanner();
-            statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
-            const auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
-            statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
-            callbacks.remover(pending_external_pages, alive_external_ids);
-            statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
+            statistics.finishCleanExternalPage(gc_watch.elapsedMillisecondsFromLastTime());
+            return;
+        }
+
+        assert(iter != callbacks_container.end()); // early exit in the previous code
+        // keep the shared_ptr so that erasing ns_id from PageStorage won't invalid the `ns_callbacks`
+        ns_callbacks = iter->second;
+    }
+
+    Stopwatch external_watch;
+
+    SYNC_FOR("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+
+    while (true)
+    {
+        // 1. Note that we must call `scanner` before `getAliveExternalIds`.
+        // Or some committed external ids is not included in `alive_ids`
+        // but exist in `pending_external_pages`. They will be removed by
+        // accident with `remover` under this situation.
+        // 2. Assume calling the callbacks after erasing ns_is is safe.
+
+        // the external pages on disks.
+        auto pending_external_pages = ns_callbacks->scanner();
+        statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
+        auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->ns_id);
+        statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
+        // remove the external pages that is not alive now.
+        ns_callbacks->remover(pending_external_pages, alive_external_ids);
+        statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
+
+        // move to next namespace callbacks
+        {
+            std::scoped_lock lock{callbacks_mutex};
+            // next ns_id that is greater than `ns_id`
+            auto iter = callbacks_container.upper_bound(ns_callbacks->ns_id);
+            if (iter == callbacks_container.end())
+                break;
+            ns_callbacks = iter->second;
         }
     }
 
-    statistics.clean_external_page_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.finishCleanExternalPage(gc_watch.elapsedMillisecondsFromLastTime());
 }
 
 PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
@@ -372,27 +400,40 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
 
     GCTimeStatistics statistics;
 
+    // TODO: rewrite the GC process and split it into smaller interface
+    bool force_wal_compact = false;
+    fiu_do_on(FailPoints::force_ps_wal_compact, { force_wal_compact = true; });
+
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    if (page_directory->tryDumpSnapshot(read_limiter, write_limiter))
+    if (page_directory->tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact))
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
-    statistics.dump_snapshots_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
     const auto & del_entries = page_directory->gcInMemEntries();
-    statistics.gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
+
+    SYNC_FOR("before_PageStorageImpl::doGC_fullGC_prepare");
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
     blob_store.remove(del_entries);
-    statistics.blobstore_remove_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_spacemap_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap).Observe(statistics.compact_spacemap_ms / 1000.0);
 
-    // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `full GC`.
-    // Blobs that do not need to do full GC will also do ftruncate to reduce space amplification.
+    // Note that if full GC is not executed, below metrics won't be shown on grafana but it should
+    // only take few ms to fininsh these in-memory operations. Check them out by the logs if
+    // the total time cost not match.
+
+    // 3. Check whether there are BlobFiles that need to do `full GC`.
+    // This function will also try to use `ftruncate` to reduce space amplification.
     const auto & blob_ids_need_gc = blob_store.getGCStats();
-    statistics.blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.full_gc_prepare_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_ids_need_gc.empty())
     {
         cleanExternalPage(gc_watch, statistics);
@@ -416,11 +457,15 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
         return statistics;
     }
 
+    SYNC_FOR("before_PageStorageImpl::doGC_fullGC_commit");
+
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
     statistics.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_rewrite).Observe( //
+        (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms) / 1000.0);
     RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
     // 6. MVCC gc apply
@@ -432,6 +477,9 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_commit).Observe(statistics.full_gc_apply_ms / 1000.0);
+
+    SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 
     cleanExternalPage(gc_watch, statistics);
     statistics.stage = GCStageType::FullGC;
@@ -445,8 +493,13 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
     assert(callbacks.ns_id != MAX_NAMESPACE_ID);
-    assert(callbacks_container.count(callbacks.ns_id) == 0);
-    callbacks_container.emplace(callbacks.ns_id, callbacks);
+    // NamespaceId(TableID) should not be reuse
+    RUNTIME_CHECK_MSG(
+        callbacks_container.count(callbacks.ns_id) == 0,
+        "Try to create callbacks for duplicated namespace id {}",
+        callbacks.ns_id);
+    // `emplace` won't invalid other iterator
+    callbacks_container.emplace(callbacks.ns_id, std::make_shared<ExternalPageCallbacks>(callbacks));
 }
 
 void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)

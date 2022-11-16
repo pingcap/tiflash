@@ -51,7 +51,7 @@ UnaryDAGResponseWriter::UnaryDAGResponseWriter(
 
 void UnaryDAGResponseWriter::encodeChunkToDAGResponse()
 {
-    auto dag_chunk = dag_response->add_chunks();
+    auto * dag_chunk = dag_response->add_chunks();
     dag_chunk->set_rows_data(chunk_codec_stream->getString());
     chunk_codec_stream->clear();
     current_records_num = 0;
@@ -63,7 +63,7 @@ void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
     dag_context.consumeWarnings(warnings);
     for (auto & warning : warnings)
     {
-        auto warn = dag_response->add_warnings();
+        auto * warn = dag_response->add_warnings();
         // TODO: consider using allocated warnings to prevent copy?
         warn->CopyFrom(warning);
     }
@@ -77,7 +77,7 @@ void UnaryDAGResponseWriter::finishWrite()
         encodeChunkToDAGResponse();
     }
     appendWarningsToDAGResponse();
-    addExecuteSummaries(*dag_response, false);
+    summary_collector.addExecuteSummaries(*dag_response);
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)

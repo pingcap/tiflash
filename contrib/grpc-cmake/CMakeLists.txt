@@ -72,17 +72,45 @@ endif()
 # We don't want to build C# extensions.
 set(gRPC_BUILD_CSHARP_EXT OFF)
 
+no_warning(deprecated-builtins)
 add_subdirectory("${_gRPC_SOURCE_DIR}" "${_gRPC_BINARY_DIR}")
 
-# TODO: we had better update and lib to avoid warnings
-# But for now, the warnings are too annoying so we simply remote it
+# clean up some clang warnings
+target_no_warning(grpc deprecated-declarations)
+target_no_warning(grpc non-c-typedef-for-linkage)
+target_no_warning(grpc implicit-const-int-float-conversion)
+target_no_warning(grpc unused-but-set-variable)
+target_no_warning(grpc unused-function)
+target_no_warning(grpc++ deprecated-declarations)
+target_no_warning(grpc++ non-c-typedef-for-linkage)
+target_no_warning(grpc++ implicit-const-int-float-conversion)
+target_no_warning(grpc++ unused-but-set-variable)
 
-if(TIFLASH_LLVM_TOOLCHAIN)
-  target_compile_options(grpc PRIVATE
-        -Wno-deprecated-declarations -Wno-non-c-typedef-for-linkage -Wno-implicit-const-int-float-conversion)
-  target_compile_options(grpc++ PRIVATE
-        -Wno-deprecated-declarations -Wno-non-c-typedef-for-linkage  -Wno-implicit-const-int-float-conversion)
-endif()
+execute_process(
+  COMMAND grep "//gpr_log(GPR_DEBUG, \"cannot set inq fd=%d errno=%d\", tcp->fd, errno);" "${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_posix.cc"
+  RESULT_VARIABLE HAVE_APPLY_PATCH)
+# grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.
+if (HAVE_APPLY_PATCH EQUAL 1)
+  message(STATUS "grpc patch not apply: ${HAVE_APPLY_PATCH}, patching...")
+  # update the patch using `git format-patch` if you upgrade grpc
+  set (GRPC_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/grpc-cmake/0001-disable-tcp-set-inq-debug-message.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${GRPC_PATCH_FILE}"
+    WORKING_DIRECTORY "${_gRPC_SOURCE_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply grpc patch ${GRPC_PATCH_FILE}")
+  else ()
+    message(STATUS "grpc patch done")
+  endif ()
+elseif (HAVE_APPLY_PATCH EQUAL 0)
+  message(STATUS "grpc patch have been applied: ${HAVE_APPLY_PATCH}")
+else ()
+  message(FATAL_ERROR "Can not check the grpc patch status")
+endif ()
+
 
 # The contrib/grpc/CMakeLists.txt redefined the PROTOBUF_GENERATE_GRPC_CPP() function for its own purposes,
 # so we need to redefine it back.

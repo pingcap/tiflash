@@ -18,8 +18,8 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/packTask.h>
+#include <boost_wrapper/lockfree_queue.h>
 
-#include <boost/lockfree/queue.hpp>
 #include <chrono>
 #include <future>
 

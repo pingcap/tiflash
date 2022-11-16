@@ -12,14 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Debug-mode symbolization is slow. Let's always build a release. The building is fast anyway.
+set(_SYMBOLIZATION_BUILD_PROFILE "release")
+set(_SYMBOLIZATION_BUILD_ARGS --release)
+
 set(_SYMBOLIZATION_SOURCE_DIR "${TiFlash_SOURCE_DIR}/libs/libsymbolization")
-set(_SYMBOLIZATION_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}symbolization${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(_SYMBOLIZATION_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/${_SYMBOLIZATION_BUILD_PROFILE}/${CMAKE_STATIC_LIBRARY_PREFIX}symbolization${CMAKE_STATIC_LIBRARY_SUFFIX}")
 file(GLOB_RECURSE _SYMBOLIZATION_SRCS "${_SYMBOLIZATION_SOURCE_DIR}/src/*.rs")
 file(GLOB_RECURSE _SYMBOLIZATION_HEADERS "${_SYMBOLIZATION_SOURCE_DIR}/include/*.h")
+
 add_custom_command(OUTPUT ${_SYMBOLIZATION_LIBRARY}
-        COMMENT "Building symbolization"
-        COMMAND cargo build --release --target-dir ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Building symbolization using ${_SYMBOLIZATION_BUILD_PROFILE} profile"
+        COMMAND cargo build ${_SYMBOLIZATION_BUILD_ARGS} --target-dir ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
+        USES_TERMINAL
         WORKING_DIRECTORY ${_SYMBOLIZATION_SOURCE_DIR}
         DEPENDS "${_SYMBOLIZATION_SRCS}"
                 "${_SYMBOLIZATION_HEADERS}"

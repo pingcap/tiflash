@@ -25,13 +25,13 @@ template <typename T>
 class WorkQueue
 {
     // Protects all member variable access
-    std::mutex mutex_;
-    std::condition_variable readerCv_;
-    std::condition_variable writerCv_;
-    std::condition_variable finishCv_;
-    std::queue<T> queue_;
-    bool done_;
-    std::size_t maxSize_;
+    std::mutex mu;
+    std::condition_variable reader_cv;
+    std::condition_variable writer_cv;
+    std::condition_variable finish_cv;
+    std::queue<T> queue;
+    bool done;
+    std::size_t max_size;
 
     std::size_t peak_queue_size;
     int64_t pop_times;
@@ -39,11 +39,11 @@ class WorkQueue
     // Must have lock to call this function
     bool full() const
     {
-        if (maxSize_ == 0)
+        if (max_size == 0)
         {
             return false;
         }
-        return queue_.size() >= maxSize_;
+        return queue.size() >= max_size;
     }
 
 public:
@@ -53,9 +53,9 @@ public:
    *
    * @param maxSize The maximum allowed size of the work queue.
    */
-    WorkQueue(std::size_t maxSize = 0)
-        : done_(false)
-        , maxSize_(maxSize)
+    explicit WorkQueue(std::size_t maxSize = 0)
+        : done(false)
+        , max_size(maxSize)
         , peak_queue_size(0)
         , pop_times(0)
         , pop_empty_times(0)
@@ -73,23 +73,23 @@ public:
     bool push(U && item, size_t * size)
     {
         {
-            std::unique_lock<std::mutex> lock(mutex_);
-            while (full() && !done_)
+            std::unique_lock<std::mutex> lock(mu);
+            while (full() && !done)
             {
-                writerCv_.wait(lock);
+                writer_cv.wait(lock);
             }
-            if (done_)
+            if (done)
             {
                 return false;
             }
-            queue_.push(std::forward<U>(item));
-            peak_queue_size = std::max(queue_.size(), peak_queue_size);
+            queue.push(std::forward<U>(item));
+            peak_queue_size = std::max(queue.size(), peak_queue_size);
             if (size != nullptr)
             {
-                *size = queue_.size();
+                *size = queue.size();
             }
         }
-        readerCv_.notify_one();
+        reader_cv.notify_one();
         return true;
     }
     /**
@@ -104,22 +104,22 @@ public:
     bool pop(T & item)
     {
         {
-            std::unique_lock<std::mutex> lock(mutex_);
+            std::unique_lock<std::mutex> lock(mu);
             pop_times++;
-            while (queue_.empty() && !done_)
+            while (queue.empty() && !done)
             {
                 pop_empty_times++;
-                readerCv_.wait(lock);
+                reader_cv.wait(lock);
             }
-            if (queue_.empty())
+            if (queue.empty())
             {
-                assert(done_);
+                assert(done);
                 return false;
             }
-            item = std::move(queue_.front());
-            queue_.pop();
+            item = std::move(queue.front());
+            queue.pop();
         }
-        writerCv_.notify_one();
+        writer_cv.notify_one();
         return true;
     }
     /**
@@ -130,10 +130,10 @@ public:
     void setMaxSize(std::size_t maxSize)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            maxSize_ = maxSize;
+            std::lock_guard lock(mu);
+            max_size = maxSize;
         }
-        writerCv_.notify_all();
+        writer_cv.notify_all();
     }
     /**
    * Promise that `push()` won't be called again, so once the queue is empty
@@ -142,28 +142,28 @@ public:
     void finish()
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            assert(!done_);
-            done_ = true;
+            std::lock_guard lock(mu);
+            assert(!done);
+            done = true;
         }
-        readerCv_.notify_all();
-        writerCv_.notify_all();
-        finishCv_.notify_all();
+        reader_cv.notify_all();
+        writer_cv.notify_all();
+        finish_cv.notify_all();
     }
     /// Blocks until `finish()` has been called (but the queue may not be empty).
     void waitUntilFinished()
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        while (!done_)
+        std::unique_lock<std::mutex> lock(mu);
+        while (!done)
         {
-            finishCv_.wait(lock);
+            finish_cv.wait(lock);
         }
     }
 
     size_t size()
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return queue_.size();
+        std::lock_guard lock(mu);
+        return queue.size();
     }
 
     std::tuple<int64_t, int64_t, size_t> getStat() const

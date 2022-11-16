@@ -63,10 +63,10 @@ struct WriteBatches : private boost::noncopyable
                 if (!wb.empty())
                 {
                     StackTrace trace;
-                    LOG_FMT_ERROR(logger,
-                                  "!!!=========================Modifications in {} haven't persisted=========================!!! Stack trace: {}",
-                                  name,
-                                  trace.toString());
+                    LOG_ERROR(logger,
+                              "!!!=========================Modifications in {} haven't persisted=========================!!! Stack trace: {}",
+                              name,
+                              trace.toString());
                 }
             };
             check_empty(log, "log");
@@ -97,10 +97,10 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type == WriteBatch::WriteType::DEL))
+                    if (unlikely(w.type == WriteBatchWriteType::DEL))
                         throw Exception("Unexpected deletes in " + what);
                 }
-                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
+                LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(log, "log", logger);
@@ -142,10 +142,10 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type != WriteBatch::WriteType::DEL))
+                    if (unlikely(w.type != WriteBatchWriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
-                LOG_FMT_TRACE(logger, "Rollback remove from {} : {}", what, wb.toString());
+                LOG_TRACE(logger, "Rollback remove from {} : {}", what, wb.toString());
             };
 
             check(log_wb, "log_wb", logger);
@@ -170,10 +170,10 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type != WriteBatch::WriteType::PUT))
+                    if (unlikely(w.type != WriteBatchWriteType::PUT))
                         throw Exception("Expected puts in " + what);
                 }
-                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
+                LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(meta, "meta", logger);
@@ -194,10 +194,10 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type != WriteBatch::WriteType::DEL))
+                    if (unlikely(w.type != WriteBatchWriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
-                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
+                LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(removed_log, "removed_log", logger);

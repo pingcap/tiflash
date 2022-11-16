@@ -32,6 +32,14 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
+struct NullPresence
+{
+    bool has_nullable = false;
+    bool has_null_constant = false;
+};
+
+NullPresence getNullPresense(const Block &, const ColumnNumbers &);
+
 /// The simplest executable object.
 /// Motivation:
 ///  * Prepare something heavy once before main execution loop instead of doing it for each block.

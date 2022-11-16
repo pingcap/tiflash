@@ -35,6 +35,7 @@ constexpr size_t RESERVE_OFFSET = 200;
 constexpr size_t TEST_ALIGN_SIZE = 64;
 static_assert(RESERVE_OFFSET > TEST_ALIGN_SIZE * 2);
 constexpr char DEFAULT_INIT_CHAR = '0';
+constexpr char DEFAULT_TEST_CHAR = '1';
 static constexpr size_t TEST_ALIGN_OFF_1 = 15;
 static constexpr size_t TEST_ALIGN_OFF_2 = 31;
 
@@ -70,6 +71,36 @@ public:
             const auto * src = reinterpret_cast<const char *>((size_t(inner_data2.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_2); // start address not aligned
             size_t size = inner_data2.data() + inner_data2.size() - src;
             data2 = {src, size};
+        }
+    }
+};
+
+template <size_t max_src_size>
+class MemUtilsCmp : public benchmark::Fixture
+{
+protected:
+    std::string inner_data1;
+    std::string inner_data2;
+    std::string_view data1;
+    std::string_view data2;
+
+public:
+    static constexpr size_t max_size = max_src_size;
+
+    void SetUp(const ::benchmark::State & /*state*/) override
+    {
+        inner_data1.resize(max_size + RESERVE_OFFSET, DEFAULT_INIT_CHAR);
+        inner_data2 = inner_data1;
+
+        {
+            const auto * src = reinterpret_cast<const char *>((size_t(inner_data1.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_1); // start address not aligned
+            data1 = {src, max_size};
+        }
+
+        {
+            auto * src = reinterpret_cast<char *>((size_t(inner_data2.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_2); // start address not aligned
+            src[max_size - 1] = DEFAULT_TEST_CHAR;
+            data2 = {src, max_size};
         }
     }
 };
@@ -124,6 +155,10 @@ ALWAYS_INLINE static inline bool stl_mem_eq(const char * p1, const char * p2, si
 {
     return std::memcmp(p1, p2, n) == 0; // call bcmp@plt
 }
+ALWAYS_INLINE static inline int stl_mem_cmp(const char * p1, const char * p2, size_t n)
+{
+    return std::memcmp(p1, p2, n); // call memcmp@plt
+}
 
 NO_INLINE size_t stl_str_find(std::string_view s, std::string_view p)
 {
@@ -132,24 +167,52 @@ NO_INLINE size_t stl_str_find(std::string_view s, std::string_view p)
 
 // volatile value is used to prevent compiler optimization for fixed context
 
-#define BENCH_MEM_EQ(name1, name2, func, iter_cnt)                   \
-    BENCHMARK_DEFINE_F(name1, name2)                                 \
-    (benchmark::State & state)                                       \
-    {                                                                \
-        [[maybe_unused]] volatile size_t _volatile_flags = 1;        \
-        [[maybe_unused]] volatile size_t cnt = max_size;             \
-        for (auto _ : state)                                         \
-        {                                                            \
-            _volatile_flags = func(data1.data(), data2.data(), cnt); \
-            if constexpr (varify_res)                                \
-            {                                                        \
-                if (unlikely(!_volatile_flags))                      \
-                    exit(-1);                                        \
-            }                                                        \
-        }                                                            \
-    }                                                                \
+#define BENCH_MEM_EQ(name1, name2, func, loop_cnt, iter_cnt)                                 \
+    BENCHMARK_DEFINE_F(name1, name2)                                                         \
+    (benchmark::State & state)                                                               \
+    {                                                                                        \
+        [[maybe_unused]] volatile size_t _volatile_flags = 1;                                \
+        [[maybe_unused]] volatile size_t cnt = max_size;                                     \
+        for (auto _ : state)                                                                 \
+        {                                                                                    \
+            for (size_t i = 0; i < (loop_cnt); ++i)                                          \
+            {                                                                                \
+                _volatile_flags = func(data1.data(), data2.data(), cnt > i ? cnt - i : cnt); \
+                if constexpr (varify_res)                                                    \
+                {                                                                            \
+                    if (unlikely(!_volatile_flags))                                          \
+                        exit(-1);                                                            \
+                }                                                                            \
+            }                                                                                \
+        }                                                                                    \
+    }                                                                                        \
     BENCHMARK_REGISTER_F(name1, name2)->Iterations(iter_cnt);
 
+#define BENCH_MEM_CMP(name1, name2, func, loop_cnt, iter_cnt)                        \
+    BENCHMARK_DEFINE_F(name1, name2)                                                 \
+    (benchmark::State & state)                                                       \
+    {                                                                                \
+        [[maybe_unused]] volatile int _volatile_flags = 1;                           \
+        [[maybe_unused]] volatile size_t cnt = max_size;                             \
+        for (auto _ : state)                                                         \
+        {                                                                            \
+            for (size_t i = 0; i < (loop_cnt); ++i)                                  \
+            {                                                                        \
+                size_t ori = cnt;                                                    \
+                size_t n = ori > i ? ori - i : ori;                                  \
+                size_t diff = ori - n;                                               \
+                _volatile_flags = func(data1.data() + diff, data2.data() + diff, n); \
+                if constexpr (varify_res)                                            \
+                {                                                                    \
+                    if (unlikely(!(_volatile_flags < 0)))                            \
+                    {                                                                \
+                        exit(-1);                                                    \
+                    }                                                                \
+                }                                                                    \
+            }                                                                        \
+        }                                                                            \
+    }                                                                                \
+    BENCHMARK_REGISTER_F(name1, name2)->Iterations(iter_cnt);
 
 #define BENCH_MEM_STRSTR(name1, name2, func, iter_cnt)                        \
     BENCHMARK_DEFINE_F(name1, name2)                                          \
@@ -174,23 +237,50 @@ NO_INLINE size_t stl_str_find(std::string_view s, std::string_view p)
     BENCHMARK_REGISTER_F(name1, name2)->Iterations(iter_cnt);
 
 
-#define BENCH_MEM_EQ_ALL(max_src_size, iter_cnt)                                                                 \
-    using MemUtilsEqual##_##max_src_size = MemUtilsEqual<max_src_size>;                                          \
-    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, stl_mem_eq, stl_mem_eq, iter_cnt)                               \
-    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, mem_utils_memoryEqual_avx512, mem_utils::memoryEqual, iter_cnt) \
-    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, avx2_mem_equal, mem_utils::avx2_mem_equal, iter_cnt)
+#define BENCH_MEM_EQ_ALL_IMPL(id, max_src_size, loop_cnt, iter_cnt)                            \
+    using id = MemUtilsEqual<max_src_size>;                                                    \
+    BENCH_MEM_EQ(id, stl_mem_eq, stl_mem_eq, loop_cnt, iter_cnt)                               \
+    BENCH_MEM_EQ(id, mem_utils_memoryEqual_avx512, mem_utils::memoryEqual, loop_cnt, iter_cnt) \
+    BENCH_MEM_EQ(id, avx2_mem_equal, mem_utils::avx2_mem_equal, loop_cnt, iter_cnt)
+
+#define BENCH_MEM_EQ_IMPL_ID(max_src_size, loop_cnt, iter_cnt) MemUtilsEqual##_##max_src_size##_##loop_cnt
+
+#define BENCH_MEM_EQ_ALL(max_src_size, loop_cnt, iter_cnt) \
+    BENCH_MEM_EQ_ALL_IMPL(BENCH_MEM_EQ_IMPL_ID(max_src_size, loop_cnt, iter_cnt), max_src_size, loop_cnt, iter_cnt)
+
+#define BENCH_MEM_CMP_ALL_IMPL(id, max_src_size, loop_cnt, iter_cnt) \
+    using id = MemUtilsCmp<max_src_size>;                            \
+    BENCH_MEM_CMP(id, stl_mem_cmp, stl_mem_cmp, loop_cnt, iter_cnt)  \
+    BENCH_MEM_CMP(id, avx2_mem_cmp, mem_utils::avx2_mem_cmp, loop_cnt, iter_cnt)
+
+#define BENCH_MEM_CMP_IMPL_ID(max_src_size, loop_cnt, iter_cnt) MemUtilsCmp##_##max_src_size##_##loop_cnt
+
+#define BENCH_MEM_CMP_ALL(max_src_size, loop_cnt, iter_cnt) \
+    BENCH_MEM_CMP_ALL_IMPL(BENCH_MEM_CMP_IMPL_ID(max_src_size, loop_cnt, iter_cnt), max_src_size, loop_cnt, iter_cnt)
 
 #define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                          \
     using MemUtilsStrStr##_##max_src_size##_##max_needle_size = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>; \
     BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, stl_str_find, stl_str_find, iter_cnt)         \
     BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, avx2_strstr, mem_utils::avx2_strstr, iter_cnt)
 
-BENCH_MEM_EQ_ALL(13, 2000)
-BENCH_MEM_EQ_ALL(65, 2000)
-BENCH_MEM_EQ_ALL(100, 500)
-BENCH_MEM_EQ_ALL(10000, 500)
-BENCH_MEM_EQ_ALL(100000, 500)
-BENCH_MEM_EQ_ALL(1000000, 200)
+#define BENCH_MEM_EQ_LOOP 20
+
+BENCH_MEM_EQ_ALL(13, BENCH_MEM_EQ_LOOP, 2000)
+BENCH_MEM_EQ_ALL(65, BENCH_MEM_EQ_LOOP, 2000)
+BENCH_MEM_EQ_ALL(100, BENCH_MEM_EQ_LOOP, 500)
+BENCH_MEM_EQ_ALL(10000, BENCH_MEM_EQ_LOOP, 500)
+BENCH_MEM_EQ_ALL(100000, BENCH_MEM_EQ_LOOP, 500)
+BENCH_MEM_EQ_ALL(1000000, BENCH_MEM_EQ_LOOP, 200)
+
+#define BENCH_MEM_CMP_LOOP 20
+
+BENCH_MEM_CMP_ALL(2, BENCH_MEM_CMP_LOOP, 2000)
+BENCH_MEM_CMP_ALL(13, BENCH_MEM_CMP_LOOP, 2000)
+BENCH_MEM_CMP_ALL(65, BENCH_MEM_CMP_LOOP, 2000)
+BENCH_MEM_CMP_ALL(100, BENCH_MEM_CMP_LOOP, 500)
+BENCH_MEM_CMP_ALL(10000, BENCH_MEM_CMP_LOOP, 500)
+BENCH_MEM_CMP_ALL(100000, BENCH_MEM_CMP_LOOP, 500)
+BENCH_MEM_CMP_ALL(1000000, BENCH_MEM_CMP_LOOP, 200)
 
 BENCH_MEM_STRSTR_ALL(512, 1024, 1, 100);
 BENCH_MEM_STRSTR_ALL(512, 1024, 7, 100);

@@ -15,8 +15,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Flash/LogSearch.h>
 #include <Poco/InflatingStream.h>
+#include <boost_wrapper/string.h>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 namespace DB
@@ -354,7 +354,7 @@ LogIterator::~LogIterator()
 {
     if (err_info.has_value())
     {
-        LOG_FMT_DEBUG(log, "LogIterator search end with error {} at line {}.", err_info->second, err_info->first);
+        LOG_DEBUG(log, "LogIterator search end with error {} at line {}.", err_info->second, err_info->first);
     }
 }
 
@@ -374,7 +374,7 @@ int64_t readApproxiTimestamp(const char * start, const char * date_format)
         return -1;
     }
 
-    std::tm time;
+    std::tm time{};
     time.tm_year = year - 1900;
     time.tm_mon = month - 1;
     time.tm_mday = day;

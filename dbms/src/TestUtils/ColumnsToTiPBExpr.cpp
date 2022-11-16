@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
-#include <Debug/astToExecutor.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
+
 
 namespace DB
 {

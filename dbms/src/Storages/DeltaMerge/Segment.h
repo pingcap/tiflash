@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
@@ -56,10 +57,12 @@ struct SegmentSnapshot : private boost::noncopyable
         , stable(std::move(stable_))
     {}
 
-    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
+    SegmentSnapshotPtr clone() const { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
 
-    UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
-    UInt64 getRows() { return delta->getRows() + stable->getRows(); }
+    UInt64 getBytes() const { return delta->getBytes() + stable->getBytes(); }
+    UInt64 getRows() const { return delta->getRows() + stable->getRows(); }
+
+    bool isForUpdate() const { return delta->isForUpdate(); }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -70,6 +73,7 @@ class Segment : private boost::noncopyable
 {
 public:
     using DeltaTree = DefaultDeltaTree;
+    using Lock = DeltaValueSpace::Lock;
 
     struct ReadInfo
     {
@@ -110,6 +114,7 @@ public:
     DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
+        const LoggerPtr & parent_log_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
         PageId segment_id_,
@@ -118,6 +123,7 @@ public:
         const StableValueSpacePtr & stable_);
 
     static SegmentPtr newSegment(
+        const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
@@ -126,13 +132,14 @@ public:
         PageId delta_id,
         PageId stable_id);
     static SegmentPtr newSegment(
+        const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
         PageId segment_id,
         PageId next_segment_id);
 
-    static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
 
     void serialize(WriteBatch & wb);
 
@@ -153,6 +160,7 @@ public:
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
     BlockInputStreamPtr getInputStream(
+        const ReadMode & read_mode,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
@@ -162,7 +170,16 @@ public:
         size_t expected_block_size,
         bool for_bitmap = false);
 
-    BlockInputStreamPtr getInputStream(
+    BlockInputStreamPtr getInputStreamModeNormal(
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const RSOperatorPtr & filter,
+        UInt64 max_version,
+        size_t expected_block_size);
+
+    BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
@@ -180,76 +197,208 @@ public:
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
 
-    BlockInputStreamPtr getInputStreamRaw(
+    BlockInputStreamPtr getInputStreamModeFast(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         const RSOperatorPtr & filter,
-        bool filter_delete_mark = true,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    BlockInputStreamPtr getInputStreamRaw(
+    BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
-        bool filter_delete_mark = false);
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & data_ranges,
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
+
+    BlockInputStreamPtr getInputStreamModeRaw(
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read);
 
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Note: There is also DeltaMergeStore::SegmentSplitMode, which shadows this enum.
+     */
+    enum class SplitMode
+    {
+        /**
+         * Split according to settings.
+         *
+         * If logical split is allowed in the settings, logical split will be tried first.
+         * Logical split may fall back to physical split when calculating split point failed.
+         */
+        Auto,
+
+        /**
+         * Do logical split. If split point is not specified and cannot be calculated out,
+         * the split will fail.
+         */
+        Logical,
+
+        /**
+         * Do physical split.
+         */
+        Physical,
+    };
+
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareSplit` and `applySplit`.
+     */
+    [[nodiscard]] SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, std::optional<RowKeyValue> opt_split_at = std::nullopt, SplitMode opt_split_mode = SplitMode::Auto) const;
+
     std::optional<SplitInfo> prepareSplit(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_at,
+        SplitMode split_mode,
         WriteBatches & wbs) const;
 
-    SegmentPair applySplit(
+    std::optional<SplitInfo> prepareSplit(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const SegmentSnapshotPtr & segment_snap,
+        WriteBatches & wbs) const
+    {
+        return prepareSplit(dm_context, schema_snap, segment_snap, std::nullopt, SplitMode::Auto, wbs);
+    }
+
+    /**
+     * Should be protected behind the Segment update lock.
+     */
+    [[nodiscard]] SegmentPair applySplit(
+        const Lock &,
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         SplitInfo & split_info) const;
 
-    static SegmentPtr merge(
+    /// Merge delta & stable, and then take the middle one.
+    std::optional<RowKeyValue> getSplitPointSlow(
+        DMContext & dm_context,
+        const ReadInfo & read_info,
+        const SegmentSnapshotPtr & segment_snap) const;
+    /// Only look up in the stable vs.
+    std::optional<RowKeyValue> getSplitPointFast(
+        DMContext & dm_context,
+        const StableSnapshotPtr & stable_snap) const;
+
+    enum class PrepareSplitLogicalStatus
+    {
+        Success,
+        FailCalculateSplitPoint,
+        FailOther,
+    };
+
+    std::pair<std::optional<SplitInfo>, PrepareSplitLogicalStatus> prepareSplitLogical(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
-        const SegmentPtr & left,
-        const SegmentPtr & right);
+        const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_point,
+        WriteBatches & wbs) const;
+    std::optional<SplitInfo> prepareSplitPhysical(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_point,
+        WriteBatches & wbs) const;
+
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareMerge` and `applyMerge`.
+     */
+    [[nodiscard]] static SegmentPtr merge(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const std::vector<SegmentPtr> & ordered_segments);
+
     static StableValueSpacePtr prepareMerge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
-        const SegmentPtr & left,
-        const SegmentSnapshotPtr & left_snap,
-        const SegmentPtr & right,
-        const SegmentSnapshotPtr & right_snap,
+        const std::vector<SegmentPtr> & ordered_segments,
+        const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs);
-    static SegmentPtr applyMerge(
+
+    /**
+     * Should be protected behind the update lock for all related segments.
+     */
+    [[nodiscard]] static SegmentPtr applyMerge(
+        const std::vector<Lock> &,
         DMContext & dm_context,
-        const SegmentPtr & left,
-        const SegmentSnapshotPtr & left_snap,
-        const SegmentPtr & right,
-        const SegmentSnapshotPtr & right_snap,
+        const std::vector<SegmentPtr> & ordered_segments,
+        const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs,
         const StableValueSpacePtr & merged_stable);
 
-    /// Merge the delta (major compaction) and return the new segment.
-    ///
-    /// Note: This is only a shortcut function used in tests.
-    /// Normally you should call `prepareMergeDelta`, `applyMergeDelta` instead.
-    SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareMergeDelta` and `applyMergeDelta`.
+     */
+    [[nodiscard]] SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
     StableValueSpacePtr prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
-    SegmentPtr applyMergeDelta(
+
+    /**
+     * Should be protected behind the Segment update lock.
+     */
+    [[nodiscard]] SegmentPtr applyMergeDelta(
+        const Lock &,
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
-    SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `dangerouslyReplaceData`.
+     */
+    [[nodiscard]] SegmentPtr dangerouslyReplaceDataForTest(DMContext & dm_context, const DMFilePtr & data_file) const;
+
+    /**
+     * Discard all data in the current delta and stable layer, and use the specified DMFile as the stable instead.
+     * This API does not have a prepare & apply pair, as it should be quick enough. The specified DMFile is safe
+     * to be shared for multiple segments.
+     *
+     * Note 1: Should be protected behind the Segment update lock to ensure no new data will be appended to this
+     *         segment during the function call. Otherwise these new data will be lost in the new segment.
+     *
+     * Note 2: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
+     *         stable file for multiple segments. It is your own duty to enable GC later.
+     *
+     * Note 3: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
+     *         to the PageStorage's data. Otherwise there will be exceptions.
+     *
+     * Note 4: This API is subjected to be changed in future, as it relies on the knowledge that all current data
+     *         in this segment is useless, which is a pretty tough requirement.
+     */
+    [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs) const;
+
+    [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
+
+    /**
+     * Do a fast (but rough) check to see whether there is no data in the snapshot.
+     *
+     * "No data" means there is even no delete versions in the snapshot.
+     *
+     * As it is a rough check, the result is not certain:
+     * - When returning true, the snapshot is definitely empty.
+     * - When returning false, the snapshot is very likely to be not empty (but still, may be empty in some rare cases).
+     *   (More specifically, this function does not respect delete ranges.)
+     *
+     * You must ensure the snapshot is for_write, because when snapshot is not for_write, newly
+     * written data will change the content of the snapshot silently at any time.
+     *
+     * To prevent you from making mistakes, exceptions will be thrown when snapshot is not for_write.
+     */
+    bool isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
@@ -264,6 +413,7 @@ public:
 
     PageId segmentId() const { return segment_id; }
     PageId nextSegmentId() const { return next_segment_id; }
+    UInt64 segmentEpoch() const { return epoch; };
 
     void check(DMContext & dm_context, const String & when) const;
 
@@ -272,18 +422,21 @@ public:
     const DeltaValueSpacePtr & getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
 
+    String logId() const;
     String simpleInfo() const;
     String info() const;
 
-    using Lock = DeltaValueSpace::Lock;
-    bool getUpdateLock(Lock & lock) const { return delta->getLock(lock); }
+    static String simpleInfo(const std::vector<SegmentPtr> & segments);
+    static String info(const std::vector<SegmentPtr> & segments);
+
+    std::optional<Lock> getUpdateLock() const { return delta->getLock(); }
 
     Lock mustGetUpdateLock() const
     {
-        Lock lock;
-        if (!getUpdateLock(lock))
-            throw Exception("Segment [" + DB::toString(segmentId()) + "] get update lock failed", ErrorCodes::LOGICAL_ERROR);
-        return lock;
+        auto lock_opt = getUpdateLock();
+        if (lock_opt == std::nullopt)
+            throw Exception(fmt::format("Segment get update lock failed, segment={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
+        return std::exchange(lock_opt, std::nullopt).value();
     }
 
     /// Marks this segment as abandoned.
@@ -291,17 +444,20 @@ public:
     /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
-        LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
+        LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);
     }
 
     /// Returns whether this segment has been marked as abandoned.
     /// Note: Segment member functions never abandon the segment itself.
     /// The abandon state is usually triggered by the DeltaMergeStore.
-    bool hasAbandoned() { return delta->hasAbandoned(); }
+    bool hasAbandoned() const { return delta->hasAbandoned(); }
 
-    bool isSplitForbidden() { return split_forbidden; }
+    bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
+
+    bool isValidDataRatioChecked() const { return check_valid_data_ratio.load(std::memory_order_relaxed); }
+    void setValidDataRatioChecked() { check_valid_data_ratio.store(true, std::memory_order_relaxed); }
 
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
 
@@ -344,29 +500,6 @@ private:
         size_t expected_block_size,
         UInt64 max_version = std::numeric_limits<UInt64>::max(),
         bool for_bitmap = false);
-
-    /// Merge delta & stable, and then take the middle one.
-    std::optional<RowKeyValue> getSplitPointSlow(
-        DMContext & dm_context,
-        const ReadInfo & read_info,
-        const SegmentSnapshotPtr & segment_snap) const;
-    /// Only look up in the stable vs.
-    std::optional<RowKeyValue> getSplitPointFast(
-        DMContext & dm_context,
-        const StableSnapshotPtr & stable_snap) const;
-
-    std::optional<SplitInfo> prepareSplitLogical(
-        DMContext & dm_context,
-        const ColumnDefinesPtr & schema_snap,
-        const SegmentSnapshotPtr & segment_snap,
-        RowKeyValue & split_point,
-        WriteBatches & wbs) const;
-    std::optional<SplitInfo> prepareSplitPhysical(
-        DMContext & dm_context,
-        const ColumnDefinesPtr & schema_snap,
-        const SegmentSnapshotPtr & segment_snap,
-        WriteBatches & wbs) const;
-
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.
@@ -417,7 +550,7 @@ private:
                                                    size_t expected_block_size);
 
 private:
-    /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
+    /// The version of this segment. After split / merge / mergeDelta / dangerouslyReplaceData, epoch got increased by 1.
     const UInt64 epoch;
 
     RowKeyRange rowkey_range;
@@ -432,8 +565,14 @@ private:
     const StableValueSpacePtr stable;
 
     bool split_forbidden = false;
+    // After logical split, it is very possible that only half of the data in the segment's DTFile is valid for this segment.
+    // So we want to do merge delta on this kind of segment to clean out the invalid data.
+    // This involves to check the valid data ratio in the background gc thread,
+    // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
+    std::atomic<bool> check_valid_data_ratio = false;
 
-    Poco::Logger * log;
+    const LoggerPtr parent_log; // Used when constructing new segments in split
+    const LoggerPtr log;
 };
 
 } // namespace DB::DM

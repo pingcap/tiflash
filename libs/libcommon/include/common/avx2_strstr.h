@@ -16,10 +16,6 @@
 
 #include <common/avx2_mem_utils.h>
 
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-
 namespace mem_utils::details
 {
 
@@ -135,6 +131,9 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
         // align to 32
         src = reinterpret_cast<decltype(src)>(ALIGNED_ADDR(size_t(src), BLOCK32_SIZE));
 
+        // load block 32 from new aligned address may cause false positives when using `AddressSanitizer` because asan will provide a malloc()/free() alternative and detect memory visitation.
+        // generally it's safe to visit address which won't cross page boundary.
+
         // right shift offset to remove useless mask bit
         auto mask = get_block32_cmp_eq_mask(src, check_block32) >> offset;
 
@@ -184,7 +183,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
     return res;
 }
 
-inline const char * avx2_strstr_impl_genetic(const char * src, size_t n, const char * needle, size_t k)
+inline const char * avx2_strstr_impl_generic(const char * src, size_t n, const char * needle, size_t k)
 {
     return avx2_strstr_impl(src, needle[0], n - k + 1, [&](const char * s) -> bool {
         return avx2_mem_equal(s, needle, k);
@@ -243,7 +242,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
         M(16);
     default:
     {
-        return avx2_strstr_impl_genetic(src, n, needle, k);
+        return avx2_strstr_impl_generic(src, n, needle, k);
     }
     }
 #undef M
@@ -251,6 +250,10 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
 
 ALWAYS_INLINE static inline size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k)
 {
+#if defined(ADDRESS_SANITIZER)
+    return std::string_view{src, n}.find({needle, k}); // memchr@plt -> bcmp@plt
+#endif
+
     const auto * p = avx2_strstr_impl(src, n, needle, k);
     return p ? p - src : std::string_view::npos;
 }
@@ -260,6 +263,10 @@ ALWAYS_INLINE static inline size_t avx2_strstr(std::string_view src, std::string
 }
 ALWAYS_INLINE static inline const char * avx2_memchr(const char * src, size_t n, char target)
 {
+#if defined(ADDRESS_SANITIZER)
+    return static_cast<const char *>(std::memchr(src, target, n)); // memchr@plt
+#endif
+
     if (unlikely(n < 1))
     {
         return nullptr;

@@ -134,7 +134,7 @@ public:
 
     ~ColumnSharingCacheMap()
     {
-        LOG_FMT_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
+        LOG_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
     }
 
     // `addStale` just do some statistics.
@@ -194,7 +194,7 @@ private:
         auto add_total = add_count + add_stale;
         auto get_cached = get_hit + get_copy;
         auto get_total = get_miss + get_part + get_hit + get_copy;
-        return fmt::format("add_count {} add_stale {} add_ratio {} get_miss {} get_part {} get_hit {} get_copy {} cached_ratio {}",
+        return fmt::format("add_count={} add_stale={} add_ratio={} get_miss={} get_part={} get_hit={} get_copy={} cached_ratio={}",
                            add_count,
                            add_stale,
                            add_total > 0 ? add_count * 1.0 / add_total : 0,
@@ -218,13 +218,17 @@ class DMFileReaderPool
 {
 public:
     static DMFileReaderPool & instance();
-    DMFileReaderPool() = default;
     ~DMFileReaderPool() = default;
     DISALLOW_COPY_AND_MOVE(DMFileReaderPool);
 
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);
     void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
+    // `get` is just for test.
+    DMFileReader * get(const std::string & name);
+
+private:
+    DMFileReaderPool() = default;
 
 private:
     std::mutex mtx;

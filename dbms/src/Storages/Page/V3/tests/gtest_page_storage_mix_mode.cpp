@@ -274,21 +274,10 @@ try
     }
 
     {
-        PageIds page_ids = {1, 2, 3, 4};
-        PageHandler hander = [](DB::PageId /*page_id*/, const Page & /*page*/) {
-        };
-        ASSERT_NO_THROW(page_reader_mix->read(page_ids, hander));
-
-        // Read page ids which only exited in V2
-        page_ids = {1, 2, 7};
-        ASSERT_NO_THROW(page_reader_mix->read(page_ids, hander));
-    }
-
-    {
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
-        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(4, {1, 3, 4, 8, 10}));
-        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(7, {0, 1, 2}));
+        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
+        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(4, {1, 3, 4, 8, 10}));
+        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(7, {0, 1, 2}));
         PageMap page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 3);
         ASSERT_EQ(page_maps[2].page_id, 2);
@@ -302,7 +291,7 @@ try
     {
         // Read page ids which only exited in V2
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
+        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
         ASSERT_NO_THROW(page_reader_mix->read(read_fields));
     }
 
@@ -925,7 +914,7 @@ try
     }
 
     {
-        LOG_FMT_INFO(logger, "first check alive id in v2");
+        LOG_INFO(logger, "first check alive id in v2");
         auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_dt_ids_in_v2.size(), 0);
 
@@ -939,38 +928,38 @@ try
     }
 
     {
-        LOG_FMT_INFO(logger, "remove 100, create 105");
+        LOG_INFO(logger, "remove 100, create 105");
         DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(100);
         batch.putExternal(105, 0);
         page_writer_mix->write(std::move(batch), nullptr);
-        LOG_FMT_INFO(logger, "done");
+        LOG_INFO(logger, "done");
     }
     {
-        LOG_FMT_INFO(logger, "remove 101, create 106");
+        LOG_INFO(logger, "remove 101, create 106");
         DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(101);
         batch.putExternal(106, 0);
         page_writer_mix->write(std::move(batch), nullptr);
-        LOG_FMT_INFO(logger, "done");
+        LOG_INFO(logger, "done");
     }
     {
-        LOG_FMT_INFO(logger, "remove 102, create 107");
+        LOG_INFO(logger, "remove 102, create 107");
         DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(102);
         batch.putExternal(107, 0);
         page_writer_mix->write(std::move(batch), nullptr);
-        LOG_FMT_INFO(logger, "done");
+        LOG_INFO(logger, "done");
     }
 
     {
-        LOG_FMT_INFO(logger, "second check alive id in v2");
+        LOG_INFO(logger, "second check alive id in v2");
         auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_dt_ids_in_v2.size(), 0) << fmt::format("{}", alive_dt_ids_in_v2);
 
@@ -985,7 +974,7 @@ try
         EXPECT_EQ(*iter, 107);
     }
     {
-        LOG_FMT_INFO(logger, "third check alive id in v2");
+        LOG_INFO(logger, "third check alive id in v2");
         auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_dt_ids_in_v2.size(), 0) << fmt::format("{}", alive_dt_ids_in_v2);
 

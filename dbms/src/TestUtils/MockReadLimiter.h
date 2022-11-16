@@ -31,8 +31,8 @@ public:
 protected:
     void consumeBytes(Int64 bytes) override
     {
-        // Need soft limit here.
-        WriteLimiter::consumeBytes(bytes); // NOLINT(bugprone-parent-virtual-call)
+        alloc_bytes += std::min(available_balance, bytes);
+        available_balance -= bytes;
     }
 };
 

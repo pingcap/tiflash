@@ -32,7 +32,8 @@ extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, 
 namespace DM
 {
 enum class FileConvertJobType;
-}
+struct ExternalDTFileInfo;
+} // namespace DM
 
 namespace tests
 {
@@ -92,7 +93,7 @@ public:
 
     void tryPersist(RegionID region_id);
 
-    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed = true);
+    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
@@ -110,24 +111,29 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
-    bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
+    bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
 
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    /**
+     * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
+     */
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
-    std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
+    std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
-        const SSTViewVec,
+        SSTViewVec,
         uint64_t index,
         uint64_t term,
         TMTContext & tmt);
     template <typename RegionPtrWrap>
-    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
-    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
+    // Exported only for tests.
+    TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
 
     TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
 
@@ -166,6 +172,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    friend struct MockRaftStoreProxy;
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
@@ -188,7 +195,7 @@ private:
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
 
-    std::vector<UInt64> preHandleSSTsToDTFiles(
+    std::vector<DM::ExternalDTFileInfo> preHandleSSTsToDTFiles(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
@@ -197,7 +204,7 @@ private:
         TMTContext & tmt);
 
     template <typename RegionPtrWrap>
-    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     template <typename RegionPtrWrap>
     void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
@@ -229,6 +236,7 @@ private:
     /// It will not check if a flush will eventually succeed.
     /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
     bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
+    bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
     void releaseReadIndexWorkers();
@@ -250,7 +258,7 @@ private:
 
     TiDB::SnapshotApplyMethod snapshot_apply_method;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;

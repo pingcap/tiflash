@@ -13,12 +13,16 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/BackgroundTask.h>
+#include <Common/ThreadManager.h>
 #include <Common/assert_cast.h>
-#include <Debug/astToExecutor.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/Transaction/PDTiKVClient.h>
+
 
 namespace DB
 {
@@ -39,6 +43,8 @@ public:
     void setMockStorage(MockStorage & mock_storage);
     void setMockMPPServerInfo(MockMPPServerInfo info);
 
+    std::unique_ptr<FlashService> & flashService();
+
 private:
     const LoggerPtr & log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
@@ -48,7 +54,9 @@ private:
     // cqs and notify_cqs are used for processing async grpc events (currently only EstablishMPPConnection).
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
-    std::shared_ptr<ThreadManager> thread_manager;
+    std::vector<std::thread> cq_workers;
+    std::vector<std::thread> notify_cq_workers;
+    CollectProcInfoBackgroundTask background_task;
 };
 
 } // namespace DB

@@ -67,6 +67,7 @@ cmake -S "${SRCPATH}" \
   -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
   -Wno-dev \
   -DUSE_CCACHE=OFF \
+  -DUSE_INTERNAL_SSL_LIBRARY=ON \
   -DRUN_HAVE_STD_REGEX=0 \
   -DENABLE_THINLTO=${ENABLE_THINLTO} \
   -DTHINLTO_JOBS=${NPROC} \
@@ -80,3 +81,6 @@ cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"
 ldd "${INSTALL_DIR}/tiflash"
+
+# show version
+${INSTALL_DIR}/tiflash version

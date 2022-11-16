@@ -50,8 +50,7 @@ public:
         const RSOperatorPtr & filter_,
         UInt64 max_version_,
         size_t expected_block_size_,
-        bool is_raw_,
-        bool do_delete_mark_filter_for_raw_,
+        ReadMode read_mode_,
         const int extra_table_id_index,
         const TableID physical_table_id,
         const String & req_id)
@@ -63,11 +62,10 @@ public:
         , header(toEmptyBlock(columns_to_read))
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
-        , is_raw(is_raw_)
-        , do_delete_mark_filter_for_raw(do_delete_mark_filter_for_raw_)
+        , read_mode(read_mode_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(Logger::get(NAME, req_id))
+        , log(Logger::get(req_id))
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -100,7 +98,7 @@ protected:
                 if (!task)
                 {
                     done = true;
-                    LOG_FMT_DEBUG(log, "Read done");
+                    LOG_DEBUG(log, "Read done");
                     return {};
                 }
                 Stopwatch sw;
@@ -128,7 +126,7 @@ protected:
                 }
                 get_input_stream_ms += sw.elapsedMilliseconds();
                 read_segment_count++;
-                LOG_FMT_TRACE(log, "Start to read segment [{}]", cur_segment->segmentId());
+                LOG_TRACE(log, "Start to read segment [{}]", cur_segment->segmentId());
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
@@ -156,7 +154,7 @@ protected:
             else
             {
                 after_segment_read(dm_context, cur_segment);
-                LOG_FMT_TRACE(log, "Finish reading segment [{}]", cur_segment->segmentId());
+                LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
                 cur_segment = {};
                 cur_stream = {};
             }
@@ -166,7 +164,7 @@ protected:
     void readSuffixImpl() override
     {
         auto elapsed_ms = total_sw.elapsedMilliseconds();
-        LOG_FMT_DEBUG(log, "finish read {} rows from storage, read time {} ms, read segment count {}, read time per segment {} ms, get input stream time {} ms, get input stream time per segment {} ms", total_rows, elapsed_ms, read_segment_count, elapsed_ms / read_segment_count, get_input_stream_ms, get_input_stream_ms / read_segment_count);
+        LOG_DEBUG(log, "finish read {} rows from storage, read time {} ms, read segment count {}, read time per segment {} ms, get input stream time {} ms, get input stream time per segment {} ms", total_rows, elapsed_ms, read_segment_count, elapsed_ms / read_segment_count, get_input_stream_ms, get_input_stream_ms / read_segment_count);
     }
 
 private:
@@ -178,8 +176,7 @@ private:
     Block header;
     const UInt64 max_version;
     const size_t expected_block_size;
-    const bool is_raw;
-    const bool do_delete_mark_filter_for_raw;
+    const ReadMode read_mode;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
 

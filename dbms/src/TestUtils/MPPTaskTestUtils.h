@@ -16,11 +16,15 @@
 
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Debug/dbgQueryExecutor.h>
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <gtest/gtest.h>
 
 namespace DB::tests
 {
+
+DAGProperties getDAGPropertiesForTest(int server_num);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
@@ -55,70 +59,52 @@ private:
     std::atomic<Int64> port = 3931;
 };
 
-DAGProperties getDAGPropertiesForTest(int server_num)
+// Hold MPP test related infomation:
+// 1. context_idx: indicate which global context this MPP test use.
+// 2. server_num: indicate how many compute server the MPP test use.
+struct MPPTestMeta
 {
-    DAGProperties properties;
-    // enable mpp
-    properties.is_mpp_query = true;
-    properties.mpp_partition_num = server_num;
-    properties.start_ts = MockTimeStampGenerator::instance().nextTs();
-    return properties;
-}
+    size_t context_idx;
+    size_t server_num;
+};
 
 class MPPTaskTestUtils : public ExecutorTest
 {
 public:
-    static void SetUpTestCase()
-    {
-        ExecutorTest::SetUpTestCase();
-        log_ptr = Logger::get("compute_test");
-        server_num = 1;
-    }
+    static void SetUpTestCase();
 
-    static void TearDownTestCase() // NOLINT(readability-identifier-naming))
-    {
-        MockComputeServerManager::instance().reset();
-    }
+    void TearDown() override;
 
-    void startServers()
-    {
-        startServers(server_num);
-    }
+    static void startServers();
 
-    void startServers(size_t server_num_)
-    {
-        server_num = server_num_;
-        MockComputeServerManager::instance().reset();
-        auto size = std::thread::hardware_concurrency();
-        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-        for (size_t i = 0; i < server_num; ++i)
-        {
-            MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
-        }
-        MockComputeServerManager::instance().startServers(log_ptr, TiFlashTestEnv::getGlobalContext());
-        MockServerAddrGenerator::instance().reset();
-    }
+    static void startServers(size_t server_num_);
+    static size_t serverNum();
 
-    size_t serverNum() const
-    {
-        return server_num;
-    }
+    // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
+    std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
+
+    ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+
+    ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
+
+    static ::testing::AssertionResult assertQueryCancelled(size_t start_ts);
+    static ::testing::AssertionResult assertQueryActive(size_t start_ts);
+    static String queryInfo(size_t server_id);
 
 protected:
     static LoggerPtr log_ptr;
     static size_t server_num;
+    static MPPTestMeta test_meta;
 };
-
-LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
-size_t MPPTaskTestUtils::server_num = 0;
 
 #define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
     do                                                                                                                                      \
     {                                                                                                                                       \
         TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
         MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
-        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+        ASSERT_COLUMNS_EQ_UR(exeucteMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
     } while (0)
+
 
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
     do                                                                         \
@@ -135,7 +121,9 @@ size_t MPPTaskTestUtils::server_num = 0;
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
     do                                                                                 \
     {                                                                                  \
-        auto properties = getDAGPropertiesForTest(serverNum());                        \
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)                  \
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();                          \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \
         for (size_t i = 0; i < task_size; ++i)                                         \
@@ -147,4 +135,5 @@ size_t MPPTaskTestUtils::server_num = 0;
             properties,                                                                \
             expect_cols);                                                              \
     } while (0)
+
 } // namespace DB::tests

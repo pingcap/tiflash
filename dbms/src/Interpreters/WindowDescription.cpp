@@ -13,7 +13,10 @@
 // limitations under the License.
 
 #include <Core/Field.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -61,6 +64,21 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.is_default = false;
 }
 
+void WindowDescription::fillArgColumnNumbers()
+{
+    const auto & before_window_header = before_window->getSampleBlock();
+    for (auto & descr : window_functions_descriptions)
+    {
+        if (descr.arguments.empty())
+        {
+            for (const auto & name : descr.argument_names)
+            {
+                descr.arguments.emplace_back(before_window_header.getPositionByName(name));
+            }
+        }
+    }
+}
+
 String frameTypeToString(const WindowFrame::FrameType & type)
 {
     switch (type)
@@ -74,7 +92,7 @@ String frameTypeToString(const WindowFrame::FrameType & type)
     default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Unknown frame type {}",
-                        type);
+                        static_cast<Int32>(type));
     }
 }
 
@@ -91,7 +109,7 @@ String boundaryTypeToString(const WindowFrame::BoundaryType & type)
     default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Unknown boundary type {}",
-                        type);
+                        magic_enum::enum_name(type));
     }
 }
 } // namespace DB

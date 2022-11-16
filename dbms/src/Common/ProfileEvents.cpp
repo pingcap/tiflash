@@ -67,7 +67,6 @@
     M(PSMVCCCompactOnDeltaRebaseRejected)      \
     M(PSMVCCCompactOnBase)                     \
                                                \
-    M(DMWriteBytes)                            \
     M(DMWriteBlock)                            \
     M(DMWriteBlockNS)                          \
     M(DMWriteFile)                             \
@@ -99,6 +98,8 @@
     M(DMFlushDeltaCache)                       \
     M(DMFlushDeltaCacheNS)                     \
     M(DMCleanReadRows)                         \
+    M(DMSegmentIsEmptyFastPath)                \
+    M(DMSegmentIsEmptySlowPath)                \
                                                \
     M(FileFSync)                               \
                                                \

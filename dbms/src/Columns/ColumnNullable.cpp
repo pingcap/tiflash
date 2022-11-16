@@ -486,8 +486,8 @@ void getExtremesFromNullableContent(const ColumnVector<T> & col, const NullMap &
 
     if (has_not_null)
     {
-        min = typename NearestFieldType<T>::Type(cur_min);
-        max = typename NearestFieldType<T>::Type(cur_max);
+        min = static_cast<typename NearestFieldType<T>::Type>(cur_min);
+        max = static_cast<typename NearestFieldType<T>::Type>(cur_max);
     }
 }
 
