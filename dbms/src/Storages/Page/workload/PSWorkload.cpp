@@ -17,47 +17,76 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
 #include <TestUtils/MockDiskDelegator.h>
+
+#include <ext/scope_guard.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
 
 namespace DB::PS::tests
 {
 void StressWorkload::onDumpResult()
 {
     UInt64 time_interval = stop_watch.elapsedMilliseconds();
-    LOG_INFO(options.logger, fmt::format("result in {}ms", time_interval));
+    LOG_INFO(options.logger, "result in {}ms", time_interval);
     double seconds_run = 1.0 * time_interval / 1000;
+
+    Poco::JSON::Object::Ptr details = new Poco::JSON::Object();
 
     size_t total_pages_written = 0;
     size_t total_bytes_written = 0;
 
+    Poco::JSON::Array::Ptr json_writers(new Poco::JSON::Array());
     for (auto & writer : writers)
     {
         total_pages_written += writer->pages_used;
         total_bytes_written += writer->bytes_used;
+
+        Poco::JSON::Object::Ptr json_writer = new Poco::JSON::Object();
+        json_writer->set("pages", writer->pages_used);
+        json_writer->set("bytes", writer->bytes_used);
+        json_writers->add(json_writer);
     }
+    details->set("writers", json_writers);
 
     size_t total_pages_read = 0;
     size_t total_bytes_read = 0;
 
+    Poco::JSON::Array::Ptr json_readers(new Poco::JSON::Array());
     for (auto & reader : readers)
     {
         total_pages_read += reader->pages_used;
         total_bytes_read += reader->bytes_used;
+
+        Poco::JSON::Object::Ptr json_reader = new Poco::JSON::Object();
+        json_reader->set("pages", reader->pages_used);
+        json_reader->set("bytes", reader->bytes_used);
+        json_readers->add(json_reader);
     }
+    details->set("readers", json_readers);
+
+    LOG_INFO(options.logger, "{}", [&]() {
+        std::stringstream ss;
+        details->stringify(ss);
+        return ss.str();
+    }());
 
     LOG_INFO(options.logger,
-             fmt::format(
-                 "W: {} pages, {:.4f} GB, {:.4f} GB/s",
-                 total_pages_written,
-                 static_cast<double>(total_bytes_written) / DB::GB,
-                 static_cast<double>(total_bytes_written) / DB::GB / seconds_run));
+             "W: {} pages, {:.4f} GB, {:.4f} GB/s",
+             total_pages_written,
+             static_cast<double>(total_bytes_written) / DB::GB,
+             static_cast<double>(total_bytes_written) / DB::GB / seconds_run);
     LOG_INFO(options.logger,
-             fmt::format(
-                 "R: {} pages, {:.4f} GB, {:.4f} GB/s",
-                 total_pages_read,
-                 static_cast<double>(total_bytes_read) / DB::GB,
-                 static_cast<double>(total_bytes_read) / DB::GB / seconds_run));
+             "R: {} pages, {:.4f} GB, {:.4f} GB/s",
+             total_pages_read,
+             static_cast<double>(total_bytes_read) / DB::GB,
+             static_cast<double>(total_bytes_read) / DB::GB / seconds_run);
 
     if (options.status_interval != 0)
     {
@@ -107,18 +136,37 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
             (void)page;
             num_of_pages++;
         });
-        LOG_INFO(StressEnv::logger, fmt::format("Recover {} pages.", num_of_pages));
+        LOG_INFO(StressEnv::logger, "Recover {} pages.", num_of_pages);
+    }
+
+    runtime_stat = std::make_unique<GlobalStat>();
+}
+
+void StressWorkload::initPages(const DB::PageId & max_page_id)
+{
+    auto writer = std::make_shared<PSWriter>(ps, 0, runtime_stat);
+    for (DB::PageId page_id = 0; page_id <= max_page_id; ++page_id)
+    {
+        RandomPageId r(page_id);
+        writer->write(r);
+        if (page_id % 100 == 0)
+            LOG_INFO(StressEnv::logger, "writer wrote page {}", page_id);
     }
 }
 
 void StressWorkload::startBackgroundTimer()
 {
     // A background thread that do GC
-    gc = std::make_shared<PSGc>(ps);
-    gc->start();
+    if (options.gc_interval_s > 0)
+    {
+        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
+        gc->start();
+    }
 
-    // A background thread that scan all pages
-    scanner = std::make_shared<PSScanner>(ps);
+    // A background thread that get snapshot statics,
+    // mock `AsynchronousMetrics` that report metrics
+    // to grafana.
+    scanner = std::make_shared<PSSnapStatGetter>(ps);
     scanner->start();
 
     if (options.status_interval > 0)
@@ -136,20 +184,17 @@ void StressWorkload::startBackgroundTimer()
     }
 }
 
-void StressWorkloadManger::runWorkload()
+void PageWorkloadFactory::runWorkload()
 {
-    if (options.just_init_pages || options.situation_mask == NORMAL_WORKLOAD)
+    if (options.situation_mask == NORMAL_WORKLOAD)
     {
         String name;
         WorkloadCreator func;
         std::tie(name, func) = get(NORMAL_WORKLOAD);
-        auto workload = std::shared_ptr<StressWorkload>(func(options));
-        LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
-        workload->run();
-        if (!options.just_init_pages)
-        {
-            workload->onDumpResult();
-        }
+        running_workload = std::shared_ptr<StressWorkload>(func(options));
+        LOG_INFO(StressEnv::logger, "Start Running {}, {}", name, running_workload->desc());
+        running_workload->run();
+        running_workload->onDumpResult();
         return;
     }
 
@@ -163,18 +208,19 @@ void StressWorkloadManger::runWorkload()
         {
             auto & name = it.second.first;
             auto & creator = it.second.second;
-            auto workload = creator(options);
-            LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
-            workload->run();
-            if (options.verify && !workload->verify())
+            running_workload = creator(options);
+            SCOPE_EXIT({ running_workload.reset(); });
+            LOG_INFO(StressEnv::logger, "Start Running {}, {}", name, running_workload->desc());
+            running_workload->run();
+            if (options.verify && !running_workload->verify())
             {
-                LOG_WARNING(StressEnv::logger, fmt::format("work load : {} failed.", name));
-                workload->onFailed();
+                LOG_WARNING(StressEnv::logger, "work load: {} failed.", name);
+                running_workload->onFailed();
                 break;
             }
             else
             {
-                workload->onDumpResult();
+                running_workload->onDumpResult();
             }
         }
     }

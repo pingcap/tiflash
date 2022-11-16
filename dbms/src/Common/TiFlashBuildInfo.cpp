@@ -85,7 +85,7 @@ std::string getEnabledFeatures()
 
 // SIMD related
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            "avx",
+            "avx2",
 #endif
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
             "avx512",

@@ -37,8 +37,6 @@ public:
         : log(Logger::get(req_id))
     {}
 
-    void clearExecutionSummaries(tipb::SelectResponse & response);
-
     /// for both broadcast writing and partition writing, only
     /// return meaningful execution summary for the first tunnel,
     /// because in TiDB, it does not know enough information
@@ -47,13 +45,15 @@ public:
     /// so if return execution summary for all the tunnels, the
     /// information in TiDB will be amplified, which may make
     /// user confused.
-    // this is a broadcast writing.
+    // this is a root mpp writing.
     void write(tipb::SelectResponse & response);
-    void write(mpp::MPPDataPacket & packet);
-
+    // this is a broadcast or pass through writing.
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet);
     // this is a partition writing.
-    void write(tipb::SelectResponse & response, int16_t partition_id);
-    void write(mpp::MPPDataPacket & packet, int16_t partition_id);
+    void partitionWrite(TrackedMppDataPacketPtr && packet, int16_t partition_id);
+    // this is a execution summary writing.
+    void sendExecutionSummary(tipb::SelectResponse & response);
+
     void close(const String & reason, bool wait_sender_finish);
     void finishWrite();
     void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel);

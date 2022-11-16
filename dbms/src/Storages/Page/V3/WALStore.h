@@ -16,6 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
@@ -62,6 +63,18 @@ public:
 
     void apply(String && serialized_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
+
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        FileUsageStatistics usage;
+        {
+            std::lock_guard guard(mtx_disk_usage);
+            usage.total_log_file_num = num_log_files;
+            usage.total_log_disk_size = bytes_on_disk;
+        }
+        return usage;
+    }
+
     struct FilesSnapshot
     {
         // The log files to generate snapshot from. Sorted by <log number, log level>.
@@ -103,6 +116,8 @@ private:
 
     Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
 
+    void updateDiskUsage(const LogFilenameSet & log_filenames);
+
 private:
     const String storage_name;
     PSDiskDelegatorPtr delegator;
@@ -112,6 +127,11 @@ private:
     // select next path for creating new logfile
     UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
+
+    // Cached values when `tryGetFilesSnapshot` is called
+    mutable std::mutex mtx_disk_usage;
+    size_t num_log_files;
+    size_t bytes_on_disk;
 
     LoggerPtr logger;
 

@@ -22,12 +22,12 @@
 
 namespace DB
 {
-template <class StreamWriterPtr>
+template <class ExchangeWriterPtr>
 class FineGrainedShuffleWriter : public DAGResponseWriter
 {
 public:
     FineGrainedShuffleWriter(
-        StreamWriterPtr writer_,
+        ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         bool should_send_exec_summary_at_last,
@@ -40,16 +40,17 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void batchWriteFineGrainedShuffle();
 
-    template <bool send_exec_summary_at_last>
-    void writePackets(std::vector<TrackedMppDataPacket> & packets);
+    void writePackets(TrackedMppDataPacketPtrs & packets);
 
     void initScatterColumns();
 
+    void sendExecutionSummary();
+
+private:
     bool should_send_exec_summary_at_last;
-    StreamWriterPtr writer;
+    ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
