@@ -88,7 +88,7 @@ struct SecureConfig
     TiFlashSecurityConfig * config = nullptr;
 };
 
-static SecureConfig * secure_config = new SecureConfig;
+static SecureConfig * global_security_config = new SecureConfig;
 
 static grpc_ssl_certificate_config_reload_status
 sslServerCertificateConfigCallback(
@@ -122,7 +122,7 @@ grpc_server_credentials * grpcSslServerCredentialsCreateWithFetcher(
     grpc_ssl_server_credentials_options * options = grpc_ssl_server_credentials_create_options_using_config_fetcher(
         client_certificate_request,
         sslServerCertificateConfigCallback,
-        secure_config);
+        global_security_config);
 
     return grpc_ssl_server_credentials_create_with_options(options);
 }
@@ -141,8 +141,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
 {
     background_task.begin();
     grpc::ServerBuilder builder;
-    auto * cfg = secure_config;
-    cfg->config = &security_config;
+    global_security_config->config = &security_config;
 
     if (security_config.has_tls_config)
     {
