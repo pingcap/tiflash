@@ -227,7 +227,7 @@ inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & tim
 
 bool isPunctuation(char c);
 
-bool isValidSeperator(char c, int previous_parts);
+bool isValidSeparator(char c, int previous_parts);
 
 // Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
 // Note that this function will not check if the input is logically a valid datetime value.

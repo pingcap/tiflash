@@ -76,33 +76,18 @@ bool scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *>
     return true;
 }
 
-// find index of fractional point.
-int getFracIndex(const String & format)
-{
-    int idx = -1;
-    for (int i = int(format.size()) - 1; i >= 0; i--)
-    {
-        if (std::ispunct(format[i]))
-        {
-            if (format[i] == '.')
-            {
-                idx = i;
-            }
-            break;
-        }
-    }
-    return idx;
-}
-
 // helper for date part splitting, punctuation characters are valid separators anywhere,
 // while space and 'T' are valid separators only between date and time.
-bool isValidSeperator(char c, int previous_parts)
+bool isValidSeparator(char c, int previous_parts)
 {
     if (isPunctuation(c))
         return true;
 
     // for https://github.com/pingcap/tics/issues/4036
-    return previous_parts == 2 && (c == 'T' || isWhitespaceASCII(c));
+    if (previous_parts == 2 && (c == 'T' || isWhitespaceASCII(c)))
+        return true;
+
+    return previous_parts > 4 && !isdigit(c);
 }
 
 std::vector<String> parseDateFormat(String format)
@@ -112,25 +97,31 @@ std::vector<String> parseDateFormat(String format)
     if (format.empty())
         return {};
 
-    if (!std::isdigit(format[0]) || !std::isdigit(format[format.size() - 1]))
+    // Date format must start with number.
+    if (!std::isdigit(format[0]))
     {
         return {};
     }
 
+    size_t start = 0;
+    // Initialize `seps` with capacity of 6. The input `format` is typically
+    // a date time of the form "2006-01-02 15:04:05", which has 6 numeric parts
+    // (the fractional second part is usually removed by `splitDateTime`).
+    // Setting `seps`'s capacity to 6 avoids reallocation in this common case.
     std::vector<String> seps;
     seps.reserve(6);
-    size_t start = 0;
-    for (size_t i = 0; i < format.size(); i++)
+
+    for (size_t i = 1; i < format.length() - 1; i++)
     {
-        if (isValidSeperator(format[i], seps.size()))
+        if (isValidSeparator(format[i], seps.size()))
         {
             int previous_parts = seps.size();
-            seps.push_back(format.substr(start, i - start));
+            seps.push_back(format.substr(start, i));
             start = i + 1;
 
-            for (size_t j = i + 1; j < format.size(); j++)
+            for (size_t j = i + 1; j < format.length(); j++)
             {
-                if (!isValidSeperator(format[j], previous_parts))
+                if (!isValidSeparator(format[j], previous_parts))
                     break;
                 start++;
                 i++;
@@ -263,6 +254,32 @@ bool isPunctuation(char c)
     return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
 }
 
+// getFracIndex finds the last '.' for get fracStr, index = -1 means fracStr not found.
+// but for format like '2019.01.01 00:00:00', the index should be -1.
+// It will not be affected by the time zone suffix. For format like '2020-01-01 12:00:00.123456+05:00', the index should be 19.
+int getFracIndex(const String & format)
+{
+    auto [tz_idx, tz_sign, tz_hour, tz_sep, tz_minute] = getTimeZone(format);
+    int end = format.length() - 1;
+    if (tz_idx != -1)
+    {
+        end = tz_idx - 1;
+    }
+    int idx = -1;
+    for (int i = end; i >= 0; i--)
+    {
+        if (isPunctuation(format[i]))
+        {
+            if (format[i] == '.')
+            {
+                idx = i;
+            }
+            break;
+        }
+    }
+    return idx;
+}
+
 std::tuple<std::vector<String>, String, bool, String, String, String, String, bool> splitDatetime(String format)
 {
     std::vector<String> seps;
@@ -278,9 +295,10 @@ std::tuple<std::vector<String>, String, bool, String, String, String, String, bo
         }
         format = format.substr(0, tz_idx);
     }
-    size_t frac_idx = getFracIndex(format);
+    int frac_idx = getFracIndex(format);
     if (frac_idx > 0)
     {
+        // Only contain digits
         size_t frac_end = frac_idx + 1;
         for (; frac_end < format.length() && isdigit(format[frac_end]); frac_end++)
         {
