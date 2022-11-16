@@ -53,7 +53,6 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     children.push_back(input);
 }
 
-
 void WindowTransformAction::initialPartitionAndOrderColumnIndices()
 {
     partition_column_indices.reserve(window_description.partition_by.size());

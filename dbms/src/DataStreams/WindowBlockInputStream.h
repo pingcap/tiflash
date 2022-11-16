@@ -237,7 +237,6 @@ struct WindowTransformAction
 };
 
 class WindowBlockInputStream : public IProfilingBlockInputStream
-    , public std::enable_shared_from_this<WindowBlockInputStream>
 {
     static constexpr auto NAME = "Window";
 
