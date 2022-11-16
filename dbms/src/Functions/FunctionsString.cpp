@@ -6019,7 +6019,7 @@ private:
         for (size_t i = 0; i < size; ++i)
         {
             size_t begin = prev_offset;
-            size_t length = offsets[i] - prev_offset;
+            size_t length = offsets[i] - prev_offset - 1;
             unhexOne(data, length, i, begin, pos, res_data, res_offsets, res_null_map);
             pos = res_offsets[i];
             prev_offset = offsets[i];
@@ -6065,7 +6065,9 @@ private:
     {
         char low;
         char high;
-        res_offsets[idx] = pos;
+        size_t end = begin + length;
+        res_offsets[idx] = pos + 1;
+
         if (length % 2 != 0)
         {
             const char * byte = reinterpret_cast<const char *>(&data[begin]);
@@ -6079,7 +6081,7 @@ private:
             pos++;
             begin++;
         }
-        for (size_t i = begin; i < begin + length; i += 2)
+        for (size_t i = begin; i < end; i += 2)
         {
             const char * byte1 = reinterpret_cast<const char *>(&data[i]);
             const char * byte2 = reinterpret_cast<const char *>(&data[i + 1]);
@@ -6094,7 +6096,7 @@ private:
             res_data[pos] = val;
             pos++;
         }
-        res_offsets[idx] = pos;
+        res_offsets[idx] = pos + 1;
     }
 
     static bool fromHexChar(const char * in, char & out)

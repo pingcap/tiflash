@@ -48,9 +48,7 @@ try
 
     // Special Empty Character
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"\t", "\t", "\n"
-                                                    "\n",
-                                        " "}),
+        createColumn<Nullable<String>>({"\t", "\t", "\n", "\n", " "}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"9", "09", "A", "0A", "20"})));
