@@ -113,8 +113,8 @@ function check_env() {
 
 function update_tls_file() {
   file=$1
-  exec "cp $file.pem $file.pem.old && cp $file.pem.new $file.pem \
-    cp $file-key.pem $file-key.pem.old && cp $file-key.pem.new $file-key.pem"
+  exec "cp $file.pem $file.pem.old && cp $file-new.pem $file.pem \
+    cp $file-key.pem $file-key.pem.old && cp $file-key-new.pem $file-key.pem"
 }
 
 function update_tls() {

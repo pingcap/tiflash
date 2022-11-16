@@ -23,6 +23,7 @@
 #include <common/logger_useful.h>
 #include <pingcap/Config.h>
 
+#include <mutex>
 #include <set>
 
 namespace DB
@@ -46,6 +47,7 @@ struct TiFlashSecurityConfig
     bool inited = false;
     bool has_tls_config = false;
     grpc::SslCredentialsOptions options;
+    std::mutex mu;
 
 public:
     TiFlashSecurityConfig() = default;
@@ -125,7 +127,6 @@ public:
         }
     }
 
-
     bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
         if (allowed_common_names.empty() || grpc_context == nullptr)
@@ -155,6 +156,7 @@ public:
 
     pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log) const
     {
+        std::unique_lock lock(mu);
         pingcap::ClusterConfig config;
         config.tiflash_engine_key = raft_config.engine_key;
         config.tiflash_engine_value = raft_config.engine_value;
@@ -167,10 +169,10 @@ public:
 
     bool updated()
     {
+        std::unique_lock lock(mu);
         auto new_options = readSecurityInfo();
         LOG_INFO(log, "cert check if change path, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         auto updated = new_options.pem_root_certs != options.pem_root_certs || new_options.pem_cert_chain != options.pem_cert_chain || new_options.pem_private_key != options.pem_private_key;
-
         if (updated)
         {
             LOG_INFO(log, "cert updated in security config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
