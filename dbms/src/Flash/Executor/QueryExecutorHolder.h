@@ -42,7 +42,7 @@ public:
     QueryExecutor * operator->()
     {
         std::lock_guard lock(mu);
-        RUNTIME_CHECK(query_executor != nullptr);
+        assert(query_executor != nullptr);
         return query_executor.get();
     }
 
