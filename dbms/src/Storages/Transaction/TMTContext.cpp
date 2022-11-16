@@ -85,6 +85,12 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 
+void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+{
+    if (!raft_config.pd_addrs.empty())
+        cluster->update(raft_config.pd_addrs, cluster_config);
+}
+
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
     kvstore->restore(path_pool, proxy_helper);

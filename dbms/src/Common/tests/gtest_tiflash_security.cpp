@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/TiFlashSecurity.h>
+#include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
@@ -21,11 +23,20 @@ namespace DB
 {
 namespace tests
 {
-class TestTiFlashSecurity : public ext::Singleton<TestTiFlashSecurity>
+class TiFlashSecurityConfigTest : public ::testing::Test
 {
+public:
+    TiFlashSecurityConfigTest()
+        : log(Logger::get("TiFlashSecurityConfigTest"))
+    {}
+
+    static void SetUpTestCase() {}
+
+protected:
+    LoggerPtr log;
 };
 
-TEST(TestTiFlashSecurity, Config)
+TEST_F(TiFlashSecurityConfigTest, Config)
 {
     TiFlashSecurityConfig config;
     config.parseAllowedCN(String("[abc,efg]"));

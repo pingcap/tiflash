@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/TiFlashSecurity.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
@@ -215,6 +216,11 @@ public:
       */
     void setUsersConfig(const ConfigurationPtr & config);
     ConfigurationPtr getUsersConfig();
+
+    /// Security configuration settings.
+    void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
+
+    std::shared_ptr<TiFlashSecurityConfig> getSecurityConfig();
 
     /// Must be called before getClientInfo.
     void setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address, const String & quota_key);
@@ -482,6 +488,7 @@ public:
     MockStorage mockStorage() const;
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
+
 
 private:
     /** Check if the current client has access to the specified database.

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "MetricsPrometheus.h"
+#include "CertificateReloader.h"
 
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
@@ -112,7 +113,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         security_config.ca_path,
         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
-    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
         {
             return true;
@@ -121,7 +122,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     };
 
     context->setAdhocVerification(check_common_name);
-
+    CertificateReloader::instance().initSSLCallback(context);
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
@@ -234,13 +235,13 @@ MetricsPrometheus::~MetricsPrometheus()
 void MetricsPrometheus::run()
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
+    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); ++event)
     {
         const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
         tiflash_metrics.registered_profile_events[event]->Set(value);
     }
 
-    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
+    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); ++metric)
     {
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
         tiflash_metrics.registered_current_metrics[metric]->Set(value);

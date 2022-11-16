@@ -85,6 +85,8 @@ public:
 
     SchemaSyncerPtr getSchemaSyncer() const;
 
+    void updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config);
+
     pingcap::pd::ClientPtr getPDClient() const;
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
