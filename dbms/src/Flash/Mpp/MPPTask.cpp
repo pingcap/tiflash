@@ -174,7 +174,6 @@ void MPPTask::initExchangeReceivers()
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
             receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
-            new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
         }
         return true;
     });
@@ -326,6 +325,7 @@ void MPPTask::preprocess()
             throw Exception("task not in running state, may be cancelled");
         for (auto & r : dag_context->getCoprocessorReaders())
             receiver_set->addCoprocessorReader(r);
+        new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
     }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -356,7 +356,7 @@ void MPPTask::runImpl()
         LOG_INFO(log, "task starts preprocessing");
         preprocess();
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
-        LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
+        LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getExternalThreadCnt(), new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
@@ -521,10 +521,11 @@ int MPPTask::estimateCountOfNewThreads()
         "It should not estimate the threads for the uninitialized task {}",
         id.toString());
 
-    // Estimated count of new threads from query executor(including ExchangeReceiver), remote MppTunnels s.
+    // Estimated count of new threads from query executor, MppTunnels, mpp_receivers.
     assert(query_executor.value());
     return (*query_executor)->estimateNewThreadCount() + 1
-        + dag_context->tunnel_set->getRemoteTunnelCnt();
+        + dag_context->tunnel_set->getExternalThreadCnt()
+        + new_thread_count_of_mpp_receiver;
 }
 
 } // namespace DB

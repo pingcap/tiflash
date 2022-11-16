@@ -62,9 +62,9 @@ public:
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
-    int getRemoteTunnelCnt()
+    int getExternalThreadCnt()
     {
-        return remote_tunnel_cnt;
+        return external_thread_cnt;
     }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
@@ -74,7 +74,7 @@ private:
     std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
     const LoggerPtr log;
 
-    int remote_tunnel_cnt = 0;
+    int external_thread_cnt = 0;
 };
 
 class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>

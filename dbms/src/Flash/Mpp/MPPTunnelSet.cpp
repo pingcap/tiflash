@@ -32,7 +32,7 @@ void checkPacketSize(size_t size)
 
 TrackedMppDataPacketPtr serializePacket(tipb::SelectResponse & response)
 {
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_unique<TrackedMppDataPacket>();
     tracked_packet->serializeByResponse(response);
     checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
     return tracked_packet;
@@ -81,9 +81,9 @@ void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id
 
     receiver_task_id_to_index_map[receiver_task_id] = tunnels.size();
     tunnels.push_back(tunnel);
-    if (!tunnel->isLocal())
+    if (!tunnel->isLocal() && !tunnel->isAsync())
     {
-        remote_tunnel_cnt++;
+        ++external_thread_cnt;
     }
 }
 

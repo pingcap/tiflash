@@ -136,7 +136,7 @@ private:
 
     MPPReceiverSetPtr receiver_set;
 
-    int new_thread_count_of_exchange_receiver = 0;
+    int new_thread_count_of_mpp_receiver = 0;
 
     const LoggerPtr log;
 
