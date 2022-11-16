@@ -42,7 +42,7 @@ public:
 private:
     void batchWriteFineGrainedShuffle();
 
-    void writePackets(const TrackedMppDataPacketPtrs & packets);
+    void writePackets(TrackedMppDataPacketPtrs & packets);
 
     void initScatterColumns();
 
