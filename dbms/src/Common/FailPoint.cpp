@@ -27,55 +27,51 @@
 namespace DB
 {
 std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
-#define APPLY_FOR_FAILPOINTS_ONCE(M)                                  \
-    M(exception_between_drop_meta_and_data)                           \
-    M(exception_between_alter_data_and_meta)                          \
-    M(exception_drop_table_during_remove_meta)                        \
-    M(exception_between_rename_table_data_and_metadata)               \
-    M(exception_between_create_database_meta_and_directory)           \
-    M(exception_before_rename_table_old_meta_removed)                 \
-    M(exception_after_step_1_in_exchange_partition)                   \
-    M(exception_before_step_2_rename_in_exchange_partition)           \
-    M(exception_after_step_2_in_exchange_partition)                   \
-    M(exception_before_step_3_rename_in_exchange_partition)           \
-    M(exception_after_step_3_in_exchange_partition)                   \
-    M(region_exception_after_read_from_storage_some_error)            \
-    M(region_exception_after_read_from_storage_all_error)             \
-    M(exception_before_dmfile_remove_encryption)                      \
-    M(exception_before_dmfile_remove_from_disk)                       \
-    M(force_enable_region_persister_compatible_mode)                  \
-    M(force_disable_region_persister_compatible_mode)                 \
-    M(force_triggle_background_merge_delta)                           \
-    M(force_triggle_foreground_flush)                                 \
-    M(exception_before_mpp_register_non_root_mpp_task)                \
-    M(exception_before_mpp_register_tunnel_for_non_root_mpp_task)     \
-    M(exception_during_mpp_register_tunnel_for_non_root_mpp_task)     \
-    M(exception_before_mpp_non_root_task_run)                         \
-    M(exception_during_mpp_non_root_task_run)                         \
-    M(exception_before_mpp_register_root_mpp_task)                    \
-    M(exception_before_mpp_register_tunnel_for_root_mpp_task)         \
-    M(exception_before_mpp_root_task_run)                             \
-    M(exception_during_mpp_root_task_run)                             \
-    M(exception_during_mpp_write_err_to_tunnel)                       \
-    M(exception_during_mpp_close_tunnel)                              \
-    M(exception_during_write_to_storage)                              \
-    M(force_set_sst_to_dtfile_block_size)                             \
-    M(force_set_sst_decode_rand)                                      \
-    M(exception_before_page_file_write_sync)                          \
-    M(force_set_segment_ingest_packs_fail)                            \
-    M(segment_merge_after_ingest_packs)                               \
-    M(force_formal_page_file_not_exists)                              \
-    M(force_legacy_or_checkpoint_page_file_exists)                    \
-    M(exception_in_creating_set_input_stream)                         \
-    M(exception_when_read_from_log)                                   \
-    M(exception_mpp_hash_build)                                       \
-    M(exception_before_drop_segment)                                  \
-    M(exception_after_drop_segment)                                   \
-    M(exception_between_schema_change_in_the_same_diff)               \
-    /* try to use logical split, could fall back to physical split */ \
-    M(try_segment_logical_split)                                      \
-    /* must perform logical split, otherwise throw exception */       \
-    M(force_segment_logical_split)
+#define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
+    M(exception_between_drop_meta_and_data)                       \
+    M(exception_between_alter_data_and_meta)                      \
+    M(exception_drop_table_during_remove_meta)                    \
+    M(exception_between_rename_table_data_and_metadata)           \
+    M(exception_between_create_database_meta_and_directory)       \
+    M(exception_before_rename_table_old_meta_removed)             \
+    M(exception_after_step_1_in_exchange_partition)               \
+    M(exception_before_step_2_rename_in_exchange_partition)       \
+    M(exception_after_step_2_in_exchange_partition)               \
+    M(exception_before_step_3_rename_in_exchange_partition)       \
+    M(exception_after_step_3_in_exchange_partition)               \
+    M(region_exception_after_read_from_storage_some_error)        \
+    M(region_exception_after_read_from_storage_all_error)         \
+    M(exception_before_dmfile_remove_encryption)                  \
+    M(exception_before_dmfile_remove_from_disk)                   \
+    M(force_enable_region_persister_compatible_mode)              \
+    M(force_disable_region_persister_compatible_mode)             \
+    M(force_triggle_background_merge_delta)                       \
+    M(force_triggle_foreground_flush)                             \
+    M(exception_before_mpp_register_non_root_mpp_task)            \
+    M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
+    M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \
+    M(exception_before_mpp_non_root_task_run)                     \
+    M(exception_during_mpp_non_root_task_run)                     \
+    M(exception_before_mpp_register_root_mpp_task)                \
+    M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
+    M(exception_before_mpp_root_task_run)                         \
+    M(exception_during_mpp_root_task_run)                         \
+    M(exception_during_write_to_storage)                          \
+    M(force_set_sst_to_dtfile_block_size)                         \
+    M(force_set_sst_decode_rand)                                  \
+    M(exception_before_page_file_write_sync)                      \
+    M(force_set_segment_ingest_packs_fail)                        \
+    M(segment_merge_after_ingest_packs)                           \
+    M(force_formal_page_file_not_exists)                          \
+    M(force_legacy_or_checkpoint_page_file_exists)                \
+    M(exception_in_creating_set_input_stream)                     \
+    M(exception_when_read_from_log)                               \
+    M(exception_mpp_hash_build)                                   \
+    M(exception_before_drop_segment)                              \
+    M(exception_after_drop_segment)                               \
+    M(exception_between_schema_change_in_the_same_diff)           \
+    M(force_ps_wal_compact)                                       \
+    M(pause_before_full_gc_prepare)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -95,7 +91,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
-    M(unblock_query_init_after_write)
+    M(unblock_query_init_after_write)                        \
+    M(exception_in_merged_task_init)                         \
+    M(force_fail_in_flush_region_data)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -106,7 +104,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_before_apply_raft_cmd)             \
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
-    M(pause_after_copr_streams_acquired_once)
+    M(pause_after_copr_streams_acquired_once)  \
+    M(pause_before_register_non_root_mpp_task)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \
@@ -129,7 +128,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_aggregate_merge_failpoint)                 \
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
-    M(random_task_lifecycle_failpoint)                  \
     M(random_task_manager_find_task_failure_failpoint)  \
     M(random_min_tso_scheduler_failpoint)
 
@@ -151,10 +149,20 @@ public:
     // wake up all waiting threads when destroy
     ~FailPointChannel() { notifyAll(); }
 
+    explicit FailPointChannel(UInt64 timeout_)
+        : timeout(timeout_)
+    {}
+    FailPointChannel()
+        : timeout(0)
+    {}
+
     void wait()
     {
         std::unique_lock lock(m);
-        cv.wait(lock);
+        if (timeout == 0)
+            cv.wait(lock);
+        else
+            cv.wait_for(lock, std::chrono::seconds(timeout));
     }
 
     void notifyAll()
@@ -164,9 +172,33 @@ public:
     }
 
 private:
+    UInt64 timeout;
     std::mutex m;
     std::condition_variable cv;
 };
+
+void FailPointHelper::enablePauseFailPoint(const String & fail_point_name, UInt64 time)
+{
+#define SUB_M(NAME, flags)                                                                                  \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
+        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>(time));   \
+        return;                                                                                             \
+    }
+
+#define M(NAME) SUB_M(NAME, FIU_ONETIME)
+    APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)
+#undef M
+
+#define M(NAME) SUB_M(NAME, 0)
+    APPLY_FOR_PAUSEABLE_FAILPOINTS(M)
+#undef M
+#undef SUB_M
+
+    throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
+}
 
 void FailPointHelper::enableFailPoint(const String & fail_point_name)
 {
@@ -245,7 +277,7 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         RUNTIME_ASSERT((0 <= rate && rate <= 1.0), log, "RandomFailPoint trigger rate should in [0,1], while {}", rate);
         enableRandomFailPoint(pair_tokens[0], rate);
     }
-    LOG_FMT_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+    LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)
@@ -270,6 +302,8 @@ class FailPointChannel
 };
 
 void FailPointHelper::enableFailPoint(const String &) {}
+
+void FailPointHelper::enablePauseFailPoint(const String &, UInt64) {}
 
 void FailPointHelper::disableFailPoint(const String &) {}
 

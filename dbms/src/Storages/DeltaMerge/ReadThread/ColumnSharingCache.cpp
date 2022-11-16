@@ -60,4 +60,11 @@ void DMFileReaderPool::set(DMFileReader & from_reader, int64_t col_id, size_t st
         r->addCachedPacks(col_id, start, count, col);
     }
 }
+
+DMFileReader * DMFileReaderPool::get(const std::string & name)
+{
+    std::lock_guard lock(mtx);
+    auto itr = readers.find(name);
+    return itr != readers.end() && !itr->second.empty() ? *(itr->second.begin()) : nullptr;
+}
 } // namespace DB::DM

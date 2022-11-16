@@ -12,119 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockRaftStoreProxy.h>
-#include <Debug/MockSSTReader.h>
-#include <Storages/PathPool.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionExecutionResult.h>
-#include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/tests/region_helper.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
-
-#include <memory>
+#include "kvstore_helper.h"
 
 namespace DB
 {
-namespace RegionBench
-{
-extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
-extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
-} // namespace RegionBench
-
-extern std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true);
-extern void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true);
-extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
-extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state);
-
 namespace tests
 {
-
-// TODO: Use another way to workaround calling the private methods on KVStore
-class RegionKVStoreTest : public ::testing::Test
-{
-public:
-    RegionKVStoreTest()
-    {
-        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
-    }
-
-    static void SetUpTestCase() {}
-
-    void SetUp() override
-    {
-        // clean data and create path pool instance
-        path_pool = createCleanPathPool(test_path);
-
-        reloadKVSFromDisk();
-
-        proxy_instance = std::make_unique<MockRaftStoreProxy>();
-        proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-            RaftStoreProxyPtr{proxy_instance.get()}));
-        proxy_instance->init(100);
-
-        kvstore->restore(*path_pool, proxy_helper.get());
-    }
-
-    void TearDown() override {}
-
-protected:
-    KVStore & getKVS() { return *kvstore; }
-    KVStore & reloadKVSFromDisk()
-    {
-        kvstore.reset();
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        kvstore = std::make_unique<KVStore>(global_ctx, TiDB::SnapshotApplyMethod::DTFile_Directory);
-        // only recreate kvstore and restore data from disk, don't recreate proxy instance
-        kvstore->restore(*path_pool, proxy_helper.get());
-        return *kvstore;
-    }
-
-protected:
-    static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
-    static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
-    static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
-    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
-
-    static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
-    {
-        // Drop files on disk
-        Poco::File file(path);
-        if (file.exists())
-            file.remove(true);
-        file.createDirectories();
-
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        auto path_capacity = global_ctx.getPathCapacity();
-        auto provider = global_ctx.getFileProvider();
-        // Create a PathPool instance on the clean directory
-        Strings main_data_paths{path};
-        return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
-    }
-
-    std::string test_path;
-
-    std::unique_ptr<PathPool> path_pool;
-    std::unique_ptr<KVStore> kvstore;
-
-    std::unique_ptr<MockRaftStoreProxy> proxy_instance;
-    std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
-};
-
 TEST_F(RegionKVStoreTest, NewProxy)
 {
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
-    {
-        auto store = metapb::Store{};
-        store.set_id(1234);
-        kvs.setStore(store);
-        ASSERT_EQ(kvs.getStoreID(), store.id());
-    }
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
         auto task_lock = kvs.genTaskLock();
@@ -153,12 +52,13 @@ TEST_F(RegionKVStoreTest, NewProxy)
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, ctx.getTMTContext(), 0, 0), false);
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
     }
 }
 
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // start mock proxy in other thread
@@ -754,6 +654,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 
 TEST_F(RegionKVStoreTest, Region)
 {
+    createDefaultRegions();
     TableID table_id = 100;
     {
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
@@ -787,7 +688,7 @@ TEST_F(RegionKVStoreTest, Region)
             ASSERT_EQ(k->lock_version(), 3);
         }
         {
-            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region);
+            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
             ASSERT_TRUE(data_list_read);
             ASSERT_EQ(1, data_list_read->size());
             RemoveRegionCommitCache(region, *data_list_read);
@@ -827,7 +728,7 @@ TEST_F(RegionKVStoreTest, Region)
         region->remove("write", RecordKVFormat::genKey(table_id, 4, 8));
         ASSERT_EQ(1, region->writeCFCount());
         {
-            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region);
+            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
             ASSERT_TRUE(data_list_read);
             ASSERT_EQ(1, data_list_read->size());
             RemoveRegionCommitCache(region, *data_list_read);
@@ -851,6 +752,7 @@ TEST_F(RegionKVStoreTest, Region)
 
 TEST_F(RegionKVStoreTest, KVStore)
 {
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -1127,7 +1029,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                     9,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
+                kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
             }
             try
             {
@@ -1138,7 +1040,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                     9,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
+                kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
                 ASSERT_TRUE(false);
             }
             catch (Exception & e)
@@ -1162,7 +1064,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                         10,
                         5,
                         ctx.getTMTContext());
-                    kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
+                    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
                     ASSERT_TRUE(false);
                 }
                 catch (Exception & e)
@@ -1184,7 +1086,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                     10,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
+                kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
 
                 auto state = proxy_helper->getRegionLocalState(8192);
                 ASSERT_EQ(state.state(), raft_serverpb::PeerState::Tombstone);
@@ -1245,32 +1147,175 @@ TEST_F(RegionKVStoreTest, KVStore)
             ASSERT_EQ(e.message(), "unsupported admin command type InvalidAdmin");
         }
     }
+}
+
+
+class ApplySnapshotTest
+    : public RegionKVStoreTest
+    , public testing::WithParamInterface<bool /* ingest_using_split */>
+{
+public:
+    ApplySnapshotTest()
     {
-        // There shall be data to flush.
-        ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
-        // Force flush until succeed only for testing.
-        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext(), 0, 0), true);
-        // Non existing region.
-        // Flush and CompactLog will not panic.
-        ASSERT_EQ(kvs.tryFlushRegionData(1999, true, ctx.getTMTContext(), 0, 0), true);
+        ingest_using_split = GetParam();
+    }
+
+protected:
+    bool ingest_using_split{};
+};
+
+INSTANTIATE_TEST_CASE_P(
+    ByIngestUsingSplit,
+    ApplySnapshotTest,
+    testing::Bool());
+
+TEST_P(ApplySnapshotTest, WithNewRegionRange)
+try
+{
+    using DM::tests::DMTestEnv;
+
+    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & kvs = getKVS();
+    auto table_id = 101;
+    auto region_id = 19;
+    auto region_id_str = std::to_string(region_id);
+
+    auto settings_backup = ctx.getGlobalContext().getSettings();
+    ctx.getGlobalContext().getSettingsRef().dt_segment_limit_rows = 50;
+    if (ingest_using_split)
+    {
+        ctx.getGlobalContext().getSettingsRef().dt_segment_delta_small_column_file_size = 50 * 8;
+    }
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
+        ctx.getGlobalContext().setSettings(settings_backup);
+    });
+
+    StorageDeltaMergePtr storage;
+    {
+        auto columns = DMTestEnv::getDefaultTableColumns();
+        auto table_info = DMTestEnv::getMinimalTableInfo(table_id);
+        auto astptr = DMTestEnv::getPrimaryKeyExpr("test_table");
+        storage = StorageDeltaMerge::create("TiFlash",
+                                            "default" /* db_name */,
+                                            "test_table" /* table_name */,
+                                            table_info,
+                                            ColumnsDescription{columns},
+                                            astptr,
+                                            0,
+                                            ctx);
+        storage->startup();
+    }
+    SCOPE_EXIT({
+        storage->drop();
+        ctx.getTMTContext().getStorages().remove(table_id);
+    });
+    // Initially region_19 range is [0, 10000)
+    {
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10000));
+        GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
+        std::vector<SSTView> sst_views{
+            SSTView{
+                ColumnFamilyType::Write,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+            SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+        };
+        {
+            RegionMockTest mock_test(kvstore.get(), region);
+
+            kvs.handleApplySnapshot(
+                region->getMetaRegion(),
+                2,
+                SSTViewVec{sst_views.data(), sst_views.size()},
+                8,
+                5,
+                ctx.getTMTContext());
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
+        }
+    }
+    {
+        if (ingest_using_split)
+        {
+            auto stats = storage->getStore()->getStoreStats();
+            ASSERT_EQ(3, stats.segment_count);
+        }
+
+        storage->mergeDelta(ctx);
+    }
+    // Later, its range is changed to [20000, 50000)
+    {
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 20000), RecordKVFormat::genKey(table_id, 50000));
+        GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
+        std::vector<SSTView> sst_views{
+            SSTView{
+                ColumnFamilyType::Write,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+            SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+        };
+        {
+            RegionMockTest mock_test(kvstore.get(), region);
+
+            kvs.handleApplySnapshot(
+                region->getMetaRegion(),
+                2,
+                SSTViewVec{sst_views.data(), sst_views.size()},
+                9,
+                5,
+                ctx.getTMTContext());
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(9), true);
+        }
+    }
+    {
+        auto stats = storage->getStore()->getStoreStats();
+        ASSERT_NE(0, stats.total_stable_size_on_disk);
+        ASSERT_NE(0, stats.total_rows);
+        ASSERT_NE(0, stats.total_size);
+    }
+    // Finally, the region is migrated out
+    {
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
-        request.mutable_compact_log();
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeerV2);
+        auto meta = kvs.getRegion(region_id)->getMetaRegion();
+        meta.mutable_peers()->Clear();
+        meta.add_peers()->set_id(3);
+        *response.mutable_change_peer()->mutable_region() = meta;
+        kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), region_id, 10, 6, ctx.getTMTContext());
+        ASSERT_EQ(kvs.getRegion(region_id), nullptr);
+    }
+    {
+        // After several rounds of GC, everything should be reclaimed.
+        for (size_t i = 0; i < 10; ++i)
+        {
+            storage->onSyncGc(100, DM::GCOptions::newAllForTest());
+        }
+
+        auto gc_n = storage->onSyncGc(100, DM::GCOptions::newAllForTest());
+        ASSERT_EQ(0, gc_n);
+
+        auto stats = storage->getStore()->getStoreStats();
+        ASSERT_EQ(1, stats.segment_count);
+        ASSERT_EQ(0, stats.total_stable_size_on_disk);
+        ASSERT_EQ(0, stats.total_rows);
+        ASSERT_EQ(0, stats.total_size);
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreRestore)
 {
     {
         KVStore & kvs = getKVS();
-        {
-            auto store = metapb::Store{};
-            store.set_id(1234);
-            kvs.setStore(store);
-            ASSERT_EQ(kvs.getStoreID(), store.id());
-        }
         {
             ASSERT_EQ(kvs.getRegion(0), nullptr);
             auto task_lock = kvs.genTaskLock();

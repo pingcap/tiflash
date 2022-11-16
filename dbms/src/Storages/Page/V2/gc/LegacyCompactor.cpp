@@ -49,7 +49,7 @@ LegacyCompactor::tryCompact(
     if (page_files_to_compact.size() < config.gc_min_legacy_num)
     {
         // Nothing to compact
-        LOG_FMT_DEBUG(log, "{} LegacyCompactor::tryCompact exit without compaction, candidates size: {}, compact_legacy_min_num: {}", storage_name, page_files_to_compact.size(), config.gc_min_legacy_num);
+        LOG_DEBUG(log, "{} LegacyCompactor::tryCompact exit without compaction, candidates size: {}, compact_legacy_min_num: {}", storage_name, page_files_to_compact.size(), config.gc_min_legacy_num);
         removePageFilesIf(page_files, [&min_writing_file_id_level](const PageFile & pf) -> bool {
             return
                 // Remove page files that maybe writing to
@@ -68,7 +68,7 @@ LegacyCompactor::tryCompact(
     const String storage_path = delegator->defaultPath();
     if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
-        LOG_FMT_WARNING(log, "{} LegacyCompactor::tryCompact to checkpoint PageFile_{}_{} is done before.", storage_name, checkpoint_id.first, checkpoint_id.second);
+        LOG_WARNING(log, "{} LegacyCompactor::tryCompact to checkpoint PageFile_{}_{} is done before.", storage_name, checkpoint_id.first, checkpoint_id.second);
         removePageFilesIf(page_files, [&min_writing_file_id_level](const PageFile & pf) -> bool {
             return
                 // Remove page files that maybe writing to
@@ -91,7 +91,7 @@ LegacyCompactor::tryCompact(
         legacy_ss << "]";
         const String old_checkpoint_str = (old_checkpoint ? old_checkpoint->toString() : "(none)");
 
-        LOG_FMT_INFO(log, "{} Compact legacy PageFile {} and old checkpoint: {} into checkpoint PageFile_{}_{} with {} sequence: {}", storage_name, legacy_ss.str(), old_checkpoint_str, checkpoint_id.first, checkpoint_id.second, info.toString(), checkpoint_sequence);
+        LOG_INFO(log, "{} Compact legacy PageFile {} and old checkpoint: {} into checkpoint PageFile_{}_{} with {} sequence: {}", storage_name, legacy_ss.str(), old_checkpoint_str, checkpoint_id.first, checkpoint_id.second, info.toString(), checkpoint_sequence);
     }
 
     size_t bytes_written = 0;
@@ -184,7 +184,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             || reader_wb_seq >= gc_safe_sequence //
             || writing_files.contains(reader->fileIdLevel()))
         {
-            LOG_FMT_DEBUG(log, "{} collectPageFilesToCompact stop on {}, sequence: {} last sequence: {} gc safe squence: {}", storage_name, reader->belongingPageFile().toString(), reader_wb_seq, last_sequence, gc_safe_sequence);
+            LOG_DEBUG(log, "{} collectPageFilesToCompact stop on {}, sequence: {} last sequence: {} gc safe squence: {}", storage_name, reader->belongingPageFile().toString(), reader_wb_seq, last_sequence, gc_safe_sequence);
             break;
         }
 
@@ -206,7 +206,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
                 // Then there would be a hole in the WAL. We need to automatically recover from crashes in the middle
                 // from writing, so just skip the hole and continue the compaction.
                 // FIXME: rethink the multi-threads writing support.
-                LOG_FMT_WARNING(log, "{} collectPageFilesToCompact skip non-continuous sequence from {} to {}, {{{}}}", storage_name, last_sequence, reader_wb_seq, reader->toString());
+                LOG_WARNING(log, "{} collectPageFilesToCompact skip non-continuous sequence from {} to {}, {{{}}}", storage_name, last_sequence, reader_wb_seq, reader->toString());
             }
 
             try
@@ -233,7 +233,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         else
         {
             // We apply all edit of belonging PageFile, do compaction on it.
-            LOG_FMT_TRACE(log, "{} collectPageFilesToCompact try to compact: {}", storage_name, reader->belongingPageFile().toString());
+            LOG_TRACE(log, "{} collectPageFilesToCompact try to compact: {}", storage_name, reader->belongingPageFile().toString());
             page_files_to_compact.emplace(reader->belongingPageFile());
         }
     }

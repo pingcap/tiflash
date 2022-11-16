@@ -83,8 +83,8 @@ public:
         for (auto & [_key, seg] : store->segments)
         {
             UNUSED(_key);
-            LOG_FMT_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
-            rows_by_segments[segment_idx] = seg->getStable()->getRows();
+            LOG_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
+            rows_by_segments[segment_idx] = seg->getEstimatedRows();
             expected_stable_rows[segment_idx] = seg->getStable()->getRows();
             expected_delta_rows[segment_idx] = seg->getDelta()->getRows();
             segment_idx++;
@@ -150,7 +150,7 @@ public:
             store->read_write_mutex.lock();
             auto seg = std::next(store->segments.begin(), segment_idx)->second;
             store->read_write_mutex.unlock();
-            auto result = store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+            auto result = store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
             if (result.first)
             {
                 break;

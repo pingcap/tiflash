@@ -23,8 +23,6 @@ namespace tests
 {
 class JoinExecutorTestRunner : public DB::tests::ExecutorTest
 {
-    static constexpr size_t max_concurrency_level = 10;
-
 public:
     void initializeContext() override
     {
@@ -58,16 +56,6 @@ public:
                                     {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
-    }
-
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
-        {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-        }
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     static constexpr size_t join_type_num = 7;
@@ -147,7 +135,7 @@ try
                                .build(context);
 
             {
-                executeWithConcurrency(request, expected_cols[i * simple_test_num + j]);
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
             }
         }
     }
@@ -287,7 +275,7 @@ try
                                      {col("b")})
                                .build(context);
 
-            executeWithConcurrency(request, expected_cols[i * join_type_num + j]);
+            executeAndAssertColumnsEqual(request, expected_cols[i * join_type_num + j]);
         }
     }
 }
@@ -307,70 +295,70 @@ try
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1.0})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float32>({1.0})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float32>({1.0})});
 
     /// int(1) == double(1.0)
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1.0})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float64>({1.0})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float64>({1.0})});
 
     /// float(1) == double(1.0)
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<Float32>({1}), toNullableVec<Float64>({1})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Float32>({1}), toNullableVec<Float64>({1})});
 
     /// varchar('x') == char('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeString}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
 
     /// tinyblob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeTinyBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
 
     /// mediumBlob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeMediumBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
 
     /// blob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
 
     /// longBlob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLongBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
-    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
 
     /// decimal with different scale
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeNewDecimal}}, {createColumn<Decimal256>(std::make_tuple(9, 4), {"0.12"}, "a")});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeNewDecimal}}, {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
 
-    executeWithConcurrency(cast_request(), {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}), createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
+    executeAndAssertColumnsEqual(cast_request(), {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}), createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
 
     /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeDatetime}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeTimestamp}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
-    executeWithConcurrency(cast_request(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
+    executeAndAssertColumnsEqual(cast_request(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
 }
 CATCH
 
@@ -398,7 +386,7 @@ try
                            .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
                            .build(context);
 
-        executeWithConcurrency(request, expected_cols[i]);
+        executeAndAssertColumnsEqual(request, expected_cols[i]);
     }
 }
 CATCH
@@ -440,7 +428,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
     {
@@ -448,7 +436,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
     {
@@ -456,7 +444,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
     {
@@ -464,7 +452,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
     {
@@ -472,7 +460,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
     {
@@ -480,7 +468,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
     {
@@ -488,7 +476,7 @@ try
         auto request = t1
                            .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
                            .build(context);
-        executeWithConcurrency(request, expected_cols[i++]);
+        executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 }
 CATCH
@@ -501,7 +489,7 @@ try
                        .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
 
     request = context
@@ -510,7 +498,7 @@ try
                   .project({"s", "join_c"})
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
 
     request = context
@@ -518,7 +506,7 @@ try
                   .join(context.scan("test_db", "r_table_2"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})});
+        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})});
     }
 }
 CATCH
@@ -531,7 +519,7 @@ try
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
 }
 CATCH
@@ -544,8 +532,19 @@ try
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
+}
+CATCH
+
+
+// Currently only support join with `using`
+TEST_F(JoinExecutorTestRunner, RawQuery)
+try
+{
+    String query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
+    auto cols = {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})};
+    ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
 }
 CATCH
 

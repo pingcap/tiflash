@@ -67,27 +67,10 @@ public:
              toVec<String>("value", {"a", "b", "c", "d", "e", "f", "g", "h"})});
     }
 
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-        for (size_t i = 2; i <= max_concurrency_level; ++i)
-        {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-        }
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
-    }
-
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const String & db, const String & table_name, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
         context.addMockTableColumnData(db, table_name, source_columns);
-        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 2; i <= max_concurrency_level; ++i)
-        {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-        }
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
+        executeAndAssertColumnsEqual(request, expect_columns);
     }
 };
 
@@ -101,7 +84,7 @@ try
                        .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
                        .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                        .build(context);
-    executeWithConcurrency(
+    executeAndAssertColumnsEqual(
         request,
         createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
                        toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
@@ -132,10 +115,10 @@ try
                   .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
 
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<String>("partition", {"apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}),
-                                          toNullableVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}),
-                                          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
+    executeAndAssertColumnsEqual(request,
+                                 createColumns({toNullableVec<String>("partition", {"apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}),
+                                                toNullableVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}),
+                                                toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // nullable
     executeWithTableScanAndConcurrency(request,
@@ -154,10 +137,10 @@ try
                   .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
 
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
-                                          toNullableVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}),
-                                          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
+    executeAndAssertColumnsEqual(request,
+                                 createColumns({toNullableVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
+                                                toNullableVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}),
+                                                toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // nullable
     executeWithTableScanAndConcurrency(request,
@@ -202,20 +185,20 @@ try
                   .window(RowNumber(), {{"order1", false}, {"order2", false}}, {{"partition1", false}, {"partition2", false}}, buildDefaultRowsFrame())
                   .build(context);
 
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}),
-                                          toNullableVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}),
-                                          toNullableVec<Int64>("order1", {1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 2}),
-                                          toNullableVec<Int64>("order2", {1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2}),
-                                          toNullableVec<Int64>("row_number", {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3})}));
+    executeAndAssertColumnsEqual(request,
+                                 createColumns({toNullableVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}),
+                                                toNullableVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}),
+                                                toNullableVec<Int64>("order1", {1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 2}),
+                                                toNullableVec<Int64>("order2", {1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2}),
+                                                toNullableVec<Int64>("row_number", {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3})}));
 
     /***** rank, dense_rank *****/
     request = context.scan("test_db", "test_table_for_rank").sort({{"partition", false}, {"order", false}}, true).window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame{}).build(context);
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-                                          toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
-                                          toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3}),
-                                          toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2})}));
+    executeAndAssertColumnsEqual(request,
+                                 createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                                toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+                                                toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3}),
+                                                toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2})}));
 
     // nullable
     executeWithTableScanAndConcurrency(request,
@@ -252,10 +235,10 @@ try
                            .sort({{"partition", false}, {"order", false}}, true)
                            .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{})
                            .build(context);
-        executeWithConcurrency(request,
-                               createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-                                              toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
-                                              functions_result[index]}));
+        executeAndAssertColumnsEqual(request,
+                                     createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                                    toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+                                                    functions_result[index]}));
     };
     for (size_t i = 0; i < functions.size(); ++i)
         test_single_window_function(i);
@@ -292,8 +275,8 @@ try
                 wfs.push_back(functions[k]);
                 wfs_result.push_back(functions_result[k]);
 
-                executeWithConcurrency(gen_merge_window_request(wfs), wfs_result);
-                executeWithConcurrency(gen_split_window_request(wfs), wfs_result);
+                executeAndAssertColumnsEqual(gen_merge_window_request(wfs), wfs_result);
+                executeAndAssertColumnsEqual(gen_split_window_request(wfs), wfs_result);
 
                 wfs.pop_back();
                 wfs_result.pop_back();
@@ -326,7 +309,7 @@ try
                        .window(RowNumber(), {"order", true}, {"partition", false}, buildDefaultRowsFrame())
                        .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                        .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
     /*
     select count(1) from (
@@ -343,7 +326,7 @@ try
                   .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
     request = context
                   .scan("test_db", "test_table")
@@ -351,7 +334,7 @@ try
                   .window({RowNumber(), RowNumber()}, {{"order", false}}, {{"partition", false}}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
     /*
     select count(1) from (
@@ -368,7 +351,7 @@ try
                   .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
     request = context
                   .scan("test_db", "test_table")
@@ -376,7 +359,7 @@ try
                   .window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
     /*
     select count(1) from (
@@ -393,7 +376,7 @@ try
                   .window({DenseRank(), DenseRank(), Rank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
     request = context
                   .scan("test_db", "test_table")
@@ -403,7 +386,7 @@ try
                   .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 }
 CATCH
 
@@ -420,7 +403,7 @@ try
                        .window(Lead1(concat(col("value"), col("value"))), {"order", false}, {"partition", false}, MockWindowFrame())
                        .build(context);
     result.emplace_back(toNullableVec<String>({"bb", "cc", "dd", {}, "ff", "gg", "hh", {}}));
-    executeWithConcurrency(request, result);
+    executeAndAssertColumnsEqual(request, result);
     result.pop_back();
 
     request = context
@@ -429,7 +412,7 @@ try
                   .window(Lag2(concat(col("value"), lit(Field(String("0")))), lit(Field(static_cast<UInt64>(2)))), {"order", false}, {"partition", false}, MockWindowFrame())
                   .build(context);
     result.emplace_back(toNullableVec<String>({{}, {}, "a0", "b0", {}, {}, "e0", "f0"}));
-    executeWithConcurrency(request, result);
+    executeAndAssertColumnsEqual(request, result);
     result.pop_back();
 
     request = context
@@ -438,7 +421,7 @@ try
                   .window(Lead2(concat(col("value"), concat(lit(Field(String("0"))), col("value"))), lit(Field(static_cast<UInt64>(1)))), {"order", false}, {"partition", false}, MockWindowFrame())
                   .build(context);
     result.emplace_back(toNullableVec<String>({"b0b", "c0c", "d0d", {}, "f0f", "g0g", "h0h", {}}));
-    executeWithConcurrency(request, result);
+    executeAndAssertColumnsEqual(request, result);
 }
 CATCH
 

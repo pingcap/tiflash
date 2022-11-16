@@ -57,7 +57,7 @@ MutableColumnPtr ColumnFixedString::cloneResized(size_t size) const
 
 void ColumnFixedString::insert(const Field & x)
 {
-    const String & s = DB::get<const String &>(x);
+    const auto & s = DB::get<const String &>(x);
 
     if (s.size() > n)
         throw Exception("Too large string '" + s + "' for FixedString column", ErrorCodes::TOO_LARGE_STRING_SIZE);
@@ -69,7 +69,7 @@ void ColumnFixedString::insert(const Field & x)
 
 void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
 {
-    const ColumnFixedString & src = static_cast<const ColumnFixedString &>(src_);
+    const auto & src = static_cast<const ColumnFixedString &>(src_);
 
     if (n != src.getN())
         throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
@@ -180,15 +180,16 @@ void ColumnFixedString::getPermutation(bool reverse, size_t limit, int /*nan_dir
 
 void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
-    const ColumnFixedString & src_concrete = static_cast<const ColumnFixedString &>(src);
+    const auto & src_concrete = static_cast<const ColumnFixedString &>(src);
 
     if (start + length > src_concrete.size())
-        throw Exception("Parameters start = "
-                            + toString(start) + ", length = "
-                            + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
-                                                 " (size() = "
-                            + toString(src_concrete.size()) + ").",
-                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(
+            fmt::format(
+                "Parameters are out of bound in ColumnFixedString::insertRangeFrom method, start={}, length={}, src.size()={}",
+                start,
+                length,
+                src_concrete.size()),
+            ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = chars.size();
     chars.resize(old_size + length * n);

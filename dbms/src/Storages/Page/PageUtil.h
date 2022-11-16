@@ -22,10 +22,10 @@
 #include <Common/TiFlashException.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
+#include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <random>
 
 #ifndef __APPLE__

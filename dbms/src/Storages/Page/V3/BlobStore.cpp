@@ -20,6 +20,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/formatReadable.h>
 #include <Poco/File.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
@@ -27,13 +28,15 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/WriteBatch.h>
+#include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
+#include <unordered_map>
 
 namespace ProfileEvents
 {
@@ -60,19 +63,18 @@ namespace PS::V3
 {
 static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 
-using BlobStat = BlobStore::BlobStats::BlobStat;
-using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
+using BlobStatPtr = BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
 
 /**********************
   * BlobStore methods *
   *********************/
 
-BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobStore::Config & config_)
+BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_)
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
-    , log(Logger::get("BlobStore", std::move(storage_name)))
+    , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
     , cached_files(config.cached_fd_size)
 {
@@ -106,13 +108,13 @@ void BlobStore::registerPaths()
             }
             else
             {
-                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
+                LOG_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
             }
         }
     }
 }
 
-void BlobStore::reloadConfig(const BlobStore::Config & rhs)
+void BlobStore::reloadConfig(const BlobConfig & rhs)
 {
     // Currently, we don't add any config for `file_limit_size`, so it won't reload at run time.
     // And if we support it in the future(although it seems there is no need to do that),
@@ -160,13 +162,12 @@ FileUsageStatistics BlobStore::getFileUsageStatistics() const
 
 PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
-    auto ns_id = wb.getNamespaceId();
     PageEntriesEdit edit;
     for (auto & write : wb.getWrites())
     {
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -211,28 +212,28 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             catch (DB::Exception & e)
             {
                 removePosFromStats(blob_id, offset_in_file, write.size);
-                LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
+                LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
                 throw e;
             }
 
-            edit.put(buildV3Id(ns_id, write.page_id), entry);
+            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
-            edit.del(buildV3Id(ns_id, write.page_id));
+            edit.del(wb.getFullPageId(write.page_id));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
-            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+            edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
             break;
         }
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-            edit.putExternal(buildV3Id(ns_id, write.page_id));
+        case WriteBatchWriteType::PUT_EXTERNAL:
+            edit.putExternal(wb.getFullPageId(write.page_id));
             break;
-        case WriteBatch::WriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+        case WriteBatchWriteType::UPSERT:
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
@@ -247,7 +248,6 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     PageEntriesEdit edit;
 
-    auto ns_id = wb.getNamespaceId();
     if (all_page_data_size == 0)
     {
         // Shortcut for WriteBatch that don't need to persist blob data.
@@ -255,24 +255,24 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         {
             switch (write.type)
             {
-            case WriteBatch::WriteType::DEL:
+            case WriteBatchWriteType::DEL:
             {
-                edit.del(buildV3Id(ns_id, write.page_id));
+                edit.del(wb.getFullPageId(write.page_id));
                 break;
             }
-            case WriteBatch::WriteType::REF:
+            case WriteBatchWriteType::REF:
             {
-                edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+                edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
                 break;
             }
-            case WriteBatch::WriteType::PUT_EXTERNAL:
+            case WriteBatchWriteType::PUT_EXTERNAL:
             {
                 // putExternal won't have data.
-                edit.putExternal(buildV3Id(ns_id, write.page_id));
+                edit.putExternal(wb.getFullPageId(write.page_id));
                 break;
             }
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:
+            case WriteBatchWriteType::PUT:
+            case WriteBatchWriteType::UPSERT:
                 throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
@@ -312,7 +312,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     {
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -353,24 +353,24 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
 
             buffer_pos += write.size;
-            edit.put(buildV3Id(ns_id, write.page_id), entry);
+            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
-            edit.del(buildV3Id(ns_id, write.page_id));
+            edit.del(wb.getFullPageId(write.page_id));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
-            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+            edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
             break;
         }
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-            edit.putExternal(buildV3Id(ns_id, write.page_id));
+        case WriteBatchWriteType::PUT_EXTERNAL:
+            edit.putExternal(wb.getFullPageId(write.page_id));
             break;
-        case WriteBatch::WriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+        case WriteBatchWriteType::UPSERT:
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
@@ -395,7 +395,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
+        LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
         throw e;
     }
 
@@ -439,13 +439,13 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
                 auto lock = stat->lock();
                 stat->recalculateCapacity();
             }
-            LOG_FMT_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
-                               "[total_size={}] [valid_size={}] [valid_rate={}]",
-                          blob_id,
-                          stat->sm_max_caps,
-                          stat->sm_total_size,
-                          stat->sm_valid_size,
-                          stat->sm_valid_rate);
+            LOG_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
+                           "[total_size={}] [valid_size={}] [valid_rate={}]",
+                      blob_id,
+                      stat->sm_max_caps,
+                      stat->sm_total_size,
+                      stat->sm_valid_size,
+                      stat->sm_valid_rate);
         }
     }
 }
@@ -516,82 +516,13 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     // Because once BlobStat become Read-Only type, Then valid size won't increase.
     if (need_remove_stat)
     {
-        LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+        LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
         auto blob_file = getBlobFile(blob_id);
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
         blob_file->remove();
         cached_files.remove(blob_id);
-    }
-}
-
-void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
-{
-    if (entries.empty())
-    {
-        return;
-    }
-
-    ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
-
-    // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
-        return a.second.offset < b.second.offset;
-    });
-
-    // allocate data_buf that can hold all pages
-    size_t buf_size = 0;
-    for (const auto & p : entries)
-        buf_size = std::max(buf_size, p.second.size);
-
-    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
-    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
-    if (buf_size == 0)
-    {
-        for (const auto & [page_id_v3, entry] : entries)
-        {
-            (void)entry;
-            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page;
-            page.page_id = page_id_v3.low;
-            handler(page_id_v3.low, page);
-        }
-        return;
-    }
-
-    char * data_buf = static_cast<char *>(alloc(buf_size));
-    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
-        free(p, buf_size);
-    });
-
-    for (const auto & [page_id_v3, entry] : entries)
-    {
-        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
-
-        if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
-        {
-            ChecksumClass digest;
-            digest.update(data_buf, entry.size);
-            auto checksum = digest.checksum();
-            if (unlikely(entry.size != 0 && checksum != entry.checksum))
-            {
-                throw Exception(
-                    fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                                page_id_v3,
-                                entry.checksum,
-                                checksum,
-                                toDebugString(entry),
-                                blob_file->getPath()),
-                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
-            }
-        }
-
-        Page page;
-        page.page_id = page_id_v3.low;
-        page.data = ByteBuffer(data_buf, data_buf + entry.size);
-        page.mem_holder = mem_holder;
-        handler(page_id_v3.low, page);
     }
 }
 
@@ -635,7 +566,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         free(p, buf_size);
     });
 
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
     char * pos = data_buf;
     PageMap page_map;
     for (const auto & [page_id_v3, entry, fields] : to_read)
@@ -679,8 +610,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             write_offset += size_to_read;
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
@@ -708,7 +638,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+    std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -727,9 +657,8 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
-            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page;
-            page.page_id = page_id_v3.low;
+            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page(page_id_v3);
             page_map.emplace(page_id_v3.low, page);
         }
         return page_map;
@@ -764,8 +693,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             }
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
         page_map.emplace(page_id_v3.low, page);
@@ -786,8 +714,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
 {
     if (!id_entry.second.isValid())
     {
-        Page page_not_found;
-        page_not_found.page_id = INVALID_PAGE_ID;
+        Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
         return page_not_found;
     }
 
@@ -798,9 +725,8 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-        Page page;
-        page.page_id = page_id_v3.low;
+        LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        Page page(page_id_v3);
         return page;
     }
 
@@ -828,8 +754,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         }
     }
 
-    Page page;
-    page.page_id = page_id_v3.low;
+    Page page(page_id_v3);
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
@@ -961,7 +886,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                           stat->changeToReadOnly();
                       }
                   }
-                  LOG_FMT_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
+                  LOG_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
               });
 
     for (const auto & [path, stats] : stats_list)
@@ -972,7 +897,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             if (stat->isReadOnly())
             {
                 blobstore_gc_info.appendToReadOnlyBlob(stat->id, stat->sm_valid_rate);
-                LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
+                LOG_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
                 continue;
             }
 
@@ -990,7 +915,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
+                LOG_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
                 stat->sm_total_size = right_margin;
@@ -1001,7 +926,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 
             if (stat->sm_valid_rate > 1.0)
             {
-                LOG_FMT_ERROR(
+                LOG_ERROR(
                     log,
                     "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
                     stat->sm_valid_rate,
@@ -1016,7 +941,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Check if GC is required
             if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
             {
-                LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
                 blob_need_gc.emplace_back(stat->id);
 
                 // Change current stat to read only
@@ -1026,13 +951,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             else
             {
                 blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
-                LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, no need to GC", stat->id, stat->sm_valid_rate);
             }
 
             if (right_margin != stat->sm_total_size)
             {
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
+                LOG_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
 
@@ -1042,7 +967,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         }
     }
 
-    LOG_FMT_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
+    LOG_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }
@@ -1060,7 +985,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
+    LOG_INFO(log, "BlobStore gc will migrate {} into new blob files", formatReadableSizeWithBinarySuffix(total_page_size));
 
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
                                                                               char * data_begin,
@@ -1072,7 +997,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             // Should append before calling BlobStore::write, so that we can rollback the
             // first allocated span from stats.
             written_blobs.emplace_back(file_id, file_offset, data_size);
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
                 file_id,
@@ -1083,7 +1008,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(
+            LOG_ERROR(
                 log,
                 "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
                 file_id,
@@ -1217,341 +1142,6 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
                            return std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
                        })
         .first;
-}
-
-/**********************
-  * BlobStats methods *
-  *********************/
-
-BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config & config_)
-    : log(std::move(log_))
-    , delegator(delegator_)
-    , config(config_)
-{
-}
-
-void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
-{
-    auto stat = blobIdToStat(entry.file_id);
-    stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
-}
-
-std::pair<BlobFileId, String> BlobStore::BlobStats::getBlobIdFromName(String blob_name)
-{
-    String err_msg;
-    if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
-    {
-        return {INVALID_BLOBFILE_ID, err_msg};
-    }
-
-    Strings ss;
-    boost::split(ss, blob_name, boost::is_any_of("_"));
-
-    if (ss.size() != 2)
-    {
-        return {INVALID_BLOBFILE_ID, err_msg};
-    }
-
-    try
-    {
-        const auto & blob_id = std::stoull(ss[1]);
-        return {blob_id, err_msg};
-    }
-    catch (std::invalid_argument & e)
-    {
-        err_msg = e.what();
-    }
-    catch (std::out_of_range & e)
-    {
-        err_msg = e.what();
-    }
-    return {INVALID_BLOBFILE_ID, err_msg};
-}
-
-void BlobStore::BlobStats::restore()
-{
-    BlobFileId max_restored_file_id = 0;
-
-    for (auto & [path, stats] : stats_map)
-    {
-        (void)path;
-        for (const auto & stat : stats)
-        {
-            stat->recalculateSpaceMap();
-            max_restored_file_id = std::max(stat->id, max_restored_file_id);
-        }
-    }
-
-    // restore `roll_id`
-    roll_id = max_restored_file_id + 1;
-}
-
-std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
-{
-    return std::lock_guard(lock_stats);
-}
-
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> & guard)
-{
-    // New blob file id won't bigger than roll_id
-    if (blob_file_id > roll_id)
-    {
-        throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [roll_id={}]",
-                                    blob_file_id,
-                                    roll_id),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-
-    for (auto & [path, stats] : stats_map)
-    {
-        (void)path;
-        for (const auto & stat : stats)
-        {
-            if (stat->id == blob_file_id)
-            {
-                throw Exception(fmt::format("BlobStats can not create [blob_id={}] which is exist",
-                                            blob_file_id),
-                                ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-    }
-
-    // Create a stat without checking the file_id exist or not
-    auto stat = createStatNotChecking(blob_file_id, max_caps, guard);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
-
-    return stat;
-}
-
-BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
-{
-    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] [capacity={}]", blob_file_id, max_caps);
-    // Only BlobFile which total capacity is smaller or equal to config.file_limit_size can be reused for another write
-    auto stat_type = max_caps <= config.file_limit_size ? BlobStats::BlobStatType::NORMAL : BlobStats::BlobStatType::READ_ONLY;
-    BlobStatPtr stat = std::make_shared<BlobStat>(
-        blob_file_id,
-        static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
-        max_caps,
-        stat_type);
-
-    PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    auto path = delegator->choosePath(id_lvl);
-    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
-    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
-    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
-    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
-    stats_map[path].emplace_back(stat);
-    return stat;
-}
-
-void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
-{
-    PageFileIdAndLevel id_lvl{stat->id, 0};
-    stats_map[delegator->getPageFilePath(id_lvl)].remove(stat);
-}
-
-void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
-{
-    BlobStatPtr stat = nullptr;
-
-    for (auto & [path, stats] : stats_map)
-    {
-        (void)path;
-        for (const auto & stat_in_map : stats)
-        {
-            if (stat_in_map->id == blob_file_id)
-            {
-                stat = stat_in_map;
-                break;
-            }
-        }
-    }
-
-    if (stat == nullptr)
-    {
-        LOG_FMT_ERROR(log, "BlobStat not exist [blob_id={}]", blob_file_id);
-        return;
-    }
-
-    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [blob_id={}]", blob_file_id);
-
-    eraseStat(std::move(stat), lock);
-}
-
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &)
-{
-    BlobStatPtr stat_ptr = nullptr;
-    double smallest_valid_rate = 2;
-
-    // No stats exist
-    if (stats_map.empty())
-    {
-        return std::make_pair(nullptr, roll_id);
-    }
-
-    // If the stats_map size changes, or stats_map_path_index is out of range,
-    // then make stats_map_path_index fit to current size.
-    stats_map_path_index %= stats_map.size();
-
-    auto stats_iter = stats_map.begin();
-    std::advance(stats_iter, stats_map_path_index);
-
-    size_t path_iter_idx = 0;
-    for (path_iter_idx = 0; path_iter_idx < stats_map.size(); ++path_iter_idx)
-    {
-        // Try to find a suitable stat under current path (path=`stats_iter->first`)
-        for (const auto & stat : stats_iter->second)
-        {
-            auto lock = stat->lock(); // TODO: will it bring performance regression?
-            if (stat->isNormal()
-                && stat->sm_max_caps >= buf_size
-                && stat->sm_valid_rate < smallest_valid_rate)
-            {
-                smallest_valid_rate = stat->sm_valid_rate;
-                stat_ptr = stat;
-            }
-        }
-
-        // Already find the available stat under current path.
-        if (stat_ptr != nullptr)
-        {
-            break;
-        }
-
-        // Try to find stat in the next path.
-        stats_iter++;
-        if (stats_iter == stats_map.end())
-        {
-            stats_iter = stats_map.begin();
-        }
-    }
-
-    // advance the `stats_map_path_idx` without size checking
-    stats_map_path_index += path_iter_idx + 1;
-
-    // Can not find a suitable stat under all paths
-    if (stat_ptr == nullptr)
-    {
-        return std::make_pair(nullptr, roll_id);
-    }
-
-    return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
-}
-
-BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)
-{
-    auto guard = lock();
-    for (const auto & [path, stats] : stats_map)
-    {
-        (void)path;
-        for (const auto & stat : stats)
-        {
-            if (stat->id == file_id)
-            {
-                return stat;
-            }
-        }
-    }
-
-    if (!ignore_not_exist)
-    {
-        throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
-                                    file_id),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-
-    return nullptr;
-}
-
-/*********************
-  * BlobStat methods *
-  ********************/
-
-BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &)
-{
-    BlobFileOffset offset = 0;
-    UInt64 max_cap = 0;
-    bool expansion = true;
-
-    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(buf_size);
-    ProfileEvents::increment(expansion ? ProfileEvents::PSV3MBlobExpansion : ProfileEvents::PSV3MBlobReused);
-
-    /**
-     * Whatever `searchInsertOffset` success or failed,
-     * Max capability still need update.
-     */
-    sm_max_caps = max_cap;
-    if (offset != INVALID_BLOBFILE_OFFSET)
-    {
-        if (offset + buf_size > sm_total_size)
-        {
-            // This file must be expanded
-            auto expand_size = buf_size - (sm_total_size - offset);
-            sm_total_size += expand_size;
-            sm_valid_size += buf_size;
-        }
-        else
-        {
-            /**
-             * The `offset` reuses the original address. 
-             * Current blob file is not expanded.
-             * Only update valid size.
-             */
-            sm_valid_size += buf_size;
-        }
-
-        sm_valid_rate = sm_valid_size * 1.0 / sm_total_size;
-    }
-    return offset;
-}
-
-size_t BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &)
-{
-    if (!smap->markFree(offset, buf_size))
-    {
-        smap->logDebugString();
-        throw Exception(fmt::format("Remove position from BlobStat failed, invalid position [offset={}] [buf_size={}] [blob_id={}]",
-                                    offset,
-                                    buf_size,
-                                    id),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-
-    sm_valid_size -= buf_size;
-    sm_valid_rate = sm_valid_size * 1.0 / sm_total_size;
-    return sm_valid_size;
-}
-
-void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
-{
-    if (!smap->markUsed(offset, buf_size))
-    {
-        smap->logDebugString();
-        throw Exception(fmt::format("Restore position from BlobStat failed, the space/subspace is already being used [offset={}] [buf_size={}] [blob_id={}]",
-                                    offset,
-                                    buf_size,
-                                    id),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-}
-
-void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
-{
-    const auto & [total_size, valid_size] = smap->getSizes();
-    sm_total_size = total_size;
-    sm_valid_size = valid_size;
-    sm_valid_rate = total_size == 0 ? 0.0 : valid_size * 1.0 / total_size;
-    recalculateCapacity();
-}
-
-void BlobStore::BlobStats::BlobStat::recalculateCapacity()
-{
-    sm_max_caps = smap->updateAccurateMaxCapacity();
 }
 
 } // namespace PS::V3

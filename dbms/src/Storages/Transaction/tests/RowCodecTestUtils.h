@@ -15,7 +15,9 @@
 #pragma once
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/RowCodec.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB::tests
 {
@@ -146,7 +148,7 @@ struct ColumnIDValue<T, true>
 {
     static constexpr bool value_is_null = true;
     using ValueType = std::decay_t<T>;
-    ColumnIDValue(ColumnID id_)
+    explicit ColumnIDValue(ColumnID id_)
         : id(id_)
     {}
     ColumnID id;
@@ -198,7 +200,8 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
         else
         {
             column_info_fields.emplace(column_id_value.id,
-                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id), static_cast<NearestType>(std::move(column_id_value.value))));
+                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id),
+                                                       static_cast<NearestType>(std::move(column_id_value.value))));
         }
     }
 }
@@ -211,46 +214,55 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
 }
 
 template <typename... Types>
-std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs handle_ids, bool is_common_handle, Types &&... column_value_ids)
+std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs pk_col_ids, bool is_common_handle, Types &&... column_value_ids)
 {
     OrderedColumnInfoFields column_info_fields;
     getTableInfoFieldsInternal(column_info_fields, std::forward<Types>(column_value_ids)...);
     TableInfo table_info;
     std::vector<Field> fields;
+    bool pk_is_handle = pk_col_ids.size() == 1 && pk_col_ids[0] != ::DB::TiDBPkColumnID;
+
     for (auto & column_info_field : column_info_fields)
     {
         auto & column = std::get<0>(column_info_field.second);
         auto & field = std::get<1>(column_info_field.second);
-        if (std::find(handle_ids.begin(), handle_ids.end(), column.id) != handle_ids.end())
+        if (std::find(pk_col_ids.begin(), pk_col_ids.end(), column.id) != pk_col_ids.end())
         {
             column.setPriKeyFlag();
+            if (column.tp != TiDB::TypeLong && column.tp != TiDB::TypeTiny && column.tp != TiDB::TypeLongLong && column.tp != TiDB::TypeShort && column.tp != TiDB::TypeInt24)
+            {
+                pk_is_handle = false;
+            }
         }
         table_info.columns.emplace_back(std::move(column));
         fields.emplace_back(std::move(field));
     }
-    if (!is_common_handle)
-    {
-        if (handle_ids[0] != EXTRA_HANDLE_COLUMN_ID)
-            table_info.pk_is_handle = true;
-    }
-    else
+
+    table_info.pk_is_handle = pk_is_handle;
+    table_info.is_common_handle = is_common_handle;
+    if (is_common_handle)
     {
         table_info.is_common_handle = true;
-        TiDB::IndexInfo index_info;
-        for (auto handle_id : handle_ids)
+        // TiFlash maintains the column name of primary key
+        // for common handle table
+        TiDB::IndexInfo pk_index_info;
+        pk_index_info.is_primary = true;
+        pk_index_info.idx_name = "PRIMARY";
+        pk_index_info.is_unique = true;
+        for (auto pk_col_id : pk_col_ids)
         {
             TiDB::IndexColumnInfo index_column_info;
             for (auto & column : table_info.columns)
             {
-                if (column.id == handle_id)
+                if (column.id == pk_col_id)
                 {
                     index_column_info.name = column.name;
                     break;
                 }
             }
-            index_info.idx_cols.emplace_back(index_column_info);
+            pk_index_info.idx_cols.emplace_back(index_column_info);
         }
-        table_info.index_infos.emplace_back(index_info);
+        table_info.index_infos.emplace_back(pk_index_info);
     }
 
     return std::make_pair(std::move(table_info), std::move(fields));
@@ -272,7 +284,7 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
     store_columns.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
     store_columns.emplace_back(TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
     ColumnID handle_id = EXTRA_HANDLE_COLUMN_ID;
-    for (auto & column_info : table_info.columns)
+    for (const auto & column_info : table_info.columns)
     {
         if (table_info.pk_is_handle)
         {
@@ -301,7 +313,7 @@ size_t valueStartPos(const TableInfo & table_info)
 
 inline Block decodeRowToBlock(const String & row_value, DecodingStorageSchemaSnapshotConstPtr decoding_schema)
 {
-    auto & sorted_column_id_with_pos = decoding_schema->sorted_column_id_with_pos;
+    const auto & sorted_column_id_with_pos = decoding_schema->sorted_column_id_with_pos;
     auto iter = sorted_column_id_with_pos.begin();
     const size_t value_column_num = 3;
     // skip first three column which is EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN
@@ -309,10 +321,7 @@ inline Block decodeRowToBlock(const String & row_value, DecodingStorageSchemaSna
         iter++;
 
     Block block = createBlockSortByColumnID(decoding_schema);
-    if (decoding_schema->pk_is_handle)
-        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, decoding_schema->pk_column_ids[0], true);
-    else
-        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, InvalidColumnID, true);
+    appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema, true);
 
     // remove first three column
     for (size_t i = 0; i < value_column_num; i++)

@@ -242,7 +242,7 @@ void SystemLog<LogElement>::flush()
 {
     try
     {
-        LOG_FMT_TRACE(log, "Flushing system log");
+        LOG_TRACE(log, "Flushing system log");
 
         /// We check for existence of the table and create it as needed at every flush.
         /// This is done to allow user to drop the table at any moment (new empty table will be created automatically).
@@ -316,7 +316,7 @@ void SystemLog<LogElement>::prepareTable()
 
             rename->elements.emplace_back(elem);
 
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "Existing table {} for system log has obsolete or different structure. Renaming it to {}",
                 description,
@@ -328,13 +328,13 @@ void SystemLog<LogElement>::prepareTable()
             table = nullptr;
         }
         else if (!is_prepared)
-            LOG_FMT_DEBUG(log, "Will use existing table {} for {}", description, LogElement::name());
+            LOG_DEBUG(log, "Will use existing table {} for {}", description, LogElement::name());
     }
 
     if (!table)
     {
         /// Create the table.
-        LOG_FMT_DEBUG(log, "Creating new table {} for {}", description, LogElement::name());
+        LOG_DEBUG(log, "Creating new table {} for {}", description, LogElement::name());
 
         auto create = std::make_shared<ASTCreateQuery>();
 

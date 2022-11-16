@@ -34,8 +34,7 @@
 #include <algorithm>
 #include <future>
 #include <iterator>
-
-#include "Storages/DeltaMerge/RowKeyRange.h"
+#include <random>
 
 namespace DB
 {
@@ -124,7 +123,7 @@ try
     store = nullptr;
 
     sp_gc.next(); // continue the page storage gc
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -156,7 +155,7 @@ try
     store = nullptr;
 
     sp_gc.next(); // continue removing dtfiles
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -186,6 +185,7 @@ try
                                                       "test",
                                                       "t_200",
                                                       200,
+                                                      true,
                                                       *new_cols,
                                                       handle_column_define,
                                                       false,
@@ -197,7 +197,7 @@ try
     }
 
     sp_gc.next(); // continue the page storage gc
-    th_gc.wait();
+    th_gc.get();
 
     BlockInputStreamPtr in = new_store->read(*db_context,
                                              db_context->getSettingsRef(),
@@ -208,7 +208,7 @@ try
                                              EMPTY_FILTER,
                                              "",
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
@@ -254,7 +254,7 @@ try
          })
     {
         SCOPED_TRACE(fmt::format("Test case for {}", DMTestEnv::PkTypeToString(pk_type)));
-        LOG_FMT_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
+        LOG_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
 
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
         store = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
@@ -301,7 +301,7 @@ try
         stream = std::make_shared<PKSquashingBlockInputStream<false>>(stream, EXTRA_HANDLE_COLUMN_ID, store->isCommonHandle());
         ASSERT_INPUTSTREAM_NROWS(stream, nrows + nrows_2);
 
-        LOG_FMT_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
+        LOG_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
     }
 }
 CATCH
@@ -1160,7 +1160,7 @@ try
 
         SegmentPtr seg;
         std::tie(std::ignore, seg) = *store->segments.begin();
-        store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+        store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
     }
 
     const UInt64 tso2 = 10;
@@ -1273,10 +1273,8 @@ try
     // The ingest range is [32, 256)
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-
-        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, /*file_ids*/ {}, /*clear_data_in_range*/ true);
     }
 
 
@@ -1342,6 +1340,7 @@ try
     size_t num_rows_write_in_total = 0;
 
     const size_t num_rows_per_write = 5;
+    std::default_random_engine random;
     while (true)
     {
         {
@@ -1368,7 +1367,7 @@ try
                 break;
             case TestMode::V2_Mix:
             {
-                if ((std::rand() % 2) == 0)
+                if ((random() % 2) == 0)
                 {
                     store->write(*db_context, settings, block);
                 }
@@ -1407,7 +1406,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
@@ -1415,7 +1414,7 @@ try
                     createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
                 }));
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -2956,7 +2955,7 @@ try
 
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
-            auto segment_stats = store->getSegmentStats();
+            auto segment_stats = store->getSegmentsStats();
             size_t delta_cache_size = 0;
             for (auto & stat : segment_stats)
             {
@@ -2988,7 +2987,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
@@ -2996,7 +2995,7 @@ try
                 createColumns({
                     createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
                 }));
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -3047,6 +3046,7 @@ public:
                                                   "test",
                                                   DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
                                                   101,
+                                                  true,
                                                   *cols,
                                                   (*cols)[0],
                                                   pk_type == DMTestEnv::PkType::CommonHandle,
@@ -3095,13 +3095,13 @@ try
     if (store->isCommonHandle())
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     else
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     std::optional<RowKeyRange> result_1;
@@ -3109,11 +3109,11 @@ try
         // Specifies MIN_KEY. In this case, the first segment should be processed.
         if (store->isCommonHandle())
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
         else
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
         }
         // The returned range is the same as first segment's range.
         ASSERT_NE(result_1, std::nullopt);
@@ -3125,7 +3125,7 @@ try
     }
     {
         // Compact the first segment again, nothing should change.
-        auto result = store->mergeDeltaBySegment(*db_context, result_1->start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, result_1->start);
         ASSERT_EQ(*result, *result_1);
 
         helper->verifyExpectedRowsForAllSegments();
@@ -3133,7 +3133,7 @@ try
     std::optional<RowKeyRange> result_2;
     {
         // Compact again using the end key just returned. The second segment should be processed.
-        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end, DeltaMergeStore::TaskRunThread::Foreground);
+        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end);
         ASSERT_NE(result_2, std::nullopt);
         ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
 
@@ -3151,12 +3151,12 @@ TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
         if (store->isCommonHandle())
         {
             // For common handle, give int handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
         }
         else
         {
             // For int handle, give common handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
     });
 }
@@ -3172,13 +3172,13 @@ try
         ASSERT_NE(it, store->segments.end());
         auto seg = it->second;
 
-        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
     {
         // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
-        auto result2 = store->mergeDeltaBySegment(*db_context, result->end, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result2 = store->mergeDeltaBySegment(*db_context, result->end);
         ASSERT_EQ(result2, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
@@ -3207,7 +3207,7 @@ try
         auto range = std::next(store->segments.begin())->second->getRowKeyRange();
         auto compact_key = range.start.toPrefixNext();
 
-        auto result = store->mergeDeltaBySegment(*db_context, compact_key, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, compact_key);
         ASSERT_NE(result, std::nullopt);
 
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
@@ -3251,7 +3251,7 @@ try
     }
     {
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
 
         segment1 = std::next(store->segments.begin())->second;
@@ -3299,7 +3299,7 @@ try
     // Start a mergeDelta. It should hit retry immediately due to a flush is in progress.
     auto th_merge_delta = std::async([&]() {
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
         // All rows in the delta layer should be merged into the stable layer.
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
@@ -3310,11 +3310,11 @@ try
 
     // Let's finish the flush.
     sp_flush_commit.next();
-    th_flush.wait();
+    th_flush.get();
 
     // Proceed the mergeDelta retry. Retry should succeed without triggering any new flush.
     sp_merge_delta_retry.next();
-    th_merge_delta.wait();
+    th_merge_delta.get();
 }
 CATCH
 
@@ -3334,7 +3334,7 @@ try
         // Split segment1 into 2.
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        auto result = store->segmentSplit(*dm_context, segment1, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
         ASSERT_NE(result.second, nullptr);
 
         helper->resetExpectedRows();
@@ -3350,7 +3350,7 @@ try
     auto th_merge_delta = std::async([&] {
         // mergeDeltaBySegment for segment1
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
 
         // Although original segment1 has been split into 2, we still expect only segment1's delta
@@ -3366,7 +3366,7 @@ try
 
     // Proceed and finish the split.
     sp_split_prepare.next();
-    th_split.wait();
+    th_split.get();
     {
         // Write to the new segment1 + segment2 after split.
         auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
@@ -3379,7 +3379,7 @@ try
 
     // This time the retry should succeed without any future retries.
     sp_merge_delta_retry.next();
-    th_merge_delta.wait();
+    th_merge_delta.get();
 }
 CATCH
 

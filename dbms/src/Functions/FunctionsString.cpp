@@ -22,7 +22,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsRound.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
@@ -34,6 +33,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -324,7 +324,6 @@ struct ReverseUTF8Impl
         throw Exception("Cannot apply function reverseUTF8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
     }
 };
-
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
@@ -1090,10 +1089,6 @@ public:
             ReverseImpl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
-        else if (checkColumn<ColumnArray>(column.get()))
-        {
-            DefaultExecutable(std::make_shared<FunctionArrayReverse>()).execute(block, arguments, result);
-        }
         else
             throw Exception(
                 fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
@@ -1190,9 +1185,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(arguments[0].get()))
-            return FunctionArrayConcat(context).getReturnTypeImpl(arguments);
-
         if (arguments.size() < 2)
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
@@ -1212,9 +1204,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(block.getByPosition(arguments[0]).type.get()))
-            return FunctionArrayConcat(context).executeImpl(block, arguments, result);
-
         if (arguments.size() == 2)
             executeBinary(block, arguments, result);
         else
@@ -3484,7 +3473,7 @@ private:
             TidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
             break;
         default:
-            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
     }
 };
@@ -4079,7 +4068,7 @@ private:
             TidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
             break;
         default:
-            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 };
@@ -4391,6 +4380,183 @@ private:
     }
 };
 
+
+class FunctionSpace : public IFunction
+{
+public:
+    static constexpr auto name = "space";
+
+    // tidb mysql.MaxBlobWidth space max input : space(MAX_BLOB_WIDTH+1) will return NULL
+    static constexpr auto MAX_BLOB_WIDTH = 16777216;
+    static const auto APPROX_STRING_SIZE = 64;
+
+    FunctionSpace() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionSpace>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return arguments[0]->onlyNull()
+            ? makeNullable(std::make_shared<DataTypeNothing>())
+            : makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeSpace<UInt8>(block, arguments, result)
+            || executeSpace<UInt16>(block, arguments, result)
+            || executeSpace<UInt32>(block, arguments, result)
+            || executeSpace<UInt64>(block, arguments, result)
+            || executeSpace<Int8>(block, arguments, result)
+            || executeSpace<Int16>(block, arguments, result)
+            || executeSpace<Int32>(block, arguments, result)
+            || executeSpace<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeSpace(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        auto & c0_col = block.getByPosition(arguments[0]);
+
+        auto c0_col_column = c0_col.column;
+
+        size_t val_num = block.rows();
+        auto result_null_map = ColumnUInt8::create(val_num);
+        auto col_res = ColumnString::create();
+        auto & col_res_data = col_res->getChars();
+        auto & col_res_offsets = col_res->getOffsets();
+
+        col_res_offsets.resize(c0_col_column->size());
+
+
+        if (c0_col_column->isColumnConst())
+        {
+            const ColumnConst * col_const_space_num = checkAndGetColumnConst<ColumnVector<IntType>>(c0_col_column.get());
+            if (col_const_space_num == nullptr)
+            {
+                return false;
+            }
+            auto space_num_values = col_const_space_num->getValue<IntType>();
+            Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT64_MAX : space_num_values;
+            executeConst(space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
+        }
+        else
+        {
+            const auto * col_vector_space_num = checkAndGetColumn<ColumnVector<IntType>>(c0_col_column.get());
+            if (col_vector_space_num == nullptr)
+            {
+                return false;
+            }
+            executeVector(col_vector_space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
+        return true;
+    }
+
+    static void executeConst(
+        Int64 space_num,
+        size_t val_num,
+        ColumnUInt8::Container & result_null_map_data,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        ColumnString::Offset res_offset = 0;
+        auto is_big = false;
+
+        if (space_num < 0)
+        {
+            space_num = 0;
+        }
+
+        if (space_num > MAX_BLOB_WIDTH)
+        {
+            res_data.reserve(val_num);
+            is_big = true;
+            space_num = 0;
+        }
+        else
+        {
+            res_data.reserve(val_num * (space_num + 1));
+        }
+
+        std::string res_string(space_num, ' ');
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map_data[row] = false;
+
+            if (is_big)
+            {
+                result_null_map_data[row] = true;
+            }
+            res_data.resize(res_data.size() + space_num + 1);
+
+            memcpy(&res_data[res_offset], &res_string[0], space_num);
+
+            res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            res_offsets[row] = res_offset;
+        }
+    }
+
+    template <typename IntType>
+    static void executeVector(
+        const IntType * col_vector_space_num,
+        size_t val_num,
+        ColumnUInt8::Container & result_null_map_data,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        ColumnString::Offset res_offset = 0;
+        res_data.reserve(val_num * APPROX_STRING_SIZE);
+        const auto & col_vector_space_num_value = col_vector_space_num->getData();
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map_data[row] = false;
+
+            Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT64_MAX : col_vector_space_num_value[row];
+            if (space_num < 0)
+            {
+                space_num = 0;
+            }
+            if (space_num > MAX_BLOB_WIDTH)
+            {
+                result_null_map_data[row] = true;
+                space_num = 0;
+            }
+            res_data.resize(res_data.size() + space_num + 1);
+
+            std::string res_string(space_num, ' ');
+            memcpy(&res_data[res_offset], &res_string[0], space_num);
+
+            res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            res_offsets[row] = res_offset;
+        }
+    }
+};
 
 class FunctionPosition : public IFunction
 {
@@ -5615,6 +5781,181 @@ private:
     }
 };
 
+// internal function.
+// `abc.def` ==> 'fed.cba'
+// `-abc.def` ==> '-fed.cba'
+// `abc.def0000` ==> 'fed.cba'
+// `-abc.def0000` ==> '-fed.cba'
+// `abc.de0000f` ==> 'f0000ed.cba'
+// `-abc.de0000f` ==> '-f0000ed.cba'
+// `abc.de0000f0000` ==> 'f0000ed.cba'
+// `-abc.de0000f0000` ==> '-f0000ed.cba'
+// `0.def` ==> 'fed.'
+// `-0.def` ==> '-fed.'
+// `0.def0000` ==> 'fed.'
+// `-0.def0000` ==> '-fed.'
+// `0.de0000f` ==> 'f0000ed.'
+// `-0.de0000f` ==> '-f0000ed.'
+// `0.de0000f0000` ==> 'f0000ed.'
+// `-0.de0000f0000` ==> '-f0000ed.'
+// `abc` ==> 'cba'
+// `-abc` ==> '-cba'
+// `abc.00` ==> 'cba'
+// `-abc.00` ==> '-cba'
+// `abc0000` ==> '0000cba'
+// `-abc0000` ==> '-0000cba'
+// `abc0000.00` ==> '0000cba'
+// `-abc0000.00` ==> '-0000cba'
+// `0` ==> ''
+// `0.00` ==> ''
+class FunctionFormatDecimal : public IFunction
+{
+public:
+    static constexpr auto name = "formatDecimal";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionFormatDecimal>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & base_type = block.getByPosition(arguments[0]).type;
+        bool is_types_valid = getDecimalType(base_type, [&](const auto & decimal_type, bool) {
+            using DecimalType = std::decay_t<decltype(decimal_type)>;
+            using DecimalFieldType = typename DecimalType::FieldType;
+            static_assert(IsDecimal<DecimalFieldType>);
+            using IntType = typename DecimalFieldType::NativeType;
+            using DecimalColVec = ColumnDecimal<DecimalFieldType>;
+
+            const auto & col_arg = block.getByPosition(arguments[0]);
+            if (const auto * col = checkAndGetColumn<DecimalColVec>(col_arg.column.get()))
+            {
+                auto precision = maxDecimalPrecision<DecimalFieldType>();
+                auto scale = decimal_type.getScale();
+                auto col_res = ColumnString::create();
+                format<DecimalColVec, IntType>(col, precision, scale, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        });
+
+        if (!is_types_valid)
+            throw Exception(
+                fmt::format("Illegal types {} arguments of function {}", base_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    template <typename F>
+    static bool getDecimalType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename DecimalColVec, typename IntType>
+    static void format(
+        const DecimalColVec * col,
+        PrecType precision,
+        ScaleType scale,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        auto & data = col->getData();
+        size_t size = data.size();
+        res_data.resize(size * (precision + 3));
+        res_offsets.resize(size);
+
+        ColumnString::Offset cur_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & decimal = data[i];
+            if (decimal.value == std::numeric_limits<IntType>::min())
+                // for IntType::min, `value = -value` may cause overflow, so use Int256 here.
+                doFormat<Int256>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+            else
+                doFormat<IntType>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+        }
+    }
+
+    template <typename IntType>
+    static void doFormat(
+        IntType value,
+        ScaleType scale,
+        ColumnString::Offset & cur_offset,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        if (value < 0)
+        {
+            res_data[cur_offset++] = '-';
+            value = -value;
+        }
+        // fill decimal part
+        if (scale > 0 && value > 0)
+        {
+            size_t scale_i = 0;
+            // return false if the decimal part is all 0.
+            auto remove_tailing_zero = [&]() {
+                while (value > 0 && scale_i < scale)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    ++scale_i;
+                    if (d != 0)
+                    {
+                        res_data[cur_offset++] = d + '0';
+                        return true;
+                    }
+                }
+                return false;
+            };
+            auto fill_decimal_part = [&]() {
+                for (; value > 0 && scale_i < scale; ++scale_i)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    res_data[cur_offset++] = d + '0';
+                }
+                res_data[cur_offset++] = '.';
+            };
+            if (remove_tailing_zero())
+                fill_decimal_part();
+        }
+        // fill integer part
+        while (value > 0)
+        {
+            int d = static_cast<int>(value % 10);
+            value = value / 10;
+            res_data[cur_offset++] = d + '0';
+        }
+        res_data[cur_offset++] = 0;
+        res_offset = cur_offset;
+    }
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -5702,7 +6043,9 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionHexStr>();
     factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
+    factory.registerFunction<FunctionSpace>();
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
+    factory.registerFunction<FunctionFormatDecimal>();
 }
 } // namespace DB

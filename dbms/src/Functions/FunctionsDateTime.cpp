@@ -15,6 +15,8 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsDateTime.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 static std::string extractTimeZoneNameFromColumn(const IColumn & column)
@@ -176,7 +178,7 @@ public:
             dispatch<Int64>(block, arguments, result);
             break;
         default:
-            throw Exception(fmt::format("argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
     }
 };

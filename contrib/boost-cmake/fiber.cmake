@@ -49,6 +49,8 @@ target_compile_definitions(boost_fiber
 
 target_link_libraries (boost_fiber boost_context)
 
+target_no_warning(boost_fiber unused-but-set-variable)
+
 if(BUILD_SHARED_LIBS)
   target_compile_definitions(boost_fiber PUBLIC BOOST_FIBER_DYN_LINK BOOST_FIBERS_DYN_LINK)
 else()
@@ -82,6 +84,8 @@ target_compile_definitions(boost_fiber_numa
   PUBLIC BOOST_FIBER_NO_LIB
   PRIVATE BOOST_FIBER_SOURCE BOOST_FIBERS_SOURCE
 )
+
+target_no_warning(boost_fiber_numa unused-but-set-variable)
 
 if(BUILD_SHARED_LIBS)
   target_compile_definitions(boost_fiber_numa PUBLIC BOOST_FIBER_DYN_LINK BOOST_FIBERS_DYN_LINK)

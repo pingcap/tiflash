@@ -439,7 +439,7 @@ struct AggregationCollatorsWrapper<true>
         if (likely(collators.size() > column_index))
         {
             if (collators[column_index] != nullptr)
-                return collators[column_index]->sortKey(in.data, in.size, sort_key_containers[column_index]);
+                return collators[column_index]->sortKeyFastPath(in.data, in.size, sort_key_containers[column_index]);
             return in;
         }
         else if (collators.empty())

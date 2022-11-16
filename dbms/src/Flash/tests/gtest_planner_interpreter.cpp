@@ -195,15 +195,13 @@ Union: <for test>
     {
         String expected = R"(
 Expression: <final projection>
- Expression: <projection>
-  MockTableScan)";
+ MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
 
         expected = R"(
 Union: <for test>
  Expression x 5: <final projection>
-  Expression: <projection>
-   MockTableScan)";
+  MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
 
@@ -282,12 +280,11 @@ Union: <for test>
   Expression: <expr after aggregation>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
-     Expression x 10: <projection>
-      SharedQuery: <restore concurrency>
-       Limit, limit = 10
-        Union: <for partial limit>
-         Limit x 10, limit = 10
-          MockTableScan)";
+     SharedQuery x 10: <restore concurrency>
+      Limit, limit = 10
+       Union: <for partial limit>
+        Limit x 10, limit = 10
+         MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
 
         expected = R"(
@@ -295,9 +292,8 @@ Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
    Concat
-    Expression: <projection>
-     Limit, limit = 10
-      MockTableScan)";
+    Limit, limit = 10
+     MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -313,12 +309,11 @@ Union: <for test>
   Expression: <expr after aggregation>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
-     Expression x 10: <projection>
-      SharedQuery: <restore concurrency>
-       MergeSorting, limit = 10
-        Union: <for partial order>
-         PartialSorting x 10: limit = 10
-          MockTableScan)";
+     SharedQuery x 10: <restore concurrency>
+      MergeSorting, limit = 10
+       Union: <for partial order>
+        PartialSorting x 10: limit = 10
+         MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
 
         expected = R"(
@@ -326,10 +321,9 @@ Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
    Concat
-    Expression: <projection>
-     MergeSorting, limit = 10
-      PartialSorting: limit = 10
-       MockTableScan)";
+    MergeSorting, limit = 10
+     PartialSorting: limit = 10
+      MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -498,9 +492,8 @@ Union: <for test>
     MergeSorting, limit = 10
      Union: <for partial order>
       PartialSorting x 10: limit = 10
-       Expression: <before TopN>
-        Expression: <projection>
-         MockTableScan)";
+       Expression: <projection>
+        MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -515,18 +508,16 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <expr after aggregation>
-    SharedQuery: <restore concurrency>
-     ParallelAggregating, max_threads: 10, final: true
-      Expression x 10: <projection>
-       SharedQuery: <restore concurrency>
-        MergeSorting, limit = 10
-         Union: <for partial order>
-          PartialSorting x 10: limit = 10
-           Expression: <before TopN>
-            Expression: <projection>
-             MockTableScan)";
+  Expression: <expr after aggregation>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <projection>
+      SharedQuery: <restore concurrency>
+       MergeSorting, limit = 10
+        Union: <for partial order>
+         PartialSorting x 10: limit = 10
+          Expression: <projection>
+           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -550,18 +541,16 @@ Union: <for test>
      Limit x 10, limit = 10
       Expression: <projection>
        Filter
-        Expression: <projection>
-         Expression: <expr after aggregation>
-          SharedQuery: <restore concurrency>
-           ParallelAggregating, max_threads: 10, final: true
-            Expression x 10: <projection>
-             SharedQuery: <restore concurrency>
-              MergeSorting, limit = 10
-               Union: <for partial order>
-                PartialSorting x 10: limit = 10
-                 Expression: <before TopN>
-                  Expression: <projection>
-                   MockTableScan)";
+        Expression: <expr after aggregation>
+         SharedQuery: <restore concurrency>
+          ParallelAggregating, max_threads: 10, final: true
+           Expression x 10: <projection>
+            SharedQuery: <restore concurrency>
+             MergeSorting, limit = 10
+              Union: <for partial order>
+               PartialSorting x 10: limit = 10
+                Expression: <projection>
+                 MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -632,14 +621,13 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   SharedQuery: <restore concurrency>
-    Expression: <expr after window>
-     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
-      MergeSorting, limit = 0
-       Union: <for partial order>
-        PartialSorting x 10: limit = 0
-         MockTableScan)";
+  SharedQuery: <restore concurrency>
+   Expression: <expr after window>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     MergeSorting, limit = 0
+      Union: <for partial order>
+       PartialSorting x 10: limit = 0
+        MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -653,17 +641,15 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   SharedQuery: <restore concurrency>
-    Expression: <expr after window>
-     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
-      Union: <merge into one for window input>
-       Expression x 10: <projection>
-        SharedQuery: <restore concurrency>
-         MergeSorting, limit = 0
-          Union: <for partial order>
-           PartialSorting x 10: limit = 0
-            MockTableScan)";
+  SharedQuery: <restore concurrency>
+   Expression: <expr after window>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Union: <merge into one for window input>
+      SharedQuery x 10: <restore concurrency>
+       MergeSorting, limit = 0
+        Union: <for partial order>
+         PartialSorting x 10: limit = 0
+          MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }

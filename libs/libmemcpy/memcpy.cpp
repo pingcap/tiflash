@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "memcpy.h"
+#ifndef NO_TIFLASH_INTERNAL_MEMCPY
+
+#include <common/memcpy.h>
 
 /// This is needed to generate an object file for linking.
 
@@ -20,3 +22,5 @@ extern "C" __attribute__((visibility("default"))) void * memcpy(void * __restric
 {
     return inline_memcpy(dst, src, size);
 }
+
+#endif

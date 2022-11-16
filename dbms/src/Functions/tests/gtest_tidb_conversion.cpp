@@ -103,6 +103,22 @@ public:
     }
 
     template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const DecimalField<Decimal64> & input, const MyDateTime & output, int fraction)
+    {
+        auto meta = std::make_tuple(19, input.getScale());
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, output, fraction) : createDateTimeColumn({output}, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(meta, 1, input) : createColumn<Nullable<Input>>(meta, {input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
     typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const Input & input, const MyDateTime & output, int fraction)
     {
         auto inner_test = [&](bool is_const) {
@@ -172,6 +188,21 @@ public:
                 executeFunction(
                     func_name,
                     {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testReturnNull(const DecimalField<Input> & input, const std::tuple<UInt32, UInt32> & meta, int fraction)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, {}, fraction) : createDateTimeColumn({{}}, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(meta, 1, input) : createColumn<Nullable<Input>>(meta, {input}),
                      createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
         };
         inner_test(true);
@@ -1208,42 +1239,72 @@ try
     testOnlyNull<Float64, MyDateTime>();
 
     // TODO add tests after non-expected results fixed
-
-    // mysql: null, warning.
-    // tiflash: null, no warning.
-    // tidb: 0000-00-00 00:00:00
-    testReturnNull<Float32, MyDateTime>(0, 6);
     testReturnNull<Float32, MyDateTime>(12.213, 6);
     testReturnNull<Float32, MyDateTime>(-12.213, 6);
     testReturnNull<Float32, MyDateTime>(MAX_FLOAT32, 6);
     testReturnNull<Float32, MyDateTime>(MIN_FLOAT32, 6);
-    // mysql: 2000-01-11 00:00:00
-    // tiflash / tidb: null, warnings
-    // testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
-    testReturnNull<Float32, MyDateTime>(-111, 6);
-    // mysql: 2000-01-11 00:00:00
-    // tiflash / tidb: null, warnings
-    // testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
 
-    // mysql: null, warning.
-    // tiflash: null, no warning.
-    // tidb: 0000-00-00 00:00:00
-    // testReturnNull<Float64, MyDateTime>(0, 6);
+    testNotOnlyNull<Float32, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testReturnNull<Float32, MyDateTime>(-111, 6);
+    testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+
     testReturnNull<Float64, MyDateTime>(12.213, 6);
     testReturnNull<Float64, MyDateTime>(-12.213, 6);
     testReturnNull<Float64, MyDateTime>(MAX_FLOAT64, 6);
     testReturnNull<Float64, MyDateTime>(MIN_FLOAT64, 6);
-    // mysql: 2000-01-11 00:00:00
-    // tiflash / tidb: null, warnings
-    // testNotOnlyNull<Float64, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testReturnNull<Float64, MyDateTime>(1.1, 6);
+    testReturnNull<Float64, MyDateTime>(48.1, 6);
+    testReturnNull<Float64, MyDateTime>(100.1, 6);
+    testReturnNull<Float64, MyDateTime>(1301.11, 6);
+    testReturnNull<Float64, MyDateTime>(1131.111, 6);
+    testReturnNull<Float64, MyDateTime>(100001111.111, 6);
+    testReturnNull<Float64, MyDateTime>(20121212121260.1111111, 6);
+    testReturnNull<Float64, MyDateTime>(20121212126012.1111111, 6);
+    testReturnNull<Float64, MyDateTime>(20121212241212.1111111, 6);
+    testNotOnlyNull<Float64, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
     testReturnNull<Float64, MyDateTime>(-111, 6);
-    // mysql: 2000-01-11 00:00:00
-    // tiflash / tidb: null, warnings
-    // testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+
+    testNotOnlyNull<Float64, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(20210201, {2021, 2, 1, 0, 0, 0, 0}, 6);
-    // mysql: 2021-02-01 00:00:00
-    // tiflash / tidb: 2021-02-01 01:00:00
-    // testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(20210000.1, {2021, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(120012.1, {2012, 0, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(121200.1, {2012, 12, 00, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(101.1, {2000, 1, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(1122.1, {2000, 11, 22, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(31212.111, {2003, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(121212.1111, {2012, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(1121212.111111, {112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(11121212.111111, {1112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(99991111.1111111, {9999, 11, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(1212121212.111111, {2000, 12, 12, 12, 12, 12, 111111}, 6);
+}
+CATCH
+
+TEST_F(TestTidbConversion, castDecimalAsReal)
+try
+{
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(11, 1), std::make_tuple(19, 1), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(481, 1), std::make_tuple(19, 1), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(1001, 1), std::make_tuple(19, 1), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(130111, 2), std::make_tuple(19, 2), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(1131111, 3), std::make_tuple(19, 3), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(100001111111, 3), std::make_tuple(19, 3), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(12121212126011111, 5), std::make_tuple(19, 6), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(121212126012111111, 5), std::make_tuple(19, 4), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(12121224121211111, 5), std::make_tuple(19, 4), 6);
+
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1011, 1), {2000, 1, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1111, 1), {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11221, 1), {2000, 11, 22, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(31212111, 3), {2003, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(30000111, 3), {2003, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1212121111, 4), {2012, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1121212111111, 6), {112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11121212111111, 6), {1112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(99991111111111, 6), {9999, 11, 11, 0, 0, 0, 0}, 6);
 }
 CATCH
 
@@ -1929,6 +1990,12 @@ try
     {
         ASSERT_COLUMN_EQ(expect_date_column, vector_result);
     }
+
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{{2012, 0, 0, 0, 0, 0, 0}}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<String>>({"20120000"}),
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
 }
 CATCH
 

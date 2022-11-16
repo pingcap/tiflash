@@ -41,10 +41,8 @@ public:
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-            for (size_t i = 2; i <= max_concurrency_level; ++i)
-            {
-                ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-            }
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));
         }
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }

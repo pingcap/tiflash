@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#pragma once
 
 #include <Common/Exception.h>
+#include <Common/grpcpp.h>
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
-#include <grpc++/grpc++.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 using grpc::Channel;
 using grpc::Status;
@@ -41,6 +42,19 @@ public:
         {
             throw Exception(fmt::format("Meet error while dispatch mpp task, error code = {}, message = {}", status.error_code(), status.error_message()));
         }
+    }
+
+    coprocessor::Response runCoprocessor(std::shared_ptr<coprocessor::Request> request)
+    {
+        coprocessor::Response response;
+        grpc::ClientContext context;
+        Status status = stub->Coprocessor(&context, *request, &response);
+        if (!status.ok())
+        {
+            throw Exception(fmt::format("Meet error while run coprocessor task, error code = {}, message = {}", status.error_code(), status.error_message()));
+        }
+
+        return response;
     }
 
 private:

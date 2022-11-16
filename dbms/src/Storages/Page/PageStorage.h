@@ -16,9 +16,8 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
-#include <Interpreters/SettingsCommon.h>
-#include <Storages/FormatVersion.h>
 #include <Storages/Page/Config.h>
+#include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -66,20 +65,6 @@ enum class PageStorageRunMode : UInt8
     MIX_MODE = 3,
 };
 
-struct ExternalPageCallbacks
-{
-    // `scanner` for scanning available external page ids on disks.
-    // `remover` will be called with living normal page ids after gc run a round, user should remove those
-    //           external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
-    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
-    using ExternalPagesScanner = std::function<PathAndIdsVec()>;
-    using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageId> & valid_normal_pages)>;
-    ExternalPagesScanner scanner = nullptr;
-    ExternalPagesRemover remover = nullptr;
-    NamespaceId ns_id = MAX_NAMESPACE_ID;
-};
-
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageID. Store Page with the same PageID
  * will cover the old ones.
@@ -92,130 +77,17 @@ class PageStorage : private boost::noncopyable
 public:
     using SnapshotPtr = PageStorageSnapshotPtr;
 
-    struct Config
-    {
-        //==========================================================================================
-        // V2 config
-        //==========================================================================================
-        SettingBool sync_on_write = true;
-
-        SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
-        SettingUInt64 file_max_size = PAGE_FILE_MAX_SIZE;
-        SettingUInt64 file_small_size = PAGE_FILE_SMALL_SIZE;
-
-        SettingUInt64 file_meta_roll_size = PAGE_META_ROLL_SIZE;
-
-        // When the value of gc_force_hardlink_rate is less than or equal to 1,
-        // It means that candidates whose valid rate is greater than this value will be forced to hardlink(This will reduce the gc duration).
-        // Otherwise, if gc_force_hardlink_rate is greater than 1, hardlink won't happen
-        SettingDouble gc_force_hardlink_rate = 2;
-
-        SettingDouble gc_max_valid_rate = 0.35;
-        SettingUInt64 gc_min_bytes = PAGE_FILE_ROLL_SIZE;
-        SettingUInt64 gc_min_files = 10;
-        // Minimum number of legacy files to be selected for compaction
-        SettingUInt64 gc_min_legacy_num = 3;
-
-        SettingUInt64 gc_max_expect_legacy_files = 100;
-        SettingDouble gc_max_valid_rate_bound = 1.0;
-
-        // Maximum write concurrency. Must not be changed once the PageStorage object is created.
-        SettingUInt64 num_write_slots = 1;
-
-        // Maximum seconds of reader / writer idle time.
-        // 0 for never reclaim idle file descriptor.
-        SettingUInt64 open_file_max_idle_time = 15;
-
-        // Probability to do gc when write is low.
-        // The probability is `prob_do_gc_when_write_is_low` out of 1000.
-        SettingUInt64 prob_do_gc_when_write_is_low = 10;
-
-        MVCC::VersionSetConfig version_set_config;
-
-        //==========================================================================================
-        // V3 config
-        //==========================================================================================
-        SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
-        SettingUInt64 blob_spacemap_type = 2;
-        SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
-        SettingDouble blob_heavy_gc_valid_rate = 0.5;
-        SettingUInt64 blob_block_alignment_bytes = 0;
-
-        SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 wal_recover_mode = static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords);
-        SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
-
-        void reload(const Config & rhs)
-        {
-            // Reload is not atomic, but should be good enough
-
-            // Reload gc threshold
-            gc_force_hardlink_rate = rhs.gc_force_hardlink_rate;
-            gc_max_valid_rate = rhs.gc_max_valid_rate;
-            gc_min_bytes = rhs.gc_min_bytes;
-            gc_min_files = rhs.gc_min_files;
-            gc_min_legacy_num = rhs.gc_min_legacy_num;
-            prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
-            // Reload fd idle time
-            open_file_max_idle_time = rhs.open_file_max_idle_time;
-
-            // Reload V3 setting
-            blob_file_limit_size = rhs.blob_file_limit_size;
-            blob_spacemap_type = rhs.blob_spacemap_type;
-            blob_cached_fd_size = rhs.blob_cached_fd_size;
-            blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
-            blob_block_alignment_bytes = rhs.blob_block_alignment_bytes;
-
-            wal_roll_size = rhs.wal_roll_size;
-            wal_recover_mode = rhs.wal_recover_mode;
-            wal_max_persisted_log_files = rhs.wal_max_persisted_log_files;
-        }
-
-        String toDebugStringV2() const
-        {
-            return fmt::format(
-                "PageStorage::Config {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
-                "gc_min_legacy_num: {}, gc_max_expect_legacy: {}, gc_max_valid_rate_bound: {:.3f}, prob_do_gc_when_write_is_low: {}, "
-                "open_file_max_idle_time: {}}}",
-                gc_min_files,
-                gc_min_bytes,
-                gc_force_hardlink_rate.get(),
-                gc_max_valid_rate.get(),
-                gc_min_legacy_num,
-                gc_max_expect_legacy_files.get(),
-                gc_max_valid_rate_bound.get(),
-                prob_do_gc_when_write_is_low,
-                open_file_max_idle_time);
-        }
-
-        String toDebugStringV3() const
-        {
-            return fmt::format(
-                "PageStorage::Config V3 {{"
-                "blob_file_limit_size: {}, blob_spacemap_type: {}, "
-                "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
-                "wal_roll_size: {}, wal_recover_mode: {}, wal_max_persisted_log_files: {}}}",
-                blob_file_limit_size.get(),
-                blob_spacemap_type.get(),
-                blob_cached_fd_size.get(),
-                blob_heavy_gc_valid_rate.get(),
-                blob_block_alignment_bytes.get(),
-                wal_roll_size.get(),
-                wal_recover_mode.get(),
-                wal_max_persisted_log_files.get());
-        }
-    };
-    void reloadSettings(const Config & new_config)
+    void reloadSettings(const PageStorageConfig & new_config)
     {
         config.reload(new_config);
         reloadConfig();
     }
-    Config getSettings() const { return config; }
+    PageStorageConfig getSettings() const { return config; }
 
     // Use a more easy gc config for v2 when all of its data will be transformed to v3.
-    static Config getEasyGCConfig()
+    static PageStorageConfig getEasyGCConfig()
     {
-        Config gc_config;
+        PageStorageConfig gc_config;
         gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
         return gc_config;
     }
@@ -225,7 +97,7 @@ public:
     create(
         String name,
         PSDiskDelegatorPtr delegator,
-        const PageStorage::Config & config,
+        const PageStorageConfig & config,
         const FileProviderPtr & file_provider,
         bool use_v3 = false,
         bool no_more_insert_to_v2 = false);
@@ -233,7 +105,7 @@ public:
     PageStorage(
         String name,
         PSDiskDelegatorPtr delegator_,
-        const Config & config_,
+        const PageStorageConfig & config_,
         const FileProviderPtr & file_provider_)
         : storage_name(std::move(name))
         , delegator(std::move(delegator_))
@@ -297,15 +169,6 @@ public:
         return readImpl(ns_id, page_ids, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    /**
-     * If throw_on_not_exist is false, Also we do have some of page_id not found.
-     * Then the return value will record the all of page_id which not found.
-     */
-    PageIds read(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
-    {
-        return readImpl(ns_id, page_ids, handler, read_limiter, snapshot, throw_on_not_exist);
-    }
-
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
 
@@ -351,8 +214,6 @@ protected:
 
     virtual PageMap readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageIds readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
-
     virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
@@ -367,7 +228,7 @@ protected:
 
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
-    Config config;
+    PageStorageConfig config;
     FileProviderPtr file_provider;
 };
 
@@ -388,8 +249,6 @@ public:
     DB::Page read(PageId page_id) const;
 
     PageMap read(const PageIds & page_ids) const;
-
-    void read(const PageIds & page_ids, PageHandler & handler) const;
 
     using PageReadFields = PageStorage::PageReadFields;
     PageMap read(const std::vector<PageReadFields> & page_fields) const;
@@ -438,10 +297,10 @@ private:
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     // A wrap of getSettings only used for `RegionPersister::gc`
-    PageStorage::Config getSettings() const;
+    PageStorageConfig getSettings() const;
 
     // A wrap of reloadSettings only used for `RegionPersister::gc`
-    void reloadSettings(const PageStorage::Config & new_config) const;
+    void reloadSettings(const PageStorageConfig & new_config) const;
 
     // A wrap of gc only used for `RegionPersister::gc`
     bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) const;

@@ -98,11 +98,36 @@ public:
         case EncryptionMethod::Aes256Ctr:
             cipher = EVP_aes_256_ctr();
             break;
+        case EncryptionMethod::SM4Ctr:
+#if USE_GM_SSL
+            // Use sm4 in GmSSL, don't need to do anything here
+            break;
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+            throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
+                                       Errors::Encryption::Internal);
+#else
+            // Openssl support SM4 after 1.1.1 release version.
+            cipher = EVP_sm4_ctr();
+            break;
+#endif
         default:
             DBMS_ASSERT(false);
         }
+#if !USE_GM_SSL
         DBMS_ASSERT(cipher != nullptr);
+#endif
 
+#if USE_GM_SSL
+        if (method == EncryptionMethod::SM4Ctr)
+        {
+            SM4_KEY sm4_key;
+            unsigned char own_iv[16];
+            memcpy(own_iv, iv, 16);
+            sm4_set_encrypt_key(&sm4_key, test::KEY);
+            sm4_ctr_encrypt(&sm4_key, own_iv, plaintext, MAX_SIZE, ciphertext);
+            return;
+        }
+#endif
         int ret = EVP_EncryptInit(ctx, cipher, test::KEY, iv);
         DBMS_ASSERT(ret == 1);
         int output_size = 0;
@@ -121,7 +146,7 @@ public:
         generateCiphertext(iv);
 
         EncryptionMethod method = std::get<1>(GetParam());
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(method));
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(method));
         std::string iv_str(reinterpret_cast<const char *>(iv), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
@@ -191,7 +216,26 @@ TEST_P(EncryptionTest, EncryptionTest)
     EXPECT_TRUE(testEncryption(16, 16 * 2, test::IV_OVERFLOW_FULL));
 }
 
-INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
+INSTANTIATE_TEST_CASE_P(
+    EncryptionTestInstance,
+    EncryptionTest,
+    testing::Combine(
+        testing::Bool(),
+        testing::Values(
+            EncryptionMethod::Aes128Ctr,
+            EncryptionMethod::Aes192Ctr,
+            EncryptionMethod::Aes256Ctr
+#if USE_GM_SSL
+            ,
+            EncryptionMethod::SM4Ctr
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+// not support SM4
+#else
+            // Openssl support SM4 after 1.1.1 release version.
+            ,
+            EncryptionMethod::SM4Ctr
+#endif
+            )));
 
 
 TEST(PosixWritableFileTest, test)
@@ -286,7 +330,7 @@ try
 
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto file_provider = std::make_shared<FileProvider>(key_manager, true);
@@ -312,7 +356,7 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
     WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
@@ -355,7 +399,7 @@ public:
         String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
         B file = std::make_shared<T>(file_path, true, -1, 0600);
 
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
         std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
@@ -443,7 +487,9 @@ try
     linked_file.close();
 
     // Check the stat
-    struct stat file_stat;
+    struct stat file_stat
+    {
+    };
     ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
     ASSERT_EQ(2, file_stat.st_nlink);
 
@@ -467,7 +513,7 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
@@ -499,7 +545,9 @@ try
     linked_enc_file.close();
 
     // Check the stat
-    struct stat file_stat;
+    struct stat file_stat
+    {
+    };
     ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
     ASSERT_EQ(2, file_stat.st_nlink);
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #pragma once
-#include <Columns/Collator.h>
+
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>

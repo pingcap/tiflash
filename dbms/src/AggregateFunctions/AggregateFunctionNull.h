@@ -26,7 +26,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsHigherOrder.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/SetVariants.h>
@@ -91,11 +90,11 @@ protected:
 
     static bool getFlag(ConstAggregateDataPtr __restrict place) noexcept
     {
-        return result_is_nullable ? place[0] : 1;
+        return result_is_nullable ? place[0] : true;
     }
 
 public:
-    AggregateFunctionNullBase(AggregateFunctionPtr nested_function_)
+    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_)
         : nested_function{nested_function_}
     {
         if (result_is_nullable)
@@ -167,7 +166,7 @@ public:
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
-        bool flag = 1;
+        bool flag = true;
         if (result_is_nullable)
             readBinary(flag, buf);
         if (flag)
@@ -181,7 +180,7 @@ public:
     {
         if constexpr (result_is_nullable)
         {
-            ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
+            auto & to_concrete = static_cast<ColumnNullable &>(to);
             if (getFlag(place))
             {
                 nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn(), arena);
@@ -256,7 +255,7 @@ protected:
     }
 
 public:
-    AggregateFunctionFirstRowNull(AggregateFunctionPtr nested_function_)
+    explicit AggregateFunctionFirstRowNull(AggregateFunctionPtr nested_function_)
         : nested_function{nested_function_}
     {
         if (result_is_nullable)
@@ -315,7 +314,7 @@ public:
         {
             if (this->getFlag(place) == 0)
             {
-                const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+                const auto * column = static_cast<const ColumnNullable *>(columns[0]);
                 bool is_null = column->isNullAt(row_num);
                 this->setFlag(place, is_null ? 2 : 1);
                 if (!is_null)
@@ -381,7 +380,7 @@ public:
     {
         if constexpr (result_is_nullable)
         {
-            ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
+            auto & to_concrete = static_cast<ColumnNullable &>(to);
             UInt8 flag = getFlag(place);
             if (flag == 1)
             {
@@ -419,7 +418,7 @@ template <bool result_is_nullable, bool input_is_nullable>
 class AggregateFunctionNullUnary final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullUnary<result_is_nullable, input_is_nullable>>
 {
 public:
-    AggregateFunctionNullUnary(AggregateFunctionPtr nested_function)
+    explicit AggregateFunctionNullUnary(AggregateFunctionPtr nested_function)
         : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullUnary<result_is_nullable, input_is_nullable>>(nested_function)
     {
     }
@@ -428,7 +427,7 @@ public:
     {
         if constexpr (input_is_nullable)
         {
-            const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+            const auto * column = static_cast<const ColumnNullable *>(columns[0]);
             if (!column->isNullAt(row_num))
             {
                 this->setFlag(place);
@@ -443,7 +442,7 @@ public:
         }
     }
 
-    void addBatchSinglePlace(
+    void addBatchSinglePlace( // NOLINT(google-default-arguments)
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -455,7 +454,7 @@ public:
 
         if constexpr (input_is_nullable)
         {
-            const ColumnNullable * column = assert_cast<const ColumnNullable *>(columns[0]);
+            const auto * column = assert_cast<const ColumnNullable *>(columns[0]);
             const IColumn * nested_column = &column->getNestedColumn();
             const UInt8 * null_map = column->getNullMapData().data();
 
@@ -513,7 +512,7 @@ public:
         {
             if (is_nullable[i])
             {
-                const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(*columns[i]);
+                const auto & nullable_col = static_cast<const ColumnNullable &>(*columns[i]);
                 if (nullable_col.isNullAt(row_num))
                 {
                     /// If at least one column has a null value in the current row,

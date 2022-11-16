@@ -166,6 +166,7 @@ public:
 protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
+    bool returnIfCancelledOrKilled();
 
     LoggerPtr log;
 

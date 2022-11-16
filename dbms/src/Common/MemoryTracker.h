@@ -19,7 +19,8 @@
 
 #include <atomic>
 
-extern std::atomic<Int64> real_rss;
+extern std::atomic<Int64> real_rss, proc_num_threads, baseline_of_query_mem_tracker;
+extern std::atomic<UInt64> proc_virt_size;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
@@ -39,13 +40,15 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     std::atomic<Int64> limit{0};
 
     // How many bytes RSS(Resident Set Size) can be larger than limit(max_memory_usage_for_all_queries). Default: 5GB
-    Int64 bytes_rss_larger_than_limit = 5368709120;
+    std::atomic<Int64> bytes_rss_larger_than_limit{1073741824};
 
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;
 
+    bool is_global_root = false;
+
     /// To test the accuracy of memory track, it throws an exception when the part exceeding the tracked amount is greater than accuracy_diff_for_test.
-    Int64 accuracy_diff_for_test = 0;
+    std::atomic<Int64> accuracy_diff_for_test{0};
 
     /// Singly-linked list. All information will be passed to subsequent memory trackers also (it allows to implement trackers hierarchy).
     /// In terms of tree nodes it is the list of parents. Lifetime of these trackers should "include" lifetime of current tracker.
@@ -64,6 +67,11 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
         : limit(limit_)
     {}
 
+    explicit MemoryTracker(Int64 limit_, bool is_global_root)
+        : limit(limit_)
+        , is_global_root(is_global_root)
+    {}
+
 public:
     /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
     static MemoryTrackerPtr create(Int64 limit = 0)
@@ -76,6 +84,11 @@ public:
         {
             return std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
         }
+    }
+
+    static MemoryTrackerPtr createGlobalRoot()
+    {
+        return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true));
     }
 
     ~MemoryTracker();
@@ -103,16 +116,18 @@ public:
       */
     void setOrRaiseLimit(Int64 value);
 
-    void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit = value; }
+    void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit.store(value, std::memory_order_relaxed); }
 
     void setFaultProbability(double value) { fault_probability = value; }
 
-    void setAccuracyDiffForTest(double value) { accuracy_diff_for_test = value; }
+    void setAccuracyDiffForTest(Int64 value) { accuracy_diff_for_test.store(value, std::memory_order_relaxed); }
 
     /// next should be changed only once: from nullptr to some value.
     void setNext(MemoryTracker * elem)
     {
-        next.store(elem, std::memory_order_relaxed);
+        MemoryTracker * old_val = nullptr;
+        if (!next.compare_exchange_strong(old_val, elem, std::memory_order_seq_cst, std::memory_order_relaxed))
+            return;
         next_holder = elem ? elem->shared_from_this() : nullptr;
     }
 
@@ -138,6 +153,9 @@ extern __thread MemoryTracker * current_memory_tracker;
 #else
 extern thread_local MemoryTracker * current_memory_tracker;
 #endif
+
+extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
+extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker

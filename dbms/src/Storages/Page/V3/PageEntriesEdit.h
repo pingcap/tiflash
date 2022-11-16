@@ -65,6 +65,32 @@ struct PageVersion
         return sequence <= rhs.sequence;
     }
 };
+} // namespace DB::PS::V3
+/// See https://fmt.dev/latest/api.html#formatting-user-defined-types
+template <>
+struct fmt::formatter<DB::PS::V3::PageVersion>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx)
+    {
+        return format_to(ctx.out(), "<{},{}>", ver.sequence, ver.epoch);
+    }
+};
+
+namespace DB::PS::V3
+{
 using VersionedEntry = std::pair<PageVersion, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
@@ -222,7 +248,8 @@ public:
         Int64 being_ref_count;
 
         EditRecord()
-            : page_id(0)
+            : type(EditRecordType::DEL)
+            , page_id(0)
             , ori_page_id(0)
             , version(0, 0)
             , being_ref_count(1)
@@ -250,46 +277,6 @@ public:
     EditRecords & getMutRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
 
-#ifndef NDEBUG
-    // Just for tests, refactor them out later
-    void put(PageId page_id, const PageEntryV3 & entry)
-    {
-        put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry);
-    }
-    void putExternal(PageId page_id)
-    {
-        putExternal(buildV3Id(TEST_NAMESPACE_ID, page_id));
-    }
-    void upsertPage(PageId page_id, const PageVersion & ver, const PageEntryV3 & entry)
-    {
-        upsertPage(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry);
-    }
-    void del(PageId page_id)
-    {
-        del(buildV3Id(TEST_NAMESPACE_ID, page_id));
-    }
-    void ref(PageId ref_id, PageId page_id)
-    {
-        ref(buildV3Id(TEST_NAMESPACE_ID, ref_id), buildV3Id(TEST_NAMESPACE_ID, page_id));
-    }
-    void varRef(PageId ref_id, const PageVersion & ver, PageId ori_page_id)
-    {
-        varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id));
-    }
-    void varExternal(PageId page_id, const PageVersion & create_ver, Int64 being_ref_count)
-    {
-        varExternal(buildV3Id(TEST_NAMESPACE_ID, page_id), create_ver, being_ref_count);
-    }
-    void varEntry(PageId page_id, const PageVersion & ver, const PageEntryV3 & entry, Int64 being_ref_count)
-    {
-        varEntry(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry, being_ref_count);
-    }
-    void varDel(PageId page_id, const PageVersion & delete_ver)
-    {
-        varDel(buildV3Id(TEST_NAMESPACE_ID, page_id), delete_ver);
-    }
-#endif
-
 private:
     EditRecords records;
 
@@ -313,26 +300,3 @@ public:
 };
 
 } // namespace DB::PS::V3
-
-/// See https://fmt.dev/latest/api.html#formatting-user-defined-types
-template <>
-struct fmt::formatter<DB::PS::V3::PageVersion>
-{
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-
-        return it;
-    }
-
-    template <typename FormatContext>
-    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx)
-    {
-        return format_to(ctx.out(), "<{},{}>", ver.sequence, ver.epoch);
-    }
-};

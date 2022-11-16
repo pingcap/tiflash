@@ -15,6 +15,8 @@
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -24,7 +26,7 @@ extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
 WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : log(Logger::get(req_id))
     , window_description(window_description_)
 {
     children.push_back(input);
@@ -73,15 +75,28 @@ void WindowBlockInputStream::initialWorkspaces()
     only_have_pure_window = onlyHaveRowNumberAndRank();
 }
 
+bool WindowBlockInputStream::returnIfCancelledOrKilled()
+{
+    if (isCancelledOrThrowIfKilled())
+    {
+        if (!window_blocks.empty())
+            window_blocks.erase(window_blocks.begin(), window_blocks.end());
+        input_is_finished = true;
+        return true;
+    }
+    return false;
+}
+
 Block WindowBlockInputStream::readImpl()
 {
     const auto & stream = children.back();
     while (!input_is_finished)
     {
+        if (returnIfCancelledOrKilled())
+            return {};
+
         if (Block output_block = tryGetOutputBlock())
-        {
             return output_block;
-        }
 
         Block block = stream->read();
         if (!block)
@@ -91,6 +106,8 @@ Block WindowBlockInputStream::readImpl()
         tryCalculate();
     }
 
+    if (returnIfCancelledOrKilled())
+        return {};
     // return last partition block, if already return then return null
     return tryGetOutputBlock();
 }
@@ -257,7 +274,7 @@ void WindowBlockInputStream::advanceFrameStart()
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "The frame begin type '{}' is not implemented",
-            window_description.frame.begin_type);
+            magic_enum::enum_name(window_description.frame.begin_type));
     }
 }
 
@@ -356,7 +373,7 @@ void WindowBlockInputStream::advanceFrameEnd()
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame end type '{}' is not implemented",
-                        window_description.frame.end_type);
+                        magic_enum::enum_name(window_description.frame.end_type));
     }
 }
 
@@ -374,14 +391,6 @@ void WindowBlockInputStream::writeOutCurrentRow()
 
 Block WindowBlockInputStream::tryGetOutputBlock()
 {
-    if (isCancelledOrThrowIfKilled())
-    {
-        if (!window_blocks.empty())
-            window_blocks.erase(window_blocks.begin(), window_blocks.end());
-        input_is_finished = true;
-        return {};
-    }
-
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
     // calculated the window functions for all input rows. That's why the

@@ -63,7 +63,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
     auto v = table_info->toStrings();
     for (const auto & s : v)
     {
-        LOG_FMT_INFO(log, "TableInfo: {}", s);
+        LOG_INFO(log, "TableInfo: {}", s);
     }
 
     key_gen = KeyGenerator::create(opts_);
@@ -76,13 +76,14 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
         table_info->db_name,
         table_info->table_name,
         table_info->table_id,
+        true,
         *table_info->columns,
         table_info->handle,
         table_info->is_common_handle,
         table_info->rowkey_column_indexes.size(),
         DeltaMergeStore::Settings());
     stat.init_ms = sw.elapsedMilliseconds();
-    LOG_FMT_INFO(log, "Init store {} ms", stat.init_ms);
+    LOG_INFO(log, "Init store {} ms", stat.init_ms);
 
     if (opts_.verification)
     {
@@ -103,7 +104,7 @@ uint64_t DTWorkload::updateBlock(Block & block, uint64_t key)
         auto & cd = (*table_info->columns)[0];
         if (cd.type->getTypeId() != TypeIndex::Int64)
         {
-            LOG_FMT_ERROR(log, "Column type not match: {} but {} is required", cd.type->getTypeId(), TypeIndex::Int64);
+            LOG_ERROR(log, "Column type not match: {} but {} is required", magic_enum::enum_name(cd.type->getTypeId()), magic_enum::enum_name(TypeIndex::Int64));
             throw std::invalid_argument("Column type not match");
         }
 
@@ -123,7 +124,7 @@ uint64_t DTWorkload::updateBlock(Block & block, uint64_t key)
         auto & cd = (*table_info->columns)[1];
         if (cd.id != VERSION_COLUMN_ID)
         {
-            LOG_FMT_ERROR(log, "Column id not match: {} but {} is required", cd.id, VERSION_COLUMN_ID);
+            LOG_ERROR(log, "Column id not match: {} but {} is required", cd.id, VERSION_COLUMN_ID);
             throw std::invalid_argument("Column id not match");
         }
 
@@ -169,13 +170,13 @@ void DTWorkload::write(ThreadStat & write_stat)
             }
             if (opts->log_write_request)
             {
-                LOG_FMT_INFO(log, "{} => {}", key, ts);
+                LOG_INFO(log, "{} => {}", key, ts);
             }
         }
 
         write_stat.ms = sw.elapsedMilliseconds();
         write_stat.count = write_count;
-        LOG_FMT_INFO(log, "write_stat: {}", write_stat.toString());
+        LOG_INFO(log, "write_stat: {}", write_stat.toString());
         writing_threads.fetch_sub(1, std::memory_order_relaxed);
     }
     catch (...)
@@ -222,14 +223,14 @@ void DTWorkload::verifyHandle(uint64_t r)
             const auto & cols = block.getColumnsWithTypeAndName();
             if (cols.size() != 2)
             {
-                LOG_FMT_ERROR(log, "verifyHandle: block has {} columns, but 2 is required.", cols.size());
+                LOG_ERROR(log, "verifyHandle: block has {} columns, but 2 is required.", cols.size());
                 throw std::logic_error("Invalid block");
             }
             const auto & handle_col = cols[0].column;
             const auto & ts_col = cols[1].column;
             if (handle_col->size() != ts_col->size())
             {
-                LOG_FMT_ERROR(log, "verifyHandle: handle_col size {} ts_col size {}, they should be equal.", handle_col->size(), ts_col->size());
+                LOG_ERROR(log, "verifyHandle: handle_col size {} ts_col size {}, they should be equal.", handle_col->size(), ts_col->size());
                 throw std::logic_error("Invalid block");
             }
             for (size_t i = 0; i < handle_col->size(); i++)
@@ -241,7 +242,7 @@ void DTWorkload::verifyHandle(uint64_t r)
                 auto table_ts = handle_table->read(h);
                 if (store_ts != table_ts && table_ts <= read_ts)
                 {
-                    LOG_FMT_ERROR(log, "verifyHandle: round {} handle {} ts in store {} ts in table {} read_ts {}", r, h, store_ts, table_ts, read_ts);
+                    LOG_ERROR(log, "verifyHandle: round {} handle {} ts in store {} ts in table {} read_ts {}", r, h, store_ts, table_ts, read_ts);
                     throw std::logic_error("Data inconsistent");
                 }
             }
@@ -256,10 +257,10 @@ void DTWorkload::verifyHandle(uint64_t r)
         auto handle_count = handle_table->count();
         if (read_count.load(std::memory_order_relaxed) != handle_count)
         {
-            LOG_FMT_INFO(log, "Handle count from store {} handle count from table {}", read_count, handle_count);
+            LOG_INFO(log, "Handle count from store {} handle count from table {}", read_count, handle_count);
             throw std::logic_error("Data inconsistent");
         }
-        LOG_FMT_INFO(log, "verifyHandle: round {} columns {} streams {} read_count {} read_ms {}", r, columns.size(), stream_count, handle_count, sw.elapsedMilliseconds());
+        LOG_INFO(log, "verifyHandle: round {} columns {} streams {} read_count {} read_ms {}", r, columns.size(), stream_count, handle_count, sw.elapsedMilliseconds());
     }
     catch (...)
     {
@@ -287,7 +288,7 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
             read(columns, stream_count, count_row);
             read_stat.ms = sw.elapsedMilliseconds();
             read_stat.count = read_count;
-            LOG_FMT_INFO(log, "scanAll: columns {} streams {} read_stat {}", columns.size(), stream_count, read_stat.toString());
+            LOG_INFO(log, "scanAll: columns {} streams {} read_stat {}", columns.size(), stream_count, read_stat.toString());
         }
     }
     catch (...)

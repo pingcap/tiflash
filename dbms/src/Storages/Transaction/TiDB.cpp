@@ -246,7 +246,7 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
         collator = ITiDBCollator::getCollator("binary");
     for (const auto & elem : elems)
     {
-        if (collator->compare(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
+        if (collator->compareFastPath(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
         {
             return elem.second;
         }
@@ -265,12 +265,12 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     Poco::StringTokenizer string_tokens(set_str, ",");
     std::set<String> marked;
     for (const auto & s : string_tokens)
-        marked.insert(collator->sortKey(s.data(), s.length(), sort_key_container).toString());
+        marked.insert(collator->sortKeyFastPath(s.data(), s.length(), sort_key_container).toString());
 
     UInt64 value = 0;
     for (size_t i = 0; i < elems.size(); i++)
     {
-        String key = collator->sortKey(elems.at(i).first.data(), elems.at(i).first.length(), sort_key_container).toString();
+        String key = collator->sortKeyFastPath(elems.at(i).first.data(), elems.at(i).first.length(), sort_key_container).toString();
         auto it = marked.find(key);
         if (it != marked.end())
         {

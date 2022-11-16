@@ -23,8 +23,8 @@
 #include <Functions/ObjectPool.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
+#include <boost_wrapper/geometry.h>
 
-#include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 

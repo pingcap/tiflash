@@ -145,6 +145,7 @@ public:
 
     String toString()
     {
+        std::scoped_lock lock(mutex);
         return fmt::format("<placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={}>",
                            placed_rows,
                            placed_deletes,

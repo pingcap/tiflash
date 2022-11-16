@@ -21,6 +21,8 @@
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
@@ -97,7 +99,7 @@ const BaseRuntimeStatistics & MPPTaskStatistics::collectRuntimeStatistics()
 
 void MPPTaskStatistics::logTracingJson()
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger,
         R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
@@ -121,7 +123,7 @@ void MPPTaskStatistics::logTracingJson()
         local_input_bytes,
         remote_input_bytes,
         output_bytes,
-        taskStatusToString(status),
+        magic_enum::enum_name(status),
         error_message,
         working_time,
         memory_peak);

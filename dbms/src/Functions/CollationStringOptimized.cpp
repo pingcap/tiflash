@@ -23,9 +23,7 @@
 #include <limits>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#ifndef TIFLASH_USE_AVX2_COMPILE_FLAG
-static_assert(false, "`dbms/src/Functions/CollationStringOptimized.cpp` need flag `-mavx2` to inline related functions");
-#endif
+ASSERT_USE_AVX2_COMPILE_FLAG
 #endif
 
 namespace DB

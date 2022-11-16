@@ -11,7 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
+
 
 namespace DB
 {
@@ -41,7 +43,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             // tells us whether there is any kind of event or cq is shutting down.
             if (!curcq->Next(&tag, &ok))
             {
-                LOG_FMT_INFO(log, "CQ is fully drained and shut down");
+                LOG_INFO(log, "CQ is fully drained and shut down");
                 break;
             }
             GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
@@ -50,30 +52,27 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             });
             // If ok is false, it means server is shutdown.
             // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-            if (ok)
-                static_cast<EstablishCallData *>(tag)->proceed();
-            else
-                static_cast<EstablishCallData *>(tag)->cancel();
+            static_cast<EstablishCallData *>(tag)->proceed(ok);
         }
         catch (Exception & e)
         {
             err_msg = e.displayText();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
+            LOG_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
         }
         catch (pingcap::Exception & e)
         {
             err_msg = e.message();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            LOG_ERROR(log, "handleRpcs meets error: {}", err_msg);
         }
         catch (std::exception & e)
         {
             err_msg = e.what();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            LOG_ERROR(log, "handleRpcs meets error: {}", err_msg);
         }
         catch (...)
         {
             err_msg = "unrecovered error";
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            LOG_ERROR(log, "handleRpcs meets error: {}", err_msg);
             throw;
         }
     }
@@ -103,27 +102,27 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     /// Init and register flash service.
     bool enable_async_server = context.getSettingsRef().enable_async_server;
     if (enable_async_server)
-        flash_service = std::make_unique<AsyncFlashService>(security_config, context);
+        flash_service = std::make_unique<AsyncFlashService>();
     else
-        flash_service = std::make_unique<FlashService>(security_config, context);
+        flash_service = std::make_unique<FlashService>();
+    flash_service->init(security_config, context);
+
     diagnostics_service = std::make_unique<DiagnosticsService>(context, config_);
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
-    builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
     // number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads
     auto max_grpc_pollers = context.getSettingsRef().max_grpc_pollers;
     if (max_grpc_pollers > 0 && max_grpc_pollers <= std::numeric_limits<int>::max())
         builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_grpc_pollers);
     builder.RegisterService(flash_service.get());
-    LOG_FMT_INFO(log, "Flash service registered");
+    LOG_INFO(log, "Flash service registered");
     builder.RegisterService(diagnostics_service.get());
-    LOG_FMT_INFO(log, "Diagnostics service registered");
+    LOG_INFO(log, "Diagnostics service registered");
 
     /// Kick off grpc server.
     // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
     builder.SetMaxReceiveMessageSize(-1);
     builder.SetMaxSendMessageSize(-1);
-    thread_manager = DB::newThreadManager();
     int async_cq_num = context.getSettingsRef().async_cqs;
     if (enable_async_server)
     {
@@ -138,7 +137,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     {
         throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
     }
-    LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
+    LOG_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
     Debug::setServiceAddr(raft_config.flash_server_addr);
     if (enable_async_server)
     {
@@ -153,8 +152,8 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
                 // EstablishCallData will handle its lifecycle by itself.
                 EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
             }
-            thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
-            thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
+            cq_workers.emplace_back(ThreadFactory::newThread(false, "async_poller", [cq, this] { handleRpcs(cq, log); }));
+            notify_cq_workers.emplace_back(ThreadFactory::newThread(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); }));
         }
     }
 }
@@ -164,7 +163,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     try
     {
         /// Shut down grpc server.
-        LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
+        LOG_INFO(log, "Begin to shut down flash grpc server");
         flash_grpc_server->Shutdown();
         *is_shutdown = true;
         // Wait all existed MPPTunnels done to prevent crash.
@@ -178,25 +177,30 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
             cq->Shutdown();
         for (auto & cq : notify_cqs)
             cq->Shutdown();
-        thread_manager->wait();
+
+        for (auto & worker : cq_workers)
+            worker.join();
+        for (auto & worker : notify_cq_workers)
+            worker.join();
+
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
         if (GRPCCompletionQueuePool::global_instance)
             GRPCCompletionQueuePool::global_instance->markShutdown();
 
         GRPCCompletionQueuePool::global_instance = nullptr;
-        LOG_FMT_INFO(log, "Shut down flash grpc server");
+        LOG_INFO(log, "Shut down flash grpc server");
 
         /// Close flash service.
-        LOG_FMT_INFO(log, "Begin to shut down flash service");
+        LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
-        LOG_FMT_INFO(log, "Shut down flash service");
+        LOG_INFO(log, "Shut down flash service");
         background_task.end();
     }
     catch (...)
     {
         auto message = getCurrentExceptionMessage(false);
-        LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
+        LOG_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
         std::terminate();
     }
 }
@@ -209,5 +213,10 @@ void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
 void FlashGrpcServerHolder::setMockMPPServerInfo(MockMPPServerInfo info)
 {
     flash_service->setMockMPPServerInfo(info);
+}
+
+std::unique_ptr<FlashService> & FlashGrpcServerHolder::flashService()
+{
+    return flash_service;
 }
 } // namespace DB

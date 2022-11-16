@@ -22,6 +22,7 @@ ENV PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}:/usr/local/go/bin:/root/.cargo/
     LIBRARY_PATH="/usr/local/lib/aarch64-unknown-linux-gnu/:${LIBRARY_PATH}" \
     LD_LIBRARY_PATH="/usr/local/lib/aarch64-unknown-linux-gnu/:${LD_LIBRARY_PATH}" \
     CPLUS_INCLUDE_PATH="/usr/local/include/aarch64-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}" \
+    OPENSSL_ROOT_DIR="/usr/local/opt/openssl" \
     CC=clang \
     CXX=clang++ \
     LD=ld.lld

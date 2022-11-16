@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockStorage.h>
-#include <Debug/astToExecutor.h>
-#include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
@@ -71,7 +71,7 @@ public:
         properties.collator = -abs(collator);
     }
 
-    ExecutorPtr getRoot()
+    mock::ExecutorBinderPtr getRoot()
     {
         return root;
     }
@@ -80,8 +80,8 @@ public:
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
 
     DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -147,7 +147,7 @@ private:
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
     DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
-    ExecutorPtr root;
+    mock::ExecutorBinderPtr root;
     DAGProperties properties;
 };
 
@@ -211,6 +211,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
+#define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
+#define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))

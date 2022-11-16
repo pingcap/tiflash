@@ -50,7 +50,6 @@ namespace DB
 struct ContextShared;
 class IRuntimeComponentsFactory;
 class QuotaForIntervals;
-class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
 class MarkCache;
@@ -161,7 +160,9 @@ private:
     {
         non_test,
         mpp_test,
-        executor_test
+        cop_test,
+        executor_test,
+        cancel_test
     };
     TestMode test_mode = non_test;
 
@@ -284,10 +285,6 @@ public:
     /// Set a setting by name. Read the value in text form from a string (for example, from a config, or from a URL parameter).
     void setSetting(const String & name, const std::string & value);
 
-    const ExternalModels & getExternalModels() const;
-    ExternalModels & getExternalModels();
-    void tryCreateExternalModels() const;
-
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, size_t max_block_size) const;
     BlockOutputStreamPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
@@ -330,8 +327,8 @@ public:
     void setQueryContext(Context & context_) { query_context = &context_; }
     void setSessionContext(Context & context_) { session_context = &context_; }
     void setGlobalContext(Context & context_) { global_context = &context_; }
-    const Settings & getSettingsRef() const { return settings; };
-    Settings & getSettingsRef() { return settings; };
+    const Settings & getSettingsRef() const;
+    Settings & getSettingsRef();
 
 
     void setProgressCallback(ProgressCallback callback);
@@ -470,11 +467,15 @@ public:
 
     size_t getMaxStreams() const;
 
-    /// For executor tests and MPPTask tests.
+    /// For executor, MPPTask, CancelMPPTasks tests.
     bool isMPPTest() const;
     void setMPPTest();
+    bool isCancelTest() const;
+    void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
+    void setCopTest();
+    bool isCopTest() const;
     bool isTest() const;
 
     void setMockStorage(MockStorage & mock_storage_);
@@ -489,14 +490,16 @@ private:
       */
     void checkDatabaseAccessRightsImpl(const std::string & database_name) const;
 
-    ExternalModels & getExternalModelsImpl(bool throw_on_error) const;
-
     StoragePtr getTableImpl(const String & database_name, const String & table_name, Exception * exception) const;
 
     SessionKey getSessionKey(const String & session_id) const;
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
+
+    void checkIsConfigLoaded() const;
+
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
 using ContextPtr = std::shared_ptr<Context>;

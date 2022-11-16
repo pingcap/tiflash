@@ -22,9 +22,15 @@
 
 #include <iomanip>
 
-std::atomic<Int64> real_rss{0};
+std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
+std::atomic<UInt64> proc_virt_size{0};
 MemoryTracker::~MemoryTracker()
 {
+    // Destruction of global root mem tracker means the process is shutting down, log and metrics models may have been released!
+    // So we just skip operations of log or metrics for global root mem trackers.
+    if (is_global_root)
+        return;
+
     if (peak)
     {
         try
@@ -60,7 +66,7 @@ static Poco::Logger * getLogger()
 
 void MemoryTracker::logPeakMemoryUsage() const
 {
-    LOG_FMT_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
+    LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
 }
 
 void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
@@ -77,17 +83,23 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     if (check_memory_limit)
     {
         Int64 current_limit = limit.load(std::memory_order_relaxed);
-
-        if (unlikely(!next.load(std::memory_order_relaxed) && accuracy_diff_for_test && current_limit && real_rss > accuracy_diff_for_test + current_limit))
+        Int64 current_accuracy_diff_for_test = accuracy_diff_for_test.load(std::memory_order_relaxed);
+        if (unlikely(!next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit && real_rss > current_accuracy_diff_for_test + current_limit))
         {
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({})",
+            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, memory usage tracked by ProcessList: peak {}, current {}, memory usage not tracked by ProcessList: peak {}, current {} . Virtual memory size: {}",
                               formatReadableSizeWithBinarySuffix(real_rss),
-                              formatReadableSizeWithBinarySuffix(current_limit));
+                              formatReadableSizeWithBinarySuffix(current_limit),
+                              proc_num_threads.load(),
+                              (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->peak) : "0"),
+                              (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->amount) : "0"),
+                              (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
+                              (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
+                              proc_virt_size.load());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -108,9 +120,10 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
+        Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
         bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
-                                 && real_rss > current_limit + bytes_rss_larger_than_limit
-                                 && will_be > current_limit - (real_rss - current_limit - bytes_rss_larger_than_limit));
+                                 && real_rss > current_limit + current_bytes_rss_larger_than_limit
+                                 && will_be > baseline_of_query_mem_tracker);
         if (is_rss_too_large
             || unlikely(current_limit && will_be > current_limit))
         {
@@ -205,6 +218,9 @@ __thread MemoryTracker * current_memory_tracker = nullptr;
 #else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
+
+std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::createGlobalRoot();
+std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
 
 namespace CurrentMemoryTracker
 {

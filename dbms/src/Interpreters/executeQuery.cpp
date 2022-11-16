@@ -22,8 +22,6 @@
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Mpp/MPPReceiverSet.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
 #include <IO/ConcatReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/IQuerySource.h>
@@ -84,24 +82,7 @@ LoggerPtr getLogger(const Context & context)
     auto * dag_context = context.getDAGContext();
     return (dag_context && dag_context->log)
         ? dag_context->log
-        : Logger::get("executeQuery");
-}
-
-/// Log query into text log (not into system table).
-void logQuery(const String & query, const Context & context, const LoggerPtr & logger)
-{
-    const auto & current_query_id = context.getClientInfo().current_query_id;
-    const auto & initial_query_id = context.getClientInfo().initial_query_id;
-    const auto & current_user = context.getClientInfo().current_user;
-
-    LOG_FMT_DEBUG(
-        logger,
-        "(from {}{}, query_id: {}{}) {}",
-        context.getClientInfo().current_address.toString(),
-        (current_user != "default" ? ", user: " + current_user : ""),
-        current_query_id,
-        (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
-        joinLines(query));
+        : Logger::get();
 }
 
 
@@ -125,7 +106,7 @@ void setExceptionStackTrace(QueryLogElement & elem)
 /// Log exception (with query info) into text log (not into system table).
 void logException(Context & context, QueryLogElement & elem, const LoggerPtr & logger)
 {
-    LOG_FMT_ERROR(
+    LOG_ERROR(
         logger,
         "{} (from {}) (in query: {}){}",
         elem.exception,
@@ -224,23 +205,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         ProcessList::EntryPtr process_list_entry;
         if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
-            process_list_entry = context.getProcessList().insert(
-                query,
-                ast.get(),
-                context.getClientInfo(),
-                settings);
-
-            context.setProcessListElement(&process_list_entry->get());
-        }
-
-        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
-        // so that we can propagate current_memory_tracker into them.
-        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
-        {
-            if (context.getDAGContext()->tunnel_set)
-                context.getDAGContext()->tunnel_set->updateMemTracker();
-            if (context.getDAGContext()->getMppReceiverSet())
-                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+            process_list_entry = setProcessListElement(context, query, ast.get());
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
@@ -256,23 +221,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         if (res.in)
         {
-            if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(res.in.get()))
-            {
-                stream->setProgressCallback(context.getProgressCallback());
-                stream->setProcessListElement(context.getProcessListElement());
-
-                /// Limits on the result, the quota on the result, and also callback for progress.
-                /// Limits apply only to the final result.
-                if (stage == QueryProcessingStage::Complete)
-                {
-                    IProfilingBlockInputStream::LocalLimits limits;
-                    limits.mode = IProfilingBlockInputStream::LIMITS_CURRENT;
-                    limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
-
-                    stream->setLimits(limits);
-                    stream->setQuota(quota);
-                }
-            }
+            prepareForInputStream(context, stage, res.in);
         }
 
         if (res.out)
@@ -352,7 +301,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (elem.read_rows != 0)
                 {
-                    LOG_FMT_INFO(
+                    LOG_INFO(
                         execute_query_logger,
                         "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
                         elem.read_rows,
@@ -404,13 +353,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             if (!internal && res.in)
             {
-                auto pipeline_log_str = [&res]() {
-                    FmtBuffer log_buffer;
-                    log_buffer.append("Query pipeline:\n");
-                    res.in->dumpTree(log_buffer);
-                    return log_buffer.toString();
-                };
-                LOG_DEBUG(execute_query_logger, pipeline_log_str());
+                logQueryPipeline(execute_query_logger, res.in);
             }
         }
     }
@@ -426,6 +369,75 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 }
 } // namespace
 
+/// Log query into text log (not into system table).
+void logQuery(const String & query, const Context & context, const LoggerPtr & logger)
+{
+    const auto & current_query_id = context.getClientInfo().current_query_id;
+    const auto & initial_query_id = context.getClientInfo().initial_query_id;
+    const auto & current_user = context.getClientInfo().current_user;
+
+    LOG_DEBUG(
+        logger,
+        "(from {}{}, query_id: {}{}) {}",
+        context.getClientInfo().current_address.toString(),
+        (current_user != "default" ? ", user: " + current_user : ""),
+        current_query_id,
+        (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
+        joinLines(query));
+}
+
+void prepareForInputStream(
+    Context & context,
+    QueryProcessingStage::Enum stage,
+    const BlockInputStreamPtr & in)
+{
+    assert(in);
+    if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(in.get()))
+    {
+        stream->setProgressCallback(context.getProgressCallback());
+        stream->setProcessListElement(context.getProcessListElement());
+
+        /// Limits on the result, the quota on the result, and also callback for progress.
+        /// Limits apply only to the final result.
+        if (stage == QueryProcessingStage::Complete)
+        {
+            IProfilingBlockInputStream::LocalLimits limits;
+            limits.mode = IProfilingBlockInputStream::LIMITS_CURRENT;
+            const auto & settings = context.getSettingsRef();
+            limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
+
+            stream->setLimits(limits);
+            stream->setQuota(context.getQuota());
+        }
+    }
+}
+
+std::shared_ptr<ProcessListEntry> setProcessListElement(
+    Context & context,
+    const String & query,
+    const IAST * ast)
+{
+    assert(ast);
+    auto process_list_entry = context.getProcessList().insert(
+        query,
+        ast,
+        context.getClientInfo(),
+        context.getSettingsRef());
+    context.setProcessListElement(&process_list_entry->get());
+    return process_list_entry;
+}
+
+void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in)
+{
+    assert(in);
+    auto pipeline_log_str = [&in]() {
+        FmtBuffer log_buffer;
+        log_buffer.append("Query pipeline:\n");
+        in->dumpTree(log_buffer);
+        return log_buffer.toString();
+    };
+    LOG_DEBUG(logger, pipeline_log_str());
+}
 
 BlockIO executeQuery(
     const String & query,
@@ -436,15 +448,6 @@ BlockIO executeQuery(
     BlockIO streams;
     SQLQuerySource query_src(query.data(), query.data() + query.size());
     std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, internal, stage);
-    return streams;
-}
-
-
-BlockIO executeQuery(IQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage)
-{
-    BlockIO streams;
-    std::tie(std::ignore, streams) = executeQueryImpl(dag, context, internal, stage);
-    context.getDAGContext()->attachBlockIO(streams);
     return streams;
 }
 

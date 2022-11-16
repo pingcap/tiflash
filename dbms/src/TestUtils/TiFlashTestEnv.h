@@ -69,13 +69,16 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 0);
-    static Context & getGlobalContext() { return *global_context; }
+    static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
+    static void addGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
+    static Context & getGlobalContext() { return *global_contexts[0]; }
+    static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
+    static int globalContextSize() { return global_contexts.size(); }
     static void shutdown();
 
     TiFlashTestEnv() = delete;
 
 private:
-    static std::unique_ptr<Context> global_context;
+    static std::vector<std::shared_ptr<Context>> global_contexts;
 };
 } // namespace DB::tests
