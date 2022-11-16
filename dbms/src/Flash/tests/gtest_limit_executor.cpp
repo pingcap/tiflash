@@ -71,7 +71,18 @@ try
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
         WRAP_FOR_DIS_ENABLE_PLANNER_END
+
+        executeAndAssertRowsEqual(request, std::min(limit_num, col_data_num));
     }
+}
+CATCH
+
+TEST_F(ExecutorLimitTestRunner, RawQuery)
+try
+{
+    String query = "select * from test_db.projection_test_table limit 1";
+    auto cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + 1))};
+    ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
 }
 CATCH
 

@@ -14,27 +14,11 @@
 
 #pragma once
 
-#include <Columns/ColumnsNumber.h>
-#include <Common/typeid_cast.h>
-#include <Core/Names.h>
-#include <Storages/ColumnsDescription.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/RowCodec.h>
-
-namespace TiDB
-{
-struct TableInfo;
-};
 
 namespace DB
 {
-class IManageableStorage;
-using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
-
-struct ColumnsDescription;
 class Block;
 
 /// The Reader to read the region data in `data_list` and decode based on the given table_info and columns, as a block.
@@ -45,12 +29,12 @@ public:
 
     /// Read `data_list` as a block.
     ///
-    /// On decode error, i.e. column number/type mismatch, will do force apply schema,
+    /// On decode error, i.e. column number/type mismatch, caller should trigger a schema-sync and retry with `force_decode=True`,
     /// i.e. add/remove/cast unknown/missing/type-mismatch column if force_decode is true, otherwise return empty block and false.
     /// Moreover, exception will be thrown if we see fatal decode error meanwhile `force_decode` is true.
     ///
-    /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
-    /// each of which will use carefully adjusted 'force_decode' with appropriate error handling/retry to get what they want.
+    /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of Delta-Tree engine,
+    /// which will use carefully adjusted 'force_decode' with appropriate error handling/retry to get what they want.
     bool read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
 
 private:

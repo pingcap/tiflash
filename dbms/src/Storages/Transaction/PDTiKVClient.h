@@ -31,11 +31,6 @@
 
 #include <atomic>
 
-// We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
-// `share` the resource of cluster.
-using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
-
-
 namespace DB
 {
 struct PDClientHelper

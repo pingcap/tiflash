@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/CollationStringSearch.h>
 #include <Functions/CollationStringSearchOptimized.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/CollatorUtils.h>
@@ -225,7 +226,7 @@ void testCollator()
 
             ColumnString::Chars_t strs;
             ColumnString::Offsets offsets;
-            std::vector<bool> res;
+            PaddedPODArray<UInt8> res;
             { // init data
                 ColumnString::Offset current_new_offset = 0;
                 for (const auto & inner_c : inner_cases)

@@ -31,6 +31,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -167,7 +168,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
 
     // Mock to apply a snapshot with data in `region`
     auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>(region, tmt);
+    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(region, tmt);
     output(fmt::format("put region #{}, range{} to table #{} with {} records", region_id, range_string, table_id, cnt));
 }
 
@@ -255,41 +256,6 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
 std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
 
-SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
-{
-    std::string s(v.path.data, v.path.len);
-    auto iter = MockSSTReader::getMockSSTData().find({s, v.type});
-    if (iter == MockSSTReader::getMockSSTData().end())
-        throw Exception("Can not find data in MockSSTData, [key=" + s + "] [type=" + CFToName(v.type) + "]");
-    auto & d = iter->second;
-    return MockSSTReader::ffi_get_cf_file_reader(d);
-}
-uint8_t fn_remained(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    return reader->ffi_remained();
-}
-BaseBuffView fn_key(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    return reader->ffi_key();
-}
-BaseBuffView fn_value(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    return reader->ffi_val();
-}
-void fn_next(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    reader->ffi_next();
-}
-void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    delete reader;
-}
-
 RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
     , region(region_)
@@ -299,14 +265,7 @@ RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
         ori_proxy_helper = kvstore->getProxyHelper();
         std::memcpy(&mock_proxy_helper, ori_proxy_helper, sizeof(mock_proxy_helper));
     }
-    mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
-        .fn_get_sst_reader = fn_get_sst_reader,
-        .fn_remained = fn_remained,
-        .fn_key = fn_key,
-        .fn_value = fn_value,
-        .fn_next = fn_next,
-        .fn_gc = fn_gc,
-    };
+    mock_proxy_helper.sst_reader_interfaces = make_mock_sst_reader_interface();
     kvstore->proxy_helper = &mock_proxy_helper;
     region->proxy_helper = &mock_proxy_helper;
 }
@@ -502,7 +461,7 @@ struct GlobalRegionMap
     using Key = std::string;
     using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
     std::unordered_map<Key, BlockVal> regions_block;
-    using SnapPath = std::pair<RegionPtr, std::vector<UInt64>>;
+    using SnapPath = std::pair<RegionPtr, std::vector<DM::ExternalDTFileInfo>>;
     std::unordered_map<Key, SnapPath> regions_snap_files;
     std::mutex mutex;
 
@@ -572,7 +531,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
     auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
     auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
+    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
 
     output(fmt::format("success apply {} with block cache", region->id()));
 }
@@ -786,10 +745,10 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
 
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
-    auto [new_region, ingest_ids] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
+    auto [new_region, external_files] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
     auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
-        RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)},
+    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
+        RegionPtrWithSnapshotFiles{new_region, std::move(external_files)},
         tmt);
 
     output(fmt::format("success apply region {} with dt files", new_region->id()));

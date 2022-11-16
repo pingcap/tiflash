@@ -18,8 +18,8 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
+#include <boost_wrapper/cpp_int.h>
 
-#include <boost/multiprecision/cpp_int.hpp>
 #include <boost/random.hpp>
 #include <random>
 #include <vector>

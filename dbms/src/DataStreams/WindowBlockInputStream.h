@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
+#include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/AggregateDescription.h>
 #include <Interpreters/WindowDescription.h>
 
 #include <deque>
@@ -29,6 +29,8 @@ struct WindowFunctionWorkspace
 {
     // TODO add aggregation function
     WindowFunctionPtr window_function = nullptr;
+
+    ColumnNumbers arguments;
 };
 
 struct WindowBlock
@@ -58,6 +60,11 @@ struct RowNumber
     bool operator<=(const RowNumber & other) const
     {
         return *this < other || *this == other;
+    }
+
+    String toString() const
+    {
+        return fmt::format("[block={},row={}]", block, row);
     }
 };
 
@@ -137,23 +144,11 @@ public:
         return window_blocks[x.block - first_block_number].output_columns;
     }
 
-    void advanceRowNumber(RowNumber & x) const
-    {
-        assert(x.block >= first_block_number);
-        assert(x.block - first_block_number < window_blocks.size());
+    void advanceRowNumber(RowNumber & x) const;
 
-        const auto block_rows = blockAt(x).rows;
-        assert(x.row < block_rows);
+    bool lead(RowNumber & x, size_t offset) const;
 
-        ++x.row;
-        if (x.row < block_rows)
-        {
-            return;
-        }
-
-        x.row = 0;
-        ++x.block;
-    }
+    bool lag(RowNumber & x, size_t offset) const;
 
     RowNumber blocksEnd() const
     {
@@ -171,6 +166,7 @@ public:
 protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
+    bool returnIfCancelledOrKilled();
 
     LoggerPtr log;
 
@@ -188,8 +184,6 @@ public:
 
     // Per-window-function scratch spaces.
     std::vector<WindowFunctionWorkspace> workspaces;
-
-    std::unique_ptr<Arena> arena;
 
     // A sliding window of blocks we currently need. We add the input blocks as
     // they arrive, and discard the blocks we don't need anymore. The blocks

@@ -56,6 +56,11 @@ public:
         return keep_order;
     }
 
+    bool isFastScan() const
+    {
+        return is_fast_scan;
+    }
+
 private:
     const tipb::Executor * table_scan;
     String executor_id;
@@ -71,6 +76,7 @@ private:
     std::vector<Int64> physical_table_ids;
     Int64 logical_table_id;
     bool keep_order;
+    bool is_fast_scan;
 };
 
 } // namespace DB

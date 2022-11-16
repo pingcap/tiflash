@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/Blob/BlobStat.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -46,15 +47,15 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
+    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALConfig config);
 
-    PageDirectoryPtr createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal, bool for_dump_snapshot = false);
-
-    // just for test
-    PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+    PageDirectoryPtr createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
 
     // just for test
-    PageDirectoryFactory & setBlobStats(BlobStore::BlobStats & blob_stats_)
+    PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit);
+
+    // just for test
+    PageDirectoryFactory & setBlobStats(BlobStats & blob_stats_)
     {
         blob_stats = &blob_stats_;
         return *this;
@@ -67,7 +68,11 @@ private:
         const PageDirectoryPtr & dir,
         const PageEntriesEdit::EditRecord & r);
 
-    BlobStore::BlobStats * blob_stats = nullptr;
+    BlobStats * blob_stats = nullptr;
+
+    // For debug tool
+    friend class PageStorageControlV3;
+    bool dump_entries = false;
 };
 
 } // namespace PS::V3

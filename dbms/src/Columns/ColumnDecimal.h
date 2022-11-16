@@ -116,7 +116,7 @@ public:
     void reserve(size_t n) override { data.reserve(n); }
 
     void insertFrom(const IColumn & src, size_t n) override { data.push_back(static_cast<const Self &>(src).getData()[n]); }
-    void insertData(const char * pos, size_t /*length*/) override;
+    void insertData(const char * src, size_t /*length*/) override;
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
     void insertDefault() override { data.push_back(T()); }
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
@@ -173,6 +173,11 @@ public:
     MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override
     {
         return this->template scatterImpl<Self>(num_columns, selector);
+    }
+
+    void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector) const override
+    {
+        return this->template scatterToImpl<Self>(columns, selector);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

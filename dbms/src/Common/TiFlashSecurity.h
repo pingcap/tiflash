@@ -13,20 +13,13 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/grpcpp.h>
 #include <Core/Types.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/logger_useful.h>
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <grpc++/grpc++.h>
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 #include <set>
 
@@ -87,7 +80,7 @@ public:
             else
             {
                 has_tls_config = true;
-                LOG_FMT_INFO(
+                LOG_INFO(
                     log,
                     "security config is set: ca path is {} cert path is {} key path is {}",
                     ca_path,
@@ -129,7 +122,7 @@ public:
     }
 
 
-    bool checkGrpcContext(grpc::ServerContext * grpc_context) const
+    bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
         if (allowed_common_names.empty() || grpc_context == nullptr)
         {

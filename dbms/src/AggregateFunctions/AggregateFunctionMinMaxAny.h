@@ -193,28 +193,28 @@ private:
 
     Int32 size = -1; /// -1 indicates that there is no value.
     Int32 capacity = 0; /// power of two or zero
-    char * large_data;
-    TiDB::TiDBCollatorPtr collator = nullptr;
+    char * large_data{};
+    TiDB::TiDBCollatorPtr collator{};
 
     bool less(const StringRef & a, const StringRef & b) const
     {
-        if (collator == nullptr)
+        if (unlikely(collator == nullptr))
             return a < b;
-        return collator->compare(a.data, a.size, b.data, b.size) < 0;
+        return collator->compareFastPath(a.data, a.size, b.data, b.size) < 0;
     }
 
     bool greater(const StringRef & a, const StringRef & b) const
     {
-        if (collator == nullptr)
+        if (unlikely(collator == nullptr))
             return a > b;
-        return collator->compare(a.data, a.size, b.data, b.size) > 0;
+        return collator->compareFastPath(a.data, a.size, b.data, b.size) > 0;
     }
 
     bool equalTo(const StringRef & a, const StringRef & b) const
     {
-        if (collator == nullptr)
+        if (unlikely(collator == nullptr))
             return a == b;
-        return collator->compare(a.data, a.size, b.data, b.size) == 0;
+        return collator->compareFastPath(a.data, a.size, b.data, b.size) == 0;
     }
 
 public:
@@ -222,7 +222,7 @@ public:
     static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) - sizeof(collator);
 
 private:
-    char small_data[MAX_SMALL_STRING_SIZE]; /// Including the terminating zero.
+    char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
     bool has() const

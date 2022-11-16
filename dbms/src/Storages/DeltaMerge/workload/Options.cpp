@@ -44,11 +44,11 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
         fmt::format("testing_type {}{}", testing_type, seperator) + //
         fmt::format("log_write_request {}{}", log_write_request, seperator) + //
-        fmt::format("ps_run_mode {}{}", ps_run_mode, seperator) + //
+        fmt::format("ps_run_mode {}{}", magic_enum::enum_name(ps_run_mode), seperator) + //
         fmt::format("bg_thread_count {}{}", bg_thread_count, seperator) + //
         fmt::format("table_id {}{}", table_id, seperator) + //
         fmt::format("table_name {}{}", table_name, seperator) + //
-        fmt::format("is_fast_mode {}{}", is_fast_mode, seperator) + //
+        fmt::format("is_fast_scan {}{}", is_fast_scan, seperator) + //
         fmt::format("enable_read_thread {}{}", enable_read_thread, seperator);
 }
 
@@ -96,11 +96,8 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("table_name", value<std::string>()->default_value(""), "") //
         ("table_id", value<int64_t>()->default_value(-1), "") //
-        //
-        ("is_fast_mode", value<bool>()->default_value(false), "default is false, means normal mode. When we in fast mode, we should set verification as false") //
-        //
-        ("enable_read_thread", value<bool>()->default_value(true), "") //
-        ;
+        ("is_fast_scan", value<bool>()->default_value(false), "default is false, means normal mode. When we in fast mode, we should set verification as false") //
+        ("enable_read_thread", value<bool>()->default_value(true), "");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
@@ -180,11 +177,11 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     table_id = vm["table_id"].as<int64_t>();
     table_name = vm["table_name"].as<std::string>();
-    is_fast_mode = vm["is_fast_mode"].as<bool>();
+    is_fast_scan = vm["is_fast_scan"].as<bool>();
 
-    if (is_fast_mode && verification)
+    if (is_fast_scan && verification)
     {
-        return {false, fmt::format("When in_fast_mode, we should set verification as false")};
+        return {false, fmt::format("When in_fast_scan, we should set verification as false")};
     }
 
     enable_read_thread = vm["enable_read_thread"].as<bool>();

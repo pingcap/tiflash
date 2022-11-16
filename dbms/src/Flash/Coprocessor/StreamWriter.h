@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -42,25 +43,18 @@ struct StreamWriter
     explicit StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)
     {}
-    void write(mpp::MPPDataPacket &)
-    {
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &) do not support writing MPPDataPacket!");
-    }
-    void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
-    {
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
-    }
-    void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
+    void write(tipb::SelectResponse & response)
     {
         ::coprocessor::BatchResponse resp;
         if (!response.SerializeToString(resp.mutable_data()))
-            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+            throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_batch_cop).Increment(resp.ByteSizeLong());
+
         std::lock_guard lk(write_mutex);
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    // a helper function
-    uint16_t getPartitionNum() { return 0; }
 };
 
 using StreamWriterPtr = std::shared_ptr<StreamWriter>;

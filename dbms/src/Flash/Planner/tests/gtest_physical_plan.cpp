@@ -47,6 +47,13 @@ public:
                                     {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
                                      toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
 
+        context.addExchangeReceiver("exchange3",
+                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeLongLong}, {"s4", TiDB::TP::TypeLongLong}},
+                                    {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+                                     toNullableVec<String>("s2", {"apple", {}, "banana"}),
+                                     toNullableVec<Int64>("s3", {1, {}, 1}),
+                                     toNullableVec<Int64>("s4", {1, 1, {}})});
+
         context.addExchangeReceiver("exchange_r_table",
                                     {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
@@ -232,6 +239,25 @@ Expression: <final projection>
  Expression: <projection>
   MockExchangeReceiver)",
         {toNullableVec<String>({"bananaapple", {}, "bananabanana"})});
+
+    request = context.receive("exchange3")
+                  .project({concat(col("s1"), col("s2")), concat(col("s1"), col("s2")), And(col("s3"), col("s4")), NOT(col("s3"))})
+                  .build(context);
+
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, project_1> | is_tidb_operator: false, schema: <project_1_tidbConcat(s1, s2)_collator_46 , Nullable(String)>, <project_1_tidbConcat(s1, s2)_collator_46 _1, Nullable(String)>, <project_1_CAST(and(notEquals(s3, 0_Int64)_collator_0 , notEquals(s4, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>, <project_1_CAST(not(notEquals(s3, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>
+ <Projection, project_1> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>, <tidbConcat(s1, s2)_collator_46 , Nullable(String)>, <CAST(and(notEquals(s3, 0_Int64)_collator_0 , notEquals(s4, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>, <CAST(not(notEquals(s3, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(Int64)>, <s4, Nullable(Int64)>)",
+        /*expected_streams=*/R"(
+Expression: <final projection>
+ Expression: <projection>
+  MockExchangeReceiver)",
+        {toNullableVec<String>({"bananaapple", {}, "bananabanana"}),
+         toNullableVec<String>({"bananaapple", {}, "bananabanana"}),
+         toNullableVec<UInt64>({1, {}, {}}),
+         toNullableVec<UInt64>({0, {}, 0})});
 }
 CATCH
 
@@ -294,8 +320,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
- <Window, window_2> | is_tidb_operator: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_CAST(window_2_row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+ <Window, window_2> | is_tidb_operator: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_row_number()_collator , Int64>
   <WindowSort, sort_1> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
         /*expected_streams=*/R"(
@@ -313,8 +339,8 @@ Expression: <final projection>
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
- <Window, window_2> | is_tidb_operator: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_CAST(window_2_row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+ <Window, window_2> | is_tidb_operator: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_row_number()_collator , Int64>
   <WindowSort, sort_1> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
         /*expected_streams=*/R"(
@@ -373,7 +399,7 @@ try
    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
+ HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
@@ -400,7 +426,7 @@ CreatingSets
    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+ HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
@@ -427,7 +453,7 @@ CreatingSets
    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+ HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
@@ -474,12 +500,12 @@ CreatingSets
      <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
+ HashJoinBuild x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockTableScan
  Union: <for join>
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -487,7 +513,7 @@ CreatingSets
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -544,12 +570,12 @@ CreatingSets
      <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
+ HashJoinBuild x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockTableScan
  Union: <for join>
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -557,7 +583,7 @@ CreatingSets
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>

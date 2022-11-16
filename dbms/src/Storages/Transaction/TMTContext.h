@@ -44,6 +44,10 @@ using GCManagerPtr = std::shared_ptr<GCManager>;
 
 struct TiFlashRaftConfig;
 
+// We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
+// `share` the resource of cluster.
+using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
+
 class TMTContext : private boost::noncopyable
 {
 public:

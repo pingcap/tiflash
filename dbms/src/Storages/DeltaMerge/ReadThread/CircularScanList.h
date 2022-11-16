@@ -15,6 +15,7 @@
 
 #include <list>
 #include <memory>
+#include <unordered_map>
 
 namespace DB::DM
 {
@@ -24,29 +25,30 @@ template <typename T>
 class CircularScanList
 {
 public:
-    using Value = std::shared_ptr<T>;
+    using ElemPtr = std::shared_ptr<T>;
 
     CircularScanList()
         : last_itr(l.end())
     {}
 
-    void add(const Value & ptr)
+    void add(const ElemPtr & ptr)
     {
         l.push_back(ptr);
+        m[ptr->poolId()] = --l.end();
     }
 
-    Value next()
+    ElemPtr next()
     {
         last_itr = nextItr(last_itr);
         while (!l.empty())
         {
-            auto ptr = *last_itr;
-            if (ptr->valid())
+            if (needScheduled(last_itr))
             {
-                return ptr;
+                return *last_itr;
             }
             else
             {
+                m.erase((*last_itr)->poolId());
                 last_itr = l.erase(last_itr);
                 if (last_itr == l.end())
                 {
@@ -57,6 +59,12 @@ public:
         return nullptr;
     }
 
+    size_t size() const
+    {
+        return l.size();
+    }
+
+    // `count` is for test
     std::pair<int64_t, int64_t> count(int64_t table_id) const
     {
         int64_t valid = 0;
@@ -71,20 +79,14 @@ public:
         return {valid, invalid};
     }
 
-    Value get(uint64_t pool_id) const
+    ElemPtr get(uint64_t pool_id) const
     {
-        for (const auto & p : l)
-        {
-            if (p->poolId() == pool_id)
-            {
-                return p;
-            }
-        }
-        return nullptr;
+        auto itr = m.find(pool_id);
+        return itr != m.end() ? *(itr->second) : nullptr;
     }
 
 private:
-    using Iter = typename std::list<Value>::iterator;
+    using Iter = typename std::list<ElemPtr>::iterator;
     Iter nextItr(Iter itr)
     {
         if (itr == l.end() || std::next(itr) == l.end())
@@ -97,8 +99,15 @@ private:
         }
     }
 
-    std::list<Value> l;
+    bool needScheduled(Iter itr)
+    {
+        // If other components hold this SegmentReadTaskPool, schedule it for read blocks or clean MergedTaskPool if necessary.
+        return itr->use_count() > 1;
+    }
+
+    std::list<ElemPtr> l;
     Iter last_itr;
+    std::unordered_map<uint64_t, Iter> m;
 };
 
 } // namespace DB::DM

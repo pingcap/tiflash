@@ -22,16 +22,12 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include <Common/CPUAffinityManager.h>
 #include <Common/Config/TOMLConfiguration.h>
 #include <Poco/Util/LayeredConfiguration.h>
+#include <boost_wrapper/string.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
-
-#include <boost/algorithm/string.hpp>
-
-#define private public
-#include <Common/CPUAffinityManager.h>
-#undef private
 
 namespace DB
 {
@@ -47,7 +43,7 @@ static auto loadConfigFromString(const std::string & s)
     return config;
 }
 
-TEST(CPUAffinityManager_test, readConfig)
+TEST(CPUAffinityManagerTest, readConfig)
 {
     std::vector<std::string> vs = {
         R"(
@@ -76,7 +72,7 @@ query_cpu_percent=77
 }
 
 #ifdef __linux__
-TEST(CPUAffinityManager_test, CPUAffinityManager)
+TEST(CPUAffinityManagerTest, CPUAffinityManager)
 {
     auto & cpu_affinity = CPUAffinityManager::getInstance();
 

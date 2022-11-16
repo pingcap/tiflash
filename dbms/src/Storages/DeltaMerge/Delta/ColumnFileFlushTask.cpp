@@ -21,14 +21,6 @@
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
 
-namespace ProfileEvents
-{
-extern const Event DMWriteBytes;
-extern const Event PSMWriteBytes;
-extern const Event WriteBufferFromFileDescriptorWriteBytes;
-extern const Event WriteBufferAIOWriteBytes;
-} // namespace ProfileEvents
-
 namespace DB
 {
 namespace DM
@@ -104,13 +96,6 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
 
     mem_table_set->removeColumnFilesInFlushTask(*this);
 
-    // Also update the write amplification
-    auto total_write = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
-    auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
-        + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
-        + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
-    GET_METRIC(tiflash_storage_write_amplification)
-        .Set((static_cast<double>(actual_write) / 1024 / 1024) / (static_cast<double>(total_write) / 1024 / 1024));
     return true;
 }
 } // namespace DM

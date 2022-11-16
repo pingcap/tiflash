@@ -16,10 +16,11 @@
 
 namespace DB
 {
-MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size)
+MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size, bool is_infinite_)
     : columns(columns)
     , output_index(0)
     , max_block_size(max_block_size)
+    , is_infinite(is_infinite_)
 {
     rows = 0;
     for (const auto & elem : columns)
@@ -47,7 +48,7 @@ ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem) 
 
 Block MockTableScanBlockInputStream::readImpl()
 {
-    if (output_index >= rows)
+    if (output_index >= rows && !is_infinite)
         return {};
     ColumnsWithTypeAndName output_columns;
     for (const auto & elem : columns)

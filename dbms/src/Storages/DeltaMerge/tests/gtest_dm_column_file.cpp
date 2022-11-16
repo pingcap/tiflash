@@ -14,6 +14,8 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -52,8 +54,7 @@ public:
             *db_context,
             *path_pool,
             *storage_pool,
-            /*hash_salt*/ 0,
-            0,
+            /*min_version_*/ 0,
             settings.not_compress_columns,
             false,
             1,
@@ -158,6 +159,34 @@ try
             num_rows_read += in.rows();
         }
         ASSERT_EQ(num_rows_read, num_rows_write_per_batch * batch_num);
+    }
+}
+CATCH
+
+TEST_F(ColumnFileTest, SerializeColumnFilePersisted)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    MemoryWriteBuffer buff;
+    {
+        ColumnFilePersisteds column_file_persisteds;
+        size_t rows = 100; // arbitrary value
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, rows, false);
+        auto schema = std::make_shared<Block>(block.cloneEmpty());
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        serializeSavedColumnFilesInV3Format(buff, column_file_persisteds);
+    }
+
+    {
+        auto read_buff = buff.tryGetReadBuffer();
+        auto column_file_persisteds = deserializeSavedColumnFilesInV3Format(dmContext(), RowKeyRange::newAll(false, 1), *read_buff);
+        ASSERT_EQ(column_file_persisteds.size(), 5);
+        ASSERT_EQ(column_file_persisteds[0]->tryToTinyFile()->getSchema(), column_file_persisteds[2]->tryToTinyFile()->getSchema());
+        ASSERT_EQ(column_file_persisteds[2]->tryToTinyFile()->getSchema(), column_file_persisteds[4]->tryToTinyFile()->getSchema());
     }
 }
 CATCH

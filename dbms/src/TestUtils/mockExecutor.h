@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockStorage.h>
-#include <Debug/astToExecutor.h>
-#include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
@@ -43,6 +43,12 @@ inline int32_t convertToTiDBCollation(int32_t collation)
     return -(abs(collation));
 }
 
+enum class DAGRequestType
+{
+    tree,
+    list,
+};
+
 /** Responsible for Hand write tipb::DAGRequest
   * Use this class to mock DAGRequest, then feed the DAGRequest into 
   * the Interpreter for test purpose.
@@ -65,17 +71,17 @@ public:
         properties.collator = -abs(collator);
     }
 
-    ExecutorPtr getRoot()
+    mock::ExecutorBinderPtr getRoot()
     {
         return root;
     }
 
-    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
+    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context, DAGRequestType type = DAGRequestType::tree);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
 
     DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -89,8 +95,18 @@ public:
     DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, int limit);
     DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, ASTPtr limit_expr);
 
+    DAGRequestBuilder & project(std::initializer_list<ASTPtr> exprs)
+    {
+        return project(MockAstVec{exprs});
+    }
     DAGRequestBuilder & project(MockAstVec exprs);
+
+    DAGRequestBuilder & project(std::initializer_list<String> exprs)
+    {
+        return project(MockColumnNameVec{exprs});
+    }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
+
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
@@ -131,7 +147,7 @@ private:
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
     DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
-    ExecutorPtr root;
+    mock::ExecutorBinderPtr root;
     DAGProperties properties;
 };
 
@@ -195,6 +211,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
+#define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
+#define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
@@ -213,5 +231,11 @@ MockWindowFrame buildDefaultRowsFrame();
 #define RowNumber() makeASTFunction("RowNumber")
 #define Rank() makeASTFunction("Rank")
 #define DenseRank() makeASTFunction("DenseRank")
+#define Lead1(expr) makeASTFunction("Lead", (expr))
+#define Lead2(expr1, expr2) makeASTFunction("Lead", (expr1), (expr2))
+#define Lead3(expr1, expr2, expr3) makeASTFunction("Lead", (expr1), (expr2), (expr3))
+#define Lag1(expr) makeASTFunction("Lag", (expr))
+#define Lag2(expr1, expr2) makeASTFunction("Lag", (expr1), (expr2))
+#define Lag3(expr1, expr2, expr3) makeASTFunction("Lag", (expr1), (expr2), (expr3))
 
 } // namespace DB::tests

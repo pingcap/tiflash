@@ -164,7 +164,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
+            LOG_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
             return false;
         }
 
@@ -211,7 +211,7 @@ protected:
 
         if (free_map.empty())
         {
-            LOG_FMT_ERROR(log, "Current space map is full");
+            LOG_ERROR(log, "Current space map is full");
             hint_biggest_cap = 0;
             return std::make_tuple(offset, hint_biggest_cap, false);
         }
@@ -237,13 +237,13 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert."
-                               "[size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", //
-                          size,
-                          hint_biggest_offset,
-                          hint_biggest_cap,
-                          scan_biggest_offset,
-                          scan_biggest_cap);
+            LOG_ERROR(log, "Not sure why can't found any place to insert."
+                           "[size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", //
+                      size,
+                      hint_biggest_offset,
+                      hint_biggest_cap,
+                      scan_biggest_offset,
+                      scan_biggest_cap);
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 
@@ -252,11 +252,21 @@ protected:
 
         // Update return start
         offset = it->first;
+        // If the chosen free block contains `hint_biggest_offset`, then the free block must be the largest free block
+        // in this spacemap
+        bool is_champion = it->first <= hint_biggest_offset && hint_biggest_offset < it->first + it->second;
+        RUNTIME_CHECK_MSG(!is_champion || (hint_biggest_offset + hint_biggest_cap <= it->first + it->second),
+                          "Algorithm broken: is_champion {} hint_biggest_offset {} hint_biggest_cap {} candidate offset {} candidate size {}",
+                          is_champion,
+                          hint_biggest_offset,
+                          hint_biggest_cap,
+                          it->first,
+                          it->second);
 
         if (it->second == size)
         {
             // It is not champion, just return
-            if (it->first != hint_biggest_offset)
+            if (!is_champion)
             {
                 free_map.erase(it);
                 max_cap = hint_biggest_cap;
@@ -277,7 +287,7 @@ protected:
             it = free_map.insert(/*hint=*/it, {k, v}); // Use the `it` after erased as a hint, should be good for performance
 
             // It is not champion, just return
-            if (k - size != hint_biggest_offset)
+            if (!is_champion)
             {
                 max_cap = hint_biggest_cap;
                 return std::make_tuple(offset, max_cap, last_offset == offset);
@@ -356,7 +366,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
+                LOG_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
                 free_map.erase(it);
                 return false;
             }
@@ -367,7 +377,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
+                LOG_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
                 free_map.erase(it);
                 return false;
             }
@@ -413,11 +423,21 @@ protected:
         return true;
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     // Save the <offset, length> of free blocks
     std::map<UInt64, UInt64> free_map;
     // Keep a hint track of the biggest free block. Save its biggest capacity and start offset.
-    // The hint could be invalid after `markSmapUsed` while restoring or `markSmapFree`.
+    // The hint could be invalid in the following case:
+    // 1. call `markUsedImpl` while restoring at restart,
+    //    but we will call `updateAccurateMaxCapacity` at the end of restart and get an accurate value after that;
+    // 2. call `markFreeImpl` to free space while gc, but it will only potentially increase the actual `biggest_cap`,
+    //    and it will later call `updateAccurateMaxCapacity` to get an accurate value too.
+    //    So we will have a small period while having a `hint_biggest_cap` smaller than `biggest_cap`.
+    //    And this will be ok if we can take care of this case in `searchInsertOffset`.
     UInt64 hint_biggest_offset = 0;
     UInt64 hint_biggest_cap = 0;
 };

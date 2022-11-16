@@ -39,8 +39,8 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     static constexpr size_t UNROLL_BATCH = 64;
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
-    constexpr static const char * MVCC_FILTER_NAME = "DMVersionFilterBlockInputStream<MVCC>";
-    constexpr static const char * COMPACT_FILTER_NAME = "DMVersionFilterBlockInputStream<COMPACT>";
+    constexpr static const char * MVCC_FILTER_NAME = "mode=MVCC";
+    constexpr static const char * COMPACT_FILTER_NAME = "mode=COMPACT";
 
 public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
@@ -65,18 +65,19 @@ public:
 
     ~DMVersionFilterBlockInputStream()
     {
-        LOG_FMT_DEBUG(log,
-                      "Total rows: {}, pass: {:.2f}%"
-                      ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
-                      ", not clean: {:.2f}%, effective: {:.2f}%"
-                      ", read tso: {}",
-                      total_rows,
-                      passed_rows * 100.0 / total_rows,
-                      complete_passed * 100.0 / total_blocks,
-                      complete_not_passed * 100.0 / total_blocks,
-                      not_clean_rows * 100.0 / passed_rows,
-                      effective_num_rows * 100.0 / passed_rows,
-                      version_limit);
+        LOG_DEBUG(log,
+                  "Total rows: {}, pass: {:.2f}%"
+                  ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
+                  ", not clean: {:.2f}%, is deleted: {:.2f}%, effective: {:.2f}%"
+                  ", read tso: {}",
+                  total_rows,
+                  passed_rows * 100.0 / total_rows,
+                  complete_passed * 100.0 / total_blocks,
+                  complete_not_passed * 100.0 / total_blocks,
+                  not_clean_rows * 100.0 / passed_rows,
+                  deleted_rows * 100.0 / passed_rows,
+                  effective_num_rows * 100.0 / passed_rows,
+                  version_limit);
     }
 
     void readPrefix() override;
@@ -95,6 +96,7 @@ public:
 
     size_t getEffectiveNumRows() const { return effective_num_rows; }
     size_t getNotCleanRows() const { return not_clean_rows; }
+    size_t getDeletedRows() const { return deleted_rows; }
     UInt64 getGCHintVersion() const { return gc_hint_version; }
 
 private:
@@ -114,6 +116,7 @@ private:
             filter[i]
                 = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
+            is_deleted[i] = filter[i] && deleted;
             effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
             if (filter[i])
                 gc_hint_version = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
@@ -210,6 +213,8 @@ private:
     IColumn::Filter effective{};
     // not_clean = selected & (handle equals with next || deleted)
     IColumn::Filter not_clean{};
+    // is_deleted = selected & deleted
+    IColumn::Filter is_deleted{};
 
     // Calculate per block, when gc_safe_point exceed this version, there must be some data obsolete in this block
     // First calculate the gc_hint_version of every pk according to the following rules,
@@ -236,6 +241,7 @@ private:
     size_t complete_not_passed = 0;
     size_t not_clean_rows = 0;
     size_t effective_num_rows = 0;
+    size_t deleted_rows = 0;
 
     const LoggerPtr log;
 };

@@ -76,8 +76,9 @@ public:
         // 1. There is no delta.
         // 2. You don't need pk, version and delete_tag columns
         // If you have no idea what it means, then simply set it to false.
-        bool enable_clean_read_,
-        bool is_fast_mode_,
+        bool enable_handle_clean_read_,
+        bool enable_del_clean_read_,
+        bool is_fast_scan_,
         // The the MVCC filter version. Used by clean read check.
         UInt64 max_read_version_,
         // filters
@@ -101,13 +102,11 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
     Block read();
-    UInt64 fileId() const
-    {
-        return dmfile->fileId();
-    }
     std::string path() const
     {
-        return dmfile->path();
+        // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
+        // For DMFileReader, always use the readable path.
+        return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
 
@@ -142,10 +141,13 @@ private:
     const bool single_file_mode;
 
     /// Clean read optimize
-    // In normal mode, if there is no delta for some packs in stable, we can try to do clean read.
-    // In fast mode, we always try to do clean read.
-    const bool enable_clean_read;
-    const bool is_fast_mode;
+    // In normal mode, if there is no delta for some packs in stable, we can try to do clean read (enable_handle_clean_read is true).
+    // In fast mode, if we don't need handle column, we will try to do clean read on handle_column(enable_handle_clean_read is true).
+    //               if we don't need del column, we will try to do clean read on del_column(enable_del_clean_read is true).
+    const bool enable_handle_clean_read;
+    const bool enable_del_clean_read;
+    const bool is_fast_scan;
+
     const UInt64 max_read_version;
 
     /// Filters

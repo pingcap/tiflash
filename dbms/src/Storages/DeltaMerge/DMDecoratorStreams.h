@@ -35,20 +35,20 @@ public:
     DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const String & tracing_id = "")
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
-        , log(Logger::get("DMDeleteFilterBlockInputStream", tracing_id))
+        , log(Logger::get(tracing_id))
     {
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
     }
     ~DMDeleteFilterBlockInputStream()
     {
-        LOG_FMT_TRACE(log,
-                      "Total rows: {}, pass: {:.2f}%"
-                      ", complete pass: {:.2f}%, complete not pass: {:.2f}%",
-                      total_rows,
-                      passed_rows * 100.0 / total_rows,
-                      complete_passed * 100.0 / total_blocks,
-                      complete_not_passed * 100.0 / total_blocks);
+        LOG_TRACE(log,
+                  "Total rows: {}, pass: {:.2f}%"
+                  ", complete pass: {:.2f}%, complete not pass: {:.2f}%",
+                  total_rows,
+                  passed_rows * 100.0 / total_rows,
+                  complete_passed * 100.0 / total_blocks,
+                  complete_not_passed * 100.0 / total_blocks);
     }
 
     String getName() const override { return "DMDeleteFilter"; }
@@ -64,6 +64,18 @@ public:
                 return {};
             if (block.rows() == 0)
                 continue;
+
+            /// if the pack is do clean read for del column, the del column returned is a const column, with size 1.
+            /// In this case, all the del_mark must be 0. Thus we don't need extra filter.
+            if (block.getByPosition(delete_col_pos).column->isColumnConst())
+            {
+                ++total_blocks;
+                ++complete_passed;
+                total_rows += block.rows();
+                passed_rows += block.rows();
+
+                return getNewBlockByHeader(header, block);
+            }
 
             delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
 

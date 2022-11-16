@@ -266,7 +266,7 @@ std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log
         /// There are files .sql.tmp - delete.
         if (endsWith(dir_it.name(), ".sql.tmp"))
         {
-            LOG_FMT_INFO(log, "Removing file {}", dir_it->path());
+            LOG_INFO(log, "Removing file {}", dir_it->path());
             Poco::File(dir_it->path()).remove();
             continue;
         }
@@ -305,7 +305,7 @@ void loadTable(Context & context,
       */
     if (s.empty())
     {
-        LOG_FMT_ERROR(log, "File {} is empty. Removing.", table_metadata_path);
+        LOG_ERROR(log, "File {} is empty. Removing.", table_metadata_path);
         Poco::File(table_metadata_path).remove();
         return;
     }
@@ -351,7 +351,7 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
     for (const auto & table : tables)
     {
         const String & table_name = table.first;
-        LOG_FMT_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
+        LOG_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
         const String table_meta_path = database.getTableMetadataPath(table_name);
         if (!table_meta_path.empty())
         {
@@ -364,7 +364,7 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
 
 void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
 {
-    LOG_FMT_INFO(log, "Starting up {} tables.", tables.size());
+    LOG_INFO(log, "Starting up {} tables.", tables.size());
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
@@ -378,7 +378,7 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         {
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
+                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 

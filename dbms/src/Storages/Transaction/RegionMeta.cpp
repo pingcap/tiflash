@@ -106,6 +106,12 @@ UInt64 RegionMeta::appliedIndex() const
     return apply_state.applied_index();
 }
 
+UInt64 RegionMeta::appliedIndexTerm() const
+{
+    std::lock_guard lock(mutex);
+    return applied_term;
+}
+
 RegionMeta::RegionMeta(RegionMeta && rhs)
     : region_id(rhs.regionId())
 {
@@ -247,7 +253,7 @@ RegionMergeResult MetaRaftCommandDelegate::computeRegionMergeResult(
     const metapb::Region & source_region,
     const metapb::Region & target_region)
 {
-    RegionMergeResult res;
+    RegionMergeResult res{};
 
     res.version = std::max(source_region.region_epoch().version(), target_region.region_epoch().version()) + 1;
 

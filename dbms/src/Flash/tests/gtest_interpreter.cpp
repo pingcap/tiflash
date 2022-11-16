@@ -254,8 +254,8 @@ try
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
       MergeSorting, limit = 0
@@ -275,10 +275,10 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
-     Expression: <cast after window>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
        Expression: <final projection>
         MergeSorting, limit = 0
@@ -299,10 +299,10 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
-     Expression: <cast after window>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
        Union: <merge into one for window input>
         Expression x 10: <final projection>
@@ -334,7 +334,7 @@ try
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after window>
+  Expression: <before order and select>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     Expression: <final projection>
      MergeSorting: <enable fine grained shuffle>, limit = 0
@@ -370,8 +370,8 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
       MergeSorting, limit = 0
@@ -416,12 +416,12 @@ try
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -458,12 +458,12 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -501,12 +501,12 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -542,7 +542,7 @@ try
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
@@ -571,7 +571,7 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
@@ -605,7 +605,7 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+  HashJoinBuild x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
@@ -626,6 +626,51 @@ CreatingSets
                MockExchangeReceiver
            Expression x 20: <remove useless column after join>
             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, ListBase)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .limit(10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Limit, limit = 10
+ Expression: <final projection>
+  Aggregating
+   Concat
+    Expression: <before aggregation>
+     Filter: <execute where>
+      MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .topN("s2", false, 10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Union: <for test>
+ SharedQuery x 20: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      SharedQuery: <restore concurrency>
+       ParallelAggregating, max_threads: 20, final: true
+        Expression x 20: <before aggregation>
+         Filter: <execute where>
+          MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }

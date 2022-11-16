@@ -144,7 +144,7 @@ try
     }
     auto delta_store = storage->getStore();
     size_t total_segment_rows = 0;
-    auto segment_stats = delta_store->getSegmentStats();
+    auto segment_stats = delta_store->getSegmentsStats();
     for (auto & stat : segment_stats)
     {
         total_segment_rows += stat.rows;
@@ -207,10 +207,12 @@ try
 
     // Rename database name before store object is created.
     const String new_db_name = "new_" + storage->getDatabaseName();
-    storage->rename(path_name, new_db_name, table_name, table_name);
+    const String new_display_table_name = "new_" + storage->getTableName();
+    storage->rename(path_name, new_db_name, table_name, new_display_table_name);
     ASSERT_FALSE(storage->storeInited());
     ASSERT_EQ(storage->getTableName(), table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
+    ASSERT_EQ(storage->getTableInfo().name, new_display_table_name);
 
     // prepare block data
     Block sample;
@@ -231,9 +233,8 @@ try
     }
 
     // TiFlash always use t_{table_id} as table name
-    String new_table_name = storage->getTableName();
-    storage->rename(path_name, new_db_name, new_table_name, new_table_name);
-    ASSERT_EQ(storage->getTableName(), new_table_name);
+    storage->rename(path_name, new_db_name, table_name, table_name);
+    ASSERT_EQ(storage->getTableName(), table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
     storage->drop();
@@ -771,11 +772,11 @@ try
     {
         write_data(num_rows_write, 1000);
         num_rows_write += 1000;
-        if (storage->getStore()->getSegmentStats().size() > 1)
+        if (storage->getStore()->getSegmentsStats().size() > 1)
             break;
     }
     {
-        ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_GT(storage->getStore()->getSegmentsStats().size(), 1);
         ASSERT_EQ(read_data(), num_rows_write);
     }
     storage->flushCache(ctx);
@@ -792,13 +793,13 @@ try
     // write more data make sure segments more than 1
     for (size_t i = 0; i < 100000; i++)
     {
-        if (storage->getStore()->getSegmentStats().size() > 1)
+        if (storage->getStore()->getSegmentsStats().size() > 1)
             break;
         write_data(num_rows_write, 1000);
         num_rows_write += 1000;
     }
     {
-        ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_GT(storage->getStore()->getSegmentsStats().size(), 1);
         ASSERT_EQ(read_data(), num_rows_write);
     }
     storage->flushCache(ctx);
@@ -818,7 +819,7 @@ try
     // restore the table and make sure there is just one segment left
     create_table();
     {
-        ASSERT_EQ(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_EQ(storage->getStore()->getSegmentsStats().size(), 1);
         ASSERT_LT(read_data(), num_rows_write);
     }
     storage->drop();

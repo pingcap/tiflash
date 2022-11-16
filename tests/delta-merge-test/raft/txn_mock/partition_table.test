@@ -17,12 +17,9 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> drop table if exists default.test1
 => drop table if exists default.test_9997
 => drop table if exists default.test_9998
 => drop table if exists default.test_9999
-=> drop table if exists default.test1_9997
-=> drop table if exists default.test1_9999
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
 => DBGInvoke __mock_tidb_partition(default, test, 9999)
@@ -94,27 +91,17 @@
 │            0 │
 └──────────────┘
 
-=> DBGInvoke __rename_tidb_table(default, test, test1)
+=> DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __refresh_schemas()
-=> select count(*) from default.test1_9997
-┌─count()─┐
-│       2 │ 
-└─────────┘
-
-=> DBGInvoke __drop_tidb_table(default, test1)
-=> DBGInvoke __refresh_schemas()
-=> DBGInvoke is_tombstone(default, test1_9999)
+=> DBGInvoke is_tombstone(default, test_9999)
 ┌─is_tombstone(default, test_9999)─┐
 │ true                             │
 └──────────────────────────────────┘
 
 => drop table if exists default.test
-=> drop table if exists default.test1
 => drop table if exists default.test_9997
 => drop table if exists default.test_9998
 => drop table if exists default.test_9999
-=> drop table if exists default.test1_9997
-=> drop table if exists default.test1_9999
 
 => DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __clean_up_region()

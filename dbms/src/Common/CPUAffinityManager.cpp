@@ -28,11 +28,11 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
+#include <boost_wrapper/string.h>
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <unistd.h>
 
-#include <boost/algorithm/string.hpp>
 #include <cstring>
 #include <fstream>
 namespace DB
@@ -124,7 +124,7 @@ void CPUAffinityManager::bindSelfQueryThread() const
 {
     if (enable())
     {
-        LOG_FMT_INFO(log, "Thread: {} bindQueryThread.", ::getThreadName());
+        LOG_INFO(log, "Thread: {} bindQueryThread.", ::getThreadName());
         // If tid is zero, then the calling thread is used.
         bindQueryThread(0);
     }
@@ -134,7 +134,7 @@ void CPUAffinityManager::bindSelfOtherThread() const
 {
     if (enable())
     {
-        LOG_FMT_INFO(log, "Thread: {} bindOtherThread.", ::getThreadName());
+        LOG_INFO(log, "Thread: {} bindOtherThread.", ::getThreadName());
         // If tid is zero, then the calling thread is used.
         bindOtherThread(0);
     }
@@ -197,7 +197,7 @@ void CPUAffinityManager::setAffinity(pid_t tid, const cpu_set_t & cpu_set) const
     int ret = sched_setaffinity(tid, sizeof(cpu_set), &cpu_set);
     if (ret != 0)
     {
-        LOG_FMT_ERROR(log, "sched_setaffinity fail but ignore error: {}", std::strerror(errno));
+        LOG_ERROR(log, "sched_setaffinity fail but ignore error: {}", std::strerror(errno));
     }
 }
 
@@ -257,7 +257,7 @@ std::vector<pid_t> CPUAffinityManager::getThreadIDs(const std::string & dir) con
         }
         catch (std::exception & e)
         {
-            LOG_FMT_ERROR(log, "dir {} path {} exception {}", dir, iter->path(), e.what());
+            LOG_ERROR(log, "dir {} path {} exception {}", dir, iter->path(), e.what());
         }
     }
     return tids;
@@ -279,7 +279,7 @@ std::unordered_map<pid_t, std::string> CPUAffinityManager::getThreads(pid_t pid)
 {
     std::string task_dir = "/proc/" + std::to_string(pid) + "/task";
     auto tids = getThreadIDs(task_dir);
-    LOG_FMT_DEBUG(log, "{} thread count {}", task_dir, tids.size());
+    LOG_DEBUG(log, "{} thread count {}", task_dir, tids.size());
     std::unordered_map<pid_t, std::string> threads;
     for (auto tid : tids)
     {
@@ -300,12 +300,12 @@ void CPUAffinityManager::bindThreadCPUAffinity() const
     {
         if (isQueryThread(t.second))
         {
-            LOG_FMT_INFO(log, "Thread: {} {} bindQueryThread.", t.first, t.second);
+            LOG_INFO(log, "Thread: {} {} bindQueryThread.", t.first, t.second);
             bindQueryThread(t.first);
         }
         else
         {
-            LOG_FMT_INFO(log, "Thread: {} {} bindOtherThread.", t.first, t.second);
+            LOG_INFO(log, "Thread: {} {} bindOtherThread.", t.first, t.second);
             bindOtherThread(t.first);
         }
     }
@@ -323,17 +323,17 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
         int ret = sched_getaffinity(t.first, sizeof(cpu_set), &cpu_set);
         if (ret != 0)
         {
-            LOG_FMT_ERROR(log, "Thread: {} {} sched_getaffinity ret {} error {}", t.first, t.second, ret, strerror(errno));
+            LOG_ERROR(log, "Thread: {} {} sched_getaffinity ret {} error {}", t.first, t.second, ret, strerror(errno));
             continue;
         }
-        LOG_FMT_INFO(log, "Thread: {} {} bind on CPU: {}", t.first, t.second, cpuSetToString(cpu_set));
+        LOG_INFO(log, "Thread: {} {} bind on CPU: {}", t.first, t.second, cpuSetToString(cpu_set));
         if (isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &query_cpu_set))
         {
-            LOG_FMT_ERROR(log, "Thread: {} {} is query thread and bind CPU info is error.", t.first, t.second);
+            LOG_ERROR(log, "Thread: {} {} is query thread and bind CPU info is error.", t.first, t.second);
         }
         else if (!isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &other_cpu_set))
         {
-            LOG_FMT_ERROR(log, "Thread: {} {} is other thread and bind CPU info is error.", t.first, t.second);
+            LOG_ERROR(log, "Thread: {} {} is other thread and bind CPU info is error.", t.first, t.second);
         }
     }
 }

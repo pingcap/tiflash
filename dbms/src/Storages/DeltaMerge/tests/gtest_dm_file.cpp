@@ -110,8 +110,8 @@ public:
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFileTest", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
         dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
-        table_columns_ = std::make_shared<ColumnDefines>();
-        column_cache_ = std::make_shared<ColumnCache>();
+        table_columns = std::make_shared<ColumnDefines>();
+        column_cache = std::make_shared<ColumnCache>();
 
         reload();
     }
@@ -120,15 +120,14 @@ public:
     void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns())
     {
         TiFlashStorageTestBasic::reload();
-        if (table_columns_ != cols)
-            *table_columns_ = *cols;
+        if (table_columns != cols)
+            *table_columns = *cols;
         *path_pool = db_context->getPathPool().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
             *path_pool,
             *storage_pool,
-            /*hash_salt*/ 0,
-            0,
+            /*min_version_*/ 0,
             settings.not_compress_columns,
             false,
             1,
@@ -154,13 +153,13 @@ private:
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    ColumnDefinesPtr table_columns_;
+    ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
 protected:
     String parent_path;
     DMFilePtr dm_file;
-    ColumnCachePtr column_cache_;
+    ColumnCachePtr column_cache;
 };
 
 
@@ -174,9 +173,11 @@ try
     DMFileBlockOutputStream::BlockProperty block_property1;
     block_property1.effective_num_rows = 1;
     block_property1.gc_hint_version = 1;
+    block_property1.deleted_rows = 1;
     DMFileBlockOutputStream::BlockProperty block_property2;
     block_property2.effective_num_rows = 2;
     block_property2.gc_hint_version = 2;
+    block_property2.deleted_rows = 2;
     std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
     block_propertys.push_back(block_property1);
     block_propertys.push_back(block_property2);
@@ -200,7 +201,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -222,13 +223,14 @@ try
             const auto & property = propertys.property(i);
             ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
             ASSERT_EQ((size_t)property.gc_hint_version(), (size_t)block_propertys[i].effective_num_rows);
+            ASSERT_EQ((size_t)property.deleted_rows(), (size_t)block_propertys[i].deleted_rows);
         }
     }
     {
         // Test read after restore
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -329,7 +331,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -384,7 +386,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -454,12 +456,12 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::fromHandleRange(range)}); // Filtered by read_range
 
-        Int64 expect_first_pk = int(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
+        Int64 expect_first_pk = static_cast<int>(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
         Int64 expect_last_pk = std::min(num_rows_write, //
-                                        int(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
+                                        static_cast<int>(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
                                             + (range.end % span_per_part ? span_per_part : 0));
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -546,13 +548,13 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .setRSOperator(filter) // Filtered by rough set filter
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
-        Int64 expect_first_pk = int(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
+        Int64 expect_first_pk = static_cast<int>(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
         Int64 expect_last_pk = std::min(num_rows_write, //
-                                        int(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
+                                        static_cast<int>(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
                                             + (range.end % span_per_part ? span_per_part : 0));
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -629,7 +631,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .setRSOperator(filter) // Filtered by rough set filter
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
@@ -704,7 +706,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .setReadPacks(id_set_ptr) // filter by pack index
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
@@ -784,7 +786,7 @@ try
         // Test Read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -830,7 +832,7 @@ try
         // Test Read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -860,7 +862,7 @@ try
         // Half of the column are filled by NULL
         auto col = nullable_col.type->createColumn();
         for (size_t i = 0; i < num_rows_write / 2; i++)
-            col->insert(toField(Int64(i)));
+            col->insert(toField(static_cast<Int64>(i)));
         for (size_t i = 64; i < num_rows_write; i++)
             col->insertDefault();
         block.insert(ColumnWithTypeAndName{
@@ -881,7 +883,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         std::vector<Int64> nullable_coldata = createNumbers<Int64>(0, num_rows_write / 2);
         nullable_coldata.resize(num_rows_write);
@@ -927,8 +929,8 @@ public:
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *path_pool, "test.t1");
         dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
-        table_columns_ = std::make_shared<ColumnDefines>();
-        column_cache_ = std::make_shared<ColumnCache>();
+        table_columns = std::make_shared<ColumnDefines>();
+        column_cache = std::make_shared<ColumnCache>();
 
         reload();
     }
@@ -940,14 +942,13 @@ public:
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
-        *table_columns_ = *cols;
+        *table_columns = *cols;
 
         dm_context = std::make_unique<DMContext>( //
             *db_context,
             *path_pool,
             *storage_pool,
-            /*hash_salt*/ 0,
-            0,
+            /*min_version_*/ 0,
             settings.not_compress_columns,
             is_common_handle,
             rowkey_column_size,
@@ -965,12 +966,12 @@ private:
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    ColumnDefinesPtr table_columns_;
+    ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
 protected:
     DMFilePtr dm_file;
-    ColumnCachePtr column_cache_;
+    ColumnCachePtr column_cache;
     TableID table_id = 1;
     bool is_common_handle = true;
     size_t rowkey_column_size = 2;
@@ -1017,7 +1018,7 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
@@ -1101,11 +1102,11 @@ try
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols, RowKeyRanges{range.range}); // Filtered by read_range
-        Int64 expect_first_pk = int(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
+        Int64 expect_first_pk = static_cast<int>(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
         Int64 expect_last_pk = std::min(num_rows_write, //
-                                        int(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
+                                        static_cast<int>(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
                                             + (range.end % span_per_part ? span_per_part : 0));
         // mock common handle
         auto common_handle_coldata = [this, expect_first_pk, expect_last_pk]() {
@@ -1208,14 +1209,14 @@ try
     cols_after_ddl->emplace_back(new_s_col);
     // A new int64 column with default value 5
     ColumnDefine new_i_col_with_default(101, "i", typeFromString("Int64"));
-    new_i_col_with_default.default_value = Field(Int64(5));
+    new_i_col_with_default.default_value = Field(static_cast<Int64>(5));
     cols_after_ddl->emplace_back(new_i_col_with_default);
 
     {
         // Test read with new columns after ddl
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -1252,7 +1253,7 @@ try
         // Test read with new columns after ddl
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -1285,7 +1286,7 @@ try
         // Test read with new columns after ddl
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
@@ -1318,7 +1319,7 @@ try
         // Test read with new columns after ddl
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder
-                          .setColumnCache(column_cache_)
+                          .setColumnCache(column_cache)
                           .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         auto i32_coldata = createSignedNumbers(0, num_rows_write);

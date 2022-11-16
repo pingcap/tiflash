@@ -63,26 +63,26 @@ static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractCon
 {
     if (typeid(channel) == typeid(Poco::TiFlashLogFileChannel))
     {
-        Poco::TiFlashLogFileChannel * file_channel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
+        auto * file_channel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
         ASSERT_EQ(file_channel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
         ASSERT_EQ(file_channel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "10"));
         return;
     }
     if (typeid(channel) == typeid(Poco::LevelFilterChannel))
     {
-        Poco::LevelFilterChannel * level_filter_channel = dynamic_cast<Poco::LevelFilterChannel *>(&channel);
+        auto * level_filter_channel = dynamic_cast<Poco::LevelFilterChannel *>(&channel);
         verifyChannelConfig(*level_filter_channel->getChannel(), config);
         return;
     }
     if (typeid(channel) == typeid(Poco::SourceFilterChannel))
     {
-        Poco::SourceFilterChannel * source_filter_channel = dynamic_cast<Poco::SourceFilterChannel *>(&channel);
+        auto * source_filter_channel = dynamic_cast<Poco::SourceFilterChannel *>(&channel);
         verifyChannelConfig(*source_filter_channel->getChannel(), config);
         return;
     }
     if (typeid(channel) == typeid(Poco::FormattingChannel))
     {
-        Poco::FormattingChannel * formatting_channel = dynamic_cast<Poco::FormattingChannel *>(&channel);
+        auto * formatting_channel = dynamic_cast<Poco::FormattingChannel *>(&channel);
         verifyChannelConfig(*formatting_channel->getChannel(), config);
     }
 }
@@ -195,7 +195,7 @@ size = "1"
             ASSERT_NE(cur_logger.getChannel(), nullptr);
             Poco::Channel * cur_logger_channel = cur_logger.getChannel();
             ASSERT_EQ(typeid(*cur_logger_channel), typeid(Poco::ReloadableSplitterChannel));
-            Poco::ReloadableSplitterChannel * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
+            auto * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
             splitter_channel->setPropertiesValidator(verifyChannelConfig);
             splitter_channel->validateProperties(config);
         };
@@ -207,7 +207,7 @@ size = "1"
         auto config = loadConfigFromString(test_case);
         app.buildLoggers(*config);
         Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", i));
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         verify_loggers_config(i + 1, *config);
     }
     clearFiles("./tmp/log");

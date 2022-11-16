@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Common/UnaryCallback.h>
+#include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <common/types.h>
-#include <grpc++/grpc++.h>
 #include <kvproto/mpp.pb.h>
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>
@@ -28,15 +28,16 @@
 namespace DB
 {
 using MPPDataPacket = mpp::MPPDataPacket;
-using MPPDataPacketPtr = std::shared_ptr<MPPDataPacket>;
-using MPPDataPacketPtrs = std::vector<MPPDataPacketPtr>;
+using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
 
 class ExchangePacketReader
 {
 public:
     virtual ~ExchangePacketReader() = default;
-    virtual bool read(MPPDataPacketPtr & packet) = 0;
+    virtual bool read(TrackedMppDataPacketPtr & packet) = 0;
     virtual ::grpc::Status finish() = 0;
+    virtual void cancel(const String & reason) = 0;
 };
 using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
 
@@ -45,7 +46,7 @@ class AsyncExchangePacketReader
 public:
     virtual ~AsyncExchangePacketReader() = default;
     virtual void init(UnaryCallback<bool> * callback) = 0;
-    virtual void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
+    virtual void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
     virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
 };
 using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;

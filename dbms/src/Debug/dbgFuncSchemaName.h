@@ -50,14 +50,4 @@ void dbgFuncGetTiflashReplicaCount(Context & context, const ASTs & args, DBGInvo
 //   ./storage-client.sh "DBGInvoke get_partition_tables_tiflash_replica_count(db_name, table_name)"
 void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-// Get table's tiflash mode with mapped table name
-// Usage:
-//   ./storage-client.sh "DBGInvoke get_tiflash_mode(db_name, table_name)"
-void dbgFuncGetTiflashMode(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
-// Get the logical table's partition tables' tiflash replica counts with mapped table name
-// Usage:
-//   ./storage-client.sh "DBGInvoke get_partition_tables_tiflash_mode(db_name, table_name)"
-void dbgFuncGetPartitionTablesTiflashMode(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
 } // namespace DB

@@ -38,13 +38,23 @@ using DataTypes = std::vector<DataTypePtr>;
 class WindowFunctionFactory final : public ext::Singleton<WindowFunctionFactory>
 {
 public:
-    using Creator = std::function<WindowFunctionPtr(const String &, const DataTypes &)>;
+    using Creator = std::function<WindowFunctionPtr(const DataTypes &)>;
 
     /// Register a function by its name.
     /// No locking, you must register all functions before usage of get.
     void registerFunction(
         const String & name,
         Creator creator);
+
+    template <typename Function>
+    void registerFunction()
+    {
+        registerFunction(
+            Function::name,
+            [](const DataTypes & argument_types) {
+                return std::make_shared<Function>(argument_types);
+            });
+    }
 
     /// Throws an exception if not found.
     WindowFunctionPtr get(

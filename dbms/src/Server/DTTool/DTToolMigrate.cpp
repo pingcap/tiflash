@@ -187,11 +187,11 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             args.file_id,
             args.no_keep};
         auto src_file = DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-        LOG_FMT_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
-        LOG_FMT_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
-        LOG_FMT_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
-        LOG_FMT_INFO(logger, "target version: {}", args.version);
-        LOG_FMT_INFO(logger, "target frame size: {}", args.frame);
+        LOG_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
+        LOG_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
+        LOG_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
+        LOG_INFO(logger, "target version: {}", args.version);
+        LOG_INFO(logger, "target frame size: {}", args.frame);
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.
@@ -208,13 +208,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             throw DB::Exception(fmt::format("invalid dtfile version: {}", args.version));
         }
 
-        LOG_FMT_INFO(logger, "creating new dtfile");
+        LOG_INFO(logger, "creating new dtfile");
         auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
-        LOG_FMT_INFO(logger, "creating input stream");
+        LOG_INFO(logger, "creating input stream");
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
-        LOG_FMT_INFO(logger, "creating output stream");
+        LOG_INFO(logger, "creating output stream");
         context.getSettingsRef().dt_compression_method.set(args.compression_method);
         context.getSettingsRef().dt_compression_level.set(args.compression_level);
         auto output_stream = DB::DM::DMFileBlockOutputStream(
@@ -231,11 +231,11 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         // iterate all blocks and rewrite them to new dtfile
         while (auto block = input_stream->read())
         {
-            LOG_FMT_INFO(logger, "migrating block {} ( size: {} )", counter++, block.bytes());
+            LOG_INFO(logger, "migrating block {} ( size: {} )", counter++, block.bytes());
             if (!args.dry_mode)
                 output_stream.write(
                     block,
-                    {stat_iter->not_clean, properties_iter->num_rows(), properties_iter->gc_hint_version()});
+                    {stat_iter->not_clean, properties_iter->deleted_rows(), properties_iter->num_rows(), properties_iter->gc_hint_version()});
             stat_iter++;
             properties_iter++;
         }
@@ -246,13 +246,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             keeper.markSuccess();
         }
 
-        LOG_FMT_INFO(logger, "checking meta status for new file");
+        LOG_INFO(logger, "checking meta status for new file");
         if (!args.dry_mode)
         {
             DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 1, keeper.migration_temp_dir.path(), DB::DM::DMFile::ReadMetaMode::all());
         }
     }
-    LOG_FMT_INFO(logger, "migration finished");
+    LOG_INFO(logger, "migration finished");
 
     return 0;
 }

@@ -24,6 +24,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/LearnerRead.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
@@ -64,6 +65,16 @@ private:
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
+    bool checkRetriableForBatchCopOrMPP(
+        const TableID & table_id,
+        const SelectQueryInfo & query_info,
+        const RegionException & e,
+        int num_allow_retry);
+    void buildLocalStreamsForPhysicalTable(
+        const TableID & table_id,
+        const SelectQueryInfo & query_info,
+        DAGPipeline & pipeline,
+        size_t max_block_size);
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
@@ -80,12 +91,15 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void buildRemoteStreams(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline);
+    std::vector<pingcap::coprocessor::copTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
+    void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
 
+    // before_where, filter_column_name, after_where
+    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter();
     void executePushedDownFilter(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);

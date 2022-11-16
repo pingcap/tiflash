@@ -47,69 +47,17 @@ struct IsEqualRelated<DB::NotEqualsOp<A...>>
     static constexpr const bool value = true;
 };
 
-// Loop columns and invoke callback for each pair.
-// Remove last zero byte.
-template <typename F>
-FLATTEN_INLINE inline void LoopTwoColumns(
+template <typename Op, bool trim, typename Result, typename F>
+FLATTEN_INLINE static inline void LoopOneColumnCmpEqStr(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
-    const ColumnString::Chars_t & b_data,
-    const ColumnString::Offsets & b_offsets,
-    size_t size,
-    F && func)
-{
-    ColumnString::Offset a_prev_offset = 0;
-    ColumnString::Offset b_prev_offset = 0;
-
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto a_size = a_offsets[i] - a_prev_offset;
-        auto b_size = b_offsets[i] - b_prev_offset;
-
-        // Remove last zero byte.
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1},
-             {reinterpret_cast<const char *>(&b_data[b_prev_offset]), b_size - 1},
-             i);
-
-        a_prev_offset = a_offsets[i];
-        b_prev_offset = b_offsets[i];
-    }
-}
-
-// Loop one column and invoke callback for each pair.
-// Remove last zero byte.
-template <typename F>
-FLATTEN_INLINE inline void LoopOneColumn(
-    const ColumnString::Chars_t & a_data,
-    const ColumnString::Offsets & a_offsets,
-    size_t size,
-    F && func)
-{
-    ColumnString::Offset a_prev_offset = 0;
-
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto a_size = a_offsets[i] - a_prev_offset;
-
-        // Remove last zero byte.
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
-        a_prev_offset = a_offsets[i];
-    }
-}
-
-template <size_t n, typename Op, bool trim, typename Result>
-FLATTEN_INLINE inline void LoopOneColumnCmpEqFixedStr(
-    const ColumnString::Chars_t & a_data,
-    const ColumnString::Offsets & a_offsets,
-    const char * src,
-    Result & c)
+    Result & c,
+    F && fn_is_eq)
 {
     LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&](std::string_view view, size_t i) {
         if constexpr (trim)
             view = RightTrim(view);
-        auto res = 1;
-        if (view.size() == n)
-            res = mem_utils::memcmp_eq_fixed_size<n>(view.data(), src) ? 0 : 1;
+        auto res = fn_is_eq(view) ? 0 : 1;
         c[i] = Op::apply(res, 0);
     });
 }
@@ -119,7 +67,7 @@ FLATTEN_INLINE inline void LoopOneColumnCmpEqFixedStr(
 //   - Check if columns do NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
-ALWAYS_INLINE inline bool CompareStringVectorStringVector(
+ALWAYS_INLINE inline bool CompareStringVectorStringVectorImpl(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     const ColumnString::Chars_t & b_data,
@@ -179,16 +127,74 @@ ALWAYS_INLINE inline bool CompareStringVectorStringVector(
     return use_optimized_path;
 }
 
+template <bool need_trim, typename Op, typename Result>
+ALWAYS_INLINE static inline bool BinCollatorCompareStringVectorConstant(const ColumnString::Chars_t & a_data,
+                                                                        const ColumnString::Offsets & a_offsets,
+                                                                        const std::string_view & tar_str_view,
+                                                                        Result & c)
+{
+    if constexpr (!IsEqualRelated<Op>::value)
+        return false;
+
+#ifdef M
+    static_assert(false, "`M` is defined");
+#endif
+#define M(k)                                                                                                                                                                                                            \
+    case k:                                                                                                                                                                                                             \
+    {                                                                                                                                                                                                                   \
+        LoopOneColumnCmpEqStr<Op, need_trim>(a_data, a_offsets, c, [&](const std::string_view & src) -> bool { return (src.size() == (k)) && mem_utils::memcmp_eq_fixed_size<(k)>(src.data(), tar_str_view.data()); }); \
+        return true;                                                                                                                                                                                                    \
+    }
+    if (likely(tar_str_view.size() <= 32))
+    {
+        switch (tar_str_view.size())
+        {
+            M(0);
+            M(1);
+            M(2);
+            M(3);
+            M(4);
+            M(5);
+            M(6);
+            M(7);
+            M(8);
+            M(9);
+            M(10);
+            M(11);
+            M(12);
+            M(13);
+            M(14);
+            M(15);
+            M(16);
+        default:
+        {
+            LoopOneColumnCmpEqStr<Op, need_trim>(a_data, a_offsets, c, [&](const std::string_view & src) -> bool {
+                const size_t n = tar_str_view.size();
+                if (src.size() != n)
+                    return false;
+                const auto * p1 = src.data();
+                const auto * p2 = tar_str_view.data();
+                return mem_utils::memcmp_eq_fixed_size<16>(p1, p2)
+                    && mem_utils::memcmp_eq_fixed_size<16>(p1 + n - 16, p2 + n - 16);
+            });
+            return true;
+        }
+        }
+    }
+#undef M
+    return false;
+}
+
 // Handle str-column compare const-str.
 // - Optimize bin collator
 //   - Right trim const-str first
 //   - Check if column does NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
-ALWAYS_INLINE inline bool CompareStringVectorConstant(
+ALWAYS_INLINE static inline bool CompareStringVectorConstantImpl(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
-    const std::string_view & b,
+    const std::string_view & _b,
     const TiDB::TiDBCollatorPtr & collator,
     Result & c)
 {
@@ -199,44 +205,10 @@ ALWAYS_INLINE inline bool CompareStringVectorConstant(
     case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
     case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
     {
-        std::string_view tar_str_view = RightTrim(b); // right trim const-str first
+        std::string_view tar_str_view = RightTrim(_b); // right trim const-str first
 
-        if constexpr (IsEqualRelated<Op>::value)
-        {
-#ifdef M
-            static_assert(false, "`M` is defined");
-#endif
-#define M(k)                                                                                \
-    case k:                                                                                 \
-    {                                                                                       \
-        LoopOneColumnCmpEqFixedStr<k, Op, true>(a_data, a_offsets, tar_str_view.data(), c); \
-        return true;                                                                        \
-    }
-
-            switch (tar_str_view.size())
-            {
-                M(0);
-                M(1);
-                M(2);
-                M(3);
-                M(4);
-                M(5);
-                M(6);
-                M(7);
-                M(8);
-                M(9);
-                M(10);
-                M(11);
-                M(12);
-                M(13);
-                M(14);
-                M(15);
-                M(16);
-            default:
-                break;
-            }
-#undef M
-        }
+        if (BinCollatorCompareStringVectorConstant<true, Op>(a_data, a_offsets, tar_str_view, c))
+            return true;
 
         LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&c, &tar_str_view](const std::string_view & view, size_t i) {
             if constexpr (IsEqualRelated<Op>::value)
@@ -253,51 +225,19 @@ ALWAYS_INLINE inline bool CompareStringVectorConstant(
     }
     case TiDB::ITiDBCollator::CollatorType::BINARY:
     {
-        if constexpr (IsEqualRelated<Op>::value)
-        {
-#ifdef M
-            static_assert(false, "`M` is defined");
-#endif
-#define M(k)                                                                      \
-    case k:                                                                       \
-    {                                                                             \
-        LoopOneColumnCmpEqFixedStr<k, Op, false>(a_data, a_offsets, b.data(), c); \
-        return true;                                                              \
-    }
+        const std::string_view & tar_str_view = _b; // use original const-str
 
-            switch (b.size())
-            {
-                M(0);
-                M(1);
-                M(2);
-                M(3);
-                M(4);
-                M(5);
-                M(6);
-                M(7);
-                M(8);
-                M(9);
-                M(10);
-                M(11);
-                M(12);
-                M(13);
-                M(14);
-                M(15);
-                M(16);
-            default:
-                break;
-            }
-#undef M
-        }
+        if (BinCollatorCompareStringVectorConstant<false, Op>(a_data, a_offsets, tar_str_view, c))
+            return true;
 
-        LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&c, &b](const std::string_view & view, size_t i) {
+        LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&c, &tar_str_view](const std::string_view & view, size_t i) {
             if constexpr (IsEqualRelated<Op>::value)
             {
-                c[i] = Op::apply(RawStrEqualCompare((view), b), 0);
+                c[i] = Op::apply(RawStrEqualCompare(view, tar_str_view), 0);
             }
             else
             {
-                c[i] = Op::apply(RawStrCompare((view), b), 0);
+                c[i] = Op::apply(RawStrCompare(view, tar_str_view), 0);
             }
         });
 

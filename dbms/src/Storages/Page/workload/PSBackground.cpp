@@ -51,9 +51,9 @@ void PSGc::doGcOnce()
     gc_stop_watch.start();
     try
     {
-        MemoryTracker tracker;
-        tracker.setDescription("(Stress Test GC)");
-        current_memory_tracker = &tracker;
+        auto tracker = MemoryTracker::create();
+        tracker->setDescription("(Stress Test GC)");
+        current_memory_tracker = tracker.get();
         ps->gc();
         current_memory_tracker = nullptr;
     }
@@ -71,13 +71,13 @@ void PSGc::start()
     gc_timer.start(Poco::TimerCallback<PSGc>(*this, &PSGc::onTime));
 }
 
-void PSScanner::onTime(Poco::Timer & /*timer*/)
+void PSSnapStatGetter::onTime(Poco::Timer & /*timer*/)
 {
     try
     {
-        LOG_FMT_INFO(StressEnv::logger, "Scanner start");
+        LOG_INFO(StressEnv::logger, "Scanner start");
         auto stat = ps->getSnapshotsStat();
-        LOG_FMT_INFO(
+        LOG_INFO(
             StressEnv::logger,
             "Scanner get {} snapshots, longest lifetime: {:.3f}s longest from thread: {}, tracing_id: {}",
             stat.num_snapshots,
@@ -94,9 +94,9 @@ void PSScanner::onTime(Poco::Timer & /*timer*/)
     }
 }
 
-void PSScanner::start()
+void PSSnapStatGetter::start()
 {
-    scanner_timer.start(Poco::TimerCallback<PSScanner>(*this, &PSScanner::onTime));
+    scanner_timer.start(Poco::TimerCallback<PSSnapStatGetter>(*this, &PSSnapStatGetter::onTime));
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)

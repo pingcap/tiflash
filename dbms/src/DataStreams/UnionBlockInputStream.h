@@ -99,7 +99,7 @@ public:
         const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(std::max(inputs.size(), additional_inputs_at_end.size()), max_threads) * 5) // reduce contention
-        , log(Logger::get(NAME, req_id))
+        , log(Logger::get(req_id))
         , handler(*this)
         , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
         , exception_callback(exception_callback_)
@@ -167,7 +167,7 @@ protected:
         if (!started)
             return;
 
-        LOG_FMT_TRACE(log, "Waiting for threads to finish");
+        LOG_TRACE(log, "Waiting for threads to finish");
 
         std::exception_ptr exception;
         if (!all_read)
@@ -196,7 +196,7 @@ protected:
 
         processor.wait();
 
-        LOG_FMT_TRACE(log, "Waited for threads to finish");
+        LOG_TRACE(log, "Waited for threads to finish");
 
         if (exception)
             std::rethrow_exception(exception);

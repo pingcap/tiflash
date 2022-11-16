@@ -48,13 +48,6 @@ StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char
 }
 
 template <typename T>
-const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
-{
-    data.push_back(*reinterpret_cast<const T *>(pos));
-    return pos + sizeof(T);
-}
-
-template <typename T>
 void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(data[n]);
@@ -181,24 +174,24 @@ UInt64 ColumnVector<T>::get64(size_t n) const
 template <typename T>
 UInt64 ColumnVector<T>::getUInt(size_t n) const
 {
-    return UInt64(data[n]);
+    return static_cast<UInt64>(data[n]);
 }
 
 template <typename T>
 Int64 ColumnVector<T>::getInt(size_t n) const
 {
-    return Int64(data[n]);
+    return static_cast<Int64>(data[n]);
 }
 
 template <typename T>
 void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
-    const ColumnVector & src_vec = static_cast<const ColumnVector &>(src);
+    const auto & src_vec = static_cast<const ColumnVector &>(src);
 
     if (start + length > src_vec.data.size())
         throw Exception(
             fmt::format(
-                "Parameters start = {}, length = {} are out of bound in ColumnVector<T>::insertRangeFrom method (data.size() = {}).",
+                "Parameters are out of bound in ColumnVector<T>::insertRangeFrom method, start={}, length={}, src.size()={}",
                 start,
                 length,
                 src_vec.data.size()),
@@ -334,8 +327,8 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
 
     if (size == 0)
     {
-        min = typename NearestFieldType<T>::Type(0);
-        max = typename NearestFieldType<T>::Type(0);
+        min = static_cast<typename NearestFieldType<T>::Type>(0);
+        max = static_cast<typename NearestFieldType<T>::Type>(0);
         return;
     }
 
@@ -369,8 +362,8 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
             cur_max = x;
     }
 
-    min = typename NearestFieldType<T>::Type(cur_min);
-    max = typename NearestFieldType<T>::Type(cur_max);
+    min = static_cast<typename NearestFieldType<T>::Type>(cur_min);
+    max = static_cast<typename NearestFieldType<T>::Type>(cur_max);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

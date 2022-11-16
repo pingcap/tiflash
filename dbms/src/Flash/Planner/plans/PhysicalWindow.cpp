@@ -66,6 +66,7 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
     child->transform(pipeline, context, max_streams);
 
     executeExpression(pipeline, window_description.before_window, log, "before window");
+    window_description.fillArgColumnNumbers();
 
     if (fine_grained_shuffle.enable())
     {

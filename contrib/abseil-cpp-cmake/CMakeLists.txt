@@ -1,9 +1,12 @@
 set(ABSL_ROOT_DIR "${TiFlash_SOURCE_DIR}/contrib/abseil-cpp")
+set(ABSL_ROOT_DIR "${ABSL_ROOT_DIR}" PARENT_SCOPE)
 if(NOT EXISTS "${ABSL_ROOT_DIR}/CMakeLists.txt")
   message(FATAL_ERROR " submodule third_party/abseil-cpp is missing. To fix try run: \n git submodule update --init --recursive")
 endif()
 set(BUILD_TESTING OFF)
 set(ABSL_PROPAGATE_CXX_STD ON)
+
+no_warning(deprecated-builtins)
 add_subdirectory("${ABSL_ROOT_DIR}" "${TiFlash_BINARY_DIR}/contrib/abseil-cpp")
 
 add_library(abseil_swiss_tables INTERFACE)

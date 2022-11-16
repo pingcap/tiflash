@@ -1,3 +1,5 @@
+set_property(DIRECTORY PROPERTY EXCLUDE_FROM_ALL 1)
+
 if (NOT MSVC)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-old-style-cast")
 endif ()
@@ -60,6 +62,19 @@ if (USE_INTERNAL_SSL_LIBRARY)
     add_library (OpenSSL::SSL ALIAS ssl)
 endif ()
 
+if (USE_GM_SSL)
+    set (save_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+    set (save_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+    set (_save ${ENABLE_TESTS})
+    set (CMAKE_CXX_FLAGS "")
+    set (CMAKE_C_FLAGS "")
+    set (ENABLE_TESTS 0)
+    add_subdirectory (GmSSL)
+    set (ENABLE_TESTS ${_save})
+    set (CMAKE_CXX_FLAGS ${save_CMAKE_CXX_FLAGS})
+    set (CMAKE_C_FLAGS ${save_CMAKE_C_FLAGS})
+endif()
+
 if (USE_INTERNAL_POCO_LIBRARY)
     set (save_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
     set (save_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
@@ -97,24 +112,18 @@ if (USE_INTERNAL_GRPC_LIBRARY)
 endif ()
 
 add_subdirectory (kvproto/cpp)
-if(TIFLASH_LLVM_TOOLCHAIN)
-    target_compile_options(kvproto PRIVATE
-            -Wno-deprecated-declarations
-            -Wno-non-c-typedef-for-linkage
-            -Wno-implicit-const-int-float-conversion)
-endif()
+target_no_warning(kvproto deprecated-declarations)
+target_no_warning(kvproto non-c-typedef-for-linkage)
+target_no_warning(kvproto implicit-const-int-float-conversion)
 # -----
 set (_save ${ENABLE_TESTS})
 set (ENABLE_TESTS 0)
 # disable ENABLE_TESTS for client-c
 # GTest package conflicts with TiFlash's GTest, so we have to disable test compilation in client-c.
 add_subdirectory (client-c)
-if(TIFLASH_LLVM_TOOLCHAIN)
-    target_compile_options(kv_client PRIVATE
-            -Wno-deprecated-declarations
-            -Wno-non-c-typedef-for-linkage
-            -Wno-implicit-const-int-float-conversion)
-endif()
+target_no_warning(kv_client deprecated-declarations)
+target_no_warning(kv_client non-c-typedef-for-linkage)
+target_no_warning(kv_client implicit-const-int-float-conversion)
 set (ENABLE_TESTS ${_save})
 # -------
 add_subdirectory (tipb/cpp)
@@ -159,10 +168,12 @@ SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testi
 add_subdirectory(benchmark)
 
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
-if (NOT (APPLE AND ARCH_AARCH64))
+if (NOT (OS_DARWIN AND ARCH_AARCH64))
     add_subdirectory(cpu_features)
 endif()
 
-if (ARCH_AARCH64 AND ARCH_LINUX)
+if (ARCH_AARCH64 AND OS_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)
 endif ()
+
+add_subdirectory(magic_enum)

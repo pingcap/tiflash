@@ -41,23 +41,23 @@ ReadIndexStressTest::ReadIndexStressTest(
     : tmt(tmt_)
 {
     MockStressTestCfg::enable = true;
-    LOG_FMT_WARNING(logger, "enable MockStressTest");
+    LOG_WARNING(logger, "enable MockStressTest");
 }
 
 ReadIndexStressTest::~ReadIndexStressTest()
 {
     MockStressTestCfg::enable = false;
-    LOG_FMT_WARNING(logger, "disable MockStressTest");
+    LOG_WARNING(logger, "disable MockStressTest");
 }
 
 void ReadIndexStressTest::dbgFuncStressTest(Context & context, const ASTs & args, DBGInvoker::Printer printer)
 {
     if (args.size() < 4)
         throw Exception("Args not matched, should be: min_region_cnt, loop_cnt, type(batch-read-index-v1, async-read-index), concurrency", ErrorCodes::BAD_ARGUMENTS);
-    size_t min_region_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    size_t loop_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto min_region_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto loop_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     TestType ver = TestName2Type.at(typeid_cast<const ASTIdentifier &>(*args[2]).name);
-    size_t concurrency = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    auto concurrency = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     {
         if (min_region_cnt < 1 || loop_cnt < 1 || concurrency < 1)
             throw Exception("Invalid args: `min_region_cnt < 1 or loop_cnt < 1 or concurrency < 1` ", ErrorCodes::LOGICAL_ERROR);
@@ -168,7 +168,7 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
         f();
         auto end_time = Clock ::now();
         auto time_cost = std::chrono::duration_cast<TimeCost>(end_time - start_time);
-        LOG_FMT_INFO(logger, "time cost {}", time_cost);
+        LOG_INFO(logger, "time cost {}", time_cost);
         return time_cost;
     };
     switch (ver)
@@ -176,7 +176,7 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
     case TestType::V1:
         return wrap_time_cost(
             [&]() {
-                LOG_FMT_INFO(logger, "begin to run `{}`: req size {}, ", TestTypeName.at(ver), reqs.size());
+                LOG_INFO(logger, "begin to run `{}`: req size {}, ", TestTypeName.at(ver), reqs.size());
                 kvstore.getProxyHelper()->batchReadIndex_v1(reqs, timeout_ms);
             });
     case TestType::Async:
@@ -184,16 +184,16 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
             [&]() {
                 if (!kvstore.read_index_worker_manager)
                 {
-                    LOG_FMT_ERROR(logger, "no read_index_worker_manager");
+                    LOG_ERROR(logger, "no read_index_worker_manager");
                     return;
                 }
-                LOG_FMT_INFO(logger, "begin to run `{}`: req size {}", TestTypeName.at(ver), reqs.size());
+                LOG_INFO(logger, "begin to run `{}`: req size {}", TestTypeName.at(ver), reqs.size());
                 for (size_t i = 0; i < reqs.size(); ++i)
                 {
                     auto & req = reqs[i];
                     req.mutable_context()->set_region_id(req.context().region_id() + MockStressTestCfg::RegionIdPrefix * (i + 1));
                 }
-                LOG_FMT_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
+                LOG_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
                 auto resps = kvstore.batchReadIndex(reqs, timeout_ms);
                 for (const auto & resp : resps)
                 {

@@ -79,23 +79,6 @@ private:
     const Context & context;
 };
 
-/// Implements the function ifNull which takes 2 arguments and returns
-/// the value of the 1st argument if it is not null. Otherwise it returns
-/// the value of the 2nd argument.
-class FunctionIfNull : public IFunction
-{
-public:
-    static constexpr auto name = "ifNull";
-    static FunctionPtr create(const Context & context);
-
-    std::string getName() const override;
-    size_t getNumberOfArguments() const override { return 2; }
-    bool useDefaultImplementationForNulls() const override { return false; }
-    bool useDefaultImplementationForConstants() const override { return true; }
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
-};
-
 /// Implements the function nullIf which takes 2 arguments and returns
 /// NULL if both arguments have the same value. Otherwise it returns the
 /// value of the first argument.

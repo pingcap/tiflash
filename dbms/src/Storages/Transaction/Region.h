@@ -167,8 +167,11 @@ public:
     std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
 
     UInt64 appliedIndex() const;
+    UInt64 appliedIndexTerm() const;
 
     void notifyApplied() { meta.notifyAll(); }
+    // Export for tests.
+    void setApplied(UInt64 index, UInt64 term);
 
     RegionVersion version() const;
     RegionVersion confVer() const;
@@ -225,7 +228,7 @@ private:
 
     RegionMeta meta;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     const TableID mapped_table_id;
 

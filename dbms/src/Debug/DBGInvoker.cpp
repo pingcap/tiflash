@@ -107,6 +107,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
+    regSchemalessFunc("enable_pause_fail_point", DbgFailPointFunc::dbgEnablePauseFailPoint);
     regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
     regSchemalessFunc("wait_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
@@ -120,8 +121,6 @@ DBGInvoker::DBGInvoker()
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
     regSchemalessFunc("get_tiflash_replica_count", dbgFuncGetTiflashReplicaCount);
     regSchemalessFunc("get_partition_tables_tiflash_replica_count", dbgFuncGetPartitionTablesTiflashReplicaCount);
-    regSchemalessFunc("get_tiflash_mode", dbgFuncGetTiflashMode);
-    regSchemalessFunc("get_partition_tables_tiflash_mode", dbgFuncGetPartitionTablesTiflashMode);
 
     regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
     regSchemalessFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);

@@ -22,8 +22,6 @@
 #include <random>
 #include <thread>
 
-#include "common/types.h"
-
 #ifdef __linux__
 #include <sys/syscall.h>
 #endif
@@ -193,9 +191,9 @@ TEST(ReadLimiterTest, GetIOStatPeroid200ms)
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
+    TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     ReadLimiter limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
 
-    TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
     ASSERT_EQ(limiter.getAvailableBalance(), 20);
     request(limiter, 1);
@@ -333,23 +331,51 @@ TEST(ReadLimiterTest, LimiterStat)
         ASSERT_GT(stat.pct(), 100) << stat.toString();
     }
 
-    static constexpr UInt64 alloc_bytes = 2047;
+    static constexpr UInt64 total_bytes = 2047;
     for (int i = 0; i < 11; i++)
     {
         request(read_limiter, 1 << i);
     }
-
     std::this_thread::sleep_for(100ms);
     ASSERT_EQ(read_limiter.getAvailableBalance(), -947);
 
     stat = read_limiter.getStat();
-    ASSERT_EQ(stat.alloc_bytes, alloc_bytes);
-    ASSERT_GE(stat.elapsed_ms, alloc_bytes / 100 + 1);
+    ASSERT_EQ(stat.alloc_bytes, total_bytes + read_limiter.getAvailableBalance());
+    ASSERT_GE(stat.elapsed_ms, stat.alloc_bytes / 100 + 1);
     ASSERT_EQ(stat.refill_period_ms, 100ul);
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
-    ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
-    ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+    ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
+    ASSERT_EQ(stat.pct(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+}
+
+TEST(ReadLimiterTest, ReadMany)
+{
+    Int64 real_read_bytes{0};
+    auto get_read_bytes = [&]() {
+        return real_read_bytes;
+    };
+    auto request = [&](ReadLimiter & limiter, Int64 bytes) {
+        limiter.request(bytes);
+        real_read_bytes += bytes;
+    };
+
+    constexpr Int64 bytes_per_sec = 1000;
+    constexpr UInt64 refill_period_ms = 100;
+    ReadLimiter read_limiter(get_read_bytes, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), 100);
+    request(read_limiter, 1000);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
+    ASSERT_EQ(read_limiter.alloc_bytes, 100);
+
+    Stopwatch sw;
+    request(read_limiter, 1); // About 1000ms
+    auto req_ms = sw.elapsedMilliseconds();
+    // Theoretical value of `req_ms` is 1000.
+    // But time can be affected by many factors,
+    // such as machine load, process scheduling delays, clock jitter.
+    ASSERT_GE(req_ms, 950);
+    ASSERT_LT(req_ms, 1100);
 }
 
 #ifdef __linux__
@@ -707,6 +733,37 @@ TEST(IOLimitTunerTest, Tune)
         test4(t);
         test5(t);
     }
+}
+
+TEST(IOLimitTunerTest, Tune2)
+{
+    StorageIORateLimitConfig io_config;
+    io_config.max_bytes_per_sec = 2000;
+    io_config.min_bytes_per_sec = 10;
+
+    auto bg_write_stat = createLimiterStat(0, 1000, 1000, 990);
+    auto fg_write_stat = createLimiterStat(0, 1000, 1000, 990);
+    auto bg_read_stat = createLimiterStat(10, 1000, 1000, 10);
+    auto fg_read_stat = createLimiterStat(0, 1000, 1000, 10);
+
+    ASSERT_EQ(bg_write_stat->pct(), 0);
+    ASSERT_EQ(fg_write_stat->pct(), 0);
+    ASSERT_EQ(bg_read_stat->pct(), 100);
+    ASSERT_EQ(fg_read_stat->pct(), 0);
+    ASSERT_EQ(bg_read_stat->maxBytesPerSec(), 10);
+
+    IOLimitTuner tuner(
+        std::move(bg_write_stat),
+        std::move(fg_write_stat),
+        std::move(bg_read_stat),
+        std::move(fg_read_stat),
+        io_config);
+    ASSERT_EQ(tuner.readWatermark(), Emergency);
+
+    auto res = tuner.tune();
+    ASSERT_TRUE(res.write_tuned);
+    ASSERT_TRUE(res.read_tuned);
+    ASSERT_GT(res.max_bg_read_bytes_per_sec, 10);
 }
 
 } // namespace tests
