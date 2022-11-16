@@ -32,7 +32,7 @@ void checkPacketSize(size_t size)
 
 TrackedMppDataPacketPtr serializePacket(tipb::SelectResponse & response)
 {
-    auto tracked_packet = std::make_unique<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
     tracked_packet->serializeByResponse(response);
     checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
     return tracked_packet;
