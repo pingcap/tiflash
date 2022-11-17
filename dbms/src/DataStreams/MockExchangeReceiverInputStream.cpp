@@ -21,6 +21,7 @@ MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::Exc
     : output_index(0)
     , max_block_size(max_block_size)
     , rows(rows_)
+    , source_num(static_cast<size_t>(receiver.encoded_task_meta_size()))
 {
     for (int i = 0; i < receiver.field_types_size(); ++i)
     {

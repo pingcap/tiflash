@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <Common/MyDuration.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -86,6 +86,199 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
+};
+
+struct ExtractMyDurationImpl
+{
+    static Int64 signMultiplier(const MyDuration & duration)
+    {
+        return duration.isNeg() ? -1 : 1;
+    }
+
+    static Int64 extractHour(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.hours();
+    }
+
+    static Int64 extractMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.minutes();
+    }
+
+    static Int64 extractSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.seconds();
+    }
+
+    static Int64 extractMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.microSecond();
+    }
+
+    static Int64 extractSecondMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.seconds() * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractMinuteMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractMinuteSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractHourMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractHourSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractHourMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+
+    static Int64 extractDayMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractDaySecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractDayMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+
+    static Int64 extractDayHour(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.hours();
+    }
+};
+
+class FunctionExtractMyDuration : public IFunction
+{
+public:
+    static constexpr auto name = "extractMyDuration";
+
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionExtractMyDuration>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
+
+        if (!arguments[1]->isMyTime())
+            throw TiFlashException(
+                fmt::format("Illegal type {} of second argument of function {}. Must be Duration.", arguments[1]->getName(), getName()),
+                Errors::Coprocessor::BadRequest);
+
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        if (!unit_column)
+            throw TiFlashException(
+                fmt::format("First argument for function {} must be constant String", getName()),
+                Errors::Coprocessor::BadRequest);
+
+        String unit = Poco::toLower(unit_column->getValue<String>());
+
+        auto col_from = block.getByPosition(arguments[1]).column;
+
+        size_t rows = block.rows();
+        auto col_to = ColumnInt64::create(rows);
+        auto & vec_to = col_to->getData();
+
+        if (unit == "hour")
+            dispatch<ExtractMyDurationImpl::extractHour>(col_from, vec_to);
+        else if (unit == "minute")
+            dispatch<ExtractMyDurationImpl::extractMinute>(col_from, vec_to);
+        else if (unit == "second")
+            dispatch<ExtractMyDurationImpl::extractSecond>(col_from, vec_to);
+        else if (unit == "microsecond")
+            dispatch<ExtractMyDurationImpl::extractMicrosecond>(col_from, vec_to);
+        else if (unit == "second_microsecond")
+            dispatch<ExtractMyDurationImpl::extractSecondMicrosecond>(col_from, vec_to);
+        else if (unit == "minute_microsecond")
+            dispatch<ExtractMyDurationImpl::extractMinuteMicrosecond>(col_from, vec_to);
+        else if (unit == "minute_second")
+            dispatch<ExtractMyDurationImpl::extractMinuteSecond>(col_from, vec_to);
+        else if (unit == "hour_microsecond")
+            dispatch<ExtractMyDurationImpl::extractHourMicrosecond>(col_from, vec_to);
+        else if (unit == "hour_second")
+            dispatch<ExtractMyDurationImpl::extractHourSecond>(col_from, vec_to);
+        else if (unit == "hour_minute")
+            dispatch<ExtractMyDurationImpl::extractHourMinute>(col_from, vec_to);
+        else if (unit == "day_microsecond")
+            dispatch<ExtractMyDurationImpl::extractDayMicrosecond>(col_from, vec_to);
+        else if (unit == "day_second")
+            dispatch<ExtractMyDurationImpl::extractDaySecond>(col_from, vec_to);
+        else if (unit == "day_minute")
+            dispatch<ExtractMyDurationImpl::extractDayMinute>(col_from, vec_to);
+        else if (unit == "day_hour")
+            dispatch<ExtractMyDurationImpl::extractDayHour>(col_from, vec_to);
+        else
+            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    using Func = Int64 (*)(Int64);
+
+    template <Func F>
+    static void dispatch(const ColumnPtr col_from, PaddedPODArray<Int64> & vec_to)
+    {
+        if (const auto * from = checkAndGetColumn<ColumnInt64>(col_from.get()); from)
+        {
+            const auto & data = from->getData();
+            vectorDuration<F>(data, vec_to);
+        }
+    }
+
+    template <Func F>
+    static void vectorDuration(const ColumnInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(vec_from.size());
+        for (size_t i = 0; i < vec_from.size(); i++)
+        {
+            vec_to[i] = F(vec_from[i]);
+        }
+    }
 };
 
 } // namespace DB

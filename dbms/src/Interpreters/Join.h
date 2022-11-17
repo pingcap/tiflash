@@ -21,7 +21,6 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataStreams/SizeLimits.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
@@ -95,10 +94,11 @@ public:
     Join(const Names & key_names_left_,
          const Names & key_names_right_,
          bool use_nulls_,
-         const SizeLimits & limits,
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
+         bool enable_fine_grained_shuffle_,
+         size_t fine_grained_shuffle_count_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
@@ -113,7 +113,7 @@ public:
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
-    bool insertFromBlock(const Block & block);
+    void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
@@ -158,8 +158,6 @@ public:
         std::shared_lock lock(rwlock);
         return getNotJoinedStreamConcurrencyInternal();
     }
-
-    bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
 
     enum BuildTableState
     {
@@ -290,7 +288,6 @@ private:
     bool use_nulls;
 
     size_t build_concurrency;
-    std::atomic_bool build_set_exceeded;
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
@@ -340,9 +337,6 @@ private:
 
     const LoggerPtr log;
 
-    /// Limits for maximum map size.
-    SizeLimits limits;
-
     Block totals;
     std::atomic<size_t> total_input_build_rows{0};
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
@@ -353,6 +347,8 @@ private:
     mutable std::shared_mutex rwlock;
 
     bool initialized = false;
+    bool enable_fine_grained_shuffle = false;
+    size_t fine_grained_shuffle_count = 0;
 
     size_t getBuildConcurrencyInternal() const
     {
@@ -384,7 +380,7 @@ private:
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
       */
-    bool insertFromBlockInternal(Block * stored_block, size_t stream_index);
+    void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;

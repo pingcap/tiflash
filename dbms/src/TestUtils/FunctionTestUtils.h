@@ -377,6 +377,60 @@ ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const std::optional
     return {std::move(col), data_type_ptr, "datetime"};
 }
 
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDurationColumn(std::initializer_list<std::optional<MyDuration>> init, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDuration>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+    auto col = data_type_ptr->createColumn();
+    for (const auto & dt : init)
+    {
+        if (dt.has_value())
+            col->insert(Field(dt->nanoSecond()));
+        else
+        {
+            if constexpr (is_nullable)
+            {
+                col->insert(Null());
+            }
+            else
+            {
+                throw Exception("Null value for not nullable DataTypeMyDuration");
+            }
+        }
+    }
+    return {std::move(col), data_type_ptr, "duration"};
+}
+
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDurationColumnConst(size_t size, const std::optional<MyDuration> & duration, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDuration>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+
+    ColumnPtr col;
+    if (duration.has_value())
+        col = data_type_ptr->createColumnConst(size, Field(duration->nanoSecond()));
+    else
+    {
+        if constexpr (is_nullable)
+        {
+            col = data_type_ptr->createColumnConst(size, Field(Null()));
+        }
+        else
+        {
+            throw Exception("Null value for not nullable DataTypeMyDuration");
+        }
+    }
+    return {std::move(col), data_type_ptr, "duration"};
+}
+
 // parse a string into decimal field.
 template <typename T>
 typename TypeTraits<T>::FieldType parseDecimal(

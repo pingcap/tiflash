@@ -39,11 +39,14 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const Block & sample_block_,
-        const BlockInputStreams & mock_streams_);
+        const BlockInputStreams & mock_streams,
+        size_t source_num_);
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
+
+    size_t getSourceNum() const { return source_num; };
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
@@ -52,5 +55,6 @@ private:
     Block sample_block;
 
     BlockInputStreams mock_streams;
+    size_t source_num = 0;
 };
 } // namespace DB

@@ -17,6 +17,7 @@
 #include <Common/PODArray.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <Flash/Coprocessor/CodecUtils.h>
 #include <IO/CompressedReadBufferFromFile.h>
 
 namespace DB
@@ -116,19 +117,7 @@ private:
     Block header;
     UInt64 server_revision;
     bool align_column_name_with_header = false;
-
-    struct DataTypeWithTypeName
-    {
-        DataTypeWithTypeName(const DataTypePtr & t, const String & n)
-            : type(t)
-            , name(n)
-        {
-        }
-
-        DataTypePtr type;
-        String name;
-    };
-    std::vector<DataTypeWithTypeName> header_datatypes;
+    std::vector<CodecUtils::DataTypeWithTypeName> header_datatypes;
 
     bool use_index = false;
     IndexForNativeFormat::Blocks::const_iterator index_block_it;
@@ -136,7 +125,7 @@ private:
     IndexOfBlockForNativeFormat::Columns::const_iterator index_column_it;
 
     /// If an index is specified, then `istr` must be CompressedReadBufferFromFile.
-    CompressedReadBufferFromFile<> * istr_concrete;
+    CompressedReadBufferFromFile<> * istr_concrete = nullptr;
 
     PODArray<double> avg_value_size_hints;
 

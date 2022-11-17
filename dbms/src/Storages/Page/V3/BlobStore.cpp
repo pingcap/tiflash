@@ -20,6 +20,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/formatReadable.h>
 #include <Poco/File.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
@@ -27,6 +28,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/WriteBatch.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
@@ -34,6 +36,7 @@
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
+#include <unordered_map>
 
 namespace ProfileEvents
 {
@@ -523,73 +526,6 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     }
 }
 
-void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
-{
-    if (entries.empty())
-    {
-        return;
-    }
-
-    ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
-
-    // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
-        return a.second.offset < b.second.offset;
-    });
-
-    // allocate data_buf that can hold all pages
-    size_t buf_size = 0;
-    for (const auto & p : entries)
-        buf_size = std::max(buf_size, p.second.size);
-
-    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
-    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
-    if (buf_size == 0)
-    {
-        for (const auto & [page_id_v3, entry] : entries)
-        {
-            (void)entry;
-            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page(page_id_v3);
-            handler(page_id_v3.low, page);
-        }
-        return;
-    }
-
-    char * data_buf = static_cast<char *>(alloc(buf_size));
-    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
-        free(p, buf_size);
-    });
-
-    for (const auto & [page_id_v3, entry] : entries)
-    {
-        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
-
-        if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
-        {
-            ChecksumClass digest;
-            digest.update(data_buf, entry.size);
-            auto checksum = digest.checksum();
-            if (unlikely(entry.size != 0 && checksum != entry.checksum))
-            {
-                throw Exception(
-                    fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                                page_id_v3,
-                                entry.checksum,
-                                checksum,
-                                toDebugString(entry),
-                                blob_file->getPath()),
-                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
-            }
-        }
-
-        Page page(page_id_v3);
-        page.data = ByteBuffer(data_buf, data_buf + entry.size);
-        page.mem_holder = mem_holder;
-        handler(page_id_v3.low, page);
-    }
-}
-
 PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
     if (to_read.empty())
@@ -1005,7 +941,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Check if GC is required
             if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
             {
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
                 blob_need_gc.emplace_back(stat->id);
 
                 // Change current stat to read only
@@ -1015,7 +951,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             else
             {
                 blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, no need to GC", stat->id, stat->sm_valid_rate);
             }
 
             if (right_margin != stat->sm_total_size)
@@ -1049,7 +985,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
+    LOG_INFO(log, "BlobStore gc will migrate {} into new blob files", formatReadableSizeWithBinarySuffix(total_page_size));
 
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
                                                                               char * data_begin,

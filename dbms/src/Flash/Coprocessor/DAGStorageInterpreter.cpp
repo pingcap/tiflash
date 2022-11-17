@@ -534,7 +534,9 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+        std::multimap<std::string, std::string> meta_data;
+        meta_data.emplace("is_remote_read", "true");
+        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"), std::move(meta_data));
         all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
     }
     return all_tasks;
@@ -546,11 +548,11 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     {
         DisaggregatedTiFlashTableScanInterpreter tsc_interpreter(context, table_scan, remote_requests, log);
         tsc_interpreter.execute(pipeline);
-        return;
     }
     else
     {
         std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
+        GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(static_cast<double>(all_tasks.size()));
 
         const DAGSchema & schema = remote_requests[0].schema;
         pingcap::kv::Cluster * cluster = tmt.getKVCluster();
@@ -560,18 +562,29 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
         size_t rest_task = all_tasks.size() % concurrent_num;
         for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
         {
-            size_t task_end = task_start + task_per_thread;
-            if (i < rest_task)
-                task_end++;
-            if (task_end == task_start)
-                continue;
-            std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+            std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
 
-            auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-            context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
-            BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-            pipeline.streams.push_back(input);
-            task_start = task_end;
+            const DAGSchema & schema = remote_requests[0].schema;
+            pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+            bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+            size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+            size_t task_per_thread = all_tasks.size() / concurrent_num;
+            size_t rest_task = all_tasks.size() % concurrent_num;
+            for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
+            {
+                size_t task_end = task_start + task_per_thread;
+                if (i < rest_task)
+                    task_end++;
+                if (task_end == task_start)
+                    continue;
+                std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+
+                auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+                context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+                BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
+                pipeline.streams.push_back(input);
+                task_start = task_end;
+            }
         }
     }
 }
