@@ -123,8 +123,8 @@ storage_engine = "dt"
 [security]
 ## The path for certificates. An empty string means that secure connections are disabled.
 # Path of the file that contains a list of trusted SSL CAs. If it is set, the following settings `cert_path` and `key_path` are also needed.
-ca_path = "tls/ca.pem"
+ca_path = "/tls/ca.pem"
 # Path of the file that contains X509 certificate in PEM format.
-cert_path = "tls/tiflash-server.pem"
+cert_path = "/tls/tiflash-server.pem"
 # Path of the file that contains X509 key in PEM format.
-key_path = "tls/tiflash-server-key.pem"
+key_path = "/tls/tiflash-server-key.pem"
