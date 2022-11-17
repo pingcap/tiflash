@@ -208,16 +208,21 @@ public:
                 reader.reset();
                 LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
                 retryOrDone("Exchange receiver meet error : send async stream request fail");
+                if (retry_times >= max_retry_times)
+                    notifyReactor();
             }
             else
             {
-                notifyReactor();
+                stage = AsyncRequestStage::WAIT_BATCH_READ;
+                read_packet_index = 0;
+                reader->read(packets[0], thisAsUnaryCallback());
             }
             break;
         }
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
+
             if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
                 notifyReactor();
             else
@@ -238,11 +243,6 @@ public:
         LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
         switch (stage)
         {
-        case AsyncRequestStage::WAIT_MAKE_READER:
-            stage = AsyncRequestStage::WAIT_BATCH_READ;
-            read_packet_index = 0;
-            reader->read(packets[0], thisAsUnaryCallback());
-            break;
         case AsyncRequestStage::WAIT_BATCH_READ:
             LOG_TRACE(log, "Received {} packets.", read_packet_index);
             if (read_packet_index > 0)
