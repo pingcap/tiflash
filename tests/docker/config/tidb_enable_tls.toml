@@ -18,8 +18,8 @@ host = "0.0.0.0"
 
 [security]
 # Path of the file that contains list of trusted SSL CAs for connection with cluster components.
-cluster-ssl-ca = "ca.pem"
+cluster-ssl-ca = "/tls/ca.pem"
 # Path of the file that contains X509 certificate in PEM format for connection with cluster components.
-cluster-ssl-cert = "tidb-server.pem"
+cluster-ssl-cert = "/tls/tidb-server.pem"
 # Path of the file that contains X509 key in PEM format for connection with cluster components.
-cluster-ssl-key = "tidb-server-key.pem"
+cluster-ssl-key = "/tls/tidb-server-key.pem"

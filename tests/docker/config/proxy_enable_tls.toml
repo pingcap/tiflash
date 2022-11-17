@@ -21,11 +21,11 @@
 
 [security]
 # Path of the file that contains list of trusted SSL CAs for connection with cluster components.
-cluster-ssl-ca = "ca.pem"
+cluster-ssl-ca = "/tls/ca.pem"
 # Path of the file that contains X509 certificate in PEM format for connection with cluster components.
-cluster-ssl-cert = "tiflash-server.pem"
+cluster-ssl-cert = "/tls/tiflash-server.pem"
 # Path of the file that contains X509 key in PEM format for connection with cluster components.
-cluster-ssl-key = "tiflash-server-key.pem"
+cluster-ssl-key = "/tls/tiflash-server-key.pem"
 
 [security.encryption]
 data-encryption-method = "aes256-ctr"
