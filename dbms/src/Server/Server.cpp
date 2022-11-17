@@ -229,7 +229,6 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-
 struct TiFlashProxyConfig
 {
     static const std::string config_prefix;
