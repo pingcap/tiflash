@@ -68,13 +68,13 @@ protected:
         *table_columns = *columns;
 
         dm_context = std::make_shared<DMContext>(*db_context,
-                                                  *path_pool,
-                                                  *storage_pool,
-                                                  /*min_version_*/ 0,
-                                                  settings.not_compress_columns,
-                                                  is_common_handle,
-                                                  rowkey_column_size,
-                                                  db_context->getSettingsRef());
+                                                 *path_pool,
+                                                 *storage_pool,
+                                                 /*min_version_*/ 0,
+                                                 settings.not_compress_columns,
+                                                 is_common_handle,
+                                                 rowkey_column_size,
+                                                 db_context->getSettingsRef());
     }
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
@@ -280,7 +280,7 @@ CATCH
 
 class SegmentDeletionCommonHandleTest : public SegmentCommonHandleTest
     , //
-                                           public testing::WithParamInterface<std::tuple<bool, bool>>
+                                        public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 };
 

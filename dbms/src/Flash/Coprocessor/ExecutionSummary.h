@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <common/types.h>
 #include <Storages/DeltaMerge/FullTableScanContext.h>
+#include <common/types.h>
 
 namespace DB
 {

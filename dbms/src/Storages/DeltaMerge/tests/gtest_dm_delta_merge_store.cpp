@@ -30,11 +30,14 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <gtest/gtest.h>
 
 #include <algorithm>
 #include <future>
 #include <iterator>
 #include <random>
+
+#include "Storages/DeltaMerge/ReadThread/UnorderedInputStream.h"
 
 namespace DB
 {
@@ -411,6 +414,99 @@ try
     }
 }
 CATCH
+
+TEST_P(DeltaMergeStoreRWTest, SimpleReadCheckFullTableScanContext)
+try
+{
+    const ColumnDefine col_a_define(2, "col_a", std::make_shared<DataTypeInt64>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_a_define);
+
+        store = reload(table_column_defines);
+    }
+
+    const size_t num_rows_write = 50000;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            block.insert(DB::tests::createColumn<Int64>(
+                createSignedNumbers(0, num_rows_write),
+                col_a_define.name,
+                col_a_define.id));
+        }
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*db_context, db_context->getSettingsRef(), block);
+            break;
+        default:
+        {
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->ingestFiles(dm_context, range, file_ids, false);
+            break;
+        }
+        }
+    }
+
+    // merge into stable layer
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->mergeDeltaAll(*db_context);
+
+    const auto & columns = store->getTableColumns();
+    auto in = store->read(*db_context,
+                          db_context->getSettingsRef(),
+                          columns,
+                          {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                          /* num_streams= */ 1,
+                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                          EMPTY_FILTER,
+                          TRACING_NAME,
+                          /* keep_order= */ false,
+                          /* is_fast_scan= */ false,
+                          /* expected_block_size= */ 1024)[0];
+    in->readPrefix();
+    while (in->read()) {};
+    in->readSuffix();
+
+    auto * unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(in.get());
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_packs_count, 7);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_rows_count, 50000);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_packs_count, 0);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_rows_count, 0);
+
+    auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
+
+    in = store->read(*db_context,
+                     db_context->getSettingsRef(),
+                     columns,
+                     {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                     /* num_streams= */ 1,
+                     /* max_version= */ std::numeric_limits<UInt64>::max(),
+                     filter,
+                     TRACING_NAME,
+                     /* keep_order= */ false,
+                     /* is_fast_scan= */ false,
+                     /* expected_block_size= */ 1024)[0];
+
+    in->readPrefix();
+    while (in->read()) {};
+    in->readSuffix();
+
+    unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(in.get());
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_packs_count, 6);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_rows_count, 41808);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_packs_count, 1);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_rows_count, 8192);
+}
+CATCH
+
 
 TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithoutCache)
 try

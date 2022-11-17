@@ -28,7 +28,7 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
 
-
+//TODO 要修改，加入新的 summary
 namespace DB
 {
 namespace tests
@@ -49,7 +49,7 @@ struct MockWriter
         : queue(queue_)
     {}
 
-    ExecutionSummary mockExecutionSummary()
+    static ExecutionSummary mockExecutionSummary()
     {
         ExecutionSummary summary;
         summary.time_processed_ns = 100;
@@ -59,7 +59,7 @@ struct MockWriter
         return summary;
     }
 
-    void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
+    static void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
     void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet)
     {
         ++total_packets;
@@ -88,7 +88,7 @@ struct MockWriter
         queue->push(tracked_packet);
     }
     void sendExecutionSummary(tipb::SelectResponse & response) { write(response); }
-    uint16_t getPartitionNum() const { return 1; }
+    static uint16_t getPartitionNum() { return 1; }
 
     PacketQueuePtr queue;
     bool add_summary = false;
@@ -102,7 +102,7 @@ struct MockReceiverContext
     using Status = ::grpc::Status;
     struct Request
     {
-        String debugString() const
+        static String debugString() 
         {
             return "{Request}";
         }
@@ -133,7 +133,7 @@ struct MockReceiverContext
             return false;
         }
 
-        Status finish() const
+        static Status finish() 
         {
             return ::grpc::Status();
         }
@@ -148,9 +148,9 @@ struct MockReceiverContext
     struct MockAsyncGrpcExchangePacketReader
     {
         // Not implement benchmark for Async GRPC for now.
-        void init(UnaryCallback<bool> *) { assert(0); }
-        void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
-        void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        static void init(UnaryCallback<bool> *) { assert(0); }
+        static void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
+        static void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
     };
 
     using AsyncReader = MockAsyncGrpcExchangePacketReader;
@@ -174,7 +174,7 @@ struct MockReceiverContext
         }
     }
 
-    Request makeRequest(int index) const
+    static Request makeRequest(int index) 
     {
         return {index, index, -1};
     }
@@ -189,7 +189,7 @@ struct MockReceiverContext
         return ::grpc::Status();
     }
 
-    bool supportAsync(const Request &) const { return false; }
+    static bool supportAsync(const Request &) { return false; }
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
@@ -286,7 +286,7 @@ public:
     void prepareQueue(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet)
+        bool empty_last_packet) const
     {
         prepareBlocks(source_blocks, empty_last_packet);
 
@@ -308,7 +308,7 @@ public:
     void prepareQueueV2(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet)
+        bool empty_last_packet) const
     {
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
         prepareBlocks(source_blocks, empty_last_packet);
@@ -329,7 +329,7 @@ public:
         dag_writer->finishWrite();
     }
 
-    void checkChunkInResponse(
+    static void checkChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -347,7 +347,7 @@ public:
         ASSERT_BLOCK_EQ(reference_block, decoded_block);
     }
 
-    void checkNoChunkInResponse(
+    static void checkNoChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -355,7 +355,7 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        auto summary = receiver_stream->getRemoteExecutionSummaries(0);
+        const auto *summary = receiver_stream->getRemoteExecutionSummaries(0);
         ASSERT_TRUE(summary != nullptr);
         ASSERT_EQ(summary->size(), 1);
         ASSERT_EQ(summary->begin()->first, "Executor_0");
@@ -373,7 +373,7 @@ public:
         ASSERT_EQ(receiver_stream->getTotalRows(), reference_block.rows());
     }
 
-    std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
+    static std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
         PacketQueuePtr queue_ptr)
     {
         auto receiver = std::make_shared<MockExchangeReceiver>(

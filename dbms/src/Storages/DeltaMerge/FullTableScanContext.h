@@ -14,12 +14,18 @@
 
 #pragma once
 
+#include <fmt/format.h>
+
 #include <atomic>
+
 #include "common/types.h"
+#include "tipb/executor.pb.h"
 
-namespace DB::DM {
+namespace DB::DM
+{
 
-class FullTableScanContext {
+class FullTableScanContext
+{
 public:
     std::atomic<uint64_t> scan_packs_count{0}; // number of scan packs
     std::atomic<uint64_t> skip_packs_count{0}; // number of skip packs
@@ -29,14 +35,33 @@ public:
 
     FullTableScanContext() = default;
 
-    void merge(const FullTableScanContext* other) {
+    explicit FullTableScanContext(const tipb::FullTableScanContext full_table_scan_context_pb)
+    {
+        scan_packs_count = full_table_scan_context_pb.scan_packs_count();
+        skip_packs_count = full_table_scan_context_pb.skip_packs_count();
+        scan_rows_count = full_table_scan_context_pb.scan_rows_count();
+        skip_rows_count = full_table_scan_context_pb.skip_rows_count();
+    }
+
+
+    void merge(const FullTableScanContext * other)
+    {
+        std::cout << " FullTableScanContext info " << toDebugString() << " and merge with " << other->toDebugString() << std::endl;
+
         scan_packs_count += other->scan_packs_count;
         skip_packs_count += other->skip_packs_count;
         scan_rows_count += other->scan_rows_count;
         skip_rows_count += other->skip_rows_count;
     }
 
-    String toDebugString() const;
+    String toDebugString() const
+    {
+        return fmt::format("scan_packs_count: {}, skip_packs_count: {}, scan_rows_count: {}, skip_rows_count: {}",
+                           scan_packs_count.load(),
+                           skip_packs_count.load(),
+                           scan_rows_count.load(),
+                           skip_rows_count.load());
+    }
 };
 
-}
+} // namespace DB::DM

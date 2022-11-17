@@ -18,6 +18,7 @@
 
 #include "Storages/DeltaMerge/DMSegmentThreadInputStream.h"
 #include "Storages/DeltaMerge/ReadThread/UnorderedInputStream.h"
+#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -44,6 +45,9 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
 
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
+
+    std::cout << " fillTiExecutionSummary execution_summary is " << execution_summary->DebugString() << std::endl;
+    LOG_INFO(Logger::get("[hyy]"), "fillTiExecutionSummary execution_summary is {}", execution_summary->DebugString());
 }
 
 template <typename RemoteBlockInputStream>
@@ -71,6 +75,7 @@ void mergeRemoteExecuteSummaries(
 
 void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & response)
 {
+    std::cout << "====== [begin ExecutionSummaryCollector::addExecuteSummaries] ======= " << std::endl;
     if (!dag_context.collect_execution_summaries)
         return;
     /// get executionSummary info from remote input streams
@@ -79,12 +84,15 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     {
         for (const auto & stream_ptr : map_entry.second)
         {
+            // 这边应该不会有 table scan 的数据
             if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
             {
+                std::cout << " into ExchangeReceiverInputStream with map_entry.first " << map_entry.first << std::endl;
                 mergeRemoteExecuteSummaries(exchange_receiver_stream_ptr, merged_remote_execution_summaries);
             }
             else if (auto * cop_stream_ptr = dynamic_cast<CoprocessorBlockInputStream *>(stream_ptr.get()))
             {
+                std::cout << " into CoprocessorBlockInputStream " << std::endl;
                 mergeRemoteExecuteSummaries(cop_stream_ptr, merged_remote_execution_summaries);
             }
             else
@@ -95,8 +103,11 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     }
 
     auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams) {
+        std::cout << " === begin fill_execution_summary with " + executor_id + "==== " << std::endl;
         ExecutionSummary current;
+        bool get_storage_info = false;
         /// part 1: local execution info
+        std::cout << " === local execution info ==== " << std::endl;
         for (const auto & stream_ptr : streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
@@ -105,18 +116,34 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
                 current.num_iterations += p_stream->getProfileInfo().blocks;
 
-                if (auto * local_unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(p_stream))
-                { // check 一下有没有更优雅的写法，这样写后面 input stream 越来越多咋办
-                    current.full_table_scan_context->merge(local_unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr.get());
-                }
-                else if (auto * local_dm_segment_thread_input_stream = dynamic_cast<DB::DM::DMSegmentThreadInputStream *>(stream_ptr.get()))
+                if (!get_storage_info)
                 {
-                    current.full_table_scan_context->merge(local_dm_segment_thread_input_stream->getDMContext()->full_table_scan_context_ptr.get());
+                    // There may be multiple UnorderedInputStream in the same executor, but they share the same full_table_scan_context,
+                    // Thus we only calculate the full_table_scan_context once;
+                    if (auto * local_unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(p_stream))
+                    { // check 一下有没有更优雅的写法，这样写后面 input stream 越来越多咋办
+                        if (local_unordered_input_stream_ptr->getDMContext() && local_unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr)
+                        {
+                            std::cout << " UnorderedInputStream get full_table_scan_context " << std::endl;
+                            current.full_table_scan_context->merge(local_unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr.get());
+                            get_storage_info = true;
+                        }
+                    }
+                    else if (auto * local_dm_segment_thread_input_stream = dynamic_cast<DB::DM::DMSegmentThreadInputStream *>(stream_ptr.get()))
+                    {
+                        if (local_dm_segment_thread_input_stream->getDMContext() && local_dm_segment_thread_input_stream->getDMContext()->full_table_scan_context_ptr)
+                        {
+                            std::cout << " DMSegmentThreadInputStream get full_table_scan_context " << std::endl;
+                            current.full_table_scan_context->merge(local_dm_segment_thread_input_stream->getDMContext()->full_table_scan_context_ptr.get());
+                            get_storage_info = true;
+                        }
+                    }
                 }
             }
             current.concurrency++;
         }
         /// part 2: remote execution info
+        std::cout << " === remote execution info ==== " << std::endl;
         if (merged_remote_execution_summaries.find(executor_id) != merged_remote_execution_summaries.end())
         {
             for (auto & remote : merged_remote_execution_summaries[executor_id])
@@ -146,17 +173,21 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;
+        std::cout << " == begin fillTiExecutionSummary == " << std::endl;
         fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
+        std::cout << " == end fillTiExecutionSummary == " << std::endl;
     };
 
     /// add execution_summary for local executor
     if (dag_context.return_executor_id)
     {
+        std::cout << " calculate the local streams with return executor id" << std::endl;
         for (auto & p : dag_context.getProfileStreamsMap())
             fill_execution_summary(p.first, p.second);
     }
     else
     {
+        std::cout << " calculate the local streams with list_based_executors_order" << std::endl;
         const auto & profile_streams_map = dag_context.getProfileStreamsMap();
         assert(profile_streams_map.size() == dag_context.list_based_executors_order.size());
         for (const auto & executor_id : dag_context.list_based_executors_order)
@@ -167,6 +198,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         }
     }
 
+    std::cout << " calculate the merged_remote_execution_summaries with no local executor " << std::endl;
     for (auto & p : merged_remote_execution_summaries)
     {
         if (local_executors.find(p.first) == local_executors.end())
@@ -177,5 +209,6 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
             fillTiExecutionSummary(response.add_execution_summaries(), merged, p.first);
         }
     }
+    std::cout << "======= [finish ExecutionSummaryCollector::addExecuteSummaries] ======= " << std::endl;
 }
 } // namespace DB

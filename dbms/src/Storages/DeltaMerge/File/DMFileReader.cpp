@@ -280,6 +280,8 @@ DMFileReader::DMFileReader(
             last_read_from_cache[cd.id] = false;
         }
     }
+
+    std::cout << " DMFileReader init with next_pack_id is " << next_pack_id << std::endl;
 }
 
 bool DMFileReader::shouldSeek(size_t pack_id)
@@ -296,7 +298,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
-        if (dm_context->db_context.getDAGContext()->collect_execution_summaries)
+        if (dm_context && dm_context->full_table_scan_context_ptr)
         {
             dm_context->full_table_scan_context_ptr->skip_packs_count += 1;
             dm_context->full_table_scan_context_ptr->skip_rows_count += pack_stats[next_pack_id].rows;
@@ -319,6 +321,7 @@ Block DMFileReader::read()
 {
     // Go to next available pack.
     size_t skip_rows;
+
     getSkippedRows(skip_rows);
 
     const auto & use_packs = pack_filter.getUsePacks();
@@ -374,12 +377,12 @@ Block DMFileReader::read()
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
 
-    if (dm_context->db_context.getDAGContext()->collect_execution_summaries)
+    // if (dm_context && dm_context->db_context.getDAGContext() && dm_context->db_context.getDAGContext()->collect_execution_summaries && dm_context->full_table_scan_context_ptr){
+    if (dm_context && dm_context->full_table_scan_context_ptr)
     {
         dm_context->full_table_scan_context_ptr->scan_packs_count += read_packs;
         dm_context->full_table_scan_context_ptr->scan_rows_count += read_rows;
     }
-
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_scan);

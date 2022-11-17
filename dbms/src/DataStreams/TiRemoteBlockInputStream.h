@@ -31,6 +31,8 @@
 #include <thread>
 #include <utility>
 
+#include "Storages/DeltaMerge/FullTableScanContext.h"
+
 namespace DB
 {
 // TiRemoteBlockInputStream is a block input stream that read/receive data from remote.
@@ -78,6 +80,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows = execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations = execution_summary.num_iterations();
                 remote_execution_summary.concurrency = execution_summary.concurrency();
+                auto full_table_scan_context = DM::FullTableScanContext(execution_summary.full_table_scan_context());
+                remote_execution_summary.full_table_scan_context->merge(&full_table_scan_context);
             }
         }
         execution_summaries_inited[index].store(true);
@@ -115,6 +119,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations += execution_summary.num_iterations();
                 remote_execution_summary.concurrency += execution_summary.concurrency();
+                auto full_table_scan_context = DM::FullTableScanContext(execution_summary.full_table_scan_context());
+                remote_execution_summary.full_table_scan_context->merge(&full_table_scan_context);
             }
         }
     }
