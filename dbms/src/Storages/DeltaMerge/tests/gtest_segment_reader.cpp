@@ -202,7 +202,6 @@ try
     ASSERT_EQ(dmfiles.size(), 1);
     auto dmfile = dmfiles.front();
     auto readable_path = DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
-    std::cerr << "readable_path except null: " << readable_path << std::endl;
     ASSERT_EQ(dmfile->path(), readable_path);
     ASSERT_EQ(DMFileReaderPool::instance().get(readable_path), nullptr);
 
@@ -219,10 +218,8 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 128)[0];
-        std::cerr << "in stream read: " << readable_path << std::endl;
         auto blk = in->read();
         // DMFileReader is created and add to DMFileReaderPool.
-        std::cerr << "get readable_path except not null: " << readable_path << std::endl;
         auto * reader = DMFileReaderPool::instance().get(readable_path);
         ASSERT_NE(reader, nullptr);
         ASSERT_EQ(reader->path(), readable_path);
