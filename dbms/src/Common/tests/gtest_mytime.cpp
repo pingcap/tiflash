@@ -76,7 +76,7 @@ public:
         if (expect_error)
         {
             MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-            EXPECT_THROW({ numberToDateTime(input, datetime, ctx); }, TiFlashException) << "Original time number: " << input;
+            EXPECT_TRUE(numberToDateTime(input, datetime, ctx));
             return;
         }
 
