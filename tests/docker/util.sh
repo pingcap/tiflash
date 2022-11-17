@@ -111,9 +111,20 @@ function check_env() {
   fi
 }
 
+function update_tls_file() {
+  file=$1
+  exec "cp $file.pem $file.pem.old && cp $file-new.pem $file.pem \
+    cp $file-key.pem $file-key.pem.old && cp $file-key-new.pem $file-key.pem"
+}
+
+function update_tls() {
+  update_tls_file "tiflash-server"
+}
+
 export -f show_env
 export -f wait_env
 export -f wait_tiflash_env
 export -f set_branch
 export -f clean_data_log
 export -f check_env
+export -f update_tls
