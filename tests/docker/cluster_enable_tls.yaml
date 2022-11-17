@@ -21,9 +21,9 @@ services:
       - ./config/pd_enable_tls.toml:/pd.toml:ro
       - ./data/pd0:/data
       - ./log/pd0:/log
-      - ./tls/ca.pem:/ca.pem
-      - ./tls/pd-server.pem:/pd-server.pem
-      - ./tls/pd-server-key.pem:/pd-server-key.pem
+      - ./tls/ca.pem:ca.pem
+      - ./tls/pd-server.pem:pd-server.pem
+      - ./tls/pd-server-key.pem:pd-server-key.pem
     command:
       - --name=pd0
       - --client-urls=http://0.0.0.0:2379
@@ -41,9 +41,9 @@ services:
       - ./config/tikv_enable_tls.toml:/tikv.toml:ro
       - ./data/tikv0:/data
       - ./log/tikv0:/log
-      - ./tls/ca.pem:/ca.pem
-      - ./tls/tikv-server.pem:/tikv-server.pem
-      - ./tls/tikv-server-key.pem:/tikv-server-key.pem
+      - ./tls/ca.pem:ca.pem
+      - ./tls/tikv-server.pem:tikv-server.pem
+      - ./tls/tikv-server-key.pem:tikv-server-key.pem
     command:
       - --addr=0.0.0.0:20160
       - --advertise-addr=tikv0:20160
@@ -61,9 +61,9 @@ services:
     volumes:
       - ./config/tidb_enable_tls.toml:/tidb.toml:ro
       - ./log/tidb0:/log
-      - ./tls/ca.pem:/ca.pem
-      - ./tls/tidb-server.pem:/tidb-server.pem
-      - ./tls/tidb-server-key.pem:/tidb-server-key.pem
+      - ./tls/ca.pem:ca.pem
+      - ./tls/tidb-server.pem:tidb-server.pem
+      - ./tls/tidb-server-key.pem:tidb-server-key.pem
     command:
       - --store=tikv
       - --path=pd0:2379

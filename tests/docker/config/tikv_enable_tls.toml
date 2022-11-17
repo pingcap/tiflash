@@ -29,8 +29,8 @@ capacity = "100GB"
 [security]
 ## The path for certificates. An empty string means that secure connections are disabled.
 # Path of the file that contains a list of trusted SSL CAs. If it is set, the following settings `cert_path` and `key_path` are also needed.
-ca-path = "/ca.pem"
+ca-path = "ca.pem"
 # Path of the file that contains X509 certificate in PEM format.
-cert-path = "/tikv-server.pem"
+cert-path = "tikv-server.pem"
 # Path of the file that contains X509 key in PEM format.
-key-path = "/tikv-server-key.pem"
+key-path = "tikv-server-key.pem"

@@ -30,9 +30,12 @@ services:
       - ./config/cipher-file-256:/cipher-file-256:ro
       - ./data/proxy:/data
       - ./log/proxy:/log
-      - ./tls/ca.pem:/ca.pem
-      - ./tls/tiflash-server.pem:/tiflash-server.pem
-      - ./tls/tiflash-server-key.pem:/tiflash-server-key.pem
+      - ./tls/ca.pem:ca.pem
+      - ./tls/tiflash-server.pem:tiflash-server.pem
+      - ./tls/tiflash-server-key.pem:tiflash-server-key.pem
+      - ./tls/ca-new.pem:ca-new.pem
+      - ./tls/tiflash-server-new.pem:tiflash-server-new.pem
+      - ./tls/tiflash-server-key-new.pem:tiflash-server-key-new.pem
       - ../.build/tiflash:/tiflash
     entrypoint:
       - /tiflash/tiflash
