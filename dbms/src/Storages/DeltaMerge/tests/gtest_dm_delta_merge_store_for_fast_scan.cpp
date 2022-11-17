@@ -1135,7 +1135,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({createColumn<Int64>(createNumbers<Int64>(num_write_rows / 2, 2 * num_write_rows))}));
