@@ -16,6 +16,7 @@
 #include <Common/OptimizedRegularExpression.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Exception.h>
+#include <Common/UTF8Helpers.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -472,30 +473,6 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
     }
 }
 
-// Convert utf8 position to byte position.
-// For Example:
-//   Taking string "ni好a" as an example.
-//   utf8 position of character 'a' in this string is 4 and byte position is 6.
-static inline Int64 utf8Pos2bytePos(const char * str, Int64 utf8_pos)
-{
-    Int64 byte_index = 0;
-    utf8_pos--;
-    while (utf8_pos > 0)
-    {
-        byte_index += getUtf8Len(str[byte_index]);
-        utf8_pos--;
-    }
-    return byte_index + 1;
-}
-
-static inline Int64 bytePos2Utf8Pos(const char * str, Int64 byte_pos)
-{
-    // byte_num means the number of byte before this byte_pos
-    Int64 byte_num = byte_pos - 1;
-    Int64 utf8_num = getStringUtf8Len(str, byte_num);
-    return utf8_num + 1;
-}
-
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const char * expr, size_t expr_size, size_t pos, Int64 occur)
 {
@@ -543,13 +520,13 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const c
     }
 
     byte_offset = matched_str.data() - subject;
-    return ret_op == 0 ? bytePos2Utf8Pos(subject, byte_offset + 1) : bytePos2Utf8Pos(subject, byte_offset + matched_str.size() + 1);
+    return ret_op == 0 ? DB::UTF8::bytePos2Utf8Pos(reinterpret_cast<const UInt8 *>(subject), byte_offset + 1) : DB::UTF8::bytePos2Utf8Pos(reinterpret_cast<const UInt8 *>(subject), byte_offset + matched_str.size() + 1);
 }
 
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
-    Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
+    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
 
     checkArgs(utf8_total_len, subject_size, pos, ret_op);
 
@@ -558,7 +535,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
     if (unlikely(subject_size == 0))
         return processEmptyStringExpr(subject, subject_size, pos, occur);
 
-    size_t byte_pos = utf8Pos2bytePos(subject, pos);
+    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
     return getSubstrMatchedIndex(subject, subject_size, byte_pos, occur, ret_op);
 }
 

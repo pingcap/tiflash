@@ -149,32 +149,3 @@ inline bool equalsCaseInsensitive(char a, char b)
 {
     return a == b || (isAlphaASCII(a) && alternateCaseIfAlphaASCII(a) == b);
 }
-
-// Get how many bytes this utf8 character needs.
-// Input must be the first byte of a utf8 character.
-inline size_t getUtf8Len(uint8_t utf8_first_byte)
-{
-    uint8_t flag = 128;
-    size_t len = 0;
-    while (flag & utf8_first_byte)
-    {
-        len++;
-        flag >>= 1;
-    }
-
-    return flag == 128 ? 1 : len;
-}
-
-inline size_t getStringUtf8Len(const char * str, size_t total_len)
-{
-    size_t len = 0;
-    size_t utf8_len;
-
-    for (size_t i = 0; i < total_len; i += utf8_len)
-    {
-        utf8_len = getUtf8Len(str[i]);
-        len++;
-    }
-
-    return len;
-}

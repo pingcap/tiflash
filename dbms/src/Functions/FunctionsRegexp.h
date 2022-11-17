@@ -127,7 +127,7 @@ Int64 getIntFromField(Field & field)
     }
 }
 
-enum class IntType { UInt8 = 0, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64 };
+enum class IntType { UInt8 = 0, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64 };
 
 template <typename T>
 Int64 getInt(const void * container, size_t idx)
@@ -150,8 +150,6 @@ GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
         return &getInt<UInt32>;
     case IntType::UInt64:
         return &getInt<UInt64>;
-    case IntType::UInt128:
-        return &getInt<UInt128>;
     case IntType::Int8:
         return &getInt<Int8>;
     case IntType::Int16:
@@ -163,6 +161,20 @@ GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
     default:
         throw Exception("Unexpected int type");
     }
+}
+
+template <typename ResultType>
+void setResultColumnValuesNull(ColumnWithTypeAndName & res_arg, size_t col_size)
+{
+    // Initialize result column
+    auto col_res = ColumnVector<ResultType>::create();
+    typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
+    vec_res.resize(col_size, 0);
+
+    auto nullmap_col = ColumnUInt8::create();
+    typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+    nullmap.resize(col_size, 1);
+    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
 }
 
 template <bool is_const>
@@ -1237,7 +1249,7 @@ public:
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst() && MatchTypeT::isConst())
         {
-            if (col_size == 0 || expr_param.isNullAt(0) || pat_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
@@ -1245,17 +1257,13 @@ public:
             
             int flags = getDefaultFlags();
             String expr = expr_param.getString(0);
+            String match_type = match_type_param.getString(0);
             String pat = pat_param.getString(0);
             if (unlikely(pat.empty()))
-                throw Exception(EMPTY_PAT_ERR_MSG);
-
-            Int64 pos = PosT::isConst() ? pos_const_val : get_pos_func(pos_container, 0);
-            Int64 occur = OccurT::isConst() ? occur_const_val : get_occur_func(occur_container, 0);
-            Int64 ret_op = RetOpT::isConst() ? ret_op_const_val : get_ret_op_func(ret_op_container, 0);
-            String match_type = match_type_param.getString(0);
+                throw Exception(EMPTY_PAT_ERR_MSG);            
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
-            ResultType res = regexp.instr(expr.c_str(), expr.size(), pos, occur, ret_op);
+            ResultType res = regexp.instr(expr.c_str(), expr.size(), pos_const_val, occur_const_val, ret_op_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
         }
@@ -1304,9 +1312,20 @@ public:
         // Start to execute instr
         if (canMemorize<PatT, MatchTypeT>())
         {
-            // Codes in this if branch execute instr with memorized regexp
+            std::unique_ptr<Regexps::Regexp> regexp;
+            if (col_size > 0)
+            {
+                regexp = memorize(pat_param, match_type_param, collator);
+                if (regexp == nullptr)
+                {
+                    auto nullmap_col = ColumnUInt8::create();
+                    typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+                    nullmap.resize(col_size, 1);
+                    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+                    return;
+                }
+            }
 
-            const auto & regexp = memorize(pat_param, match_type_param, collator);
             if constexpr (has_nullable_col)
             {
                 // Process nullable columns with memorized regexp
