@@ -1135,6 +1135,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
+        // Data is not guaranteed to be returned in order.
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),

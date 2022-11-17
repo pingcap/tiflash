@@ -143,10 +143,10 @@ try
         store = reload(table_column_defines);
     }
 
+    // Ensure stable is large enough, or this would be unstable.
     const size_t num_rows_write_stable = db_context->getGlobalContext().getSettingsRef().max_block_size;
     constexpr size_t NUMBER_OF_BLOCK_IN_STABLE = 5;
     const size_t stable_rows = num_rows_write_stable * NUMBER_OF_BLOCK_IN_STABLE;
-    // Ensure stable is large enough.
     {
         for (size_t i = 0; i < NUMBER_OF_BLOCK_IN_STABLE; i++)
         {
@@ -236,7 +236,14 @@ try
         dmfile->remove(db_context->getFileProvider());
         ASSERT_NE(dmfile->path(), readable_path);
 
-        in = nullptr;
+        while (blk)
+        {
+            blk = in->read();
+        }
+        // When input stream finished, background read threads will
+        // first notify current thread and then release relative components concurrently.
+        // So it is necessary to wait for background read threads to release relative components before check it.
+        // Release relative components will execute immediately in background read threads, I think 10ms is enough.
         std::this_thread::sleep_for(10ms);
         ASSERT_EQ(DMFileReaderPool::instance().get(readable_path), nullptr);
     }
