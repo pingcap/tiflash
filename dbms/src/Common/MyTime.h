@@ -163,7 +163,7 @@ static int8_t default_fsp = 6;
 static bool default_need_check_time_valid = false;
 
 Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool need_check_time_valid = default_need_check_time_valid);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_need_check_time_valid);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool need_check_time_valid = default_need_check_time_valid);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
