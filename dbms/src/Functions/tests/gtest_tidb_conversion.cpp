@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Columns/ColumnsNumber.h>
-#include <Common/Logger.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeMyDuration.h>
