@@ -702,37 +702,38 @@ try
         createDateTimeColumnNullable({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({{}, 20211026160859}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
         createDateTimeColumnNullable({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({{}, 20211026160859}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    ASSERT_THROW(
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumnNullable({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({MAX_UINT8}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
-    ASSERT_THROW(
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumnNullable({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({MAX_UINT16}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
-    ASSERT_THROW(
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumnNullable({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({MAX_UINT32}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
         createDateTimeColumnNullable({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    ASSERT_THROW(
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumnNullable({{}, {}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({{}, -20211026160859}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
+                        createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
 }
 CATCH
 
