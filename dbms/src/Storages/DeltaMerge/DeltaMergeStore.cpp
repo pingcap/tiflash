@@ -753,7 +753,8 @@ bool DeltaMergeStore::mergeDeltaAll(const Context & context)
     bool all_succ = true;
     for (auto & segment : all_segments)
     {
-        all_succ = all_succ && segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual) != nullptr;
+        bool succ = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual) != nullptr;
+        all_succ = all_succ && succ;
     }
 
     LOG_INFO(log, "Finish table mergeDeltaAll: {}", all_succ);
