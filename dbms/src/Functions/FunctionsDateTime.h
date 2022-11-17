@@ -2752,12 +2752,12 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isString())
-            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
+            throw Exception(fmt::format("First argument for function {} (unit) must be String", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isMyDateOrMyDateTime())
-            throw TiFlashException(
+            throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}. Must be DateOrDateTime.", arguments[1]->getName(), getName()),
-                Errors::Coprocessor::BadRequest);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -2769,9 +2769,9 @@ public:
     {
         const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
-            throw TiFlashException(
+            throw Exception(
                 fmt::format("First argument for function {} must be constant String", getName()),
-                Errors::Coprocessor::BadRequest);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
@@ -2802,7 +2802,7 @@ public:
         else if (unit == "year_month")
             dispatch<ExtractMyDateTimeImpl::extractYearMonth>(col_from, vec_to);
         else
-            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
+            throw Exception(fmt::format("Function {} does not support '{}' unit", getName(), unit), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         block.getByPosition(result).column = std::move(col_to);
     }
@@ -2824,7 +2824,7 @@ private:
     static void vectorDatetime(const ColumnUInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
     {
         vec_to.resize(vec_from.size());
-        for (size_t i = 0; i < vec_from.size(); i++)
+        for (size_t i = 0; i < vec_from.size(); ++i)
         {
             vec_to[i] = F(vec_from[i]);
         }
@@ -3035,12 +3035,12 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isString())
-            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
+            throw Exception(fmt::format("First argument for function {} (unit) must be String", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isString())
-            throw TiFlashException(
+            throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}. Must be String.", arguments[1]->getName(), getName()),
-                Errors::Coprocessor::BadRequest);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3052,9 +3052,9 @@ public:
     {
         const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
-            throw TiFlashException(
+            throw Exception(
                 fmt::format("First argument for function {} must be constant String", getName()),
-                Errors::Coprocessor::BadRequest);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
@@ -3073,7 +3073,7 @@ public:
         else if (unit == "day_hour")
             dispatch<ExtractMyDateTimeFromStringImpl::extractDayHour>(col_from, vec_to);
         else
-            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
+            throw Exception(fmt::format("Function {} does not support '{}' unit", getName(), unit), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         block.getByPosition(result).column = std::move(col_to);
     }

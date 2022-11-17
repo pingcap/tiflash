@@ -248,12 +248,6 @@ std::tuple<int, String, String, String, String> getTimeZone(const String & liter
     return std::make_tuple(-1, "", "", "", "");
 }
 
-// TODO: make unified helper
-bool isPunctuation(char c)
-{
-    return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
-}
-
 // getFracIndex finds the last '.' for get fracStr, index = -1 means fracStr not found.
 // but for format like '2019.01.01 00:00:00', the index should be -1.
 // It will not be affected by the time zone suffix. For format like '2020-01-01 12:00:00.123456+05:00', the index should be 19.

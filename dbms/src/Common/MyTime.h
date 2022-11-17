@@ -225,8 +225,6 @@ inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & tim
     return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
 }
 
-bool isPunctuation(char c);
-
 bool isValidSeparator(char c, int previous_parts);
 
 // Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.

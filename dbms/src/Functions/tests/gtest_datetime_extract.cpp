@@ -39,38 +39,41 @@ class TestDateTimeExtract : public DB::tests::FunctionTest
 TEST_F(TestDateTimeExtract, ExtractFromString)
 try
 {
+    auto test = [&](const std::vector<String> & units, const String & datetime_value, const std::vector<Int64> & results) {
+        for (size_t i = 0; i < units.size(); ++i)
+        {
+            const auto & unit = units[i];
+            const auto & result = results[i];
+            // nullable/non-null string
+            ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({datetime_value})));
+            ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toVec<String>({datetime_value})));
+            // const string
+            ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), createConstColumn<String>(1, {datetime_value})));
+            // null
+            ASSERT_COLUMN_EQ(toNullableVec<Int64>({std::nullopt}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({std::nullopt})));
+        }
+    };
+
     std::vector<String> units{
         "day_microsecond",
         "day_second",
         "day_minute",
         "day_hour",
     };
-    String datetime_value{"2021/1/29 12:34:56.123456"};
-    std::vector<Int64> results{29123456123456, 29123456, 291234, 2912};
-
-    for (size_t i = 0; i < units.size(); ++i)
+    std::vector<std::pair<String, std::vector<Int64>>> test_cases = {
+        {"2021/1/29 12:34:56.123456", {29123456123456, 29123456, 291234, 2912}},
+        {"12:34:56.123456", {123456123456, 123456, 1234, 12}},
+        {" \t\r2012^12^31T11+30+45 \n ", {31113045000000, 31113045, 311130, 3111}},
+        {"20121231113045", {31113045000000, 31113045, 311130, 3111}},
+        {"121231113045", {31113045000000, 31113045, 311130, 3111}},
+        // {"1701020304.1", {2030401000000, 2030401, 20304, 203}},
+        {"2018-01-01 18", {1180000000000, 1180000, 11800, 118}},
+        {"18-01-01 18", {1180000000000, 1180000, 11800, 118}},
+        {"2020-01-01 12:00:00.123456+05:00", {1070000123456, 1070000, 10700, 107}},
+    };
+    for (auto & [datetime_value, results] : test_cases)
     {
-        const auto & unit = units[i];
-        const auto & result = results[i];
-        // nullable/non-null string
-        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({datetime_value})));
-        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toVec<String>({datetime_value})));
-        // const string
-        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), createConstColumn<String>(1, {datetime_value})));
-    }
-
-    datetime_value = "12:34:56.123456";
-    results = {123456123456, 123456, 1234, 12};
-
-    for (size_t i = 0; i < units.size(); ++i)
-    {
-        const auto & unit = units[i];
-        const auto & result = results[i];
-        // nullable/non-null string
-        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({datetime_value})));
-        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toVec<String>({datetime_value})));
-        // const string
-        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), createConstColumn<String>(1, {datetime_value})));
+        test(units, datetime_value, results);
     }
 }
 CATCH
