@@ -47,7 +47,6 @@ const SingleTableRegions & TablesRegionsInfo::getTableRegionInfoByTableID(Int64 
 static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
-    // gjt todo
     if (tmt_context.isDisaggregatedComputeNode())
         return true;
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);

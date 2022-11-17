@@ -99,9 +99,9 @@ AnalysisResult analyzeExpressions(
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    // selection on table scan had been executed in handleTableScan
-    // In test mode, filter is not pushed down to table scan
-    // In disaggregated mode, filter is just a hint, Selection need to execute in tiflash_compute node.
+    // selection on table scan had been executed in handleTableScan.
+    // In test mode, filter is not pushed down to table scan.
+    // In disaggregated mode, we need an explicit Selection.
     if (query_block.selection && (!query_block.isTableScanSource() || context.isTest() || context.getTMTContext().isDisaggregatedComputeNode()))
     {
         std::vector<const tipb::Expr *> where_conditions;

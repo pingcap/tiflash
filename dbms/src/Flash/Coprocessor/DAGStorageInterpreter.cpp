@@ -378,7 +378,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle pushed down filter for local and remote table scan.
-    if (push_down_filter.hasValue())
+    /// For tiflash_compute node, an explicit PhysicalFilter will handle this, instead build FilterBlockInputStream here.
+    if (!tmt.isDisaggregatedComputeNode() && push_down_filter.hasValue())
     {
         executePushedDownFilter(remote_read_streams_start_index, pipeline);
         recordProfileStreams(pipeline, push_down_filter.executor_id);
@@ -387,6 +388,14 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::prepare()
 {
+    // For tiflash_compute node, no need to:
+    //   1. Do learner read.
+    //   2. Sync schema(getAndLockStorages()).
+    //   3. Construct analyzer for FilterBlockInputStream(but Selection will still be sent to tiflash_storage).
+    // Becase there is no region data in tiflash_compute node, all above three will be done in tiflash_storage node.
+    if (tmt.isDisaggregatedComputeNode())
+        return;
+
     // About why we do learner read before acquiring structure lock on Storage(s).
     // Assume that:
     // 1. Read threads do learner read and wait for the Raft applied index with holding a read lock

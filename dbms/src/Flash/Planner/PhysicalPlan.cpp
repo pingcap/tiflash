@@ -99,8 +99,9 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         auto child = popBack();
         if (context.getTMTContext().isDisaggregatedComputeNode())
         {
-            // In disaggregated mode, because we have local cache in tiflash_compute node,
-            // so tiflash_storage node only use Selection as a hint. Selection need to execute in tiflash_compute node.
+            // Still need to pushBack(PhysicalFilter) because we dont want to build FilterBlockInputStream in DAGStorageInterpreter.
+            // Because it requres SchemaSyncer to get correct schema to build DAGExpressionAnalyzer.
+            // By doing so, tiflash_compute node doesn't need to talk to TiKV.
             pushDownSelection(child, executor_id, executor->selection());
             pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         }
