@@ -24,6 +24,7 @@
 namespace DB::DM
 {
 
+
 class FullTableScanContext
 {
 public:
@@ -46,12 +47,15 @@ public:
 
     void merge(const FullTableScanContext * other)
     {
-        std::cout << " FullTableScanContext info " << toDebugString() << " and merge with " << other->toDebugString() << std::endl;
-
         scan_packs_count += other->scan_packs_count;
         skip_packs_count += other->skip_packs_count;
         scan_rows_count += other->scan_rows_count;
         skip_rows_count += other->skip_rows_count;
+    }
+
+    bool equal(const FullTableScanContext * other)
+    {
+        return (scan_packs_count == other->scan_packs_count) && (skip_packs_count == other->skip_packs_count) && (scan_rows_count == other->scan_rows_count) && (skip_rows_count == other->skip_rows_count);
     }
 
     String toDebugString() const

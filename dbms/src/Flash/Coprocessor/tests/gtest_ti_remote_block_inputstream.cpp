@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/FullTableScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -24,6 +25,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
+#include <Flash/Coprocessor/ExecutionSummaryCollector.cpp>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
@@ -40,7 +42,7 @@ using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
 {
-    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns);
+    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && left.full_table_scan_context->equal(right.full_table_scan_context.get());
 }
 
 struct MockWriter
@@ -56,6 +58,12 @@ struct MockWriter
         summary.num_produced_rows = 10000;
         summary.num_iterations = 50;
         summary.concurrency = 1;
+        summary.full_table_scan_context = std::make_shared<DM::FullTableScanContext>();
+        summary.full_table_scan_context->scan_packs_count = 1;
+        summary.full_table_scan_context->scan_rows_count = 8192;
+        summary.full_table_scan_context->skip_packs_count = 2;
+        summary.full_table_scan_context->skip_rows_count = 16000;
+
         return summary;
     }
 
@@ -77,6 +85,10 @@ struct MockWriter
             summary_ptr->set_num_produced_rows(summary.num_produced_rows);
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
+
+            auto * full_table_scan_context = summary_ptr->mutable_full_table_scan_context();
+            setFullTableScanContext(full_table_scan_context, summary.full_table_scan_context);
+
             summary_ptr->set_executor_id("Executor_0");
         }
         ++total_packets;
@@ -102,7 +114,7 @@ struct MockReceiverContext
     using Status = ::grpc::Status;
     struct Request
     {
-        static String debugString() 
+        static String debugString()
         {
             return "{Request}";
         }
@@ -133,7 +145,7 @@ struct MockReceiverContext
             return false;
         }
 
-        static Status finish() 
+        static Status finish()
         {
             return ::grpc::Status();
         }
@@ -174,7 +186,7 @@ struct MockReceiverContext
         }
     }
 
-    static Request makeRequest(int index) 
+    static Request makeRequest(int index)
     {
         return {index, index, -1};
     }
@@ -355,7 +367,7 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        const auto *summary = receiver_stream->getRemoteExecutionSummaries(0);
+        const auto * summary = receiver_stream->getRemoteExecutionSummaries(0);
         ASSERT_TRUE(summary != nullptr);
         ASSERT_EQ(summary->size(), 1);
         ASSERT_EQ(summary->begin()->first, "Executor_0");
@@ -391,7 +403,7 @@ public:
         return receiver_stream;
     }
 
-    void doTestNoChunkInResponse(bool empty_last_packet)
+    void doTestNoChunkInResponse(bool empty_last_packet) const
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -408,7 +420,7 @@ public:
         checkNoChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    void doTestChunkInResponse(bool empty_last_packet)
+    void doTestChunkInResponse(bool empty_last_packet) const
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;

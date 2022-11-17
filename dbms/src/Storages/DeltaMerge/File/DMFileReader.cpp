@@ -280,8 +280,6 @@ DMFileReader::DMFileReader(
             last_read_from_cache[cd.id] = false;
         }
     }
-
-    std::cout << " DMFileReader init with next_pack_id is " << next_pack_id << std::endl;
 }
 
 bool DMFileReader::shouldSeek(size_t pack_id)
