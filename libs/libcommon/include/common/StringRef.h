@@ -28,14 +28,14 @@
 #include <vector>
 
 #if defined(__SSE4_2__)
-    #include <smmintrin.h>
-    #include <nmmintrin.h>
-    #define CRC_INT _mm_crc32_u64
+#include <nmmintrin.h>
+#include <smmintrin.h>
+#define CRC_INT _mm_crc32_u64
 #endif
 
 #if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
-    #include <arm_acle.h>
-    #define CRC_INT __crc32cd
+#include <arm_acle.h>
+#define CRC_INT __crc32cd
 #endif
 
 
@@ -188,7 +188,7 @@ inline size_t hashLessThan8(const char * data, size_t size)
 
 struct CRC32Hash
 {
-    unsigned operator() (StringRef x) const
+    unsigned operator()(StringRef x) const
     {
         const char * pos = x.data;
         size_t size = x.size;
@@ -212,7 +212,7 @@ struct CRC32Hash
             pos += 8;
         } while (pos + 8 < end);
 
-        auto word = unalignedLoad<UInt64>(end - 8);    /// I'm not sure if this is normal.
+        auto word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
         res = static_cast<unsigned>(CRC_INT(res, word));
 
         return res;
