@@ -403,6 +403,8 @@ private:
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
+    // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
+    // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
 };
 
