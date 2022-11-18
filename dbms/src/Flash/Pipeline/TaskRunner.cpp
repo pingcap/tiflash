@@ -45,7 +45,7 @@ void TaskRunner::loop()
 
 void TaskRunner::handleTask(TaskPtr && task)
 {
-    auto status = task->execute();
+    auto [status, err_msg] = task->execute();
     switch (status)
     {
     case PStatus::BLOCKED:
@@ -57,6 +57,12 @@ void TaskRunner::handleTask(TaskPtr && task)
     case PStatus::NEED_MORE:
         scheduler.submitCPU(std::move(task));
         break;
+    case PStatus::FAIL:
+    {
+        LOG_ERROR(logger, "task fail for err: {}", err_msg);
+        scheduler.finishOneTask();
+        break;
+    }
     }
 }
 } // namespace DB

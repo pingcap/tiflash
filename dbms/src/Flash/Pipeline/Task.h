@@ -32,16 +32,23 @@ public:
         , sink(std::move(sink_))
     {}
 
-    PStatus execute()
+    std::pair<PStatus, String> execute()
     {
-        auto [block, op_index] = fetchBlock();
-        for (; op_index < transforms.size(); ++op_index)
+        try
         {
-            auto op_status = transforms[op_index]->transform(block);
-            if (op_status != PStatus::NEED_MORE)
-                return op_status;
+            auto [block, op_index] = fetchBlock();
+            for (; op_index < transforms.size(); ++op_index)
+            {
+                auto op_status = transforms[op_index]->transform(block);
+                if (op_status != PStatus::NEED_MORE)
+                    return {op_status, ""};
+            }
+            return {sink->write(block), ""};
         }
-        return sink->write(block);
+        catch (...)
+        {
+            return {PStatus::FAIL, getCurrentExceptionMessage(true, true)};
+        }
     }
 
     bool isBlocked()

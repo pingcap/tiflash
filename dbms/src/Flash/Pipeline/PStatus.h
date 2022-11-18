@@ -25,5 +25,6 @@ enum class PStatus
     BLOCKED,
     FINISHED,
     NEED_MORE,
+    FAIL,
 };
 } // namespace DB

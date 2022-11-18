@@ -43,8 +43,7 @@ TEST_F(PipelineRunner, all_cpu)
         return TaskBuilder().setCPUSource().appendCPUTransform().setCPUSink().build();
     };
     std::vector<TaskPtr> tasks;
-    for (size_t i = 0; i < 100; ++i)
-        tasks.emplace_back(build());
+    tasks.emplace_back(build()); 
     TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
     task_scheduler.waitForFinish();
 }
@@ -55,8 +54,7 @@ TEST_F(PipelineRunner, all_io)
         return TaskBuilder().setIOSource().appendIOTransform().setIOSink().build();
     };
     std::vector<TaskPtr> tasks;
-    for (size_t i = 0; i < 1; ++i)
-        tasks.emplace_back(build());
+    tasks.emplace_back(build());   
     TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
     task_scheduler.waitForFinish();
 }
