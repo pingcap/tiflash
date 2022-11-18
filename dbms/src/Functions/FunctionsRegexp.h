@@ -1994,13 +1994,19 @@ public:
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            String expr = expr_param.getString(0);
-            String repl = repl_param.getString(0);
+            pat = fmt::format("({})", pat);
+            StringRef expr_ref;
+            StringRef repl_ref;
+            expr_param.getStringRef(0, expr_ref);
+            repl_param.getStringRef(0, repl_ref);
             String match_type = match_type_param.getString(0);
-            StringRef res_ref;
 
-            Impl::constant(expr, pat, repl, pos_const_val, occur_const_val, match_type, collator, res_ref);
-            res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(res_ref.data, res_ref.size)));
+            ColumnString::Chars_t res_data;
+            IColumn::Offset offset = 0;
+
+            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), getDefaultFlags());
+            regexp.replace(expr_ref.data, expr_ref.size, res_data, offset, repl_ref, pos_const_val, occur_const_val);
+            res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(reinterpret_cast<const char *>(&res_data[0]), offset - 1)));
             return;
         }
 
@@ -2027,6 +2033,12 @@ public:
             occur = get_occur_func(occur_container, idx); \
     } while (0);
 
+        auto & res_data = col_res->getChars();
+        auto & res_offsets = col_res->getOffsets();
+        ColumnString::Offset res_offset = 0;
+        res_data.resize(col_size * 10);
+        res_offsets.resize(col_size);
+
         // Start to execute replace
         if (canMemorize<PatT, MatchTypeT>())
         {
@@ -2044,11 +2056,6 @@ public:
                 }
             }
 
-            auto & res_data = col_res->getChars();
-            auto & res_offsets = col_res->getOffsets();
-            ColumnString::Offset res_offset = 0;
-            res_data.resize(col_size * 10);
-
             StringRef expr_ref;
             StringRef repl_ref;
             String pat;
@@ -2060,28 +2067,27 @@ public:
             {
                 auto null_map_col = ColumnUInt8::create();
                 typename ColumnUInt8::Container & null_map = null_map_col->getData();
-                null_map.resize(col_size, 0);
+                null_map.resize(col_size);
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
                     if (expr_param.isNullAt(i) || repl_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
                     {
                         null_map[i] = 1;
-                        size_t cur_res_size = res_data.size();
-                        if (unlikely(cur_res_size <= res_offset + 1))
-                            res_data.resize(cur_res_size * 2);
-                        
+                        res_data.resize(res_data.size() + 1);
                         res_data[res_offset++] = 0;
                         res_offsets[i] = res_offset;
                         continue;
                     }
 
+                    null_map[i] = 0;
                     expr_param.getStringRef(i, expr_ref);
                     repl_param.getStringRef(i, repl_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    Impl::executeReplace(expr_ref, *(regexp->getRE2()), repl_ref, pos, occur, res_data, res_offsets, i, res_offset);
+                    regexp->replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
+                    res_offsets[i] = res_offset;
                 }
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
             }
@@ -2094,20 +2100,20 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    Impl::executeReplace(expr_ref, *(regexp->getRE2()), repl_ref, pos, occur, res_data, res_offsets, i, res_offset);
+                    regexp->replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
+                    res_offsets[i] = res_offset;
                 }
                 res_arg.column = std::move(col_res);
             }
         }
         else
         {
-            String expr;
-            String repl;
+            StringRef expr_ref;
+            StringRef repl_ref;
             String pat;
             Int64 pos;
             Int64 occur;
             String match_type;
-            StringRef res_ref;
 
             if constexpr (has_nullable_col)
             {
@@ -2120,7 +2126,9 @@ public:
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || repl_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
                         null_map[i] = 1;
-                        col_res->insertData("", 0);
+                        res_data.resize(res_data.size() + 1);
+                        res_data[res_offset++] = 0;
+                        res_offsets[i] = res_offset;
                         continue;
                     }
 
@@ -2128,14 +2136,17 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    expr = expr_param.getString(i);
-                    repl = repl_param.getString(i);
+                    null_map[i] = 0;
+                    pat = fmt::format("({})", pat);
+                    expr_param.getStringRef(i, expr_ref);
+                    repl_param.getStringRef(i, repl_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    Impl::constant(expr, pat, repl, pos, occur, match_type, collator, res_ref);
-                    col_res->insertData(res_ref.data, res_ref.size);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
+                    res_offsets[i] = res_offset;
                 }
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
             }
@@ -2147,13 +2158,16 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    expr = expr_param.getString(i);
+                    pat = fmt::format("({})", pat);
+                    expr_param.getStringRef(i, expr_ref);
+                    repl_param.getStringRef(i, repl_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    Impl::constant(expr, pat, repl, pos, occur, match_type, collator, res_ref);
-                    col_res->insertData(res_ref.data, res_ref.size);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
+                    res_offsets[i] = res_offset;
                 }
                 res_arg.column = std::move(col_res);
             }

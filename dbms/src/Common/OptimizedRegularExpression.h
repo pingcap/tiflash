@@ -116,7 +116,7 @@ public:
 
     Int64 instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op);
     bool substr(const char * subject, size_t subject_size, StringRef & res, Int64 pos, Int64 occur);
-    bool replace(const char * subject, size_t subject_size, char ** res, size_t & res_size, const StringRef & repl, Int64 pos, Int64 occur);
+    void replace(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 pos, Int64 occur);
 
 private:
     Int64 processInstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
@@ -124,6 +124,8 @@ private:
 
     bool processSubstrEmptyStringExpr(const char * expr, size_t expr_size, StringRef & res, size_t byte_pos, Int64 occur);
     bool substrImpl(const char * subject, size_t subject_size, StringRef & res, Int64 byte_pos, Int64 occur);
+    
+    void processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur);
     void replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur);
     void replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur);
     void replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos);

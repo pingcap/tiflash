@@ -3270,11 +3270,30 @@ TEST_F(Regexp, RegexpReplace)
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results_with_pos_occ_match_type, input_string_nulls),
                          executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, nullptr, true));
 
-
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results_with_pos_occ_match_type_binary, input_string_nulls),
                          executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, binary_collator, true));
     }
+
+    /// case 5: test some special cases
+    {
+        // test empty expr
+        ASSERT_COLUMN_EQ(createColumn<String>({"aa", "aa", "aa", ""}),
+                    executeFunction(
+                        "regexp_replace",
+                        {
+                            createColumn<String>({"", "", "", ""}),
+                            createColumn<String>({"^$", "^$", "^$", "^$"}),
+                            createColumn<String>({"aa", "aa", "aa", "aa"}),
+                            createColumn<Int64>({1, 1, 1, 1}),
+                            createColumn<Int64>({-1, 0, 1, 2})
+                        },
+                        nullptr,
+                        true));
+
+    }
+
+    /// case 6: test empty columns
 }
 } // namespace tests
 } // namespace DB
