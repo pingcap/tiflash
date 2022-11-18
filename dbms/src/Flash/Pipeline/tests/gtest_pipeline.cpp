@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <TestUtils/ExecutorTestUtils.h>
-#include <Flash/Pipeline/Task.h>
+#include <Flash/Pipeline/TaskScheduler.h>
 
 namespace DB
 {
@@ -27,6 +27,9 @@ class PipelineRunner : public DB::tests::ExecutorTest
 TEST_F(PipelineRunner, Test)
 try
 {
+    std::vector<TaskPtr> tasks;
+    TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
+    task_scheduler.waitForFinish();
 }
 CATCH
 
