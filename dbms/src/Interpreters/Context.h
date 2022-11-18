@@ -489,7 +489,6 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
-
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
