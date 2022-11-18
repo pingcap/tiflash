@@ -120,5 +120,12 @@ void TaskScheduler::finishOneTask()
 void TaskScheduler::waitForFinish()
 {
     task_counter.waitAllFinished();
+
+    {
+        std::lock_guard<std::mutex> lock(global_mutex);
+        is_closed = true;
+    }
+    cv.notify_all();
+    io_reactor.finish();
 }
 } // namespace DB
