@@ -615,7 +615,6 @@ public:
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
-                    LOG_INFO(log, "init https port before callback");
                     CertificateReloader::instance().initSSLCallback(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);

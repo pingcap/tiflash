@@ -100,20 +100,12 @@ sslServerCertificateConfigCallback(
         return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_FAIL;
     }
     auto * cfg = static_cast<SecureConfig *>(user_data);
-
-    if (cfg->config->updated())
-    {
-        auto options = cfg->config->options;
-        grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
-        *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
-                                                            &pem_key_cert_pair,
-                                                            1);
-        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
-    }
-    else
-    {
-        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
-    }
+    auto options = cfg->config->readSecurityInfo();
+    grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
+    *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
+                                                        &pem_key_cert_pair,
+                                                        1);
+    return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
 }
 
 grpc_server_credentials * grpcSslServerCredentialsCreateWithFetcher(

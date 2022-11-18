@@ -40,14 +40,11 @@ int callSetCertificate(SSL * ssl, [[maybe_unused]] void * arg)
 /// This is callback for OpenSSL. It will be called on every connection to obtain a certificate and private key.
 int CertificateReloader::setCertificate(SSL * ssl)
 {
-    if (config->updated())
-    {
-        LOG_INFO(log, "SSL certificate updated");
-        Poco::Crypto::X509Certificate cert(config->cert_path);
-        Poco::Crypto::EVPPKey key("", config->key_path);
-        SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
-        SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
-    }
+    LOG_INFO(log, "setCertificate callback called");
+    Poco::Crypto::X509Certificate cert(config->cert_path);
+    Poco::Crypto::EVPPKey key("", config->key_path);
+    SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
+    SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
 
     int err = SSL_check_private_key(ssl);
     if (err != 1)

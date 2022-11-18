@@ -149,7 +149,7 @@ public:
         new_options.pem_cert_chain = readFile(cert_path);
         new_options.pem_private_key = readFile(key_path);
 
-        LOG_INFO(log, "read root_certs: {}, cert_chain: {}, pem_private_key: {} ", options.pem_root_certs, options.pem_cert_chain, options.pem_private_key);
+        LOG_INFO(log, "read root_certs: {}, cert_chain: {}, pem_private_key: {} ", new_options.pem_root_certs, new_options.pem_cert_chain, new_options.pem_private_key);
 
         return new_options;
     }
@@ -163,7 +163,7 @@ public:
         config.ca_path = ca_path;
         config.cert_path = cert_path;
         config.key_path = key_path;
-        LOG_INFO(log, "ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+        LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         return config;
     }
 
@@ -171,13 +171,10 @@ public:
     {
         std::unique_lock lock(mu);
         auto new_options = readSecurityInfo();
-        LOG_INFO(log, "cert check if change path, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         auto updated = new_options.pem_root_certs != options.pem_root_certs || new_options.pem_cert_chain != options.pem_cert_chain || new_options.pem_private_key != options.pem_private_key;
         if (updated)
         {
             LOG_INFO(log, "cert updated in security config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
-            LOG_INFO(log, "new cert is {}", new_options.pem_root_certs);
-
             options.pem_root_certs = new_options.pem_root_certs;
             options.pem_cert_chain = new_options.pem_cert_chain;
             options.pem_private_key = new_options.pem_private_key;
