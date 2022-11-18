@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <common/types.h>
 #include <Common/DynamicThreadPool.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/PStatus.h>
 #include <Flash/Pipeline/Utils.h>
+#include <common/types.h>
 
 #include <memory>
 
@@ -58,6 +58,7 @@ public:
     {
         return false;
     }
+
 private:
     size_t count = 0;
 };
@@ -102,6 +103,7 @@ public:
             io_future.reset();
         return !is_ready;
     }
+
 private:
     std::optional<std::future<void>> io_future;
     Block io_block;

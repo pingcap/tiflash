@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/TaskScheduler.h>
 #include <Flash/Pipeline/TaskBuilder.h>
-
+#include <Flash/Pipeline/TaskScheduler.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
@@ -27,6 +26,11 @@ protected:
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             /*fixed_thread_num=*/300,
             std::chrono::milliseconds(100000));
+    }
+
+    void TearDown() override
+    {
+        DynamicThreadPool::global_instance.reset();
     }
 };
 
@@ -43,7 +47,7 @@ TEST_F(PipelineRunner, all_cpu)
         return TaskBuilder().setCPUSource().appendCPUTransform().setCPUSink().build();
     };
     std::vector<TaskPtr> tasks;
-    tasks.emplace_back(build()); 
+    tasks.emplace_back(build());
     TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
     task_scheduler.waitForFinish();
 }
@@ -54,8 +58,8 @@ TEST_F(PipelineRunner, all_io)
         return TaskBuilder().setIOSource().appendIOTransform().setIOSink().build();
     };
     std::vector<TaskPtr> tasks;
-    tasks.emplace_back(build());   
+    tasks.emplace_back(build());
     TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
     task_scheduler.waitForFinish();
 }
-}
+} // namespace DB::tests

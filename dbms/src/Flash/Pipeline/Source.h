@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <common/types.h>
 #include <Common/DynamicThreadPool.h>
 #include <Core/Block.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Flash/Pipeline/PStatus.h>
 #include <TestUtils/ColumnGenerator.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <common/types.h>
 
 #include <memory>
 
@@ -41,7 +41,7 @@ Block prepareRandomBlock(size_t rows)
     }
     return block;
 }
-}
+} // namespace
 
 class Source
 {
@@ -102,6 +102,7 @@ public:
             io_future.reset();
         return !is_ready;
     }
+
 private:
     std::optional<std::future<void>> io_future;
     int block_count = 100;

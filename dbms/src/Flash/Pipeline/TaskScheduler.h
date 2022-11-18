@@ -14,20 +14,22 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Task.h>
 #include <Flash/Pipeline/IOReactor.h>
+#include <Flash/Pipeline/Task.h>
 #include <Flash/Pipeline/TaskRunner.h>
 
 #include <atomic>
+#include <deque>
 #include <list>
 #include <mutex>
-#include <deque>
 
 namespace DB
 {
 struct TaskCounter
 {
-    TaskCounter(size_t count): counter(count) {}
+    TaskCounter(size_t count)
+        : counter(count)
+    {}
 
     void finishOne();
 

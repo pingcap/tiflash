@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Transform.h>
-#include <Flash/Pipeline/Task.h>
 #include <Flash/Pipeline/Sink.h>
 #include <Flash/Pipeline/Source.h>
+#include <Flash/Pipeline/Task.h>
+#include <Flash/Pipeline/Transform.h>
 
 namespace DB
 {
@@ -65,6 +65,7 @@ public:
         assert(sink);
         return std::make_unique<Task>(std::move(source), std::move(transforms), std::move(sink));
     }
+
 private:
     SourcePtr source;
     std::vector<TransformPtr> transforms;

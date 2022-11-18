@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Transform.h>
 #include <Flash/Pipeline/Sink.h>
 #include <Flash/Pipeline/Source.h>
+#include <Flash/Pipeline/Transform.h>
 
 namespace DB
 {
@@ -24,8 +24,8 @@ class Task
 {
 public:
     Task(
-        SourcePtr && source_, 
-        std::vector<TransformPtr> && transforms_, 
+        SourcePtr && source_,
+        std::vector<TransformPtr> && transforms_,
         SinkPtr && sink_)
         : source(std::move(source_))
         , transforms(std::move(transforms_))
@@ -64,6 +64,7 @@ public:
             return true;
         return false;
     }
+
 private:
     // Block, next_op_index
     std::pair<Block, size_t> fetchBlock()
@@ -75,6 +76,7 @@ private:
         }
         return {source->read(), 0};
     }
+
 private:
     SourcePtr source;
     std::vector<TransformPtr> transforms;

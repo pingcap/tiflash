@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
-#include <Flash/Pipeline/TaskScheduler.h>
 #include <Flash/Pipeline/IOReactor.h>
-
+#include <Flash/Pipeline/TaskScheduler.h>
 #include <errno.h>
 
 namespace DB
 {
-IOReactor::IOReactor(TaskScheduler & scheduler_): scheduler(scheduler_)
+IOReactor::IOReactor(TaskScheduler & scheduler_)
+    : scheduler(scheduler_)
 {
     io_thread = std::thread(&IOReactor::loop, this);
 }

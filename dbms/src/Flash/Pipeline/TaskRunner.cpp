@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
-#include <Flash/Pipeline/TaskScheduler.h>
 #include <Flash/Pipeline/TaskRunner.h>
-
+#include <Flash/Pipeline/TaskScheduler.h>
 #include <errno.h>
 
 namespace DB
 {
-TaskRunner::TaskRunner(TaskScheduler & scheduler_): scheduler(scheduler_)
+TaskRunner::TaskRunner(TaskScheduler & scheduler_)
+    : scheduler(scheduler_)
 {
     cpu_thread = std::thread(&TaskRunner::loop, this);
 }

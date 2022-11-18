@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <common/types.h>
 #include <Common/DynamicThreadPool.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/PStatus.h>
 #include <Flash/Pipeline/Utils.h>
+#include <common/types.h>
 
 #include <memory>
 
