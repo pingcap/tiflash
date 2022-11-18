@@ -23,6 +23,42 @@ namespace DB
 class Task
 {
 public:
+    PStatus execute()
+    {
+        auto [block, op_index] = fetchBlock();
+        for (; op_index < transforms.size(); ++op_index)
+        {
+            auto op_status = transforms[op_index]->transform(block);
+            if (op_status != PStatus::NEED_MORE)
+                return op_status;
+        }
+        return sink->write(block);
+    }
+
+    bool isBlocked()
+    {
+        if (sink->isBlocked())
+            return true;
+        for (int i = transforms.size() - 1; i >= 0; --i)
+        {
+            if (transforms[i]->isBlocked())
+                return true;
+        }
+        if (source->isBlocked())
+            return true;
+        return false;
+    }
+private:
+    // Block, next_op_index
+    std::pair<Block, size_t> fetchBlock()
+    {
+        for (int i = transforms.size() - 1; i >= 0; --i)
+        {
+            if (auto block = transforms[i]->fetchBlock(); block)
+                return {block, i + 1};
+        }
+        return {source->read(), 0};
+    }
 private:
     SourcePtr source;
     std::vector<TransformPtr> transforms;

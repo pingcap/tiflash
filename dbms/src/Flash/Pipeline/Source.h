@@ -19,6 +19,7 @@
 #include <Core/Block.h>
 #include <Flash/Pipeline/PStatus.h>
 #include <TestUtils/ColumnGenerator.h>
+#include <DataTypes/DataTypesNumber.h>
 
 #include <memory>
 
