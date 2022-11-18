@@ -303,6 +303,8 @@ public:
 
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
 
+    ColumnPtr replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & replicate_offsets) const override;
+
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         return scatterImpl<ColumnString>(num_columns, selector);
@@ -320,14 +322,29 @@ public:
     void getExtremes(Field & min, Field & max) const override;
 
 
-    bool canBeInsideNullable() const override { return true; }
+    bool canBeInsideNullable() const override
+    {
+        return true;
+    }
 
 
-    Chars_t & getChars() { return chars; }
-    const Chars_t & getChars() const { return chars; }
+    Chars_t & getChars()
+    {
+        return chars;
+    }
+    const Chars_t & getChars() const
+    {
+        return chars;
+    }
 
-    Offsets & getOffsets() { return offsets; }
-    const Offsets & getOffsets() const { return offsets; }
+    Offsets & getOffsets()
+    {
+        return offsets;
+    }
+    const Offsets & getOffsets() const
+    {
+        return offsets;
+    }
 };
 
 

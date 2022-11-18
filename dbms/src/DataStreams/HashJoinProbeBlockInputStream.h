@@ -38,7 +38,8 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const ExpressionActionsPtr & join_probe_actions_,
-        const String & req_id);
+        const String & req_id,
+        size_t concurrency_probe_index_);
 
     String getName() const override { return name; }
     Block getTotals() override;
@@ -50,6 +51,7 @@ protected:
 private:
     const LoggerPtr log;
     ExpressionActionsPtr join_probe_actions;
+    size_t concurrency_probe_index;
 };
 
 } // namespace DB

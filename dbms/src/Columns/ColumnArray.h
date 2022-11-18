@@ -96,6 +96,7 @@ public:
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
+    ColumnPtr replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & replicate_offsets) const override;
     ColumnPtr convertToFullColumnIfConst() const override;
     void getExtremes(Field & min, Field & max) const override;
 

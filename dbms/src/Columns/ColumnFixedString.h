@@ -136,6 +136,8 @@ public:
 
     ColumnPtr replicate(const Offsets & offsets) const override;
 
+    ColumnPtr replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const override;
+
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         return scatterImpl<ColumnFixedString>(num_columns, selector);

@@ -323,6 +323,28 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
     return res;
 }
 
+ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+{
+    size_t col_size = size();
+    if (col_size != offsets.size())
+        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    auto res = ColumnFixedString::create(n);
+
+    if (0 == col_size || start_row > end_row)
+        return res;
+
+    Chars_t & res_chars = res->chars;
+    res_chars.resize(n * (offsets[end_row] - already_generate_rows));
+
+    Offset curr_offset = already_generate_rows;
+    for (size_t i = start_row; i <= end_row; ++i)
+        for (size_t next_offset = offsets[i]; curr_offset < next_offset; ++curr_offset)
+            memcpySmallAllowReadWriteOverflow15(&res->chars[curr_offset * n], &chars[i * n], n);
+
+    return res;
+}
+
 void ColumnFixedString::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);

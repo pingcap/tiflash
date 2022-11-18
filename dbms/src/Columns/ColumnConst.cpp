@@ -66,6 +66,18 @@ ColumnPtr ColumnConst::replicate(const Offsets & offsets) const
     return ColumnConst::create(data, replicated_size);
 }
 
+ColumnPtr ColumnConst::replicate(size_t /*start_row*/, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+{
+    if (s != offsets.size())
+        throw Exception(
+            fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), s),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    size_t replicated_size = 0 == s ? 0 : (offsets[end_row] - already_generate_rows);
+    return ColumnConst::create(data, replicated_size);
+}
+
+
 ColumnPtr ColumnConst::permute(const Permutation & perm, size_t limit) const
 {
     if (limit == 0)

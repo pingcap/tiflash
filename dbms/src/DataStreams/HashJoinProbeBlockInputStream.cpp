@@ -20,9 +20,11 @@ namespace DB
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & join_probe_actions_,
-    const String & req_id)
+    const String & req_id,
+    size_t concurrency_probe_index_)
     : log(Logger::get(req_id))
     , join_probe_actions(join_probe_actions_)
+    , concurrency_probe_index(concurrency_probe_index_)
 {
     children.push_back(input);
 
@@ -47,21 +49,24 @@ Block HashJoinProbeBlockInputStream::getTotals()
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
-    join_probe_actions->execute(res);
+    if (res.rows() != 0)
+        res = res.cloneEmpty();
+    join_probe_actions->executeForHashJoinProbeSide(res);
     return res;
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    Block res = children.back()->read();
-    if (!res)
-        return res;
+    if (join_probe_actions->needGetBlockForHashJoinProbe(concurrency_probe_index))
+    {
+        Block block = children.back()->read();
+        if (!block)
+            return block;
+        join_probe_actions->updateBlockForHashJoinProbe(block, concurrency_probe_index);
+    }
 
-    join_probe_actions->execute(res);
-
-    // TODO split block if block.size() > settings.max_block_size
-    // https://github.com/pingcap/tiflash/issues/3436
-
+    Block res;
+    join_probe_actions->executeForHashJoinProbeSide(res, concurrency_probe_index);
     return res;
 }
 

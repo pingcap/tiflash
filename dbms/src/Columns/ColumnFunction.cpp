@@ -59,6 +59,21 @@ ColumnPtr ColumnFunction::replicate(const Offsets & offsets) const
     return ColumnFunction::create(replicated_size, function, capture);
 }
 
+ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+{
+    if (column_size != offsets.size())
+        throw Exception(
+            fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), column_size),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    ColumnsWithTypeAndName capture = captured_columns;
+    for (auto & column : capture)
+        column.column = column.column->replicate(start_row, end_row, already_generate_rows, offsets);
+
+    size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row] - already_generate_rows);
+    return ColumnFunction::create(replicated_size, function, capture);
+}
+
 ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
 {
     ColumnsWithTypeAndName capture = captured_columns;

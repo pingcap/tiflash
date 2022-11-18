@@ -398,6 +398,32 @@ ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) c
     return res;
 }
 
+ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+{
+    size_t size = data.size();
+    if (size != offsets.size())
+        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    if (size == 0 || start_row > end_row)
+        return cloneEmpty();
+
+    auto res = createView();
+    auto & res_data = res->getData();
+    res_data.reserve(offsets[end_row] - already_generate_rows);
+
+    IColumn::Offset prev_offset = already_generate_rows;
+    for (size_t i = start_row; i <= end_row; ++i)
+    {
+        size_t size_to_replicate = offsets[i] - prev_offset;
+        prev_offset = offsets[i];
+
+        for (size_t j = 0; j < size_to_replicate; ++j)
+            res_data.push_back(data[i]);
+    }
+
+    return res;
+}
+
 MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const
 {
     /// Columns with scattered values will point to this column as the owner of values.

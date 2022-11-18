@@ -111,6 +111,8 @@ public:
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
+    void initProbeSide(size_t probe_concurrency_ = 1, UInt64 max_block_size_ = DEFAULT_BLOCK_SIZE);
+
     void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
@@ -118,7 +120,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    void joinBlock(Block & block) const;
+    void joinBlock(Block & block, size_t stream_index = 0) const;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
@@ -126,6 +128,10 @@ public:
     bool hasTotals() const { return static_cast<bool>(totals); };
 
     void joinTotals(Block & block) const;
+
+    void setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 max_block_size);
+
+    void setBlockAndInitProbeProcessInfo(Block block, size_t probe_index);
 
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
@@ -189,6 +195,34 @@ public:
         {}
     };
 
+
+    struct ProbeProcessInfo
+    {
+        Block block;
+        UInt64 max_block_size;
+        size_t start_row;
+        size_t end_row;
+        size_t already_expanded_rows;
+        size_t already_generate_rows;
+        bool all_rows_joined_finish;
+        bool block_full;
+
+        ProbeProcessInfo(Block block_, UInt64 max_block_size_, size_t start_row_, size_t end_row_, size_t already_expanded_rows_, size_t already_generate_rows_, bool all_rows_joined_finish_, bool block_full_)
+            : block(block_)
+            , max_block_size(max_block_size_)
+            , start_row(start_row_)
+            , end_row(end_row_)
+            , already_expanded_rows(already_expanded_rows_)
+            , already_generate_rows(already_generate_rows_)
+            , all_rows_joined_finish(all_rows_joined_finish_)
+            , block_full(block_full_)
+        {}
+    };
+
+    using ProbeProcessInfoPtr = std::shared_ptr<ProbeProcessInfo>;
+    using ProbeProcessInfoPtrs = std::vector<ProbeProcessInfoPtr>;
+
+    const ProbeProcessInfoPtrs & getProbeProcessInfos() const;
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
       * For implementation of RIGHT and FULL JOINs.
@@ -271,6 +305,7 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
+
 private:
     friend class NonJoinedBlockInputStream;
 
@@ -286,6 +321,14 @@ private:
     bool use_nulls;
 
     size_t build_concurrency;
+
+    size_t probe_concurrency;
+
+    UInt64 max_block_size_for_hash_join;
+
+    ProbeProcessInfoPtrs probe_process_infos;
+
+private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
@@ -317,6 +360,7 @@ private:
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
 
+
 private:
     Type type = Type::EMPTY;
 
@@ -345,6 +389,8 @@ private:
     mutable std::shared_mutex rwlock;
 
     bool initialized = false;
+
+    bool probe_initialized = false;
 
     size_t getBuildConcurrencyInternal() const
     {
@@ -379,7 +425,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & block, const Maps & maps) const;
+    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr probe_process_info_ptr) const;
 
     /** Handle non-equal join conditions
       *

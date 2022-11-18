@@ -352,6 +352,34 @@ ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets & offsets) const
 }
 
 template <typename T>
+ColumnPtr ColumnDecimal<T>::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+{
+    size_t size = data.size();
+    if (size != offsets.size())
+        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    auto res = this->create(0, scale);
+    if (0 == size || start_row > end_row)
+        return res;
+
+    typename Self::Container & res_data = res->getData();
+    res_data.reserve(offsets[end_row] - already_generate_rows);
+
+    IColumn::Offset prev_offset = already_generate_rows;
+    for (size_t i = start_row; i <= end_row; ++i)
+    {
+        size_t size_to_replicate = offsets[i] - prev_offset;
+        prev_offset = offsets[i];
+
+        for (size_t j = 0; j < size_to_replicate; ++j)
+            res_data.push_back(data[i]);
+    }
+
+    return res;
+}
+
+
+template <typename T>
 void ColumnDecimal<T>::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);

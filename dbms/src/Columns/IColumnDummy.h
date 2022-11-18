@@ -128,6 +128,12 @@ public:
         return cloneDummy(s == 0 ? 0 : offsets.back());
     }
 
+    ColumnPtr replicate(size_t /*start_row*/, size_t /*end_row*/, size_t /*already_generate_rows*/, const IColumn::Offsets & /*offsets*/) const override
+    {
+        throw Exception("not implement.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         if (s != selector.size())
