@@ -131,7 +131,7 @@ private:
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
-    DMContextPtr dm_context;
+    const DMContextPtr dm_context;
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;

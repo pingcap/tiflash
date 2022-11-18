@@ -24,6 +24,8 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
+#include "Storages/DeltaMerge/DMContext.h"
+
 namespace ProfileEvents
 {
 extern const Event DMFileFilterNoFilter;
@@ -43,6 +45,7 @@ class DMFilePackFilter
 public:
     // Empty `rowkey_ranges` means do not filter by rowkey_ranges
     static DMFilePackFilter loadFrom(
+        const DMContextPtr & dm_context,
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
         bool set_cache_if_miss,
@@ -53,7 +56,7 @@ public:
         const ReadLimiterPtr & read_limiter,
         const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
+        auto pack_filter = DMFilePackFilter(dm_context, dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
@@ -103,7 +106,8 @@ public:
     }
 
 private:
-    DMFilePackFilter(const DMFilePtr & dmfile_,
+    DMFilePackFilter(const DMContextPtr & dm_context_,
+                     const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
                      bool set_cache_if_miss_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
@@ -112,7 +116,8 @@ private:
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
                      const String & tracing_id)
-        : dmfile(dmfile_)
+        : dm_context(dm_context_)
+        , dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
         , rowkey_ranges(rowkey_ranges_)
@@ -284,10 +289,17 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
+        Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
+
+        if (dm_context && dm_context->table_scan_context_ptr)
+        {
+            dm_context->table_scan_context_ptr->rough_set_index_load_time_in_milliseconds += watch.elapsedMilliseconds();
+        }
     }
 
 private:
+    const DMContextPtr dm_context;
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
     bool set_cache_if_miss;

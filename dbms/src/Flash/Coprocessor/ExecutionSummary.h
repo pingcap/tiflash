@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/FullTableScanContext.h>
+#include <Storages/DeltaMerge/TableScanContext.h>
 #include <common/types.h>
 
 namespace DB
@@ -27,7 +27,7 @@ struct ExecutionSummary
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
 
-    std::shared_ptr<DB::DM::FullTableScanContext> full_table_scan_context = std::make_shared<DB::DM::FullTableScanContext>();
+    std::shared_ptr<DB::DM::TableScanContext> table_scan_context = std::make_shared<DB::DM::TableScanContext>();
 
     ExecutionSummary() = default;
 

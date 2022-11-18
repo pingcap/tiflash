@@ -40,6 +40,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMContextPt
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
     DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+        dm_context,
         dmfile,
         index_cache,
         /*set_cache_if_miss*/ true,

@@ -415,7 +415,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, SimpleReadCheckFullTableScanContext)
+TEST_P(DeltaMergeStoreRWTest, SimpleReadCheckTableScanContext)
 try
 {
     const ColumnDefine col_a_define(2, "col_a", std::make_shared<DataTypeInt64>());
@@ -476,10 +476,10 @@ try
     in->readSuffix();
 
     auto * unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(in.get());
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_packs_count, 7);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_rows_count, 50000);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_packs_count, 0);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_rows_count, 0);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_packs_count, 7);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_rows_count, 50000);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_packs_count, 0);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_rows_count, 0);
 
     auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
 
@@ -500,10 +500,10 @@ try
     in->readSuffix();
 
     unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(in.get());
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_packs_count, 6);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->scan_rows_count, 41808);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_packs_count, 1);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr->skip_rows_count, 8192);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_packs_count, 6);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_rows_count, 41808);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_packs_count, 1);
+    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_rows_count, 8192);
 }
 CATCH
 

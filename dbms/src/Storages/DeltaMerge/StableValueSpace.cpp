@@ -52,6 +52,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
         for (const auto & file : files_)
         {
             auto pack_filter = DMFilePackFilter::loadFrom(
+                nullptr,
                 file,
                 index_cache,
                 /*set_cache_if_miss*/ true,
@@ -224,7 +225,7 @@ void StableValueSpace::calculateStableProperty(const DMContextPtr & context, con
                                                   .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
                                                   .onlyReadOnePackEveryTime()
                                                   .setTracingID(fmt::format("{}-calculateStableProperty", context->tracing_id))
-                                                  .build(context, file, read_columns, RowKeyRanges{rowkey_range});
+                                                  .build(nullptr, file, read_columns, RowKeyRanges{rowkey_range});
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -251,6 +252,7 @@ void StableValueSpace::calculateStableProperty(const DMContextPtr & context, con
             mvcc_stream->readSuffix();
         }
         auto pack_filter = DMFilePackFilter::loadFrom(
+            nullptr,
             file,
             context->db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
@@ -378,6 +380,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     for (auto & f : stable->files)
     {
         auto filter = DMFilePackFilter::loadFrom(
+            nullptr,
             f,
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
@@ -422,6 +425,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
     {
         const auto & file = stable->files[file_idx];
         auto filter = DMFilePackFilter::loadFrom(
+            nullptr,
             file,
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,

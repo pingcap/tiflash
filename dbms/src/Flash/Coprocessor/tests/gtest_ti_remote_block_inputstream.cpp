@@ -17,7 +17,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/FullTableScanContext.h>
+#include <Storages/DeltaMerge/TableScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -42,7 +42,7 @@ using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
 {
-    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && left.full_table_scan_context->equal(right.full_table_scan_context.get());
+    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && left.table_scan_context->equal(right.table_scan_context.get());
 }
 
 struct MockWriter
@@ -58,11 +58,11 @@ struct MockWriter
         summary.num_produced_rows = 10000;
         summary.num_iterations = 50;
         summary.concurrency = 1;
-        summary.full_table_scan_context = std::make_shared<DM::FullTableScanContext>();
-        summary.full_table_scan_context->scan_packs_count = 1;
-        summary.full_table_scan_context->scan_rows_count = 8192;
-        summary.full_table_scan_context->skip_packs_count = 2;
-        summary.full_table_scan_context->skip_rows_count = 16000;
+        summary.table_scan_context = std::make_shared<DM::TableScanContext>();
+        summary.table_scan_context->scan_packs_count = 1;
+        summary.table_scan_context->scan_rows_count = 8192;
+        summary.table_scan_context->skip_packs_count = 2;
+        summary.table_scan_context->skip_rows_count = 16000;
 
         return summary;
     }
@@ -86,8 +86,8 @@ struct MockWriter
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
 
-            auto * full_table_scan_context = summary_ptr->mutable_full_table_scan_context();
-            setFullTableScanContext(full_table_scan_context, summary.full_table_scan_context);
+            auto * table_scan_context = summary_ptr->mutable_table_scan_context();
+            setTableScanContext(table_scan_context, summary.table_scan_context);
 
             summary_ptr->set_executor_id("Executor_0");
         }

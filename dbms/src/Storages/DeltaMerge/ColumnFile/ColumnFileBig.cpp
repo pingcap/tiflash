@@ -35,6 +35,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
 
     auto pack_filter = DMFilePackFilter::loadFrom(
+        nullptr,
         file,
         index_cache,
         /*set_cache_if_miss*/ false,

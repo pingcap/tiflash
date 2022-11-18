@@ -23,12 +23,12 @@
 namespace DB
 {
 
-void setFullTableScanContext(tipb::FullTableScanContext * full_table_scan_context_pb, std::shared_ptr<DM::FullTableScanContext> full_table_scan_context)
+void setTableScanContext(DM::TableScanContext * table_scan_context_pb, std::shared_ptr<DM::TableScanContext> table_scan_context)
 {
-    full_table_scan_context_pb->set_scan_packs_count(full_table_scan_context->scan_packs_count);
-    full_table_scan_context_pb->set_scan_rows_count(full_table_scan_context->scan_rows_count);
-    full_table_scan_context_pb->set_skip_packs_count(full_table_scan_context->skip_packs_count);
-    full_table_scan_context_pb->set_skip_rows_count(full_table_scan_context->skip_rows_count);
+    table_scan_context_pb->set_scan_packs_count(table_scan_context->scan_packs_count);
+    table_scan_context_pb->set_scan_rows_count(table_scan_context->scan_rows_count);
+    table_scan_context_pb->set_skip_packs_count(table_scan_context->skip_packs_count);
+    table_scan_context_pb->set_skip_rows_count(table_scan_context->skip_rows_count);
 }
 
 void ExecutionSummaryCollector::fillTiExecutionSummary(
@@ -40,9 +40,9 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
     execution_summary->set_num_produced_rows(current.num_produced_rows);
     execution_summary->set_num_iterations(current.num_iterations);
     execution_summary->set_concurrency(current.concurrency);
-    auto * full_table_scan_context = execution_summary->mutable_full_table_scan_context();
+    auto * table_scan_context = execution_summary->mutable_table_scan_context();
 
-    setFullTableScanContext(full_table_scan_context, current.full_table_scan_context);
+    setTableScanContext(table_scan_context, current.table_scan_context);
 
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
@@ -111,21 +111,21 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
 
                 if (!get_storage_info)
                 {
-                    // There may be multiple UnorderedInputStream in the same executor, but they share the same full_table_scan_context,
-                    // Thus we only calculate the full_table_scan_context once;
+                    // There may be multiple UnorderedInputStream in the same executor, but they share the same table_scan_context,
+                    // Thus we only calculate the table_scan_context once;
                     if (auto * local_unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(p_stream))
                     { // check 一下有没有更优雅的写法，这样写后面 input stream 越来越多咋办
-                        if (local_unordered_input_stream_ptr->getDMContext() && local_unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr)
+                        if (local_unordered_input_stream_ptr->getDMContext() && local_unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr)
                         {
-                            current.full_table_scan_context->merge(local_unordered_input_stream_ptr->getDMContext()->full_table_scan_context_ptr.get());
+                            current.table_scan_context->merge(local_unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr.get());
                             get_storage_info = true;
                         }
                     }
                     else if (auto * local_dm_segment_thread_input_stream = dynamic_cast<DB::DM::DMSegmentThreadInputStream *>(stream_ptr.get()))
                     {
-                        if (local_dm_segment_thread_input_stream->getDMContext() && local_dm_segment_thread_input_stream->getDMContext()->full_table_scan_context_ptr)
+                        if (local_dm_segment_thread_input_stream->getDMContext() && local_dm_segment_thread_input_stream->getDMContext()->table_scan_context_ptr)
                         {
-                            current.full_table_scan_context->merge(local_dm_segment_thread_input_stream->getDMContext()->full_table_scan_context_ptr.get());
+                            current.table_scan_context->merge(local_dm_segment_thread_input_stream->getDMContext()->table_scan_context_ptr.get());
                             get_storage_info = true;
                         }
                     }

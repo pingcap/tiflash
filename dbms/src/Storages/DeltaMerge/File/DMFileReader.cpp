@@ -28,6 +28,8 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
+#include "Common/Stopwatch.h"
+
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -296,10 +298,10 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
-        if (dm_context && dm_context->full_table_scan_context_ptr)
+        if (dm_context && dm_context->table_scan_context_ptr)
         {
-            dm_context->full_table_scan_context_ptr->skip_packs_count += 1;
-            dm_context->full_table_scan_context_ptr->skip_rows_count += pack_stats[next_pack_id].rows;
+            dm_context->table_scan_context_ptr->skip_packs_count += 1;
+            dm_context->table_scan_context_ptr->skip_rows_count += pack_stats[next_pack_id].rows;
         }
     }
     return next_pack_id < use_packs.size();
@@ -317,6 +319,13 @@ inline bool isCacheableColumn(const ColumnDefine & cd)
 
 Block DMFileReader::read()
 {
+    Stopwatch watch;
+    SCOPE_EXIT(
+        if (dm_context && dm_context->table_scan_context_ptr) {
+            dm_context->table_scan_context_ptr->dmfile_read_time_in_milliseconds += watch.elapsedMilliseconds();
+        });
+
+
     // Go to next available pack.
     size_t skip_rows;
 
@@ -375,11 +384,11 @@ Block DMFileReader::read()
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
 
-    // if (dm_context && dm_context->db_context.getDAGContext() && dm_context->db_context.getDAGContext()->collect_execution_summaries && dm_context->full_table_scan_context_ptr){
-    if (dm_context && dm_context->full_table_scan_context_ptr)
+    // if (dm_context && dm_context->db_context.getDAGContext() && dm_context->db_context.getDAGContext()->collect_execution_summaries && dm_context->table_scan_context_ptr){
+    if (dm_context && dm_context->table_scan_context_ptr)
     {
-        dm_context->full_table_scan_context_ptr->scan_packs_count += read_packs;
-        dm_context->full_table_scan_context_ptr->scan_rows_count += read_rows;
+        dm_context->table_scan_context_ptr->scan_packs_count += read_packs;
+        dm_context->table_scan_context_ptr->scan_rows_count += read_rows;
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.

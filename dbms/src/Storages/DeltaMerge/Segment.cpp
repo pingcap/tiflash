@@ -457,6 +457,12 @@ bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & rang
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
+    Stopwatch watch;
+    SCOPE_EXIT(
+        if (dm_context.table_scan_context_ptr) {
+            dm_context.table_scan_context_ptr->dmfile_read_time_in_milliseconds += watch.elapsedMilliseconds();
+        });
+
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
