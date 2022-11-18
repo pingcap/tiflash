@@ -15,7 +15,6 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>
 #include <limits.h>
@@ -36,9 +35,6 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     SpaceMapPtr smap;
     switch (type)
     {
-    case SMAP64_RBTREE:
-        smap = RBTreeSpaceMap::create(start, end);
-        break;
     case SMAP64_STD_MAP:
         smap = STDMapSpaceMap::create(start, end);
         break;

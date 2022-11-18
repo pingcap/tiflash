@@ -54,7 +54,7 @@ template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    summary_collector.addExecuteSummaries(response);
     writer->sendExecutionSummary(response);
 }
 
@@ -99,7 +99,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -122,14 +122,14 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
-        const auto & packet = packets[part_id];
+        auto & packet = packets[part_id];
         assert(packet);
         if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(packet, part_id);
+            writer->partitionWrite(std::move(packet), part_id);
     }
 }
 

@@ -97,6 +97,8 @@ public:
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
+         bool enable_fine_grained_shuffle_,
+         size_t fine_grained_shuffle_count_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
@@ -389,6 +391,8 @@ private:
     mutable std::shared_mutex rwlock;
 
     bool initialized = false;
+    bool enable_fine_grained_shuffle = false;
+    size_t fine_grained_shuffle_count = 0;
 
     bool probe_initialized = false;
 

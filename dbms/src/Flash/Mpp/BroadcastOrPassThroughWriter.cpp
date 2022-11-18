@@ -47,7 +47,7 @@ template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    summary_collector.addExecuteSummaries(response);
     writer->sendExecutionSummary(response);
 }
 
@@ -92,7 +92,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
     }
     assert(blocks.empty());
     rows_in_blocks = 0;
-    writer->broadcastOrPassThroughWrite(tracked_packet);
+    writer->broadcastOrPassThroughWrite(std::move(tracked_packet));
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

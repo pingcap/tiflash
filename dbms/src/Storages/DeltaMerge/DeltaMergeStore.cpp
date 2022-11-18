@@ -734,7 +734,7 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
     return true;
 }
 
-void DeltaMergeStore::mergeDeltaAll(const Context & context)
+bool DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
     LOG_INFO(log, "Begin table mergeDeltaAll");
 
@@ -750,12 +750,15 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
         }
     }
 
+    bool all_succ = true;
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
+        bool succ = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual) != nullptr;
+        all_succ = all_succ && succ;
     }
 
-    LOG_INFO(log, "Finish table mergeDeltaAll");
+    LOG_INFO(log, "Finish table mergeDeltaAll: {}", all_succ);
+    return all_succ;
 }
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)

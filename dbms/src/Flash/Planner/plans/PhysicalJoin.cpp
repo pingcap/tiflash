@@ -76,6 +76,7 @@ void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context 
         restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
     }
 }
+
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -83,6 +84,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Join & join,
+    const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & left,
     const PhysicalPlanNodePtr & right)
 {
@@ -149,6 +151,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
+        fine_grained_shuffle.enable(),
+        fine_grained_shuffle.stream_count,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -171,7 +175,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_side_prepare_actions,
         build_side_prepare_actions,
         is_tiflash_right_join,
-        Block(join_output_schema));
+        Block(join_output_schema),
+        fine_grained_shuffle);
     return physical_join;
 }
 
@@ -222,6 +227,8 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
+    if (fine_grained_shuffle.enable())
+        join_build_extra_info = fmt::format("{} {}", join_build_extra_info, String(enableFineGrainedShuffleExtraInfo));
     auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
     auto build_streams = [&](BlockInputStreams & streams) {
         size_t build_index = 0;

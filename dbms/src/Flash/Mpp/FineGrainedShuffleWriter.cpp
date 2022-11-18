@@ -58,7 +58,7 @@ template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    summary_collector.addExecuteSummaries(response);
     writer->sendExecutionSummary(response);
 }
 
@@ -137,7 +137,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
-            HashBaseWriterHelper::scatterColumnsInplace(block, num_bucket, collators, partition_key_containers_for_reuse, partition_col_ids, hash, selector, scattered);
+            HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
             blocks.pop_back();
         }
 
@@ -176,14 +176,14 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
-        const auto & packet = packets[part_id];
+        auto & packet = packets[part_id];
         assert(packet);
         if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(packet, part_id);
+            writer->partitionWrite(std::move(packet), part_id);
     }
 }
 
