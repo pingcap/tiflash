@@ -1668,7 +1668,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             right_indexes,                                                                                                                     \
             collators,                                                                                                                         \
             enable_fine_grained_shuffle,                                                                                                       \
-            fine_grained_shuffle_count,                                                                                                                   \
+            fine_grained_shuffle_count,                                                                                                        \
             probe_process_info_ptr);                                                                                                           \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
