@@ -1697,20 +1697,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
     {
         for (size_t i = 0; i < existing_columns; ++i)
         {
-            // for test, and then will create function replicate(start_row, end_row, already_generate_rows, offsets_to_replicate) for all ColumnXXX
-            //            if (block.safeGetByPosition(i).column->isColumnNullable())
-            //            {
-            //                auto col = static_cast<const ColumnNullable &>(*block.safeGetByPosition(i).column).getNestedColumnPtr().get();
-            //                auto null = static_cast<const ColumnNullable &>(*block.safeGetByPosition(i).column).getNullMapColumnPtr().get();
-            //                ColumnPtr replicated_data = static_cast<ColumnInt32 *>(const_cast<IColumn *>(col))->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, probe_process_info_ptr->already_generate_rows, *offsets_to_replicate);
-            //                ColumnPtr replicated_null_map = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(null))->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, probe_process_info_ptr->already_generate_rows, *offsets_to_replicate);
-            //                block.safeGetByPosition(i).column = ColumnNullable::create(replicated_data, replicated_null_map);
-            //            }
-            //            else
-            //            {
-            //                block.safeGetByPosition(i).column = static_cast<ColumnInt32 *>(const_cast<IColumn *>(block.safeGetByPosition(i).column.get()))->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, probe_process_info_ptr->already_generate_rows, *offsets_to_replicate);
-            //            }
-
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, probe_process_info_ptr->already_generate_rows, *offsets_to_replicate);
         }
 
