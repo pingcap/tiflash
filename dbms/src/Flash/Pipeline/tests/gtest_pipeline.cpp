@@ -62,4 +62,17 @@ TEST_F(PipelineRunner, all_io)
     TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
     task_scheduler.waitForFinish();
 }
+
+TEST_F(PipelineRunner, io_cpu)
+{
+    std::vector<TaskPtr> tasks;
+    tasks.emplace_back(TaskBuilder().setCPUSource().appendCPUTransform().setIOSink().build());
+    tasks.emplace_back(TaskBuilder().setCPUSource().appendIOTransform().setIOSink().build());
+    tasks.emplace_back(TaskBuilder().setCPUSource().appendIOTransform().setCPUSink().build());
+    tasks.emplace_back(TaskBuilder().setIOSource().appendIOTransform().setCPUSink().build());
+    tasks.emplace_back(TaskBuilder().setIOSource().appendCPUTransform().setCPUSink().build());
+    tasks.emplace_back(TaskBuilder().setIOSource().appendCPUTransform().setIOSink().build());
+    TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
+    task_scheduler.waitForFinish();
+}
 } // namespace DB::tests
