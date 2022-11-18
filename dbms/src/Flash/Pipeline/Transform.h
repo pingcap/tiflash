@@ -21,7 +21,6 @@
 #include <Flash/Pipeline/Utils.h>
 
 #include <memory>
-#include <thread>
 
 namespace DB
 {
@@ -71,16 +70,12 @@ public:
         if (!block)
             return PStatus::NEED_MORE;
 
-        assert(!io_future.valid());
-        io_future = DynamicThreadPool::global_instance->schedule(true, [&, block]() {
+        assert(!io_future);
+        io_future.emplace(DynamicThreadPool::global_instance->schedule(true, [&, block]() {
             assert(!io_block);
-
-            // io part
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-            // cpu part
+            doIOPart();
             doCpuPart(count, 10);
-        });
+        }));
         return PStatus::BLOCKED;
     }
 
@@ -100,15 +95,15 @@ public:
 
     bool isBlocked() override
     {
-        if (!io_future.valid())
+        if (!io_future)
             return false;
-        bool is_ready = io_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        bool is_ready = io_future->wait_for(std::chrono::seconds(0)) == std::future_status::ready;
         if (is_ready)
-            io_future = {};
+            io_future.reset();
         return !is_ready;
     }
 private:
-    std::future<void> io_future;
+    std::optional<std::future<void>> io_future;
     Block io_block;
     size_t count = 0;
 };

@@ -14,6 +14,8 @@
 
 #include <Flash/Pipeline/Utils.h>
 
+#include <thread>
+
 namespace DB
 {
 void doCpuPart(size_t & count, size_t loop)
@@ -21,5 +23,10 @@ void doCpuPart(size_t & count, size_t loop)
     count = 0;
     for (size_t i = 0; i < loop; ++i)
         count += (i + random() % 100);
+}
+
+void doIOPart()
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 } // namespace DB

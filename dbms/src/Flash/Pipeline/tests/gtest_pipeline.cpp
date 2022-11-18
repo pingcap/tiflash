@@ -12,26 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/ExecutorTestUtils.h>
 #include <Flash/Pipeline/TaskScheduler.h>
+#include <Flash/Pipeline/TaskBuilder.h>
 
-namespace DB
-{
-namespace tests
-{
+#include <gtest/gtest.h>
 
-class PipelineRunner : public DB::tests::ExecutorTest
+namespace DB::tests
 {
+class PipelineRunner : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
+            /*fixed_thread_num=*/300,
+            std::chrono::milliseconds(100000));
+    }
 };
 
-TEST_F(PipelineRunner, Test)
-try
+TEST_F(PipelineRunner, empty)
 {
     std::vector<TaskPtr> tasks;
     TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
     task_scheduler.waitForFinish();
 }
-CATCH
 
-} // namespace tests
-} // namespace DB
+TEST_F(PipelineRunner, all_cpu)
+{
+    auto build = []() {
+        return TaskBuilder().setCPUSource().appendCPUTransform().setCPUSink().build();
+    };
+    std::vector<TaskPtr> tasks;
+    for (size_t i = 0; i < 100; ++i)
+        tasks.emplace_back(build());
+    TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
+    task_scheduler.waitForFinish();
+}
+
+TEST_F(PipelineRunner, all_io)
+{
+    auto build = []() {
+        return TaskBuilder().setIOSource().appendIOTransform().setIOSink().build();
+    };
+    std::vector<TaskPtr> tasks;
+    for (size_t i = 0; i < 1; ++i)
+        tasks.emplace_back(build());
+    TaskScheduler task_scheduler(std::thread::hardware_concurrency(), tasks);
+    task_scheduler.waitForFinish();
+}
+}

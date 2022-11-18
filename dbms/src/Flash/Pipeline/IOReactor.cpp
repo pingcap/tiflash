@@ -74,12 +74,12 @@ void IOReactor::loop()
         {
             if ((*task_it)->isBlocked())
             {
-                ready_tasks.emplace_back(std::move(*task_it));
-                task_it = local_blocked_tasks.erase(task_it);
+                ++task_it;
             }
             else
             {
-                ++task_it;
+                ready_tasks.emplace_back(std::move(*task_it));
+                task_it = local_blocked_tasks.erase(task_it);
             }
         }
 

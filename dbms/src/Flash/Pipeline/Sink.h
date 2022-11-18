@@ -65,24 +65,22 @@ public:
         if (!block)
             return PStatus::FINISHED;
         block.clear();
-        assert(!io_future.valid());
-        io_future = DynamicThreadPool::global_instance->schedule(true, [&]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        });
+        assert(!io_future);
+        io_future.emplace(DynamicThreadPool::global_instance->schedule(false, []() { doIOPart(); }));
         return PStatus::BLOCKED;
     }
 
     bool isBlocked() override
     {
-        if (!io_future.valid())
+        if (!io_future)
             return false;
-        bool is_ready = io_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        bool is_ready = io_future->wait_for(std::chrono::seconds(0)) == std::future_status::ready;
         if (is_ready)
-            io_future = {};
+            io_future.reset();
         return !is_ready;
     }
 
 private:
-    std::future<void> io_future;
+    std::optional<std::future<void>> io_future;
 };
 } // namespace DB

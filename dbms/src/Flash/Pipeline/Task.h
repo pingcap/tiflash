@@ -23,6 +23,15 @@ namespace DB
 class Task
 {
 public:
+    Task(
+        SourcePtr && source_, 
+        std::vector<TransformPtr> && transforms_, 
+        SinkPtr && sink_)
+        : source(std::move(source_))
+        , transforms(std::move(transforms_))
+        , sink(std::move(sink_))
+    {}
+
     PStatus execute()
     {
         auto [block, op_index] = fetchBlock();
