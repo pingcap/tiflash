@@ -24,11 +24,11 @@ services:
       - ./tls:/tls
     command:
       - --name=pd0
-      - --client-urls=http://0.0.0.0:2379
+      - --client-urls=https://0.0.0.0:2379
       - --peer-urls=https://0.0.0.0:2380
-      - --advertise-client-urls=http://pd0:2379
-      - --advertise-peer-urls=https://pd0:2380
-      - --initial-cluster=pd0=https://pd0:2380
+      - --advertise-client-urls=https://0.0.0.0:2379
+      - --advertise-peer-urls=https://0.0.0.0:2380
+      - --initial-cluster=pd0=https://0.0.0.0:2380
       - --config=/pd.toml
       - --data-dir=/data
       - --log-file=/log/pd.log
