@@ -141,7 +141,7 @@ void PageDirectoryFactory<Trait>::loadEdit(const typename Trait::PageDirectoryPt
             max_applied_ver = r.version;
 
         if (dump_entries)
-            LOG_INFO(Logger::get(), Trait::PageEntriesEdit::toDebugString(r));
+            LOG_INFO(Logger::get(), r.toDebugString());
         applyRecord(dir, r);
     }
 }

@@ -1,0 +1,60 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.#pragma once
+
+syntax = "proto3";
+
+package DB.PS.V3.Remote;
+
+import "common.proto";
+
+message ManifestFile {
+    // WARN: this struct is subject to change!
+    ManifestFilePrefix file_prefix = 1;
+    repeated EditRecord records = 2;
+}
+
+message ManifestFilePrefix {
+    uint64 local_sequence = 2;
+    uint64 last_local_sequence = 3;
+
+    // The local timestamp this manifest file is created.
+    uint64 create_at_ms = 4;
+    WriterInfo writer_info = 5;
+}
+
+enum EditType {
+    EDIT_TYPE_UNSPECIFIED = 0;
+    EDIT_TYPE_ENTRY = 1;
+    EDIT_TYPE_REF = 2;
+    EDIT_TYPE_EXTERNAL = 3;
+    EDIT_TYPE_DELETE = 4;
+}
+
+message EntryDataLocation {
+    // We have compression, so may be its fine.
+    string data_file_id = 1;
+
+    uint64 offset_in_file = 2;
+    uint64 size_in_file = 3;
+}
+
+message EditRecord {
+    EditType type = 1;
+    PageId page_id = 2;
+    PageId ori_page_id = 3;
+    uint64 version_sequence = 4;
+    uint64 version_epoch = 5;
+    EntryDataLocation entry = 6;
+    int64 being_ref_count = 7;
+}

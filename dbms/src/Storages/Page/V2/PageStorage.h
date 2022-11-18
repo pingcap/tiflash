@@ -128,6 +128,12 @@ public:
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
+    void checkpointImpl(std::shared_ptr<const PS::V3::Remote::WriterInfo>, const std::string &) override
+    {
+        // Unimplemented
+        RUNTIME_CHECK(false);
+    }
+
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
     FileProviderPtr getFileProvider() const { return file_provider; }

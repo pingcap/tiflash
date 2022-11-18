@@ -74,6 +74,8 @@ public:
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
+    void checkpointImpl(std::shared_ptr<const Remote::WriterInfo> writer_info, const std::string & remote_directory) override;
+
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
     void unregisterExternalPagesCallbacks(NamespaceId ns_id) override;

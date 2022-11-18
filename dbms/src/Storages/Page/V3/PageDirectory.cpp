@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -41,6 +42,7 @@
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
+#include <Poco/File.h>
 
 #include <pcg_random.hpp>
 #include <thread>
@@ -120,7 +122,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
         fmt::format("try to create entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
-                    ::DB::PS::V3::toDebugString(entry),
+                    entry.toDebugString(),
                     toDebugString()),
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
@@ -198,7 +200,7 @@ typename Trait::PageId VersionedPageEntries<Trait>::createUpsertEntry(const Page
         fmt::format("try to create upsert entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
-                    ::DB::PS::V3::toDebugString(entry),
+                    entry.toDebugString(),
                     toDebugString()),
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
@@ -483,6 +485,116 @@ std::optional<PageEntryV3> VersionedPageEntries<Trait>::getLastEntry(std::option
         }
     }
     return std::nullopt;
+}
+
+template <typename Trait>
+void VersionedPageEntries<Trait>::copyRemoteInfoFromEdit(const typename Trait::PageEntriesEdit::EditRecord & edit)
+{
+    // We are dealing with two use cases here.
+    //
+    // Case #A:
+    //    We have a running PageStorage instance, and did a checkpoint dump. The checkpoint dump is encoded using
+    //    PageEntriesEdit. During the checkpoint dump, this function is invoked so that we can write back where
+    //    (the remote info) each page's data was dumped.
+    //    Note: In this case, there is a living snapshot protecting the data.
+    //
+    // Case #B:
+    //    There is a checkpoint dump at some time. We are now recovering the remote info from that checkpoint dump
+    //    for the PageStorage instance. The PageStorage instance may be just recovered from the WAL (for example,
+    //    TiFlash was just restarted).
+    //
+    // The case #B is harder than case #A. There may be full GC. If we handle case #B correctly then case #A will
+    // be just fine.
+    //
+    // TODO: The implementation below only handles Case #A correctly.
+
+    // Pre-check: All ENTRY edit record must contain remote info.
+    //      TODO: May be we could use another type, instead of doing a runtime check.
+    if (edit.type == EditRecordType::VAR_ENTRY)
+        RUNTIME_CHECK(edit.entry.remote_info.has_value());
+
+    auto page_lock = acquireLock();
+
+    switch (type)
+    {
+    case EditRecordType::VAR_DELETE:
+    {
+        // For the same page this must not happen:
+        // Impossible case #A: Edit is delete and current is delete:
+        //      VAR_DELETE will not create an edit.
+        // Impossible case #B: Edit is not delete and current is delete:
+        //      VAR_EXTERNAL / VAR_REF / VAR_ENTRY page will not turn into VAR_DELETE.
+
+        // TODO: May be possible? Put X -> Delete X -> Full GC -> Delete X
+
+        // If this really happens, it means we are applying remote info over a wrong PageStorage instance.
+        // May be we should provide a better message instead.
+        RUNTIME_CHECK(false,
+                      toDebugString(),
+                      edit.toDebugString());
+        break;
+    }
+    case EditRecordType::VAR_EXTERNAL:
+    {
+        // TODO: May be possible? Put X -> Delete X -> Full GC -> External X
+
+        RUNTIME_CHECK(
+            edit.type == EditRecordType::VAR_DELETE || edit.type == EditRecordType::VAR_EXTERNAL,
+            toDebugString(),
+            edit.toDebugString());
+        break;
+    }
+    case EditRecordType::VAR_REF:
+    {
+        // TODO: May be possible? Put X -> Delete X -> Full GC -> Ref X
+
+        RUNTIME_CHECK(
+            edit.type == EditRecordType::VAR_DELETE || edit.type == EditRecordType::VAR_REF,
+            toDebugString(),
+            edit.toDebugString());
+        break;
+    }
+    case EditRecordType::VAR_ENTRY:
+    {
+        // TODO: May be possible? Ref X -> Delete X -> Full GC -> Put X
+
+        RUNTIME_CHECK(
+            edit.type == EditRecordType::VAR_DELETE || edit.type == EditRecordType::VAR_ENTRY,
+            toDebugString(),
+            edit.toDebugString());
+
+        if (edit.type == EditRecordType::VAR_DELETE)
+            break;
+
+        // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
+        // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign remote info for all of it.
+        auto iter = MapUtils::findMutLess(entries, PageVersion(edit.version.sequence + 1));
+        RUNTIME_CHECK(iter != entries.end());
+        RUNTIME_CHECK(iter->first.sequence == edit.version.sequence); // TODO: If there is a full GC this may be false?
+
+        // Discard epoch, and only check sequence.
+        while (iter->first.sequence == edit.version.sequence)
+        {
+            // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
+            RUNTIME_CHECK(iter->second.isEntry());
+            iter->second.entry.remote_info = edit.entry.remote_info;
+
+            if (iter == entries.begin())
+                break;
+            --iter;
+        }
+
+        // TODO: Check whether this is fine: Put X -> Delete X -> Full GC -> Put X
+        //                                   ↑ A                             ↑ B
+        //       The remote info of A must not be recovered into B.
+
+        break;
+    }
+    default:
+        throw Exception(fmt::format(
+            "Calling VersionedPageEntries::copyRemoteInfoFromEdit() with unexpected type: {}",
+            magic_enum::enum_name(type)));
+    }
 }
 
 // Returns true when **this id** is "visible" by `seq`.
@@ -1568,6 +1680,162 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
     return done_any_io;
+}
+
+template <typename Trait>
+template <typename PSBlobTrait>
+typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<PSBlobTrait> options)
+{
+    std::scoped_lock lock(checkpoint_mu);
+
+    RUNTIME_CHECK(endsWith(options.temp_directory, "/"));
+    RUNTIME_CHECK(endsWith(options.remote_directory, "/"));
+    RUNTIME_CHECK(!options.data_file_name_pattern.empty());
+    RUNTIME_CHECK(!options.manifest_file_name_pattern.empty());
+
+    // FIXME: We need to dump snapshot from files, in order to get a correct `being_ref_count`.
+    //  Note that, snapshots from files does not have a correct remote info, so we cannot simply
+    //  copy logic from `tryDumpSnapshot`.
+    //  Currently this is fine, because we will not reclaim data from the PageStorage.
+
+    LOG_INFO(log, "Start dumpRemoteCheckpoint");
+
+    // Let's keep this snapshot until all finished, so that blob data will not be GCed.
+    auto snap = createSnapshot(/*tracing_id*/ "");
+
+    if (snap->sequence == last_checkpoint_sequence)
+    {
+        LOG_INFO(log, "Skipped dump checkpoint because sequence is unchanged, last_seq={} this_seq={}", last_checkpoint_sequence, snap->sequence);
+        return {};
+    }
+
+    auto edit_from_mem = dumpSnapshotToEdit(snap);
+    LOG_DEBUG(log, "Dumped edit from PageDirectory, seq={} n_edits={}", snap->sequence, edit_from_mem.size());
+
+    // As a checkpoint, we write both entries (in manifest) and its data.
+    // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
+
+    // TODO: Check temp file exists.
+
+    auto data_file_name = fmt::format(
+        options.data_file_name_pattern,
+        fmt::arg("sequence", snap->sequence),
+        fmt::arg("sub_file_index", 0));
+    auto data_file_path = options.remote_directory + data_file_name;
+    // Always append a suffix, in case of remote_directory == temp_directory
+    auto data_file_path_temp = options.temp_directory + data_file_name + ".tmp";
+
+    auto manifest_file_name = fmt::format(
+        options.manifest_file_name_pattern,
+        fmt::arg("sequence", snap->sequence));
+    auto manifest_file_path = options.remote_directory + manifest_file_name;
+    // Always append a suffix, in case of remote_directory == temp_directory
+    auto manifest_file_path_temp = options.temp_directory + manifest_file_name + ".tmp";
+
+    Poco::File(Poco::Path(data_file_path_temp).parent()).createDirectories();
+    Poco::File(Poco::Path(manifest_file_path_temp).parent()).createDirectories();
+
+    LOG_DEBUG(log, "data_file_path_temp={} manifest_file_path_temp={}", data_file_path_temp, manifest_file_path_temp);
+
+    auto data_writer = CheckpointDataFileWriter<Trait>::create(
+        typename CheckpointDataFileWriter<Trait>::Options{
+            .file_path = data_file_path_temp,
+            .file_id = data_file_name,
+        });
+    auto manifest_writer = CheckpointManifestFileWriter<Trait>::create(
+        typename CheckpointManifestFileWriter<Trait>::Options{
+            .file_path = manifest_file_path_temp,
+            .file_id = manifest_file_name,
+        });
+    auto writer = CheckpointFilesWriter<Trait, PSBlobTrait>::create(
+        typename CheckpointFilesWriter<Trait, PSBlobTrait>::Options{
+            .info = typename CheckpointFilesWriter<Trait, PSBlobTrait>::Info{
+                .writer = options.writer_info,
+                .sequence = snap->sequence,
+                .last_sequence = 0,
+            },
+            .data_writer = std::move(data_writer),
+            .manifest_writer = std::move(manifest_writer),
+            .blob_store = options.blob_store,
+            .log = log,
+        });
+
+    writer->writePrefix();
+    bool has_new_data = writer->writeEditsAndApplyRemoteInfo(edit_from_mem);
+    writer->writeSuffix();
+
+    writer.reset();
+
+    if (has_new_data)
+    {
+        // Copy back the remote info to the current PageStorage. New remote infos are attached in `writeEditsAndApplyRemoteInfo`.
+        // As a snapshot is kept, we expect there should be no missing page.
+        copyRemoteInfoFromEdit(edit_from_mem, /* allow_missing */ false);
+    }
+
+    // NOTE: The following IO may be very slow, because the output directory should be mounted as S3.
+    Poco::File(Poco::Path(data_file_path).parent()).createDirectories();
+    Poco::File(Poco::Path(manifest_file_path).parent()).createDirectories();
+
+    auto data_file = Poco::File{data_file_path_temp};
+    RUNTIME_CHECK(data_file.exists());
+
+    if (has_new_data)
+        data_file.moveTo(data_file_path);
+    else
+        data_file.remove();
+
+    auto manifest_file = Poco::File{manifest_file_path_temp};
+    RUNTIME_CHECK(manifest_file.exists());
+    manifest_file.moveTo(manifest_file_path);
+
+    last_checkpoint_sequence = snap->sequence;
+    LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);
+
+    return DumpRemoteCheckpointResult{
+        .data_file = data_file, // Note: when has_new_data == false, this field will be pointing to a file not exist. To be fixed.
+        .manifest_file = manifest_file,
+    };
+}
+
+template PageDirectory<u128::PageDirectoryTrait>::DumpRemoteCheckpointResult PageDirectory<u128::PageDirectoryTrait>::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<u128::BlobStoreTrait> options);
+
+template PageDirectory<universal::PageDirectoryTrait>::DumpRemoteCheckpointResult PageDirectory<universal::PageDirectoryTrait>::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<universal::BlobStoreTrait> options);
+
+template <typename Trait>
+void PageDirectory<Trait>::copyRemoteInfoFromEdit(typename Trait::PageEntriesEdit & edit, bool allow_missing)
+{
+    const auto & records = edit.getRecords();
+    if (records.empty())
+        return;
+
+    // Pre-check: All ENTRY edit record must contain remote info.
+    //      TODO: May be we could use another type, instead of doing a runtime check.
+    // We do the pre-check before copying any remote info to avoid partial completion.
+    for (const auto & rec : records)
+    {
+        if (rec.type == EditRecordType::VAR_ENTRY)
+            RUNTIME_CHECK(rec.entry.remote_info.has_value());
+    }
+
+    for (const auto & rec : records)
+    {
+        // TODO: Improve from O(nlogn) to O(n).
+
+        typename MVCCMapType::iterator iter;
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            iter = mvcc_table_directory.find(rec.page_id);
+            if (iter == mvcc_table_directory.end())
+            {
+                RUNTIME_CHECK_MSG(allow_missing, "Page ID {} from the edit is not found in the current PageStorage", rec.page_id);
+                continue;
+            }
+        }
+
+        auto & entries = iter->second;
+        entries->copyRemoteInfoFromEdit(rec);
+    }
 }
 
 template <typename Trait>

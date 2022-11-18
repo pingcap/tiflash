@@ -18,6 +18,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
+#include <Poco/File.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -27,6 +28,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
@@ -51,6 +53,341 @@ extern const char force_set_page_file_write_errno[];
 
 namespace PS::V3::tests
 {
+
+// ===== Begin Remote Checkpoint Tests =====
+// These tests should be moved to other places, when these methods are reorganized.
+
+class PageStorageRemoteCheckpointTest : public PageStorageTest
+{
+public:
+    PageStorageRemoteCheckpointTest()
+    {
+        writer_info = std::make_shared<Remote::WriterInfo>();
+        writer_info->set_store_id(1027);
+
+        output_directory = DB::tests::TiFlashTestEnv::getTemporaryPath("RemoteCheckpointTest/");
+        DB::tests::TiFlashTestEnv::tryRemovePath(output_directory);
+    }
+
+    std::string readData(const RemoteDataLocation & location)
+    {
+        RUNTIME_CHECK(location.offset_in_file > 0);
+        RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
+
+        std::string ret;
+        ret.resize(location.size_in_file);
+
+        // Note: We will introduce a DataReader when compression is added later.
+        // When there is compression, we first need to seek and read compressed blocks, decompress them, and then seek to the data we want.
+        // A DataReader will encapsulate this logic.
+        // Currently there is no compression, so reading data is rather easy.
+
+        auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
+        buf.seek(location.offset_in_file);
+        auto n = buf.readBig(ret.data(), location.size_in_file);
+        RUNTIME_CHECK(n == location.size_in_file);
+
+        return ret;
+    }
+
+    void dumpCheckpoint()
+    {
+        page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<u128::PageDirectoryTrait>::DumpRemoteCheckpointOptions<u128::BlobStoreTrait>{
+            .temp_directory = output_directory,
+            .remote_directory = output_directory,
+            .data_file_name_pattern = "{sequence}_{sub_file_index}.data",
+            .manifest_file_name_pattern = "{sequence}.manifest",
+            .writer_info = writer_info,
+            .blob_store = page_storage->blob_store,
+        });
+    }
+
+protected:
+    std::shared_ptr<Remote::WriterInfo> writer_info;
+    std::string output_directory;
+};
+
+TEST_F(PageStorageRemoteCheckpointTest, DumpEmpty)
+try
+{
+    dumpCheckpoint();
+    {
+        ASSERT_FALSE(Poco::File(output_directory + "0.manifest").exists());
+        ASSERT_FALSE(Poco::File(output_directory + "0_0.data").exists());
+    }
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, DumpAndRead)
+try
+{
+    using namespace PS::V3::Remote;
+    const UInt64 tag = 0;
+    {
+        WriteBatch batch;
+        batch.putPage(5, tag, "The flower carriage rocked");
+        batch.putPage(3, tag, "Said she just dreamed a dream");
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        batch.putRefPage(2, 5);
+        batch.putPage(10, tag, "Nahida opened her eyes");
+        batch.delPage(3);
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+    {
+        ASSERT_TRUE(Poco::File(output_directory + "2.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "2_0.data").exists());
+    }
+
+    // FIXME: When there is a trait this is ridiculously long.....
+    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "2.manifest"});
+    auto edit = reader->read();
+    auto records = edit.getRecords();
+
+    ASSERT_EQ(5, records.size());
+
+    auto iter = records.begin();
+    ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 2), iter->page_id);
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+    ASSERT_TRUE(iter->entry.remote_info.has_value());
+    ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.remote_info->data_location));
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 5), iter->page_id);
+    ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 10), iter->page_id);
+    ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+    ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.remote_info->data_location));
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, ZeroSizedEntry)
+try
+{
+    using namespace PS::V3::Remote;
+    const UInt64 tag = 0;
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "Said she just dreamed a dream");
+        batch.putPage(7, tag, "");
+        batch.putPage(14, tag, "The flower carriage rocked");
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+    {
+        ASSERT_TRUE(Poco::File(output_directory + "1.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "1_0.data").exists());
+    }
+
+    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "1.manifest"});
+    auto edit = reader->read();
+    auto records = edit.getRecords();
+
+    ASSERT_EQ(3, records.size());
+
+    auto iter = records.begin();
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.remote_info->data_location));
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 7), iter->page_id);
+    ASSERT_EQ("", readData(iter->entry.remote_info->data_location));
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 14), iter->page_id);
+    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, PutAndDelete)
+try
+{
+    using namespace PS::V3::Remote;
+    const UInt64 tag = 0;
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "The flower carriage rocked");
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.delPage(3);
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+    {
+        ASSERT_TRUE(Poco::File(output_directory + "2.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "2_0.data").exists());
+    }
+
+    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "2.manifest"});
+    auto edit = reader->read();
+    auto records = edit.getRecords();
+
+    ASSERT_EQ(2, records.size());
+
+    auto iter = records.begin();
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, MultiplePut)
+try
+{
+    using namespace PS::V3::Remote;
+    const UInt64 tag = 0;
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "The flower carriage rocked");
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "Nahida opened her eyes");
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "Said she just dreamed a dream");
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+    {
+        ASSERT_TRUE(Poco::File(output_directory + "3.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "3_0.data").exists());
+    }
+
+    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "3.manifest"});
+    auto edit = reader->read();
+    auto records = edit.getRecords();
+
+    ASSERT_EQ(1, records.size());
+
+    auto iter = records.begin();
+    ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+    ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.remote_info->data_location));
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, GCDuringDump)
+try
+{
+    // TODO
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, DeleteAndGCDuringDump)
+try
+{
+    // TODO
+}
+CATCH
+
+TEST_F(PageStorageRemoteCheckpointTest, DumpWriteDump)
+try
+{
+    using namespace PS::V3::Remote;
+    const UInt64 tag = 0;
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "The flower carriage rocked");
+        batch.putPage(4, tag, "Nahida opened her eyes");
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+    {
+        ASSERT_TRUE(Poco::File(output_directory + "1.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "1_0.data").exists());
+
+        auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "1.manifest"});
+        auto edit = reader->read();
+        auto records = edit.getRecords();
+
+        ASSERT_EQ(2, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+        ASSERT_EQ("1_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 4), iter->page_id);
+        ASSERT_EQ("1_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.remote_info->data_location));
+    }
+
+    // Write and dump again.
+
+    {
+        WriteBatch batch;
+        batch.putPage(3, tag, "Said she just dreamed a dream"); // Override
+        batch.putPage(5, tag, "Dreamed of the day that she was born"); // New
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+    {
+        ASSERT_TRUE(Poco::File(output_directory + "2.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "2_0.data").exists());
+
+        auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "2.manifest"});
+        auto edit = reader->read();
+        auto records = edit.getRecords();
+
+        ASSERT_EQ(3, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
+        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.remote_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 4), iter->page_id);
+        ASSERT_EQ("1_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.remote_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 5), iter->page_id);
+        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.remote_info->data_location));
+    }
+}
+CATCH
+
+// ===== End Remote Checkpoint Tests =====
+
 
 TEST_F(PageStorageTest, WriteRead)
 try

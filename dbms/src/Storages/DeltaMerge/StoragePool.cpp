@@ -23,6 +23,8 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <fmt/format.h>
 
 
@@ -82,6 +84,8 @@ PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
     }
 #undef SET_CONFIG
 
+    config.ps_remote_directory = settings.dt_ps_remote_directory;
+
     return config;
 }
 
@@ -126,11 +130,45 @@ void GlobalStoragePool::restore()
             return this->gc(global_context.getSettingsRef());
         },
         false);
+
+    checkpoint_handle = global_context.getBackgroundPool().addTask(
+        [this] {
+            this->doCheckpoint();
+            return false;
+        },
+        false,
+        /* interval_ms */ 60 * 1000);
 }
 
 FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
 {
     return log_storage->getFileUsageStatistics();
+}
+
+void GlobalStoragePool::doCheckpoint()
+{
+    Timepoint now = Clock::now();
+    if (now < (last_checkpoint_time.load() + Seconds(60)))
+        return;
+
+    last_checkpoint_time = now;
+    
+    auto wi = std::make_shared<PS::V3::Remote::WriterInfo>();
+    auto store_info = global_context.getTMTContext().getKVStore()->getStoreMeta();
+    if (store_info.id() == 0)
+    {
+        LOG_INFO(Logger::get(), "Skip checkpoint because store meta is not initialized");
+        return;
+    }
+
+    wi->set_store_id(store_info.id());
+    wi->set_version(store_info.version());
+    wi->set_version_git(store_info.git_hash());
+    wi->set_start_at_ms(store_info.start_timestamp() * 1000); // TODO: Check whether * 1000 is correct..
+
+    meta_storage->doCheckpoint(wi);
+    data_storage->doCheckpoint(wi);
+    log_storage->doCheckpoint(wi);
 }
 
 bool GlobalStoragePool::gc()

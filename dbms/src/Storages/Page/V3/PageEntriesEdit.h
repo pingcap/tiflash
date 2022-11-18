@@ -18,6 +18,8 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/Remote/Proto/Helper.h>
+#include <Storages/Page/V3/Remote/Proto/manifest_file.pb.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -137,6 +139,40 @@ inline const char * typeToString(EditRecordType t)
     }
 }
 
+inline Remote::EditType typeToRemote(EditRecordType t)
+{
+    switch (t)
+    {
+    case EditRecordType::VAR_ENTRY:
+        return Remote::EDIT_TYPE_ENTRY;
+    case EditRecordType::VAR_REF:
+        return Remote::EDIT_TYPE_REF;
+    case EditRecordType::VAR_EXTERNAL:
+        return Remote::EDIT_TYPE_EXTERNAL;
+    case EditRecordType::VAR_DELETE:
+        return Remote::EDIT_TYPE_DELETE;
+    default:
+        return Remote::EDIT_TYPE_UNSPECIFIED;
+    }
+}
+
+inline EditRecordType typeFromRemote(Remote::EditType t)
+{
+    switch (t)
+    {
+    case Remote::EDIT_TYPE_ENTRY:
+        return EditRecordType::VAR_ENTRY;
+    case Remote::EDIT_TYPE_REF:
+        return EditRecordType::VAR_REF;
+    case Remote::EDIT_TYPE_EXTERNAL:
+        return EditRecordType::VAR_EXTERNAL;
+    case Remote::EDIT_TYPE_DELETE:
+        return EditRecordType::VAR_DELETE;
+    default:
+        RUNTIME_CHECK(false, EditType_Name(t));
+    }
+}
+
 /// Page entries change to apply to PageDirectory
 template <typename PageIdType>
 class PageEntriesEdit
@@ -250,20 +286,60 @@ public:
         PageVersion version;
         PageEntryV3 entry;
         Int64 being_ref_count{1};
+
+        Remote::EditRecord toRemote() const
+        {
+            Remote::EditRecord remote_rec;
+            remote_rec.set_type(typeToRemote(type));
+            remote_rec.mutable_page_id()->CopyFrom(Remote::toRemote(page_id));
+            remote_rec.mutable_ori_page_id()->CopyFrom(Remote::toRemote(ori_page_id));
+            remote_rec.set_version_sequence(version.sequence);
+            remote_rec.set_version_epoch(version.epoch);
+            remote_rec.set_being_ref_count(being_ref_count);
+            if (type == EditRecordType::VAR_ENTRY)
+            {
+                RUNTIME_CHECK(entry.remote_info.has_value());
+                *remote_rec.mutable_entry() = entry.remote_info->data_location.toRemote();
+            }
+            return remote_rec;
+        }
+
+        // WARNING!!!
+        // The edit record rebuild from the `remote_rec` does not have valid blob file ID, blob data size, etc for VAR_ENTRY.
+        static EditRecord fromRemote(const Remote::EditRecord & remote_rec)
+        {
+            EditRecord rec;
+            rec.type = typeFromRemote(remote_rec.type());
+            rec.page_id = Remote::fromRemote<PageIdType>(remote_rec.page_id());
+            rec.ori_page_id = Remote::fromRemote<PageIdType>(remote_rec.ori_page_id());
+            rec.version.sequence = remote_rec.version_sequence();
+            rec.version.epoch = remote_rec.version_epoch();
+            rec.being_ref_count = remote_rec.being_ref_count();
+            if (rec.type == EditRecordType::VAR_ENTRY)
+            {
+                rec.entry.remote_info = RemoteDataInfo{
+                    .data_location = RemoteDataLocation::fromRemote(remote_rec.entry()),
+                    .is_local_data_reclaimed = true,
+                };
+                // Note: rec.entry.* is untouched, leaving zero value.
+                // We need to take care when restoring the PS instance.
+            }
+            return rec;
+        }
+
+        String toDebugString() const
+        {
+            return fmt::format(
+                "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+                typeToString(type),
+                page_id,
+                ori_page_id,
+                version,
+                entry.toDebugString(),
+                being_ref_count);
+        }
     };
     using EditRecords = std::vector<EditRecord>;
-
-    static String toDebugString(const EditRecord & rec)
-    {
-        return fmt::format(
-            "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
-            typeToString(rec.type),
-            rec.page_id,
-            rec.ori_page_id,
-            rec.version,
-            DB::PS::V3::toDebugString(rec.entry),
-            rec.being_ref_count);
-    }
 
     void appendRecord(const EditRecord & rec)
     {
@@ -292,6 +368,21 @@ public:
             records.swap(rhs.records);
         }
         return *this;
+    }
+
+    String toDebugString() const
+    {
+        FmtBuffer buf;
+        buf.append('[');
+        buf.joinStr(
+            records.begin(),
+            records.end(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.append(arg.toDebugString());
+            },
+            ", ");
+        buf.append(']');
+        return buf.toString();
     }
 };
 namespace u128

@@ -14,14 +14,10 @@
 
 #include <Common/TiFlashException.h>
 #include <IO/ChecksumBuffer.h>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <dmfile.pb.h>
-#pragma GCC diagnostic pop
-
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
+#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
+
 namespace DB::DM
 {
 DMChecksumConfig::DMChecksumConfig(std::istream & input)

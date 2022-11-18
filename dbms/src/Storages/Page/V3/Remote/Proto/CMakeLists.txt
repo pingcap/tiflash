@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-protobuf_generate_cpp(
-        dtpb_srcs dtpb_hdrs
-        dmfile.proto
-)
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS *.proto)
+protobuf_generate_cpp(PROTO_SRCS PB_HEADERS ${PROTO_FILES})
 
-add_library(dtpb
-        ${dtpb_srcs})
-target_include_directories(dtpb
+add_library(PSCheckpointProto
+        ${PROTO_SRCS})
+target_include_directories(PSCheckpointProto
         PUBLIC ${Protobuf_INCLUDE_DIR})
-target_compile_options(dtpb
+target_compile_options(PSCheckpointProto
         PRIVATE -Wno-unused-parameter)

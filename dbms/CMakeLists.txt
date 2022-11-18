@@ -213,6 +213,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
+    PSCheckpointProto
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}

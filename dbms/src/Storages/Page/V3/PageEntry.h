@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/Remote/Proto/manifest_file.pb.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -27,6 +28,47 @@ extern const int CHECKSUM_DOESNT_MATCH;
 } // namespace ErrorCodes
 namespace PS::V3
 {
+
+struct RemoteDataLocation
+{
+    // This struct is highly coupled with manifest_file.proto -> EditEntry.
+
+    std::shared_ptr<const std::string> data_file_id;
+
+    uint64_t offset_in_file;
+    uint64_t size_in_file;
+
+    Remote::EntryDataLocation toRemote() const
+    {
+        Remote::EntryDataLocation remote_val;
+        remote_val.set_data_file_id(*data_file_id);
+        remote_val.set_offset_in_file(offset_in_file);
+        remote_val.set_size_in_file(size_in_file);
+        return remote_val;
+    }
+
+    static RemoteDataLocation fromRemote(const Remote::EntryDataLocation & remote_rec)
+    {
+        RemoteDataLocation val;
+        // TODO: This does not share the same memory for identical data files, wasting memory usage.
+        val.data_file_id = std::make_shared<std::string>(remote_rec.data_file_id());
+        val.offset_in_file = remote_rec.offset_in_file();
+        val.size_in_file = remote_rec.size_in_file();
+        return val;
+    }
+};
+
+struct RemoteDataInfo
+{
+    RemoteDataLocation data_location;
+
+    /**
+     * Whether the PageEntry's local BlobData has been reclaimed.
+     * If the data is reclaimed, you can only read out its data from the remote.
+     */
+    bool is_local_data_reclaimed = false;
+};
+
 struct PageEntryV3
 {
 public:
@@ -36,6 +78,12 @@ public:
     UInt64 tag = 0;
     BlobFileOffset offset = 0; // The offset of page data in file
     UInt64 checksum = 0; // The checksum of whole page data
+
+    /**
+     * Whether this page entry's data is stored remotely and where it is stored.
+     * If this page entry is not remotely stored, this field is nullopt.
+     */
+    std::optional<RemoteDataInfo> remote_info = std::nullopt;
 
     // The offset to the beginning of specify field.
     PageFieldOffsetChecksums field_offsets{};
@@ -74,21 +122,21 @@ public:
         else
             return {field_offsets[index].first, field_offsets[index + 1].first};
     }
+
+    String toDebugString() const
+    {
+        return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+                           file_id,
+                           offset,
+                           size,
+                           checksum,
+                           tag,
+                           field_offsets.size());
+    }
 };
 using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageIdV3Internal, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
-
-inline String toDebugString(const PageEntryV3 & entry)
-{
-    return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
-                       entry.file_id,
-                       entry.offset,
-                       entry.size,
-                       entry.checksum,
-                       entry.tag,
-                       entry.field_offsets.size());
-}
 
 } // namespace PS::V3
 } // namespace DB

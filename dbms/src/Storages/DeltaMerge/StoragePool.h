@@ -58,6 +58,8 @@ public:
     // Only used on dbgFuncMisc
     bool gc();
 
+    void doCheckpoint();
+
     FileUsageStatistics getLogFileUsage() const;
 
 private:
@@ -69,9 +71,11 @@ private:
     PageStoragePtr meta_storage;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
+    std::atomic<Timepoint> last_checkpoint_time = Clock::now();
 
     Context & global_context;
     BackgroundProcessingPool::TaskHandle gc_handle;
+    BackgroundProcessingPool::TaskHandle checkpoint_handle;
 };
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 

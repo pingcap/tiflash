@@ -456,7 +456,7 @@ try
                     else if (r.page_id.low == ref_page_id4)
                         exist_id4_normal_entry = true;
                 }
-                LOG_INFO(log, u128::PageEntriesEdit::toDebugString(r));
+                LOG_INFO(log, r.toDebugString());
             }
         }
     }

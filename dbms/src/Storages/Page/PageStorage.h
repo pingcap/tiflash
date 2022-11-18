@@ -23,6 +23,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/V3/Remote/Proto/common.pb.h>
 #include <Storages/Page/WALRecoveryMode.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
@@ -47,7 +48,6 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
-class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 class RegionPersister;
@@ -198,6 +198,13 @@ public:
         return gcImpl(not_skip, write_limiter, read_limiter);
     }
 
+    void doCheckpoint(std::shared_ptr<const PS::V3::Remote::WriterInfo> writer_info)
+    {
+        if (config.ps_remote_directory.get().empty())
+            return;
+        return checkpointImpl(writer_info, config.ps_remote_directory);
+    }
+
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
@@ -223,6 +230,8 @@ protected:
     virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
+
+    virtual void checkpointImpl(std::shared_ptr<const PS::V3::Remote::WriterInfo> writer_info, const std::string & remote_directory) = 0;
 
     virtual void reloadConfig() {}
 

@@ -47,6 +47,7 @@ private:
 
     BackgroundProcessingPool::TaskHandle single_thread_task_handle;
     BackgroundProcessingPool::TaskHandle storage_gc_handle;
+    BackgroundProcessingPool::TaskHandle ps_checkpoint_handle;
 };
 
 } // namespace DB

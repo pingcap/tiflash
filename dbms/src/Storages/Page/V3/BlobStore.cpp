@@ -429,7 +429,7 @@ void BlobStore<Trait>::remove(const PageEntriesV3 & del_entries)
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("while removing entry [entry={}]", toDebugString(entry)));
+            e.addMessage(fmt::format("while removing entry [entry={}]", entry.toDebugString()));
             e.rethrow();
         }
     }
@@ -612,7 +612,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
                                     field_index,
                                     beg_offset,
                                     size_to_read,
-                                    toDebugString(entry),
+                                    entry.toDebugString(),
                                     blob_file->getPath()),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
                 }
@@ -700,7 +700,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
                                 page_id_v3,
                                 entry.checksum,
                                 checksum,
-                                toDebugString(entry),
+                                entry.toDebugString(),
                                 blob_file->getPath()),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
@@ -762,7 +762,7 @@ typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry
                             page_id_v3,
                             entry.checksum,
                             checksum,
-                            toDebugString(entry),
+                            entry.toDebugString(),
                             blob_file->getPath()),
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }

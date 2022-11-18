@@ -19,6 +19,7 @@
 #include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <Poco/File.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
@@ -27,6 +28,7 @@
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/Remote/Proto/common.pb.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <common/defines.h>
@@ -130,7 +132,7 @@ struct EntryOrDelete
         return fmt::format(
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             is_delete,
-            ::DB::PS::V3::toDebugString(entry),
+            entry.toDebugString(),
             being_ref_count);
     }
 };
@@ -187,6 +189,8 @@ public:
 
     std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
 
+    void copyRemoteInfoFromEdit(const typename Trait::PageEntriesEdit::EditRecord & edit);
+
     bool isVisible(UInt64 seq) const;
 
     /**
@@ -206,7 +210,7 @@ public:
      *
      * `normal_entries_to_deref`: Return the informations that the entries need
      *   to be decreased the ref count by `derefAndClean`.
-     *   The elem is <page_id, <version, num to decrease ref count>> 
+     *   The elem is <page_id, <version, num to decrease ref count>>
      * `entries_removed`: Return the entries removed from the version list
      *
      * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
@@ -253,6 +257,7 @@ public:
             being_ref_count,
             entries.size());
     }
+
     friend class PageStorageControlV3;
 
 private:
@@ -339,6 +344,53 @@ public:
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
+    template <typename PSBlobTrait>
+    struct DumpRemoteCheckpointOptions
+    {
+        /**
+         * The directory where temporary files are generated.
+         * Files are first generated in the temporary directory, then copied into the remote directory.
+         */
+        const std::string & temp_directory;
+
+        /**
+         * Final files are always named according to `data_file_name_pattern` and `manifest_file_name_pattern`.
+         * When we support different remote endpoints, the definition of remote_directory will change.
+         */
+        const std::string & remote_directory;
+
+        /**
+         * The data file name. Available placeholders: {sequence}, {sub_file_index}.
+         * We accept "/" in the file name.
+         */
+        const std::string & data_file_name_pattern;
+
+        /**
+         * The manifest file name. Available placeholders: {sequence}.
+         * We accept "/" in the file name.
+         */
+        const std::string & manifest_file_name_pattern;
+
+        /**
+         * The writer info field in the dumped files.
+         */
+        const std::shared_ptr<const Remote::WriterInfo> writer_info;
+
+        BlobStore<PSBlobTrait> & blob_store;
+
+        const ReadLimiterPtr read_limiter = nullptr;
+        const WriteLimiterPtr write_limiter = nullptr;
+    };
+
+    struct DumpRemoteCheckpointResult
+    {
+        Poco::File data_file;
+        Poco::File manifest_file;
+    };
+
+    template <typename PSBlobTrait> // TODO: PSBlobTrait should be associated with Trait, instead of defining a new one. We may resolve it when moving everything out.
+    DumpRemoteCheckpointResult dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<PSBlobTrait> options);
+
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
     PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
@@ -363,6 +415,13 @@ public:
     }
 
     typename Trait::PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
+
+    /**
+     * Attach remote info from the edit. This function will be used in two cases:
+     * 1. Recover remote info from an existing checkpoint
+     * 2. Write a new checkpoint (and apply the newly written remote info)
+     */
+    void copyRemoteInfoFromEdit(typename Trait::PageEntriesEdit & edit, bool allow_missing = true);
 
     // Approximate number of pages in memory
     size_t numPages() const
@@ -429,6 +488,10 @@ private:
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;
     LoggerPtr log;
+
+    // Checkpoint related. To be moved to a standalone manager.
+    std::mutex checkpoint_mu;
+    UInt64 last_checkpoint_sequence = 0;
 };
 
 namespace universal

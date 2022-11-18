@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/ReadBufferFromFile.h>
 #include <Storages/Page/UniversalPage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
@@ -103,5 +104,7 @@ TEST_F(UniPageStorageTest, RaftLog)
     };
     raft_log_reader.traverse(RaftLogReader::toFullPageId(10, 0), RaftLogReader::toFullPageId(101, 0), checker);
 }
+
+
 } // namespace PS::universal::tests
 } // namespace DB

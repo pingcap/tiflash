@@ -45,7 +45,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, toDebugString(id_entry.second));
+            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, id_entry.second.toDebugString());
         },
         ", ");
     buf.append("]");
@@ -70,7 +70,7 @@ inline ::testing::AssertionResult entryCompare(
     {
         return ::testing::AssertionSuccess();
     }
-    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, toDebugString(lhs), toDebugString(rhs), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
 
 #define ASSERT_SAME_ENTRY(val1, val2) ASSERT_PRED_FORMAT2(entryCompare, val1, val2)
@@ -103,8 +103,8 @@ inline ::testing::AssertionResult getEntryCompare(
         return testing::internal::EqFailure(
             expected_entry_expr,
             actual_expr.c_str(),
-            toDebugString(expected_entry),
-            toDebugString(entry),
+            expected_entry.toDebugString(),
+            entry.toDebugString(),
             false);
     };
     String error;
@@ -166,8 +166,8 @@ inline ::testing::AssertionResult getEntriesCompare(
                     return testing::internal::EqFailure(
                         expect_expr.c_str(),
                         actual_expr.c_str(),
-                        toDebugString(expected_id_entry.second),
-                        toDebugString(actual_id_entry.second),
+                        expected_id_entry.second.toDebugString(),
+                        actual_id_entry.second.toDebugString(),
                         false);
                 }
             }
@@ -232,7 +232,7 @@ inline ::testing::AssertionResult getEntryNotExist(
             snap_expr,
             id_entry.first.high,
             id_entry.first.low,
-            toDebugString(id_entry.second));
+            id_entry.second.toDebugString());
     }
     catch (DB::Exception & ex)
     {
