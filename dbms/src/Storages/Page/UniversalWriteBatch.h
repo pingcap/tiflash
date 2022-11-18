@@ -84,6 +84,12 @@ public:
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }
+    
+    void putPage(UniversalPageId page_id, UInt64 tag, std::string_view data)
+    {
+        auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
+        putPage(page_id, tag, buffer_ptr, data.size());
+    }
 
     void putExternal(UniversalPageId page_id, UInt64 tag)
     {

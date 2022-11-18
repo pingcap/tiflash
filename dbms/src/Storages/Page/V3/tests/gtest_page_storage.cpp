@@ -139,12 +139,12 @@ try
     }
     dumpCheckpoint();
     {
-        ASSERT_TRUE(Poco::File(output_directory + "2.manifest").exists());
-        ASSERT_TRUE(Poco::File(output_directory + "2_0.data").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "6.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "6_0.data").exists());
     }
 
     // FIXME: When there is a trait this is ridiculously long.....
-    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "2.manifest"});
+    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "6.manifest"});
     auto edit = reader->read();
     auto records = edit.getRecords();
 
@@ -158,7 +158,7 @@ try
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
     ASSERT_TRUE(iter->entry.remote_info.has_value());
-    ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+    ASSERT_EQ("6_0.data", *iter->entry.remote_info->data_location.data_file_id);
     ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.remote_info->data_location));
 
     iter++;
@@ -168,13 +168,13 @@ try
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 5), iter->page_id);
-    ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+    ASSERT_EQ("6_0.data", *iter->entry.remote_info->data_location.data_file_id);
     ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 10), iter->page_id);
-    ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+    ASSERT_EQ("6_0.data", *iter->entry.remote_info->data_location.data_file_id);
     ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.remote_info->data_location));
 }
 CATCH
@@ -193,11 +193,11 @@ try
     }
     dumpCheckpoint();
     {
-        ASSERT_TRUE(Poco::File(output_directory + "1.manifest").exists());
-        ASSERT_TRUE(Poco::File(output_directory + "1_0.data").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "3.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "3_0.data").exists());
     }
 
-    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "1.manifest"});
+    auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "3.manifest"});
     auto edit = reader->read();
     auto records = edit.getRecords();
 
@@ -324,10 +324,10 @@ try
     }
     dumpCheckpoint();
     {
-        ASSERT_TRUE(Poco::File(output_directory + "1.manifest").exists());
-        ASSERT_TRUE(Poco::File(output_directory + "1_0.data").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "2.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "2_0.data").exists());
 
-        auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "1.manifest"});
+        auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "2.manifest"});
         auto edit = reader->read();
         auto records = edit.getRecords();
 
@@ -336,13 +336,13 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
-        ASSERT_EQ("1_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 4), iter->page_id);
-        ASSERT_EQ("1_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.remote_info->data_location));
     }
 
@@ -356,10 +356,10 @@ try
     }
     dumpCheckpoint();
     {
-        ASSERT_TRUE(Poco::File(output_directory + "2.manifest").exists());
-        ASSERT_TRUE(Poco::File(output_directory + "2_0.data").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "4.manifest").exists());
+        ASSERT_TRUE(Poco::File(output_directory + "4_0.data").exists());
 
-        auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "2.manifest"});
+        auto reader = CheckpointManifestFileReader<u128::PageDirectoryTrait>::create(CheckpointManifestFileReader<u128::PageDirectoryTrait>::Options{.file_path = output_directory + "4.manifest"});
         auto edit = reader->read();
         auto records = edit.getRecords();
 
@@ -368,19 +368,19 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 3), iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("4_0.data", *iter->entry.remote_info->data_location.data_file_id);
         ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.remote_info->data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 4), iter->page_id);
-        ASSERT_EQ("1_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.remote_info->data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ(buildV3Id(TEST_NAMESPACE_ID, 5), iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.remote_info->data_location.data_file_id);
+        ASSERT_EQ("4_0.data", *iter->entry.remote_info->data_location.data_file_id);
         ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.remote_info->data_location));
     }
 }

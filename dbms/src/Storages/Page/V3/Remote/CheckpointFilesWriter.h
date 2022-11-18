@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/Remote/CheckpointDataFileWriter.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileWriter.h>
