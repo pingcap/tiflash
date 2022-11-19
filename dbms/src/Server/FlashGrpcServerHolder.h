@@ -36,7 +36,6 @@ public:
     FlashGrpcServerHolder(
         Context & context,
         Poco::Util::LayeredConfiguration & config_,
-        TiFlashSecurityConfig & security_config,
         const TiFlashRaftConfig & raft_config,
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();

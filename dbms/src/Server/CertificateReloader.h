@@ -21,6 +21,7 @@
 #if Poco_NetSSL_FOUND
 
 #include <Common/TiFlashSecurity.h>
+#include <Interpreters/Context.h>
 #include <Poco/Crypto/RSAKey.h>
 #include <Poco/Crypto/X509Certificate.h>
 #include <Poco/Logger.h>
@@ -39,10 +40,9 @@ namespace DB
 class CertificateReloader : public ext::Singleton<CertificateReloader>
 {
 public:
-    static void initSSLCallback(Poco::Net::Context::Ptr context);
+    static void initSSLCallback(Poco::Net::Context::Ptr context, Context * global_context);
     /// A callback for OpenSSL
-    int setCertificate(SSL * ssl);
-    std::shared_ptr<TiFlashSecurityConfig> config;
+    int setCertificate(SSL * ssl, void * arg);
 
 private:
     Poco::Logger * log = &Poco::Logger::get("CertificateReloader");

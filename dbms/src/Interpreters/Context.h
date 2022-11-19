@@ -100,6 +100,8 @@ class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
 using MockStorage = DB::tests::MockStorage;
+struct TiFlashSecurityConfig;
+using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -220,7 +222,7 @@ public:
     /// Security configuration settings.
     void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
-    std::shared_ptr<TiFlashSecurityConfig> getSecurityConfig();
+    TiFlashSecurityConfigPtr getSecurityConfig();
 
     /// Must be called before getClientInfo.
     void setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address, const String & quota_key);

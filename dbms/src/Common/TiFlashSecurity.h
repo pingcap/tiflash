@@ -47,7 +47,6 @@ struct TiFlashSecurityConfig
     bool inited = false;
     bool has_tls_config = false;
     grpc::SslCredentialsOptions options;
-    std::mutex mu;
 
 public:
     TiFlashSecurityConfig() = default;
@@ -148,7 +147,7 @@ public:
         new_options.pem_root_certs = readFile(ca_path);
         new_options.pem_cert_chain = readFile(cert_path);
         new_options.pem_private_key = readFile(key_path);
-
+        LOG_INFO(log, "read cert_path: {}, key_path: {}", cert_path, key_path);
         LOG_INFO(log, "read root_certs: {}, cert_chain: {}, pem_private_key: {} ", new_options.pem_root_certs, new_options.pem_cert_chain, new_options.pem_private_key);
 
         return new_options;
@@ -156,7 +155,6 @@ public:
 
     pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log)
     {
-        std::unique_lock lock(mu);
         pingcap::ClusterConfig config;
         config.tiflash_engine_key = raft_config.engine_key;
         config.tiflash_engine_value = raft_config.engine_value;
@@ -165,21 +163,6 @@ public:
         config.key_path = key_path;
         LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
         return config;
-    }
-
-    bool updated()
-    {
-        std::unique_lock lock(mu);
-        auto new_options = readSecurityInfo();
-        auto updated = new_options.pem_root_certs != options.pem_root_certs || new_options.pem_cert_chain != options.pem_cert_chain || new_options.pem_private_key != options.pem_private_key;
-        if (updated)
-        {
-            LOG_INFO(log, "cert updated in security config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
-            options.pem_root_certs = new_options.pem_root_certs;
-            options.pem_cert_chain = new_options.pem_cert_chain;
-            options.pem_private_key = new_options.pem_private_key;
-        }
-        return updated;
     }
 
 private:

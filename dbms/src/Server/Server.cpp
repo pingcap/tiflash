@@ -518,8 +518,6 @@ public:
         auto & config = server.config();
         auto security_config = server.global_context->getSecurityConfig();
 
-        CertificateReloader::instance().config = security_config;
-
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
         http_params->setTimeout(settings.receive_timeout);
@@ -604,7 +602,7 @@ public:
                                                                              security_config->ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
                     auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
-                        auto security_config = CertificateReloader::instance().config;
+                        auto security_config = server.global_context->getSecurityConfig();
                         if (security_config->allowed_common_names.empty())
                         {
                             return true;
@@ -615,7 +613,7 @@ public:
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
-                    CertificateReloader::instance().initSSLCallback(context);
+                    CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -675,7 +673,7 @@ public:
                                                                              security_config->key_path,
                                                                              security_config->cert_path,
                                                                              security_config->ca_path);
-                    CertificateReloader::instance().initSSLCallback(context);
+                    CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -1088,6 +1086,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
         [&](ConfigurationPtr config) {
+            LOG_INFO(log, "run main config reloader");
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
@@ -1252,7 +1251,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), *global_context->getSecurityConfig(), raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
@@ -1294,7 +1293,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, *global_context->getSecurityConfig());
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 
         SessionCleaner session_cleaner(*global_context);
 
