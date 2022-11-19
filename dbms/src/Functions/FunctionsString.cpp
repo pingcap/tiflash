@@ -6102,7 +6102,7 @@ private:
             if (is_unsigned)
             {
                 UInt64 number = col->getUInt(i);
-                length = sprintf(data, "%llu", number);
+                length = sprintf(data, "%lu", number);
             }
             else
             {
@@ -6114,7 +6114,7 @@ private:
                     res_null_map[i] = 1;
                     continue;
                 }
-                length = sprintf(data, "%lli", number);
+                length = sprintf(data, "%li", number);
             }
 
             size_t begin = 0;
