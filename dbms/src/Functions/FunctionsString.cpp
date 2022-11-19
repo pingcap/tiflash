@@ -6013,7 +6013,7 @@ private:
                                    ColumnString::Offsets & res_offsets,
                                    ColumnUInt8::Container & res_null_map)
     {
-        const auto col = checkAndGetColumn<ColumnString>(column.get());
+        const auto * const col = checkAndGetColumn<ColumnString>(column.get());
         if (col == nullptr)
         {
             return false;
@@ -6044,7 +6044,7 @@ private:
                                         ColumnString::Offsets & res_offsets,
                                         ColumnUInt8::Container & res_null_map)
     {
-        const auto col = checkAndGetColumn<ColumnFixedString>(column.get());
+        const auto * const col = checkAndGetColumn<ColumnFixedString>(column.get());
         if (col == nullptr)
         {
             return false;
