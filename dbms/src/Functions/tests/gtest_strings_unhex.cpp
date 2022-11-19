@@ -52,6 +52,55 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"9", "09", "A", "0A", "20"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"abcd", "\tg", std::nullopt, std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({61626364, 967, std::nullopt, -1})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"abcd", "\tg", std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt64>>({61626364, 967, std::nullopt})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"abc", "\tg", std::nullopt, std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int32>>({616263, 967, std::nullopt, -1})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"abc", "\tg", std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt32>>({616263, 967, std::nullopt})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ab", "\tg", std::nullopt, std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int16>>({6162, 967, std::nullopt, -1})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ab", "\tg", std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt16>>({6162, 967, std::nullopt})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"a", "\t", std::nullopt, std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int8>>({61, 9, std::nullopt, -1})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"a", "\t", std::nullopt}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt8>>({61, 9, std::nullopt})));
+
 }
 CATCH
 } // namespace tests
