@@ -100,7 +100,6 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<UInt8>>({61, 9, std::nullopt})));
-
 }
 CATCH
 } // namespace tests
