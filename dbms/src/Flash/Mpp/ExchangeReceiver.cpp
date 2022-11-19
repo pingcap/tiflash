@@ -207,8 +207,7 @@ public:
             {
                 reader.reset();
                 LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
-                retryOrDone("Exchange receiver meet error : send async stream request fail");
-                if (retry_times >= max_retry_times)
+                if (!retryOrDone("Exchange receiver meet error : send async stream request fail"))
                     notifyReactor();
             }
             else
@@ -337,7 +336,7 @@ private:
         rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
     }
 
-    void retryOrDone(String done_msg)
+    bool retryOrDone(String done_msg)
     {
         if (retriable())
         {
@@ -347,10 +346,12 @@ private:
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
             alarm.Set(cq, Clock::now() + std::chrono::seconds(1), this);
+            return true;
         }
         else
         {
             setDone(std::move(done_msg));
+            return false;
         }
     }
 
