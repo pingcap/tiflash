@@ -41,7 +41,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
     const LoggerPtr & log,
     const TiDBTableScan & table_scan)
 {
-    auto schema = genNamesAndTypes(table_scan, "table_scan");
+    auto schema = genNamesAndTypesForTableScan(table_scan);
     auto physical_table_scan = std::make_shared<PhysicalTableScan>(
         executor_id,
         schema,
@@ -58,7 +58,8 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
     storage_interpreter.execute(pipeline);
 
-    const auto & storage_schema = storage_interpreter.analyzer->getCurrentInputColumns();
+    RUNTIME_CHECK(!pipeline.streams.empty());
+    auto storage_schema = pipeline.streams[0]->getHeader().getColumnsWithTypeAndName();
     RUNTIME_CHECK(
         storage_schema.size() == schema.size(),
         storage_schema.size(),

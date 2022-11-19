@@ -19,6 +19,7 @@
 
 namespace DB
 {
+const String DisaggregatedTiFlashTableScanInterpreter::ExecIDPrefixForTiFlashStorageSender = "exec_id_disaggregated_tiflash_storage_sender";
 
 void DisaggregatedTiFlashTableScanInterpreter::execute(DAGPipeline & pipeline)
 {
@@ -42,7 +43,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-    LOG_DEBUG(log, "batch cop tasks({}) build finish for tiflash_storage node", batch_cop_tasks.size());
+    LOG_DEBUG(log, "batch cop tasks(nums: {}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
 }
 
@@ -51,7 +52,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request;
 
-    std::shared_ptr<::mpp::DispatchTaskRequest> dispatch_req;
+    auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
     dispatch_req_meta->set_start_ts(sender_target_task_start_ts);
     dispatch_req_meta->set_task_id(sender_target_task_task_id);
@@ -60,7 +61,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     dispatch_req->set_timeout(settings.mpp_task_timeout);
     dispatch_req->set_schema_ver(settings.read_tso);
     RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
-            "batch cop task invalid, single table region info: {}, partition table region info: {}",
+            "region_infos and table_regions should not exist at the same time, single table region info: {}, partition table region info: {}",
             batch_cop_task.region_infos.size(), batch_cop_task.table_regions.size());
     if (!batch_cop_task.region_infos.empty())
     {
@@ -71,6 +72,10 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
             region->set_region_id(region_info.region_id.id);
             region->mutable_region_epoch()->set_version(region_info.region_id.ver);
             region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
+            for (const auto & key_range : region_info.ranges)
+            {
+                key_range.setKeyRange(region->add_ranges());
+            }
         }
     }
     else
@@ -100,12 +105,17 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     sender_dag_req.set_collect_execution_summaries(true);
     sender_dag_req.set_flags(dag_req->flags());
     sender_dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
-    // Ignore sender_dag_req.output_offsets because tiflash_storage sender MPPTask is not root.
+    // todo: maybe we can avoid this.
+    for (const auto & off : context.getDAGContext()->output_offsets)
+    {
+        sender_dag_req.add_output_offsets(off);
+    }
 
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
-    executor->set_executor_id(table_scan.getTableScanExecutorID());
+    executor->set_executor_id(fmt::format("{}_{}_{}",
+                ExecIDPrefixForTiFlashStorageSender, sender_target_task_start_ts, sender_target_task_task_id));
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
@@ -130,6 +140,7 @@ std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> DisaggregatedTiFlashTab
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
     for (const auto & dispatch_req : dispatch_reqs)
     {
+        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", dispatch_req->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [dispatch_req, this] {
                 pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(dispatch_req);
                 // gjt todo: retry dispatch
@@ -147,12 +158,18 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
 {
     tipb::ExchangeReceiver receiver;
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    // Ignore receiver.field types, because it's used to construct schema of ExchangeReceiver,
-    // which is only meaningful for cop protocal.
     for (const auto & dispatch_req : dispatch_reqs)
     {
         const ::mpp::TaskMeta & sender_task_meta = dispatch_req->meta();
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
+    }
+
+    const auto & column_infos = table_scan.getColumns();
+    for (const auto & column_info : column_infos)
+    {
+        auto * field_type = receiver.add_field_types();
+        auto tidb_column_info = TiDB::toTiDBColumnInfo(column_info);
+        *field_type = columnInfoToFieldType(tidb_column_info);
     }
 
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
@@ -175,16 +192,18 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);
 
-    // We can use PhysicalExchange::transform() to build InputStream after DAGQueryBlockInterpreter is deprecated.
+    // We can use PhysicalExchange::transform() to build InputStream after
+    // DAGQueryBlockInterpreter is deprecated to avoid duplicated code here.
     size_t max_streams = context.getMaxStreams();
-    const String extra_info = "squashing after disaggregated compute exchange receiver";
+    const String extra_info = "disaggregated compute node exchange receiver";
     for (size_t i = 0; i < max_streams; ++i)
     {
+        // These streams will be recorded into inbound_io_input_streams_map in
+        // DAGStorageInterpreter::executeImpl() to help record remote exec summaries.
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
                                                                                    log->identifier(),
                                                                                    executor_id,
                                                                                    /*stream_id=*/0);
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }

@@ -34,6 +34,11 @@ DataTypePtr getPkType(const ColumnInfo & column_info)
 }
 } // namespace
 
+NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan)
+{
+    return genNamesAndTypes(table_scan, "table_scan");
+}
+
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;

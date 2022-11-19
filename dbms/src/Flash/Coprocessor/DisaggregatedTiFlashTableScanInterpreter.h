@@ -44,6 +44,9 @@ public:
         , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
         , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id()) {}
     void execute(DAGPipeline & pipeline);
+
+    // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
+    static const String ExecIDPrefixForTiFlashStorageSender;
 private:
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
     std::shared_ptr<mpp::DispatchTaskRequest> buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
