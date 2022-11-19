@@ -160,6 +160,7 @@ using TimePoint = Clock::time_point;
 
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 batch_packet_count = 16;
+constexpr Int32 retry_interval_time = 1; // second
 
 template <typename RPCContext, bool enable_fine_grained_shuffle>
 class AsyncRequestHandler : public UnaryCallback<bool>
@@ -345,7 +346,7 @@ private:
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(1), this);
+            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), this);
             return true;
         }
         else
