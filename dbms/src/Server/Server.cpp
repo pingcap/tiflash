@@ -779,11 +779,6 @@ public:
             LOG_DEBUG(log, debug_msg);
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
-    {
-        return servers;
-    }
-
 private:
     Server & server;
     const LoggerPtr & log;

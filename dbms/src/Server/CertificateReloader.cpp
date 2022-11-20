@@ -41,10 +41,11 @@ int callSetCertificate(SSL * ssl, void * arg)
 int CertificateReloader::setCertificate(SSL * ssl, void * arg)
 {
     auto * context = static_cast<Context *>(arg);
-    // ywq todo refine.
-    LOG_INFO(log, "setCertificate callback called, cert_path: {}, key_path: {}", context->getSecurityConfig()->cert_path, context->getSecurityConfig()->key_path);
-    Poco::Crypto::X509Certificate cert(context->getSecurityConfig()->cert_path);
-    Poco::Crypto::EVPPKey key("", context->getSecurityConfig()->key_path);
+    auto cert_path = context->getSecurityConfig()->cert_path;
+    auto key_path = context->getSecurityConfig()->key_path;
+    LOG_INFO(log, "setCertificate callback called, cert_path: {}, key_path: {}", cert_path, key_path);
+    Poco::Crypto::X509Certificate cert(cert_path);
+    Poco::Crypto::EVPPKey key("", key_path);
     SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
     SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
 
