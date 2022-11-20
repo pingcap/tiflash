@@ -105,8 +105,8 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     sender_dag_req.set_collect_execution_summaries(true);
     sender_dag_req.set_flags(dag_req->flags());
     sender_dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
-    // todo: maybe we can avoid this.
-    for (const auto & off : context.getDAGContext()->output_offsets)
+    const auto & column_infos = table_scan.getColumns();
+    for (auto off = 0; off < column_infos.size(); ++off)
     {
         sender_dag_req.add_output_offsets(off);
     }
@@ -122,7 +122,12 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
     auto * child = sender->mutable_child();
     child->CopyFrom(*(table_scan.getTableScanPB()));
-    // Ignore sender.all_filed_types because it's useless for tiflash Planner/Interpreter.
+    for (const auto & column_info : column_infos)
+    {
+        auto * field_type = sender->add_all_field_types();
+        auto tidb_column_info = TiDB::toTiDBColumnInfo(column_info);
+        *field_type = columnInfoToFieldType(tidb_column_info);
+    }
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
     dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
