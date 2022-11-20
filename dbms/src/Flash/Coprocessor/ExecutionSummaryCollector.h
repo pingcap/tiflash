@@ -26,7 +26,6 @@ public:
         DAGContext & dag_context_)
         : dag_context(dag_context_)
     {
-        RUNTIME_CHECK(dag_context.collect_execution_summaries);
         for (auto & p : dag_context.getProfileStreamsMap())
         {
             local_executors.insert(p.first);
