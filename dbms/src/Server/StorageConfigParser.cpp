@@ -179,6 +179,11 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
         path = getNormalizedPath(path);
         LOG_INFO(log, "Raft data candidate path: {}", path);
     }
+
+    if (auto remote_src = table->get_qualified_as<String>("remote.dir"); remote_src && !remote_src->empty())
+    {
+        remote_source = getNormalizedPath(*remote_src);
+    }
 }
 
 void TiFlashStorageConfig::parseMisc(const String & storage_section, const LoggerPtr & log)

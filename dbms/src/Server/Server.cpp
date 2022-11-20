@@ -941,6 +941,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
 
+    if (!storage_config.remote_source.empty())
+    {
+        LOG_INFO(log, "Using remote_source={}", storage_config.remote_source);
+        global_context->setRemoteDataServiceSource(storage_config.remote_source);
+    }
+
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,

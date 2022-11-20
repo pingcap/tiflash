@@ -102,6 +102,8 @@ public:
     std::vector<size_t> latest_capacity_quota;
     Strings kvstore_data_path;
 
+    String remote_source;
+
     UInt64 format_version = 0;
     bool lazily_init_store = true;
 
