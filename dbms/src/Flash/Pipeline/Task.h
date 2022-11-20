@@ -37,11 +37,15 @@ public:
         try
         {
             auto [block, op_index] = fetchBlock();
+            assert(!blocked_op_index);
             for (; op_index < transforms.size(); ++op_index)
             {
                 auto op_status = transforms[op_index]->transform(block);
-                if (op_status != PStatus::NEED_MORE)
-                    return {op_status, ""};
+                if (op_status == PStatus::NEED_MORE)
+                    continue;
+                else if (op_status == PStatus::BLOCKED)
+                    blocked_op_index.emplace(op_index);
+                return {op_status, ""};
             }
             return {sink->write(block), ""};
         }
@@ -55,11 +59,8 @@ public:
     {
         if (sink->isBlocked())
             return true;
-        for (int i = transforms.size() - 1; i >= 0; --i)
-        {
-            if (transforms[i]->isBlocked())
-                return true;
-        }
+        if (blocked_op_index && transforms[*blocked_op_index]->isBlocked())
+            return true;
         if (source->isBlocked())
             return true;
         return false;
@@ -69,10 +70,11 @@ private:
     // Block, next_op_index
     std::pair<Block, size_t> fetchBlock()
     {
-        for (int i = transforms.size() - 1; i >= 0; --i)
+        if (blocked_op_index)
         {
-            if (auto block = transforms[i]->fetchBlock(); block)
-                return {block, i + 1};
+            auto op_index = *blocked_op_index;
+            blocked_op_index.reset();
+            return {transforms[op_index]->fetchBlock(), op_index + 1}; 
         }
         return {source->read(), 0};
     }
@@ -81,6 +83,8 @@ private:
     SourcePtr source;
     std::vector<TransformPtr> transforms;
     SinkPtr sink;
+
+    std::optional<int> blocked_op_index;
 };
 using TaskPtr = std::unique_ptr<Task>;
 } // namespace DB
