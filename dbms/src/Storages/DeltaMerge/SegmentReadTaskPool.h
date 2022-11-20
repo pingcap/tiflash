@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
 
 #include <mutex>
 
@@ -302,6 +303,8 @@ struct RemoteSegmentReadTask
 
     // FIXME: This should be only stored in write node
     SegmentSnapshotPtr segment_snap;
+
+    StableSnapshotPtr buildRemoteStableSnap(const Context & db_context, TableID table_id, UInt64 stable_id, const RowKeyRange & seg_range);
 };
 using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
 
@@ -310,7 +313,7 @@ using RemoteReadTaskPtr = std::shared_ptr<RemoteReadTask>;
 class RemoteReadTask
 {
 public:
-    static RemoteReadTaskPtr buildFrom(TableID physical_table_id, SegmentReadTasks & tasks);
+    static RemoteReadTaskPtr buildFrom(const Context & db_context, TableID physical_table_id, SegmentReadTasks & tasks);
 
     RemoteSegmentReadTaskPtr nextTask()
     {

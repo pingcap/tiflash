@@ -86,6 +86,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_relevant_place;
     const bool enable_skippable_place;
 
+    const TableID table_id;
     String tracing_id;
 
 public:
@@ -97,6 +98,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
+              TableID table_id_,
               const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
@@ -122,6 +124,7 @@ public:
         , read_stable_only(settings.dt_read_stable_only)
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
+        , table_id(table_id_)
         , tracing_id(tracing_id_)
     {
     }

@@ -82,7 +82,8 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             dm_settings.not_compress_columns,
             false,
             1,
-            db_context->getSettingsRef());
+            db_context->getSettingsRef(),
+            /*table_id*/ 0);
         // Write
         {
             dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), false, std::nullopt);

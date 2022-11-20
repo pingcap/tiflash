@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/DeltaMerge/RemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -45,8 +46,6 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
-
-#include "Storages/DeltaMerge/RemoteSegmentThreadInputStream.h"
 
 namespace ProfileEvents
 {
@@ -432,6 +431,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,
+                               physical_table_id,
                                tracing_id);
     return DMContextPtr(ctx);
 }
@@ -964,7 +964,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
 {
-    bool enable_remote_read = true; // FIXME:
+    bool enable_remote_read = !db_context.remoteDataServiceSource().empty();
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
     // If keep order is required, disable read thread.
@@ -972,10 +972,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
     LOG_DEBUG(tracing_logger,
-              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
+              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} remote_read={}",
               keep_order,
               db_context.getSettingsRef().dt_enable_read_thread,
-              enable_read_thread);
+              enable_read_thread,
+              enable_remote_read);
 
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
@@ -987,7 +988,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     if (enable_remote_read)
     {
         // Transfrom `SegmentReadTasks` into `RemoteReadTask`
-        RemoteReadTaskPtr read_tasks = RemoteReadTask::buildFrom(physical_table_id, tasks);
+        RemoteReadTaskPtr read_tasks = RemoteReadTask::buildFrom(dm_context->db_context, physical_table_id, tasks);
         BlockInputStreams streams;
         for (size_t i = 0; i < final_num_stream; ++i)
         {

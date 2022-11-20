@@ -349,7 +349,8 @@ int benchEntry(const std::vector<std::string> & opts)
             dm_settings.not_compress_columns,
             false,
             1,
-            db_context->getSettingsRef());
+            db_context->getSettingsRef(),
+            /*table_id*/ 0);
         DB::DM::DMFilePtr dmfile = nullptr;
 
         // Write

@@ -58,7 +58,8 @@ public:
             settings.not_compress_columns,
             false,
             1,
-            db_context->getSettingsRef());
+            db_context->getSettingsRef(),
+            /*table_id*/ 1000);
     }
 
     DMContext & dmContext() { return *dm_context; }

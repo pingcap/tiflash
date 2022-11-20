@@ -347,8 +347,8 @@ StableValueSpace::Snapshot::getInputStream(
     bool enable_del_clean_read)
 {
     LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
-    SkippableBlockInputStreams streams;
 
+    SkippableBlockInputStreams streams;
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
@@ -358,7 +358,7 @@ StableValueSpace::Snapshot::getInputStream(
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
-        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
+        streams.emplace_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }

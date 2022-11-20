@@ -120,7 +120,7 @@ public:
         // number of rows having at least one version(include delete)
         UInt64 num_rows;
 
-        const String toDebugString() const
+        String toDebugString() const
         {
             return "StableProperty: gc_hint_version [" + std::to_string(this->gc_hint_version) + "] num_versions ["
                 + std::to_string(this->num_versions) + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows["

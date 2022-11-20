@@ -572,7 +572,8 @@ void SegmentTestBasic::reloadDMContext()
                                              settings.not_compress_columns,
                                              options.is_common_handle,
                                              1,
-                                             db_context->getSettingsRef());
+                                             db_context->getSettingsRef(),
+                                             /*table_id*/ 1000);
 }
 
 void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)

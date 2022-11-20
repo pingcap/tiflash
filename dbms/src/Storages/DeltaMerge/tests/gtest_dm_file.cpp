@@ -131,7 +131,8 @@ public:
             settings.not_compress_columns,
             false,
             1,
-            db_context->getSettingsRef());
+            db_context->getSettingsRef(),
+            /*table_id*/ 1000);
     }
 
     DMFilePtr restoreDMFile()
@@ -952,7 +953,8 @@ public:
             settings.not_compress_columns,
             is_common_handle,
             rowkey_column_size,
-            db_context->getSettingsRef());
+            db_context->getSettingsRef(),
+            /*table_id*/ 1000);
     }
 
 

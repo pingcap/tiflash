@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
 
 namespace CurrentMetrics
 {
@@ -318,7 +321,27 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     }
 }
 
-RemoteReadTaskPtr RemoteReadTask::buildFrom(TableID physical_table_id, SegmentReadTasks & tasks)
+StableSnapshotPtr RemoteSegmentReadTask::buildRemoteStableSnap(const Context & db_context, TableID table_id, UInt64 stable_id, const RowKeyRange & seg_range)
+{
+    // Create stable VS
+    auto stable = std::make_shared<StableValueSpace>(stable_id);
+    DMFiles dmfiles;
+    auto provider = db_context.getFileProvider();
+    const auto & remote_source = db_context.remoteDataServiceSource();
+    // build the full path
+    const auto remote_parent_path = fmt::format("{}/t_{}", remote_source, table_id);
+    for (const auto & file_id : stable_files)
+    {
+        LOG_DEBUG(Logger::get(), "Loading remote dtfile from {}, file_id={}", remote_parent_path, file_id);
+        auto dmfile = DMFile::restore(provider, file_id, /*page_id*/ file_id, remote_parent_path, DMFile::ReadMetaMode::all());
+        RUNTIME_CHECK(dmfile != nullptr);
+        dmfiles.emplace_back(dmfile);
+    }
+    stable->setFiles(dmfiles, seg_range);
+    return stable->createSnapshot();
+}
+
+RemoteReadTaskPtr RemoteReadTask::buildFrom(const Context & db_context, TableID physical_table_id, SegmentReadTasks & tasks)
 {
     auto read_tasks = std::make_shared<RemoteReadTask>();
     read_tasks->table_id = physical_table_id;
@@ -339,6 +362,12 @@ RemoteReadTaskPtr RemoteReadTask::buildFrom(TableID physical_table_id, SegmentRe
             // here directly return the file id for read node download it from remote
             seg_task->stable_files.emplace_back(dmf->fileId());
         }
+        seg_task->segment_snap->stable = seg_task->buildRemoteStableSnap(
+            db_context,
+            physical_table_id,
+            task->read_snapshot->stable->getId(),
+            task->segment->getRowKeyRange());
+
         read_tasks->tasks.emplace_back(std::move(seg_task));
     }
     return read_tasks;

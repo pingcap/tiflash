@@ -28,6 +28,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB
 {
@@ -116,8 +117,18 @@ public:
 
     void SetUp() override
     {
+        // For testing remote storage service
+        auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME);
+        TiFlashTestEnv::tryRemovePath(remote_source, true);
+        TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
+
         TiFlashStorageTestBasic::SetUp();
         store = reload();
+    }
+
+    void TearDown() override
+    {
+        TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource("");
     }
 
     DeltaMergeStorePtr

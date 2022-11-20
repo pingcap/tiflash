@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <common/types.h>

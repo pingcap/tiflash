@@ -33,7 +33,7 @@ namespace tests
 class SegmentCommonHandleTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    SegmentCommonHandleTest() {}
+    SegmentCommonHandleTest() = default;
 
 public:
     static void SetUpTestCase() {}
@@ -74,7 +74,8 @@ protected:
                                                   settings.not_compress_columns,
                                                   is_common_handle,
                                                   rowkey_column_size,
-                                                  db_context->getSettingsRef());
+                                                  db_context->getSettingsRef(),
+                                                  /*table_id*/ 1000);
     }
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns_; }
