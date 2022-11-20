@@ -25,12 +25,10 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
     uint64_t fine_grained_shuffle_stream_count_,
     UInt64 fine_grained_shuffle_batch_size_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
@@ -50,16 +48,6 @@ template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->sendExecutionSummary(response);
 }
 
 template <class ExchangeWriterPtr>

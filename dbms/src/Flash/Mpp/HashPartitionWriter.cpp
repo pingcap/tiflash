@@ -26,11 +26,9 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     Int64 batch_send_min_limit_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
@@ -46,16 +44,6 @@ template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->sendExecutionSummary(response);
 }
 
 template <class ExchangeWriterPtr>

@@ -54,10 +54,16 @@ void mergeRemoteExecuteSummaries(
     }
 }
 
+tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
+{
+    tipb::SelectResponse response;
+    addExecuteSummaries(response);
+    return response;
+}
+
 void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & response)
 {
-    if (!dag_context.collect_execution_summaries)
-        return;
+    assert(dag_context.collect_execution_summaries);
     /// get executionSummary info from remote input streams
     std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
     for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
