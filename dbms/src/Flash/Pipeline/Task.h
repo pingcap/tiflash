@@ -74,7 +74,7 @@ private:
         {
             auto op_index = *blocked_op_index;
             blocked_op_index.reset();
-            return {transforms[op_index]->fetchBlock(), op_index + 1}; 
+            return {transforms[op_index]->fetchBlock(), op_index + 1};
         }
         return {source->read(), 0};
     }

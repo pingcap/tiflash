@@ -97,10 +97,12 @@ public:
             return true;
         }
 
-        bool is_ready = io_future->wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-        if (is_ready)
+        if (io_future->wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        {
             io_future.reset();
-        return !is_ready;
+            return false;
+        }
+        return true;
     }
 
 private:
