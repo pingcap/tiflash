@@ -38,6 +38,11 @@
 #include <iterator>
 #include <random>
 
+#include <TestUtils/InputStreamTestUtils.h>
+#include <fmt/format.h>
+
+using namespace std::chrono_literals;
+
 namespace DB
 {
 namespace FailPoints
@@ -511,6 +516,71 @@ try
 }
 CATCH
 
+
+TEST_P(DeltaMergeStoreRWTest, ReadWithRange)
+try
+{
+    const ColumnDefine col_i8_define(2, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_i8_define);
+        store = reload(table_column_defines);
+    }
+
+    auto create_block = [&](Int64 a, Int8 b) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(a, a + 1, false);
+        block.insert(DB::tests::createColumn<Int8>(
+            createSignedNumbers(b, b + 1),
+            col_i8_define.name,
+            col_i8_define.id));
+        return block;
+    };
+
+    auto b1 = create_block(std::numeric_limits<Int64>::min(), 1);
+    store->write(*db_context, db_context->getSettingsRef(), b1);
+
+    auto b3 = create_block(0L, 3);
+    store->write(*db_context, db_context->getSettingsRef(), b3);
+
+    auto b2 = create_block(std::numeric_limits<Int64>::max()-1, 2);
+    store->write(*db_context, db_context->getSettingsRef(), b2);
+
+    //while (!store->mergeDeltaAll(*db_context))
+    {
+        std::this_thread::sleep_for(10ms);
+    }
+    auto getIntHandleKey = [](Int64 i) {
+        WriteBufferFromOwnString ss;
+        DB::EncodeInt64(i, ss);
+        return std::make_shared<String>(ss.releaseStr());
+    };
+
+    {
+        Int64 start_key = 0;
+        RowKeyValue start(false, getIntHandleKey(start_key), start_key);
+        RowKeyValue end = RowKeyValue::INT_HANDLE_MAX_KEY;
+        RowKeyRange range(start, end, false, 1);
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {range},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+        auto block = in->read();
+        const auto & col = block.getByPosition(0);
+        auto * ids = toColumnVectorDataPtr<Int64>(col.column);
+        std::vector<Int64> v(ids->data(), ids->data() + col.column->size());
+        std::cout << fmt::format("{}", v) << std::endl;
+    }
+}
+CATCH
 
 TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithoutCache)
 try
