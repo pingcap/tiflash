@@ -66,10 +66,12 @@ PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
     const NamesAndTypes & schema_,
     const String & req_id,
     const Block & sample_block_,
-    const BlockInputStreams & mock_streams_)
+    const BlockInputStreams & mock_streams_,
+    size_t source_num_)
     : PhysicalLeaf(executor_id_, PlanType::MockExchangeReceiver, schema_, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
+    , source_num(source_num_)
 {}
 
 PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
@@ -87,7 +89,8 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
         schema,
         log->identifier(),
         Block(schema),
-        mock_streams);
+        mock_streams,
+        static_cast<size_t>(exchange_receiver.encoded_task_meta_size()));
     return physical_mock_exchange_receiver;
 }
 

@@ -48,9 +48,9 @@ public:
     // this is a root mpp writing.
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet);
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet);
     // this is a partition writing.
-    void partitionWrite(const TrackedMppDataPacketPtr & packet, int16_t partition_id);
+    void partitionWrite(TrackedMppDataPacketPtr && packet, int16_t partition_id);
     // this is a execution summary writing.
     void sendExecutionSummary(tipb::SelectResponse & response);
 

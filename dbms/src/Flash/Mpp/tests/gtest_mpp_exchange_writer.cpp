@@ -120,8 +120,8 @@ struct MockExchangeWriter
         , part_num(part_num_)
     {}
 
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet) { checker(packet, 0); }
-    void partitionWrite(const TrackedMppDataPacketPtr & packet, uint16_t part_id) { checker(packet, part_id); }
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet) { checker(packet, 0); }
+    void partitionWrite(TrackedMppDataPacketPtr && packet, uint16_t part_id) { checker(packet, part_id); }
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void sendExecutionSummary(tipb::SelectResponse & response)
     {

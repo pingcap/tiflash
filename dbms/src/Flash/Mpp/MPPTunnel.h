@@ -72,9 +72,9 @@ public:
     {
     }
 
-    virtual bool push(const TrackedMppDataPacketPtr & data)
+    virtual bool push(TrackedMppDataPacketPtr && data)
     {
-        return send_queue.push(data) == MPMCQueueResult::OK;
+        return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
     virtual void cancelWith(const String & reason)
@@ -174,9 +174,9 @@ public:
         , queue(queue_size, func)
     {}
 
-    bool push(const TrackedMppDataPacketPtr & data) override
+    bool push(TrackedMppDataPacketPtr && data) override
     {
-        return queue.push(data);
+        return queue.push(std::move(data));
     }
 
     bool finish() override
@@ -273,7 +273,7 @@ public:
     const String & id() const { return tunnel_id; }
 
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
-    void write(const TrackedMppDataPacketPtr & data);
+    void write(TrackedMppDataPacketPtr && data);
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();
