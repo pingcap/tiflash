@@ -23,12 +23,15 @@
 namespace DB
 {
 
-void setTableScanContext(DM::TableScanContext * table_scan_context_pb, std::shared_ptr<DM::TableScanContext> table_scan_context)
+void setTableScanContext(tipb::TableScanContext * table_scan_context_pb, std::shared_ptr<DM::TableScanContext> table_scan_context)
 {
     table_scan_context_pb->set_scan_packs_count(table_scan_context->scan_packs_count);
     table_scan_context_pb->set_scan_rows_count(table_scan_context->scan_rows_count);
     table_scan_context_pb->set_skip_packs_count(table_scan_context->skip_packs_count);
     table_scan_context_pb->set_skip_rows_count(table_scan_context->skip_rows_count);
+    table_scan_context_pb->set_rough_set_index_load_time_in_ns(table_scan_context->rough_set_index_load_time_in_ns);
+    table_scan_context_pb->set_dmfile_read_time_in_ns(table_scan_context->dmfile_read_time_in_ns);
+    table_scan_context_pb->set_create_snapshot_time_in_ns(table_scan_context->create_snapshot_time_in_ns);
 }
 
 void ExecutionSummaryCollector::fillTiExecutionSummary(

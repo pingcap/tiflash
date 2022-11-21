@@ -35,22 +35,22 @@ public:
     std::atomic<uint64_t> scan_rows_count{0}; // number of scan rows
     std::atomic<uint64_t> skip_rows_count{0}; // number of skip rows
 
-    std::atomic<uint64_t> rough_set_index_load_time_in_milliseconds{0};
-    std::atomic<uint64_t> dmfile_read_time_in_milliseconds{0};
-    std::atomic<uint64_t> create_snapshot_time_in_milliseconds{0};
+    std::atomic<uint64_t> rough_set_index_load_time_in_ns{0};
+    std::atomic<uint64_t> dmfile_read_time_in_ns{0};
+    std::atomic<uint64_t> create_snapshot_time_in_ns{0};
 
 
     TableScanContext() = default;
 
-    explicit TableScanContext(const TableScanContext table_scan_context_pb)
+    explicit TableScanContext(const tipb::TableScanContext & table_scan_context_pb)
     {
         scan_packs_count = table_scan_context_pb.scan_packs_count();
         skip_packs_count = table_scan_context_pb.skip_packs_count();
         scan_rows_count = table_scan_context_pb.scan_rows_count();
         skip_rows_count = table_scan_context_pb.skip_rows_count();
-        rough_set_index_load_time_in_milliseconds = table_scan_context_pb.rough_set_index_load_time_in_milliseconds();
-        dmfile_read_time_in_milliseconds = table_scan_context_pb.dmfile_read_time_in_milliseconds();
-        create_snapshot_time_in_milliseconds = table_scan_context_pb.create_snapshot_time_in_milliseconds();
+        rough_set_index_load_time_in_ns = table_scan_context_pb.rough_set_index_load_time_in_ns();
+        dmfile_read_time_in_ns = table_scan_context_pb.dmfile_read_time_in_ns();
+        create_snapshot_time_in_ns = table_scan_context_pb.create_snapshot_time_in_ns();
     }
 
 
@@ -60,32 +60,28 @@ public:
         skip_packs_count += other->skip_packs_count;
         scan_rows_count += other->scan_rows_count;
         skip_rows_count += other->skip_rows_count;
-        rough_set_index_load_time_in_milliseconds += other->rough_set_index_load_time_in_milliseconds;
-        dmfile_read_time_in_milliseconds += other->dmfile_read_time_in_milliseconds;
-        create_snapshot_time_in_milliseconds += other->create_snapshot_time_in_milliseconds;
+        rough_set_index_load_time_in_ns += other->rough_set_index_load_time_in_ns;
+        dmfile_read_time_in_ns += other->dmfile_read_time_in_ns;
+        create_snapshot_time_in_ns += other->create_snapshot_time_in_ns;
     }
 
     bool equal(const TableScanContext * other)
     {
-        return (scan_packs_count == other->scan_packs_count) && (skip_packs_count == other->skip_packs_count) && 
-               (scan_rows_count == other->scan_rows_count) && (skip_rows_count == other->skip_rows_count) && 
-               (rough_set_index_load_time_in_milliseconds == other->rough_set_index_load_time_in_milliseconds) &&
-               (dmfile_read_time_in_milliseconds == other->dmfile_read_time_in_milliseconds) &&
-               (create_snapshot_time_in_milliseconds == other->create_snapshot_time_in_milliseconds);
+        return (scan_packs_count == other->scan_packs_count) && (skip_packs_count == other->skip_packs_count) && (scan_rows_count == other->scan_rows_count) && (skip_rows_count == other->skip_rows_count) && (rough_set_index_load_time_in_ns == other->rough_set_index_load_time_in_ns) && (dmfile_read_time_in_ns == other->dmfile_read_time_in_ns) && (create_snapshot_time_in_ns == other->create_snapshot_time_in_ns);
     }
 
     String toDebugString() const
     {
         return fmt::format("scan_packs_count: {}, skip_packs_count: {}, scan_rows_count: {}, skip_rows_count: {}, \
-                           rough_set_index_load_time_in_milliseconds: {}, dmfile_read_time_in_milliseconds: {}, \
-                           create_snapshot_time_in_milliseconds: {}",
+                           rough_set_index_load_time_in_ns: {}ns, dmfile_read_time_in_ns: {}ns, \
+                           create_snapshot_time_in_ns: {}ns",
                            scan_packs_count.load(),
                            skip_packs_count.load(),
                            scan_rows_count.load(),
                            skip_rows_count.load(),
-                           rough_set_index_load_time_in_milliseconds.load(),
-                           dmfile_read_time_in_milliseconds.load(),
-                           create_snapshot_time_in_milliseconds.load());
+                           rough_set_index_load_time_in_ns.load(),
+                           dmfile_read_time_in_ns.load(),
+                           create_snapshot_time_in_ns.load());
     }
 };
 

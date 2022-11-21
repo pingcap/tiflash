@@ -63,6 +63,9 @@ struct MockWriter
         summary.table_scan_context->scan_rows_count = 8192;
         summary.table_scan_context->skip_packs_count = 2;
         summary.table_scan_context->skip_rows_count = 16000;
+        summary.table_scan_context->dmfile_read_time_in_ns = 100;
+        summary.table_scan_context->create_snapshot_time_in_ns = 10;
+        summary.table_scan_context->rough_set_index_load_time_in_ns = 4;
 
         return summary;
     }

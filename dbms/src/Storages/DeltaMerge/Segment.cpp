@@ -460,7 +460,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     Stopwatch watch;
     SCOPE_EXIT(
         if (dm_context.table_scan_context_ptr) {
-            dm_context.table_scan_context_ptr->dmfile_read_time_in_milliseconds += watch.elapsedMilliseconds();
+            dm_context.table_scan_context_ptr->create_snapshot_time_in_ns += watch.elapsed();
         });
 
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);

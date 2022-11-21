@@ -322,7 +322,7 @@ Block DMFileReader::read()
     Stopwatch watch;
     SCOPE_EXIT(
         if (dm_context && dm_context->table_scan_context_ptr) {
-            dm_context->table_scan_context_ptr->dmfile_read_time_in_milliseconds += watch.elapsedMilliseconds();
+            dm_context->table_scan_context_ptr->dmfile_read_time_in_ns += watch.elapsed();
         });
 
 
@@ -384,7 +384,6 @@ Block DMFileReader::read()
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
 
-    // if (dm_context && dm_context->db_context.getDAGContext() && dm_context->db_context.getDAGContext()->collect_execution_summaries && dm_context->table_scan_context_ptr){
     if (dm_context && dm_context->table_scan_context_ptr)
     {
         dm_context->table_scan_context_ptr->scan_packs_count += read_packs;

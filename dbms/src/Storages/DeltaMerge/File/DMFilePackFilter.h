@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
+#include "Flash/Coprocessor/DAGContext.h"
 #include "Storages/DeltaMerge/DMContext.h"
 
 namespace ProfileEvents
@@ -294,7 +295,7 @@ private:
 
         if (dm_context && dm_context->table_scan_context_ptr)
         {
-            dm_context->table_scan_context_ptr->rough_set_index_load_time_in_milliseconds += watch.elapsedMilliseconds();
+            dm_context->table_scan_context_ptr->rough_set_index_load_time_in_ns += watch.elapsed();
         }
     }
 
