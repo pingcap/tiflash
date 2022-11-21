@@ -25,15 +25,6 @@ namespace tests
 {
 class TiFlashSecurityConfigTest : public ::testing::Test
 {
-public:
-    TiFlashSecurityConfigTest()
-        : log(Logger::get("TiFlashSecurityConfigTest"))
-    {}
-
-    static void SetUpTestCase() {}
-
-protected:
-    LoggerPtr log;
 };
 
 TEST_F(TiFlashSecurityConfigTest, Config)
@@ -45,7 +36,7 @@ TEST_F(TiFlashSecurityConfigTest, Config)
 
     config.allowed_common_names.clear();
 
-    config.parseAllowedCN(String("[\"abc\",\"efg\"]"));
+    config.parseAllowedCN(String(R"(["abc","efg"])"));
     ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
     ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
 
@@ -57,7 +48,7 @@ TEST_F(TiFlashSecurityConfigTest, Config)
 
     config.allowed_common_names.clear();
 
-    config.parseAllowedCN(String("[ \"abc\", \"efg\" ]"));
+    config.parseAllowedCN(String(R"([ "abc", "efg" ])"));
     ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
     ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
 }

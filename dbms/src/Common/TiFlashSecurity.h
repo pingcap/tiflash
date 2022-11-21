@@ -54,6 +54,11 @@ public:
     TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log_)
         : log(log_)
     {
+        init(config);
+    }
+
+    void init(Poco::Util::AbstractConfiguration & config)
+    {
         if (config.has("security"))
         {
             bool miss_ca_path = true;
