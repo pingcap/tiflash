@@ -222,6 +222,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         if (!is_updating.compare_exchange_strong(v, false))
             throw Exception(simpleInfo() + " is expected to be updating", ErrorCodes::LOGICAL_ERROR);
     });
+    LOG_FMT_DEBUG(log, "Compact start, delta={}", info());
 
     MinorCompactionPtr compaction_task;
     PageStorage::SnapshotPtr log_storage_snap;
