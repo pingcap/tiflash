@@ -55,7 +55,7 @@ public:
 
     // Use for DeltaMergeBlockInputStream to read rows from MemTableSet to do full compaction with other layer.
     // This method will check whether offset and limit are valid. It only return those valid rows.
-    size_t readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range);
+    size_t readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range, std::vector<UInt32> * row_ids = nullptr);
 
     void getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end, size_t place_rows_offset = 0);
 
