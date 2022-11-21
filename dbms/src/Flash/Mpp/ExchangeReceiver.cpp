@@ -19,8 +19,8 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
-#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
 #include <grpcpp/completion_queue.h>

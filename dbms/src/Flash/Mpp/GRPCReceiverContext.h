@@ -88,7 +88,7 @@ public:
     void makeAsyncReader(
         const ExchangeRecvRequest & request,
         AsyncExchangePacketReaderPtr & reader,
-        grpc::CompletionQueue *cq,
+        grpc::CompletionQueue * cq,
         UnaryCallback<bool> * callback) const;
 
     static Status getStatusOK()

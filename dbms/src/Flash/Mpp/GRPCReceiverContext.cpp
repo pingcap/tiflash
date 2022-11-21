@@ -84,7 +84,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     const ExchangeRecvRequest & request;
     pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
     grpc::ClientContext client_context;
-    grpc::CompletionQueue *cq; // won't be null
+    grpc::CompletionQueue * cq; // won't be null
     std::unique_ptr<grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
 
     AsyncGrpcExchangePacketReader(
@@ -251,7 +251,7 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 void GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
     AsyncExchangePacketReaderPtr & reader,
-    grpc::CompletionQueue *cq,
+    grpc::CompletionQueue * cq,
     UnaryCallback<bool> * callback) const
 {
     reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
