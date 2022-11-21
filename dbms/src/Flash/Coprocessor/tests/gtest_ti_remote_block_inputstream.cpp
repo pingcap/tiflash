@@ -184,6 +184,11 @@ struct MockReceiverContext
         return std::make_shared<Reader>(queue);
     }
 
+    void cancelMPPTaskOnTiFlashStorageNode()
+    {
+        throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
     static Status getStatusOK()
     {
         return ::grpc::Status();
@@ -382,7 +387,8 @@ public:
             1,
             "mock_req_id",
             "mock_exchange_receiver_id",
-            0);
+            0,
+            /*is_tiflash_storage_receiver*/false);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",

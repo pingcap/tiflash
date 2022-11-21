@@ -113,7 +113,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
 
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
-    // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
+    // Exec summary of ExchangeSender will be merged into TableScan.
     executor->set_executor_id(fmt::format("{}_{}_{}",
                 ExecIDPrefixForTiFlashStorageSender, sender_target_task_start_ts, sender_target_task_task_id));
 
