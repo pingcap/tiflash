@@ -93,7 +93,7 @@ public:
     const DAGSchema & getOutputSchema() const { return schema; }
 
     void open() { resp_iter.open(); }
-    
+
     void cancel() { resp_iter.cancel(); }
 
 
