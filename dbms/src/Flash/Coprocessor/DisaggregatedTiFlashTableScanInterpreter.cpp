@@ -148,8 +148,6 @@ std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> DisaggregatedTiFlashTab
         LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", dispatch_req->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [dispatch_req, this] {
                 pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(dispatch_req);
-                // gjt todo: retry dispatch
-                // gjt todo: make timeout const
                 this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(dispatch_req->meta().address(), rpc_call, /*timeout=*/60);
         });
     }

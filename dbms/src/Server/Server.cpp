@@ -1163,10 +1163,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"));
 
+    const bool is_disaggregated_compute_node = isDisaggregatedComputeNode(proxy_conf.user_engine_label);
     {
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config, std::move(cluster_config), isDisaggregatedComputeNode(proxy_conf.user_engine_label));
+        global_context->createTMTContext(raft_config, std::move(cluster_config), is_disaggregated_compute_node);
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -1200,34 +1201,37 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Load metadata done.");
 
-    /// Then, sync schemas with TiDB, and initialize schema sync service.
-    for (int i = 0; i < 60; i++) // retry for 3 mins
+    if (!is_disaggregated_compute_node)
     {
-        try
+        /// Then, sync schemas with TiDB, and initialize schema sync service.
+        for (int i = 0; i < 60; i++) // retry for 3 mins
         {
-            global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
-            break;
+            try
+            {
+                global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+                break;
+            }
+            catch (Poco::Exception & e)
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                        log,
+                        "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                        " seconds and try again.",
+                        e.displayText(),
+                        wait_seconds);
+                ::sleep(wait_seconds);
+            }
         }
-        catch (Poco::Exception & e)
-        {
-            const int wait_seconds = 3;
-            LOG_ERROR(
-                log,
-                "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
-                " seconds and try again.",
-                e.displayText(),
-                wait_seconds);
-            ::sleep(wait_seconds);
-        }
+        LOG_DEBUG(log, "Sync schemas done.");
+
+        initStores(*global_context, log, storage_config.lazily_init_store);
+
+        // After schema synced, set current database.
+        global_context->setCurrentDatabase(default_database);
+
+        global_context->initializeSchemaSyncService();
     }
-    LOG_DEBUG(log, "Sync schemas done.");
-
-    initStores(*global_context, log, storage_config.lazily_init_store);
-
-    // After schema synced, set current database.
-    global_context->setCurrentDatabase(default_database);
-
-    global_context->initializeSchemaSyncService();
     CPUAffinityManager::initCPUAffinityManager(config());
     LOG_INFO(log, "CPUAffinity: {}", CPUAffinityManager::getInstance().toString());
     SCOPE_EXIT({

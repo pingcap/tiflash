@@ -41,8 +41,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
-#include <kvproto/mpp.pb.h>
-#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
@@ -426,7 +424,6 @@ void DAGStorageInterpreter::prepare()
     std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan(settings.max_columns_to_read);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGStorageInterpreter::buildPushDownFilter()

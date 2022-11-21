@@ -29,6 +29,8 @@
 namespace DB
 {
 
+// For TableScan in disaggregated tiflash mode, we convert it to ExchangeReceiver(executed in tiflash_compute node),
+// and ExchangeSender + TableScan(executed in tiflash_storage node).
 class DisaggregatedTiFlashTableScanInterpreter
 {
 public:
