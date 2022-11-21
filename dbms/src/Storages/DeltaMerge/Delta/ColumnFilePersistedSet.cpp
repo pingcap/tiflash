@@ -324,6 +324,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
 
         auto compaction = std::make_shared<MinorCompaction>(next_compaction_level, minor_compaction_version);
         auto & level = persisted_files_levels[next_compaction_level];
+        next_compaction_level++;
         if (!level.empty())
         {
             bool is_all_trivial_move = true;
@@ -365,7 +366,6 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
             if (!is_all_trivial_move)
                 return compaction;
         }
-        next_compaction_level++;
     }
     return nullptr;
 }
