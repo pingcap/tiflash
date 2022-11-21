@@ -86,7 +86,7 @@ RemoteRequest RemoteRequest::build(
         dag_req.set_force_encode_type(true);
     }
 
-    dag_req.set_collect_execution_summaries(true);
+    dag_req.set_collect_execution_summaries(dag_context.collect_execution_summaries);
     const auto & original_dag_req = *dag_context.dag_request;
     if (original_dag_req.has_time_zone_name() && !original_dag_req.time_zone_name().empty())
         dag_req.set_time_zone_name(original_dag_req.time_zone_name());
