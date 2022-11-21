@@ -18,26 +18,15 @@
 
 namespace DB
 {
-
-/// delta_mode means when for a streaming call, return the delta execution summary
-/// because TiDB is not aware of the streaming call when it handle the execution summaries
-/// so we need to "pretend to be a unary call", can be removed if TiDB support streaming
-/// call's execution summaries directly
 void ExecutionSummaryCollector::fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
-    const String & executor_id,
-    bool delta_mode)
+    const String & executor_id) const
 {
-    auto & prev_stats = previous_execution_stats[executor_id];
-
-    execution_summary->set_time_processed_ns(
-        delta_mode ? current.time_processed_ns - prev_stats.time_processed_ns : current.time_processed_ns);
-    execution_summary->set_num_produced_rows(
-        delta_mode ? current.num_produced_rows - prev_stats.num_produced_rows : current.num_produced_rows);
-    execution_summary->set_num_iterations(delta_mode ? current.num_iterations - prev_stats.num_iterations : current.num_iterations);
-    execution_summary->set_concurrency(delta_mode ? current.concurrency - prev_stats.concurrency : current.concurrency);
-    prev_stats = current;
+    execution_summary->set_time_processed_ns(current.time_processed_ns);
+    execution_summary->set_num_produced_rows(current.num_produced_rows);
+    execution_summary->set_num_iterations(current.num_iterations);
+    execution_summary->set_concurrency(current.concurrency);
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
@@ -65,7 +54,7 @@ void mergeRemoteExecuteSummaries(
     }
 }
 
-void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
+void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & response)
 {
     if (!dag_context.collect_execution_summaries)
         return;
@@ -133,7 +122,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;
-        fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id, delta_mode);
+        fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
     };
 
     /// add execution_summary for local executor
@@ -161,7 +150,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
             ExecutionSummary merged;
             for (auto & remote : p.second)
                 merged.merge(remote, false);
-            fillTiExecutionSummary(response.add_execution_summaries(), merged, p.first, delta_mode);
+            fillTiExecutionSummary(response.add_execution_summaries(), merged, p.first);
         }
     }
 }

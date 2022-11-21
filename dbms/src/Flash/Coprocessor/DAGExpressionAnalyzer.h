@@ -43,6 +43,9 @@ enum class ExtraCastAfterTSMode
     AppendDurationCast
 };
 
+struct JoinKeyType;
+using JoinKeyTypes = std::vector<JoinKeyType>;
+
 class DAGExpressionAnalyzerHelper;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   */
@@ -157,7 +160,7 @@ public:
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         Names & key_names,
         bool left,
         bool is_right_out_join,
@@ -260,7 +263,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name);
 
-    String appendCastIfNeeded(
+    String appendCastForFunctionExpr(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         const String & expr_name);
@@ -288,7 +291,7 @@ private:
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         bool left,
         bool is_right_out_join);
 

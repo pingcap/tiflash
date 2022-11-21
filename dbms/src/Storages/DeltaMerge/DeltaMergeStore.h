@@ -121,7 +121,9 @@ struct StoreStats
     Float64 avg_stable_rows = 0;
     Float64 avg_stable_size = 0;
 
+    // statistics about column file in delta
     UInt64 total_pack_count_in_delta = 0;
+    UInt64 max_pack_count_in_delta = 0;
     Float64 avg_pack_count_in_delta = 0;
     Float64 avg_pack_rows_in_delta = 0;
     Float64 avg_pack_size_in_delta = 0;
@@ -135,25 +137,16 @@ struct StoreStats
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
     String storage_stable_oldest_snapshot_tracing_id;
-    UInt64 storage_stable_num_pages = 0;
-    UInt64 storage_stable_num_normal_pages = 0;
-    UInt64 storage_stable_max_page_id = 0;
 
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
     String storage_delta_oldest_snapshot_tracing_id;
-    UInt64 storage_delta_num_pages = 0;
-    UInt64 storage_delta_num_normal_pages = 0;
-    UInt64 storage_delta_max_page_id = 0;
 
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
     String storage_meta_oldest_snapshot_tracing_id;
-    UInt64 storage_meta_num_pages = 0;
-    UInt64 storage_meta_num_normal_pages = 0;
-    UInt64 storage_meta_max_page_id = 0;
 
     UInt64 background_tasks_length = 0;
 };
@@ -328,7 +321,7 @@ public:
     /// Merge delta into the stable layer for all segments.
     ///
     /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
-    void mergeDeltaAll(const Context & context);
+    bool mergeDeltaAll(const Context & context);
 
     /// Merge delta into the stable layer for one segment located by the specified start key.
     /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
