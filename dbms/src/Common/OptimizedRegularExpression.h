@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/config.h>
-#include <re2/re2.h>
 #include <common/types.h>
+#include <re2/re2.h>
 
 #include <memory>
 #include <string>

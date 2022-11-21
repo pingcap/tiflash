@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Poco/Exception.h>
+#include <Common/Exception.h>
 #include <Common/OptimizedRegularExpression.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/Exception.h>
 #include <Common/UTF8Helpers.h>
+#include <Poco/Exception.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -504,7 +504,7 @@ template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
-    const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
+    const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
     StringPieceType expr_sp(expr, expr_size);
