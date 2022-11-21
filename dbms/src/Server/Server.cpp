@@ -1284,6 +1284,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             main_config_reloader.reset();
             users_config_reloader.reset();
+
+            DynamicThreadPool::global_instance.reset();
         });
 
         /// This object will periodically calculate some metrics.
