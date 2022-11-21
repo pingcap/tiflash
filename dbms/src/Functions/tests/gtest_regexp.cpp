@@ -2512,7 +2512,8 @@ TEST_F(Regexp, RegexpInstr)
                       {0, "\n", ".", 1, 1},
                       {0, "", "^$", 3, 2},
                       {0, "ab\naB", "^ab$", 1, 1},
-                      {6, "pp跑ppのaaa", "(跑|の|P)", 2, 2}};
+                      {6, "pp跑ppのaaa", "(跑|の|P)", 2, 2},
+                      {0, "pp跑ppのaaa", "(跑|の|P)", 2, 10}};
         RegexpInstrCase::setVecsWithoutNullMap(4, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
