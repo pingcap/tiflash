@@ -32,14 +32,12 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <future>
 #include <iterator>
 #include <random>
-
-#include <TestUtils/InputStreamTestUtils.h>
-#include <fmt/format.h>
 
 using namespace std::chrono_literals;
 
@@ -597,7 +595,7 @@ try
     auto b3 = create_block(0L, 3);
     store->write(*db_context, db_context->getSettingsRef(), b3);
 
-    auto b2 = create_block(std::numeric_limits<Int64>::max()-1, 2);
+    auto b2 = create_block(std::numeric_limits<Int64>::max() - 1, 2);
     store->write(*db_context, db_context->getSettingsRef(), b2);
 
     //while (!store->mergeDeltaAll(*db_context))

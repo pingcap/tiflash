@@ -96,6 +96,7 @@ private:
     MutableColumnPtr seg_row_id_col;
     // `stable_rows` is the total rows of the underlying DMFiles, includes not valid rows.
     UInt64 stable_rows;
+    std::vector<UInt32> delta_row_ids;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -285,6 +286,14 @@ private:
         {
             auto row_id = start + i;
             seg_row_id_col->insert(row_id);
+        }
+    }
+
+    inline void fillSegmentRowId(const std::vector<UInt32> & row_ids)
+    {
+        for (auto row_id : row_ids)
+        {
+            seg_row_id_col->insert(row_id + stable_rows);
         }
     }
     template <bool c_stable_done, bool c_delta_done>
@@ -534,11 +543,19 @@ private:
 
         // Note that the rows between [use_delta_offset, use_delta_offset + write_rows) are guaranteed sorted,
         // otherwise we won't read them in the same range.
-        auto actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range);
+        size_t actual_write = 0;
         if constexpr (need_row_id)
         {
-            fillSegmentRowId(use_delta_offset + stable_rows, actual_write);
+            delta_row_ids.clear();
+            delta_row_ids.reserve(write_rows);
+            actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range, &delta_row_ids);
+            fillSegmentRowId(delta_row_ids);
         }
+        else
+        {
+            actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range);
+        }
+
         if constexpr (skippable_place)
         {
             sk_skip_total_rows += write_rows - actual_write;
