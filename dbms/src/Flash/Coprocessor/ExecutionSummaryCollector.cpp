@@ -15,10 +15,8 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
-
-#include "Storages/DeltaMerge/DMSegmentThreadInputStream.h"
-#include "Storages/DeltaMerge/ReadThread/UnorderedInputStream.h"
-#include "common/logger_useful.h"
+#include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 
 namespace DB
 {
@@ -84,7 +82,6 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     {
         for (const auto & stream_ptr : map_entry.second)
         {
-            // 这边应该不会有 table scan 的数据
             if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
             {
                 mergeRemoteExecuteSummaries(exchange_receiver_stream_ptr, merged_remote_execution_summaries);
@@ -117,7 +114,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
                     // There may be multiple UnorderedInputStream in the same executor, but they share the same table_scan_context,
                     // Thus we only calculate the table_scan_context once;
                     if (auto * local_unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(p_stream))
-                    { // check 一下有没有更优雅的写法，这样写后面 input stream 越来越多咋办
+                    {
                         if (local_unordered_input_stream_ptr->getDMContext() && local_unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr)
                         {
                             current.table_scan_context->merge(local_unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr.get());

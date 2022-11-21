@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
@@ -36,8 +37,6 @@
 #include <future>
 #include <iterator>
 #include <random>
-
-#include "Storages/DeltaMerge/ReadThread/UnorderedInputStream.h"
 
 namespace DB
 {

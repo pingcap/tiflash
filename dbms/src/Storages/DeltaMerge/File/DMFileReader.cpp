@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 #include <Encryption/FileProvider.h>
@@ -27,8 +28,6 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
-
-#include "Common/Stopwatch.h"
 
 namespace CurrentMetrics
 {

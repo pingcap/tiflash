@@ -24,14 +24,13 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/TableScanContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
 #include <mutex>
 #include <thread>
 #include <utility>
-
-#include "Storages/DeltaMerge/TableScanContext.h"
 
 namespace DB
 {

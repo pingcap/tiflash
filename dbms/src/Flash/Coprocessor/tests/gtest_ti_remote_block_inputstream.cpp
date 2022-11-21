@@ -30,7 +30,6 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
 
-//TODO 要修改，加入新的 summary
 namespace DB
 {
 namespace tests

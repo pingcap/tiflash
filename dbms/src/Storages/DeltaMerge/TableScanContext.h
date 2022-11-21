@@ -14,17 +14,15 @@
 
 #pragma once
 
+#include <common/types.h>
 #include <fmt/format.h>
 #include <sys/types.h>
+#include <tipb/executor.pb.h>
 
 #include <atomic>
 
-#include "common/types.h"
-#include "tipb/executor.pb.h"
-
 namespace DB::DM
 {
-
 
 class TableScanContext
 {
@@ -84,5 +82,4 @@ public:
                            create_snapshot_time_in_ns.load());
     }
 };
-
 } // namespace DB::DM
