@@ -275,7 +275,7 @@ ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
     return res;
 }
 
-ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & replicate_offsets) const
+ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & replicate_offsets) const
 {
     size_t col_size = size();
     if (col_size != replicate_offsets.size())
@@ -288,10 +288,10 @@ ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, size_t alrea
 
     Chars_t & res_chars = res->chars;
     Offsets & res_offsets = res->offsets;
-    res_chars.reserve(chars.size() / col_size * (replicate_offsets[end_row] - already_generate_rows));
-    res_offsets.reserve(replicate_offsets[end_row] - already_generate_rows);
+    res_chars.reserve(chars.size() / col_size * (replicate_offsets[end_row] - prev_offset));
+    res_offsets.reserve(replicate_offsets[end_row] - prev_offset);
 
-    Offset prev_replicate_offset = already_generate_rows;
+    Offset prev_replicate_offset = prev_offset;
     Offset prev_string_offset = start_row == 0 ? 0 : offsets[start_row - 1];
     Offset current_new_offset = 0;
 

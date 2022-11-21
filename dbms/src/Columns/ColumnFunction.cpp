@@ -59,7 +59,7 @@ ColumnPtr ColumnFunction::replicate(const Offsets & offsets) const
     return ColumnFunction::create(replicated_size, function, capture);
 }
 
-ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
 {
     if (column_size != offsets.size())
         throw Exception(
@@ -68,9 +68,9 @@ ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, size_t alr
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
-        column.column = column.column->replicate(start_row, end_row, already_generate_rows, offsets);
+        column.column = column.column->replicate(start_row, end_row, prev_offset, offsets);
 
-    size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row] - already_generate_rows);
+    size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row] - prev_offset);
     return ColumnFunction::create(replicated_size, function, capture);
 }
 

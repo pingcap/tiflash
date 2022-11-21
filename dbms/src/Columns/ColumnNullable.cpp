@@ -531,10 +531,10 @@ ColumnPtr ColumnNullable::replicate(const Offsets & offsets) const
     return ColumnNullable::create(replicated_data, replicated_null_map);
 }
 
-ColumnPtr ColumnNullable::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnNullable::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
 {
-    ColumnPtr replicated_data = getNestedColumn().replicate(start_row, end_row, already_generate_rows, offsets);
-    ColumnPtr replicated_null_map = getNullMapColumn().replicate(start_row, end_row, already_generate_rows, offsets);
+    ColumnPtr replicated_data = getNestedColumn().replicate(start_row, end_row, prev_offset, offsets);
+    ColumnPtr replicated_null_map = getNullMapColumn().replicate(start_row, end_row, prev_offset, offsets);
     return ColumnNullable::create(replicated_data, replicated_null_map);
 }
 

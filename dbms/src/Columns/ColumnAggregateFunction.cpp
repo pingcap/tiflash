@@ -398,7 +398,7 @@ ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) c
     return res;
 }
 
-ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())
@@ -409,9 +409,8 @@ ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, s
 
     auto res = createView();
     auto & res_data = res->getData();
-    res_data.reserve(offsets[end_row] - already_generate_rows);
+    res_data.reserve(offsets[end_row] - prev_offset);
 
-    IColumn::Offset prev_offset = already_generate_rows;
     for (size_t i = start_row; i <= end_row; ++i)
     {
         size_t size_to_replicate = offsets[i] - prev_offset;

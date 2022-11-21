@@ -315,7 +315,7 @@ ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets & offsets) const
 }
 
 template <typename T>
-ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())
@@ -327,9 +327,7 @@ ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, size_t al
     auto res = this->create();
     typename Self::Container & res_data = res->getData();
 
-
-    IColumn::Offset prev_offset = already_generate_rows;
-    res_data.reserve(offsets[end_row] - already_generate_rows);
+    res_data.reserve(offsets[end_row] - prev_offset);
 
     for (size_t i = start_row; i <= end_row; ++i)
     {

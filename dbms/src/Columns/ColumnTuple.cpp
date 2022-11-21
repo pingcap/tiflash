@@ -222,13 +222,13 @@ ColumnPtr ColumnTuple::replicate(const Offsets & offsets) const
     return ColumnTuple::create(new_columns);
 }
 
-ColumnPtr ColumnTuple::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnTuple::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
 {
     const size_t tuple_size = columns.size();
     Columns new_columns(tuple_size);
 
     for (size_t i = 0; i < tuple_size; ++i)
-        new_columns[i] = columns[i]->replicate(start_row, end_row, already_generate_rows, offsets);
+        new_columns[i] = columns[i]->replicate(start_row, end_row, prev_offset, offsets);
 
     return ColumnTuple::create(new_columns);
 }

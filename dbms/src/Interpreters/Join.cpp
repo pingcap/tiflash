@@ -1078,26 +1078,11 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
     static void addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, Join::ProbeProcessInfoPtr probe_process_info_ptr)
     {
         size_t rows_joined = 0;
-        size_t rows_expanded = 0;
+        // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
+        // and it means the rows in this block are not joined finish.
+
         for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
         {
-            // if the row expanded is output in previous block, skip it.
-            if (rows_expanded < probe_process_info_ptr->already_expanded_rows)
-            {
-                rows_expanded++;
-                continue;
-            }
-
-            // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
-            // and it means the rows in this block are not joined finish.
-            if (current_offset + rows_joined - probe_process_info_ptr->already_generate_rows >= probe_process_info_ptr->max_block_size)
-            {
-                probe_process_info_ptr->already_expanded_rows += rows_joined;
-                probe_process_info_ptr->all_rows_joined_finish = false;
-                probe_process_info_ptr->block_full = true;
-                break;
-            }
-
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 added_columns[j]->insertFrom(*current->block->getByPosition(right_indexes[j]).column.get(), current->row_num);
 
@@ -1105,8 +1090,12 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         }
 
         current_offset += rows_joined;
+        if (current_offset - probe_process_info_ptr->already_generate_rows >= probe_process_info_ptr->max_block_size)
+        {
+            probe_process_info_ptr->all_rows_joined_finish = false;
+            probe_process_info_ptr->block_full = true;
+        }
         (*offsets)[i] = current_offset;
-        probe_process_info_ptr->end_row = i;
         if (KIND == ASTTableJoin::Kind::Anti)
             /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
             /// away because it might failed in other condition, so we add the matched rows to the result, but set (*filter)[i] = 0
@@ -1114,7 +1103,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             (*filter)[i] = 0;
     }
 
-    static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, Join::ProbeProcessInfoPtr probe_process_info_ptr)
+    static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, Join::ProbeProcessInfoPtr /*probe_process_info_ptr*/)
     {
         if (KIND == ASTTableJoin::Kind::Inner)
         {
@@ -1130,7 +1119,6 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 added_columns[j]->insertDefault();
         }
-        probe_process_info_ptr->end_row = i;
     }
 };
 
@@ -1151,7 +1139,7 @@ void NO_INLINE joinBlockImplTypeCase(
     size_t fine_grained_shuffle_count,
     Join::ProbeProcessInfoPtr probe_process_info_ptr)
 {
-    if (rows == 0)
+    if (rows == 0 || probe_process_info_ptr->start_row == rows)
     {
         return;
     }
@@ -1182,11 +1170,11 @@ void NO_INLINE joinBlockImplTypeCase(
     size_t i;
     for (i = probe_process_info_ptr->start_row; i < rows; ++i)
     {
-        if (i > probe_process_info_ptr->start_row)
+        if (probe_process_info_ptr->block_full)
         {
-            probe_process_info_ptr->already_expanded_rows = 0;
+            probe_process_info_ptr->block_full = false;
+            break;
         }
-
         if (has_null_map && (*null_map)[i])
         {
             Adder<KIND, STRICTNESS, Map>::addNotFound(
@@ -1258,11 +1246,7 @@ void NO_INLINE joinBlockImplTypeCase(
                     probe_process_info_ptr);
             keyHolderDiscardKey(key_holder);
         }
-        if (probe_process_info_ptr->block_full)
-        {
-            probe_process_info_ptr->block_full = false;
-            break;
-        }
+        probe_process_info_ptr->end_row = i;
     }
 
     // if i == rows, it means that all probe rows have been joined finish.
@@ -1700,33 +1684,10 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, probe_process_info_ptr->already_generate_rows, *offsets_to_replicate);
         }
 
-        // rows == 0 means getHeader() goes here.
         if (rows != 0)
         {
-            size_t new_size = probe_process_info_ptr->end_row - probe_process_info_ptr->start_row + 1;
-            size_t index = 0;
-            if (offsets_to_replicate)
-            {
-                //                offsets_to_replicate->resize_assume_range_reserved(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
-                auto new_offsets_to_replicate = std::make_unique<IColumn::Offsets>(new_size);
-                for (size_t i = probe_process_info_ptr->start_row; i < new_size; ++i)
-                {
-                    (*new_offsets_to_replicate)[index++] = (*offsets_to_replicate)[i];
-                }
-                offsets_to_replicate = std::move(new_offsets_to_replicate);
-            }
-            index = 0;
-            if (filter)
-            {
-                auto new_filter = std::make_unique<IColumn::Filter>(new_size);
-                for (size_t i = probe_process_info_ptr->start_row; i < new_size; ++i)
-                {
-                    (*new_filter)[index++] = (*filter)[i];
-                }
-                filter = std::move(new_filter);
-            }
-            probe_process_info_ptr->start_row = probe_process_info_ptr->end_row;
-            probe_process_info_ptr->already_generate_rows = (*offsets_to_replicate)[new_size - 1];
+            probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
+            probe_process_info_ptr->already_generate_rows = (*offsets_to_replicate)[probe_process_info_ptr->end_row];
         }
     }
 
@@ -2148,7 +2109,7 @@ void Join::setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 
     probe_concurrency = std::max(1, probe_concurrency_);
     for (size_t i = 0; i < probe_concurrency; i++)
     {
-        probe_process_infos.push_back(std::make_shared<ProbeProcessInfo>(Block{}, max_block_size, 0, 0, 0, 0, true, false));
+        probe_process_infos.push_back(std::make_shared<ProbeProcessInfo>(Block{}, max_block_size, 0, 0, 0, true, false));
     }
     max_block_size_for_hash_join = max_block_size;
     probe_initialized = true;
@@ -2159,7 +2120,6 @@ void Join::setBlockAndInitProbeProcessInfo(Block block, size_t probe_index)
     probe_process_infos[probe_index]->block = block;
     probe_process_infos[probe_index]->start_row = 0;
     probe_process_infos[probe_index]->end_row = 0;
-    probe_process_infos[probe_index]->already_expanded_rows = 0;
     probe_process_infos[probe_index]->already_generate_rows = 0;
     probe_process_infos[probe_index]->all_rows_joined_finish = true;
     probe_process_infos[probe_index]->block_full = false;

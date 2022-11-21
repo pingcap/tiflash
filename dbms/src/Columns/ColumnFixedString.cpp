@@ -323,7 +323,7 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
     return res;
 }
 
-ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, size_t already_generate_rows, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
 {
     size_t col_size = size();
     if (col_size != offsets.size())
@@ -335,9 +335,9 @@ ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, size_t 
         return res;
 
     Chars_t & res_chars = res->chars;
-    res_chars.resize(n * (offsets[end_row] - already_generate_rows));
+    res_chars.resize(n * (offsets[end_row] - prev_offset));
 
-    Offset curr_offset = already_generate_rows;
+    Offset curr_offset = prev_offset;
     for (size_t i = start_row; i <= end_row; ++i)
         for (size_t next_offset = offsets[i]; curr_offset < next_offset; ++curr_offset)
             memcpySmallAllowReadWriteOverflow15(&res->chars[curr_offset * n], &chars[i * n], n);
