@@ -97,19 +97,29 @@ inline int getDefaultFlags()
     return flags;
 }
 
-// add '()' outside of the pattern to get the matched substr
+template <bool need_subpattern>
 inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
     String mode = re2Util::getRE2ModeModifiers(match_type, collator);
     if (mode.empty())
-        return fmt::format("({})",pattern);
-    return fmt::format("{}({})", mode, pattern);
+    {
+        if constexpr (need_subpattern)
+            return fmt::format("({})", pattern);
+        else
+            return pattern;
+    }
+
+    if constexpr (need_subpattern)
+        return fmt::format("{}({})", mode, pattern);
+    else
+        return fmt::format("{}{}", mode, pattern);
 }
 
-inline std::unique_ptr<Regexps::Regexp> createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
+template <bool need_subpattern>
+inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
-    return std::make_unique<Regexps::Regexp>(final_pattern, getDefaultFlags());
+    String final_pattern = addMatchTypeForPattern<need_subpattern>(pattern, match_type, collator);
+    return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
 }
 
 // Only int types used in ColumnsNumber.h can be valid
@@ -121,7 +131,8 @@ inline constexpr bool check_int_type()
 
 Int64 getIntFromField(Field & field)
 {
-    switch (field.getType()) {
+    switch (field.getType())
+    {
     case Field::Types::Which::Int64:
         return field.safeGet<Int64>();
     case Field::Types::Which::UInt64:
@@ -131,7 +142,17 @@ Int64 getIntFromField(Field & field)
     }
 }
 
-enum class IntType { UInt8 = 0, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64 };
+enum class IntType
+{
+    UInt8 = 0,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64
+};
 
 template <typename T>
 Int64 getInt(const void * container, size_t idx)
@@ -215,7 +236,10 @@ public:
     static IntType getIntType() { throw Exception("ParamString not supports this function"); }
 
     template <typename T>
-    Int64 getInt(size_t) const { throw Exception("ParamString not supports this function"); }
+    Int64 getInt(size_t) const
+    {
+        throw Exception("ParamString not supports this function");
+    }
 
     String getString(size_t idx) const
     {
@@ -411,7 +435,10 @@ public:
     }
 
     template <typename T>
-    Int64 getInt(size_t idx) const { return data.template getInt<T>(idx); }
+    Int64 getInt(size_t idx) const
+    {
+        return data.template getInt<T>(idx);
+    }
     void getStringRef(size_t idx, StringRef & dst) const { return data.getStringRef(idx, dst); }
     String getString(size_t idx) const { return data.getString(idx); }
 
@@ -497,7 +524,8 @@ public:
 
     // default ParamString's ParamType should be ParamType::StringNotNullAndNotConst
     ParamVariant(ColumnPtr col, size_t col_size, const StringRef & default_val)
-        : col_ptr(col), param(nullptr)
+        : col_ptr(col)
+        , param(nullptr)
     {
         if (col_ptr != nullptr)
         {
@@ -513,7 +541,8 @@ public:
 
     // default ParamInt's ParamType should be ParamType::IntNotNullAndNotConst
     ParamVariant(ColumnPtr col, size_t col_size, Int64 default_val)
-        : col_ptr(col), param(nullptr)
+        : col_ptr(col)
+        , param(nullptr)
     {
         if (col_ptr != nullptr)
         {
@@ -625,14 +654,14 @@ private:
     }
 
 #define APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param) \
-    M(UInt8, col_ptr, null_map, param) \
-    M(UInt16, col_ptr, null_map, param) \
-    M(UInt32, col_ptr, null_map, param) \
-    M(UInt64, col_ptr, null_map, param) \
-    M(Int8, col_ptr, null_map, param) \
-    M(Int16, col_ptr, null_map, param) \
-    M(Int32, col_ptr, null_map, param) \
-    M(Int64, col_ptr, null_map, param) \
+    M(UInt8, col_ptr, null_map, param)                       \
+    M(UInt16, col_ptr, null_map, param)                      \
+    M(UInt32, col_ptr, null_map, param)                      \
+    M(UInt64, col_ptr, null_map, param)                      \
+    M(Int8, col_ptr, null_map, param)                        \
+    M(Int16, col_ptr, null_map, param)                       \
+    M(Int32, col_ptr, null_map, param)                       \
+    M(Int64, col_ptr, null_map, param)
 
     void handleIntNonConstCol(size_t col_size)
     {
@@ -644,16 +673,17 @@ private:
             // Construct actual param
             param_type = ParamType::IntNullableAndNotConst;
 
-#define M(INT_TYPE, col_ptr, null_map, param) \
-    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
-    { \
+#define M(INT_TYPE, col_ptr, null_map, param)                                                                                                \
+    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr))))                                                        \
+    {                                                                                                                                        \
         (param) = new ParamIntNullableAndNotConst(col_size, null_map, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
     }
 
-            if (false) {}
+            if (false)
+            {
+            }
             APPLY_FOR_INT_CONTAINER(M, nested_ptr, null_map, param)
-            else
-                throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            else throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
 #undef M
         }
@@ -662,16 +692,17 @@ private:
             // Construct actual param
             param_type = ParamType::IntNotNullableAndNotConst;
 
-#define M(INT_TYPE, col_ptr, null_map, param) \
-    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
-    { \
+#define M(INT_TYPE, col_ptr, null_map, param)                                                                                         \
+    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr))))                                                 \
+    {                                                                                                                                 \
         (param) = new ParamIntNotNullableAndNotConst(col_size, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
     }
 
-            if (false) {}
+            if (false)
+            {
+            }
             APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param)
-            else
-                throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            else throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
 #undef M
         }
@@ -726,24 +757,24 @@ public:
     {                                                                                                                 \
         switch ((pv_name).getParamType())                                                                             \
         {                                                                                                             \
-        /* Expand this macro to enumerate all string cases */                                                     \
-        APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, (pv_name).param, param_name, next_process) \
+            /* Expand this macro to enumerate all string cases */                                                     \
+            APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, (pv_name).param, param_name, next_process) \
         default:                                                                                                      \
             throw Exception("Unexpected ParamType");                                                                  \
         }                                                                                                             \
     } while (0);
 
 // Common method to get actual int param
-#define GET_ACTUAL_INT_PARAM(pv_name, param_name, next_process) \
-    do                                                          \
-    {                                                           \
-        switch ((pv_name).getParamType()) \
-        { \
-        /* Expand this macro to enumerate all int cases */                                                     \
-        APPLY_FOR_PARAM_INT_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, (pv_name).param, param_name, next_process) \
-        default:                                                                                                      \
-            throw Exception("Unexpected ParamType");                                                                  \
-        } \
+#define GET_ACTUAL_INT_PARAM(pv_name, param_name, next_process)                                                    \
+    do                                                                                                             \
+    {                                                                                                              \
+        switch ((pv_name).getParamType())                                                                          \
+        {                                                                                                          \
+            /* Expand this macro to enumerate all int cases */                                                     \
+            APPLY_FOR_PARAM_INT_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, (pv_name).param, param_name, next_process) \
+        default:                                                                                                   \
+            throw Exception("Unexpected ParamType");                                                               \
+        }                                                                                                          \
     } while (0);
 
 class FunctionStringRegexpBase
@@ -761,7 +792,7 @@ public:
     // We should pre compile the regular expression when:
     //  - only pattern column is provided and it's a constant column
     //  - pattern and match type columns are provided and they are both constant columns
-    template <typename ExprT, typename MatchTypeT>
+    template <bool need_subpattern, typename ExprT, typename MatchTypeT>
     std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
     {
         if (pat_param.isNullAt(0) || match_type_param.isNullAt(0))
@@ -772,7 +803,7 @@ public:
             throw Exception(EMPTY_PAT_ERR_MSG);
 
         String match_type = match_type_param.getString(0);
-        final_pattern = addMatchTypeForPattern(final_pattern, match_type, collator);
+        final_pattern = addMatchTypeForPattern<need_subpattern>(final_pattern, match_type, collator);
 
         int flags = getDefaultFlags();
         return std::make_unique<Regexps::Regexp>(final_pattern, flags);
@@ -951,7 +982,7 @@ public:
 
             String match_type = match_type_param.getString(0);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern<false>(pat, match_type, collator), flags);
             ResultType res{regexp.match(expr)};
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -970,7 +1001,7 @@ public:
             std::unique_ptr<Regexps::Regexp> regexp;
             if (col_size > 0)
             {
-                regexp = memorize(pat_param, match_type_param, collator);
+                regexp = memorize<false>(pat_param, match_type_param, collator);
                 if (regexp == nullptr)
                 {
                     auto nullmap_col = ColumnUInt8::create();
@@ -1046,8 +1077,8 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    vec_res[i] = regexp->match(expr_ref.data, expr_ref.size); // match
+                    auto regexp = createRegexpWithMatchType<false>(pat, match_type, collator);
+                    vec_res[i] = regexp.match(expr_ref.data, expr_ref.size); // match
                 }
 
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
@@ -1066,8 +1097,8 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    vec_res[i] = regexp->match(expr_ref.data, expr_ref.size); // match
+                    auto regexp = createRegexpWithMatchType<false>(pat, match_type, collator);
+                    vec_res[i] = regexp.match(expr_ref.data, expr_ref.size); // match
                 }
 
                 res_arg.column = std::move(col_res);
@@ -1116,59 +1147,59 @@ private:
 #undef GET_MATCH_TYPE_ACTUAL_PARAM
 #undef EXECUTE_REGEXP_LIKE
 
-#define EXECUTE_REGEXP_INSTR() \
-    do \
-    { \
+#define EXECUTE_REGEXP_INSTR()                                                                                                                                                                                                            \
+    do                                                                                                                                                                                                                                    \
+    {                                                                                                                                                                                                                                     \
         REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(POS_PARAM_PTR_VAR_NAME), *(OCCUR_PARAM_PTR_VAR_NAME), *(RET_OP_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
 // Method to get actual match type param
-#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                                          \
-    do                                                                                                                             \
-    { \
+#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                              \
+    do                                                                                                             \
+    {                                                                                                              \
         GET_ACTUAL_STRING_PARAM(MATCH_TYPE_PV_VAR_NAME, MATCH_TYPE_PARAM_PTR_VAR_NAME, ({EXECUTE_REGEXP_INSTR()})) \
     } while (0);
 
 // Method to get actual return option param
-#define GET_RET_OP_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_RET_OP_ACTUAL_PARAM()                                                                              \
+    do                                                                                                         \
+    {                                                                                                          \
         GET_ACTUAL_INT_PARAM(RET_OP_PV_VAR_NAME, RET_OP_PARAM_PTR_VAR_NAME, ({GET_MATCH_TYPE_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual occur param
-#define GET_OCCUR_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_OCCUR_ACTUAL_PARAM()                                                                         \
+    do                                                                                                   \
+    {                                                                                                    \
         GET_ACTUAL_INT_PARAM(OCCUR_PV_VAR_NAME, OCCUR_PARAM_PTR_VAR_NAME, ({GET_RET_OP_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual position param
-#define GET_POS_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_POS_ACTUAL_PARAM()                                                                      \
+    do                                                                                              \
+    {                                                                                               \
         GET_ACTUAL_INT_PARAM(POS_PV_VAR_NAME, POS_PARAM_PTR_VAR_NAME, ({GET_OCCUR_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual pattern param
-#define GET_PAT_ACTUAL_PARAM()                                                                                           \
-    do                                                                                                                       \
-    {                                                                                                                        \
+#define GET_PAT_ACTUAL_PARAM()                                                                       \
+    do                                                                                               \
+    {                                                                                                \
         GET_ACTUAL_STRING_PARAM(PAT_PV_VAR_NAME, PAT_PARAM_PTR_VAR_NAME, ({GET_POS_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual expression param
-#define GET_EXPR_ACTUAL_PARAM()                                                                                 \
-    do                                                                                                              \
-    {                                                                                                               \
+#define GET_EXPR_ACTUAL_PARAM()                                                                        \
+    do                                                                                                 \
+    {                                                                                                  \
         GET_ACTUAL_STRING_PARAM(EXPR_PV_VAR_NAME, EXPR_PARAM_PTR_VAR_NAME, ({GET_PAT_ACTUAL_PARAM()})) \
     } while (0);
 
 // The entry to get actual params and execute regexp functions
 #define GET_ACTUAL_PARAMS_AND_EXECUTE() \
-    do                                       \
-    {                                        \
-        GET_EXPR_ACTUAL_PARAM()          \
+    do                                  \
+    {                                   \
+        GET_EXPR_ACTUAL_PARAM()         \
     } while (0);
 
 // Implementation of regexp_instr function
@@ -1227,9 +1258,9 @@ public:
         GetIntFuncPointerType get_ret_op_func = getGetIntFuncPointer(ret_op_param.getIntType());
 
         // Container will not be used when parm is const
-        const void * pos_container =  pos_param.getContainer();
-        const void * occur_container =  occur_param.getContainer();
-        const void * ret_op_container =  ret_op_param.getContainer();
+        const void * pos_container = pos_param.getContainer();
+        const void * occur_container = occur_param.getContainer();
+        const void * ret_op_container = ret_op_param.getContainer();
 
         // Const value will not be used when param is not const
         Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
@@ -1244,15 +1275,15 @@ public:
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
             }
-            
+
             int flags = getDefaultFlags();
             String expr = expr_param.getString(0);
             String match_type = match_type_param.getString(0);
             String pat = pat_param.getString(0);
             if (unlikely(pat.empty()))
-                throw Exception(EMPTY_PAT_ERR_MSG);            
+                throw Exception(EMPTY_PAT_ERR_MSG);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern<true>(pat, match_type, collator), flags);
             ResultType res = regexp.instr(expr.c_str(), expr.size(), pos_const_val, occur_const_val, ret_op_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1265,30 +1296,30 @@ public:
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
-#define GET_POS_VALUE(idx) \
-    do \
-    { \
-        if constexpr (PosT::isConst()) \
-            pos = pos_const_val; \
-        else \
+#define GET_POS_VALUE(idx)                          \
+    do                                              \
+    {                                               \
+        if constexpr (PosT::isConst())              \
+            pos = pos_const_val;                    \
+        else                                        \
             pos = get_pos_func(pos_container, idx); \
     } while (0);
 
-#define GET_OCCUR_VALUE(idx) \
-    do \
-    { \
-        if constexpr (OccurT::isConst()) \
-            occur = occur_const_val; \
-        else \
+#define GET_OCCUR_VALUE(idx)                              \
+    do                                                    \
+    {                                                     \
+        if constexpr (OccurT::isConst())                  \
+            occur = occur_const_val;                      \
+        else                                              \
             occur = get_occur_func(occur_container, idx); \
     } while (0);
 
-#define GET_RET_OP_VALUE(idx) \
-    do \
-    { \
-        if constexpr (RetOpT::isConst()) \
-            ret_op = ret_op_const_val; \
-        else \
+#define GET_RET_OP_VALUE(idx)                                \
+    do                                                       \
+    {                                                        \
+        if constexpr (RetOpT::isConst())                     \
+            ret_op = ret_op_const_val;                       \
+        else                                                 \
             ret_op = get_ret_op_func(ret_op_container, idx); \
     } while (0);
 
@@ -1305,7 +1336,7 @@ public:
             std::unique_ptr<Regexps::Regexp> regexp;
             if (col_size > 0)
             {
-                regexp = memorize(pat_param, match_type_param, collator);
+                regexp = memorize<true>(pat_param, match_type_param, collator);
                 if (regexp == nullptr)
                 {
                     auto nullmap_col = ColumnUInt8::create();
@@ -1382,8 +1413,8 @@ public:
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
+                    vec_res[i] = regexp.instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
@@ -1401,8 +1432,8 @@ public:
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
+                    vec_res[i] = regexp.instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
                 res_arg.column = std::move(col_res);
@@ -1437,7 +1468,7 @@ public:
         ColumnPtr col_match_type;
 
         // Go through cases to get arguments
-        switch(arg_num)
+        switch (arg_num)
         {
         case REGEXP_INSTR_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[5]).column;
@@ -1598,7 +1629,7 @@ public:
             String expr = expr_param.getString(0);
             String match_type = match_type_param.getString(0);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern<true>(pat, match_type, collator), flags);
             StringRef res_ref;
             bool success = regexp.substr(expr.c_str(), expr.size(), res_ref, pos_const_val, occur_const_val);
             if (success)
@@ -1648,7 +1679,7 @@ public:
             std::unique_ptr<Regexps::Regexp> regexp;
             if (col_size > 0)
             {
-                regexp = memorize(pat_param, match_type_param, collator);
+                regexp = memorize<true>(pat_param, match_type_param, collator);
                 if (regexp == nullptr)
                 {
                     auto nullmap_col = ColumnUInt8::create();
@@ -1674,7 +1705,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
+                    executeAndSetResult(*regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
             }
             else
@@ -1685,7 +1716,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
+                    executeAndSetResult(*regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
             }
         }
@@ -1711,7 +1742,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
                     executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
             }
@@ -1728,7 +1759,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
                     executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
             }
@@ -1783,7 +1814,7 @@ public:
 
 private:
     void executeAndSetResult(
-            const std::unique_ptr<Regexps::Regexp> & regexp,
+            Regexps::Regexp & regexp,
             ColumnString::MutablePtr & col_res,
             typename ColumnUInt8::Container & null_map,
             size_t idx,
@@ -1793,7 +1824,7 @@ private:
             Int64 pos,
             Int64 occur) const
     {
-        bool success = regexp->substr(subject, subject_size, res_ref, pos, occur);
+        bool success = regexp.substr(subject, subject_size, res_ref, pos, occur);
         if (success)
         {
             col_res->insertData(res_ref.data, res_ref.size);
