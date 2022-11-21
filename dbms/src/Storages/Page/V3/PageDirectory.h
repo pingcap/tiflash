@@ -16,6 +16,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
@@ -57,6 +58,8 @@ public:
     ~PageDirectorySnapshot()
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
+
+        GET_METRIC(tiflash_storage_page_snapshot, type_lifetime_v3).Observe(elapsedSeconds());
     }
 
     double elapsedSeconds() const
