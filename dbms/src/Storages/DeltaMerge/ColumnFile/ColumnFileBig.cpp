@@ -111,7 +111,7 @@ void ColumnFileBigReader::initStream()
     }
 }
 
-size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     if (unlikely(rows_offset + rows_limit > column_file.valid_rows))
         throw Exception("Try to read more rows", ErrorCodes::LOGICAL_ERROR);
@@ -121,7 +121,7 @@ size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, siz
     auto [start_block_index, rows_start_in_start_block] = locatePosByAccumulation(cached_block_rows_end, rows_offset);
     auto [end_block_index, rows_end_in_end_block] = locatePosByAccumulation(cached_block_rows_end, //
                                                                             rows_offset + rows_limit);
-
+    size_t actual_offset = 0;
     size_t actual_read = 0;
     for (size_t block_index = start_block_index; block_index < cached_pk_ver_columns.size() && block_index <= end_block_index;
          ++block_index)
@@ -138,15 +138,24 @@ size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, siz
         const auto & columns = cached_pk_ver_columns.at(block_index);
         const auto & pk_column = columns[0];
 
-        actual_read += copyColumnsData(columns, pk_column, output_cols, rows_start_in_block, rows_in_block_limit, range);
+        auto [offset, rows] = copyColumnsData(columns, pk_column, output_cols, rows_start_in_block, rows_in_block_limit, range);
+        // For DMFile, records are sorted by row key. Only the first block and the last block will be filtered by range.
+        // It will read a continuous piece of data here.
+        if (actual_read == 0 && rows > 0)
+        {
+            // First successful read of data, update `actual_offset`.
+            auto offset_before_block_index = block_index == 0 ? 0 : cached_block_rows_end[block_index - 1];
+            actual_offset = offset_before_block_index + offset;
+        }
+        actual_read += rows;
     }
-    return actual_read;
+    return {actual_offset, actual_read};
 }
 
-size_t ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
-                                         size_t rows_offset,
-                                         size_t rows_limit,
-                                         const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
+                                                            size_t rows_offset,
+                                                            size_t rows_limit,
+                                                            const RowKeyRange * range)
 {
     auto read_next_block = [&, this]() -> bool {
         rows_before_cur_block += (static_cast<bool>(cur_block)) ? cur_block.rows() : 0;
@@ -169,6 +178,7 @@ size_t ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
     };
 
     size_t rows_end = rows_offset + rows_limit;
+    size_t actual_offset = 0;
     size_t actual_read = 0;
     size_t read_offset = rows_offset;
     while (read_offset < rows_end)
@@ -196,14 +206,22 @@ size_t ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
         auto read_start_in_block = read_offset - rows_before_cur_block;
         auto read_limit_in_block = read_end_for_cur_block - read_offset;
 
-        actual_read += copyColumnsData(cur_block_data, cur_block_data[0], output_cols, read_start_in_block, read_limit_in_block, range);
+        auto [offset, rows] = copyColumnsData(cur_block_data, cur_block_data[0], output_cols, read_start_in_block, read_limit_in_block, range);
+        // For DMFile, records are sorted by row key. Only the first block and the last block will be filtered by range.
+        // It will read a continuous piece of data here.
+        if (actual_read == 0 && rows > 0)
+        {
+            // First successful read of data, update `actual_offset`.
+            actual_offset = rows_before_cur_block + offset;
+        }
+        actual_read += rows;
         read_offset += read_limit_in_block;
         cur_block_offset += read_limit_in_block;
     }
-    return actual_read;
+    return {actual_offset, actual_read};
 }
 
-size_t ColumnFileBigReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileBigReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     initStream();
 
