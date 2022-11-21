@@ -195,6 +195,15 @@ public:
         if (kill)
             remote_reader->cancel();
     }
+
+    void readPrefixImpl() override
+    {
+        if constexpr (std::is_same_v<RemoteReader, CoprocessorReader>)
+        {
+            remote_reader->open();
+        }
+    }
+
     Block readImpl() override
     {
         if (block_queue.empty())

@@ -85,8 +85,6 @@ Block CreatingSetsBlockInputStream::readImpl()
 {
     Block res;
 
-    createAll();
-
     if (isCancelledOrThrowIfKilled())
         return res;
 

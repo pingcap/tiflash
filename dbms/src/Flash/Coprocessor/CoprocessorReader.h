@@ -88,12 +88,12 @@ public:
         , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
         , collected(false)
         , concurrency_(concurrency)
-    {
-        resp_iter.open();
-    }
+    {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
+    void open() { resp_iter.open(); }
+    
     void cancel() { resp_iter.cancel(); }
 
 
