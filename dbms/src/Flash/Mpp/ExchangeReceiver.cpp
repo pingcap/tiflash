@@ -544,11 +544,18 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
         AsyncHandler * handler = nullptr;
         ready_requests.pop(handler);
 
-        handler->handle();
-        if (handler->finished())
+        if (likely(handler != nullptr))
         {
-            --alive_async_connections;
-            connectionDone(handler->meetError(), handler->getErrMsg(), handler->getLog());
+            handler->handle();
+            if (handler->finished())
+            {
+                --alive_async_connections;
+                connectionDone(handler->meetError(), handler->getErrMsg(), handler->getLog());
+            }
+        }
+        else
+        {
+            throw Exception("get a null pointer in reactor");
         }
     }
 }
