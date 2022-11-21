@@ -36,6 +36,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "Common/TiFlashMetrics.h"
+
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
@@ -138,7 +140,7 @@ public:
         }
 
         // Releasing a snapshot object may do compaction on vset's versions.
-        ~Snapshot()
+        ~Snapshot() override
         {
             vset->compactOnDeltaRelease(view.getSharedTailVersion());
             // Remove snapshot from linked list
@@ -146,6 +148,8 @@ public:
             view.release();
 
             CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
+
+            GET_METRIC(tiflash_storage_page_snapshot, type_lifetime_v2).Observe(elapsedSeconds());
         }
 
         const PageEntriesView * version() const { return &view; }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -242,10 +244,19 @@ bool DeltaValueSpace::compact(DMContext & context)
         log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
-    // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
-    compaction_task->prepare(context, wbs, reader);
+    Stopwatch watch_prepare;
+    {
+        // do compaction task
+        const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
+        compaction_task->prepare(context, wbs, reader);
+        double seconds_prepare = watch_prepare.elapsedMillisecondsFromLastTime() / 1000.0;
+        LOG_FMT_DEBUG(log, "Compact prepare done, cost={:.3f}s, info={}", seconds_prepare, simpleInfo());
+        log_storage_snap.reset(); // release the snapshot
+    }
+    double seconds_release = watch_prepare.elapsedMillisecondsFromLastTime() / 1000.0;
+    GET_METRIC(tiflash_storage_page_snapshot, type_minor_compact_release).Observe(seconds_release);
+    LOG_FMT_DEBUG(log, "Compact release snapshot done, cost={:.3f}s, info={}", seconds_release, simpleInfo());
 
     {
         std::scoped_lock lock(mutex);
