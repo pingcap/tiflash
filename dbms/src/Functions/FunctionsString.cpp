@@ -5973,7 +5973,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isStringOrFixedString() && !arguments[0]->isNumber())
+        if (!arguments[0]->isString() && !arguments[0]->isNumber())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -5989,15 +5989,14 @@ public:
         auto result_null_map = ColumnUInt8::create(size, 0);
 
         if (executeUnHexString(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexFixedString(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<UInt8>(column, true, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<UInt16>(column, true, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<UInt32>(column, true, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<UInt64>(column, true, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<Int8>(column, false, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<Int16>(column, false, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<Int32>(column, false, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<Int64>(column, false, col_res->getChars(), col_res->getOffsets(), result_null_map->getData()))
+            || executeUnHexInt<true, UInt8>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<true, UInt16>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<true, UInt32>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<true, UInt64>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<false, Int8>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<false, Int16>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<false, Int32>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
+            || executeUnHexInt<false, Int64>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData()))
         {
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
         }
@@ -6039,46 +6038,9 @@ private:
         return true;
     }
 
-    static bool executeUnHexFixedString(const ColumnPtr & column,
-                                        ColumnString::Chars_t & res_data,
-                                        ColumnString::Offsets & res_offsets,
-                                        ColumnUInt8::Container & res_null_map)
-    {
-        const auto * const col = checkAndGetColumn<ColumnFixedString>(column.get());
-        if (col == nullptr)
-        {
-            return false;
-        }
-        const size_t size = col->size();
-        const ColumnString::Chars_t & data = col->getChars();
-        const size_t length = col->getN();
-
-        if (length % 2 != 0)
-        {
-            res_data.resize(length / 2 + 1);
-        }
-        else
-        {
-            res_data.resize(length / 2);
-        }
-        res_offsets.resize(size);
-
-        ColumnString::Offset pos = 0;
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t begin = i * length;
-            unhexOne(data, length, i, begin, pos, res_data, res_offsets, res_null_map);
-            pos = res_offsets[i];
-        }
-        res_data.resize(pos);
-
-        return true;
-    }
-
-    template <typename IntType>
+    template <bool is_unsigned, typename IntType>
     static bool executeUnHexInt(
         const ColumnPtr & column,
-        const bool is_unsigned,
         ColumnString::Chars_t & res_chars,
         ColumnString::Offsets & res_offsets,
         ColumnUInt8::Container & res_null_map)
@@ -6099,7 +6061,7 @@ private:
         size_t pos = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            if (is_unsigned)
+            if constexpr (is_unsigned)
             {
                 UInt64 number = col->getUInt(i);
                 length = sprintf(data, "%lu", number);

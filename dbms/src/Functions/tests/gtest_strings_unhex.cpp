@@ -28,7 +28,7 @@ class UnHexTest : public DB::tests::FunctionTest
 {
 };
 
-TEST_F(UnHexTest, unhex_all_unit_Test)
+TEST_F(UnHexTest, unhexAllUnitTest)
 try
 {
     const String & func_name = "tidbUnHex";
@@ -52,6 +52,13 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"9", "09", "A", "0A", "20"})));
+
+    // Const Column
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(4, "ab"),
+        executeFunction(
+            func_name,
+            createConstColumn<String>(4, "6162")));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"abcd", "\tg", std::nullopt, std::nullopt}),
