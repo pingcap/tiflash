@@ -592,22 +592,22 @@ public:
                 if (config.has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
-                    if (!security_config->has_tls_config)
+                    if (!security_config.has_tls_config)
                     {
                         LOG_ERROR(log, "https_port is set but tls config is not set");
                     }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             security_config->key_path,
-                                                                             security_config->cert_path,
-                                                                             security_config->ca_path,
+                                                                             security_config.key_path,
+                                                                             security_config.cert_path,
+                                                                             security_config.ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
                     auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
                         auto security_config = server.global_context->getSecurityConfig();
-                        if (security_config->allowed_common_names.empty())
+                        if (security_config.allowed_common_names.empty())
                         {
                             return true;
                         }
-                        return security_config->allowed_common_names.count(cert.commonName()) > 0;
+                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
                     };
                     context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
@@ -629,7 +629,7 @@ public:
                 else
                 {
                     /// HTTP
-                    if (security_config->has_tls_config)
+                    if (security_config.has_tls_config)
                     {
                         throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
                     }
@@ -647,7 +647,7 @@ public:
                 /// TCP
                 if (config.has("tcp_port"))
                 {
-                    if (security_config->has_tls_config)
+                    if (security_config.has_tls_config)
                     {
                         LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
@@ -660,19 +660,19 @@ public:
 
                     LOG_INFO(log, "Listening tcp: {}", address.toString());
                 }
-                else if (security_config->has_tls_config)
+                else if (security_config.has_tls_config)
                 {
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
                 /// TCP with SSL
-                if (config.has("tcp_port_secure") && !security_config->has_tls_config)
+                if (config.has("tcp_port_secure") && !security_config.has_tls_config)
                 {
 #if Poco_NetSSL_FOUND
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             security_config->key_path,
-                                                                             security_config->cert_path,
-                                                                             security_config->ca_path);
+                                                                             security_config.key_path,
+                                                                             security_config.cert_path,
+                                                                             security_config.ca_path);
                     CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
@@ -689,7 +689,7 @@ public:
                                     ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
-                else if (security_config->has_tls_config)
+                else if (security_config.has_tls_config)
                 {
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
@@ -956,7 +956,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// ===== Paths related configuration initialized end ===== ///
     global_context->setSecurityConfig(config(), log);
-    Redact::setRedactLog(global_context->getSecurityConfig()->redact_info_log);
+    Redact::setRedactLog(global_context->getSecurityConfig().redact_info_log);
 
     // Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : all_normal_path)
@@ -1089,7 +1089,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
             global_context->setSecurityConfig(*config, log);
             auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-            auto cluster_config = global_context->getSecurityConfig()->getClusterConfig(raft_config, log);
+            auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
             global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
         },
         /* already_loaded = */ true);
@@ -1143,7 +1143,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = global_context->getSecurityConfig()->getClusterConfig(raft_config, log);
+        auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }

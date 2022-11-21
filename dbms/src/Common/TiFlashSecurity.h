@@ -147,9 +147,7 @@ public:
         new_options.pem_root_certs = readFile(ca_path);
         new_options.pem_cert_chain = readFile(cert_path);
         new_options.pem_private_key = readFile(key_path);
-        LOG_INFO(log, "read cert_path: {}, key_path: {}", cert_path, key_path);
-        LOG_INFO(log, "read root_certs: {}, cert_chain: {}, pem_private_key: {} ", new_options.pem_root_certs, new_options.pem_cert_chain, new_options.pem_private_key);
-
+        LOG_INFO(log, "read SecurityInfo: cert_path: {}, key_path: {}", cert_path, key_path);
         return new_options;
     }
 

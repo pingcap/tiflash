@@ -391,7 +391,7 @@ grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_con
     // For coprocessor/mpp test, we don't care about security config.
     if likely (!context->isMPPTest() && !context->isCopTest())
     {
-        if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
+        if (!context->getSecurityConfig().checkGrpcContext(grpc_context))
         {
             return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
         }
