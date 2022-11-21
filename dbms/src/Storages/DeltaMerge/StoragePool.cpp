@@ -56,7 +56,7 @@ enum class StorageType
     Meta = 3,
 };
 
-PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
+PageStorageConfig extractConfig(const Settings & settings, StorageType subtype, const String & remote_source)
 {
 #define SET_CONFIG(NAME)                                                            \
     config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
@@ -84,7 +84,8 @@ PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
     }
 #undef SET_CONFIG
 
-    config.ps_remote_directory = settings.dt_ps_remote_directory;
+    // config.ps_remote_directory = settings.dt_ps_remote_directory;
+    config.ps_remote_directory = remote_source;
 
     return config;
 }
@@ -92,17 +93,17 @@ PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
     : log_storage(PageStorage::create("__global__.log",
                                       path_pool.getPSDiskDelegatorGlobalMulti("log"),
-                                      extractConfig(settings, StorageType::Log),
+                                      extractConfig(settings, StorageType::Log, global_ctx.remoteDataServiceSource()),
                                       global_ctx.getFileProvider(),
                                       true))
     , data_storage(PageStorage::create("__global__.data",
                                        path_pool.getPSDiskDelegatorGlobalMulti("data"),
-                                       extractConfig(settings, StorageType::Data),
+                                       extractConfig(settings, StorageType::Data, global_ctx.remoteDataServiceSource()),
                                        global_ctx.getFileProvider(),
                                        true))
     , meta_storage(PageStorage::create("__global__.meta",
                                        path_pool.getPSDiskDelegatorGlobalMulti("meta"),
-                                       extractConfig(settings, StorageType::Meta),
+                                       extractConfig(settings, StorageType::Meta, global_ctx.remoteDataServiceSource()),
                                        global_ctx.getFileProvider(),
                                        true))
     , global_context(global_ctx)
@@ -191,15 +192,15 @@ bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Se
     bool done_anything = false;
     auto write_limiter = global_context.getWriteLimiter();
     auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
+    auto config = extractConfig(settings, StorageType::Meta, "");
     meta_storage->reloadSettings(config);
     done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
-    config = extractConfig(settings, StorageType::Data);
+    config = extractConfig(settings, StorageType::Data, "");
     data_storage->reloadSettings(config);
     done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
-    config = extractConfig(settings, StorageType::Log);
+    config = extractConfig(settings, StorageType::Log, "");
     log_storage->reloadSettings(config);
     done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
@@ -221,15 +222,15 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     {
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
-                                             extractConfig(global_context.getSettingsRef(), StorageType::Log),
+                                             extractConfig(global_context.getSettingsRef(), StorageType::Log, global_ctx.remoteDataServiceSource()),
                                              global_context.getFileProvider());
         data_storage_v2 = PageStorage::create(name + ".data",
                                               storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
-                                              extractConfig(global_context.getSettingsRef(), StorageType::Data),
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Data, global_ctx.remoteDataServiceSource()),
                                               global_ctx.getFileProvider());
         meta_storage_v2 = PageStorage::create(name + ".meta",
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
-                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta),
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta, global_ctx.remoteDataServiceSource()),
                                               global_ctx.getFileProvider());
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
@@ -282,19 +283,19 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
             // And we rely on the mechanism that writing file will be rotated if no valid pages in non writing files to reduce the disk space usage of these ps instances.
             log_storage_v2 = PageStorage::create(name + ".log",
                                                  storage_path_pool.getPSDiskDelegatorMulti("log"),
-                                                 extractConfig(global_context.getSettingsRef(), StorageType::Log),
+                                                 extractConfig(global_context.getSettingsRef(), StorageType::Log, global_ctx.remoteDataServiceSource()),
                                                  global_context.getFileProvider(),
                                                  /* use_v3 */ false,
                                                  /* no_more_write_to_v2 */ true);
             data_storage_v2 = PageStorage::create(name + ".data",
                                                   storage_path_pool.getPSDiskDelegatorMulti("data"),
-                                                  extractConfig(global_context.getSettingsRef(), StorageType::Data),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Data, global_ctx.remoteDataServiceSource()),
                                                   global_ctx.getFileProvider(),
                                                   /* use_v3 */ false,
                                                   /* no_more_write_to_v2 */ true);
             meta_storage_v2 = PageStorage::create(name + ".meta",
                                                   storage_path_pool.getPSDiskDelegatorMulti("meta"),
-                                                  extractConfig(global_context.getSettingsRef(), StorageType::Meta),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Meta, global_ctx.remoteDataServiceSource()),
                                                   global_ctx.getFileProvider(),
                                                   /* use_v3 */ false,
                                                   /* no_more_write_to_v2 */ true);
@@ -623,15 +624,15 @@ bool StoragePool::doV2Gc(const Settings & settings)
     auto write_limiter = global_context.getWriteLimiter();
     auto read_limiter = global_context.getReadLimiter();
 
-    auto config = extractConfig(settings, StorageType::Meta);
+    auto config = extractConfig(settings, StorageType::Meta, "");
     meta_storage_v2->reloadSettings(config);
     done_anything |= meta_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
-    config = extractConfig(settings, StorageType::Data);
+    config = extractConfig(settings, StorageType::Data, "");
     data_storage_v2->reloadSettings(config);
     done_anything |= data_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
-    config = extractConfig(settings, StorageType::Log);
+    config = extractConfig(settings, StorageType::Log, "");
     log_storage_v2->reloadSettings(config);
     done_anything |= log_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
     return done_anything;
