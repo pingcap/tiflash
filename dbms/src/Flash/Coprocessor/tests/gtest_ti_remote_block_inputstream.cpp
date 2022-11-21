@@ -193,6 +193,7 @@ struct MockReceiverContext
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
+        grpc::CompletionQueue * cq,
         UnaryCallback<bool> *) const {}
 
     PacketQueuePtr queue;
