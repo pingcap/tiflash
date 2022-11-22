@@ -321,7 +321,7 @@ public:
     /// Merge delta into the stable layer for all segments.
     ///
     /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
-    void mergeDeltaAll(const Context & context);
+    bool mergeDeltaAll(const Context & context);
 
     /// Merge delta into the stable layer for one segment located by the specified start key.
     /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
