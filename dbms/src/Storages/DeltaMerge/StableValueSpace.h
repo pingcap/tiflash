@@ -73,35 +73,35 @@ public:
      */
     const DMFiles & getDMFiles() const { return files; }
 
-    String getDMFilesString();
+    static String getDMFilesString();
 
     /**
      * Return the total on-disk size of the underlying DTFiles.
      * DTFiles are not fully included in the segment range will be also counted in.
      * Note: Out-of-range DTFiles may be produced by logical split.
      */
-    size_t getDMFilesBytesOnDisk() const;
+    static size_t getDMFilesBytesOnDisk() ;
 
     /**
      * Return the total number of packs of the underlying DTFiles.
      * Packs that are not included in the segment range will be also counted in.
      * Note: Out-of-range packs may be produced by logical split.
      */
-    size_t getDMFilesPacks() const;
+    static size_t getDMFilesPacks() ;
 
     /**
      * Return the total number of rows of the underlying DTFiles.
      * Rows from packs that are not included in the segment range will be also counted in.
      * Note: Out-of-range rows may be produced by logical split.
      */
-    size_t getDMFilesRows() const;
+    static size_t getDMFilesRows() ;
 
     /**
      * Return the total size of the data of the underlying DTFiles.
      * Rows from packs that are not included in the segment range will be also counted in.
      * Note: Out-of-range rows may be produced by logical split.
      */
-    size_t getDMFilesBytes() const;
+    static size_t getDMFilesBytes() ;
 
     void enableDMFilesGC();
 
@@ -230,7 +230,7 @@ public:
          * Get the rows and bytes calculated from packs that is **fully contained** by the given range.
          * If the pack is partially intersected, then it is not counted.
          */
-        AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+        static AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) ;
 
     private:
         LoggerPtr log;

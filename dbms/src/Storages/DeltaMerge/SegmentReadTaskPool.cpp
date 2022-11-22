@@ -116,7 +116,7 @@ SegmentReadTasksWrapper::SegmentReadTasksWrapper(bool enable_read_thread_, Segme
     }
 }
 
-SegmentReadTaskPtr SegmentReadTasksWrapper::nextTask() const
+SegmentReadTaskPtr SegmentReadTasksWrapper::nextTask()
 {
     RUNTIME_CHECK(!enable_read_thread);
     if (ordered_tasks.empty())
@@ -128,7 +128,7 @@ SegmentReadTaskPtr SegmentReadTasksWrapper::nextTask() const
     return task;
 }
 
-SegmentReadTaskPtr SegmentReadTasksWrapper::getTask(UInt64 seg_id) const
+SegmentReadTaskPtr SegmentReadTasksWrapper::getTask(UInt64 seg_id)
 {
     RUNTIME_CHECK(enable_read_thread);
     auto itr = unordered_tasks.find(seg_id);

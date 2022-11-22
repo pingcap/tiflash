@@ -111,7 +111,7 @@ void ColumnFileBigReader::initStream()
     }
 }
 
-size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) const
+size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     if (unlikely(rows_offset + rows_limit > column_file.valid_rows))
         throw Exception("Try to read more rows", ErrorCodes::LOGICAL_ERROR);
@@ -155,7 +155,17 @@ size_t ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
         cur_block = file_stream->read();
         cur_block_offset = 0;
 
-        return !!cur_block;
+        if (!cur_block)
+        {
+            file_stream = {};
+            return false;
+        }
+        else
+        {
+            for (size_t col_index = 0; col_index < output_cols.size(); ++col_index)
+                cur_block_data.push_back(cur_block.getByPosition(col_index).column);
+            return true;
+        }
     };
 
     size_t rows_end = rows_offset + rows_limit;
