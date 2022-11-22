@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/types.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -25,9 +26,14 @@ struct ExecutionSummary
     UInt64 num_produced_rows = 0;
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
+
     ExecutionSummary() = default;
 
-    void merge(const ExecutionSummary & other, bool streaming_call);
+    void merge(const ExecutionSummary & other);
+    void merge(const tipb::ExecutorExecutionSummary & other);
+    void init(const tipb::ExecutorExecutionSummary & other);
+
+    void mergeFromRemoteRead(const ExecutionSummary & remote);
 };
 
 } // namespace DB

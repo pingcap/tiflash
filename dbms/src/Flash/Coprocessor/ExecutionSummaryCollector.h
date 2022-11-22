@@ -16,6 +16,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
+#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 
 namespace DB
 {
@@ -25,12 +26,7 @@ public:
     explicit ExecutionSummaryCollector(
         DAGContext & dag_context_)
         : dag_context(dag_context_)
-    {
-        for (auto & p : dag_context.getProfileStreamsMap())
-        {
-            local_executors.insert(p.first);
-        }
-    }
+    {}
 
     void addExecuteSummaries(tipb::SelectResponse & response);
 
@@ -42,8 +38,15 @@ private:
         ExecutionSummary & current,
         const String & executor_id) const;
 
+    std::pair<RemoteExecutionSummary, RemoteExecutionSummary> getRemoteExecutionSummaries() const;
+
+    void fillLocalExecutionSummary(
+        tipb::SelectResponse & response,
+        const String & executor_id,
+        const BlockInputStreams & streams,
+        const RemoteExecutionSummary & remote_read_execution_summary) const;
+
 private:
     DAGContext & dag_context;
-    std::unordered_set<String> local_executors;
 };
 } // namespace DB
