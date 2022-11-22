@@ -904,6 +904,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
+    // We can use num_streams as parallelism when read thread is enabled.
+    size_t final_num_stream = enable_read_thread ? num_streams : std::min(num_streams, tasks.size());
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -920,8 +922,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     BlockInputStreams res;
     if (enable_read_thread)
     {
-        // We can use num_streams directly when read thread is enabled.
-        for (size_t i = 0; i < num_streams; ++i)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
             res.emplace_back(std::make_shared<UnorderedInputStream>(
                 read_task_pool,
@@ -933,7 +934,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     }
     else
     {
-        size_t final_num_stream = std::min(num_streams, tasks.size());
         for (size_t i = 0; i < final_num_stream; ++i)
         {
             res.push_back(std::make_shared<DMSegmentThreadInputStream>(
@@ -989,6 +989,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
+    // We can use num_streams as parallelism when read thread is enabled.
+    size_t final_num_stream = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1005,8 +1007,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     if (enable_read_thread)
     {
-        // We can use num_streams directly when read thread is enabled.
-        for (size_t i = 0; i < num_streams; ++i)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
             res.emplace_back(std::make_shared<UnorderedInputStream>(
                 read_task_pool,
@@ -1018,7 +1019,6 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     }
     else
     {
-        size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
         for (size_t i = 0; i < final_num_stream; ++i)
         {
             res.emplace_back(std::make_shared<DMSegmentThreadInputStream>(
