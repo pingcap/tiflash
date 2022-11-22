@@ -16,22 +16,16 @@
 
 #include <Common/config.h>
 
-#include <memory>
-
 #if Poco_NetSSL_FOUND
 
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
-#include <Poco/Crypto/RSAKey.h>
 #include <Poco/Crypto/X509Certificate.h>
 #include <Poco/Logger.h>
 #include <Poco/Net/Context.h>
-#include <Poco/Util/AbstractConfiguration.h>
 #include <openssl/ssl.h>
-#include <openssl/x509v3.h>
 
 #include <ext/singleton.h>
-#include <string>
 
 
 namespace DB

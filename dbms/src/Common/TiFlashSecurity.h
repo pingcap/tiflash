@@ -19,7 +19,6 @@
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
-#include <Server/RaftConfigParser.h>
 #include <common/logger_useful.h>
 
 #include <mutex>
@@ -43,7 +42,6 @@ struct TiFlashSecurityConfig
 
     std::set<String> allowed_common_names;
 
-    bool inited = false;
     bool has_tls_config = false;
     grpc::SslCredentialsOptions options;
 

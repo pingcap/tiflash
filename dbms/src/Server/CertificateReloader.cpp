@@ -14,17 +14,9 @@
 
 #include "CertificateReloader.h"
 
-#include <cstddef>
-#include <memory>
-
 #if Poco_NetSSL_FOUND
 
-
-#include <Common/Exception.h>
-#include <Poco/Net/Context.h>
-#include <Poco/Net/SSLManager.h>
 #include <Poco/Net/Utility.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {

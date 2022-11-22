@@ -14,10 +14,7 @@
 #include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
 
-#include <memory>
-
 #include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
-
 
 namespace DB
 {
@@ -109,7 +106,6 @@ grpc_server_credentials * grpcSslServerCredentialsCreateWithFetcher(
         client_certificate_request,
         sslServerCertificateConfigCallback,
         reinterpret_cast<void *>(context));
-
     return grpc_ssl_server_credentials_create_with_options(options);
 }
 

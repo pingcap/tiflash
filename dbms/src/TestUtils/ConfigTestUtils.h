@@ -24,13 +24,12 @@
 #endif
 #include <Common/Config/TOMLConfiguration.h>
 #include <Poco/Util/LayeredConfiguration.h>
-#include <common/types.h>
 
 namespace DB
 {
 namespace tests
 {
-inline auto loadConfigFromString(const String & s)
+inline static auto loadConfigFromString(const std::string & s)
 {
     std::istringstream ss(s);
     cpptoml::parser p(ss);
