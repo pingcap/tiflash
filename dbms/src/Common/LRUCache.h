@@ -51,8 +51,12 @@ public:
     using MappedPtr = std::shared_ptr<Mapped>;
 
 public:
-    explicit LRUCache(size_t max_size_)
-        : max_size(std::max(static_cast<size_t>(1), max_size_))
+    /** Initialize LRUCache with max_weight and max_elements_size.
+      * max_elements_size == 0 means no elements size restrictions.
+      */
+    explicit LRUCache(size_t max_weight_, size_t max_elements_size_ = 0)
+        : max_weight(std::max(static_cast<size_t>(1), max_weight_))
+        , max_elements_size(max_elements_size_)
     {}
 
     MappedPtr get(const Key & key)
@@ -124,14 +128,18 @@ public:
 
         /// Insert the new value only if the token is still in present in insert_tokens.
         /// (The token may be absent because of a concurrent reset() call).
+        bool result = false;
         auto token_it = insert_tokens.find(key);
         if (token_it != insert_tokens.end() && token_it->second.get() == token)
+        {
             setImpl(key, token->value, cache_lock);
+            result = true;
+        }
 
         if (!token->cleaned_up)
             token_holder.cleanup(token_lock, cache_lock);
 
-        return std::make_pair(token->value, true);
+        return std::make_pair(token->value, result);
     }
 
     void remove(const Key & key)
@@ -267,7 +275,8 @@ private:
 
     /// Total weight of values.
     size_t current_weight = 0;
-    const size_t max_size;
+    const size_t max_weight;
+    const size_t max_elements_size;
 
     mutable std::mutex mutex;
     std::atomic<size_t> hits{0};
@@ -275,6 +284,7 @@ private:
 
     const WeightFunction weight_function;
 
+private:
     MappedPtr getImpl(const Key & key, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
         auto it = cells.find(key);
@@ -326,16 +336,13 @@ private:
     {
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
-        while ((current_weight > max_size) && (queue_size > 1))
+
+        while ((current_weight > max_weight || (max_elements_size != 0 && queue_size > max_elements_size)) && (queue_size > 1))
         {
             const Key & key = queue.front();
 
             auto it = cells.find(key);
-            if (it == cells.end())
-            {
-                LOG_ERROR(Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
-                abort();
-            }
+            RUNTIME_ASSERT(it != cells.end(), "LRUCache became inconsistent. There must be a bug in it.");
 
             const auto & cell = it->second;
             current_weight -= cell.size;
@@ -348,11 +355,8 @@ private:
 
         onRemoveOverflowWeightLoss(current_weight_lost);
 
-        if (current_weight > (1ull << 63))
-        {
-            LOG_ERROR(Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
-            abort();
-        }
+        // check for underflow
+        RUNTIME_ASSERT(current_weight < (1ull << 63), "LRUCache became inconsistent. There must be a bug in it.");
     }
 
     /// Override this method if you want to track how much weight was lost in removeOverflow method.
