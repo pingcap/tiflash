@@ -45,7 +45,6 @@ TEST(LRUCacheTest, WeightAfterRemove)
 
 TEST(LRUCacheTest, Concurrent)
 {
-
 }
 
 } // namespace tests

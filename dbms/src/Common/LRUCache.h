@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
-#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -34,11 +34,10 @@ struct TrivialWeightFunction
 };
 
 
-/// Thread-safe cache that evicts entries which are not used for a long time or are expired.
+/// Thread-safe cache that evicts entries which are not used for a long time.
 /// WeightFunction is a functor that takes Mapped as a parameter and returns "weight" (approximate size)
 /// of that value.
-/// Cache starts to evict entries when their total weight exceeds max_size and when expiration time of these
-/// entries is due.
+/// Cache starts to evict entries when their total weight exceeds max_size.
 /// Value weight should not change after insertion.
 template <typename TKey,
           typename TMapped,
@@ -50,16 +49,10 @@ public:
     using Key = TKey;
     using Mapped = TMapped;
     using MappedPtr = std::shared_ptr<Mapped>;
-    using Delay = std::chrono::seconds;
-
-private:
-    using Clock = std::chrono::steady_clock;
-    using Timestamp = Clock::time_point;
 
 public:
-    explicit LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
+    explicit LRUCache(size_t max_size_)
         : max_size(std::max(static_cast<size_t>(1), max_size_))
-        , expiration_delay(expiration_delay_)
     {}
 
     MappedPtr get(const Key & key)
@@ -86,7 +79,7 @@ public:
     /// produce it, saves the result in the cache and returns it.
     /// Only one of several concurrent threads calling getOrSet() will call load_func(),
     /// others will wait for that call to complete and will use its result (this helps prevent cache stampede).
-    /// Exceptions occuring in load_func will be propagated to the caller. Another thread from the
+    /// Exceptions occurring in load_func will be propagated to the caller. Another thread from the
     /// set of concurrent threads will then try to call its load_func etc.
     ///
     /// Returns std::pair of the cached value and a bool indicating whether the value was produced during this call.
@@ -149,7 +142,7 @@ public:
             return;
 
         Cell & cell = it->second;
-        current_size -= cell.size;
+        current_weight -= cell.size;
         queue.erase(cell.queue_iterator);
         cells.erase(it);
     }
@@ -164,7 +157,7 @@ public:
     size_t weight() const
     {
         std::lock_guard cache_lock(mutex);
-        return current_size;
+        return current_weight;
     }
 
     size_t count() const
@@ -179,7 +172,7 @@ public:
         queue.clear();
         cells.clear();
         insert_tokens.clear();
-        current_size = 0;
+        current_weight = 0;
         hits = 0;
         misses = 0;
     }
@@ -260,16 +253,9 @@ private:
 
     struct Cell
     {
-        bool expired(const Timestamp & last_timestamp, const Delay & expiration_delay) const
-        {
-            return (expiration_delay == Delay::zero())
-                || ((last_timestamp > timestamp) && ((last_timestamp - timestamp) > expiration_delay));
-        }
-
         MappedPtr value;
         size_t size = 0;
         LRUQueueIterator queue_iterator;
-        Timestamp timestamp;
     };
 
     using Cells = std::unordered_map<Key, Cell, HashFunction>;
@@ -280,15 +266,14 @@ private:
     Cells cells;
 
     /// Total weight of values.
-    size_t current_size = 0;
+    size_t current_weight = 0;
     const size_t max_size;
-    const Delay expiration_delay;
 
     mutable std::mutex mutex;
     std::atomic<size_t> hits{0};
     std::atomic<size_t> misses{0};
 
-    WeightFunction weight_function;
+    const WeightFunction weight_function;
 
     MappedPtr getImpl(const Key & key, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
@@ -299,8 +284,6 @@ private:
         }
 
         Cell & cell = it->second;
-        updateCellTimestamp(cell);
-
         /// Move the key to the end of the queue. The iterator remains valid.
         queue.splice(queue.end(), queue, cell.queue_iterator);
 
@@ -309,56 +292,41 @@ private:
 
     void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
-        auto res = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
+        auto [it, inserted] = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
 
-        Cell & cell = res.first->second;
-        bool inserted = res.second;
-
+        Cell & cell = it->second;
         if (inserted)
         {
             try
             {
                 cell.queue_iterator = queue.insert(queue.end(), key);
             }
-            catch (std::exception & e)
-            {
-                // If queue.insert() throws exception, cells and queue will be in inconsistent.
-                cells.erase(res.first);
-                LOG_ERROR(Logger::get("LRUCache"), "queue.insert throw std::exception: {}", e.what());
-                throw;
-            }
             catch (...)
             {
-                cells.erase(res.first);
-                LOG_ERROR(Logger::get("LRUCache"), "queue.insert throw unknown exception");
+                // If queue.insert() throws exception, cells and queue will be in inconsistent.
+                cells.erase(it);
+                tryLogCurrentException(Logger::get("LRUCache"), "queue.insert throw exception");
                 throw;
             }
         }
         else
         {
-            current_size -= cell.size;
+            current_weight -= cell.size;
             queue.splice(queue.end(), queue, cell.queue_iterator);
         }
 
         cell.value = mapped;
         cell.size = cell.value ? weight_function(*cell.value) : 0;
-        current_size += cell.size;
-        updateCellTimestamp(cell);
+        current_weight += cell.size;
 
-        removeOverflow(cell.timestamp);
+        removeOverflow();
     }
 
-    void updateCellTimestamp(Cell & cell)
-    {
-        if (expiration_delay != Delay::zero())
-            cell.timestamp = Clock::now();
-    }
-
-    void removeOverflow(const Timestamp & last_timestamp)
+    void removeOverflow()
     {
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
-        while ((current_size > max_size) && (queue_size > 1))
+        while ((current_weight > max_size) && (queue_size > 1))
         {
             const Key & key = queue.front();
 
@@ -370,10 +338,7 @@ private:
             }
 
             const auto & cell = it->second;
-            if (!cell.expired(last_timestamp, expiration_delay))
-                break;
-
-            current_size -= cell.size;
+            current_weight -= cell.size;
             current_weight_lost += cell.size;
 
             cells.erase(it);
@@ -383,7 +348,7 @@ private:
 
         onRemoveOverflowWeightLoss(current_weight_lost);
 
-        if (current_size > (1ull << 63))
+        if (current_weight > (1ull << 63))
         {
             LOG_ERROR(Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
             abort();
