@@ -5988,15 +5988,7 @@ public:
         auto col_res = ColumnString::create();
         auto result_null_map = ColumnUInt8::create(size, 0);
 
-        if (executeUnHexString(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<true, UInt8>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<true, UInt16>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<true, UInt32>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<true, UInt64>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<false, Int8>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<false, Int16>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<false, Int32>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData())
-            || executeUnHexInt<false, Int64>(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData()))
+        if (executeUnHexString(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData()))
         {
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
         }
@@ -6034,73 +6026,6 @@ private:
             prev_offset = offsets[i];
         }
         res_data.resize(pos);
-
-        return true;
-    }
-
-    template <bool is_unsigned, typename IntType>
-    static bool executeUnHexInt(
-        const ColumnPtr & column,
-        ColumnString::Chars_t & res_chars,
-        ColumnString::Offsets & res_offsets,
-        ColumnUInt8::Container & res_null_map)
-    {
-        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
-        if (col == nullptr)
-        {
-            return false;
-        }
-        const size_t size = col->size();
-        res_chars.resize(size * 10);
-        res_offsets.resize(size);
-
-        char low;
-        char high;
-        char data[20];
-        size_t length;
-        size_t pos = 0;
-        for (size_t i = 0; i < size; ++i)
-        {
-            if constexpr (is_unsigned)
-            {
-                UInt64 number = col->getUInt(i);
-                length = sprintf(data, "%lu", number);
-            }
-            else
-            {
-                Int64 number = col->getInt(i);
-                if (number < 0)
-                {
-                    pos++;
-                    res_offsets[i] = pos;
-                    res_null_map[i] = 1;
-                    continue;
-                }
-                length = sprintf(data, "%li", number);
-            }
-
-            size_t begin = 0;
-            if (length % 2 != 0)
-            {
-                const char * byte = reinterpret_cast<const char *>(&data[begin]);
-                fromHexChar(byte, low);
-                res_chars[pos] = low;
-                pos++;
-                begin++;
-            }
-            for (size_t j = begin; j < length; j += 2)
-            {
-                const char * byte1 = reinterpret_cast<const char *>(&data[j]);
-                const char * byte2 = reinterpret_cast<const char *>(&data[j + 1]);
-                fromHexChar(byte1, high);
-                fromHexChar(byte2, low);
-                res_chars[pos] = (high << 4) | low;
-                pos++;
-            }
-            pos++;
-            res_offsets[i] = pos;
-        }
-        res_chars.resize(pos);
 
         return true;
     }
