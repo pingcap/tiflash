@@ -1155,7 +1155,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
