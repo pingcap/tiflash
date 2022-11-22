@@ -16,6 +16,7 @@
 #include <IO/ReadBufferFromString.h>
 
 #include "Flash/Coprocessor/tzg-metrics.h"
+#include "Flash/Mpp/HashPartitionWriter.h"
 #include "IO/CompressedReadBuffer.h"
 #include "IO/CompressedStream.h"
 
@@ -29,7 +30,7 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 {
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String & str)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String & str, mpp::CompressMethod compress_method)
 {
     std::optional<Block> res;
     ReadBufferFromString istr(str);
@@ -39,26 +40,24 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             res.swap(accumulated_block);
         return res;
     }
+    std::unique_ptr<ReadBuffer> compress_buffer{};
+    ReadBuffer * istr_ptr = &istr;
+    if (ToCompressionMethod(compress_method) != CompressionMethod::NONE)
+    {
+        compress_buffer = std::make_unique<CompressedReadBuffer<false>>(istr);
+        istr_ptr = compress_buffer.get();
+    }
 
     if (!accumulated_block)
     {
         /// hard-code 1.5 here, since final column size will be more than rows_limit in most situations,
         /// so it should be larger than 1.0, just use 1.5 here, no special meaning
-        Block block = codec.decodeImpl(istr, static_cast<size_t>(rows_limit * 1.5));
+        Block block = codec.decodeImpl(*istr_ptr, static_cast<size_t>(rows_limit * 1.5));
         if (block)
             accumulated_block.emplace(std::move(block));
     }
     else
     {
-        std::unique_ptr<ReadBuffer> compress_buffer;
-        ReadBuffer * istr_ptr = &istr;
-        auto mm = static_cast<CompressionMethod>(tzg::SnappyStatistic::globalInstance().getMethod());
-        if (mm != CompressionMethod::NONE)
-        {
-            compress_buffer = std::make_unique<CompressedReadBuffer<false>>(istr);
-            istr_ptr = compress_buffer.get();
-        }
-
         /// Dimensions
         size_t columns = 0;
         size_t rows = 0;

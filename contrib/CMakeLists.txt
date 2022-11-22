@@ -111,6 +111,31 @@ if (USE_INTERNAL_GRPC_LIBRARY)
     unset (CMAKE_POLICY_DEFAULT_CMP0077)
 endif ()
 
+execute_process(
+  COMMAND grep "CompressMethod compress = 5;" "${TiFlash_SOURCE_DIR}/contrib/kvproto/proto/mpp.proto"
+  RESULT_VARIABLE HAVE_APPLY_PATCH)
+
+# grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.
+if (HAVE_APPLY_PATCH EQUAL 1)
+  message(STATUS "mpp compress patch not apply: ${HAVE_APPLY_PATCH}, patching...")
+  set (MPP_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/tzg.mpp.proto.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${MPP_PATCH_FILE}"
+    WORKING_DIRECTORY "${TiFlash_SOURCE_DIR}/contrib/kvproto"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply mpp compress patch ${MPP_PATCH_FILE}")
+  else ()
+    message(STATUS "mpp compress patch done")
+  endif ()
+elseif (HAVE_APPLY_PATCH EQUAL 0)
+  message(STATUS "mpp compress patch have been applied: ${HAVE_APPLY_PATCH}")
+else ()
+  message(FATAL_ERROR "Can not check the mpp compress patch status")
+endif ()
+
 add_subdirectory (kvproto/cpp)
 target_no_warning(kvproto deprecated-declarations)
 target_no_warning(kvproto non-c-typedef-for-linkage)

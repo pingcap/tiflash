@@ -64,8 +64,9 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_)
-        : memory_tracker(memory_tracker_)
+    TunnelSender(size_t queue_size_, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_)
+        : queue_size(queue_size_)
+        , memory_tracker(memory_tracker_)
         , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
@@ -105,6 +106,8 @@ public:
     {
         return memory_tracker != nullptr ? memory_tracker.get() : nullptr;
     }
+
+    size_t queue_size;
 
 protected:
     /// TunnelSender use consumer state to inform tunnel that whether sender has finished its work

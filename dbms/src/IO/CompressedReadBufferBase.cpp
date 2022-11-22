@@ -23,7 +23,7 @@
 #include <city.h>
 #include <common/unaligned.h>
 #include <lz4.h>
-#include <snappy.h>
+// #include <snappy.h>
 #include <string.h>
 #include <zstd.h>
 
@@ -122,12 +122,12 @@ void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_d
         if (ZSTD_isError(res))
             throw Exception("Cannot ZSTD_decompress: " + std::string(ZSTD_getErrorName(res)), ErrorCodes::CANNOT_DECOMPRESS);
     }
-    else if (method == static_cast<UInt8>(CompressionMethodByte::SNAPPY))
-    {
-        auto res = snappy::RawUncompress(compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE, to);
-        if (!res)
-            throw Exception("Cannot decompress by SNAPPY", ErrorCodes::CANNOT_DECOMPRESS);
-    }
+    // else if (method == static_cast<UInt8>(CompressionMethodByte::SNAPPY))
+    // {
+    //     auto res = snappy::RawUncompress(compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE, to);
+    //     if (!res)
+    //         throw Exception("Cannot decompress by SNAPPY", ErrorCodes::CANNOT_DECOMPRESS);
+    // }
     else if (method == static_cast<UInt8>(CompressionMethodByte::NONE))
     {
         memcpy(to, &compressed_buffer[COMPRESSED_BLOCK_HEADER_SIZE], size_decompressed);

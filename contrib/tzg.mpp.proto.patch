@@ -1,0 +1,25 @@
+diff --git a/proto/mpp.proto b/proto/mpp.proto
+index f8af03b..d9ab839 100644
+--- a/proto/mpp.proto
++++ b/proto/mpp.proto
+@@ -60,6 +60,12 @@ message EstablishMPPConnectionRequest {
+ 	TaskMeta receiver_meta = 2; // node closer to the tidb mpp gather.
+ }
+ 
++enum CompressMethod {
++  NONE = 0;
++  LZ4 = 1;
++  ZSTD = 2;
++}
++
+ // when TiFlash sends data to TiDB, Data packets wrap tipb.SelectResponse, i.e., serialize tipb.SelectResponse into data;
+ // when TiFlash sends data to TiFlash, data blocks are serialized into chunks, and the execution_summaries in tipb.SelectResponse are serialized into data only for the last packet.
+ message MPPDataPacket {
+@@ -67,6 +73,7 @@ message MPPDataPacket {
+ 	Error error = 2;
+ 	repeated bytes chunks = 3;
+ 	repeated uint64 stream_ids = 4;
++	CompressMethod compress = 5;
+ }
+ 
+ message Error {

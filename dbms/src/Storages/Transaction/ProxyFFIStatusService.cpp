@@ -154,6 +154,67 @@ HttpRequestRes HandleHttpRequestCompressStatus(
             .view = BaseBuffView{res->data(), res->size()}}};
 }
 
+static inline void ClearCompress()
+{
+    tzg::SnappyStatistic::globalInstance().clear();
+    tzg::SnappyStatistic::globalInstance().clearEncodeInfo();
+}
+
+HttpRequestRes HandleHttpRequestCompressClean(
+    EngineStoreServerWrap *,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    ClearCompress();
+    auto * res = RawCppString::New(fmt::format("Clean compress info"));
+
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{res->data(), res->size()}}};
+}
+
+HttpRequestRes HandleHttpRequestStreamCnt(
+    EngineStoreServerWrap *,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    auto cnt = tzg::SnappyStatistic::globalInstance().getChunckStreamCnt();
+    auto max_cnt = tzg::SnappyStatistic::globalInstance().getMaxChunckStreamCnt();
+    auto * res = RawCppString::New(fmt::format("chunck-stream-cnt: {}, max-chunck-stream-cnt: {}", cnt, max_cnt));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{res->data(), res->size()}}};
+}
+
+HttpRequestRes HandleHttpRequestEncodeInfo(
+    EngineStoreServerWrap *,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    std::chrono::steady_clock::duration d;
+    uint64_t ec;
+    std::chrono::steady_clock::duration hash_dur;
+    uint64_t hash_rows;
+    tzg::SnappyStatistic::globalInstance().getEncodeInfo(d, ec, hash_dur, hash_rows);
+    auto * res = RawCppString::New(fmt::format("uncompress-bytes: {}, time : {}, hash-part-write: {}, hash-part-time: {}", ec, d.count(), hash_rows, hash_dur.count()));
+
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{res->data(), res->size()}}};
+}
+
 HttpRequestRes HandleHttpRequestSetCompressMethod(
     EngineStoreServerWrap *,
     std::string_view path,
@@ -165,6 +226,10 @@ HttpRequestRes HandleHttpRequestSetCompressMethod(
     auto method = magic_enum::enum_cast<tzg::SnappyStatistic::Method>(method_str);
     if (method)
     {
+        if (tzg::SnappyStatistic::globalInstance().getMethod() != *method)
+        {
+            ClearCompress();
+        }
         tzg::SnappyStatistic::globalInstance().setMethod(*method);
         auto * res = RawCppString::New(fmt::format("Set compress method to {}", method_str));
         return HttpRequestRes{
@@ -186,8 +251,10 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
     {"/tiflash/tzg-compress", HandleHttpRequestCompressStatus},
-    {"/tiflash/tzg-compress-and-clean", HandleHttpRequestCompressStatus},
+    {"/tiflash/tzg-clean-compress", HandleHttpRequestCompressClean},
     {"/tiflash/set-tzg-compress-method/", HandleHttpRequestSetCompressMethod},
+    {"/tiflash/get-tzg-compress-stream-cnt", HandleHttpRequestStreamCnt},
+    {"/tiflash/get-tzg-encode-info", HandleHttpRequestEncodeInfo},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)

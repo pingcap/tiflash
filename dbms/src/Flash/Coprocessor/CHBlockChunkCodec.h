@@ -20,13 +20,14 @@
 namespace DB
 {
 class CHBlockChunkDecodeAndSquash;
+class CompressedCHBlockChunkCodec;
 
 class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
     CHBlockChunkCodec() = default;
-    CHBlockChunkCodec(const Block & header_);
-    CHBlockChunkCodec(const DAGSchema & schema);
+    explicit CHBlockChunkCodec(const Block & header_);
+    explicit CHBlockChunkCodec(const DAGSchema & schema);
 
     Block decode(const String &, const DAGSchema & schema) override;
     static Block decode(const String &, const Block & header);
@@ -34,6 +35,7 @@ public:
 
 private:
     friend class CHBlockChunkDecodeAndSquash;
+    friend class CompressedCHBlockChunkCodec;
     void readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTypeAndName & column);
     void readBlockMeta(ReadBuffer & istr, size_t & columns, size_t & rows) const;
     static void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows);

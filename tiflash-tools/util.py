@@ -51,7 +51,7 @@ def curl_http(uri, params=None):
 def check_status_code(r):
     if r.status_code != 200:
         raise Exception(
-            'unexpected status code {} from {}'.format(r.status_code, r.url))
+            'unexpected status code `{}` from `{}` error-msg `{}`'.format(r.status_code, r.url, r.text))
 
 
 def try_get_json(r):

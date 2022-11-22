@@ -97,7 +97,7 @@ bool pushPacket(size_t source_index,
             if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
                 continue;
 
-            std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
+            auto recv_msg = std::make_shared<ReceivedMessage>(
                 source_index,
                 req_info,
                 tracked_packet,
@@ -689,12 +689,13 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     if (recv_msg->chunks.empty())
         return detail;
     auto & packet = recv_msg->packet->packet;
+    auto compress_method = recv_msg->packet->getPacket().compress();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
     for (const String * chunk : recv_msg->chunks)
     {
-        auto result = decoder_ptr->decodeAndSquash(*chunk);
+        auto result = decoder_ptr->decodeAndSquash(*chunk, compress_method);
         if (!result)
             continue;
         detail.rows += result->rows();

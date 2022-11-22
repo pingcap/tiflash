@@ -34,7 +34,7 @@ class Runner:
         parser.add_argument(
             '--pd-address', default="172.16.4.39:2174")
         parser.add_argument(
-            '--type', help='run type', required=True, choices=('show', 'clean', 'set'))
+            '--type', help='run type', required=True, choices=('show', 'clean', 'set', ))
         parser.add_argument(
             '--method', choices=('SNAPPY', 'LZ4', 'ZSTD', 'NONE'))
         self.args = parser.parse_args()
@@ -54,6 +54,10 @@ class Runner:
             self.run_clean()
         elif self.args.type == 'set':
             self.run_set_method()
+        elif self.args.type == 'get-cnt':
+            self.run_show_cnt()
+        elif self.args.type == 'get-encode':
+            self.run_get_encode()
 
     def run_clean(self):
         res = {store_id: flash_http_client.clean_compress_info(
@@ -73,7 +77,8 @@ class Runner:
         tol_uncompressed_size = 0
         method = None
         for store_id, info in compress_info.items():
-            print(info)
+            print('store {}, addr {}, {}'.format(
+                store_id,  self.tiflash_stores[store_id].tiflash_status_address, info))
             tol_compressed_size += int(info['compressed_size'])
             tol_uncompressed_size += int(info['uncompressed_size'])
             if method:
@@ -88,6 +93,45 @@ class Runner:
             tol_compressed_size/MB, tol_uncompressed_size/MB,
         )
         print(msg)
+
+    def run_show_cnt(self):
+        compress_info = {store_id: flash_http_client.get_stream_info(
+            store.tiflash_status_address) for store_id, store in self.tiflash_stores.items()}
+        for store_id, info in compress_info.items():
+            print('store {}: {}'.format(store_id, info))
+
+    def run_get_encode(self):
+        compress_info = {store_id: flash_http_client.get_codec_info(
+            store.tiflash_status_address) for store_id, store in self.tiflash_stores.items()}
+        all_bytes = {}
+        all_time = {}
+        all_hash_row = {}
+        all_hash_time = {}
+        for store_id, info in compress_info.items():
+            all_bytes[store_id] = 0
+            all_time[store_id] = 0
+            all_hash_row[store_id] = 0
+            all_hash_time[store_id] = 0
+            x = [x for x in info.split(",")]
+            for o in x:
+                a, b = o.split(':')
+                a, b = a.strip(), int(b.strip())
+                if a == 'uncompress-bytes':
+                    all_bytes[store_id] += b
+                elif a == 'time':
+                    all_time[store_id] += b
+                elif a == 'hash-part-write':
+                    all_hash_row[store_id] += b
+                elif a == 'hash-part-time':
+                    all_hash_time[store_id] += b
+
+            all_time[store_id] = all_time[store_id]/(10**9)
+            all_hash_time[store_id] = all_hash_time[store_id]/(10**9)
+            all_bytes[store_id] /= 1024 ** 2
+            y = all_bytes[store_id] / \
+                all_time[store_id] if all_time[store_id] else 0.0
+            print("store {}: uncompress-bytes: {:.4f}MB, time: {:.4f}s, MBPS/core: {:.4f}, hash-part-write: {}rows, hash-part-time: {:.4f}s".format(
+                store_id, all_bytes[store_id], all_time[store_id], y, all_hash_row[store_id], all_hash_time[store_id]))
 
 
 if __name__ == '__main__':

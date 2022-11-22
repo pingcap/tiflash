@@ -211,11 +211,7 @@ target_link_libraries (clickhouse_common_io
     libsymbolization
 )
 
-target_link_libraries (
-    clickhouse_common_io
-    PRIVATE
-    snappy
-)
+# target_link_libraries (clickhouse_common_io PRIVATE snappy)
 
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")

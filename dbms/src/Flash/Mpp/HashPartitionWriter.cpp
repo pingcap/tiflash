@@ -18,6 +18,17 @@
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
+#include <cstddef>
+
+#include "Common/Exception.h"
+#include "Common/Stopwatch.h"
+#include "Flash/Coprocessor/CompressedCHBlockChunkCodec.h"
+#include "Flash/Coprocessor/tzg-metrics.h"
+#include "IO/CompressedStream.h"
+#include "common/logger_useful.h"
+#include "ext/scope_guard.h"
+#include "mpp.pb.h"
+
 namespace DB
 {
 template <class ExchangeWriterPtr>
@@ -27,19 +38,38 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     TiDB::TiDBCollators collators_,
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
-    DAGContext & dag_context_)
+    DAGContext & dag_context_,
+    mpp::CompressMethod compress_method_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
+    , compress_method(compress_method_)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
+    auto method = ToCompressionMethod(compress_method);
+    if (method != CompressionMethod::NONE)
+    {
+        compress_chunk_codec_stream = CompressedCHBlockChunkCodec::newCodecStream(dag_context.result_field_types, method);
+    }
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+    // LOG_TRACE(&Poco::Logger::get("tzg"), "using mpp CompressMethod {}, partition_num {}", mpp::CompressMethod_Name(compress_method), partition_num);
+    // {
+    //     size_t local_cnt = 0;
+    //     for (size_t part_id = 0; part_id < partition_num; ++part_id)
+    //     {
+    //         if (writer->getTunnels()[part_id]->isLocal())
+    //         {
+    //             ++local_cnt;
+    //         }
+    //     }
+    //     LOG_TRACE(&Poco::Logger::get("tzg"), "local_cnt is {}", local_cnt);
+    // }
 }
 
 template <class ExchangeWriterPtr>
@@ -85,7 +115,27 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
+    // Stopwatch watch{};
+    // auto cost = watch.elapsedSeconds();
+    // SCOPE_EXIT({
+    //     if (cost > 0.5)
+    //     {
+    //         LOG_DEBUG(&Poco::Logger::get("tzg"), "time cost {:.3f}s", cost);
+    //     }
+    // });
+
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
+
+    for (size_t part_id = 0; part_id < partition_num; ++part_id)
+    {
+        auto method = compress_method;
+        if (writer->getTunnels()[part_id]->isLocal())
+        {
+            method = mpp::CompressMethod::NONE;
+        }
+        tracked_packets[part_id]->getPacket().set_compress(method);
+    }
+
 
     if (!blocks.empty())
     {
@@ -108,9 +158,15 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 size_t dest_block_rows = dest_block.rows();
                 if (dest_block_rows > 0)
                 {
-                    chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
-                    chunk_codec_stream->clear();
+                    auto * codec_stream = chunk_codec_stream.get();
+                    if (compress_chunk_codec_stream && !writer->getTunnels()[part_id]->isLocal())
+                    {
+                        // no need compress
+                        codec_stream = compress_chunk_codec_stream.get();
+                    }
+                    codec_stream->encode(dest_block, 0, dest_block_rows);
+                    tracked_packets[part_id]->addChunk(codec_stream->getString());
+                    codec_stream->clear();
                 }
             }
         }
@@ -124,12 +180,20 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
 {
+    // auto * logger = &Poco::Logger::get("tzg");
+
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
         const auto & packet = packets[part_id];
         assert(packet);
         if (likely(packet->getPacket().chunks_size() > 0))
+        {
+            // Stopwatch watch{};
             writer->partitionWrite(packet, part_id);
+            // auto cost = watch.elapsedSeconds();
+            // if (cost > 1.001)
+            //     LOG_DEBUG(logger, "finish to write partition {}, chunck cnt {}, time cost {:.3f}s", part_id, packet->getPacket().chunks_size(), cost);
+        }
     }
 }
 

@@ -23,6 +23,20 @@ def get_compress_info(tiflash_status_address):
     return res
 
 
+def get_stream_info(tiflash_status_address):
+    res = util.curl_http(
+        '{}/tiflash/get-tzg-compress-stream-cnt'.format(tiflash_status_address))
+    util.check_status_code(res)
+    return res.text
+
+
+def get_codec_info(tiflash_status_address):
+    res = util.curl_http(
+        '{}/tiflash/get-tzg-encode-info'.format(tiflash_status_address))
+    util.check_status_code(res)
+    return res.text
+
+
 def set_compress_method(tiflash_status_address, method):
     res = util.curl_http(
         '{}/tiflash/set-tzg-compress-method/{}'.format(tiflash_status_address, method))
@@ -32,6 +46,6 @@ def set_compress_method(tiflash_status_address, method):
 
 def clean_compress_info(tiflash_status_address, ):
     res = util.curl_http(
-        '{}/tiflash/tzg-compress-and-clean'.format(tiflash_status_address, ))
+        '{}/tiflash/tzg-clean-compress'.format(tiflash_status_address, ))
     util.check_status_code(res)
     return res.text

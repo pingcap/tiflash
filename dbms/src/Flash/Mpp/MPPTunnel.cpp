@@ -20,6 +20,9 @@
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
+#include "common/logger_useful.h"
+#include "ext/scope_guard.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -67,7 +70,7 @@ MPPTunnel::MPPTunnel(
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
-    , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , queue_size(std::max(5, input_steams_num_ * 10)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get(req_id, tunnel_id))
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
@@ -133,6 +136,8 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 // TODO: consider to hold a buffer
 void MPPTunnel::write(const TrackedMppDataPacketPtr & data)
 {
+    Stopwatch watch{};
+
     LOG_TRACE(log, "ready to write");
     {
         std::unique_lock lk(mu);
@@ -140,7 +145,20 @@ void MPPTunnel::write(const TrackedMppDataPacketPtr & data)
         if (tunnel_sender == nullptr)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
+    double cost{};
+    cost = watch.elapsedSeconds();
+    if (cost > 1.0)
+    {
+        LOG_INFO(log, "tzg, `{}`, write costs {:.3f}s", tunnelSenderModeToString(mode), cost);
+    }
 
+    SCOPE_EXIT({
+        cost = watch.elapsedSeconds();
+        if (cost > 1.0)
+        {
+            LOG_INFO(log, "tzg, `{}`, `tunnel_sender->push(data) cap {} name {}`, costs {:.3f}s", tunnelSenderModeToString(mode), tunnel_sender->queue_size, tunnel_id, cost);
+        }
+    });
     if (tunnel_sender->push(data))
     {
         connection_profile_info.bytes += data->getPacket().ByteSizeLong();
@@ -196,7 +214,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_DEBUG(log, "connected");
+    LOG_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
 }
 
 void MPPTunnel::connectAsync(IAsyncCallData * call_data)
