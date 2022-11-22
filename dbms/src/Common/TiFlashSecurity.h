@@ -21,6 +21,7 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/logger_useful.h>
 
+#include <mutex>
 #include <set>
 
 namespace DB
@@ -35,19 +36,25 @@ struct TiFlashSecurityConfig
     String ca_path;
     String cert_path;
     String key_path;
+    LoggerPtr log;
 
     bool redact_info_log = false;
 
     std::set<String> allowed_common_names;
 
-    bool inited = false;
     bool has_tls_config = false;
     grpc::SslCredentialsOptions options;
 
 public:
     TiFlashSecurityConfig() = default;
 
-    TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+    TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log_)
+        : log(log_)
+    {
+        init(config);
+    }
+
+    void init(Poco::Util::AbstractConfiguration & config)
     {
         if (config.has("security"))
         {
@@ -121,7 +128,6 @@ public:
         }
     }
 
-
     bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
         if (allowed_common_names.empty() || grpc_context == nullptr)
@@ -137,17 +143,14 @@ public:
         return false;
     }
 
-    grpc::SslCredentialsOptions readAndCacheSecurityInfo()
+    grpc::SslCredentialsOptions readSecurityInfo()
     {
-        if (inited)
-        {
-            return options;
-        }
-        options.pem_root_certs = readFile(ca_path);
-        options.pem_cert_chain = readFile(cert_path);
-        options.pem_private_key = readFile(key_path);
-        inited = true;
-        return options;
+        grpc::SslCredentialsOptions new_options;
+        new_options.pem_root_certs = readFile(ca_path);
+        new_options.pem_cert_chain = readFile(cert_path);
+        new_options.pem_private_key = readFile(key_path);
+        LOG_INFO(log, "read SecurityInfo: cert_path: {}, key_path: {}", cert_path, key_path);
+        return new_options;
     }
 
 private:

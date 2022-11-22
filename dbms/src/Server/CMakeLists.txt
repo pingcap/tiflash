@@ -32,10 +32,11 @@ add_library(server_for_test
 )
 
 target_link_libraries (server_for_test PUBLIC clickhouse_common_io clickhouse_storages_system)
+target_include_directories(server_for_test PRIVATE ../../../contrib/grpc/)
 
 add_library (clickhouse-server-lib
     HTTPHandler.cpp
-    FlashGrpcServerHolder.cpp
+    CertificateReloader.cpp
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     NotFoundHandler.cpp
@@ -51,7 +52,7 @@ add_library (clickhouse-server-lib
 
 target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
-target_link_libraries (clickhouse-server-lib PUBLIC clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
+target_link_libraries (clickhouse-server-lib PUBLIC server_for_test clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
 target_include_directories (clickhouse-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 
 add_library (clickhouse-client-lib Client.cpp)

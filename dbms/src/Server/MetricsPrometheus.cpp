@@ -35,6 +35,8 @@
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
 
+#include "CertificateReloader.h"
+
 namespace DB
 {
 class MetricHandler : public Poco::Net::HTTPRequestHandler
@@ -101,10 +103,11 @@ private:
 };
 
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
-    const TiFlashSecurityConfig & security_config,
+    Context & global_context,
     const std::weak_ptr<prometheus::Collectable> & collectable,
     const String & metrics_port)
 {
+    auto security_config = global_context.getSecurityConfig();
     Poco::Net::Context::Ptr context = new Poco::Net::Context(
         Poco::Net::Context::TLSV1_2_SERVER_USE,
         security_config.key_path,
@@ -112,7 +115,8 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         security_config.ca_path,
         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
-    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+        auto security_config = global_context.getSecurityConfig();
         if (security_config.allowed_common_names.empty())
         {
             return true;
@@ -121,7 +125,9 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     };
 
     context->setAdhocVerification(check_common_name);
-
+#if Poco_NetSSL_FOUND
+    CertificateReloader::instance().initSSLCallback(context, &global_context);
+#endif
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
@@ -138,8 +144,7 @@ constexpr Int64 INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
     Context & context,
-    const AsynchronousMetrics & async_metrics_,
-    const TiFlashSecurityConfig & security_config)
+    const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
     , async_metrics(async_metrics_)
     , log(&Poco::Logger::get("Prometheus"))
@@ -202,9 +207,10 @@ MetricsPrometheus::MetricsPrometheus(
     if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
         auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
-        if (security_config.has_tls_config)
+
+        if (context.getSecurityConfig().has_tls_config)
         {
-            server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
+            server = getHTTPServer(context, tiflash_metrics.registry, metrics_port);
             server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = {}", metrics_port);
         }
@@ -234,13 +240,13 @@ MetricsPrometheus::~MetricsPrometheus()
 void MetricsPrometheus::run()
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
+    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); ++event)
     {
         const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
         tiflash_metrics.registered_profile_events[event]->Set(value);
     }
 
-    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
+    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); ++metric)
     {
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
         tiflash_metrics.registered_current_metrics[metric]->Set(value);

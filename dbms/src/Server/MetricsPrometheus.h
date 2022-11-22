@@ -35,7 +35,7 @@ class Context;
 class MetricsPrometheus
 {
 public:
-    MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & config);
+    MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_);
     ~MetricsPrometheus();
 
 private:

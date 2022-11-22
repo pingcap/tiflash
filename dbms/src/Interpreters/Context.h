@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/TiFlashSecurity.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
@@ -99,6 +100,7 @@ class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
 using MockStorage = DB::tests::MockStorage;
+struct TiFlashSecurityConfig;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -215,6 +217,11 @@ public:
       */
     void setUsersConfig(const ConfigurationPtr & config);
     ConfigurationPtr getUsersConfig();
+
+    /// Security configuration settings.
+    void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
+
+    TiFlashSecurityConfig & getSecurityConfig();
 
     /// Must be called before getClientInfo.
     void setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address, const String & quota_key);

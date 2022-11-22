@@ -54,6 +54,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Server/CertificateReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/MetricsTransmitter.h>
@@ -285,7 +286,7 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
+pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config, const LoggerPtr & log)
 {
     pingcap::ClusterConfig config;
     config.tiflash_engine_key = raft_config.engine_key;
@@ -293,6 +294,7 @@ pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_c
     config.ca_path = security_config.ca_path;
     config.cert_path = security_config.cert_path;
     config.key_path = security_config.key_path;
+    LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}", security_config.ca_path, security_config.cert_path, security_config.key_path);
     return config;
 }
 
@@ -526,7 +528,7 @@ public:
         , server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
-        auto & security_config = server.security_config;
+        auto security_config = server.global_context->getSecurityConfig();
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
@@ -611,18 +613,19 @@ public:
                                                                              security_config.cert_path,
                                                                              security_config.ca_path,
                                                                              Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
-                        = [&](const Poco::Crypto::X509Certificate & cert) {
-                              if (security_config.allowed_common_names.empty())
-                              {
-                                  return true;
-                              }
-                              return security_config.allowed_common_names.count(cert.commonName()) > 0;
-                          };
+                    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+                        auto security_config = server.global_context->getSecurityConfig();
+                        if (security_config.allowed_common_names.empty())
+                        {
+                            return true;
+                        }
+                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                    };
                     context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
+                    CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -682,6 +685,7 @@ public:
                                                                              security_config.key_path,
                                                                              security_config.cert_path,
                                                                              security_config.ca_path);
+                    CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -699,7 +703,7 @@ public:
                 }
                 else if (security_config.has_tls_config)
                 {
-                    LOG_INFO(log, "tcp_port is closed because tls config is set");
+                    LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
                 /// At least one of TCP and HTTP servers must be created.
@@ -785,11 +789,6 @@ public:
                 current_connections);
         else
             LOG_DEBUG(log, debug_msg);
-    }
-
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
-    {
-        return servers;
     }
 
 private:
@@ -968,9 +967,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
 
     /// ===== Paths related configuration initialized end ===== ///
-
-    security_config = TiFlashSecurityConfig(config(), log);
-    Redact::setRedactLog(security_config.redact_info_log);
+    global_context->setSecurityConfig(config(), log);
+    Redact::setRedactLog(global_context->getSecurityConfig().redact_info_log);
 
     // Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : all_normal_path)
@@ -1095,11 +1093,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
         [&](ConfigurationPtr config) {
+            LOG_INFO(log, "run main config reloader");
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
+            global_context->getSecurityConfig().init(*config);
+            auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
+            auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
+            global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
         },
         /* already_loaded = */ true);
 
@@ -1152,7 +1155,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(security_config, raft_config);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1255,7 +1258,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), this->security_config, raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
@@ -1299,7 +1302,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 
         SessionCleaner session_cleaner(*global_context);
 
