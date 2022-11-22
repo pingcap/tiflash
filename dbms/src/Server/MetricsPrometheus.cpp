@@ -108,20 +108,16 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     const String & metrics_port)
 {
     auto security_config = global_context.getSecurityConfig();
+    auto [ca_path, cert_path, key_path] = security_config->getPaths();
     Poco::Net::Context::Ptr context = new Poco::Net::Context(
         Poco::Net::Context::TLSV1_2_SERVER_USE,
-        security_config.key_path,
-        security_config.cert_path,
-        security_config.ca_path,
+        key_path,
+        cert_path,
+        ca_path,
         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
     auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
-        auto security_config = global_context.getSecurityConfig();
-        if (security_config.allowed_common_names.empty())
-        {
-            return true;
-        }
-        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+        return global_context.getSecurityConfig()->checkCommonName(cert);
     };
 
     context->setAdhocVerification(check_common_name);
@@ -208,7 +204,7 @@ MetricsPrometheus::MetricsPrometheus(
     {
         auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
 
-        if (context.getSecurityConfig().has_tls_config)
+        if (context.getSecurityConfig()->hasTlsConfig())
         {
             server = getHTTPServer(context, tiflash_metrics.registry, metrics_port);
             server->start();

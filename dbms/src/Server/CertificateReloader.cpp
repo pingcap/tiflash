@@ -34,8 +34,7 @@ int CertificateReloader::setCertificate(SSL * ssl, void * arg)
 {
     auto * context = static_cast<Context *>(arg);
     auto security_config = context->getSecurityConfig();
-    auto cert_path = security_config.cert_path;
-    auto key_path = security_config.key_path;
+    auto [cert_path, key_path] = security_config->getCertAndKeyPath();
     LOG_INFO(log, "setCertificate callback called, cert_path: {}, key_path: {}", cert_path, key_path);
     Poco::Crypto::X509Certificate cert(cert_path);
     Poco::Crypto::EVPPKey key("", key_path);

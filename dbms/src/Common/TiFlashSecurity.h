@@ -16,13 +16,16 @@
 #include <Common/grpcpp.h>
 #include <Core/Types.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <Poco/Crypto/X509Certificate.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/logger_useful.h>
 
+#include <memory>
 #include <mutex>
 #include <set>
+#include <utility>
 
 namespace DB
 {
@@ -33,18 +36,6 @@ extern const int INVALID_CONFIG_PARAMETER;
 
 struct TiFlashSecurityConfig
 {
-    String ca_path;
-    String cert_path;
-    String key_path;
-    LoggerPtr log;
-
-    bool redact_info_log = false;
-
-    std::set<String> allowed_common_names;
-
-    bool has_tls_config = false;
-    grpc::SslCredentialsOptions options;
-
 public:
     TiFlashSecurityConfig() = default;
 
@@ -54,8 +45,33 @@ public:
         init(config);
     }
 
+    bool hasTlsConfig()
+    {
+        std::unique_lock lock(mu);
+        return has_tls_config;
+    }
+
+    bool redactInfoLog()
+    {
+        std::unique_lock lock(mu);
+        return redact_info_log;
+    }
+
+    std::tuple<String, String, String> getPaths()
+    {
+        std::unique_lock lock(mu);
+        return {ca_path, cert_path, key_path};
+    }
+
+    std::pair<String, String> getCertAndKeyPath()
+    {
+        std::unique_lock lock(mu);
+        return {cert_path, key_path};
+    }
+
     void init(Poco::Util::AbstractConfiguration & config)
     {
+        std::unique_lock lock(mu);
         if (config.has("security"))
         {
             bool miss_ca_path = true;
@@ -112,6 +128,7 @@ public:
 
     void parseAllowedCN(String verify_cns)
     {
+        std::unique_lock lock(mu);
         if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
         {
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
@@ -130,6 +147,7 @@ public:
 
     bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
+        std::unique_lock lock(mu);
         if (allowed_common_names.empty() || grpc_context == nullptr)
         {
             return true;
@@ -143,8 +161,19 @@ public:
         return false;
     }
 
+    bool checkCommonName(const Poco::Crypto::X509Certificate & cert)
+    {
+        std::unique_lock lock(mu);
+        if (allowed_common_names.empty())
+        {
+            return true;
+        }
+        return allowed_common_names.count(cert.commonName()) > 0;
+    }
+
     grpc::SslCredentialsOptions readSecurityInfo()
     {
+        std::unique_lock lock(mu);
         grpc::SslCredentialsOptions new_options;
         new_options.pem_root_certs = readFile(ca_path);
         new_options.pem_cert_chain = readFile(cert_path);
@@ -170,6 +199,20 @@ private:
         }
         return result;
     }
+
+private:
+    String ca_path;
+    String cert_path;
+    String key_path;
+    LoggerPtr log;
+
+    bool redact_info_log = false;
+
+    std::set<String> allowed_common_names;
+
+    bool has_tls_config = false;
+    grpc::SslCredentialsOptions options;
+    mutable std::mutex mu;
 };
 
 } // namespace DB
