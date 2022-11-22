@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -148,6 +149,7 @@ public:
             return;
 
         Cell & cell = it->second;
+        current_size -= cell.size;
         queue.erase(cell.queue_iterator);
         cells.erase(it);
     }
@@ -265,7 +267,7 @@ private:
         }
 
         MappedPtr value;
-        size_t size;
+        size_t size = 0;
         LRUQueueIterator queue_iterator;
         Timestamp timestamp;
     };
