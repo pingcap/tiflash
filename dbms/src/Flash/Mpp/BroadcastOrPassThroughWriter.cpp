@@ -23,11 +23,9 @@ template <class ExchangeWriterPtr>
 BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
     ExchangeWriterPtr writer_,
     Int64 batch_send_min_limit_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
 {
     rows_in_blocks = 0;
@@ -39,16 +37,6 @@ template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->sendExecutionSummary(response);
 }
 
 template <class ExchangeWriterPtr>
@@ -92,7 +80,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
     }
     assert(blocks.empty());
     rows_in_blocks = 0;
-    writer->broadcastOrPassThroughWrite(tracked_packet);
+    writer->broadcastOrPassThroughWrite(std::move(tracked_packet));
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

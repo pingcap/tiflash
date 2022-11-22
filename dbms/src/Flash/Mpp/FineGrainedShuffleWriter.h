@@ -30,7 +30,6 @@ public:
         ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
-        bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size);
@@ -42,14 +41,11 @@ public:
 private:
     void batchWriteFineGrainedShuffle();
 
-    void writePackets(const TrackedMppDataPacketPtrs & packets);
+    void writePackets(TrackedMppDataPacketPtrs & packets);
 
     void initScatterColumns();
 
-    void sendExecutionSummary();
-
 private:
-    bool should_send_exec_summary_at_last;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;

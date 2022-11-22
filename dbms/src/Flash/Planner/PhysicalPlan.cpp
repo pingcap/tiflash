@@ -119,7 +119,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
-        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
+        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), FineGrainedShuffle(executor), popBack()));
         break;
     case tipb::ExecType::TypeExchangeSender:
     {
@@ -179,7 +179,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         buildFinalProjection(fmt::format("{}_l_", executor_id), false);
         auto left = popBack();
 
-        pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
+        pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), FineGrainedShuffle(executor), left, right));
         break;
     }
     default:

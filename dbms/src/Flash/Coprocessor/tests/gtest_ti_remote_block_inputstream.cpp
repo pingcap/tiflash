@@ -16,6 +16,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
@@ -59,13 +60,13 @@ struct MockWriter
         return summary;
     }
 
-    void partitionWrite(const TrackedMppDataPacketPtr &, uint16_t) { FAIL() << "cannot reach here."; }
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet)
+    void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet)
     {
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
-        queue->push(packet);
+        queue->push(std::move(packet));
     }
     void write(tipb::SelectResponse & response)
     {
@@ -87,7 +88,11 @@ struct MockWriter
         tracked_packet->serializeByResponse(response);
         queue->push(tracked_packet);
     }
-    void sendExecutionSummary(tipb::SelectResponse & response) { write(response); }
+    void sendExecutionSummary(const tipb::SelectResponse & response)
+    {
+        tipb::SelectResponse tmp = response;
+        write(tmp);
+    }
     uint16_t getPartitionNum() const { return 1; }
 
     PacketQueuePtr queue;
@@ -193,6 +198,7 @@ struct MockReceiverContext
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
+        grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
     PacketQueuePtr queue;
@@ -294,15 +300,18 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
-            /*should_send_exec_summary_at_last=*/true,
             *dag_context_ptr);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
             dag_writer->write(block);
         dag_writer->flush();
-        writer->add_summary = true;
         dag_writer->finishWrite();
+
+        // 3. send execution summary
+        writer->add_summary = true;
+        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
+        writer->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
     }
 
     void prepareQueueV2(
@@ -318,15 +327,19 @@ public:
             writer,
             0,
             batch_send_min_limit,
-            /*should_send_exec_summary_at_last=*/true,
             *dag_context_ptr);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
             dag_writer->write(block);
         dag_writer->flush();
-        writer->add_summary = true;
         dag_writer->finishWrite();
+
+        // 3. send execution summary
+        writer->add_summary = true;
+        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
+        auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
+        writer->write(execution_summary_response);
     }
 
     void checkChunkInResponse(

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -36,7 +36,6 @@ public:
 
 protected:
     Int64 records_per_chunk;
-    ExecutionSummaryCollector summary_collector;
     DAGContext & dag_context;
 };
 
