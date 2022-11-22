@@ -21,7 +21,6 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/RaftConfigParser.h>
 #include <common/logger_useful.h>
-#include <pingcap/Config.h>
 
 #include <mutex>
 #include <set>
