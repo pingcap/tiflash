@@ -18,10 +18,10 @@
 
 #if Poco_NetSSL_FOUND
 
+#include <Common/Logger.h>
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <Poco/Crypto/X509Certificate.h>
-#include <Poco/Logger.h>
 #include <Poco/Net/Context.h>
 #include <openssl/ssl.h>
 
@@ -38,7 +38,7 @@ public:
     int setCertificate(SSL * ssl, void * arg);
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("CertificateReloader");
+    LoggerPtr log = Logger::get("CertificateReloader");
 };
 } // namespace DB
 

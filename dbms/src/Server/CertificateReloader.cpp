@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "CertificateReloader.h"
+#include <Server/CertificateReloader.h>
 
 #if Poco_NetSSL_FOUND
 

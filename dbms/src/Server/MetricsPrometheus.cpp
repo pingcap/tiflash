@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "MetricsPrometheus.h"
-
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
 #include <Common/ProfileEvents.h>
@@ -28,14 +26,14 @@
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/SecureServerSocket.h>
+#include <Server/CertificateReloader.h>
+#include <Server/MetricsPrometheus.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
 #include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
-
-#include "CertificateReloader.h"
 
 namespace DB
 {
