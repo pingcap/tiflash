@@ -24,6 +24,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -317,7 +318,11 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
+    {
+        std::vector<DM::ScanContextPtr> scan_context_vec = {};
+        dagContext().scan_contexts_map[table_scan.getTableScanExecutorID()] = scan_context_vec;
         buildLocalStreams(pipeline, settings.max_block_size);
+    }
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));

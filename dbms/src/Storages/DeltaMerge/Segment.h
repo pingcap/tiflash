@@ -160,7 +160,7 @@ public:
 
     BlockInputStreamPtr getInputStream(
         const ReadMode & read_mode,
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
@@ -169,7 +169,7 @@ public:
         size_t expected_block_size);
 
     BlockInputStreamPtr getInputStreamModeNormal(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
@@ -178,7 +178,7 @@ public:
         size_t expected_block_size);
 
     BlockInputStreamPtr getInputStreamModeNormal(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter = {},
@@ -188,7 +188,7 @@ public:
     /// Return a stream which is suitable for exporting data.
     ///  reorganize_block: put those rows with the same pk rows into the same block or not.
     BlockInputStreamPtr getInputStreamForDataExport(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRange & data_range,
@@ -196,7 +196,7 @@ public:
         bool reorganize_block = true) const;
 
     BlockInputStreamPtr getInputStreamModeFast(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
@@ -204,14 +204,14 @@ public:
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamModeRaw(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamModeRaw(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & columns_to_read);
 
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
@@ -246,10 +246,10 @@ public:
      * Only used in tests as a shortcut.
      * Normally you should use `prepareSplit` and `applySplit`.
      */
-    [[nodiscard]] SegmentPair split(const DMContextPtr & dm_context, const ColumnDefinesPtr & schema_snap, std::optional<RowKeyValue> opt_split_at = std::nullopt, SplitMode opt_split_mode = SplitMode::Auto) const;
+    [[nodiscard]] SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, std::optional<RowKeyValue> opt_split_at = std::nullopt, SplitMode opt_split_mode = SplitMode::Auto) const;
 
     std::optional<SplitInfo> prepareSplit(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         std::optional<RowKeyValue> opt_split_at,
@@ -257,7 +257,7 @@ public:
         WriteBatches & wbs) const;
 
     std::optional<SplitInfo> prepareSplit(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const
@@ -277,12 +277,12 @@ public:
 
     /// Merge delta & stable, and then take the middle one.
     std::optional<RowKeyValue> getSplitPointSlow(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ReadInfo & read_info,
         const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
     std::optional<RowKeyValue> getSplitPointFast(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const StableSnapshotPtr & stable_snap) const;
 
     enum class PrepareSplitLogicalStatus
@@ -293,13 +293,13 @@ public:
     };
 
     std::pair<std::optional<SplitInfo>, PrepareSplitLogicalStatus> prepareSplitLogical(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         std::optional<RowKeyValue> opt_split_point,
         WriteBatches & wbs) const;
     std::optional<SplitInfo> prepareSplitPhysical(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         std::optional<RowKeyValue> opt_split_point,
@@ -310,12 +310,12 @@ public:
      * Normally you should use `prepareMerge` and `applyMerge`.
      */
     [[nodiscard]] static SegmentPtr merge(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const std::vector<SegmentPtr> & ordered_segments);
 
     static StableValueSpacePtr prepareMerge(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const std::vector<SegmentPtr> & ordered_segments,
         const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
@@ -336,10 +336,10 @@ public:
      * Only used in tests as a shortcut.
      * Normally you should use `prepareMergeDelta` and `applyMergeDelta`.
      */
-    [[nodiscard]] SegmentPtr mergeDelta(const DMContextPtr & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    [[nodiscard]] SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
     StableValueSpacePtr prepareMergeDelta(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
@@ -396,11 +396,11 @@ public:
      *
      * To prevent you from making mistakes, exceptions will be thrown when snapshot is not for_write.
      */
-    bool isDefinitelyEmpty(const DMContextPtr & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+    bool isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
-    void placeDeltaIndex(const DMContextPtr & dm_context);
+    void placeDeltaIndex(DMContext & dm_context);
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
@@ -473,7 +473,7 @@ public:
 
 private:
     ReadInfo getReadInfo(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & read_columns,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
@@ -486,7 +486,7 @@ private:
     /// Create a stream which merged delta and stable streams together.
     template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
     static SkippableBlockInputStreamPtr getPlacedStream(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges,
         const RSOperatorPtr & filter,
@@ -501,7 +501,7 @@ private:
     /// Note that the index returned could be partial index, and cannot be updated to shared index.
     /// Returns <placed index, this index is fully indexed or not>
     std::pair<DeltaIndexPtr, bool> ensurePlace(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const StableSnapshotPtr & stable_snap,
         const DeltaValueReaderPtr & delta_reader,
         const RowKeyRanges & read_ranges,
@@ -511,7 +511,7 @@ private:
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
     bool placeUpsert(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const StableSnapshotPtr & stable_snap,
         const DeltaValueReaderPtr & delta_reader,
         size_t delta_value_space_offset,
@@ -523,7 +523,7 @@ private:
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
     bool placeDelete(
-        const DMContextPtr & dm_context,
+        const DMContext & dm_context,
         const StableSnapshotPtr & stable_snap,
         const DeltaValueReaderPtr & delta_reader,
         const RowKeyRange & delete_range,

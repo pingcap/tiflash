@@ -753,7 +753,7 @@ bool DeltaMergeStore::mergeDeltaAll(const Context & context)
     bool all_succ = true;
     for (auto & segment : all_segments)
     {
-        bool succ = segmentMergeDelta(dm_context, segment, MergeDeltaReason::Manual) != nullptr;
+        bool succ = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual) != nullptr;
         all_succ = all_succ && succ;
     }
 
@@ -788,7 +788,7 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
 
         if (segment->flushCache(*dm_context))
         {
-            const auto new_segment = segmentMergeDelta(dm_context, segment, MergeDeltaReason::Manual);
+            const auto new_segment = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
             if (new_segment)
             {
                 const auto segment_end = new_segment->getRowKeyRange().end;
@@ -925,7 +925,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         if (enable_read_thread)
         {
             stream = std::make_shared<UnorderedInputStream>(
-                dm_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
@@ -968,6 +967,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
+    // currently, one query(dag) only has one table scan task.
+    // Thus scan_contexts_map only have one pair, we can just push back in the first one
+    db_context.getDAGContext()->scan_contexts_map.begin()->second.push_back(dm_context->scan_context);
     // If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
@@ -1009,7 +1011,6 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         if (enable_read_thread)
         {
             stream = std::make_shared<UnorderedInputStream>(
-                dm_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
@@ -1262,7 +1263,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                     GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_delete_range).Observe(watch.elapsedSeconds());
             });
 
-            return segmentMergeDelta(dm_context, segment, MergeDeltaReason::ForegroundWrite);
+            return segmentMergeDelta(*dm_context, segment, MergeDeltaReason::ForegroundWrite);
         }
         return {};
     };
@@ -1297,7 +1298,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_split).Observe(watch.elapsedSeconds());
             });
 
-            return segmentSplit(dm_context, my_segment, SegmentSplitReason::ForegroundWrite).first != nullptr;
+            return segmentSplit(*dm_context, my_segment, SegmentSplitReason::ForegroundWrite).first != nullptr;
         }
         return false;
     };
@@ -1372,7 +1373,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // The segment does not need any updates for now.
 }
 
-void DeltaMergeStore::check(const Context & /*db_context*/)
+void DeltaMergeStore::check(const Context & /*db_context*/) const
 {
     std::shared_lock lock(read_write_mutex);
 

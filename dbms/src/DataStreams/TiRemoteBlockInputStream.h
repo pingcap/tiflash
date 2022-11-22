@@ -24,7 +24,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/TableScanContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -79,8 +79,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows = execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations = execution_summary.num_iterations();
                 remote_execution_summary.concurrency = execution_summary.concurrency();
-                auto table_scan_context = DM::TableScanContext(execution_summary.table_scan_context());
-                remote_execution_summary.table_scan_context->merge(&table_scan_context);
+                auto scan_context = DM::ScanContext(execution_summary.tiflash_scan_context());
+                remote_execution_summary.scan_context->merge(&scan_context);
             }
         }
         execution_summaries_inited[index].store(true);
@@ -118,8 +118,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations += execution_summary.num_iterations();
                 remote_execution_summary.concurrency += execution_summary.concurrency();
-                auto table_scan_context = DM::TableScanContext(execution_summary.table_scan_context());
-                remote_execution_summary.table_scan_context->merge(&table_scan_context);
+                auto scan_context = DM::ScanContext(execution_summary.tiflash_scan_context());
+                remote_execution_summary.scan_context->merge(&scan_context);
             }
         }
     }

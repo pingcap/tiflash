@@ -39,7 +39,6 @@ class ColumnFileBig;
 class ColumnFilePersisted;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
-using DMContextPtr = std::shared_ptr<DMContext>;
 
 static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 
@@ -128,8 +127,7 @@ public:
     ColumnFilePersisted * tryToColumnFilePersisted();
 
     virtual ColumnFileReaderPtr
-    getReader(const DMContextPtr & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
-        = 0;
+    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.

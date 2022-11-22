@@ -38,7 +38,7 @@ public:
     {}
     ColumnFileDeleteRange(const ColumnFileDeleteRange &) = default;
 
-    ColumnFileReaderPtr getReader(const DMContextPtr & /*context*/,
+    ColumnFileReaderPtr getReader(const DMContext & /*context*/,
                                   const StorageSnapshotPtr & /*storage_snap*/,
                                   const ColumnDefinesPtr & /*col_defs*/) const override;
 

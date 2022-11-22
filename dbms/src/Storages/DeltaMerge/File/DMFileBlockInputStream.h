@@ -19,7 +19,10 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+
+#include <memory>
 namespace DB
 {
 class Context;
@@ -81,10 +84,10 @@ public:
     // Empty `rowkey_ranges` means not filter by rowkey
     // Should not use the builder again after `build` is called.
     DMFileBlockInputStreamPtr build(
-        const DMContextPtr & dm_context,
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
-        const RowKeyRanges & rowkey_ranges);
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
 
     // **** filters **** //
 
@@ -172,7 +175,7 @@ private:
     // Rough set filter
     RSOperatorPtr rs_filter;
     // packs filter (filter by pack index)
-    IdSetPtr read_packs;
+    IdSetPtr read_packs{};
     MarkCachePtr mark_cache;
     MinMaxIndexCachePtr index_cache;
     // column cache
@@ -208,7 +211,7 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context 
     return builder
         .setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
         .onlyReadOnePackEveryTime()
-        .build(nullptr, file, cols, DB::DM::RowKeyRanges{});
+        .build(file, cols, DB::DM::RowKeyRanges{}, std::make_shared<ScanContext>());
 }
 
 } // namespace DM

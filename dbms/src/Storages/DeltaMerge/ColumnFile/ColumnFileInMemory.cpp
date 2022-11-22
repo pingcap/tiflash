@@ -56,7 +56,7 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
 }
 
 ColumnFileReaderPtr
-ColumnFileInMemory::getReader(const DMContextPtr & /*context*/, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileInMemory::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }

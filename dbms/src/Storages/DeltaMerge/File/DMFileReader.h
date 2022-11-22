@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/MarkCache.h>
 
 namespace DB
@@ -64,13 +65,12 @@ public:
             return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_decompressed_block : (*marks)[i].offset_in_decompressed_block;
         }
 
-        std::unique_ptr<CompressedSeekableReaderBuffer> buf;
+        std::unique_ptr<CompressedSeekableReaderBuffer> buf{};
     };
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
     DMFileReader(
-        const DMContextPtr & dm_context_,
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,
         bool is_common_handle_,
@@ -96,7 +96,8 @@ public:
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
         const String & tracing_id_,
-        bool enable_col_sharing_cache);
+        bool enable_col_sharing_cache,
+        const ScanContextPtr & scan_context_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -110,7 +111,7 @@ public:
         // For DMFileReader, always use the readable path.
         return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
     }
-    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
+    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
 private:
     bool shouldSeek(size_t pack_id);
@@ -128,21 +129,19 @@ private:
                     size_t read_rows,
                     size_t skip_packs,
                     bool force_seek);
-    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
+    static bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
-    const DMContextPtr dm_context;
-
     DMFilePtr dmfile;
     ColumnDefines read_columns;
-    ColumnStreams column_streams;
+    ColumnStreams column_streams{};
 
     const bool is_common_handle;
 
     // read_one_pack_every_time is used to create info for every pack
     const bool read_one_pack_every_time;
 
-    const bool single_file_mode;
+    const bool single_file_mode{};
 
     /// Clean read optimize
     // In normal mode, if there is no delta for some packs in stable, we can try to do clean read (enable_handle_clean_read is true).
@@ -157,12 +156,14 @@ private:
     /// Filters
     DMFilePackFilter pack_filter;
 
-    std::vector<size_t> skip_packs_by_column;
+    std::vector<size_t> skip_packs_by_column{};
 
     /// Caches
     MarkCachePtr mark_cache;
     const bool enable_column_cache;
     ColumnCachePtr column_cache;
+
+    const ScanContextPtr scan_context;
 
     const size_t rows_threshold_per_read;
 
@@ -172,8 +173,8 @@ private:
 
     LoggerPtr log;
 
-    std::unique_ptr<ColumnSharingCacheMap> col_data_cache;
-    std::unordered_map<ColId, bool> last_read_from_cache;
+    std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+    std::unordered_map<ColId, bool> last_read_from_cache{};
 };
 
 } // namespace DM

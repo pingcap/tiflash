@@ -35,7 +35,6 @@ void ColumnFileBig::calculateStat(const DMContext & context)
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
 
     auto pack_filter = DMFilePackFilter::loadFrom(
-        nullptr,
         file,
         index_cache,
         /*set_cache_if_miss*/ false,
@@ -44,13 +43,14 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),
+        context.scan_context,
         /*tracing_id*/ context.tracing_id);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
 
 ColumnFileReaderPtr
-ColumnFileBig::getReader(const DMContextPtr & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
 }
@@ -87,10 +87,10 @@ void ColumnFileBigReader::initStream()
     if (file_stream)
         return;
 
-    DMFileBlockInputStreamBuilder builder(context->db_context);
+    DMFileBlockInputStreamBuilder builder(context.db_context);
     file_stream = builder
-                      .setTracingID(context->tracing_id)
-                      .build(context, column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
+                      .setTracingID(context.tracing_id)
+                      .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range}, context.scan_context);
 
     header = file_stream->getHeader();
     // If we only need to read pk and version columns, then cache columns data in memory.
@@ -111,7 +111,7 @@ void ColumnFileBigReader::initStream()
     }
 }
 
-size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) const
 {
     if (unlikely(rows_offset + rows_limit > column_file.valid_rows))
         throw Exception("Try to read more rows", ErrorCodes::LOGICAL_ERROR);
@@ -155,17 +155,7 @@ size_t ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
         cur_block = file_stream->read();
         cur_block_offset = 0;
 
-        if (!cur_block)
-        {
-            file_stream = {};
-            return false;
-        }
-        else
-        {
-            for (size_t col_index = 0; col_index < output_cols.size(); ++col_index)
-                cur_block_data.push_back(cur_block.getByPosition(col_index).column);
-            return true;
-        }
+        return !!cur_block;
     };
 
     size_t rows_end = rows_offset + rows_limit;

@@ -125,7 +125,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                 updated_segments.push_back(segment);
                 fiu_do_on(FailPoints::segment_merge_after_ingest_packs, {
                     segment->flushCache(*dm_context);
-                    segmentMergeDelta(dm_context, segment, MergeDeltaReason::ForegroundWrite);
+                    segmentMergeDelta(*dm_context, segment, MergeDeltaReason::ForegroundWrite);
                     storage_pool->gc(global_context.getSettingsRef(), StoragePool::Seconds(0));
                 });
                 break;
@@ -323,7 +323,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
 
-            const bool succeeded = ingestDTFileIntoSegmentUsingSplit(dm_context, segment, segment_ingest_range, files[file_idx]);
+            const bool succeeded = ingestDTFileIntoSegmentUsingSplit(*dm_context, segment, segment_ingest_range, files[file_idx]);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -353,7 +353,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
  * Ingest one DTFile into the target segment by using logical split.
  */
 bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
-    const DMContextPtr & dm_context,
+    DMContext & dm_context,
     const SegmentPtr & segment,
     const RowKeyRange & ingest_range,
     const DMFilePtr & file)
@@ -386,7 +386,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │----------- Segment ----------│
          *    │-------- Ingest Range --------│
          */
-        const auto new_segment_or_null = segmentDangerouslyReplaceData(*dm_context, segment, file);
+        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, file);
         const bool succeeded = new_segment_or_null != nullptr;
         return succeeded;
     }

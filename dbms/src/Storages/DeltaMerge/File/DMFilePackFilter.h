@@ -19,13 +19,13 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-
-#include "Flash/Coprocessor/DAGContext.h"
-#include "Storages/DeltaMerge/DMContext.h"
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace ProfileEvents
 {
@@ -46,7 +46,6 @@ class DMFilePackFilter
 public:
     // Empty `rowkey_ranges` means do not filter by rowkey_ranges
     static DMFilePackFilter loadFrom(
-        const DMContextPtr & dm_context,
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
         bool set_cache_if_miss,
@@ -55,9 +54,10 @@ public:
         const IdSetPtr & read_packs,
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
+        const ScanContextPtr & scan_context,
         const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dm_context, dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, scan_context, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
@@ -107,8 +107,7 @@ public:
     }
 
 private:
-    DMFilePackFilter(const DMContextPtr & dm_context_,
-                     const DMFilePtr & dmfile_,
+    DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
                      bool set_cache_if_miss_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
@@ -116,9 +115,9 @@ private:
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
+                     const ScanContextPtr & scan_context_,
                      const String & tracing_id)
-        : dm_context(dm_context_)
-        , dmfile(dmfile_)
+        : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
         , rowkey_ranges(rowkey_ranges_)
@@ -127,6 +126,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
+        , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
     {
@@ -293,14 +293,10 @@ private:
         Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
 
-        if (dm_context && dm_context->table_scan_context_ptr)
-        {
-            dm_context->table_scan_context_ptr->rough_set_index_load_time_in_ns += watch.elapsed();
-        }
+        scan_context->total_rough_set_index_load_time_in_ns += watch.elapsed();
     }
 
 private:
-    const DMContextPtr dm_context;
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
     bool set_cache_if_miss;
@@ -313,6 +309,8 @@ private:
 
     std::vector<RSResult> handle_res;
     std::vector<UInt8> use_packs;
+
+    const ScanContextPtr scan_context;
 
     LoggerPtr log;
     ReadLimiterPtr read_limiter;

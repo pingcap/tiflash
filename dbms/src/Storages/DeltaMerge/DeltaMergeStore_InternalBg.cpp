@@ -232,13 +232,13 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         switch (task.type)
         {
         case TaskType::Split:
-            std::tie(left, right) = segmentSplit(task.dm_context, task.segment, SegmentSplitReason::Background);
+            std::tie(left, right) = segmentSplit(*task.dm_context, task.segment, SegmentSplitReason::Background);
             type = ThreadType::BG_Split;
             break;
         case TaskType::MergeDelta:
         {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
-            left = segmentMergeDelta(task.dm_context, task.segment, MergeDeltaReason::BackgroundThreadPool);
+            left = segmentMergeDelta(*task.dm_context, task.segment, MergeDeltaReason::BackgroundThreadPool);
             type = ThreadType::BG_MergeDelta;
             // Wake up all waiting threads if failpoint is enabled
             FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
@@ -252,12 +252,12 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         case TaskType::Flush:
             task.segment->flushCache(*task.dm_context);
             // After flush cache, better place delta index.
-            task.segment->placeDeltaIndex(task.dm_context);
+            task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
         case TaskType::PlaceIndex:
-            task.segment->placeDeltaIndex(task.dm_context);
+            task.segment->placeDeltaIndex(*task.dm_context);
             break;
         default:
             throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
@@ -543,7 +543,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
         "GC - Trigger Merge, segment={} table={}",
         segment->simpleInfo(),
         table_name);
-    auto new_segment = segmentMerge(dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
+    auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
         checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
@@ -626,7 +626,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
         // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
-            segment->getStable()->calculateStableProperty(dm_context, segment_range, isCommonHandle());
+            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
 
         if (GC::shouldCompactStableWithTooManyInvalidVersion(
                 segment,
@@ -655,7 +655,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         GC::toString(compact_reason),
         segment->simpleInfo(),
         table_name);
-    auto new_segment = segmentMergeDelta(dm_context, segment, MergeDeltaReason::BackgroundGCThread, segment_snap);
+    auto new_segment = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::BackgroundGCThread, segment_snap);
 
     if (!new_segment)
     {

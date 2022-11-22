@@ -34,7 +34,6 @@ using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
-using DMContextPtr = std::shared_ptr<DMContext>;
 
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
@@ -131,7 +130,7 @@ public:
 
     const StableProperty & getStableProperty() const { return property; }
 
-    void calculateStableProperty(const DMContextPtr & context, const RowKeyRange & rowkey_range, bool is_common_handle);
+    void calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
 
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -207,7 +206,7 @@ public:
 
         ColumnCachePtrs & getColumnCaches() { return column_caches; }
 
-        SkippableBlockInputStreamPtr getInputStream(const DMContextPtr & context, //
+        SkippableBlockInputStreamPtr getInputStream(const DMContext & context, //
                                                     const ColumnDefines & read_columns,
                                                     const RowKeyRanges & rowkey_ranges,
                                                     const RSOperatorPtr & filter,

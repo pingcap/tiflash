@@ -389,7 +389,7 @@ int benchEntry(const std::vector<std::string> & opts)
             auto start = high_resolution_clock::now();
             {
                 auto builder = DB::DM::DMFileBlockInputStreamBuilder(*db_context);
-                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(nullptr, dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)});
+                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
                     TIFLASH_NO_OPTIMIZE(stream->read());

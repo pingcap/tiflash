@@ -21,15 +21,15 @@
 namespace DB
 {
 
-void setTableScanContext(tipb::TableScanContext * table_scan_context_pb, std::shared_ptr<DM::TableScanContext> table_scan_context)
+void setTableScanContext(tipb::TiFlashScanContext * tiflash_scan_context_pb, std::shared_ptr<DM::ScanContext> scan_context)
 {
-    table_scan_context_pb->set_scan_packs_count(table_scan_context->scan_packs_count);
-    table_scan_context_pb->set_scan_rows_count(table_scan_context->scan_rows_count);
-    table_scan_context_pb->set_skip_packs_count(table_scan_context->skip_packs_count);
-    table_scan_context_pb->set_skip_rows_count(table_scan_context->skip_rows_count);
-    table_scan_context_pb->set_rough_set_index_load_time_in_ns(table_scan_context->rough_set_index_load_time_in_ns);
-    table_scan_context_pb->set_dmfile_read_time_in_ns(table_scan_context->dmfile_read_time_in_ns);
-    table_scan_context_pb->set_create_snapshot_time_in_ns(table_scan_context->create_snapshot_time_in_ns);
+    tiflash_scan_context_pb->set_total_scanned_packs_in_dmfile(scan_context->total_scanned_packs_in_dmfile);
+    tiflash_scan_context_pb->set_total_skipped_packs_in_dmfile(scan_context->total_skipped_packs_in_dmfile);
+    tiflash_scan_context_pb->set_total_scanned_rows_in_dmfile(scan_context->total_scanned_rows_in_dmfile);
+    tiflash_scan_context_pb->set_total_skipped_rows_in_dmfile(scan_context->total_skipped_rows_in_dmfile);
+    tiflash_scan_context_pb->set_total_rough_set_index_load_time_in_ns(scan_context->total_rough_set_index_load_time_in_ns);
+    tiflash_scan_context_pb->set_total_dmfile_read_time_in_ns(scan_context->total_dmfile_read_time_in_ns);
+    tiflash_scan_context_pb->set_total_create_snapshot_time_in_ns(scan_context->total_create_snapshot_time_in_ns);
 }
 
 void ExecutionSummaryCollector::fillTiExecutionSummary(
@@ -41,9 +41,9 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
     execution_summary->set_num_produced_rows(current.num_produced_rows);
     execution_summary->set_num_iterations(current.num_iterations);
     execution_summary->set_concurrency(current.concurrency);
-    auto * table_scan_context = execution_summary->mutable_table_scan_context();
+    auto * tiflash_scan_context = execution_summary->mutable_tiflash_scan_context();
 
-    setTableScanContext(table_scan_context, current.table_scan_context);
+    setTableScanContext(tiflash_scan_context, current.scan_context);
 
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
@@ -99,8 +99,9 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
 
     auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams) {
         ExecutionSummary current;
-        bool get_storage_info = false;
+        //bool get_storage_info = false;
         /// part 1: local execution info
+        // get execution info from streams
         for (const auto & stream_ptr : streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
@@ -108,31 +109,19 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
                 current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
                 current.num_iterations += p_stream->getProfileInfo().blocks;
-
-                if (!get_storage_info)
-                {
-                    // There may be multiple UnorderedInputStream in the same executor, but they share the same table_scan_context,
-                    // Thus we only calculate the table_scan_context once;
-                    if (auto * local_unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(p_stream))
-                    {
-                        if (local_unordered_input_stream_ptr->getDMContext() && local_unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr)
-                        {
-                            current.table_scan_context->merge(local_unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr.get());
-                            get_storage_info = true;
-                        }
-                    }
-                    else if (auto * local_dm_segment_thread_input_stream = dynamic_cast<DB::DM::DMSegmentThreadInputStream *>(stream_ptr.get()))
-                    {
-                        if (local_dm_segment_thread_input_stream->getDMContext() && local_dm_segment_thread_input_stream->getDMContext()->table_scan_context_ptr)
-                        {
-                            current.table_scan_context->merge(local_dm_segment_thread_input_stream->getDMContext()->table_scan_context_ptr.get());
-                            get_storage_info = true;
-                        }
-                    }
-                }
             }
             current.concurrency++;
         }
+        // get execution info from dag context's scan_context
+        if (dag_context.scan_contexts_map.find(executor_id) != dag_context.scan_contexts_map.end())
+        {
+            auto & scan_context_vec = dag_context.scan_contexts_map[executor_id];
+            for (auto & scan_context : scan_context_vec)
+            {
+                current.scan_context->merge(scan_context.get());
+            }
+        }
+
         /// part 2: remote execution info
         if (merged_remote_execution_summaries.find(executor_id) != merged_remote_execution_summaries.end())
         {

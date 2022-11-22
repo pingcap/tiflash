@@ -150,7 +150,7 @@ public:
             store->read_write_mutex.lock();
             auto seg = std::next(store->segments.begin(), segment_idx)->second;
             store->read_write_mutex.unlock();
-            auto result = store->segmentSplit(dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
+            auto result = store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
             if (result.first)
             {
                 break;

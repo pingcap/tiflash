@@ -470,7 +470,7 @@ private:
      *
      * When `opt_split_at` is not specified, this function will try to find a mid point for splitting, and may lead to failures.
      */
-    SegmentPair segmentSplit(const DMContextPtr & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
 
     enum class SegmentMergeReason
     {
@@ -483,7 +483,7 @@ private:
      * Fail if given segments are not continuous or not valid.
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
-    SegmentPtr segmentMerge(const DMContextPtr & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason);
+    SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason);
 
     enum class MergeDeltaReason
     {
@@ -498,7 +498,7 @@ private:
      * After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
      */
     SegmentPtr segmentMergeDelta(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const SegmentPtr & segment,
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
@@ -550,7 +550,7 @@ private:
         bool clear_data_in_range);
 
     bool ingestDTFileIntoSegmentUsingSplit(
-        const DMContextPtr & dm_context,
+        DMContext & dm_context,
         const SegmentPtr & segment,
         const RowKeyRange & ingest_range,
         const DMFilePtr & file);

@@ -76,8 +76,6 @@ public:
 
     Block getHeader() const override { return header; }
 
-    DMContextPtr getDMContext() const { return dm_context; }
-
 protected:
     Block readImpl() override
     {
@@ -103,7 +101,7 @@ protected:
                 cur_segment = task->segment;
 
                 auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-                cur_stream = task->segment->getInputStream(read_mode, dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, max_version, block_size);
+                cur_stream = task->segment->getInputStream(read_mode, *dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, max_version, block_size);
                 LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);

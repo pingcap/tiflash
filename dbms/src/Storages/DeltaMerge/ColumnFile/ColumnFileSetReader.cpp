@@ -74,7 +74,7 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
 }
 
 ColumnFileSetReader::ColumnFileSetReader(
-    const DMContextPtr & context,
+    const DMContext & context,
     const ColumnFileSetSnapshotPtr & snapshot_,
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)

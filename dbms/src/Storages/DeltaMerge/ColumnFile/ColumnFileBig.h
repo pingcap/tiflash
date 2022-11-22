@@ -81,7 +81,7 @@ public:
     }
 
     ColumnFileReaderPtr
-    getReader(const DMContextPtr & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
+    getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
@@ -108,7 +108,7 @@ public:
 class ColumnFileBigReader : public ColumnFileReader
 {
 private:
-    const DMContextPtr & context;
+    const DMContext & context;
     const ColumnFileBig & column_file;
     const ColumnDefinesPtr col_defs;
 
@@ -137,7 +137,7 @@ private:
     size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
-    ColumnFileBigReader(const DMContextPtr & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnFileBigReader(const DMContext & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
         : context(context_)
         , column_file(column_file_)
         , col_defs(col_defs_)

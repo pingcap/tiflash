@@ -86,7 +86,7 @@ void SimplePKTestBasic::ensureSegmentBreakpoints(const std::vector<Int64> & brea
             if (compare(segment->getRowKeyRange().getStart(), bp_key.toRowKeyValueRef()) == 0)
                 break;
             auto split_mode = use_logical_split ? DeltaMergeStore::SegmentSplitMode::Logical : DeltaMergeStore::SegmentSplitMode::Physical;
-            auto [left, right] = store->segmentSplit(dm_context, segment, DeltaMergeStore::SegmentSplitReason::ForegroundWrite, bp_key, split_mode);
+            auto [left, right] = store->segmentSplit(*dm_context, segment, DeltaMergeStore::SegmentSplitReason::ForegroundWrite, bp_key, split_mode);
             if (left)
                 break;
         }
@@ -274,7 +274,7 @@ bool SimplePKTestBasic::merge(Int64 start_key, Int64 end_key)
     if (to_merge.size() < 2)
         return false;
 
-    auto merged = store->segmentMerge(dm_context, to_merge, DeltaMergeStore::SegmentMergeReason::BackgroundGCThread);
+    auto merged = store->segmentMerge(*dm_context, to_merge, DeltaMergeStore::SegmentMergeReason::BackgroundGCThread);
     return merged != nullptr;
 }
 

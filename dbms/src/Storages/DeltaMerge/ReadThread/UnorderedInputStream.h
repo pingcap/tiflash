@@ -32,14 +32,12 @@ class UnorderedInputStream : public IProfilingBlockInputStream
 
 public:
     UnorderedInputStream(
-        const DMContextPtr & dm_context_,
         const SegmentReadTaskPoolPtr & task_pool_,
         const ColumnDefines & columns_to_read_,
         const int extra_table_id_index,
         const TableID physical_table_id,
         const String & req_id)
-        : dm_context(dm_context_)
-        , task_pool(task_pool_)
+        : task_pool(task_pool_)
         , header(toEmptyBlock(columns_to_read_))
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
@@ -66,8 +64,6 @@ public:
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
-
-    DMContextPtr getDMContext() const { return dm_context; }
 
 protected:
     Block readImpl() override
@@ -134,7 +130,6 @@ protected:
     }
 
 private:
-    DMContextPtr dm_context;
     SegmentReadTaskPoolPtr task_pool;
     Block header;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.

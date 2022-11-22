@@ -17,7 +17,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/TableScanContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -39,10 +39,8 @@ using PacketPtr = std::shared_ptr<Packet>;
 using PacketQueue = MPMCQueue<PacketPtr>;
 using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
-bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
-{
-    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && left.table_scan_context->equal(right.table_scan_context.get());
-}
+bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right){
+    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && (left.scan_context->total_scanned_rows_in_dmfile == right.scan_context->total_scanned_packs_in_dmfile) && (left.scan_context->total_skipped_rows_in_dmfile == right.scan_context->total_skipped_rows_in_dmfile)};
 
 struct MockWriter
 {
@@ -57,15 +55,14 @@ struct MockWriter
         summary.num_produced_rows = 10000;
         summary.num_iterations = 50;
         summary.concurrency = 1;
-        summary.table_scan_context = std::make_shared<DM::TableScanContext>();
-        summary.table_scan_context->scan_packs_count = 1;
-        summary.table_scan_context->scan_rows_count = 8192;
-        summary.table_scan_context->skip_packs_count = 2;
-        summary.table_scan_context->skip_rows_count = 16000;
-        summary.table_scan_context->dmfile_read_time_in_ns = 100;
-        summary.table_scan_context->create_snapshot_time_in_ns = 10;
-        summary.table_scan_context->rough_set_index_load_time_in_ns = 4;
+        summary.scan_context = std::make_shared<DM::ScanContext>();
 
+        // We only sampled some fields to compare equality in this test.
+        // It would be better to check all fields.
+        // This can be done by using C++20's default comparsion feature when we switched to use C++20:
+        // https://en.cppreference.com/w/cpp/language/default_comparisons
+        summary.scan_context->total_scanned_rows_in_dmfile = 1;
+        summary.scan_context->total_skipped_rows_in_dmfile = 2;
         return summary;
     }
 
@@ -88,8 +85,8 @@ struct MockWriter
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
 
-            auto * table_scan_context = summary_ptr->mutable_table_scan_context();
-            setTableScanContext(table_scan_context, summary.table_scan_context);
+            auto * tiflash_scan_context = summary_ptr->mutable_tiflash_scan_context();
+            setTableScanContext(tiflash_scan_context, summary.scan_context);
 
             summary_ptr->set_executor_id("Executor_0");
         }
@@ -136,7 +133,7 @@ struct MockReceiverContext
         {
         }
 
-        bool read(PacketPtr & packet [[maybe_unused]]) const
+        static bool read(PacketPtr & packet [[maybe_unused]]) 
         {
             PacketPtr res;
             if (queue->pop(res) == MPMCQueueResult::OK)
@@ -177,7 +174,7 @@ struct MockReceiverContext
     {
     }
 
-    void fillSchema(DAGSchema & schema) const
+    static void fillSchema(DAGSchema & schema) 
     {
         schema.clear();
         for (size_t i = 0; i < field_types.size(); ++i)
@@ -210,7 +207,7 @@ struct MockReceiverContext
         UnaryCallback<bool> *) const {}
 
     PacketQueuePtr queue;
-    std::vector<tipb::FieldType> field_types;
+    std::vector<tipb::FieldType> field_types{};
 };
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 using MockWriterPtr = std::shared_ptr<MockWriter>;
@@ -297,10 +294,10 @@ public:
             source_blocks.emplace_back(prepareBlock(block_rows));
     }
 
-    void prepareQueue(
+    static void prepareQueue(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet) const
+        bool empty_last_packet) 
     {
         prepareBlocks(source_blocks, empty_last_packet);
 
@@ -319,10 +316,10 @@ public:
         dag_writer->finishWrite();
     }
 
-    void prepareQueueV2(
+    static void prepareQueueV2(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet) const
+        bool empty_last_packet) 
     {
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
         prepareBlocks(source_blocks, empty_last_packet);
@@ -405,7 +402,7 @@ public:
         return receiver_stream;
     }
 
-    void doTestNoChunkInResponse(bool empty_last_packet) const
+    static void doTestNoChunkInResponse(bool empty_last_packet) 
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -422,7 +419,7 @@ public:
         checkNoChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    void doTestChunkInResponse(bool empty_last_packet) const
+    static void doTestChunkInResponse(bool empty_last_packet) 
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -439,7 +436,7 @@ public:
     }
 
     Context context;
-    std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DAGContext> dag_context_ptr{};
 };
 
 TEST_F(TestTiRemoteBlockInputStream, testNoChunkInResponse)

@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
@@ -209,7 +210,6 @@ DMFileReader::Stream::Stream(
 }
 
 DMFileReader::DMFileReader(
-    const DMContextPtr & dm_context_,
     const DMFilePtr & dmfile_,
     const ColumnDefines & read_columns_,
     bool is_common_handle_,
@@ -231,9 +231,9 @@ DMFileReader::DMFileReader(
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
-    bool enable_col_sharing_cache)
-    : dm_context(dm_context_)
-    , dmfile(dmfile_)
+    bool enable_col_sharing_cache,
+    const ScanContextPtr & scan_context_)
+    : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
     , read_one_pack_every_time(read_one_pack_every_time_)
@@ -247,6 +247,7 @@ DMFileReader::DMFileReader(
     , mark_cache(mark_cache_)
     , enable_column_cache(enable_column_cache_ && column_cache_)
     , column_cache(column_cache_)
+    , scan_context(scan_context_)
     , rows_threshold_per_read(rows_threshold_per_read_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
@@ -297,11 +298,8 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
-        if (dm_context && dm_context->table_scan_context_ptr)
-        {
-            dm_context->table_scan_context_ptr->skip_packs_count += 1;
-            dm_context->table_scan_context_ptr->skip_rows_count += pack_stats[next_pack_id].rows;
-        }
+        scan_context->total_skipped_packs_in_dmfile += 1;
+        scan_context->total_skipped_rows_in_dmfile += pack_stats[next_pack_id].rows;
     }
     return next_pack_id < use_packs.size();
 }
@@ -320,10 +318,7 @@ Block DMFileReader::read()
 {
     Stopwatch watch;
     SCOPE_EXIT(
-        if (dm_context && dm_context->table_scan_context_ptr) {
-            dm_context->table_scan_context_ptr->dmfile_read_time_in_ns += watch.elapsed();
-        });
-
+        scan_context->total_dmfile_read_time_in_ns += watch.elapsed(););
 
     // Go to next available pack.
     size_t skip_rows;
@@ -383,11 +378,8 @@ Block DMFileReader::read()
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
 
-    if (dm_context && dm_context->table_scan_context_ptr)
-    {
-        dm_context->table_scan_context_ptr->scan_packs_count += read_packs;
-        dm_context->table_scan_context_ptr->scan_rows_count += read_rows;
-    }
+    scan_context->total_scanned_packs_in_dmfile += read_packs;
+    scan_context->total_scanned_rows_in_dmfile += read_rows;
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_scan);
@@ -404,12 +396,11 @@ Block DMFileReader::read()
         do_clean_read_on_normal_mode = max_version <= max_read_version;
     }
 
-    for (size_t i = 0; i < read_columns.size(); ++i)
+    for (auto & cd : read_columns)
     {
         try
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
-            auto & cd = read_columns[i];
             if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle_on_fast_mode)
             {
                 // Return the first row's handle
@@ -621,7 +612,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
     }
 }
 
-void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
+void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const
 {
     if (col_data_cache == nullptr)
     {

@@ -90,7 +90,7 @@ protected:
     {
         *table_columns = *columns;
 
-        dm_context = std::make_shared<DMContext>(*db_context,
+        dm_context = std::make_unique<DMContext>(*db_context,
                                                  *storage_path_pool,
                                                  *storage_pool,
                                                  /*min_version_*/ 0,
@@ -102,7 +102,7 @@ protected:
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    DMContextPtr & dmContext() { return dm_context; }
+    DMContext & dmContext() { return *dm_context; }
 
 protected:
     /// all these var lives as ref in dm_context
@@ -111,7 +111,7 @@ protected:
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
-    std::shared_ptr<DMContext> dm_context;
+    std::unique_ptr<DMContext> dm_context;
 
     // the segment we are going to test
     SegmentPtr segment;
@@ -124,7 +124,7 @@ try
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         // write to segment
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
         // estimate segment
         auto estimated_rows = segment->getEstimatedRows();
         ASSERT_EQ(estimated_rows, block.rows());
@@ -135,7 +135,7 @@ try
 
     {
         // check segment
-        segment->check(*dmContext(), "test");
+        segment->check(dmContext(), "test");
     }
 
     { // Round 1
@@ -162,7 +162,7 @@ try
     {
         // write more rows to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_2, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     { // Round 2
@@ -189,14 +189,14 @@ CATCH
 TEST_F(SegmentTest, WriteRead2)
 try
 {
-    const size_t num_rows_write = dmContext()->stable_pack_rows;
+    const size_t num_rows_write = dmContext().stable_pack_rows;
     {
         // write a block with rows all deleted
         Block block = DMTestEnv::prepareBlockWithTso(2, 100, 100 + num_rows_write, false, true);
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
         // write not deleted rows with larger pk
         Block block2 = DMTestEnv::prepareBlockWithTso(3, 100, 100 + num_rows_write, false, false);
-        segment->write(*dmContext(), block2);
+        segment->write(dmContext(), block2);
 
         // flush segment and make sure there is two packs in stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
@@ -205,7 +205,7 @@ try
 
     {
         Block block = DMTestEnv::prepareBlockWithTso(1, 100, 100 + num_rows_write, false, false);
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
     }
 
     {
@@ -223,7 +223,7 @@ try
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         // write to segment
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
         // estimate segment
         auto estimated_rows = segment->getEstimatedRows();
         ASSERT_EQ(estimated_rows, block.rows());
@@ -234,7 +234,7 @@ try
 
     {
         // check segment
-        segment->check(*dmContext(), "test");
+        segment->check(dmContext(), "test");
     }
 
     RowKeyRanges read_ranges;
@@ -269,7 +269,7 @@ try
     {
         // write more rows to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_2, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
         ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write_2);
     }
 
@@ -309,12 +309,12 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
         offset += rows;
         // write to segment
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
     };
 
     {
         // check segment
-        segment->check(*dmContext(), "test");
+        segment->check(dmContext(), "test");
     }
 
     // Thread A
@@ -322,7 +322,7 @@ try
     ASSERT_INPUTSTREAM_NROWS(
         segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
-    auto snap = segment->createSnapshot(*dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
@@ -364,7 +364,7 @@ try
     {
         // write to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     auto get_rows = [&](const RowKeyRange & range) {
@@ -377,7 +377,7 @@ try
 
     {
         HandleRange remove(100, 200);
-        segment->write(*dmContext(), /*delete_range*/ {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), /*delete_range*/ {RowKeyRange::fromHandleRange(remove)});
     }
 
     // The first call of get_rows below will place the DeleteRange into delta index.
@@ -431,7 +431,7 @@ try
     {
         // write to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -445,7 +445,7 @@ try
     {
         // test delete range [1,99) for data in delta
         HandleRange remove(1, 99);
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -453,7 +453,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush cache before applying merge delete range or the delete range will not be compacted to stable
-        segment->flushCache(*dmContext());
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -484,7 +484,7 @@ try
     {
         // write to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -503,7 +503,7 @@ try
     {
         // test delete range [1,99) for data in stable
         HandleRange remove(1, 99);
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
 
@@ -514,7 +514,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush cache before applying merge delete range or the delete range will not be compacted to stable
-        segment->flushCache(*dmContext());
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -545,7 +545,7 @@ try
     {
         // write [0, 50) to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
         // flush [0, 50) to segment's stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
@@ -555,7 +555,7 @@ try
     {
         // write [50, 100) to segment's delta
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     if (read_before_delete)
@@ -568,7 +568,7 @@ try
     {
         // test delete range [1,99) for data in stable and delta
         HandleRange remove(1, 99);
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -576,7 +576,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush cache before applying merge delete range or the delete range will not be compacted to stable
-        segment->flushCache(*dmContext());
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -608,7 +608,7 @@ try
     const size_t num_rows_write = 64;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     {
@@ -618,7 +618,7 @@ try
 
     auto check_segment_squash_delete_range = [this](SegmentPtr & segment, const HandleRange & expect_range) {
         // set `is_update=false` to get full squash delete range
-        auto snap = segment->createSnapshot(*dmContext(), /*for_update*/ false, CurrentMetrics::DT_SnapshotOfRead);
+        auto snap = segment->createSnapshot(dmContext(), /*for_update*/ false, CurrentMetrics::DT_SnapshotOfRead);
         auto squash_range = snap->delta->getSquashDeleteRange();
         ASSERT_ROWKEY_RANGE_EQ(squash_range, RowKeyRange::fromHandleRange(expect_range));
     };
@@ -626,7 +626,7 @@ try
     {
         // Test delete range [70, 100)
         HandleRange del{70, 100};
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString()); // Add trace msg when ASSERT failed
         check_segment_squash_delete_range(segment, HandleRange{70, 100});
     }
@@ -644,7 +644,7 @@ try
     {
         // Test delete range [63, 70)
         HandleRange del{63, 70};
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
 
         check_segment_squash_delete_range(segment, HandleRange{63, 100});
@@ -663,7 +663,7 @@ try
     {
         // Test delete range [1, 32)
         HandleRange del{1, 32};
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
     }
@@ -685,7 +685,7 @@ try
         // Test delete range [1, 32)
         // delete should be idempotent
         HandleRange del{1, 32};
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
     }
@@ -706,7 +706,7 @@ try
         // Test delete range [0, 2)
         // There is an overlap range [0, 1)
         HandleRange del{0, 2};
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{0, 100});
     }
@@ -723,7 +723,7 @@ try
 
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(9, 16, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
         SCOPED_TRACE("check after write");
         // if we write some new data, we can still get the delete range
         check_segment_squash_delete_range(segment, HandleRange{0, 100});
@@ -752,12 +752,12 @@ try
     {
         // write to segment and flush
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
-        segment->write(*dmContext(), std::move(block), true);
+        segment->write(dmContext(), std::move(block), true);
     }
     {
         // write to segment and don't flush
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write_per_batch, 2 * num_rows_write_per_batch, false);
-        segment->write(*dmContext(), std::move(block), false);
+        segment->write(dmContext(), std::move(block), false);
     }
 
     {
@@ -787,8 +787,8 @@ try
 
     // delete rows in the right segment
     {
-        new_segment->write(*dmContext(), /*delete_range*/ new_segment->getRowKeyRange());
-        new_segment->flushCache(*dmContext());
+        new_segment->write(dmContext(), /*delete_range*/ new_segment->getRowKeyRange());
+        new_segment->flushCache(dmContext());
     }
 
     // merge segments
@@ -816,12 +816,12 @@ try
     {
         // write to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
     }
 
     // Remove all data
-    segment->write(*dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, 100)));
-    segment->flushCache(*dmContext());
+    segment->write(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, 100)));
+    segment->flushCache(dmContext());
 
     auto [a, b] = segment->split(dmContext(), tableColumns());
     EXPECT_EQ(a, SegmentPtr{});
@@ -868,7 +868,7 @@ try
 
                 ASSERT_EQ(c1->size(), c2->size());
 
-                for (Int64 i = 0; i < static_cast<Int64>(c1->size()); i++)
+                for (Int64 i = 0; i < Int64(c1->size()); i++)
                 {
                     if (iter1->name == DMTestEnv::pk_name)
                     {
@@ -891,12 +891,12 @@ try
     const size_t num_rows_write = 64;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(*dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block));
         // flush segment
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), *dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
 
     {
         // test compare
@@ -908,8 +908,8 @@ try
     {
         // Do some update and restore again
         HandleRange del(0, 32);
-        segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
-        new_segment = segment->restoreSegment(Logger::get(), *dmContext(), segment->segmentId());
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
+        new_segment = segment->restoreSegment(Logger::get(), dmContext(), segment->segmentId());
     }
 
     {
@@ -924,7 +924,7 @@ CATCH
 TEST_F(SegmentTest, MassiveSplit)
 try
 {
-    Settings settings = dmContext()->db_context.getSettings();
+    Settings settings = dmContext().db_context.getSettings();
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 
@@ -944,7 +944,7 @@ try
                 num_batches_written * num_rows_per_write,
                 num_batches_written * num_rows_per_write + num_rows_per_write,
                 false);
-            segment->write(*dmContext(), std::move(block));
+            segment->write(dmContext(), std::move(block));
             num_batches_written += 1;
         }
 
@@ -952,9 +952,9 @@ try
             // Delete some records so that the following condition can be satisfied:
             // if pk % 5 < 2, then the record would be deleted
             // if pk % 5 >= 2, then the record would be reserved
-            HandleRange del{static_cast<Int64>((num_batches_written - 1) * num_rows_per_write),
-                            static_cast<Int64>((num_batches_written - 1) * num_rows_per_write + 2)};
-            segment->write(*dmContext(), {RowKeyRange::fromHandleRange(del)});
+            HandleRange del{Int64((num_batches_written - 1) * num_rows_per_write),
+                            Int64((num_batches_written - 1) * num_rows_per_write + 2)};
+            segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         }
 
         {
@@ -964,7 +964,7 @@ try
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)
         {
-            temp.push_back(static_cast<Int64>(i));
+            temp.push_back(Int64(i));
         }
 
         {
@@ -1076,29 +1076,29 @@ try
             {
             case SegmentTestMode::V1_BlockOnly:
             case SegmentTestMode::V2_BlockOnly:
-                segment->write(*dmContext(), std::move(block));
+                segment->write(dmContext(), std::move(block));
                 break;
             case SegmentTestMode::V2_FileOnly:
             {
-                auto delegate = dmContext()->path_pool.getStableDiskDelegator();
-                auto file_provider = dmContext()->db_context.getFileProvider();
-                auto [range, file_ids] = genDMFile(*dmContext(), block);
+                auto delegate = dmContext().path_pool.getStableDiskDelegator();
+                auto file_provider = dmContext().db_context.getFileProvider();
+                auto [range, file_ids] = genDMFile(dmContext(), block);
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto column_file = std::make_shared<ColumnFileBig>(*dmContext(), file, range);
+                auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestColumnFiles(*dmContext(), range, {column_file}, false);
+                segment->ingestColumnFiles(dmContext(), range, {column_file}, false);
                 break;
             }
             default:
                 throw Exception("Unsupported");
             }
 
-            segment->flushCache(*dmContext());
+            segment->flushCache(dmContext());
         }
     };
 
@@ -1112,8 +1112,8 @@ try
     // Test split
     SegmentPtr other_segment;
     {
-        WriteBatches wbs(dmContext()->storage_pool);
-        auto segment_snap = segment->createSnapshot(*dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
+        WriteBatches wbs(dmContext().storage_pool);
+        auto segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         ASSERT_FALSE(!segment_snap);
 
         write_100_rows(segment);
@@ -1125,14 +1125,14 @@ try
         split_info->other_stable->enableDMFilesGC();
 
         auto lock = segment->mustGetUpdateLock();
-        std::tie(segment, other_segment) = segment->applySplit(lock, *dmContext(), segment_snap, wbs, split_info.value());
+        std::tie(segment, other_segment) = segment->applySplit(lock, dmContext(), segment_snap, wbs, split_info.value());
 
         wbs.writeAll();
     }
 
     {
-        SegmentPtr new_segment_1 = Segment::restoreSegment(Logger::get(), *dmContext(), segment->segmentId());
-        SegmentPtr new_segment_2 = Segment::restoreSegment(Logger::get(), *dmContext(), other_segment->segmentId());
+        SegmentPtr new_segment_1 = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
+        SegmentPtr new_segment_2 = Segment::restoreSegment(Logger::get(), dmContext(), other_segment->segmentId());
         auto rows1 = read_rows(new_segment_1);
         auto rows2 = read_rows(new_segment_2);
         ASSERT_EQ(rows1 + rows2, (size_t)200);
@@ -1140,14 +1140,14 @@ try
 
     // Test merge
     {
-        WriteBatches wbs(dmContext()->storage_pool);
+        WriteBatches wbs(dmContext().storage_pool);
 
-        auto left_snap = segment->createSnapshot(*dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
-        auto right_snap = other_segment->createSnapshot(*dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        auto left_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        auto right_snap = other_segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
         ASSERT_FALSE(!left_snap || !right_snap);
 
         write_100_rows(other_segment);
-        segment->flushCache(*dmContext());
+        segment->flushCache(dmContext());
 
         auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs);
 
@@ -1157,13 +1157,13 @@ try
         std::vector<Segment::Lock> locks;
         locks.emplace_back(segment->mustGetUpdateLock());
         locks.emplace_back(other_segment->mustGetUpdateLock());
-        segment = Segment::applyMerge(locks, *dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
+        segment = Segment::applyMerge(locks, dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
 
         wbs.writeAll();
     }
 
     {
-        SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), *dmContext(), segment->segmentId());
+        SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
         auto rows = read_rows(new_segment);
         ASSERT_EQ(rows, (size_t)300);
     }
@@ -1225,10 +1225,10 @@ try
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
-            segment->write(*dmContext(), std::move(block));
+            segment->write(dmContext(), std::move(block));
             break;
         case SegmentWriteType::ToCache:
-            segment->writeToCache(*dmContext(), block, 0, num_rows_write);
+            segment->writeToCache(dmContext(), block, 0, num_rows_write);
             break;
         }
     }
@@ -1239,7 +1239,7 @@ try
         columns_to_read->emplace_back(column_i32_after_ddl);
         if (flush_before_ddl)
         {
-            segment->flushCache(*dmContext());
+            segment->flushCache(dmContext());
         }
         setColumns(columns_to_read);
     }
@@ -1268,10 +1268,10 @@ try
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
-            segment->write(*dmContext(), std::move(block));
+            segment->write(dmContext(), std::move(block));
             break;
         case SegmentWriteType::ToCache:
-            segment->writeToCache(*dmContext(), block, 0, block.rows());
+            segment->writeToCache(dmContext(), block, 0, block.rows());
             break;
         }
     }
@@ -1298,7 +1298,7 @@ try
     // Flush cache and apply delta-merge, then read again
     // This will create a new stable with new schema, check the data.
     {
-        segment->flushCache(*dmContext());
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -1347,10 +1347,10 @@ try
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
-            segment->write(*dmContext(), std::move(block));
+            segment->write(dmContext(), std::move(block));
             break;
         case SegmentWriteType::ToCache:
-            segment->writeToCache(*dmContext(), block, 0, num_rows_write);
+            segment->writeToCache(dmContext(), block, 0, num_rows_write);
             break;
         }
     }
@@ -1362,7 +1362,7 @@ try
         if (flush_before_ddl)
         {
             // If write to cache, before apply ddl changes (change column data type), segment->flushCache must be called.
-            segment->flushCache(*dmContext());
+            segment->flushCache(dmContext());
         }
         setColumns(columns_after_ddl);
     }
@@ -1394,10 +1394,10 @@ try
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
-            segment->write(*dmContext(), std::move(block));
+            segment->write(dmContext(), std::move(block));
             break;
         case SegmentWriteType::ToCache:
-            segment->writeToCache(*dmContext(), block, 0, block.rows());
+            segment->writeToCache(dmContext(), block, 0, block.rows());
             break;
         }
     }
@@ -1425,7 +1425,7 @@ try
     // Flush cache and apply delta-merge, then read again
     // This will create a new stable with new schema, check the data.
     {
-        segment->flushCache(*dmContext());
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -1454,7 +1454,7 @@ CATCH
 TEST_F(SegmentTest, CalculateDTFileProperty)
 try
 {
-    Settings settings = dmContext()->db_context.getSettings();
+    Settings settings = dmContext().db_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
@@ -1467,7 +1467,7 @@ try
         size_t start = num_rows_write_every_round * i;
         Block block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
         // write to segment
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -1495,7 +1495,7 @@ CATCH
 TEST_F(SegmentTest, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
-    Settings settings = dmContext()->db_context.getSettings();
+    Settings settings = dmContext().db_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
@@ -1508,7 +1508,7 @@ try
         size_t start = num_rows_write_every_round * i;
         Block block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
         // write to segment
-        segment->write(*dmContext(), block);
+        segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 

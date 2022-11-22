@@ -383,7 +383,7 @@ private:
     DeltaValueReader() = default;
 
 public:
-    DeltaValueReader(const DMContextPtr & context_,
+    DeltaValueReader(const DMContext & context_,
                      const DeltaSnapshotPtr & delta_snap_,
                      const ColumnDefinesPtr & col_defs_,
                      const RowKeyRange & segment_range_);
@@ -421,7 +421,7 @@ private:
     bool persisted_files_done = false;
 
 public:
-    DeltaValueInputStream(const DMContextPtr & context_,
+    DeltaValueInputStream(const DMContext & context_,
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)

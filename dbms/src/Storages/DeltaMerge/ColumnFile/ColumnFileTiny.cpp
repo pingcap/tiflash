@@ -118,7 +118,7 @@ void ColumnFileTiny::fillColumns(const PageReader & page_reader, const ColumnDef
 }
 
 ColumnFileReaderPtr
-ColumnFileTiny::getReader(const DMContextPtr & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
+ColumnFileTiny::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileTinyReader>(*this, storage_snap, col_defs);
 }

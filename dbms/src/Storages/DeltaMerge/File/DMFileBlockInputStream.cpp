@@ -14,6 +14,7 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB::DM
 {
@@ -28,7 +29,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setFromSettings(context.getSettingsRef());
 }
 
-DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMContextPtr & dm_context, const DMFilePtr & dmfile, const ColumnDefines & read_columns, const RowKeyRanges & rowkey_ranges)
+DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr & dmfile, const ColumnDefines & read_columns, const RowKeyRanges & rowkey_ranges, const ScanContextPtr & scan_context)
 {
     RUNTIME_CHECK(dmfile->getStatus() == DMFile::Status::READABLE, dmfile->fileId(), DMFile::statusString(dmfile->getStatus()));
 
@@ -40,7 +41,6 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMContextPt
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
     DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
-        dm_context,
         dmfile,
         index_cache,
         /*set_cache_if_miss*/ true,
@@ -49,12 +49,12 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMContextPt
         read_packs,
         file_provider,
         read_limiter,
+        scan_context,
         tracing_id);
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
 
     DMFileReader reader(
-        dm_context,
         dmfile,
         read_columns,
         is_common_handle,
@@ -73,7 +73,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMContextPt
         rows_threshold_per_read,
         read_one_pack_every_time,
         tracing_id,
-        enable_read_thread);
+        enable_read_thread,
+        scan_context);
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader), enable_read_thread);
 }
