@@ -97,28 +97,18 @@ inline int getDefaultFlags()
     return flags;
 }
 
-template <bool need_subpattern>
 inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
     String mode = re2Util::getRE2ModeModifiers(match_type, collator);
     if (mode.empty())
-    {
-        if constexpr (need_subpattern)
-            return fmt::format("({})", pattern);
-        else
-            return pattern;
-    }
+        return pattern;
 
-    if constexpr (need_subpattern)
-        return fmt::format("{}({})", mode, pattern);
-    else
-        return fmt::format("{}{}", mode, pattern);
+    return fmt::format("{}{}", mode, pattern);
 }
 
-template <bool need_subpattern>
 inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    String final_pattern = addMatchTypeForPattern<need_subpattern>(pattern, match_type, collator);
+    String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
     return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
 }
 
@@ -802,8 +792,11 @@ public:
         if (unlikely(final_pattern.empty()))
             throw Exception(EMPTY_PAT_ERR_MSG);
 
+        if (need_subpattern)
+            final_pattern = fmt::format("({})", final_pattern);
+
         String match_type = match_type_param.getString(0);
-        final_pattern = addMatchTypeForPattern<need_subpattern>(final_pattern, match_type, collator);
+        final_pattern = addMatchTypeForPattern(final_pattern, match_type, collator);
 
         int flags = getDefaultFlags();
         return std::make_unique<Regexps::Regexp>(final_pattern, flags);
@@ -982,7 +975,7 @@ public:
 
             String match_type = match_type_param.getString(0);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern<false>(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
             ResultType res{regexp.match(expr)};
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1077,7 +1070,7 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    auto regexp = createRegexpWithMatchType<false>(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.match(expr_ref.data, expr_ref.size); // match
                 }
 
@@ -1097,7 +1090,7 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    auto regexp = createRegexpWithMatchType<false>(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.match(expr_ref.data, expr_ref.size); // match
                 }
 
@@ -1283,7 +1276,8 @@ public:
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern<true>(pat, match_type, collator), flags);
+            pat = fmt::format("({})", pat);
+            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
             ResultType res = regexp.instr(expr.c_str(), expr.size(), pos_const_val, occur_const_val, ret_op_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1409,11 +1403,12 @@ public:
                     pat = pat_param.getString(i);
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
+                    pat = fmt::format("({})", pat);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
@@ -1428,11 +1423,12 @@ public:
                     pat = pat_param.getString(i);
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
+                    pat = fmt::format("({})", pat);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 

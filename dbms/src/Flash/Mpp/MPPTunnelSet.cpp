@@ -30,7 +30,7 @@ void checkPacketSize(size_t size)
         throw Exception(fmt::format("Packet is too large to send, size : {}", size));
 }
 
-TrackedMppDataPacketPtr serializePacket(tipb::SelectResponse & response)
+TrackedMppDataPacketPtr serializePacket(const tipb::SelectResponse & response)
 {
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
     tracked_packet->serializeByResponse(response);
@@ -40,7 +40,7 @@ TrackedMppDataPacketPtr serializePacket(tipb::SelectResponse & response)
 } // namespace
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::sendExecutionSummary(tipb::SelectResponse & response)
+void MPPTunnelSetBase<Tunnel>::sendExecutionSummary(const tipb::SelectResponse & response)
 {
     RUNTIME_CHECK(!tunnels.empty());
     // for execution summary, only need to send to one tunnel.
