@@ -32,7 +32,7 @@ add_library(server_for_test
 )
 
 target_link_libraries (server_for_test PUBLIC clickhouse_common_io clickhouse_storages_system)
-target_include_directories(server_for_test PRIVATE ../../../contrib/grpc/)
+target_include_directories(server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
 
 add_library (clickhouse-server-lib
     HTTPHandler.cpp
