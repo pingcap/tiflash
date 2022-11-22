@@ -27,7 +27,6 @@
 
 #include <ext/singleton.h>
 
-
 namespace DB
 {
 
@@ -41,7 +40,6 @@ public:
 private:
     Poco::Logger * log = &Poco::Logger::get("CertificateReloader");
 };
-
 } // namespace DB
 
 #endif

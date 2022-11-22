@@ -158,9 +158,10 @@ struct ContextShared
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
-    /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
     TiFlashSecurityConfigPtr security_config;
 
+    /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
+    
     class SessionKeyHash
     {
     public:
