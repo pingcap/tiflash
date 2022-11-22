@@ -1790,7 +1790,6 @@ TEST_F(Regexp, testRegexpTiDBCase)
     ASSERT_ANY_THROW((DB::MatchImpl<false, false, true>::constantConstant("", "\\", '\\', "", nullptr, res)));
 }
 
-// TODO test empty columns
 // We can only test regexp_like function as regexp is the subset of regexp_like
 TEST_F(Regexp, RegexpLike)
 {
@@ -2367,7 +2366,6 @@ struct RegexpInstrCase
     String match_type;
 };
 
-// TODO add empty column test
 TEST_F(Regexp, RegexpInstr)
 {
     // Test: All columns are const
@@ -2674,6 +2672,39 @@ TEST_F(Regexp, RegexpInstr)
                              createColumn<Int64>(occurs),
                              createConstColumn<Int32>(test_cases.size(), 0),
                              createColumn<String>(match_types)));
+    }
+
+    // Test: empty column tests
+    {
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(0, 1),
+                         executeFunction(
+                             "regexp_instr",
+                             createConstColumn<String>(0, "m"),
+                             createConstColumn<String>(0, "m"),
+                             createConstColumn<Int32>(0, 1),
+                             createConstColumn<Int32>(0, 1),
+                             createConstColumn<Int32>(0, 1),
+                             createConstColumn<String>(0, "m")));
+
+        ASSERT_COLUMN_EQ(createColumn<Int64>({}),
+                         executeFunction(
+                             "regexp_instr",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createColumn<Int32>({}),
+                             createColumn<Int32>({}),
+                             createColumn<Int32>({}),
+                             createColumn<String>({})));
+        
+        ASSERT_COLUMN_EQ(createColumn<Int64>({}),
+                         executeFunction(
+                             "regexp_instr",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createConstColumn<Int32>(0, 1),
+                             createColumn<Int32>({}),
+                             createColumn<Int32>({}),
+                             createConstColumn<String>(0, "")));
     }
 
     // Test: Invalid parameter handling

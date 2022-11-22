@@ -174,20 +174,6 @@ GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
     }
 }
 
-template <typename ResultType>
-void setResultColumnValuesNull(ColumnWithTypeAndName & res_arg, size_t col_size)
-{
-    // Initialize result column
-    auto col_res = ColumnVector<ResultType>::create();
-    typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-    vec_res.resize(col_size, 0);
-
-    auto nullmap_col = ColumnUInt8::create();
-    typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-    nullmap.resize(col_size, 1);
-    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
-}
-
 template <bool is_const>
 class ParamString
 {
