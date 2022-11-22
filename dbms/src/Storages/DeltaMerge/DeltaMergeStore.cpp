@@ -901,7 +901,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
-    size_t final_num_stream = std::min(num_streams, tasks.size());
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
@@ -919,21 +918,25 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         enable_read_thread);
 
     BlockInputStreams res;
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        BlockInputStreamPtr stream;
-        if (enable_read_thread)
+        // We can use num_streams directly when read thread is enabled.
+        for (size_t i = 0; i < num_streams; ++i)
         {
-            stream = std::make_shared<UnorderedInputStream>(
+            res.emplace_back(std::make_shared<UnorderedInputStream>(
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                req_info));
         }
-        else
+    }
+    else
+    {
+        size_t final_num_stream = std::min(num_streams, tasks.size());
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
-            stream = std::make_shared<DMSegmentThreadInputStream>(
+            res.push_back(std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -944,9 +947,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 /* read_mode */ ReadMode::Raw,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                req_info));
         }
-        res.push_back(stream);
     }
     return res;
 }
@@ -987,7 +989,6 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1002,21 +1003,25 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         enable_read_thread);
 
     BlockInputStreams res;
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        BlockInputStreamPtr stream;
-        if (enable_read_thread)
+        // We can use num_streams directly when read thread is enabled.
+        for (size_t i = 0; i < num_streams; ++i)
         {
-            stream = std::make_shared<UnorderedInputStream>(
+            res.emplace_back(std::make_shared<UnorderedInputStream>(
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                log_tracing_id);
+                log_tracing_id));
         }
-        else
+    }
+    else
+    {
+        size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
-            stream = std::make_shared<DMSegmentThreadInputStream>(
+            res.emplace_back(std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -1027,9 +1032,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
                 extra_table_id_index,
                 physical_table_id,
-                log_tracing_id);
+                log_tracing_id));
         }
-        res.push_back(stream);
     }
     LOG_DEBUG(tracing_logger, "Read create stream done");
 
