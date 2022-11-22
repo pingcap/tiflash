@@ -211,7 +211,6 @@ private:
     std::set<String> allowed_common_names;
 
     bool has_tls_config = false;
-    grpc::SslCredentialsOptions options;
     mutable std::mutex mu;
 };
 

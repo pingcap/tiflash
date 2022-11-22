@@ -161,7 +161,7 @@ struct ContextShared
     TiFlashSecurityConfigPtr security_config;
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
-    
+
     class SessionKeyHash
     {
     public:
