@@ -22,5 +22,4 @@ if (APPLE)
 endif ()
 add_check(gtests_libdaemon)
 
-target_include_directories (gtests_libdaemon BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_include_directories (gtests_libdaemon PRIVATE ${TiFlash_SOURCE_DIR}/libs/libpocoext/include)

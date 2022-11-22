@@ -156,18 +156,6 @@ public:
         return new_options;
     }
 
-    pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config, const LoggerPtr & log)
-    {
-        pingcap::ClusterConfig config;
-        config.tiflash_engine_key = raft_config.engine_key;
-        config.tiflash_engine_value = raft_config.engine_value;
-        config.ca_path = ca_path;
-        config.cert_path = cert_path;
-        config.key_path = key_path;
-        LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
-        return config;
-    }
-
 private:
     static String readFile(const String & filename)
     {

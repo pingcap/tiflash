@@ -286,6 +286,18 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
+pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config, const LoggerPtr & log)
+{
+    pingcap::ClusterConfig config;
+    config.tiflash_engine_key = raft_config.engine_key;
+    config.tiflash_engine_value = raft_config.engine_value;
+    config.ca_path = security_config.ca_path;
+    config.cert_path = security_config.cert_path;
+    config.key_path = security_config.key_path;
+    LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}", security_config.ca_path, security_config.cert_path, security_config.key_path);
+    return config;
+}
+
 LoggerPtr grpc_log;
 
 void printGRPCLog(gpr_log_func_args * args)
@@ -1089,7 +1101,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
             global_context->getSecurityConfig().init(*config);
             auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-            auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config, log);
+            auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
             global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
         },
         /* already_loaded = */ true);
