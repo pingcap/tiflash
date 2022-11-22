@@ -3551,6 +3551,131 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStoreRWTest, ReadWithRange)
+try
+{
+    const ColumnDefine col_i8_define(2, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_i8_define);
+        store = reload(table_column_defines);
+    }
+
+    auto create_block = [&](Int64 a, Int8 b) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(a, a + 1, false);
+        block.insert(DB::tests::createColumn<Int8>(
+            createSignedNumbers(b, b + 1),
+            col_i8_define.name,
+            col_i8_define.id));
+        return block;
+    };
+
+    auto b1 = create_block(std::numeric_limits<Int64>::min(), 1);
+    store->write(*db_context, db_context->getSettingsRef(), b1);
+
+    auto b3 = create_block(0L, 3);
+    store->write(*db_context, db_context->getSettingsRef(), b3);
+
+    auto b2 = create_block(std::numeric_limits<Int64>::max() - 1, 2);
+    store->write(*db_context, db_context->getSettingsRef(), b2);
+
+    //while (!store->mergeDeltaAll(*db_context))
+    {
+        std::this_thread::sleep_for(10ms);
+    }
+    auto getIntHandleKey = [](Int64 i) {
+        WriteBufferFromOwnString ss;
+        DB::EncodeInt64(i, ss);
+        return std::make_shared<String>(ss.releaseStr());
+    };
+
+    {
+        Int64 start_key = 0;
+        RowKeyValue start(false, getIntHandleKey(start_key), start_key);
+        RowKeyValue end = RowKeyValue::INT_HANDLE_MAX_KEY;
+        RowKeyRange range(start, end, false, 1);
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {range},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+        auto block = in->read();
+        const auto & col = block.getByPosition(0);
+        auto * ids = toColumnVectorDataPtr<Int64>(col.column);
+        std::vector<Int64> v(ids->data(), ids->data() + col.column->size());
+        std::cout << fmt::format("{}", v) << std::endl;
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, TestComplex)
+try
+{
+    if (mode == TestMode::V1_BlockOnly)
+    {
+        // Seems V1 not support ingest files.
+        return;
+    }
+
+    constexpr size_t num_write_rows = 128;
+
+    UInt64 tso1 = 1;
+    UInt64 tso2 = 100;
+    // [0, 128) --> tso: 1
+    Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
+    // [128, 256) --> tso: 1
+    Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
+    // [64, 192) --> tso: 100
+    Block block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
+
+    // Write: [128, 256) --> tso: 1
+    store->write(*db_context, db_context->getSettingsRef(), block2);
+
+    // Ingest 2 files.
+    auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+    auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+    auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+    auto range = range1.merge(range3);
+    auto file_ids = file_ids1;
+    file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+    store->ingestFiles(dm_context, range, file_ids, false);
+
+    //store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    //store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    // Delete range [0, 64)
+    const size_t num_deleted_rows = 64;
+    HandleRange delete_range(0, num_deleted_rows);
+    store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(delete_range));
+
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(*db_context,
+                                         db_context->getSettingsRef(),
+                                         columns,
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                         /* num_streams= */ 1,
+                                         /* max_version= */ static_cast<UInt64>(1),
+                                         EMPTY_FILTER,
+                                         TRACING_NAME,
+                                         /* keep_order= */ false,
+                                         /* is_fast_scan= */ false,
+                                         /* expected_block_size= */ 1024)[0];
+    // Data is not guaranteed to be returned in order.
+    ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+        in,
+        Strings({DMTestEnv::pk_name}),
+        createColumns({createColumn<Int64>(createNumbers<Int64>(num_write_rows / 2, 2 * num_write_rows))}));
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DM
