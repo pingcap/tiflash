@@ -23,8 +23,7 @@ namespace DB
 /** Replace all matches of regexp 'needle' to string 'replacement'. 'needle' and 'replacement' are constants.
   * 'replacement' could contain substitutions, for example: '\2-\3-\1'
   */
-template <bool replace_one = false>
-struct ReplaceRegexpImpl
+struct RegexpReplaceImpl
 {
     static constexpr bool support_non_const_needle = false;
     static constexpr bool support_non_const_replacement = false;
@@ -82,7 +81,6 @@ struct ReplaceRegexpImpl
 
         return instructions;
     }
-
 
     static void processString(const re2_st::StringPiece & input,
                               ColumnString::Chars_t & res_data,
@@ -143,7 +141,7 @@ struct ReplaceRegexpImpl
                     }
 
                     /// when occ > 0, just replace the occ-th match even if replace_one is false
-                    if (replace_one || match.length() == 0) /// Stop after match of zero length, to avoid infinite loop.
+                    if (occ > 0 || match.length() == 0) /// Stop after match of zero length, to avoid infinite loop.
                         can_finish_current_string = true;
                 }
                 else
@@ -178,6 +176,22 @@ struct ReplaceRegexpImpl
         ++res_offset;
     }
 
+    static void executeReplace(const StringRef & expr,
+                                re2_st::RE2 & re2,
+                                const StringRef & repl,
+                                Int64 pos,
+                                Int64 occur,
+                                ColumnString::Chars_t & res_data,
+                                ColumnString::Offsets & res_offsets,
+                                size_t index,
+                                ColumnString::Offset & res_offset)
+    {
+        int num_captures = std::min(re2.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
+        Instructions instructions = createInstructions(String(repl.data, repl.size), num_captures);
+
+        processString(re2_st::StringPiece(expr.data, expr.size), res_data, res_offset, pos, occur, re2, num_captures, instructions);
+        res_offsets[index] = res_offset;
+    }
 
     static void vector(const ColumnString::Chars_t & data,
                        const ColumnString::Offsets & offsets,
@@ -271,16 +285,17 @@ struct ReplaceRegexpImpl
             res_offsets[i] = res_offset;
         }
     }
-    static void constant(const String & input, const String & needle, const String & replacement, const Int64 & pos, const Int64 & occ, const String & match_type, TiDB::TiDBCollatorPtr collator, String & output)
+
+    static void constant(const String & expr, const String & pattern, const String & replacement, const Int64 & pos, const Int64 & occ, const String & match_type, TiDB::TiDBCollatorPtr collator, StringRef & output)
     {
         ColumnString::Chars_t input_data;
-        input_data.insert(input_data.end(), input.begin(), input.end());
+        input_data.insert(input_data.end(), expr.begin(), expr.end());
         ColumnString::Offsets input_offsets;
         input_offsets.push_back(input_data.size() + 1);
         ColumnString::Chars_t output_data;
         ColumnString::Offsets output_offsets;
-        vector(input_data, input_offsets, needle, replacement, pos, occ, match_type, collator, output_data, output_offsets);
-        output = String(reinterpret_cast<const char *>(&output_data[0]), output_offsets[0] - 1);
+        vector(input_data, input_offsets, pattern, replacement, pos, occ, match_type, collator, output_data, output_offsets);
+        output = StringRef(reinterpret_cast<const char *>(&output_data[0]), output_offsets[0] - 1);
     }
 };
 
@@ -288,17 +303,15 @@ using FunctionTiDBRegexp = FunctionStringRegexp<NameTiDBRegexp>;
 using FunctionRegexpLike = FunctionStringRegexp<NameRegexpLike>;
 using FunctionRegexpInstr = FunctionStringRegexpInstr<NameRegexpInstr>;
 using FunctionRegexpSubstr = FunctionStringRegexpSubstr<NameRegexpSubstr>;
-using FunctionReplaceRegexpOne = FunctionStringReplace<ReplaceRegexpImpl<true>, NameReplaceRegexpOne>;
-using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<false>, NameReplaceRegexpAll>;
+using FunctionRegexpReplace = FunctionStringRegexpReplace<RegexpReplaceImpl, NameRegexpReplace>;
 
 void registerFunctionsRegexp(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionReplaceRegexpOne>();
-    factory.registerFunction<FunctionReplaceRegexpAll>();
     factory.registerFunction<FunctionTiDBRegexp>();
     factory.registerFunction<FunctionRegexpLike>();
     factory.registerFunction<FunctionRegexpInstr>();
     factory.registerFunction<FunctionRegexpSubstr>();
+    factory.registerFunction<FunctionRegexpReplace>();
 }
 
 } // namespace DB
