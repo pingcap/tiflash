@@ -149,21 +149,7 @@ public:
     size_t getSourceNum() const { return source_num; }
     uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
 
-    int computeNewThreadCount() const { return thread_count; }
-
-    void collectNewThreadCount(int & cnt)
-    {
-        if (!collected)
-        {
-            collected = true;
-            cnt += computeNewThreadCount();
-        }
-    }
-
-    void resetNewThreadCountCompute()
-    {
-        collected = false;
-    }
+    int getExternalThreadCnt() const { return thread_count; }
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;

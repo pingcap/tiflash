@@ -43,7 +43,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
     {
         for (const auto & io_stream : it->second)
         {
-            if (auto * cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(io_stream.get()))
+            if (auto * cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(io_stream.get()); cop_stream)
             {
                 for (const auto & connection_profile_info : cop_stream->getConnectionProfileInfos())
                 {
@@ -51,11 +51,10 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                     cop_table_scan_detail.bytes += connection_profile_info.bytes;
                 }
             }
-            else /// local read input stream also is IProfilingBlockInputStream
+            else if (auto * local_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); local_stream)
             {
-                auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get());
-                assert(p_stream);
-                local_table_scan_detail.bytes += p_stream->getProfileInfo().bytes;
+                /// local read input stream also is IProfilingBlockInputStream
+                local_table_scan_detail.bytes += local_stream->getProfileInfo().bytes;
             }
         }
     }
