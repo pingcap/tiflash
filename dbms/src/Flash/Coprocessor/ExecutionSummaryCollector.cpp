@@ -22,18 +22,6 @@
 
 namespace DB
 {
-
-// void setTableScanContext(tipb::TiFlashScanContext * tiflash_scan_context_pb, std::unique_ptr<DM::ScanContext> & scan_context)
-// {
-//     tiflash_scan_context_pb->set_total_scanned_packs_in_dmfile(scan_context->total_scanned_packs_in_dmfile);
-//     tiflash_scan_context_pb->set_total_skipped_packs_in_dmfile(scan_context->total_skipped_packs_in_dmfile);
-//     tiflash_scan_context_pb->set_total_scanned_rows_in_dmfile(scan_context->total_scanned_rows_in_dmfile);
-//     tiflash_scan_context_pb->set_total_skipped_rows_in_dmfile(scan_context->total_skipped_rows_in_dmfile);
-//     tiflash_scan_context_pb->set_total_rough_set_index_load_time_in_ns(scan_context->total_rough_set_index_load_time_in_ns);
-//     tiflash_scan_context_pb->set_total_dmfile_read_time_in_ns(scan_context->total_dmfile_read_time_in_ns);
-//     tiflash_scan_context_pb->set_total_create_snapshot_time_in_ns(scan_context->total_create_snapshot_time_in_ns);
-// }
-
 void ExecutionSummaryCollector::fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
@@ -119,13 +107,9 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
             current.concurrency++;
         }
         // get execution info from dag context's scan_context
-        if (dag_context.scan_contexts_map.find(executor_id) != dag_context.scan_contexts_map.end())
+        if (dag_context.scan_context_map.find(executor_id) != dag_context.scan_context_map.end())
         {
-            auto & scan_context_vec = dag_context.scan_contexts_map[executor_id];
-            for (auto & scan_context : scan_context_vec)
-            {
-                current.scan_context->merge(*scan_context);
-            }
+            current.scan_context->merge(*(dag_context.scan_context_map[executor_id]));
         }
 
         /// part 2: remote execution info

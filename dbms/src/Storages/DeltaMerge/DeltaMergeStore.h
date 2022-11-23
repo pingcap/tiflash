@@ -29,6 +29,7 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
+
 #include "Storages/DeltaMerge/ScanContext.h"
 
 namespace DB

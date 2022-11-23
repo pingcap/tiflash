@@ -41,18 +41,14 @@ using PacketPtr = std::shared_ptr<Packet>;
 using PacketQueue = MPMCQueue<PacketPtr>;
 using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
-bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right){
+bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
+{
     /// We only sampled some fields to compare equality in this test.
     /// It would be better to check all fields.
     /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
     /// https://en.cppreference.com/w/cpp/language/default_comparisons
 
-    return (left.concurrency == right.concurrency) && 
-           (left.num_iterations == right.num_iterations) && 
-           (left.num_produced_rows == right.num_produced_rows) && 
-           (left.time_processed_ns == right.time_processed_ns) && 
-           (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && 
-           (left.scan_context->total_dmfile_skipped_rows== right.scan_context->total_dmfile_skipped_rows);
+    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && (left.scan_context->total_dmfile_skipped_rows == right.scan_context->total_dmfile_skipped_rows);
 }
 
 struct MockWriter

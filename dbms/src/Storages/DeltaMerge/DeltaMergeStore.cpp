@@ -45,6 +45,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+
 #include "Storages/DeltaMerge/ScanContext.h"
 
 namespace ProfileEvents
@@ -969,6 +970,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
+
+    // scan_context is passed through from high level(or just make a new ScanContext with default value)
+    // dm_context hold scan_context to help record the performance metrics during this query.
     dm_context->setScanContext(scan_context);
 
     // If keep order is required, disable read thread.

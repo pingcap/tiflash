@@ -25,6 +25,7 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
+
 #include "Storages/DeltaMerge/Filter/RSOperator.h"
 #include "Storages/DeltaMerge/ScanContext.h"
 
@@ -65,6 +66,7 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    /// use scan_context to record the performance metrics during read.
     BlockInputStreams read(
         const Names & column_names,
         const SelectQueryInfo & query_info,
@@ -212,9 +214,9 @@ private:
     void shutdownImpl();
 
     /// Get Rough set filter from query
-    DM::RSOperatorPtr parseRoughSetFilter(const SelectQueryInfo & query_info, 
-                                          const DM::ColumnDefines & columns_to_read, 
-                                          const Context & context, 
+    DM::RSOperatorPtr parseRoughSetFilter(const SelectQueryInfo & query_info,
+                                          const DM::ColumnDefines & columns_to_read,
+                                          const Context & context,
                                           const LoggerPtr & tracing_logger);
 
 #ifndef DBMS_PUBLIC_GTEST

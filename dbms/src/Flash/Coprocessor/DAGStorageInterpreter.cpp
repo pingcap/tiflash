@@ -37,7 +37,9 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+
 #include "Storages/DeltaMerge/ScanContext.h"
+#include "Storages/StorageDeltaMerge.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -781,7 +783,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
             auto & scan_context = dag_context.scan_context_map[table_scan.getTableScanExecutorID()];
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
+            pipeline.streams = std::dynamic_pointer_cast<StorageDeltaMerge>(storage)->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
 
             injectFailPointForLocalRead(query_info);
 

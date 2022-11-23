@@ -459,6 +459,7 @@ try
     store->mergeDeltaAll(*db_context);
 
     const auto & columns = store->getTableColumns();
+    auto scan_context = std::make_shared<ScanContext>();
     auto in = store->read(*db_context,
                           db_context->getSettingsRef(),
                           columns,
@@ -469,19 +470,21 @@ try
                           TRACING_NAME,
                           /* keep_order= */ false,
                           /* is_fast_scan= */ false,
-                          /* expected_block_size= */ 1024)[0];
+                          /* expected_block_size= */ 1024,
+                          /* read_segments */ {},
+                          /* extra_table_id_index */ InvalidColumnID,
+                          /* scan_context */ scan_context)[0];
     in->readPrefix();
     while (in->read()) {};
     in->readSuffix();
 
-    auto * unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(in.get());
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_packs_count, 7);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_rows_count, 50000);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_packs_count, 0);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_rows_count, 0);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 7);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 50000);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 0);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0);
 
     auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
-
+    scan_context = std::make_shared<ScanContext>();
     in = store->read(*db_context,
                      db_context->getSettingsRef(),
                      columns,
@@ -492,17 +495,19 @@ try
                      TRACING_NAME,
                      /* keep_order= */ false,
                      /* is_fast_scan= */ false,
-                     /* expected_block_size= */ 1024)[0];
+                     /* expected_block_size= */ 1024,
+                     /* read_segments */ {},
+                     /* extra_table_id_index */ InvalidColumnID,
+                     /* scan_context */ scan_context)[0];
 
     in->readPrefix();
     while (in->read()) {};
     in->readSuffix();
 
-    unordered_input_stream_ptr = dynamic_cast<DB::DM::UnorderedInputStream *>(in.get());
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_packs_count, 6);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->scan_rows_count, 41808);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_packs_count, 1);
-    ASSERT_EQ(unordered_input_stream_ptr->getDMContext()->table_scan_context_ptr->skip_rows_count, 8192);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 6);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 41808);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 1);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 8192);
 }
 CATCH
 

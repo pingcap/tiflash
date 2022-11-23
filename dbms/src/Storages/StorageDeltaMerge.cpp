@@ -54,6 +54,7 @@
 #include <common/logger_useful.h>
 
 #include <random>
+
 #include "Storages/DeltaMerge/ScanContext.h"
 
 namespace DB
@@ -585,7 +586,8 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
     throw Exception(fmt::format("Unable to parse segment IDs in literal form: `{}`", partition_ast.fields_str.toString()));
 }
 
-size_t setColumnsToRead(ColumnDefines & columns_to_read, const DeltaMergeStorePtr & store, const Names & column_names) {
+size_t setColumnsToRead(ColumnDefines & columns_to_read, const DeltaMergeStorePtr & store, const Names & column_names)
+{
     auto header = store->getHeader();
     size_t extra_table_id_index = InvalidColumnID;
     for (size_t i = 0; i < column_names.size(); i++)
@@ -617,7 +619,8 @@ size_t setColumnsToRead(ColumnDefines & columns_to_read, const DeltaMergeStorePt
 }
 
 // Check whether tso is smaller than TiDB GcSafePoint
-void checkReadTso(UInt64 read_tso, const TMTContext & tmt, const Context & context, const Context & global_context) {
+void checkReadTso(UInt64 read_tso, const TMTContext & tmt, const Context & context, const Context & global_context)
+{
     auto pd_client = tmt.getPDClient();
     if (likely(!pd_client->isMock()))
     {
@@ -636,10 +639,11 @@ void checkReadTso(UInt64 read_tso, const TMTContext & tmt, const Context & conte
         }
     }
 }
-RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info, const TableID & id, const bool is_common_handle, const size_t rowkey_column_size, const unsigned num_streams, const Context & context, const LoggerPtr & tracing_logger, const Context & global_context){
+RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info, const TableID & id, const bool is_common_handle, const size_t rowkey_column_size, const unsigned num_streams, const Context & context, const LoggerPtr & tracing_logger, const Context & global_context)
+{
     TMTContext & tmt = context.getTMTContext();
     RUNTIME_CHECK(tmt.isInitialized());
-    
+
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
     checkReadTso(mvcc_query_info.read_tso, tmt, context, global_context);
@@ -694,11 +698,11 @@ RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info, const
     }
 
     return ranges;
-
 }
 
 
-DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo & query_info, const ColumnDefines & columns_to_read, const Context & context, const LoggerPtr & tracing_logger) {
+DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo & query_info, const ColumnDefines & columns_to_read, const Context & context, const LoggerPtr & tracing_logger)
+{
     DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
     const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
     if (enable_rs_filter)

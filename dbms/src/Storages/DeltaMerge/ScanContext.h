@@ -44,7 +44,8 @@ public:
 
     ScanContext() = default;
 
-    void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb){
+    void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
+    {
         total_dmfile_scanned_packs = tiflash_scan_context_pb.total_dmfile_scanned_packs();
         total_dmfile_skipped_packs = tiflash_scan_context_pb.total_dmfile_skipped_packs();
         total_dmfile_scanned_rows = tiflash_scan_context_pb.total_dmfile_scanned_rows();
@@ -54,17 +55,8 @@ public:
         total_create_snapshot_time_ms = tiflash_scan_context_pb.total_create_snapshot_time_ms();
     }
 
-    // explicit ScanContext(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
-    // {
-    //     total_dmfile_scanned_packs = tiflash_scan_context_pb.total_scanned_packs_in_dmfile();
-    //     total_dmfile_skipped_packs = tiflash_scan_context_pb.total_skipped_packs_in_dmfile();
-    //     total_dmfile_scanned_rows = tiflash_scan_context_pb.total_scanned_rows_in_dmfile();
-    //     total_dmfile_skipped_rows = tiflash_scan_context_pb.total_skipped_rows_in_dmfile();
-    //     total_dmfile_rough_set_index_load_time_ms = tiflash_scan_context_pb.total_rough_set_index_load_time_in_ns();
-    //     total_dmfile_read_time_ms = tiflash_scan_context_pb.total_dmfile_read_time_in_ns();
-    //     total_create_snapshot_time_ms = tiflash_scan_context_pb.total_create_snapshot_time_in_ns();
-    // }
-    tipb::TiFlashScanContext serialize() {
+    tipb::TiFlashScanContext serialize()
+    {
         tipb::TiFlashScanContext tiflash_scan_context_pb{};
         tiflash_scan_context_pb.set_total_dmfile_scanned_packs(total_dmfile_scanned_packs);
         tiflash_scan_context_pb.set_total_dmfile_skipped_packs(total_dmfile_skipped_packs);
