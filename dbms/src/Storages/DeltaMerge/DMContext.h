@@ -136,6 +136,8 @@ public:
     {
         return DMChecksumConfig::fromDBContext(db_context, is_single_file);
     }
+
+    void setScanContext(ScanContextPtr scan_context_) { scan_context = scan_context_; }
 };
 
 } // namespace DM

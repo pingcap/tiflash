@@ -45,6 +45,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include "Storages/DeltaMerge/ScanContext.h"
 
 namespace ProfileEvents
 {
@@ -963,13 +964,13 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index)
+                                        size_t extra_table_id_index,
+                                        const ScanContextPtr & scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
-    // currently, one query(dag) only has one table scan task.
-    // Thus scan_contexts_map only have one pair, we can just push back in the first one
-    db_context.getDAGContext()->scan_contexts_map.begin()->second.push_back(dm_context->scan_context);
+    dm_context->setScanContext(scan_context);
+
     // If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.

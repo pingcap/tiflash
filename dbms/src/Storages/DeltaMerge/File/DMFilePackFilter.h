@@ -293,7 +293,7 @@ private:
         Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
 
-        scan_context->total_rough_set_index_load_time_in_ns += watch.elapsed();
+        scan_context->total_dmfile_rough_set_index_load_time_ms += watch.elapsedMilliseconds();
     }
 
 private:

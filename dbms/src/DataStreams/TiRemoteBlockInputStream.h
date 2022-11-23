@@ -79,8 +79,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows = execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations = execution_summary.num_iterations();
                 remote_execution_summary.concurrency = execution_summary.concurrency();
-                auto scan_context = DM::ScanContext(execution_summary.tiflash_scan_context());
-                remote_execution_summary.scan_context->merge(&scan_context);
+                DM::ScanContext scan_context;
+                scan_context.deserialize(execution_summary.tiflash_scan_context());
+                remote_execution_summary.scan_context->merge(scan_context);
             }
         }
         execution_summaries_inited[index].store(true);
@@ -118,8 +119,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations += execution_summary.num_iterations();
                 remote_execution_summary.concurrency += execution_summary.concurrency();
-                auto scan_context = DM::ScanContext(execution_summary.tiflash_scan_context());
-                remote_execution_summary.scan_context->merge(&scan_context);
+                DM::ScanContext scan_context;
+                scan_context.deserialize(execution_summary.tiflash_scan_context());
+                remote_execution_summary.scan_context->merge(scan_context);
             }
         }
     }

@@ -25,6 +25,8 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
+#include "Storages/DeltaMerge/Filter/RSOperator.h"
+#include "Storages/DeltaMerge/ScanContext.h"
 
 namespace DB
 {
@@ -62,6 +64,15 @@ public:
         QueryProcessingStage::Enum & processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
+
+    BlockInputStreams read(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        QueryProcessingStage::Enum & processed_stage,
+        size_t max_block_size,
+        unsigned num_streams,
+        const DM::ScanContextPtr & scan_context);
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
@@ -199,6 +210,12 @@ private:
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
     void shutdownImpl();
+
+    /// Get Rough set filter from query
+    DM::RSOperatorPtr parseRoughSetFilter(const SelectQueryInfo & query_info, 
+                                          const DM::ColumnDefines & columns_to_read, 
+                                          const Context & context, 
+                                          const LoggerPtr & tracing_logger);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

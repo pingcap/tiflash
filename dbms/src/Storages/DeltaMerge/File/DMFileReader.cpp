@@ -298,8 +298,8 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
-        scan_context->total_skipped_packs_in_dmfile += 1;
-        scan_context->total_skipped_rows_in_dmfile += pack_stats[next_pack_id].rows;
+        scan_context->total_dmfile_skipped_packs += 1;
+        scan_context->total_dmfile_skipped_rows += pack_stats[next_pack_id].rows;
     }
     return next_pack_id < use_packs.size();
 }
@@ -318,7 +318,7 @@ Block DMFileReader::read()
 {
     Stopwatch watch;
     SCOPE_EXIT(
-        scan_context->total_dmfile_read_time_in_ns += watch.elapsed(););
+        scan_context->total_dmfile_read_time_ms += watch.elapsedMilliseconds(););
 
     // Go to next available pack.
     size_t skip_rows;
@@ -378,8 +378,8 @@ Block DMFileReader::read()
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
 
-    scan_context->total_scanned_packs_in_dmfile += read_packs;
-    scan_context->total_scanned_rows_in_dmfile += read_rows;
+    scan_context->total_dmfile_scanned_packs += read_packs;
+    scan_context->total_dmfile_scanned_rows += read_rows;
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_scan);

@@ -93,8 +93,7 @@ class DMFileTest
 {
 public:
     DMFileTest()
-        : dm_file(nullptr)
-        = default;
+        : dm_file(nullptr) {}
 
     static void SetUpTestCase() {}
 
@@ -914,8 +913,7 @@ class DMFileClusteredIndexTest
 {
 public:
     DMFileClusteredIndexTest()
-        : dm_file(nullptr)
-        = default;
+        : dm_file(nullptr) {}
 
     void SetUp() override
     {

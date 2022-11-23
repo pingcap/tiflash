@@ -54,6 +54,7 @@
 #include <common/logger_useful.h>
 
 #include <random>
+#include "Storages/DeltaMerge/ScanContext.h"
 
 namespace DB
 {
@@ -584,19 +585,7 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
     throw Exception(fmt::format("Unable to parse segment IDs in literal form: `{}`", partition_ast.fields_str.toString()));
 }
 
-BlockInputStreams StorageDeltaMerge::read(
-    const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & /*processed_stage*/,
-    size_t max_block_size,
-    unsigned num_streams)
-{
-    auto & store = getAndMaybeInitStore();
-    // Note that `columns_to_read` should keep the same sequence as ColumnRef
-    // in `Coprocessor.TableScan.columns`, or rough set filter could be
-    // failed to parsed.
-    ColumnDefines columns_to_read;
+size_t setColumnsToRead(ColumnDefines & columns_to_read, const DeltaMergeStorePtr & store, const Names & column_names) {
     auto header = store->getHeader();
     size_t extra_table_id_index = InvalidColumnID;
     for (size_t i = 0; i < column_names.size(); i++)
@@ -624,51 +613,36 @@ BlockInputStreams StorageDeltaMerge::read(
         columns_to_read.push_back(col_define);
     }
 
-    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    if (select_query.raw_for_mutable) // for selraw
+    return extra_table_id_index;
+}
+
+// Check whether tso is smaller than TiDB GcSafePoint
+void checkReadTso(UInt64 read_tso, const TMTContext & tmt, const Context & context, const Context & global_context) {
+    auto pd_client = tmt.getPDClient();
+    if (likely(!pd_client->isMock()))
     {
-        // Read without MVCC filtering and del_mark = 1 filtering
-        return store->readRaw(
-            context,
-            context.getSettingsRef(),
-            columns_to_read,
-            num_streams,
-            query_info.keep_order,
-            parseSegmentSet(select_query.segment_expression_list),
-            extra_table_id_index);
+        auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+            pd_client,
+            /* ignore_cache= */ false,
+            global_context.getSettingsRef().safe_point_update_interval_seconds);
+        if (read_tso < safe_point)
+        {
+            throw Exception(
+                fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}",
+                            context.getCurrentQueryId(),
+                            read_tso,
+                            safe_point),
+                ErrorCodes::LOGICAL_ERROR);
+        }
     }
-
-    // Read with MVCC filtering
+}
+RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info, const TableID & id, const bool is_common_handle, const size_t rowkey_column_size, const unsigned num_streams, const Context & context, const LoggerPtr & tracing_logger, const Context & global_context){
     TMTContext & tmt = context.getTMTContext();
-    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
     RUNTIME_CHECK(tmt.isInitialized());
-
-    const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto tracing_logger = log->getChild(query_info.req_id);
-
+    
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
-    // Check whether tso is smaller than TiDB GcSafePoint
-    const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
-        auto pd_client = tmt.getPDClient();
-        if (likely(!pd_client->isMock()))
-        {
-            auto safe_point = PDClientHelper::getGCSafePointWithRetry(
-                pd_client,
-                /* ignore_cache= */ false,
-                global_context.getSettingsRef().safe_point_update_interval_seconds);
-            if (read_tso < safe_point)
-            {
-                throw Exception(
-                    fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}",
-                                context.getCurrentQueryId(),
-                                read_tso,
-                                safe_point),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-    };
-    check_read_tso(mvcc_query_info.read_tso);
+    checkReadTso(mvcc_query_info.read_tso, tmt, context, global_context);
 
     FmtBuffer fmt_buf;
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -700,10 +674,10 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto ranges = getQueryRanges(
         mvcc_query_info.regions_query_info,
-        tidb_table_info.id,
+        id,
         is_common_handle,
         rowkey_column_size,
-        /*expected_ranges_count*/ num_streams,
+        num_streams,
         tracing_logger);
 
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -719,7 +693,12 @@ BlockInputStreams StorageDeltaMerge::read(
         LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
-    /// Get Rough set filter from query
+    return ranges;
+
+}
+
+
+DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo & query_info, const ColumnDefines & columns_to_read, const Context & context, const LoggerPtr & tracing_logger) {
     DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
     const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
     if (enable_rs_filter)
@@ -746,6 +725,47 @@ BlockInputStreams StorageDeltaMerge::read(
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
+    return rs_operator;
+}
+
+BlockInputStreams StorageDeltaMerge::read(
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    QueryProcessingStage::Enum & /*processed_stage*/,
+    size_t max_block_size,
+    unsigned num_streams)
+{
+    auto & store = getAndMaybeInitStore();
+    // Note that `columns_to_read` should keep the same sequence as ColumnRef
+    // in `Coprocessor.TableScan.columns`, or rough set filter could be
+    // failed to parsed.
+    ColumnDefines columns_to_read;
+    auto extra_table_id_index = setColumnsToRead(columns_to_read, store, column_names);
+
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+    if (select_query.raw_for_mutable) // for selraw
+    {
+        // Read without MVCC filtering and del_mark = 1 filtering
+        return store->readRaw(
+            context,
+            context.getSettingsRef(),
+            columns_to_read,
+            num_streams,
+            query_info.keep_order,
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
+    }
+
+    // Read with MVCC filtering
+    auto tracing_logger = log->getChild(query_info.req_id);
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+
+    auto ranges = parseMvccQueryInfo(mvcc_query_info, tidb_table_info.id, is_common_handle, rowkey_column_size, num_streams, context, tracing_logger, global_context);
+
+    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+
     auto streams = store->read(
         context,
         context.getSettingsRef(),
@@ -762,7 +782,70 @@ BlockInputStreams StorageDeltaMerge::read(
         extra_table_id_index);
 
     /// Ensure read_tso info after read.
-    check_read_tso(mvcc_query_info.read_tso);
+    checkReadTso(mvcc_query_info.read_tso, context.getTMTContext(), context, global_context);
+
+    LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
+
+    return streams;
+}
+
+BlockInputStreams StorageDeltaMerge::read(
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    QueryProcessingStage::Enum & /*processed_stage*/,
+    size_t max_block_size,
+    unsigned num_streams,
+    const ScanContextPtr & scan_context)
+{
+    auto & store = getAndMaybeInitStore();
+    // Note that `columns_to_read` should keep the same sequence as ColumnRef
+    // in `Coprocessor.TableScan.columns`, or rough set filter could be
+    // failed to parsed.
+    ColumnDefines columns_to_read;
+    auto extra_table_id_index = setColumnsToRead(columns_to_read, store, column_names);
+
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+    if (select_query.raw_for_mutable) // for selraw
+    {
+        // Read without MVCC filtering and del_mark = 1 filtering
+        return store->readRaw(
+            context,
+            context.getSettingsRef(),
+            columns_to_read,
+            num_streams,
+            query_info.keep_order,
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
+    }
+
+    // Read with MVCC filtering
+    auto tracing_logger = log->getChild(query_info.req_id);
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+
+    auto ranges = parseMvccQueryInfo(mvcc_query_info, tidb_table_info.id, is_common_handle, rowkey_column_size, num_streams, context, tracing_logger, global_context);
+
+    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+
+    auto streams = store->read(
+        context,
+        context.getSettingsRef(),
+        columns_to_read,
+        ranges,
+        num_streams,
+        /*max_version=*/mvcc_query_info.read_tso,
+        rs_operator,
+        query_info.req_id,
+        query_info.keep_order,
+        /* is_fast_scan */ query_info.is_fast_scan,
+        max_block_size,
+        parseSegmentSet(select_query.segment_expression_list),
+        extra_table_id_index,
+        scan_context);
+
+    /// Ensure read_tso info after read.
+    checkReadTso(mvcc_query_info.read_tso, context.getTMTContext(), context, global_context);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 

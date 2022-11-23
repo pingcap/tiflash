@@ -37,6 +37,7 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include "Storages/DeltaMerge/ScanContext.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -319,8 +320,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        std::vector<DM::ScanContextPtr> scan_context_vec = {};
-        dagContext().scan_contexts_map[table_scan.getTableScanExecutorID()] = scan_context_vec;
+        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = std::make_shared<DM::ScanContext>();
         buildLocalStreams(pipeline, settings.max_block_size);
     }
 
@@ -774,13 +774,14 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
     auto & storage = storages_with_structure_lock[table_id].storage;
 
-    const DAGContext & dag_context = *context.getDAGContext();
+    DAGContext & dag_context = *context.getDAGContext();
     for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
     {
         try
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+            auto & scan_context = dag_context.scan_context_map[table_scan.getTableScanExecutorID()];
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
 
             injectFailPointForLocalRead(query_info);
 

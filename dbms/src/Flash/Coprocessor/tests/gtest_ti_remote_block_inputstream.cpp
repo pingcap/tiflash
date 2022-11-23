@@ -42,7 +42,18 @@ using PacketQueue = MPMCQueue<PacketPtr>;
 using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right){
-    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && (left.scan_context->total_scanned_rows_in_dmfile == right.scan_context->total_scanned_packs_in_dmfile) && (left.scan_context->total_skipped_rows_in_dmfile == right.scan_context->total_skipped_rows_in_dmfile)};
+    /// We only sampled some fields to compare equality in this test.
+    /// It would be better to check all fields.
+    /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
+    /// https://en.cppreference.com/w/cpp/language/default_comparisons
+
+    return (left.concurrency == right.concurrency) && 
+           (left.num_iterations == right.num_iterations) && 
+           (left.num_produced_rows == right.num_produced_rows) && 
+           (left.time_processed_ns == right.time_processed_ns) && 
+           (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && 
+           (left.scan_context->total_dmfile_skipped_rows== right.scan_context->total_dmfile_skipped_rows);
+}
 
 struct MockWriter
 {
@@ -50,7 +61,7 @@ struct MockWriter
         : queue(queue_)
     {}
 
-    ExecutionSummary mockExecutionSummary()
+    static ExecutionSummary mockExecutionSummary()
     {
         ExecutionSummary summary;
         summary.time_processed_ns = 100;
@@ -59,12 +70,13 @@ struct MockWriter
         summary.concurrency = 1;
         summary.scan_context = std::make_unique<DM::ScanContext>();
 
-        // We only sampled some fields to compare equality in this test.
-        // It would be better to check all fields.
-        // This can be done by using C++20's default comparsion feature when we switched to use C++20:
-        // https://en.cppreference.com/w/cpp/language/default_comparisons
-        summary.scan_context->total_scanned_rows_in_dmfile = 1;
-        summary.scan_context->total_skipped_rows_in_dmfile = 2;
+        summary.scan_context->total_dmfile_scanned_packs = 1;
+        summary.scan_context->total_dmfile_skipped_packs = 2;
+        summary.scan_context->total_dmfile_scanned_rows = 8000;
+        summary.scan_context->total_dmfile_skipped_rows = 15000;
+        summary.scan_context->total_dmfile_rough_set_index_load_time_ms = 10;
+        summary.scan_context->total_dmfile_read_time_ms = 200;
+        summary.scan_context->total_create_snapshot_time_ms = 5;
         return summary;
     }
 
@@ -86,10 +98,7 @@ struct MockWriter
             summary_ptr->set_num_produced_rows(summary.num_produced_rows);
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
-
-            auto * tiflash_scan_context = summary_ptr->mutable_tiflash_scan_context();
-            setTableScanContext(tiflash_scan_context, summary.scan_context);
-
+            summary_ptr->mutable_tiflash_scan_context()->CopyFrom(summary.scan_context->serialize());
             summary_ptr->set_executor_id("Executor_0");
         }
         ++total_packets;
@@ -119,7 +128,7 @@ struct MockReceiverContext
     using Status = ::grpc::Status;
     struct Request
     {
-        String debugString()
+        String debugString() const
         {
             return "{Request}";
         }
@@ -139,7 +148,7 @@ struct MockReceiverContext
         {
         }
 
-        bool read(PacketPtr & packet [[maybe_unused]])
+        bool read(PacketPtr & packet [[maybe_unused]]) const
         {
             PacketPtr res;
             if (queue->pop(res) == MPMCQueueResult::OK)
@@ -150,7 +159,7 @@ struct MockReceiverContext
             return false;
         }
 
-        Status finish()
+        Status finish() const
         {
             return ::grpc::Status();
         }
@@ -180,7 +189,7 @@ struct MockReceiverContext
     {
     }
 
-    void fillSchema(DAGSchema & schema)
+    void fillSchema(DAGSchema & schema) const
     {
         schema.clear();
         for (size_t i = 0; i < field_types.size(); ++i)
@@ -191,7 +200,7 @@ struct MockReceiverContext
         }
     }
 
-    Request makeRequest(int index)
+    Request makeRequest(int index) const
     {
         return {index, index, -1};
     }
@@ -206,7 +215,7 @@ struct MockReceiverContext
         return ::grpc::Status();
     }
 
-    bool supportAsync(const Request &) { return false; }
+    bool supportAsync(const Request &) const { return false; }
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
