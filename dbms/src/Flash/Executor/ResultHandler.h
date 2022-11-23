@@ -14,29 +14,34 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
-#include <tipb/select.pb.h>
+#include <Core/Block.h>
+
+#include <functional>
 
 namespace DB
 {
-class DAGResponseWriter
+class ResultHandler
 {
 public:
-    DAGResponseWriter(
-        Int64 records_per_chunk_,
-        DAGContext & dag_context_);
-    /// prepared with sample block
-    virtual void prepare(const Block &){};
-    virtual void write(const Block & block) = 0;
-    /// flush cached blocks for batch writer
-    virtual void flush() = 0;
-    virtual void finishWrite() = 0;
-    virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
+    using Handler = std::function<void(const Block &)>;
+    explicit ResultHandler(Handler handler_)
+        : handler(handler_)
+        , is_ignored(false)
+    {}
+    ResultHandler()
+        : is_ignored(true)
+    {}
 
-protected:
-    Int64 records_per_chunk;
-    DAGContext & dag_context;
+    bool isIgnored() const { return is_ignored; }
+
+    void operator()(const Block & block) const
+    {
+        handler(block);
+    }
+
+private:
+    Handler handler;
+
+    bool is_ignored;
 };
-
 } // namespace DB

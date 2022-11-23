@@ -66,7 +66,6 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
     }
-    int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
@@ -76,7 +75,6 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             exchange_type,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
-            /*should_send_exec_summary_at_last=*/stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dag_context,
             fine_grained_shuffle.enable(),
             fine_grained_shuffle.stream_count,

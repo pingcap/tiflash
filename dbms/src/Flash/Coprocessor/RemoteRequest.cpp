@@ -86,7 +86,8 @@ RemoteRequest RemoteRequest::build(
         dag_req.set_force_encode_type(true);
     }
     /// do not collect execution summaries because in this case because the execution summaries
-    /// will be collected by CoprocessorBlockInputStream
+    /// will be collected by CoprocessorBlockInputStream.
+    /// Otherwise rows in execution summary of table scan will be double.
     dag_req.set_collect_execution_summaries(false);
     const auto & original_dag_req = *dag_context.dag_request;
     if (original_dag_req.has_time_zone_name() && !original_dag_req.time_zone_name().empty())
