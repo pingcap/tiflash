@@ -49,7 +49,7 @@ struct MockWriter
         : queue(queue_)
     {}
 
-    static ExecutionSummary mockExecutionSummary()
+    ExecutionSummary mockExecutionSummary()
     {
         ExecutionSummary summary;
         summary.time_processed_ns = 100;
@@ -67,7 +67,7 @@ struct MockWriter
         return summary;
     }
 
-    static void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
+    void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
     void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet)
     {
         ++total_packets;
@@ -100,7 +100,7 @@ struct MockWriter
         queue->push(tracked_packet);
     }
     void sendExecutionSummary(tipb::SelectResponse & response) { write(response); }
-    static uint16_t getPartitionNum() { return 1; }
+    uint16_t getPartitionNum() { return 1; }
 
     PacketQueuePtr queue;
     bool add_summary = false;
@@ -114,7 +114,7 @@ struct MockReceiverContext
     using Status = ::grpc::Status;
     struct Request
     {
-        static String debugString()
+        String debugString()
         {
             return "{Request}";
         }
@@ -134,7 +134,7 @@ struct MockReceiverContext
         {
         }
 
-        static bool read(PacketPtr & packet [[maybe_unused]]) 
+        bool read(PacketPtr & packet [[maybe_unused]]) 
         {
             PacketPtr res;
             if (queue->pop(res) == MPMCQueueResult::OK)
@@ -145,7 +145,7 @@ struct MockReceiverContext
             return false;
         }
 
-        static Status finish()
+        Status finish()
         {
             return ::grpc::Status();
         }
@@ -160,9 +160,9 @@ struct MockReceiverContext
     struct MockAsyncGrpcExchangePacketReader
     {
         // Not implement benchmark for Async GRPC for now.
-        static void init(UnaryCallback<bool> *) { assert(0); }
-        static void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
-        static void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        void init(UnaryCallback<bool> *) { assert(0); }
+        void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
+        void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
     };
 
     using AsyncReader = MockAsyncGrpcExchangePacketReader;
@@ -175,7 +175,7 @@ struct MockReceiverContext
     {
     }
 
-    static void fillSchema(DAGSchema & schema) 
+    void fillSchema(DAGSchema & schema) 
     {
         schema.clear();
         for (size_t i = 0; i < field_types.size(); ++i)
@@ -186,7 +186,7 @@ struct MockReceiverContext
         }
     }
 
-    static Request makeRequest(int index)
+    Request makeRequest(int index)
     {
         return {index, index, -1};
     }
@@ -201,7 +201,7 @@ struct MockReceiverContext
         return ::grpc::Status();
     }
 
-    static bool supportAsync(const Request &) { return false; }
+    bool supportAsync(const Request &) { return false; }
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
@@ -295,7 +295,7 @@ public:
             source_blocks.emplace_back(prepareBlock(block_rows));
     }
 
-    static void prepareQueue(
+    void prepareQueue(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
         bool empty_last_packet) 
@@ -317,7 +317,7 @@ public:
         dag_writer->finishWrite();
     }
 
-    static void prepareQueueV2(
+    void prepareQueueV2(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
         bool empty_last_packet) 
@@ -341,7 +341,7 @@ public:
         dag_writer->finishWrite();
     }
 
-    static void checkChunkInResponse(
+    void checkChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -359,7 +359,7 @@ public:
         ASSERT_BLOCK_EQ(reference_block, decoded_block);
     }
 
-    static void checkNoChunkInResponse(
+    void checkNoChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -385,7 +385,7 @@ public:
         ASSERT_EQ(receiver_stream->getTotalRows(), reference_block.rows());
     }
 
-    static std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
+    std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
         PacketQueuePtr queue_ptr)
     {
         auto receiver = std::make_shared<MockExchangeReceiver>(
@@ -403,7 +403,7 @@ public:
         return receiver_stream;
     }
 
-    static void doTestNoChunkInResponse(bool empty_last_packet) 
+    void doTestNoChunkInResponse(bool empty_last_packet) 
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -420,7 +420,7 @@ public:
         checkNoChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    static void doTestChunkInResponse(bool empty_last_packet) 
+    void doTestChunkInResponse(bool empty_last_packet) 
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;

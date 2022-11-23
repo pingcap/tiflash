@@ -100,7 +100,6 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
 
     auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams) {
         ExecutionSummary current;
-        //bool get_storage_info = false;
         /// part 1: local execution info
         // get execution info from streams
         for (const auto & stream_ptr : streams)
