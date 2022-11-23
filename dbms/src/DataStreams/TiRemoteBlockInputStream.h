@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/Coprocessor/DAGResponseWriter.h>
+#include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
@@ -51,8 +51,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     /// this atomic variable is kind of a lock for the struct of execution_summaries:
     /// if execution_summaries_inited[index] = true, the map execution_summaries[index]
-    /// itself will not be modified, so DAGResponseWriter can read it safely, otherwise,
-    /// DAGResponseWriter will just skip execution_summaries[index]
+    /// itself will not be modified, so ExecutionSummaryCollector can read it safely, otherwise,
+    /// ExecutionSummaryCollector will just skip execution_summaries[index]
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
