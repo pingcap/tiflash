@@ -34,42 +34,42 @@ RemoteRequest RemoteRequest::build(
     tipb::DAGRequest dag_req;
     auto * executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
 
+    tipb::Executor * ts_exec = executor;
+    ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+    ts_exec->set_executor_id(table_scan.getTableScanExecutorID());
+
+    if (is_disaggregated_compute_node)
     {
-        tipb::Executor * ts_exec = executor;
-        ts_exec->set_executor_id(table_scan.getTableScanExecutorID());
-        if (is_disaggregated_compute_node)
+        // In disaggregated mode, use DAGRequest sent from TiDB directly, so no need to rely on SchemaSyncer.
+        if (table_scan.isPartitionTableScan())
         {
-            // In disaggregated mode, use DAGRequest sent from TiDB directly, so no need to rely on SchemaSyncer.
-            // ExchangeReceiver rely tipb::ExchangeReceiver.field_types to build schema.
-            if (table_scan.isPartitionTableScan())
-            {
-                ts_exec->set_tp(tipb::ExecType::TypePartitionTableScan);
-                auto * mutable_partition_table_scan = ts_exec->mutable_partition_table_scan();
-                *mutable_partition_table_scan = table_scan.getTableScanPB()->partition_table_scan();
-            }
-            else
-            {
-                ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-                auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
-                *mutable_table_scan = table_scan.getTableScanPB()->tbl_scan();
-            }
+            ts_exec->set_tp(tipb::ExecType::TypePartitionTableScan);
+            auto * mutable_partition_table_scan = ts_exec->mutable_partition_table_scan();
+            *mutable_partition_table_scan = table_scan.getTableScanPB()->partition_table_scan();
         }
         else
         {
-            auto print_retry_regions = [&retry_regions, &table_info] {
-                FmtBuffer buffer;
-                buffer.fmtAppend("Start to build remote request for {} regions (", retry_regions.size());
-                buffer.joinStr(
-                        retry_regions.cbegin(),
-                        retry_regions.cend(),
-                        [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
-                        ",");
-                buffer.fmtAppend(") for table {}", table_info.id);
-                return buffer.toString();
-            };
-            LOG_INFO(log, "{}", print_retry_regions());
-
             ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+            auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
+            *mutable_table_scan = table_scan.getTableScanPB()->tbl_scan();
+        }
+    }
+    else
+    {
+        auto print_retry_regions = [&retry_regions, &table_info] {
+            FmtBuffer buffer;
+            buffer.fmtAppend("Start to build remote request for {} regions (", retry_regions.size());
+            buffer.joinStr(
+                retry_regions.cbegin(),
+                retry_regions.cend(),
+                [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
+                ",");
+            buffer.fmtAppend(") for table {}", table_info.id);
+            return buffer.toString();
+        };
+        LOG_INFO(log, "{}", print_retry_regions());
+
+        {
             auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
             table_scan.constructTableScanForRemoteRead(mutable_table_scan, table_info.id);
 
@@ -107,7 +107,8 @@ RemoteRequest RemoteRequest::build(
             dag_req.set_force_encode_type(true);
         }
         /// do not collect execution summaries because in this case because the execution summaries
-        /// will be collected by CoprocessorBlockInputStream
+        /// will be collected by CoprocessorBlockInputStream.
+        /// Otherwise rows in execution summary of table scan will be double.
         dag_req.set_collect_execution_summaries(false);
         const auto & original_dag_req = *dag_context.dag_request;
         if (original_dag_req.has_time_zone_name() && !original_dag_req.time_zone_name().empty())

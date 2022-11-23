@@ -534,9 +534,13 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
         std::multimap<std::string, std::string> meta_data;
         meta_data.emplace("is_remote_read", "true");
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"), std::move(meta_data));
+
+        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"), std::move(meta_data), [&] {
+            GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment();
+        });
         all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
     }
+    GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_constructed).Increment(static_cast<double>(all_tasks.size()));
     return all_tasks;
 }
 
@@ -550,7 +554,6 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     else
     {
         std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
-        GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(static_cast<double>(all_tasks.size()));
 
         const DAGSchema & schema = remote_requests[0].schema;
         pingcap::kv::Cluster * cluster = tmt.getKVCluster();

@@ -55,6 +55,13 @@ void mergeRemoteExecuteSummaries(
     }
 }
 
+tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
+{
+    tipb::SelectResponse response;
+    addExecuteSummaries(response);
+    return response;
+}
+
 void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & response)
 {
     if (!dag_context.collect_execution_summaries)

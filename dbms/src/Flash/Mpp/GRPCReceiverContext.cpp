@@ -15,7 +15,9 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <grpcpp/completion_queue.h>
 
+#include <cassert>
 #include <tuple>
 
 namespace pingcap
@@ -25,16 +27,16 @@ namespace kv
 template <>
 struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 {
-    using RequestType = ::mpp::EstablishMPPConnectionRequest;
-    using ResultType = ::mpp::MPPDataPacket;
-    static std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
+    using RequestType = mpp::EstablishMPPConnectionRequest;
+    using ResultType = mpp::MPPDataPacket;
+    static std::unique_ptr<grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
         const RequestType & req)
     {
         return client->stub->EstablishMPPConnection(context, req);
     }
-    static std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(
+    static std::unique_ptr<grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
         const RequestType & req,
@@ -56,7 +58,7 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
 {
     std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
     grpc::ClientContext client_context;
-    std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
+    std::unique_ptr<grpc::ClientReader<mpp::MPPDataPacket>> reader;
 
     explicit GrpcExchangePacketReader(const ExchangeRecvRequest & req)
     {
@@ -68,7 +70,7 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
         return packet->read(reader);
     }
 
-    ::grpc::Status finish() override
+    grpc::Status finish() override
     {
         return reader->Finish();
     }
@@ -82,15 +84,19 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     const ExchangeRecvRequest & request;
     pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
     grpc::ClientContext client_context;
-    std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
+    grpc::CompletionQueue * cq; // won't be null
+    std::unique_ptr<grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
 
     AsyncGrpcExchangePacketReader(
         pingcap::kv::Cluster * cluster_,
-        const ExchangeRecvRequest & req)
+        grpc::CompletionQueue * cq_,
+        const ExchangeRecvRequest & req_)
         : cluster(cluster_)
-        , request(req)
-        , call(req.req)
+        , request(req_)
+        , call(req_.req)
+        , cq(cq_)
     {
+        assert(cq != nullptr);
     }
 
     void init(UnaryCallback<bool> * callback) override
@@ -99,7 +105,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
             request.req->sender_meta().address(),
             &client_context,
             call,
-            GRPCCompletionQueuePool::global_instance->pickQueue(),
+            *cq,
             callback);
     }
 
@@ -152,7 +158,7 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         }
     }
 
-    ::grpc::Status finish() override
+    grpc::Status finish() override
     {
         if (local_tunnel_sender)
         {
@@ -266,9 +272,10 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 void GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
     AsyncExchangePacketReaderPtr & reader,
+    grpc::CompletionQueue * cq,
     UnaryCallback<bool> * callback) const
 {
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
+    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
     reader->init(callback);
 }
 
