@@ -1624,8 +1624,9 @@ public:
             int flags = getDefaultFlags();
             String expr = expr_param.getString(0);
             String match_type = match_type_param.getString(0);
+            pat = fmt::format("({})", pat);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern<true>(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
             StringRef res_ref;
             bool success = regexp.substr(expr.c_str(), expr.size(), res_ref, pos_const_val, occur_const_val);
             if (success)
@@ -1737,8 +1738,9 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
+                    pat = fmt::format("({})", pat);
 
-                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
             }
@@ -1754,8 +1756,9 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
+                    pat = fmt::format("({})", pat);
 
-                    auto regexp = createRegexpWithMatchType<true>(pat, match_type, collator);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
                 }
             }
