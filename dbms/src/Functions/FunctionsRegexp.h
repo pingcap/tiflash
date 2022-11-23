@@ -1464,11 +1464,11 @@ public:
         {
         case REGEXP_INSTR_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[5]).column;
-        case REGEXP_MIN_PARAM_NUM + 3:
+        case REGEXP_INSTR_MAX_PARAM_NUM -1:
             col_return_option = block.getByPosition(arguments[4]).column;
-        case REGEXP_MIN_PARAM_NUM + 2:
+        case REGEXP_INSTR_MAX_PARAM_NUM - 2:
             col_occur = block.getByPosition(arguments[3]).column;
-        case REGEXP_MIN_PARAM_NUM + 1:
+        case REGEXP_INSTR_MAX_PARAM_NUM - 3:
             col_pos = block.getByPosition(arguments[2]).column;
         };
 

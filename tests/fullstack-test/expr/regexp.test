@@ -100,3 +100,18 @@ mysql> create table test.t (data varchar(30), pattern varchar(30), pos int, occu
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 mysql> set tidb_enforce_mpp=1; select regexp_instr("1", "1", pos, occur, 1, match_type) as res from test.t;
+mysql> set tidb_enforce_mpp=1; select regexp_instr("1", "", pos, occur, 1, match_type) as res from test.t;
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (data varchar(30), pattern varchar(30), pos int, occur int, ret_op int, match_type varchar(30));
+mysql> insert into test.t values ('123', '12.', 1, 1, 0, ''), ('aBb', "bb", 1, 1, 0, 'i'), ('ab\nabc', '^abc$', 1, 1, 0, 'm');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_instr(expr, pattern, 1, 1, 0, match_type) as res from test.t;
++------+
+| res  |
++------+
+|    1 |
+|    2 |
+|    4 |
++------+
