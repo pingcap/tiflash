@@ -2189,7 +2189,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         }
     }
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilter total_rows={} cost={}ms bitmap {}", total_rows, sw_total.elapsedMilliseconds(), bitmap_filter->toDebugString());
+    LOG_DEBUG(log, "buildBitmapFilter total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
