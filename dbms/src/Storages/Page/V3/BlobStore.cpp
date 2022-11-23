@@ -526,7 +526,6 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     }
     {
         // Remove the blob file from disk and memory
-        // Note that other code will 
         std::lock_guard files_gurad(mtx_blob_files);
         if (auto iter = blob_files.find(blob_id);
             iter != blob_files.end())
