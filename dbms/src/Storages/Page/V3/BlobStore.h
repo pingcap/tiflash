@@ -124,8 +124,8 @@ private:
 
     BlobStats blob_stats;
 
-    std::mutex mtx_cached_files;
-    std::unordered_map<BlobFileId, BlobFilePtr> cached_files;
+    std::mutex mtx_blob_files;
+    std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
 };
 using BlobStorePtr = std::shared_ptr<BlobStore>;
 

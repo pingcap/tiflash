@@ -122,7 +122,6 @@ void BlobStore::reloadConfig(const BlobConfig & rhs)
     // until it is changed to read only type by gc thread or tiflash is restarted.
     config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
-    config.cached_fd_size = rhs.cached_fd_size;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
     config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
 }
@@ -520,14 +519,23 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     // As the blob_stat become read-only, it is safe to release the lock.
     LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
-    auto blob_file = getBlobFile(blob_id);
     {
+        // Remove the stat from memory
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
     }
-    blob_file->remove();
-    std::lock_guard files_gurad(mtx_cached_files);
-    cached_files.erase(blob_id);
+    {
+        // Remove the blob file from disk and memory
+        // Note that other code will 
+        std::lock_guard files_gurad(mtx_blob_files);
+        if (auto iter = blob_files.find(blob_id);
+            iter != blob_files.end())
+        {
+            auto blob_file = iter->second;
+            blob_file->remove();
+            blob_files.erase(iter);
+        }
+    }
 }
 
 PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
@@ -1142,11 +1150,11 @@ String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    std::lock_guard files_gurad(mtx_cached_files);
-    if (auto iter = cached_files.find(blob_id); iter != cached_files.end())
+    std::lock_guard files_gurad(mtx_blob_files);
+    if (auto iter = blob_files.find(blob_id); iter != blob_files.end())
         return iter->second;
     auto file = std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
-    cached_files.emplace(blob_id, file);
+    blob_files.emplace(blob_id, file);
     return file;
 }
 
