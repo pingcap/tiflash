@@ -46,8 +46,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 
-#include "Storages/DeltaMerge/ScanContext.h"
-
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;

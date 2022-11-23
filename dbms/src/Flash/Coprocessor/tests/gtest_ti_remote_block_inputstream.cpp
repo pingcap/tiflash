@@ -47,7 +47,6 @@ bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & righ
     /// It would be better to check all fields.
     /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
     /// https://en.cppreference.com/w/cpp/language/default_comparisons
-
     return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns) && (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && (left.scan_context->total_dmfile_skipped_rows == right.scan_context->total_dmfile_skipped_rows);
 }
 

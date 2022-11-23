@@ -31,15 +31,14 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
-
-#include "Storages/DeltaMerge/ScanContext.h"
-#include "Storages/StorageDeltaMerge.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

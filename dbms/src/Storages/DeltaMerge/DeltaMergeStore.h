@@ -22,6 +22,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
@@ -29,8 +30,6 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
-
-#include "Storages/DeltaMerge/ScanContext.h"
 
 namespace DB
 {
