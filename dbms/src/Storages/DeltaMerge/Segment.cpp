@@ -455,7 +455,7 @@ bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & rang
     return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
 
-SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) 
+SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
     SCOPE_EXIT(
@@ -633,8 +633,8 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & data_ranges,
-    const RSOperatorPtr &  /*filter*/,
-    size_t  /*expected_block_size*/) const
+    const RSOperatorPtr & filter,
+    size_t expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
@@ -721,7 +721,7 @@ BlockInputStreamPtr Segment::getInputStreamModeRaw(const DMContext & dm_context,
                                                    const ColumnDefines & columns_to_read,
                                                    const SegmentSnapshotPtr & segment_snap,
                                                    const RowKeyRanges & data_ranges,
-                                                   size_t  /*expected_block_size*/) const
+                                                   size_t expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
@@ -1495,7 +1495,7 @@ SegmentPair Segment::applySplit( //
     return {new_me, other};
 }
 
-static SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const std::vector<SegmentPtr> & ordered_segments)
+SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const std::vector<SegmentPtr> & ordered_segments)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
@@ -1762,7 +1762,7 @@ String Segment::info() const
                        stable->getDMFilesPacks());
 }
 
-static String Segment::simpleInfo(const std::vector<SegmentPtr> & segments)
+String Segment::simpleInfo(const std::vector<SegmentPtr> & segments)
 {
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("[{} segments: ", segments.size());
@@ -1777,7 +1777,7 @@ static String Segment::simpleInfo(const std::vector<SegmentPtr> & segments)
     return fmt_buf.toString();
 }
 
-static String Segment::info(const std::vector<SegmentPtr> & segments)
+String Segment::info(const std::vector<SegmentPtr> & segments)
 {
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("[{} segments: ", segments.size());
@@ -1862,16 +1862,16 @@ ColumnDefinesPtr Segment::arrangeReadColumns(const ColumnDefine & handle, const 
 }
 
 template <bool skippable_place, class IndexIterator>
-SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &  /*dm_context*/,
-                                                      const ColumnDefines &  /*read_columns*/,
+SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext & dm_context,
+                                                      const ColumnDefines & read_columns,
                                                       const RowKeyRanges & rowkey_ranges,
-                                                      const RSOperatorPtr &  /*filter*/,
+                                                      const RSOperatorPtr & filter,
                                                       const StableSnapshotPtr & stable_snap,
                                                       const DeltaValueReaderPtr & delta_reader,
                                                       const IndexIterator & delta_index_begin,
                                                       const IndexIterator & delta_index_end,
                                                       size_t expected_block_size,
-                                                      UInt64  /*max_version*/)
+                                                      UInt64 max_version)
 {
     if (unlikely(rowkey_ranges.empty()))
         throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
@@ -1892,7 +1892,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
                                                     const StableSnapshotPtr & stable_snap,
                                                     const DeltaValueReaderPtr & delta_reader,
                                                     const RowKeyRanges & read_ranges,
-                                                    UInt64  /*max_version*/) const
+                                                    UInt64 max_version) const
 {
     auto delta_snap = delta_reader->getDeltaSnap();
     // Clone a new delta index.

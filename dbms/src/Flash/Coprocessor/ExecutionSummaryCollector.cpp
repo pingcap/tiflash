@@ -17,11 +17,12 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <memory>
 
 namespace DB
 {
 
-void setTableScanContext(tipb::TiFlashScanContext * tiflash_scan_context_pb, std::shared_ptr<DM::ScanContext> scan_context)
+void setTableScanContext(tipb::TiFlashScanContext * tiflash_scan_context_pb, std::unique_ptr<DM::ScanContext> & scan_context)
 {
     tiflash_scan_context_pb->set_total_scanned_packs_in_dmfile(scan_context->total_scanned_packs_in_dmfile);
     tiflash_scan_context_pb->set_total_skipped_packs_in_dmfile(scan_context->total_skipped_packs_in_dmfile);

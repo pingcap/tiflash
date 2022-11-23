@@ -129,7 +129,7 @@ size_t StableValueSpace::getBytes() const
     return valid_bytes;
 }
 
-size_t StableValueSpace::getDMFilesBytesOnDisk() 
+size_t StableValueSpace::getDMFilesBytesOnDisk() const
 {
     size_t bytes = 0;
     for (const auto & file : files)
@@ -137,7 +137,7 @@ size_t StableValueSpace::getDMFilesBytesOnDisk()
     return bytes;
 }
 
-size_t StableValueSpace::getDMFilesPacks() 
+size_t StableValueSpace::getDMFilesPacks() const
 {
     size_t packs = 0;
     for (const auto & file : files)
@@ -145,7 +145,7 @@ size_t StableValueSpace::getDMFilesPacks()
     return packs;
 }
 
-size_t StableValueSpace::getDMFilesRows() 
+size_t StableValueSpace::getDMFilesRows() const
 {
     size_t rows = 0;
     for (const auto & file : files)
@@ -153,7 +153,7 @@ size_t StableValueSpace::getDMFilesRows()
     return rows;
 }
 
-size_t StableValueSpace::getDMFilesBytes() 
+size_t StableValueSpace::getDMFilesBytes() const
 {
     size_t bytes = 0;
     for (const auto & file : files)
@@ -414,7 +414,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
 }
 
 StableValueSpace::Snapshot::AtLeastRowsAndBytesResult //
-StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) 
+StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const
 {
     AtLeastRowsAndBytesResult ret{};
 

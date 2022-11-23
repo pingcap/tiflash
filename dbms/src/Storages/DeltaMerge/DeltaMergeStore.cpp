@@ -1373,7 +1373,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // The segment does not need any updates for now.
 }
 
-void DeltaMergeStore::check(const Context & /*db_context*/) const
+void DeltaMergeStore::check(const Context & /*db_context*/)
 {
     std::shared_lock lock(read_write_mutex);
 

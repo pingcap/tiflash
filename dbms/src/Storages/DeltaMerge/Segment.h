@@ -156,7 +156,7 @@ public:
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
-    static SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) ;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
     BlockInputStreamPtr getInputStream(
         const ReadMode & read_mode,
@@ -177,7 +177,7 @@ public:
         UInt64 max_version,
         size_t expected_block_size);
 
-    static BlockInputStreamPtr getInputStreamModeNormal(
+    BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
@@ -201,14 +201,14 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         const RSOperatorPtr & filter,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE) const;
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE) const;
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
@@ -399,12 +399,12 @@ public:
     bool isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
 
     /// Flush delta's cache packs.
-    static bool flushCache(DMContext & dm_context);
+    bool flushCache(DMContext & dm_context);
     void placeDeltaIndex(DMContext & dm_context);
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
-    static bool compactDelta(DMContext & dm_context);
+    bool compactDelta(DMContext & dm_context);
 
     size_t getEstimatedRows() const { return delta->getRows() + stable->getRows(); }
     size_t getEstimatedBytes() const { return delta->getBytes() + stable->getBytes(); }

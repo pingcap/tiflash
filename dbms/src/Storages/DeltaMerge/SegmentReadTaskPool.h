@@ -37,7 +37,7 @@ struct SegmentReadTask
 {
     SegmentPtr segment;
     SegmentSnapshotPtr read_snapshot;
-    RowKeyRanges ranges{};
+    RowKeyRanges ranges;
 
     SegmentReadTask(const SegmentPtr & segment_, //
                     const SegmentSnapshotPtr & read_snapshot_,
@@ -140,18 +140,18 @@ public:
     SegmentReadTasksWrapper(bool enable_read_thread_, SegmentReadTasks && ordered_tasks_);
 
     // `nextTask` pops task sequentially. This function is used when `enable_read_thread` is false.
-    SegmentReadTaskPtr nextTask() const;
+    SegmentReadTaskPtr nextTask();
 
     // `getTask` and `getTasks` are used when `enable_read_thread` is true.
-    SegmentReadTaskPtr getTask(UInt64 seg_id) const;
+    SegmentReadTaskPtr getTask(UInt64 seg_id);
     const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
 
     bool empty() const;
 
 private:
     bool enable_read_thread;
-    SegmentReadTasks ordered_tasks{};
-    std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks{};
+    SegmentReadTasks ordered_tasks;
+    std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
 };
 
 class SegmentReadTaskPool : private boost::noncopyable
@@ -206,7 +206,7 @@ public:
                   total_bytes / 1024.0 / 1024.0);
     }
 
-    static SegmentReadTaskPtr nextTask();
+    SegmentReadTaskPtr nextTask();
     const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
     SegmentReadTaskPtr getTask(UInt64 seg_id);
 

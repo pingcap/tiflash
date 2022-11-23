@@ -218,9 +218,9 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        static std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, const LoggerPtr & log_);
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, const LoggerPtr & log_);
 
-        static BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
+        BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
     DeltaMergeStore(Context & db_context, //
@@ -316,7 +316,7 @@ public:
         return flushCache(dm_context, range, try_until_succeed);
     }
 
-    static bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
+    bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 
     /// Merge delta into the stable layer for all segments.
     ///
@@ -332,7 +332,7 @@ public:
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
-    static void compact(const Context & context, const RowKeyRange & range);
+    void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
     UInt64 onSyncGc(Int64 limit, const GCOptions & gc_options);
@@ -388,7 +388,7 @@ public:
     }
     SortDescription getPrimarySortDescription() const;
 
-    void check(const Context & db_context) const;
+    void check(const Context & db_context);
 
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
@@ -406,7 +406,7 @@ public:
 private:
 #endif
 
-    static DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {
@@ -609,9 +609,9 @@ public:
     BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
 
     /// end of range -> segment
-    SegmentSortedMap segments{};
+    SegmentSortedMap segments;
     /// Mainly for debug.
-    SegmentMap id_to_segment{};
+    SegmentMap id_to_segment;
 
     MergeDeltaTaskPool background_tasks;
 

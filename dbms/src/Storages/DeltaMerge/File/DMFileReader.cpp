@@ -396,11 +396,12 @@ Block DMFileReader::read()
         do_clean_read_on_normal_mode = max_version <= max_read_version;
     }
 
-    for (auto & cd : read_columns)
+    for (size_t i = 0; i < read_columns.size(); ++i)
     {
         try
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
+            auto & cd = read_columns[i];
             if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle_on_fast_mode)
             {
                 // Return the first row's handle
@@ -612,7 +613,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
     }
 }
 
-void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const
+void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
 {
     if (col_data_cache == nullptr)
     {

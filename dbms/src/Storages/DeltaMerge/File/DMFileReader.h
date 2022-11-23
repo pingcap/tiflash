@@ -111,7 +111,7 @@ public:
         // For DMFileReader, always use the readable path.
         return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
     }
-    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
+    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
 
 private:
     bool shouldSeek(size_t pack_id);
@@ -129,7 +129,7 @@ private:
                     size_t read_rows,
                     size_t skip_packs,
                     bool force_seek);
-    static bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
+    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
     DMFilePtr dmfile;

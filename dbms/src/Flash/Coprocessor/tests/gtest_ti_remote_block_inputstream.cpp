@@ -29,6 +29,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
+#include <memory>
 
 namespace DB
 {
@@ -55,7 +56,7 @@ struct MockWriter
         summary.num_produced_rows = 10000;
         summary.num_iterations = 50;
         summary.concurrency = 1;
-        summary.scan_context = std::make_shared<DM::ScanContext>();
+        summary.scan_context = std::make_unique<DM::ScanContext>();
 
         // We only sampled some fields to compare equality in this test.
         // It would be better to check all fields.
