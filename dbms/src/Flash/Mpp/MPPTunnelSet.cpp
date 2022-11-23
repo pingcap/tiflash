@@ -81,9 +81,9 @@ void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id
 
     receiver_task_id_to_index_map[receiver_task_id] = tunnels.size();
     tunnels.push_back(tunnel);
-    if (!tunnel->isLocal())
+    if (!tunnel->isLocal() && !tunnel->isAsync())
     {
-        remote_tunnel_cnt++;
+        ++external_thread_cnt;
     }
 }
 
