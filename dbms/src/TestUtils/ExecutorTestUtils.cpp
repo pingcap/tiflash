@@ -98,10 +98,8 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setDAGContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    auto res = executeQuery(context.context, /*internal=*/true);
-    FmtBuffer fb;
-    res.in->dumpTree(fb);
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 
 void ExecutorTest::executeExecutor(
@@ -238,7 +236,9 @@ ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(dag_context);
     // Currently, don't care about regions information in tests.
-    return readBlock(executeQuery(context.context, /*internal=*/true).in);
+    Blocks blocks;
+    queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    return mergeBlocks(blocks).getColumnsWithTypeAndName();
 }
 
 

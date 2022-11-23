@@ -30,6 +30,7 @@ public:
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
     void close();
+    int getExternalThreadCnt();
 
 private:
     /// two kinds of receiver in MPP
