@@ -16,12 +16,10 @@
 
 #include <Core/Types.h>
 #include <common/memcpy.h>
-#include <Common/PODArray.h>
+#include <common/StringRef.h>
 
 namespace DB
 {
-using JsonType = UInt8;
-using Bytes_t = PODArray<UInt8>;
 /**
  * https://github.com/pingcap/tidb/blob/release-6.4/types/json_binary.go
  * https://github.com/pingcap/tidb/blob/release-6.4/types/json_constants.go
@@ -90,36 +88,74 @@ using Bytes_t = PODArray<UInt8>;
 class JsonBinary
 {
 public:
-    const JsonType TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
-    const JsonType TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.
-    const JsonType TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
-    const JsonType TYPE_CODE_INT64 = 0x09; // TypeCodeInt64 indicates the JSON is a signed integer.
-    const JsonType TYPE_CODE_UINT64 = 0x0a; // TypeCodeUint64 indicates the JSON is a unsigned integer.
-    const JsonType TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
-    const JsonType TYPE_CODE_STRING = 0x0c; // TypeCodeString indicates the JSON is a string.
-    const JsonType TYPE_CODE_Opaque = 0x0d; // TypeCodeOpaque indicates the JSON is an opaque.
-    const JsonType TYPE_CODE_Date = 0x0e; // TypeCodeDate indicates the JSON is a date.
-    const JsonType TYPE_CODE_Datetime = 0x0f; // TypeCodeDatetime indicates the JSON is a datetime.
-    const JsonType TYPE_CODE_Timestamp = 0x10; // TypeCodeTimestamp indicates the JSON is a timestamp.
-    const JsonType TYPE_CODE_Duration = 0x11; // TypeCodeDuration indicates the JSON is a duration.
+    using JsonType = UInt8;
+    static constexpr JsonType TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
+    static constexpr JsonType TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.
+    static constexpr JsonType TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
+    static constexpr JsonType TYPE_CODE_INT64 = 0x09; // TypeCodeInt64 indicates the JSON is a signed integer.
+    static constexpr JsonType TYPE_CODE_UINT64 = 0x0a; // TypeCodeUint64 indicates the JSON is a unsigned integer.
+    static constexpr JsonType TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
+    static constexpr JsonType TYPE_CODE_STRING = 0x0c; // TypeCodeString indicates the JSON is a string.
+    static constexpr JsonType TYPE_CODE_OPAQUE = 0x0d; // TypeCodeOpaque indicates the JSON is an opaque.
+    static constexpr JsonType TYPE_CODE_DATE = 0x0e; // TypeCodeDate indicates the JSON is a date.
+    static constexpr JsonType TYPE_CODE_DATETIME = 0x0f; // TypeCodeDatetime indicates the JSON is a datetime.
+    static constexpr JsonType TYPE_CODE_TIMESTAMP = 0x10; // TypeCodeTimestamp indicates the JSON is a timestamp.
+    static constexpr JsonType TYPE_CODE_DURATION = 0x11; // TypeCodeDuration indicates the JSON is a duration.
 
-    const UInt8 LITERAL_NIL = 0x00; // LiteralNil represents JSON null.
-    const UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
-    const UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
+    static constexpr UInt8 LITERAL_NIL = 0x00; // LiteralNil represents JSON null.
+    static constexpr UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
+    static constexpr UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
 
-    explicit JsonBinary(const String & json_str);
-    explicit JsonBinary(const char * pos, size_t length)
-    {
-        data.resize(length);
-        inline_memcpy(&data[0], pos, length);
-    }
+    /// Opaque represents a raw binary type
+    struct Opaque {
+        // TypeCode is the same with TiDB database type code
+        UInt8 type;
+        // Buf is the underlying bytes of the data
+        StringRef data;
+    };
+
+    explicit JsonBinary(JsonType type_, const StringRef & ref)
+    : type(type_)
+    , data(ref)
+    {}
+
+    // getElementCount gets the count of Object or Array only.
+    UInt32 getElementCount() const;
+    String toString() const;
+    String unquote() const;
+    static String unquoteString(const StringRef & ref);
+    static String unquoteJsonString(const StringRef & ref);
 
     static void SkipJson(size_t & cursor, const String & raw_value);
     static String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
-
 private:
+    Int64 getInt64() const;
+    UInt64 getUInt64() const;
+    double getFloat64() const;
+    StringRef getString() const;
+    Opaque getOpaque() const;
+
+    JsonBinary getArrayElement(size_t index) const;
+    StringRef getObjectKey(size_t index) const;
+    JsonBinary getObjectValue(size_t index) const;
+    JsonBinary getValueEntry(size_t value_entry_offset) const;
+
+    void marshalTo(String & str) const;
+    void marshalObjectTo(String & str) const;
+    void marshalArrayTo(String & str) const;
+
+    static void marshalFloat64To(String & str, double f);
+    static void marshalLiteralTo(String & str, UInt8 literal);
+    static void marshalStringTo(String & str, const StringRef & ref);
+
+    static void marshalOpaqueTo(String & str, const Opaque & o);
+    static void marshalDurationTo(String & str, Int64 duration, UInt32 fsp);
+
     JsonType type;
-    std::vector<UInt8> data; // First byte is JsonType
+    /// 'data' doesn't contain type byte.
+    /// In this way, when we construct new JsonBinary object for child field, new object's 'data' field can directly reference original object's data memory as a slice
+    /// Avoid memory re-allocations
+    const StringRef & data;
 };
 
 } // namespace DB

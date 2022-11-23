@@ -56,6 +56,8 @@ String DecodeCompactBytes(size_t & cursor, const String & raw_value);
 
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value);
 
+UInt64 DecodeVarUInt(size_t & cursor, const StringRef & raw_value);
+
 Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value);

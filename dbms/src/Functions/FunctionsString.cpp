@@ -1097,7 +1097,7 @@ public:
     }
 };
 
-extern UInt64 GetJsonLength(std::string_view sv);
+extern UInt64 GetJsonLength(const std::string_view & sv);
 
 class FunctionJsonLength : public IFunction
 {

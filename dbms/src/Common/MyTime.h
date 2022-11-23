@@ -249,4 +249,7 @@ UInt64 addSeconds(UInt64 t, Int64 delta);
 void addDays(MyDateTime & t, Int64 days);
 void addMonths(MyDateTime & t, Int64 months);
 
+MyDate createMyDateFromCoreTime(UInt64 coreTime);
+MyDateTime createMyDateTimeFromCoreTime(UInt64 coreTime);
+
 } // namespace DB

@@ -112,11 +112,11 @@ void SkipCompactBytes(size_t & cursor, const String & raw_value)
     cursor += size;
 }
 
-UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
+UInt64 DecodeVarUIntImpl(size_t & cursor, const char * raw_value, size_t length)
 {
     UInt64 res = 0;
     int s = 0;
-    for (int i = 0; cursor < raw_value.size(); i++)
+    for (int i = 0; cursor < length; i++)
     {
         UInt64 v = raw_value[cursor++];
         if (v < 0x80)
@@ -129,6 +129,15 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
         s += 7;
     }
     throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
+}
+UInt64 DecodeVarUInt(size_t & cursor, const StringRef & raw_value)
+{
+    return DecodeVarUIntImpl(cursor, raw_value.data, raw_value.size);
+}
+
+UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
+{
+    return DecodeVarUIntImpl(cursor, raw_value.data(), raw_value.length());
 }
 
 void SkipVarUInt(size_t & cursor, const String & raw_value)
