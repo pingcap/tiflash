@@ -76,7 +76,6 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     , config(config_)
     , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
-    , cached_files(config.cached_fd_size)
 {
 }
 
@@ -502,28 +501,33 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    bool need_remove_stat = false;
     const auto & stat = blob_stats.blobIdToStat(blob_id);
     {
         auto lock = stat->lock();
         auto remaining_valid_size = stat->removePosFromStat(offset, size, lock);
+        if (bool remove_file_on_disk = stat->isReadOnly() && (remaining_valid_size == 0);
+            !remove_file_on_disk)
+        {
+            return;
+        }
         // BlobFile which is read-only won't be reused for another writing,
-        // so it's safe and necessary to remove it here.
-        need_remove_stat = stat->isReadOnly() && (remaining_valid_size == 0);
+        // so it's safe and necessary to remove it from disk.
     }
 
-    // We don't need hold the BlobStat lock(Also can't do that).
-    // Because once BlobStat become Read-Only type, Then valid size won't increase.
-    if (need_remove_stat)
-    {
-        LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
-        auto blob_file = getBlobFile(blob_id);
+    // Note that we must release the lock on blob_stat before removing it
+    // from all blob_stats, or deadlocks could happen.
+    // As the blob_stat become read-only, it is safe to release the lock.
+    LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+
+    auto blob_file = getBlobFile(blob_id);
+    {
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        blob_file->remove();
-        cached_files.remove(blob_id);
     }
+    blob_file->remove();
+    std::lock_guard files_gurad(mtx_cached_files);
+    cached_files.erase(blob_id);
 }
 
 PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
@@ -1138,10 +1142,12 @@ String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
-                       })
-        .first;
+    std::lock_guard files_gurad(mtx_cached_files);
+    if (auto iter = cached_files.find(blob_id); iter != cached_files.end())
+        return iter->second;
+    auto file = std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
+    cached_files.emplace(blob_id, file);
+    return file;
 }
 
 } // namespace PS::V3
