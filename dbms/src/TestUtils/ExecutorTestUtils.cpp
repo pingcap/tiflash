@@ -225,7 +225,7 @@ void ExecutorTest::enablePlanner(bool is_enable)
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
-    const std::shared_ptr<tipb::DAGRequest> & request, 
+    const std::shared_ptr<tipb::DAGRequest> & request,
     size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
@@ -240,7 +240,7 @@ ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context, /*internal=*/true).in);
 }
-                                                    
+
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)
 {

@@ -31,9 +31,9 @@ public:
                              {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
         context.addExchangeReceiver("test_exchange",
-                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                             {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
-                              toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+                                    {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
+                                     toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
     }
 
     static constexpr size_t concurrency = 10;
