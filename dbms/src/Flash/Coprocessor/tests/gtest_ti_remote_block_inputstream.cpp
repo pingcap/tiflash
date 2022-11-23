@@ -139,7 +139,7 @@ struct MockReceiverContext
         {
         }
 
-        bool read(PacketPtr & packet [[maybe_unused]]) 
+        bool read(PacketPtr & packet [[maybe_unused]])
         {
             PacketPtr res;
             if (queue->pop(res) == MPMCQueueResult::OK)
@@ -180,7 +180,7 @@ struct MockReceiverContext
     {
     }
 
-    void fillSchema(DAGSchema & schema) 
+    void fillSchema(DAGSchema & schema)
     {
         schema.clear();
         for (size_t i = 0; i < field_types.size(); ++i)
@@ -304,7 +304,7 @@ public:
     void prepareQueue(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet) 
+        bool empty_last_packet)
     {
         prepareBlocks(source_blocks, empty_last_packet);
 
@@ -329,7 +329,7 @@ public:
     void prepareQueueV2(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet) 
+        bool empty_last_packet)
     {
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
         prepareBlocks(source_blocks, empty_last_packet);
@@ -416,7 +416,7 @@ public:
         return receiver_stream;
     }
 
-    void doTestNoChunkInResponse(bool empty_last_packet) 
+    void doTestNoChunkInResponse(bool empty_last_packet)
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -433,7 +433,7 @@ public:
         checkNoChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    void doTestChunkInResponse(bool empty_last_packet) 
+    void doTestChunkInResponse(bool empty_last_packet)
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;

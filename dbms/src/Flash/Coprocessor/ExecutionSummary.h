@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <common/types.h>
+
 #include <memory>
 
 namespace DB

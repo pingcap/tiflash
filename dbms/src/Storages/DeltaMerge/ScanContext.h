@@ -27,7 +27,7 @@ class ScanContext
 {
 public:
     // sum of scanned packs in dmfiles(both stable and ColumnFileBig) among this query
-    std::atomic<uint64_t> total_scanned_packs_in_dmfile{0}; 
+    std::atomic<uint64_t> total_scanned_packs_in_dmfile{0};
 
     // sum of skipped packs in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_skipped_packs_in_dmfile{0};

@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+
 #include <memory>
 
 namespace DB
