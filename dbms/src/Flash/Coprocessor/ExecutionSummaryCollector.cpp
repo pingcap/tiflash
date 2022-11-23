@@ -48,11 +48,11 @@ std::pair<RemoteExecutionSummary, RemoteExecutionSummary> ExecutionSummaryCollec
     {
         for (const auto & stream_ptr : map_entry.second)
         {
-            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
             {
                 exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
             }
-            else if (auto * cop_stream_ptr = dynamic_cast<CoprocessorBlockInputStream *>(stream_ptr.get()))
+            else if (auto * cop_stream_ptr = dynamic_cast<CoprocessorBlockInputStream *>(stream_ptr.get()); cop_stream_ptr)
             {
                 remote_execution_summary.merge(cop_stream_ptr->getRemoteExecutionSummary());
             }

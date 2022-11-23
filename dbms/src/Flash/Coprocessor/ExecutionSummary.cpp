@@ -42,10 +42,8 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
 
 void ExecutionSummary::mergeFromRemoteRead(const ExecutionSummary & remote)
 {
-    // Except for num_produced_rows, other indicators are based on remote.
     time_processed_ns += remote.time_processed_ns;
-    num_produced_rows = remote.num_produced_rows;
-    num_iterations = remote.num_iterations;
-    concurrency = remote.concurrency;
+    num_iterations += remote.num_iterations;
+    concurrency += remote.concurrency;
 }
 } // namespace DB
