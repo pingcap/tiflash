@@ -769,7 +769,7 @@ class FunctionStringRegexpBase
 {
 public:
     static constexpr size_t REGEXP_MIN_PARAM_NUM = 2;
-    static constexpr size_t REGEXP_REPLACE_MIN_PARAM_NUM = 2;
+    static constexpr size_t REGEXP_REPLACE_MIN_PARAM_NUM = 3;
 
     // Max parameter number the regexp_xxx function could receive
     static constexpr size_t REGEXP_MAX_PARAM_NUM = 2;
@@ -1901,7 +1901,7 @@ private:
         GET_EXPR_ACTUAL_PARAM()          \
     } while (0);
 
-// Implementation of regexp_substr function
+// Implementation of regexp_replace function
 template <typename Impl, typename Name>
 class FunctionStringRegexpReplace : public FunctionStringRegexpBase
     , public IFunction
@@ -1979,10 +1979,10 @@ public:
             String expr = expr_param.getString(0);
             String repl = repl_param.getString(0);
             String match_type = match_type_param.getString(0);
-            String res;
+            StringRef res_ref;
 
-            Impl::constant(expr, pat, repl, pos_const_val, occur_const_val, match_type, collator, res);
-            res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
+            Impl::constant(expr, pat, repl, pos_const_val, occur_const_val, match_type, collator, res_ref);
+            res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(res_ref.data, res_ref.size)));
             return;
         }
 
@@ -2026,8 +2026,8 @@ public:
                 }
             }
 
-            auto res_data = col_res->getChars();
-            auto res_offsets = col_res->getOffsets();
+            auto & res_data = col_res->getChars();
+            auto & res_offsets = col_res->getOffsets();
             ColumnString::Offset res_offset = 0;
             res_data.resize(col_size * 10);
 
@@ -2037,7 +2037,6 @@ public:
             Int64 pos;
             Int64 occur;
             String match_type;
-            StringRef res_ref;
 
             if constexpr (has_nullable_col)
             {
@@ -2064,7 +2063,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    Impl::executeReplace(expr_ref, regexp->getRE2(), repl_ref, pos, occur, res_data, res_offsets, i, res_offset);
+                    Impl::executeReplace(expr_ref, *(regexp->getRE2()), repl_ref, pos, occur, res_data, res_offsets, i, res_offset);
                 }
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
             }
@@ -2077,7 +2076,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    Impl::executeReplace(expr_ref, regexp->getRE2(), repl_ref, pos, occur, res_data, res_offsets, i, res_offset);
+                    Impl::executeReplace(expr_ref, *(regexp->getRE2()), repl_ref, pos, occur, res_data, res_offsets, i, res_offset);
                 }
                 res_arg.column = std::move(col_res);
             }
@@ -2111,8 +2110,8 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    expr = expr_param.getStringRef(i);
-                    repl = repl_param.getStringRef(i);
+                    expr = expr_param.getString(i);
+                    repl = repl_param.getString(i);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
@@ -2172,10 +2171,10 @@ public:
         {
         case REGEXP_REPLACE_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[5]).column;
-        case REGEXP_REPLACE_MIN_PARAM_NUM + 2:
+        case REGEXP_REPLACE_MAX_PARAM_NUM - 1:
             col_occur = block.getByPosition(arguments[4]).column;
-        case REGEXP_REPLACE_MIN_PARAM_NUM + 1:
-            col_occur = block.getByPosition(arguments[3]).column;
+        case REGEXP_REPLACE_MAX_PARAM_NUM - 2:
+            col_pos = block.getByPosition(arguments[3]).column;
         };
 
         size_t col_size = col_expr->size();
