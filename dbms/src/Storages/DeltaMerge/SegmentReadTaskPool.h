@@ -186,11 +186,16 @@ public:
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     {
-        if (read_mode == ReadMode::Normal && enable_read_thread_ && // keep_order is not requried.
+        if (read_mode == ReadMode::Normal && enable_read_thread_ && // keep_order is not required.
             dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter)
         {
             read_mode = ReadMode::Bitmap;
         }
+        /* For test
+        if (read_mode == ReadMode::Fast)
+        {
+            read_mode = ReadMode::Bitmap;
+        }*/
     }
 
     ~SegmentReadTaskPool()
