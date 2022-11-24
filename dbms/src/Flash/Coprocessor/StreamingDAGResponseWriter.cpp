@@ -34,11 +34,9 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
 {
     rows_in_blocks = 0;
@@ -66,16 +64,6 @@ template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->write(response);
 }
 
 template <class StreamWriterPtr>
