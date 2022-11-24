@@ -622,7 +622,7 @@ public:
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
-                    CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
+                    CertificateReloader::initSSLCallback(context, server.global_context.get());
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -683,7 +683,7 @@ public:
                                                                              key_path,
                                                                              cert_path,
                                                                              ca_path);
-                    CertificateReloader::instance().initSSLCallback(context, server.global_context.get());
+                    CertificateReloader::initSSLCallback(context, server.global_context.get());
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);

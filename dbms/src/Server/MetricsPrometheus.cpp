@@ -120,7 +120,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
 
     context->setAdhocVerification(check_common_name);
 #if Poco_NetSSL_FOUND
-    CertificateReloader::instance().initSSLCallback(context, &global_context);
+    CertificateReloader::initSSLCallback(context, &global_context);
 #endif
     Poco::Net::SecureServerSocket socket(context);
 
