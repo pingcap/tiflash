@@ -85,6 +85,8 @@ Block CreatingSetsBlockInputStream::readImpl()
 {
     Block res;
 
+    RUNTIME_CHECK(created == true);
+
     if (isCancelledOrThrowIfKilled())
         return res;
 

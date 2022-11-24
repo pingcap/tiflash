@@ -203,7 +203,7 @@ public:
         {
             remote_reader->open();
         }
-        // note that for ExchangeReceiver, we have sent EstablishMPPConnection request before we construct the pipeline
+        // note that for ExchangeReceiver, we have sent EstablishMPPConnection requests before we construct the pipeline
     }
 
     Block readImpl() override
