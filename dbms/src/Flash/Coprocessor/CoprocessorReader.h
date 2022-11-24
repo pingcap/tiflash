@@ -92,8 +92,10 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
+    // `open` will call the resp_iter's `open` to send coprocessor request.
     void open() { resp_iter.open(); }
 
+    // `cancel` will call the resp_iter's `cancel` to abort the data receiving and prevent the next retry.
     void cancel() { resp_iter.cancel(); }
 
 
