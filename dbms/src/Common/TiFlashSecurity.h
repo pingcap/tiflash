@@ -42,7 +42,7 @@ public:
     TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log_)
         : log(log_)
     {
-        init(config);
+        update(config);
     }
 
     bool hasTlsConfig()
@@ -69,7 +69,7 @@ public:
         return {cert_path, key_path};
     }
 
-    void init(Poco::Util::AbstractConfiguration & config)
+    bool update(Poco::Util::AbstractConfiguration & config)
     {
         std::unique_lock lock(mu);
         if (config.has("security"))
@@ -77,19 +77,23 @@ public:
             bool miss_ca_path = true;
             bool miss_cert_path = true;
             bool miss_key_path = true;
+            String new_ca_path;
+            String new_cert_path;
+            String new_key_path;
+            bool updated = false;
             if (config.has("security.ca_path"))
             {
-                ca_path = config.getString("security.ca_path");
+                new_ca_path = config.getString("security.ca_path");
                 miss_ca_path = false;
             }
             if (config.has("security.cert_path"))
             {
-                cert_path = config.getString("security.cert_path");
+                new_cert_path = config.getString("security.cert_path");
                 miss_cert_path = false;
             }
             if (config.has("security.key_path"))
             {
-                key_path = config.getString("security.key_path");
+                new_key_path = config.getString("security.key_path");
                 miss_key_path = false;
             }
             if (miss_ca_path && miss_cert_path && miss_key_path)
@@ -103,12 +107,19 @@ public:
             else
             {
                 has_tls_config = true;
-                LOG_INFO(
-                    log,
-                    "security config is set: ca path is {} cert path is {} key path is {}",
-                    ca_path,
-                    cert_path,
-                    key_path);
+                if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
+                {
+                    ca_path = new_ca_path;
+                    cert_path = new_cert_path;
+                    key_path = new_key_path;
+                    updated = true;
+                    LOG_INFO(
+                        log,
+                        "security config is updated: ca path is {} cert path is {} key path is {}",
+                        ca_path,
+                        cert_path,
+                        key_path);
+                }
             }
 
             if (config.has("security.cert_allowed_cn") && has_tls_config)
@@ -123,7 +134,9 @@ public:
             {
                 redact_info_log = config.getBool("security.redact_info_log");
             }
+            return updated;
         }
+        return false;
     }
 
     void parseAllowedCN(String verify_cns)

@@ -1097,10 +1097,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
-            global_context->getSecurityConfig()->init(*config);
-            auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-            auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
-            global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
+            bool updated = global_context->getSecurityConfig()->update(*config);
+            if (updated)
+            {
+                auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
+                auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
+                global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
+                LOG_DEBUG(log, "TMTContext updated");
+            }
         },
         /* already_loaded = */ true);
 
