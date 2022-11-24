@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/QueryProcessingStage.h>
-#include <DataStreams/BlockIO.h>
 #include <Flash/Executor/QueryExecutor.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
-BlockIO executeQuery(Context & context, bool internal = false);
-QueryExecutorPtr queryExecute(Context & context, bool internal = false);
+ExecutionResult QueryExecutor::execute()
+{
+    return execute(ResultHandler{});
+}
+
+ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
+{
+    return execute(ResultHandler{handler});
+}
 } // namespace DB

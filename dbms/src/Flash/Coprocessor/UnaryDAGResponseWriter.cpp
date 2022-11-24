@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 
 namespace DB
@@ -77,7 +78,12 @@ void UnaryDAGResponseWriter::finishWrite()
         encodeChunkToDAGResponse();
     }
     appendWarningsToDAGResponse();
-    summary_collector.addExecuteSummaries(*dag_response);
+
+    if (dag_context.collect_execution_summaries)
+    {
+        ExecutionSummaryCollector summary_collector(dag_context);
+        summary_collector.addExecuteSummaries(*dag_response);
+    }
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)

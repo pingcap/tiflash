@@ -51,4 +51,14 @@ void MPPReceiverSet::close()
     for (auto & cop_reader : coprocessor_readers)
         cop_reader->close();
 }
+
+int MPPReceiverSet::getExternalThreadCnt()
+{
+    int cnt = 0;
+    for (auto & it : exchange_receiver_map)
+        cnt += it.second->getExternalThreadCnt();
+    for (auto & cop_reader : coprocessor_readers)
+        cnt += cop_reader->getExternalThreadCnt();
+    return cnt;
+}
 } // namespace DB

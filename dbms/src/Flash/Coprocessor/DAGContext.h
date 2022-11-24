@@ -59,6 +59,8 @@ struct JoinExecuteInfo
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
+class ProcessListEntry;
+
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
     /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
@@ -202,7 +204,6 @@ public:
         initOutputInfo();
     }
 
-    void attachBlockIO(const BlockIO & io_);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
@@ -259,11 +260,6 @@ public:
     const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
 
     bool containsRegionsInfoForTable(Int64 table_id) const;
-
-    const BlockIO & getBlockIO() const
-    {
-        return io;
-    }
 
     UInt64 getFlags() const
     {
@@ -367,8 +363,6 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
-    /// Hold io for correcting the destruction order.
-    BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.

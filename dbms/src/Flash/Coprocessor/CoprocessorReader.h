@@ -176,21 +176,7 @@ public:
 
     size_t getSourceNum() const { return 1; }
 
-    int computeNewThreadCount() const { return concurrency_; }
-
-    void collectNewThreadCount(int & cnt)
-    {
-        if (!collected)
-        {
-            collected = true;
-            cnt += computeNewThreadCount();
-        }
-    }
-
-    void resetNewThreadCountCompute()
-    {
-        collected = false;
-    }
+    int getExternalThreadCnt() const { return concurrency_; }
 
     void close() {}
 

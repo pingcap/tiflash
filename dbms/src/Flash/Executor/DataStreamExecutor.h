@@ -14,29 +14,32 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
-#include <tipb/select.pb.h>
+#include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
-class DAGResponseWriter
+class DataStreamExecutor : public QueryExecutor
 {
 public:
-    DAGResponseWriter(
-        Int64 records_per_chunk_,
-        DAGContext & dag_context_);
-    /// prepared with sample block
-    virtual void prepare(const Block &){};
-    virtual void write(const Block & block) = 0;
-    /// flush cached blocks for batch writer
-    virtual void flush() = 0;
-    virtual void finishWrite() = 0;
-    virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
+    explicit DataStreamExecutor(const BlockIO & block_io)
+        : QueryExecutor(block_io.process_list_entry)
+        , data_stream(block_io.in)
+    {
+        assert(data_stream);
+    }
+
+    String dump() const override;
+
+    void cancel(bool is_kill) override;
+
+    int estimateNewThreadCount() override;
 
 protected:
-    Int64 records_per_chunk;
-    DAGContext & dag_context;
-};
+    ExecutionResult execute(ResultHandler result_handler) override;
 
+protected:
+    BlockInputStreamPtr data_stream;
+};
 } // namespace DB
