@@ -26,6 +26,7 @@ const String DisaggregatedTiFlashTableScanInterpreter::ExecIDPrefixForTiFlashSto
 void DisaggregatedTiFlashTableScanInterpreter::execute(DAGPipeline & pipeline)
 {
     buildRemoteRequests();
+    RUNTIME_CHECK(!remote_requests.empty());
 
     auto dispatch_reqs = buildAndDispatchMPPTaskRequests();
     buildReceiverStreams(dispatch_reqs, pipeline);
@@ -156,7 +157,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     sender->set_tp(tipb::ExchangeType::PassThrough);
     sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
     auto * child = sender->mutable_child();
-    child->CopyFrom(*(table_scan.getTableScanPB()));
+    child->CopyFrom(remote_requests[0].dag_request.root_executor());
     for (const auto & column_info : column_infos)
     {
         auto * field_type = sender->add_all_field_types();
@@ -249,14 +250,10 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
 
 void DisaggregatedTiFlashTableScanInterpreter::pushDownFilter(DAGPipeline & pipeline)
 {
+    NamesAndTypes source_columns = genNamesAndTypes(table_scan, "exchange_receiver");
     const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    NamesAndTypes source_columns;
-    source_columns.reserve(receiver_dag_schema.size());
+    assert(receiver_dag_schema.size() == source_columns.size());
 
-    for (const auto & receiver_column : receiver_dag_schema)
-    {
-        source_columns.emplace_back(receiver_column.first, genTypeByTiDBColumnInfo(receiver_column.second));
-    }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (push_down_filter.hasValue())
