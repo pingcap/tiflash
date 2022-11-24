@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Server/CertificateReloader.h>
+#include "Common/Exception.h"
 
 #if Poco_NetSSL_FOUND
 
@@ -32,20 +33,29 @@ int callSetCertificate(SSL * ssl, void * arg)
 /// This is callback for OpenSSL. It will be called on every connection to obtain a certificate and private key.
 int CertificateReloader::setCertificate(SSL * ssl, void * arg)
 {
+    RUNTIME_ASSERT(ssl);
     auto * context = static_cast<Context *>(arg);
     auto security_config = context->getSecurityConfig();
     auto [cert_path, key_path] = security_config->getCertAndKeyPath();
     LOG_DEBUG(log, "setCertificate callback called, cert_path: {}, key_path: {}", cert_path, key_path);
     Poco::Crypto::X509Certificate cert(cert_path);
     Poco::Crypto::EVPPKey key("", key_path);
-    SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
-    SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
-
-    int err = SSL_check_private_key(ssl);
+    int err = SSL_use_certificate(ssl, const_cast<X509 *>(cert.certificate()));
     if (err != 1)
     {
-        std::string msg = Poco::Net::Utility::getLastError();
-        LOG_ERROR(log, "Unusable ssl certificate key-pair {}", msg);
+        LOG_ERROR(log, "Unusable ssl certificate {}", Poco::Net::Utility::getLastError());
+    }
+    
+    err = SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
+    if (err != 1)
+    {
+        LOG_ERROR(log, "Unusable ssl key {}", Poco::Net::Utility::getLastError());
+    }
+    
+    err = SSL_check_private_key(ssl);
+    if (err != 1)
+    {
+        LOG_ERROR(log, "Unusable ssl certificate key-pair {}", Poco::Net::Utility::getLastError());
         return -1;
     }
 
