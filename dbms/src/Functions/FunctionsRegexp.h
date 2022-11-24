@@ -41,6 +41,7 @@
 #include <common/types.h>
 #include <re2/re2.h>
 
+#include <cstring>
 #include <memory>
 #include <type_traits>
 
@@ -189,7 +190,8 @@ public:
 
     // For passing compilation
     explicit ParamString(Int64)
-        : const_string(nullptr, 0)
+        : const_string_data(nullptr)
+        , const_string_data_size(0)
         , chars(nullptr)
         , offsets(nullptr)
     {
@@ -197,17 +199,26 @@ public:
     }
 
     explicit ParamString(const StringRef & str_ref)
-        : const_string(str_ref)
+        : const_string_data(nullptr)
+        , const_string_data_size(0)
         , chars(nullptr)
         , offsets(nullptr)
     {
+        // Deep copy
+        const_string_data = new char[str_ref.size];
+        if (const_string_data == nullptr)
+            throw Exception("ParamString constructor get a nullptr");
+
+        memcpy(const_string_data, str_ref.data, str_ref.size);
+        const_string_data_size = str_ref.size;
         if constexpr (!is_const)
             throw Exception("non-const parm should not call this constructor");
     }
 
     // For passing compilation
     explicit ParamString(const void *)
-        : const_string(nullptr, 0)
+        : const_string_data(nullptr)
+        , const_string_data_size(0)
         , chars(nullptr)
         , offsets(nullptr)
     {
@@ -215,12 +226,18 @@ public:
     }
 
     ParamString(const void * chars_, const void * offsets_)
-        : const_string(nullptr, 0)
+        : const_string_data(nullptr)
+        , const_string_data_size(0)
         , chars(reinterpret_cast<const Chars_t *>(chars_))
         , offsets(reinterpret_cast<const Offsets *>(offsets_))
     {
         if constexpr (is_const)
             throw Exception("const parm should not call this constructor");
+    }
+
+    ~ParamString()
+    {
+        delete[] const_string_data;
     }
 
     static IntType getIntType() { throw Exception("ParamString not supports this function"); }
@@ -234,7 +251,7 @@ public:
     String getString(size_t idx) const
     {
         if constexpr (is_const)
-            return String(const_string.data, const_string.size);
+            return String(const_string_data, const_string_data_size);
         else
             return String(reinterpret_cast<const char *>(&(*chars)[offsetAt(idx)]), sizeAt(idx) - 1);
     }
@@ -243,8 +260,8 @@ public:
     {
         if constexpr (is_const)
         {
-            dst.data = const_string.data;
-            dst.size = const_string.size;
+            dst.data = const_string_data;
+            dst.size = const_string_data_size;
         }
         else
         {
@@ -262,7 +279,8 @@ private:
     size_t offsetAt(size_t i) const { return i == 0 ? 0 : (*offsets)[i - 1]; }
     size_t sizeAt(size_t i) const { return i == 0 ? (*offsets)[0] : ((*offsets)[i] - (*offsets)[i - 1]); }
 
-    StringRef const_string;
+    char * const_string_data;
+    size_t const_string_data_size;
 
     // for vector string
     const Chars_t * chars;
@@ -1468,11 +1486,11 @@ public:
         {
         case REGEXP_INSTR_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[5]).column;
-        case REGEXP_MIN_PARAM_NUM + 3:
+        case REGEXP_INSTR_MAX_PARAM_NUM -1:
             col_return_option = block.getByPosition(arguments[4]).column;
-        case REGEXP_MIN_PARAM_NUM + 2:
+        case REGEXP_INSTR_MAX_PARAM_NUM - 2:
             col_occur = block.getByPosition(arguments[3]).column;
-        case REGEXP_MIN_PARAM_NUM + 1:
+        case REGEXP_INSTR_MAX_PARAM_NUM - 3:
             col_pos = block.getByPosition(arguments[2]).column;
         };
 
