@@ -28,7 +28,6 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
-#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
 #include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
@@ -318,10 +317,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
-    {
-        assert(!tmt.isDisaggregatedComputeNode());
         buildLocalStreams(pipeline, settings.max_block_size);
-    }
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
@@ -376,24 +372,15 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle pushed down filter for local and remote table scan.
-    /// For tiflash_compute node, an explicit PhysicalFilter will handle this, instead build FilterBlockInputStream here.
-    if (!tmt.isDisaggregatedComputeNode() && push_down_filter.hasValue())
+    if (push_down_filter.hasValue())
     {
-        executePushedDownFilter(remote_read_streams_start_index, pipeline);
+        ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
         recordProfileStreams(pipeline, push_down_filter.executor_id);
     }
 }
 
 void DAGStorageInterpreter::prepare()
 {
-    // For tiflash_compute node, no need to:
-    //   1. Do learner read.
-    //   2. Sync schema(getAndLockStorages()).
-    //   3. Construct analyzer for FilterBlockInputStream(but Selection will still be sent to tiflash_storage).
-    // Becase there is no region data in tiflash_compute node, all above three will be done in tiflash_storage node.
-    if (tmt.isDisaggregatedComputeNode())
-        return;
-
     // About why we do learner read before acquiring structure lock on Storage(s).
     // Assume that:
     // 1. Read threads do learner read and wait for the Raft applied index with holding a read lock
@@ -424,51 +411,6 @@ void DAGStorageInterpreter::prepare()
     std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan(settings.max_columns_to_read);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-}
-
-std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGStorageInterpreter::buildPushDownFilter()
-{
-    assert(push_down_filter.hasValue());
-
-    ExpressionActionsChain chain;
-    analyzer->initChain(chain, analyzer->getCurrentInputColumns());
-    String filter_column_name = analyzer->appendWhere(chain, push_down_filter.conditions);
-    ExpressionActionsPtr before_where = chain.getLastActions();
-    chain.addStep();
-
-    // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    NamesWithAliases project_cols;
-    for (const auto & col : analyzer->getCurrentInputColumns())
-    {
-        chain.getLastStep().required_output.push_back(col.name);
-        project_cols.emplace_back(col.name, col.name);
-    }
-    chain.getLastActions()->add(ExpressionAction::project(project_cols));
-    ExpressionActionsPtr project_after_where = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    return {before_where, filter_column_name, project_after_where};
-}
-
-void DAGStorageInterpreter::executePushedDownFilter(
-    size_t remote_read_streams_start_index,
-    DAGPipeline & pipeline)
-{
-    auto [before_where, filter_column_name, project_after_where] = buildPushDownFilter();
-
-    assert(pipeline.streams_with_non_joined_data.empty());
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
-    {
-        auto & stream = pipeline.streams[i];
-        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
-        stream->setExtraInfo("push down filter");
-        // after filter, do project action to keep the schema of local streams and remote streams the same.
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
-        stream->setExtraInfo("projection after push down filter");
-    }
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
@@ -546,36 +488,28 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
 
 void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)
 {
-    if (tmt.isDisaggregatedComputeNode())
-    {
-        DisaggregatedTiFlashTableScanInterpreter tsc_interpreter(context, table_scan, remote_requests, log);
-        tsc_interpreter.execute(pipeline);
-    }
-    else
-    {
-        std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
+    std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
 
-        const DAGSchema & schema = remote_requests[0].schema;
-        pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-        bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-        size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-        size_t task_per_thread = all_tasks.size() / concurrent_num;
-        size_t rest_task = all_tasks.size() % concurrent_num;
-        for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
-        {
-            size_t task_end = task_start + task_per_thread;
-            if (i < rest_task)
-                task_end++;
-            if (task_end == task_start)
-                continue;
-            std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+    const DAGSchema & schema = remote_requests[0].schema;
+    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+    size_t task_per_thread = all_tasks.size() / concurrent_num;
+    size_t rest_task = all_tasks.size() % concurrent_num;
+    for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
+    {
+        size_t task_end = task_start + task_per_thread;
+        if (i < rest_task)
+            task_end++;
+        if (task_end == task_start)
+            continue;
+        std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
-            auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-            context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
-            BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-            pipeline.streams.push_back(input);
-            task_start = task_end;
-        }
+        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
+        pipeline.streams.push_back(input);
+        task_start = task_end;
     }
 }
 
@@ -1116,11 +1050,11 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
             retry_regions,
             *context.getDAGContext(),
             table_scan,
-            tmt.isDisaggregatedComputeNode() ? TableInfo{} : storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
+            storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             push_down_filter,
             log,
             physical_table_id,
-            context.getTMTContext().isDisaggregatedComputeNode()));
+            /*is_disaggregated_compute_mode=*/false));
     }
     return remote_requests;
 }

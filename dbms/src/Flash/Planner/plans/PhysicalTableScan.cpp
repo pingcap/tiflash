@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
+#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
@@ -55,11 +56,23 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
 
-    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
-    storage_interpreter.execute(pipeline);
+    const NamesAndTypes * storage_schema = nullptr;
+    if (context.isDisaggregatedComputeMode())
+    {
+        DisaggregatedTiFlashTableScanInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        disaggregated_tiflash_interpreter.execute(pipeline);
+        buildProjection(context, pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        storage_interpreter.execute(pipeline);
+        buildProjection(context, pipeline, storage_interpreter.analyzer->getCurrentInputColumns());
+    }
+}
 
-    RUNTIME_CHECK(!pipeline.streams.empty());
-    auto storage_schema = pipeline.streams[0]->getHeader().getColumnsWithTypeAndName();
+void PhysicalTableScan::buildProjection(Context & context, DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
+{
     RUNTIME_CHECK(
         storage_schema.size() == schema.size(),
         storage_schema.size(),

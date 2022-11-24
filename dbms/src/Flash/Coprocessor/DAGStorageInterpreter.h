@@ -98,12 +98,6 @@ private:
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
 
-    // before_where, filter_column_name, after_where
-    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter();
-    void executePushedDownFilter(
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
-
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);

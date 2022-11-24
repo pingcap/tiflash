@@ -111,9 +111,15 @@
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
 
-static const std::string DEFAULT_ENGINE_LABEL = "tiflash";
-static const std::string COMPUTE_ENGINE_LABEL = "tiflash_compute";
-inline bool isDisaggregatedComputeNode(const std::string & user_engine_label)
+#define DISAGGREGATED_MODE_STORAGE "tiflash_storage"
+#define DISAGGREGATED_MODE_COMPUTE "tiflash_compute"
+
+namespace DB
 {
-    return user_engine_label == COMPUTE_ENGINE_LABEL;
-}
+enum class DisaggregatedMode
+{
+    None,
+    Compute,
+    Storage,
+};
+} // namespace DB

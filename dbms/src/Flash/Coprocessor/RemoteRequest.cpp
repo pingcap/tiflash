@@ -28,7 +28,7 @@ RemoteRequest RemoteRequest::build(
     const PushDownFilter & push_down_filter,
     const LoggerPtr & log,
     Int64 physical_table_id,
-    bool is_disaggregated_compute_node)
+    bool is_disaggregated_compute_mode)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_req;
@@ -38,7 +38,7 @@ RemoteRequest RemoteRequest::build(
     ts_exec->set_tp(tipb::ExecType::TypeTableScan);
     ts_exec->set_executor_id(table_scan.getTableScanExecutorID());
 
-    if (is_disaggregated_compute_node)
+    if (is_disaggregated_compute_mode)
     {
         // In disaggregated mode, use DAGRequest sent from TiDB directly, so no need to rely on SchemaSyncer.
         if (table_scan.isPartitionTableScan())

@@ -111,21 +111,10 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
         auto child = popBack();
-        if (context.getTMTContext().isDisaggregatedComputeNode())
-        {
-            // Still need to pushBack(PhysicalFilter) because we dont want to build FilterBlockInputStream in DAGStorageInterpreter.
-            // Because it requres SchemaSyncer to get correct schema to build DAGExpressionAnalyzer.
-            // By doing so, tiflash_compute node doesn't need to talk to TiKV.
-            pushDownSelection(child, executor_id, executor->selection());
-            pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
-        }
+        if (pushDownSelection(child, executor_id, executor->selection()))
+            pushBack(child);
         else
-        {
-            if (pushDownSelection(child, executor_id, executor->selection()))
-                pushBack(child);
-            else
-                pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
-        }
+            pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         break;
     }
     case tipb::ExecType::TypeAggregation:

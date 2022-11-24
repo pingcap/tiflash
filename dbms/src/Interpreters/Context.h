@@ -388,7 +388,7 @@ public:
     BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBlockableBackgroundPool();
 
-    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, bool disaggregated_compute_node_);
+    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
@@ -483,6 +483,18 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
+    void setDisaggregatedMode(DisaggregatedMode mode)
+    {
+        disaggregated_mode = mode;
+    }
+    bool isDisaggregatedComputeMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Compute;
+    }
+    bool isDisaggregatedStorageMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Storage;
+    }
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
@@ -500,6 +512,7 @@ private:
     void checkIsConfigLoaded() const;
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
+    DisaggregatedMode disaggregated_mode;
 };
 
 using ContextPtr = std::shared_ptr<Context>;

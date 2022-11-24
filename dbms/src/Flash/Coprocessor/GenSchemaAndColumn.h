@@ -23,6 +23,7 @@
 
 namespace DB
 {
+DataTypePtr genTypeByTiDBColumnInfo(const TiDB::ColumnInfo & column_info);
 NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan);
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);

@@ -120,7 +120,6 @@ public:
     Int64 waitRegionReadyTimeout() const;
     uint64_t readIndexWorkerTick() const;
 
-    bool isDisaggregatedComputeNode() const { return disaggregated_compute_node; }
 private:
     Context & context;
     KVStorePtr kvstore;
@@ -146,7 +145,6 @@ private:
     std::atomic_uint64_t wait_index_timeout_ms;
     std::atomic_uint64_t read_index_worker_tick_ms;
     std::atomic_int64_t wait_region_ready_timeout_sec;
-    bool disaggregated_compute_node;
 };
 
 const std::string & IntoStoreStatusName(TMTContext::StoreStatus status);

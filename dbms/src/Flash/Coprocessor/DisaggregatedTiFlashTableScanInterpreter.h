@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
@@ -40,12 +41,13 @@ public:
     DisaggregatedTiFlashTableScanInterpreter(
             Context & context_,
             const TiDBTableScan & table_scan_,
-            const std::vector<RemoteRequest> & remote_requests_,
-            LoggerPtr log_)
+            const PushDownFilter & push_down_filter_,
+            size_t max_streams_)
         : context(context_)
         , table_scan(table_scan_)
-        , remote_requests(remote_requests_)
-        , log(log_)
+        , push_down_filter(push_down_filter_)
+        , max_streams(max_streams_)
+        , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
         , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
         , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id()) {}
 
@@ -56,12 +58,22 @@ public:
     std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> buildAndDispatchMPPTaskRequests();
     void buildReceiverStreams(const std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> & dispatch_reqs, DAGPipeline & pipeline);
 
+    // Members will be transferred to DAGQueryBlockInterpreter after execute
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 private:
+    void buildRemoteRequests();
+    void buildAnalyzer();
+    void pushDownFilter(DAGPipeline & pipeline);
+
     Context & context;
     const TiDBTableScan & table_scan;
-    const std::vector<RemoteRequest> & remote_requests;
+    const PushDownFilter & push_down_filter;
+    size_t max_streams;
     LoggerPtr log;
     uint64_t sender_target_task_start_ts;
     int64_t sender_target_task_task_id;
+
+    std::vector<RemoteRequest> remote_requests;
+    std::shared_ptr<ExchangeReceiver> exchange_receiver;
 };
 } // namespace DB

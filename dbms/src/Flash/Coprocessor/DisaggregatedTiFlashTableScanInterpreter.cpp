@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -23,8 +25,41 @@ const String DisaggregatedTiFlashTableScanInterpreter::ExecIDPrefixForTiFlashSto
 
 void DisaggregatedTiFlashTableScanInterpreter::execute(DAGPipeline & pipeline)
 {
+    buildRemoteRequests();
+
     auto dispatch_reqs = buildAndDispatchMPPTaskRequests();
     buildReceiverStreams(dispatch_reqs, pipeline);
+
+    pushDownFilter(pipeline);
+}
+
+void DisaggregatedTiFlashTableScanInterpreter::buildRemoteRequests()
+{
+    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
+    for (auto physical_table_id : table_scan.getPhysicalTableIDs())
+    {
+        const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
+
+        RUNTIME_CHECK_MSG(table_regions_info.local_regions.empty(), "in disaggregated_compute_mode, local_regions should be empty");
+        for (const auto & reg : table_regions_info.remote_regions)
+            all_remote_regions[physical_table_id].emplace_back(std::cref(reg));
+    }
+
+    for (auto physical_table_id : table_scan.getPhysicalTableIDs())
+    {
+        const auto & remote_regions = all_remote_regions[physical_table_id];
+        if (remote_regions.empty())
+            continue;
+        remote_requests.push_back(RemoteRequest::build(
+                    remote_regions,
+                    *context.getDAGContext(),
+                    table_scan,
+                    TiDB::TableInfo{},
+                    push_down_filter,
+                    log,
+                    physical_table_id,
+                    /*is_disaggregated_compute_mode=*/true));
+    }
 }
 
 std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInterpreter::buildBatchCopTasks()
@@ -177,7 +212,7 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
 
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
     const String executor_id = table_scan.getTableScanExecutorID();
-    auto exchange_receiver = std::make_shared<ExchangeReceiver>(
+    exchange_receiver = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
                 receiver,
                 sender_target_task_meta,
@@ -197,18 +232,40 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
 
     // We can use PhysicalExchange::transform() to build InputStream after
     // DAGQueryBlockInterpreter is deprecated to avoid duplicated code here.
-    size_t max_streams = context.getMaxStreams();
     const String extra_info = "disaggregated compute node exchange receiver";
     for (size_t i = 0; i < max_streams; ++i)
     {
-        // These streams will be recorded into inbound_io_input_streams_map in
-        // DAGStorageInterpreter::executeImpl() to help record remote exec summaries.
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
                                                                                    log->identifier(),
                                                                                    executor_id,
                                                                                    /*stream_id=*/0);
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
+    }
+
+    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
+    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+}
+
+void DisaggregatedTiFlashTableScanInterpreter::pushDownFilter(DAGPipeline & pipeline)
+{
+    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
+    NamesAndTypes source_columns;
+    source_columns.reserve(receiver_dag_schema.size());
+
+    for (const auto & receiver_column : receiver_dag_schema)
+    {
+        source_columns.emplace_back(receiver_column.first, genTypeByTiDBColumnInfo(receiver_column.second));
+    }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    if (push_down_filter.hasValue())
+    {
+        // No need to cast, because already done by tiflash_storage node.
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/0, push_down_filter, *analyzer, log, pipeline);
+
+        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[push_down_filter.executor_id];
+        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
     }
 }
 } // namespace DB

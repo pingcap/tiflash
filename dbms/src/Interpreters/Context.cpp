@@ -279,6 +279,7 @@ Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime
     res.shared = std::make_shared<ContextShared>(runtime_components_factory);
     res.quota = std::make_shared<QuotaForIntervals>();
     res.timezone_info.init();
+    res.disaggregated_mode = DisaggregatedMode::None;
     return res;
 }
 
@@ -1374,12 +1375,12 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     return *shared->blockable_background_pool;
 }
 
-void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, bool disaggregated_compute_node_)
+void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config, disaggregated_compute_node_);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config, isDisaggregatedComputeMode());
 }
 
 void Context::initializePathCapacityMetric( //

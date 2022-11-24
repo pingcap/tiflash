@@ -202,6 +202,27 @@ namespace Debug
 extern void setServiceAddr(const std::string & addr);
 }
 
+static DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & config)
+{
+    static const std::string config_key = "flash.disaggregated_mode";
+    DisaggregatedMode mode = DisaggregatedMode::None;
+    if (config.has(config_key))
+    {
+        std::string mode_str = config.getString(config_key);
+        RUNTIME_ASSERT(mode_str == DISAGGREGATED_MODE_STORAGE || mode_str == DISAGGREGATED_MODE_COMPUTE,
+                "Expect disaggregated_mode is {} or {}, got: {}", DISAGGREGATED_MODE_STORAGE, DISAGGREGATED_MODE_COMPUTE, mode_str);
+        if (mode_str == DISAGGREGATED_MODE_COMPUTE)
+        {
+            mode = DisaggregatedMode::Compute;
+        }
+        else
+        {
+            mode = DisaggregatedMode::Storage;
+        }
+    }
+    return mode;
+}
+
 static std::string getCanonicalPath(std::string path)
 {
     Poco::trimInPlace(path);
@@ -267,10 +288,11 @@ struct TiFlashProxyConfig
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
-            if (args_map.count(engine_label) == 0)
-                args_map[engine_label] = DEFAULT_ENGINE_LABEL;
-            // Record engine_label and we will check if it's valid or not later.
-            user_engine_label = args_map[engine_label];
+            auto disaggregated_mode = getDisaggregatedMode(config);
+            if (disaggregated_mode == DisaggregatedMode::Compute)
+                args_map[engine_label] = "tiflash_compute";
+            else
+                args_map[engine_label] = "tiflash";
 
             for (auto && [k, v] : args_map)
             {
@@ -285,12 +307,6 @@ struct TiFlashProxyConfig
             args.push_back(v.second.data());
         }
         is_proxy_runnable = true;
-    }
-
-    void checkEngineLabel()
-    {
-        RUNTIME_ASSERT(user_engine_label == DEFAULT_ENGINE_LABEL || user_engine_label == COMPUTE_ENGINE_LABEL,
-                "Expect engine label: {} or {}, got: {}", DEFAULT_ENGINE_LABEL, COMPUTE_ENGINE_LABEL, user_engine_label);
     }
 };
 
@@ -846,7 +862,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
-    proxy_conf.checkEngineLabel();
 
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
@@ -912,6 +927,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context = std::make_unique<Context>(Context::createGlobal());
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1163,11 +1179,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"));
 
-    const bool is_disaggregated_compute_node = isDisaggregatedComputeNode(proxy_conf.user_engine_label);
     {
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config, std::move(cluster_config), is_disaggregated_compute_node);
+        global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -1201,7 +1216,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Load metadata done.");
 
-    if (!is_disaggregated_compute_node)
+    if (global_context->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
         for (int i = 0; i < 60; i++) // retry for 3 mins

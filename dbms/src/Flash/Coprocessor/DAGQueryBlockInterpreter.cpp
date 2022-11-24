@@ -36,6 +36,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
@@ -102,7 +103,7 @@ AnalysisResult analyzeExpressions(
     // selection on table scan had been executed in handleTableScan.
     // In test mode, filter is not pushed down to table scan.
     // In disaggregated mode, we need an explicit Selection.
-    if (query_block.selection && (!query_block.isTableScanSource() || context.isTest() || context.getTMTContext().isDisaggregatedComputeNode()))
+    if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
     {
         std::vector<const tipb::Expr *> where_conditions;
         for (const auto & c : query_block.selection->selection().conditions())
@@ -187,10 +188,19 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 {
     const auto push_down_filter = PushDownFilter::pushDownFilterFrom(query_block.selection_name, query_block.selection);
 
-    DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
-    storage_interpreter.execute(pipeline);
+    if (context.isDisaggregatedComputeMode())
+    {
+        DisaggregatedTiFlashTableScanInterpreter disaggregated_tiflash_interpreter(context, table_scan, push_down_filter, max_streams);
+        disaggregated_tiflash_interpreter.execute(pipeline);
+        analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
+        storage_interpreter.execute(pipeline);
 
-    analyzer = std::move(storage_interpreter.analyzer);
+        analyzer = std::move(storage_interpreter.analyzer);
+    }
 }
 
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)

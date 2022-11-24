@@ -59,6 +59,6 @@ struct RemoteRequest
         const PushDownFilter & push_down_filter,
         const LoggerPtr & log,
         Int64 physical_table_id,
-        bool is_disaggregated_compute_node);
+        bool is_disaggregated_compute_mode);
 };
 } // namespace DB
