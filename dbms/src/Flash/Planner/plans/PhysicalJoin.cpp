@@ -191,8 +191,6 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     assert(probe_pipeline.streams_with_non_joined_data.empty());
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
-    auto join_probe_actions = PhysicalPlanHelper::newActions(probe_pipeline.firstStream()->getHeader(), context);
-    join_probe_actions->add(ExpressionAction::ordinaryJoin(join_ptr, columns_added_by_join));
     /// add join input stream
     if (has_non_joined)
     {
@@ -210,7 +208,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}", execId());
     for (auto & stream : probe_pipeline.streams)
     {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_probe_actions, log->identifier());
+        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, log->identifier());
         stream->setExtraInfo(join_probe_extra_info);
     }
 }

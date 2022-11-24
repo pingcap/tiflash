@@ -13,23 +13,23 @@
 // limitations under the License.
 
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
-    const ExpressionActionsPtr & join_probe_actions_,
+    const JoinPtr & join_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , join_probe_actions(join_probe_actions_)
+    , join(join_)
 {
     children.push_back(input);
 
-    if (!join_probe_actions || join_probe_actions->getActions().size() != 1
-        || join_probe_actions->getActions().back().type != ExpressionAction::Type::JOIN)
+    if (join == nullptr)
     {
-        throw Exception("isn't valid join probe actions", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("join ptr should not be null.", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -38,16 +38,29 @@ Block HashJoinProbeBlockInputStream::getTotals()
     if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
     {
         totals = child->getTotals();
-        join_probe_actions->executeOnTotals(totals);
+        if (!totals)
+        {
+            if (join && join->hasTotals())
+            {
+                for (const auto & name_and_type : getHeader().getColumnsWithTypeAndName())
+                {
+                    auto column = name_and_type.type->createColumn();
+                    column->insertDefault();
+                    totals.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
+                }
+            }
+            else
+                return totals; /// There's nothing to JOIN.
+        }
+        join->joinTotals(totals);
     }
-
     return totals;
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
-    join_probe_actions->execute(res);
+    join->joinBlock(res);
     return res;
 }
 
@@ -57,7 +70,7 @@ Block HashJoinProbeBlockInputStream::readImpl()
     if (!res)
         return res;
 
-    join_probe_actions->execute(res);
+    join->joinBlock(res);
 
     // TODO split block if block.size() > settings.max_block_size
     // https://github.com/pingcap/tiflash/issues/3436

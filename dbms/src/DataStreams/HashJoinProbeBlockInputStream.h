@@ -16,6 +16,8 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 
+#include "Interpreters/Join.h"
+
 namespace DB
 {
 class ExpressionActions;
@@ -31,13 +33,12 @@ class ExpressionActions;
 class HashJoinProbeBlockInputStream : public IProfilingBlockInputStream
 {
 private:
-    using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
     static constexpr auto name = "HashJoinProbe";
 
 public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
-        const ExpressionActionsPtr & join_probe_actions_,
+        const JoinPtr & join_,
         const String & req_id);
 
     String getName() const override { return name; }
@@ -49,7 +50,7 @@ protected:
 
 private:
     const LoggerPtr log;
-    ExpressionActionsPtr join_probe_actions;
+    JoinPtr join;
 };
 
 } // namespace DB
