@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB
