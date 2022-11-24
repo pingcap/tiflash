@@ -2066,7 +2066,6 @@ TEST_F(Regexp, RegexpLike)
                              createNullableVectorColumn<String>(match_types, match_type_nulls)));
     }
 
-    std::cout << "case 9" << std::endl;
     // case 9 test empty columns
     {
         ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
