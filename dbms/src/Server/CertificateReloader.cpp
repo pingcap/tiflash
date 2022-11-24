@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Server/CertificateReloader.h>
-#include "Common/Exception.h"
 
 #if Poco_NetSSL_FOUND
 
@@ -45,13 +44,13 @@ int CertificateReloader::setCertificate(SSL * ssl, void * arg)
     {
         LOG_ERROR(log, "Unusable ssl certificate {}", Poco::Net::Utility::getLastError());
     }
-    
+
     err = SSL_use_PrivateKey(ssl, const_cast<EVP_PKEY *>(static_cast<const EVP_PKEY *>(key)));
     if (err != 1)
     {
         LOG_ERROR(log, "Unusable ssl key {}", Poco::Net::Utility::getLastError());
     }
-    
+
     err = SSL_check_private_key(ssl);
     if (err != 1)
     {
