@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashSecurity.h>
+#include <TestUtils/ConfigTestUtils.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
@@ -27,28 +28,43 @@ class TestTiFlashSecurity : public ext::Singleton<TestTiFlashSecurity>
 
 TEST(TestTiFlashSecurity, Config)
 {
-    TiFlashSecurityConfig config;
-    config.parseAllowedCN(String("[abc,efg]"));
-    ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
-    ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
+    TiFlashSecurityConfig tiflash_config;
+    const auto log = Logger::get();
+    tiflash_config.setLog(log);
 
-    config.allowed_common_names.clear();
+    tiflash_config.parseAllowedCN(String("[abc,efg]"));
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
 
-    config.parseAllowedCN(String("[\"abc\",\"efg\"]"));
-    ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
-    ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
+    tiflash_config.allowedCommonNames().clear();
 
-    config.allowed_common_names.clear();
+    tiflash_config.parseAllowedCN(String(R"(["abc","efg"])"));
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
 
-    config.parseAllowedCN(String("[ abc , efg ]"));
-    ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
-    ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
+    tiflash_config.allowedCommonNames().clear();
 
-    config.allowed_common_names.clear();
+    tiflash_config.parseAllowedCN(String("[ abc , efg ]"));
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
 
-    config.parseAllowedCN(String("[ \"abc\", \"efg\" ]"));
-    ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
-    ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
+    tiflash_config.allowedCommonNames().clear();
+
+    tiflash_config.parseAllowedCN(String(R"([ "abc", "efg" ])"));
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
+
+    String test =
+        R"(
+[security]
+ca_path="security/ca.pem"
+cert_path="security/cert.pem"
+key_path="security/key.pem"
+cert_allowed_cn="tidb"
+        )";
+    auto new_config = loadConfigFromString(test);
+    tiflash_config.update(*new_config);
+    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("tidb"), 1);
 }
 } // namespace tests
 } // namespace DB

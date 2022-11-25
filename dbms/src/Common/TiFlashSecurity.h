@@ -45,6 +45,12 @@ public:
         update(config);
     }
 
+    void setLog(const LoggerPtr & log_)
+    {
+        std::unique_lock lock(mu);
+        log = log_;
+    }
+
     bool hasTlsConfig()
     {
         std::unique_lock lock(mu);
@@ -67,6 +73,12 @@ public:
     {
         std::unique_lock lock(mu);
         return {cert_path, key_path};
+    }
+
+    std::set<String> allowedCommonNames()
+    {
+        std::unique_lock lock(mu);
+        return allowed_common_names;
     }
 
     bool update(Poco::Util::AbstractConfiguration & config)
@@ -141,7 +153,6 @@ public:
 
     void parseAllowedCN(String verify_cns)
     {
-        std::unique_lock lock(mu);
         if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
         {
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
@@ -214,17 +225,15 @@ private:
     }
 
 private:
+    mutable std::mutex mu;
     String ca_path;
     String cert_path;
     String key_path;
-    LoggerPtr log;
-
     bool redact_info_log = false;
-
     std::set<String> allowed_common_names;
-
     bool has_tls_config = false;
-    mutable std::mutex mu;
+
+    LoggerPtr log;
 };
 
 } // namespace DB
