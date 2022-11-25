@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
+#include <common/Exception.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -93,7 +94,11 @@ public:
     const DAGSchema & getOutputSchema() const { return schema; }
 
     // `open` will call the resp_iter's `open` to send coprocessor request.
-    void open() { resp_iter.open(); }
+    void open()
+    {
+        resp_iter.open();
+        opened = true;
+    }
 
     // `cancel` will call the resp_iter's `cancel` to abort the data receiving and prevent the next retry.
     void cancel() { resp_iter.cancel(); }
@@ -145,6 +150,8 @@ public:
     // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
+        RNTIME_CHECK(opened == true);
+
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
@@ -184,5 +191,6 @@ public:
 
     bool collected = false;
     int concurrency_;
+    bool opened = false;
 };
 } // namespace DB
