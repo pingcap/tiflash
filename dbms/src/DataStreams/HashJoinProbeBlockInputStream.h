@@ -16,7 +16,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 
-#include "Interpreters/Join.h"
+#include <Interpreters/Join.h>
 
 namespace DB
 {
