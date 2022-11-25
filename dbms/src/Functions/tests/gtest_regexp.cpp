@@ -2244,6 +2244,17 @@ std::vector<String> getPatVec(const std::vector<T> & test_cases)
 }
 
 template <typename T>
+std::vector<String> getReplVec(const std::vector<T> & test_cases)
+{
+    std::vector<String> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.replacement);
+
+    return vecs;
+}
+
+template <typename T>
 std::vector<Int64> getPosVec(const std::vector<T> & test_cases)
 {
     std::vector<Int64> vecs;
@@ -2748,7 +2759,15 @@ struct RegexpSubstrCase
         , match_type(mt)
         {}
 
-    static void setVecsWithoutNullMap(int param_num, const std::vector<RegexpSubstrCase> test_cases, std::vector<String> & results, std::vector<String> & exprs, std::vector<String> & pats, std::vector<Int64> & positions, std::vector<Int64> & occurs, std::vector<String> & match_types)
+    static void setVecsWithoutNullMap(
+        int param_num,
+        const std::vector<RegexpSubstrCase> test_cases,
+        std::vector<String> & results,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
     {
         results = getResultVec<String>(test_cases);
         switch (param_num)
@@ -2768,7 +2787,16 @@ struct RegexpSubstrCase
         }
     }
 
-    static void setVecsWithNullMap(int param_num, const std::vector<RegexpSubstrCase> test_cases, std::vector<String> & results, std::vector<std::vector<UInt8>> & null_map, std::vector<String> & exprs, std::vector<String> & pats, std::vector<Int64> & positions, std::vector<Int64> & occurs, std::vector<String> & match_types)
+    static void setVecsWithNullMap(
+        int param_num,
+        const std::vector<RegexpSubstrCase> test_cases,
+        std::vector<String> & results,
+        std::vector<std::vector<UInt8>> & null_map,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
     {
         null_map.clear();
         null_map.resize(REGEXP_SUBSTR_MAX_PARAM_NUM);
@@ -3133,6 +3161,104 @@ TEST_F(Regexp, testRegexpReplaceMySQLCases)
     ASSERT_TRUE(res == "\U0001F450\U0001F450a");
 }
 
+struct RegexpReplaceCase
+{
+    RegexpReplaceCase(const String & res, const String & expr, const String & pat, const String & repl, Int64 pos = 1, Int64 occur = 1, const String & mt = "")
+        : result(res)
+        , expression(expr)
+        , pattern(pat)
+        , replacement(repl)
+        , position(pos)
+        , occurrence(occur)
+        , match_type(mt)
+        {}
+
+    RegexpReplaceCase(const String & res, const std::vector<UInt8> & null_map_, const String & expr, const String & pat, const String & repl, Int64 pos = 1, Int64 occur = 1, const String & mt = "")
+        : result(res)
+        , null_map(null_map_)
+        , expression(expr)
+        , pattern(pat)
+        , replacement(repl)
+        , position(pos)
+        , occurrence(occur)
+        , match_type(mt)
+        {}
+
+    static void setVecsWithoutNullMap(
+        int param_num,
+        const std::vector<RegexpReplaceCase> test_cases,
+        std::vector<String> & results,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<String> & repls,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
+    {
+        results = getResultVec<String>(test_cases);
+        switch (param_num)
+        {
+        case 6:
+            match_types = getMatchTypeVec(test_cases);
+        case 5:
+            occurs = getOccurVec(test_cases);
+        case 4:
+            positions = getPosVec(test_cases);
+        case 3:
+            repls = getReplVec(test_cases);
+            pats = getPatVec(test_cases);
+            exprs = getExprVec(test_cases);
+            break;
+        default:
+            throw DB::Exception("Invalid param_num");
+        }
+    }
+
+    static void setVecsWithNullMap(
+        int param_num,
+        const std::vector<RegexpReplaceCase> test_cases,
+        std::vector<String> & results,
+        std::vector<std::vector<UInt8>> & null_map,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<String> repls,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
+    {
+        null_map.clear();
+        null_map.resize(REGEXP_REPLACE_MAX_PARAM_NUM);
+        for (const auto & elem : test_cases)
+        {
+            null_map[EXPR_NULL_MAP_IDX].push_back(elem.null_map[EXPR_NULL_MAP_IDX]);
+            null_map[PAT_NULL_MAP_IDX].push_back(elem.null_map[PAT_NULL_MAP_IDX]);
+            null_map[POS_NULL_MAP_IDX].push_back(elem.null_map[POS_NULL_MAP_IDX]);
+            null_map[REPLACE_NULL_MAP_IDX].push_back(elem.null_map[REPLACE_NULL_MAP_IDX]);
+            null_map[OCCUR_NULL_MAP_IDX].push_back(elem.null_map[OCCUR_NULL_MAP_IDX]);
+            null_map[MATCH_TYPE_NULL_MAP_IDX].push_back(elem.null_map[MATCH_TYPE_NULL_MAP_IDX]);
+        }
+
+        setVecsWithoutNullMap(param_num, test_cases, results, exprs, pats, repls, positions, occurs, match_types);
+    }
+
+    const static UInt8 REGEXP_REPLACE_MAX_PARAM_NUM = 6;
+    const static UInt8 EXPR_NULL_MAP_IDX = 0;
+    const static UInt8 PAT_NULL_MAP_IDX = 1;
+    const static UInt8 REPLACE_NULL_MAP_IDX = 2;
+    const static UInt8 POS_NULL_MAP_IDX = 3;
+    const static UInt8 OCCUR_NULL_MAP_IDX = 4;
+    const static UInt8 MATCH_TYPE_NULL_MAP_IDX = 5;
+
+    String result;
+    std::vector<UInt8> null_map;
+    String expression;
+    String pattern;
+    String replacement;
+    Int64 position;
+    Int64 occurrence;
+    String match_type;
+};
+
 TEST_F(Regexp, RegexpReplace)
 {
     const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
@@ -3275,25 +3401,81 @@ TEST_F(Regexp, RegexpReplace)
                          executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, binary_collator, true));
     }
 
-    /// case 5: test some special cases
+    std::vector<RegexpReplaceCase> test_cases;
+    std::vector<std::vector<UInt8>> null_maps;
+    std::vector<String> exprs;
+    std::vector<String> repls;
+    std::vector<Int64> positions;
+    std::vector<Int64> occurs;
+
+    /// case 5 regexp_replace(vector, vector, vector[, vector, vector, vector])
+    {
+        test_cases = {{"taa", "ttifl", "tifl", "aa", 1, 0, ""},
+                      {"aaaaaa", "121212", "1.", "aa", 1, 0, ""},
+                      {"aa1212", "121212", "1.", "aa", 1, 1, ""},
+                      {"12aa12", "121212", "1.", "aa", 1, 2, ""},
+                      {"1212aa", "121212", "1.", "aa", 1, 3, ""},
+                      {"121212", "121212", "1.", "aa", 1, 4, ""},
+                      {"啊ah好a哈哈", "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
+                      {"啊a哈ah好哈", "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
+                      {"啊a哈a哈哈", "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
+                      {"aa", "\n", ".", "aa", 1, 0, "s"},
+                      {"12aa34", "12\n34", ".", "aa", 3, 1, "s"}};
+        RegexpReplaceCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, repls, positions, occurs, match_types);
+        results = getResultVec<String>(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<String>(results),
+                         executeFunction(
+                             "regexp_replace",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<String>(repls),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<String>(match_types)));
+    }
+
+    /// case 6 regexp_replace(vector, vector, const[, const, const, vector]) with null value
+    {
+        test_cases = {{"taa", {0, 0, 1, 0, 0, 0}, "ttifl", "tifl", "aa", 1, 0, ""},
+                      {"aaaaaa", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 0, ""},
+                      {"aa1212", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 1, ""},
+                      {"12aa12", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 2, ""},
+                      {"1212aa", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 3, ""},
+                      {"121212", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 4, ""},
+                      {"啊ah好a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
+                      {"啊a哈ah好哈", {0, 0, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
+                      {"啊a哈a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
+                      {"aa", {0, 1, 0, 0, 0, 0}, "\n", ".", "aa", 1, 0, "s"},
+                      {"12aa34", {0, 0, 0, 0, 0, 0}, "12\n34", ".", "aa", 3, 1, "s"}};
+        RegexpReplaceCase::setVecsWithNullMap(6, test_cases, results, null_maps, exprs, patterns, repls, positions, occurs, match_types);
+        results = getResultVec<String>(test_cases);
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(results, null_maps[RegexpReplaceCase::PAT_NULL_MAP_IDX]),
+                         executeFunction(
+                             "regexp_replace",
+                             createColumn<String>(exprs),
+                             createNullableVectorColumn<String>(patterns, null_maps[RegexpReplaceCase::PAT_NULL_MAP_IDX]),
+                             createColumn<String>(repls),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<String>(match_types)));
+    }
+
+    /// case 7: test some special cases
     {
         // test empty expr
-        ASSERT_COLUMN_EQ(createColumn<String>({"aa", "aa", "aa", ""}),
+        ASSERT_COLUMN_EQ(createColumn<String>({"aa", "aa", "aa", "", ""}),
                     executeFunction(
                         "regexp_replace",
                         {
-                            createColumn<String>({"", "", "", ""}),
-                            createColumn<String>({"^$", "^$", "^$", "^$"}),
-                            createColumn<String>({"aa", "aa", "aa", "aa"}),
-                            createColumn<Int64>({1, 1, 1, 1}),
-                            createColumn<Int64>({-1, 0, 1, 2})
+                            createColumn<String>({"", "", "", "", ""}),
+                            createColumn<String>({"^$", "^$", "^$", "^$", "12"}),
+                            createColumn<String>({"aa", "aa", "aa", "aa", "aa"}),
+                            createColumn<Int64>({1, 1, 1, 1, 1}),
+                            createColumn<Int64>({-1, 0, 1, 2, 3})
                         },
                         nullptr,
                         true));
-
     }
-
-    /// case 6: test empty columns
 }
 } // namespace tests
 } // namespace DB
