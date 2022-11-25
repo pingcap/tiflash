@@ -25,11 +25,6 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     , join(join_)
 {
     children.push_back(input);
-
-    if (join == nullptr)
-    {
-        RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
-    }
 }
 
 Block HashJoinProbeBlockInputStream::getTotals()
@@ -39,7 +34,7 @@ Block HashJoinProbeBlockInputStream::getTotals()
         totals = child->getTotals();
         if (!totals)
         {
-            if (join && join->hasTotals())
+            if (join->hasTotals())
             {
                 for (const auto & name_and_type : child->getHeader().getColumnsWithTypeAndName())
                 {
