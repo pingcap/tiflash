@@ -26,7 +26,6 @@ const String DisaggregatedTiFlashTableScanInterpreter::ExecIDPrefixForTiFlashSto
 void DisaggregatedTiFlashTableScanInterpreter::execute(DAGPipeline & pipeline)
 {
     buildRemoteRequests();
-    RUNTIME_CHECK(!remote_requests.empty());
 
     auto dispatch_reqs = buildAndDispatchMPPTaskRequests();
     buildReceiverStreams(dispatch_reqs, pipeline);
@@ -157,6 +156,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     sender->set_tp(tipb::ExchangeType::PassThrough);
     sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
     auto * child = sender->mutable_child();
+    RUNTIME_CHECK(!remote_requests.empty());
     child->CopyFrom(remote_requests[0].dag_request.root_executor());
     for (const auto & column_info : column_infos)
     {

@@ -102,7 +102,6 @@ AnalysisResult analyzeExpressions(
     ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan.
     // In test mode, filter is not pushed down to table scan.
-    // In disaggregated mode, we need an explicit Selection.
     if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
     {
         std::vector<const tipb::Expr *> where_conditions;
