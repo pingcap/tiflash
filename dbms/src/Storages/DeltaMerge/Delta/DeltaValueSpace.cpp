@@ -267,7 +267,11 @@ bool DeltaValueSpace::compact(DMContext & context)
         // and it may trigger another minor compaction if there is still too many column files.
         // This process will stop when there is no more minor compaction to be done.
         last_try_compact_column_files.store(0);
+<<<<<<< HEAD
         LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
+=======
+        LOG_DEBUG(log, "{} delta={}", compaction_task->info(), info());
+>>>>>>> 056f7c588e (avoid always compacting level0 under heavy write pressure (#6362))
     }
     wbs.writeRemoves();
 
