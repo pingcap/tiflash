@@ -936,7 +936,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     {
         for (size_t i = 0; i < final_num_stream; ++i)
         {
-            res.push_back(std::make_shared<DMSegmentThreadInputStream>(
+            res.emplace_back(std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
