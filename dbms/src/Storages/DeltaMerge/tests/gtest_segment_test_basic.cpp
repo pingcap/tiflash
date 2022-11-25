@@ -423,44 +423,36 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
 
-    auto ingest_data = [&](SegmentPtr segment, const Block & block) {
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+
+    {
+        auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
         WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(
-            *dm_context,
-            table_columns,
-            input_stream,
-            file_id,
-            parent_path,
-            flags);
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
-        {
-            WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
-            auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-            wbs.data.putRefPage(ref_id, dm_file->pageId());
-            auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
-            wbs.writeLogAndData();
-            auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
-            ColumnFiles column_files;
-            column_files.push_back(column_file);
-            ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
-        }
+
+        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        wbs.writeLogAndData();
+        auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
+        ColumnFiles column_files;
+        column_files.push_back(column_file);
+        ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
+
         ingest_wbs.rollbackWrittenLogAndData();
-    };
-
-    auto segment = segments[segment_id];
-    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
-    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
-
-    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    ingest_data(segment, block);
+    }
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["ingest"]++;
@@ -508,13 +500,7 @@ void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_i
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
-    auto dm_file = writeIntoNewDMFile(
-        *dm_context,
-        table_columns,
-        input_stream,
-        file_id,
-        parent_path,
-        {});
+    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, {});
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();
