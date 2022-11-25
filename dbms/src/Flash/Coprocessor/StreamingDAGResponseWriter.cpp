@@ -61,12 +61,6 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
-{
-    assert(0 == rows_in_blocks);
-}
-
-template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
@@ -80,9 +74,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
     size_t rows = block.rows();
-    rows_in_blocks += rows;
     if (rows > 0)
     {
+        rows_in_blocks += rows;
         blocks.push_back(block);
     }
 

@@ -71,19 +71,14 @@ void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
     dag_response->set_warning_count(dag_context.getWarningCount());
 }
 
-void UnaryDAGResponseWriter::finishWrite()
+void UnaryDAGResponseWriter::flush()
 {
     if (current_records_num > 0)
     {
         encodeChunkToDAGResponse();
     }
+    // TODO separate from UnaryDAGResponseWriter and support mpp/batchCop.
     appendWarningsToDAGResponse();
-
-    if (dag_context.collect_execution_summaries)
-    {
-        ExecutionSummaryCollector summary_collector(dag_context);
-        summary_collector.addExecuteSummaries(*dag_response);
-    }
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)

@@ -401,7 +401,10 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_DEBUG(log, "Compact stop because structure got updated, delta={}", simpleInfo());
             return false;
         }
-
+        // Reset to 0 if the minor compaction succeed,
+        // and it may trigger another minor compaction if there is still too many column files.
+        // This process will stop when there is no more minor compaction to be done.
+        last_try_compact_column_files.store(0);
         LOG_DEBUG(log, "{} delta={}", compaction_task->info(), info());
     }
     wbs.writeRemoves();
