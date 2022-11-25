@@ -21,7 +21,6 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
-#include <common/Exception.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -150,7 +149,7 @@ public:
     // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
-        RNTIME_CHECK(opened == true);
+        RUNTIME_CHECK(opened == true);
 
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
