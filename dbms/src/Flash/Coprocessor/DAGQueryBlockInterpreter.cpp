@@ -758,7 +758,6 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
     TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
-    int stream_id = 0;
     const uint64_t stream_count = query_block.exchange_sender->fine_grained_shuffle_stream_count();
     const uint64_t batch_size = query_block.exchange_sender->fine_grained_shuffle_batch_size();
 
@@ -779,7 +778,6 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             exchange_sender.tp(),
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
-            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext(),
             enable_fine_grained_shuffle,
             stream_count,

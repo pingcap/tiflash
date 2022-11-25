@@ -14,13 +14,32 @@
 
 #pragma once
 
-#include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Executor/QueryExecutor.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
-BlockIO executeQuery(Context & context, bool internal = false);
-QueryExecutorPtr queryExecute(Context & context, bool internal = false);
+class DataStreamExecutor : public QueryExecutor
+{
+public:
+    explicit DataStreamExecutor(const BlockIO & block_io)
+        : QueryExecutor(block_io.process_list_entry)
+        , data_stream(block_io.in)
+    {
+        assert(data_stream);
+    }
+
+    String dump() const override;
+
+    void cancel(bool is_kill) override;
+
+    int estimateNewThreadCount() override;
+
+protected:
+    ExecutionResult execute(ResultHandler result_handler) override;
+
+protected:
+    BlockInputStreamPtr data_stream;
+};
 } // namespace DB
