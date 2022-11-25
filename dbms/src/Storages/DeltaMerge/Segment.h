@@ -437,10 +437,15 @@ public:
         return std::exchange(lock_opt, std::nullopt).value();
     }
 
-    /// Marks this segment as abandoned.
-    /// Note: Segment member functions never abandon the segment itself.
-    /// The abandon state is usually triggered by the DeltaMergeStore.
-    void abandon(DMContext & context)
+    /**
+     * Marks this segment as abandoned.
+     * Note: Segment member functions never abandon the segment itself.
+     * The abandon state is usually triggered by the DeltaMergeStore.
+     *
+     * You must hold a Segment update lock in order to abandon this segment.
+     * Otherwise, the abandon operation may break an existing segment update operation.
+     */
+    void abandon(const Lock &, DMContext & context)
     {
         LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);
