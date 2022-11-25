@@ -408,7 +408,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {

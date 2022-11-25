@@ -634,6 +634,7 @@ void checkReadTso(UInt64 read_tso, const TMTContext & tmt, const Context & conte
         }
     }
 }
+
 DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
                                                        unsigned num_streams,
                                                        const Context & context,

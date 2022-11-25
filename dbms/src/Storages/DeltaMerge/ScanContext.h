@@ -23,19 +23,22 @@
 
 namespace DB::DM
 {
+/// ScanContext is used to record statistical information in table scan for current query.
+/// For each table scan(one executor id), there is only one ScanContext.
+/// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
 class ScanContext
 {
 public:
-    // sum of scanned packs in dmfiles(both stable and ColumnFileBig) among this query
+    /// sum of scanned packs in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_dmfile_scanned_packs{0};
 
-    // sum of skipped packs in dmfiles(both stable and ColumnFileBig) among this query
+    /// sum of skipped packs in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_dmfile_skipped_packs{0};
 
-    // sum of scanned rows in dmfiles(both stable and ColumnFileBig) among this query
+    /// sum of scanned rows in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_dmfile_scanned_rows{0};
 
-    // sum of skipped rows in dmfiles(both stable and ColumnFileBig) among this query
+    /// sum of skipped rows in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_dmfile_skipped_rows{0};
 
     std::atomic<uint64_t> total_dmfile_rough_set_index_load_time_ms{0};

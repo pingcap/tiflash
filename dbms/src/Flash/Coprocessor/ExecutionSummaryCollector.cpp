@@ -107,9 +107,9 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
             current.concurrency++;
         }
         // get execution info from dag context's scan_context
-        if (dag_context.scan_context_map.find(executor_id) != dag_context.scan_context_map.end())
+        if (const auto & iter = dag_context.scan_context_map.find(executor_id); iter != dag_context.scan_context_map.end())
         {
-            current.scan_context->merge(*(dag_context.scan_context_map[executor_id]));
+            current.scan_context->merge(*(iter->second));
         }
 
         /// part 2: remote execution info

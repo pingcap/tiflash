@@ -775,13 +775,13 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
     auto & storage = storages_with_structure_lock[table_id].storage;
 
-    DAGContext & dag_context = *context.getDAGContext();
+    const DAGContext & dag_context = *context.getDAGContext();
     for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
     {
         try
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-            auto & scan_context = dag_context.scan_context_map[table_scan.getTableScanExecutorID()];
+            const auto & scan_context = dag_context.scan_context_map.at(table_scan.getTableScanExecutorID());
             pipeline.streams = std::dynamic_pointer_cast<StorageDeltaMerge>(storage)->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
 
             injectFailPointForLocalRead(query_info);
