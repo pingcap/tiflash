@@ -298,6 +298,8 @@ CATCH
 TEST_F(SegmentOperationTest, CheckColumnFileSchema)
 try
 {
+    SegmentTestOptions options;
+    reloadWithOptions(options);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
