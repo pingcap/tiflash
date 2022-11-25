@@ -899,8 +899,6 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     Poco::File blob_file_in_disk(path);
     ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
 
-    // Clear cache to reproduce https://github.com/pingcap/tiflash/issues/5532
-    blob_store.blob_files.clear();
     // Check whether the stat can be totally removed
     stat->changeToReadOnly();
     blob_store.remove(remain_entries);

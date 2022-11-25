@@ -1051,6 +1051,57 @@ TEST_F(PageStorageWith2PagesTest, PutCollapseDuplicatedRefPages)
     }
 }
 
+TEST_F(PageStorageWith2PagesTest, RemoveReadOnlyFile)
+{
+    PageStorageConfig cfg;
+    cfg.blob_heavy_gc_valid_rate = 1.0;
+    page_storage = reopenWithConfig(cfg);
+
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+
+    // full gc happens, rewrite page from blobfile_1 to blobfile_2
+    bool flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(flag, true);
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), true);
+
+    // cleanup blobfile_1
+    flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(blob_file1.exists(), false);
+    ASSERT_EQ(blob_file2.exists(), true);
+    EXPECT_EQ(flag, true);
+}
+
+TEST_F(PageStorageWith2PagesTest, ReuseEmptyFileAfterRestart)
+{
+    {
+        // delete the pages, the blobfile become "empty"
+        WriteBatch wb;
+        wb.delPage(1);
+        wb.delPage(2);
+        page_storage->write(std::move(wb));
+    }
+
+    PageStorageConfig cfg;
+    cfg.blob_heavy_gc_valid_rate = 1.0;
+    page_storage = reopenWithConfig(cfg);
+
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+
+    // the "empty" blobfile_1 will be reused for later writing,
+    // no full gc happens.
+    bool flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(flag, false);
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+}
+
 TEST_F(PageStorageWith2PagesTest, DISABLED_AddRefPageToNonExistPage)
 try
 {

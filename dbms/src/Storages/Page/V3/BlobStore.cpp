@@ -95,9 +95,9 @@ void BlobStore::registerPaths()
         for (const auto & blob_name : file_list)
         {
             const auto & [blob_id, err_msg] = BlobStats::getBlobIdFromName(blob_name);
-            auto lock_stats = blob_stats.lock();
             if (blob_id != INVALID_BLOBFILE_ID)
             {
+                auto lock_stats = blob_stats.lock();
                 Poco::File blob(fmt::format("{}/{}", path, blob_name));
                 auto blob_size = blob.getSize();
                 delegator->addPageFileUsedSize({blob_id, 0}, blob_size, path, true);
@@ -516,7 +516,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
 
     // Note that we must release the lock on blob_stat before removing it
     // from all blob_stats, or deadlocks could happen.
-    // As the blob_stat become read-only, it is safe to release the lock.
+    // As the blob_stat has been became read-only, it is safe to release the lock.
     LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
     {
@@ -534,6 +534,8 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
             blob_file->remove();
             blob_files.erase(iter);
         }
+        // If the blob_id does not exist, the blob_file is never
+        // opened for read/write. It is safe to ignore it.
     }
 }
 

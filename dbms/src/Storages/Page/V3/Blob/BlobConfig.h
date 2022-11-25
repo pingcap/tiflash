@@ -32,7 +32,7 @@ struct BlobConfig
     String toString()
     {
         return fmt::format("BlobStore Config Info: "
-                           "[file_limit_size={}],[spacemap_type={}] "
+                           "[file_limit_size={}] [spacemap_type={}] "
                            "[block_alignment_bytes={}] "
                            "[heavy_gc_valid_rate={}]",
                            file_limit_size,
