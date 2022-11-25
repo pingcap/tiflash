@@ -506,10 +506,10 @@ try
 {
     // a smaller pack rows for logical split
     reloadWithOptions(
-    {.db_settings = {
-         .dt_segment_stable_pack_rows = 100,
-         .dt_enable_logical_split = true,
-     }});
+        {.db_settings = {
+             .dt_segment_stable_pack_rows = 100,
+             .dt_enable_logical_split = true,
+         }});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
