@@ -28,7 +28,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
     if (join == nullptr)
     {
-        throw Exception("join ptr should not be null.", ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     }
 }
 
@@ -41,7 +41,7 @@ Block HashJoinProbeBlockInputStream::getTotals()
         {
             if (join && join->hasTotals())
             {
-                for (const auto & name_and_type : getHeader().getColumnsWithTypeAndName())
+                for (const auto & name_and_type : child->getHeader().getColumnsWithTypeAndName())
                 {
                     auto column = name_and_type.type->createColumn();
                     column->insertDefault();
