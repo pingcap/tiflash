@@ -22,6 +22,8 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <memory>
+
 namespace DB
 {
 class StoragePathPool;
@@ -100,6 +102,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
+              const ScanContextPtr & scan_context_ = std::make_shared<ScanContext>(),
               const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
@@ -126,8 +129,8 @@ public:
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
         , tracing_id(tracing_id_)
+        , scan_context(scan_context_)
     {
-        scan_context = std::make_shared<ScanContext>();
     }
 
     WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
@@ -136,8 +139,6 @@ public:
     {
         return DMChecksumConfig::fromDBContext(db_context, is_single_file);
     }
-
-    void setScanContext(ScanContextPtr scan_context_) { scan_context = scan_context_; }
 };
 
 } // namespace DM
