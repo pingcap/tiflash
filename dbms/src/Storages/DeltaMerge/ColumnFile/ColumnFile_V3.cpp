@@ -51,6 +51,7 @@ void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePers
                 throw Exception("A tiny file without schema: " + column_file->toString(), ErrorCodes::LOGICAL_ERROR);
 
             bool save_schema = cur_schema != last_schema;
+            last_schema = cur_schema;
             column_file->serializeMetadata(buf, save_schema);
             break;
         }
