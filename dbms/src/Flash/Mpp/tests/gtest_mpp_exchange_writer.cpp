@@ -172,7 +172,6 @@ try
     dag_writer->prepare(block.cloneEmpty());
     dag_writer->write(block);
     dag_writer->flush();
-    dag_writer->finishWrite();
 
     // 4. Start to check write_report.
     std::vector<Block> decoded_blocks;
@@ -233,7 +232,6 @@ try
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
-    dag_writer->finishWrite();
 
     // 4. Start to check write_report.
     size_t per_part_rows = block_rows * block_num / part_num;
@@ -294,7 +292,6 @@ try
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
-    dag_writer->finishWrite();
 
     // 4. Start to check write_report.
     size_t per_part_rows = block_rows * block_num / part_num;
@@ -347,7 +344,6 @@ try
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
-    dag_writer->finishWrite();
 
     // 4. Start to check write_report.
     size_t expect_rows = block_rows * block_num;

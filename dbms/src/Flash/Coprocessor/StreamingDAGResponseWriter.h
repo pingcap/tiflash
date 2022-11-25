@@ -37,7 +37,6 @@ public:
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
-    void finishWrite() override;
 
 private:
     void encodeThenWriteBlocks();
