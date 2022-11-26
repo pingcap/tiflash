@@ -38,8 +38,7 @@ public:
         DAGContext & dag_context_);
 
     void write(const Block & block) override;
-    void flush() override {}
-    void finishWrite() override;
+    void flush() override;
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();
 

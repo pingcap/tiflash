@@ -37,6 +37,8 @@
 #include <future>
 #include <iterator>
 
+using namespace std::chrono_literals;
+
 namespace DB
 {
 namespace FailPoints
@@ -141,33 +143,44 @@ try
         store = reload(table_column_defines);
     }
 
-    constexpr size_t num_rows_write = 128;
-    // Ensure stable is not empty.
+    // Ensure stable is large enough, or this would be unstable.
+    const size_t num_rows_write_stable = db_context->getGlobalContext().getSettingsRef().max_block_size;
+    constexpr size_t NUMBER_OF_BLOCK_IN_STABLE = 5;
+    const size_t stable_rows = num_rows_write_stable * NUMBER_OF_BLOCK_IN_STABLE;
     {
-        auto block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        block.insert(DB::tests::createColumn<String>(
-            createNumberStrings(0, num_rows_write),
-            col_str_define.name,
-            col_str_define.id));
-        block.insert(DB::tests::createColumn<Int8>(
-            createSignedNumbers(0, num_rows_write),
-            col_i8_define.name,
-            col_i8_define.id));
-        store->write(*db_context, db_context->getSettingsRef(), block);
-        ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
-        store->mergeDeltaAll(*db_context);
+        for (size_t i = 0; i < NUMBER_OF_BLOCK_IN_STABLE; i++)
+        {
+            auto beg = num_rows_write_stable * i;
+            auto end = beg + num_rows_write_stable;
+            auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(beg, end),
+                col_str_define.name,
+                col_str_define.id));
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(beg, end),
+                col_i8_define.name,
+                col_i8_define.id));
+            store->write(*db_context, db_context->getSettingsRef(), block);
+            ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
+        }
+        while (!store->mergeDeltaAll(*db_context))
+        {
+            std::this_thread::sleep_for(10ms);
+        }
         auto stable = store->id_to_segment.begin()->second->getStable();
-        ASSERT_EQ(stable->getRows(), num_rows_write);
+        ASSERT_EQ(stable->getRows(), stable_rows);
     }
 
-    static const size_t NUMBER_OF_BLOCKS_IN_DELTA = 10;
-    static const size_t NUMBER_OF_BLOCKS_IN_STABLE = 1;
+    const size_t num_rows_write_delta = 128; // Avoid DeltaMerge.
+    constexpr size_t NUMBER_OF_BLOCKS_IN_DELTA = 5;
+    const size_t delta_rows = num_rows_write_delta * NUMBER_OF_BLOCKS_IN_DELTA;
     // Ensure delta is not empty.
     {
         for (size_t i = 0; i < NUMBER_OF_BLOCKS_IN_DELTA; ++i)
         {
-            auto beg = num_rows_write * (i + 1);
-            auto end = beg + num_rows_write;
+            auto beg = num_rows_write_delta * i + stable_rows;
+            auto end = beg + num_rows_write_delta;
             auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
             block.insert(DB::tests::createColumn<String>(
                 createNumberStrings(beg, end),
@@ -181,7 +194,7 @@ try
             ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
         }
         auto delta = store->id_to_segment.begin()->second->getDelta();
-        ASSERT_EQ(delta->getRows(), num_rows_write * NUMBER_OF_BLOCKS_IN_DELTA);
+        ASSERT_EQ(delta->getRows(), delta_rows);
     }
 
     // Check DMFile
@@ -215,12 +228,20 @@ try
         ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
         store->mergeDeltaAll(*db_context);
         auto stable = store->id_to_segment.begin()->second->getStable();
-        ASSERT_EQ(stable->getRows(), (NUMBER_OF_BLOCKS_IN_DELTA + NUMBER_OF_BLOCKS_IN_STABLE) * num_rows_write);
+        ASSERT_EQ(stable->getRows(), delta_rows + stable_rows);
 
         dmfile->remove(db_context->getFileProvider());
         ASSERT_NE(dmfile->path(), readable_path);
 
-        in = nullptr;
+        while (blk)
+        {
+            blk = in->read();
+        }
+        // When input stream finished, background read threads will
+        // first notify current thread and then release relative components concurrently.
+        // So it is necessary to wait for background read threads to release relative components before check it.
+        // Release relative components will execute immediately in background read threads, I think 10ms is enough.
+        std::this_thread::sleep_for(10ms);
         ASSERT_EQ(DMFileReaderPool::instance().get(readable_path), nullptr);
     }
 }

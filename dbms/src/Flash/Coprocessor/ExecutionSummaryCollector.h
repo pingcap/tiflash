@@ -34,6 +34,8 @@ public:
 
     void addExecuteSummaries(tipb::SelectResponse & response);
 
+    tipb::SelectResponse genExecutionSummaryResponse();
+
 private:
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
