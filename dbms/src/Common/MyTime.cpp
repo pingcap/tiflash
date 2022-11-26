@@ -1208,7 +1208,7 @@ bool checkHHMMSS(const int * hhmmss)
 }
 
 // duration, matched
-std::pair<MyDuration, bool> matchDuration(const String & str, int8_t fsp)
+std::pair<MyDuration, bool> parseMyDurationImpl(const String & str, int8_t fsp)
 {
     if (fsp < 0 || fsp > 6 || str.empty())
     {
@@ -1315,7 +1315,7 @@ bool canFallbackToDateTime(const String & str)
 Field parseMyDuration(const String & str, int8_t fsp)
 {
     String rest = Poco::trim(str);
-    auto [duration, matched] = matchDuration(rest, fsp);
+    auto [duration, matched] = parseMyDurationImpl(rest, fsp);
     if (matched)
     {
         return Field(duration.nanoSecond());

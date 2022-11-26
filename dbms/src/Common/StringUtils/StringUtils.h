@@ -167,7 +167,7 @@ inline std::tuple<std::string, std::string, bool> digit(const std::string & str,
         return {"", str, false};
     }
     size_t idx = 0;
-    for (; idx < str.length() && isdigit(str[idx]); idx++)
+    for (auto sz = str.length(); idx < sz && isdigit(str[idx]); idx++)
     {
         // remove all remaining spaces
     }
@@ -177,7 +177,7 @@ inline std::tuple<std::string, std::string, bool> digit(const std::string & str,
 // remove at lease x spaces
 inline std::pair<std::string, bool> space(const std::string & str, int x)
 {
-    for (size_t i = 0, times = x; i < times && i < str.length() && isspace(str[i]); i++, x--)
+    for (size_t i = 0, times = x, sz = str.length(); i < times && i < sz && isspace(str[i]); i++, x--)
     {
         // find x spaces
     }
@@ -186,7 +186,7 @@ inline std::pair<std::string, bool> space(const std::string & str, int x)
         return {str, false};
     }
     size_t idx = 0;
-    for (; idx < str.length() && isspace(str[idx]); idx++)
+    for (auto sz = str.length(); idx < sz && isspace(str[idx]); idx++)
     {
         // remove all remaining spaces
     }
@@ -230,7 +230,7 @@ inline std::pair<std::string, bool> matchColon(const std::string & str)
 inline std::tuple<int, int, bool> number(const std::string & str)
 {
     size_t idx = 0;
-    for (; idx < str.length() && isdigit(str[idx]); idx++)
+    for (auto sz = str.length(); idx < sz && isdigit(str[idx]); idx++)
     {
         // find digit string
     }

@@ -2824,7 +2824,7 @@ private:
     static void vectorDatetime(const ColumnUInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
     {
         vec_to.resize(vec_from.size());
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             vec_to[i] = F(vec_from[i]);
         }
@@ -3100,7 +3100,7 @@ private:
     {
         vec_to.resize(offsets_from.size());
         size_t current_offset = 0;
-        for (size_t i = 0; i < offsets_from.size(); i++)
+        for (size_t i = 0, sz = offsets_from.size(); i < sz; i++)
         {
             size_t next_offset = offsets_from[i];
             size_t string_size = next_offset - current_offset - 1;
@@ -3350,7 +3350,7 @@ struct TiDBLastDayTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
@@ -3385,7 +3385,7 @@ struct TiDBDayOfWeekTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
@@ -3422,7 +3422,7 @@ struct TiDBDayOfYearTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
@@ -3457,7 +3457,7 @@ struct TiDBWeekOfYearTransformerImpl
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         bool is_null = false;
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
@@ -3495,7 +3495,7 @@ struct TiDBToSecondsTransformerImpl
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         bool is_null = false;
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
@@ -3531,7 +3531,7 @@ struct TiDBToDaysTransformerImpl
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         bool is_null = false;
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
