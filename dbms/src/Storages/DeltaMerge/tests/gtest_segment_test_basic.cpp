@@ -623,10 +623,10 @@ try
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 10);
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}, "col"));
+            createColumn<Int64>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}));
         ASSERT_COLUMN_EQ(
             block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, "col"));
+            createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
     }
     {
         // write_rows > segment_rows, start_key not specified
@@ -634,10 +634,10 @@ try
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 13);
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19}, "col"));
+            createColumn<Int64>({10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19}));
         ASSERT_COLUMN_EQ(
             block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1}, "col"));
+            createColumn<UInt64>({1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1}));
     }
     {
         // start_key specified, end_key - start_key < write_rows
@@ -645,40 +645,40 @@ try
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 2, /* at */ 16);
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 17}, "col"));
+            createColumn<Int64>({16, 17}));
         ASSERT_COLUMN_EQ(
             block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 1}, "col"));
+            createColumn<UInt64>({1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 4, /* at */ 16);
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 17, 18, 19}, "col"));
+            createColumn<Int64>({16, 17, 18, 19}));
         ASSERT_COLUMN_EQ(
             block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 1, 1, 1}, "col"));
+            createColumn<UInt64>({1, 1, 1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 5, /* at */ 16);
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 16, 17, 18, 19}, "col"));
+            createColumn<Int64>({16, 16, 17, 18, 19}));
         ASSERT_COLUMN_EQ(
             block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 2, 1, 1, 1}, "col"));
+            createColumn<UInt64>({1, 2, 1, 1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 10, /* at */ 16);
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 16, 16, 17, 17, 17, 18, 18, 19, 19}, "col"));
+            createColumn<Int64>({16, 16, 16, 17, 17, 17, 18, 18, 19, 19}));
         ASSERT_COLUMN_EQ(
             block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}, "col"));
+            createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
     }
     {
         // write rows < segment rows, start key not specified, should choose a random start.
