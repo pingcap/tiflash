@@ -67,7 +67,7 @@ static const bool JsonSafeAscii[] = {
     true, true, true, true, true, true, true, true
 };
 
-/// Based on a public domain branchless UTF-8 decoder by Christopher Wellons:
+/// Based on a public domain branch-less UTF-8 decoder by Christopher Wellons:
 /// https://github.com/skeeto/branchless-utf8 (Unlicensed)
 /// Changes:
 /// 1. check byte length check branch and padding zeros inside the function if input string length < 4

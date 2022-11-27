@@ -22,7 +22,6 @@ namespace DB
 
 const std::pair<bool, JsonPathArrayIndex> JsonPathStream::InvalidIndexPair{false, 0};
 const JsonPathArraySelection AsteriskSelection{JsonPathArraySelectionAsterisk};
-const JsonPathExpr::JsonPathLeg AsteriskLeg{JsonPathExpr::JsonPathLegDoubleAsterisk, AsteriskSelection};
 
 bool isEcmascriptIdentifier(const String & str)
 {
@@ -67,7 +66,7 @@ JsonPathArrayIndex getArrayIndexFromStart(const JsonBinary & json, JsonPathArray
     return index;
 }
 
-std::pair<JsonPathArrayIndex, JsonPathArrayIndex> JsonPathArraySelection::getIndexRange(const JsonBinary & json)
+std::pair<JsonPathArrayIndex, JsonPathArrayIndex> JsonPathArraySelection::getIndexRange(const JsonBinary & json) const
 {
     auto element_count = static_cast<Int32>(json.getElementCount());
     switch (type)
@@ -218,57 +217,59 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryParseArrayIndex()
     return InvalidIndexPair;
 }
 
-std::optional<JsonPathExpr> JsonPathExpr::parseJsonPathExpr(const String & str)
+std::shared_ptr<JsonPathExpr> JsonPathExpr::parseJsonPathExpr(const String & str)
 {
-    std::optional<JsonPathExpr> ret;
     JsonPathStream stream(str);
 	stream.skipWhiteSpace();
 	if (stream.exhausted() || stream.read() != '$')
-    {
-        /// LOG_ERROR
-        return ret;
-    }
+        return nullptr;
+
 	stream.skipWhiteSpace();
 
-    JsonPathExpr path_expr;
-    path_expr.legs.reserve(16);
+    /// Not using std::make_shared for private constructor
+    auto json_path_ptr = new JsonPathExpr();
+    std::shared_ptr<JsonPathExpr> path_expr(json_path_ptr);
+    path_expr->legs.reserve(16);
     bool ok = false;
 	while (!stream.exhausted())
     {
         switch (stream.peek())
         {
         case '.':
-            ok = parseJsonPathMember(stream, path_expr);
+            ok = parseJsonPathMember(stream, path_expr.get());
             break;
         case '[':
-            ok = parseJsonPathArray(stream, path_expr);
+            ok = parseJsonPathArray(stream, path_expr.get());
             break;
         case '*':
-            ok = parseJsonPathWildcard(stream, path_expr);
+            ok = parseJsonPathWildcard(stream, path_expr.get());
             break;
         default:
             ok = false;
         }
 
         if (!ok)
-        {
-            /// LOG_ERROR
-            return ret;
-        }
+            return nullptr;
         stream.skipWhiteSpace();
     }
 
-    size_t leg_length = path_expr.legs.size();
-    if (!path_expr.legs.empty() && path_expr.legs[leg_length - 1].type == JsonPathLegDoubleAsterisk)
+    size_t leg_length = path_expr->legs.size();
+    if (!path_expr->legs.empty() && path_expr->legs[leg_length - 1]->type == JsonPathLeg::JsonPathLegDoubleAsterisk)
+        return nullptr;
+
+    /// If multiple match could happen, disable LegKey cache index
+    if (JsonPathExpr::containsAnyAsterisk(path_expr->flag) || JsonPathExpr::containsAnyRange(path_expr->flag))
     {
-        /// LOG_ERROR
-        return ret;
+        for (auto & leg_ptr : path_expr->legs)
+        {
+            if (leg_ptr->type == JsonPathLeg::JsonPathLegKey)
+                leg_ptr->dot_key.status = JsonPathObjectKeyCacheDisabled;
+        }
     }
-    ret.emplace(std::move(path_expr));
-    return ret;
+    return path_expr;
 }
 
-bool JsonPathExpr::parseJsonPathArray(JsonPathStream & stream, JsonPathExpr & path_expr)
+bool JsonPathExpr::parseJsonPathArray(JsonPathStream & stream, JsonPathExpr * path_expr)
 {
     stream.skip(1);
     stream.skipWhiteSpace();
@@ -278,8 +279,8 @@ bool JsonPathExpr::parseJsonPathArray(JsonPathStream & stream, JsonPathExpr & pa
     if (stream.peek() == '*')
     {
         stream.skip(1);
-        path_expr.flag |= JsonPathExpressionContainsAsterisk;
-        path_expr.legs.emplace_back(JsonPathLegArraySelection, AsteriskSelection);
+        path_expr->flag |= JsonPathExpressionContainsAsterisk;
+        path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegArraySelection, AsteriskSelection));
     }
     else {
         auto res = stream.tryParseArrayIndex();
@@ -303,17 +304,17 @@ bool JsonPathExpr::parseJsonPathArray(JsonPathStream & stream, JsonPathExpr & pa
                 auto end = parsed_pair.second;
                 if (!validateIndexRange(start, end))
                     return false;
-                path_expr.flag |= JsonPathExpressionContainsRange;
+                path_expr->flag |= JsonPathExpressionContainsRange;
                 selection = JsonPathArraySelection(JsonPathArraySelectionRange, start, end);
             }
         }
-        path_expr.legs.emplace_back(JsonPathLegArraySelection, selection);
+        path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegArraySelection, selection));
     }
     stream.skipWhiteSpace();
     return !(stream.exhausted() || stream.read() != ']');
 }
 
-bool JsonPathExpr::parseJsonPathWildcard(JsonPathStream & stream, JsonPathExpr & path_expr)
+bool JsonPathExpr::parseJsonPathWildcard(JsonPathStream & stream, JsonPathExpr * path_expr)
 {
     stream.skip(1);
     if (stream.exhausted() || stream.read() != '*')
@@ -322,12 +323,12 @@ bool JsonPathExpr::parseJsonPathWildcard(JsonPathStream & stream, JsonPathExpr &
     if (stream.exhausted() || stream.peek() == '*')
         return false;
 
-    path_expr.flag |= JsonPathExpressionContainsDoubleAsterisk;
-    path_expr.legs.push_back(AsteriskLeg);
+    path_expr->flag |= JsonPathExpressionContainsDoubleAsterisk;
+    path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegDoubleAsterisk, AsteriskSelection));
     return true;
 }
 
-bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr & path_expr)
+bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr * path_expr)
 {
     stream.skip(1);
     stream.skipWhiteSpace();
@@ -337,8 +338,8 @@ bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr & p
     if (stream.peek() == '*')
     {
         stream.skip(1);
-        path_expr.flag |= JsonPathExpressionContainsAsterisk;
-        path_expr.legs.emplace_back(JsonPathLegKey, "*");
+        path_expr->flag |= JsonPathExpressionContainsAsterisk;
+        path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegKey, "*"));
     }
     else
     {
@@ -374,7 +375,7 @@ bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr & p
         if (!quoted && !isEcmascriptIdentifier(dot_key))
             return false;
 
-        path_expr.legs.emplace_back(JsonPathLegKey, dot_key);
+        path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegKey, dot_key));
     }
     return true;
 }

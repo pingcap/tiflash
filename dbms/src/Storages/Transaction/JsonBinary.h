@@ -15,11 +15,21 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <common/memcpy.h>
 #include <common/StringRef.h>
+#include <common/memcpy.h>
+
+#include <unordered_set>
+
+#include "Columns/ColumnString.h"
+#include <IO/WriteBufferFromVector.h>
 
 namespace DB
 {
+struct JsonPathExprRef;
+using ConstJsonPathExprRawPtr = JsonPathExprRef const *;
+class JsonPathExprRefContainer;
+using JsonPathExprRefContainerPtr = std::unique_ptr<JsonPathExprRefContainer>;
+struct JsonPathObjectKey;
 /**
  * https://github.com/pingcap/tidb/blob/release-6.4/types/json_binary.go
  * https://github.com/pingcap/tidb/blob/release-6.4/types/json_constants.go
@@ -89,11 +99,13 @@ class JsonBinary
 {
 public:
     using JsonType = UInt8;
+    using DupCheckSet = std::unique_ptr<std::unordered_set<const char *>>;
+    using JsonBinaryWriteBuffer = WriteBufferFromVector<ColumnString::Chars_t>;
     static constexpr JsonType TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
     static constexpr JsonType TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.
     static constexpr JsonType TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
     static constexpr JsonType TYPE_CODE_INT64 = 0x09; // TypeCodeInt64 indicates the JSON is a signed integer.
-    static constexpr JsonType TYPE_CODE_UINT64 = 0x0a; // TypeCodeUint64 indicates the JSON is a unsigned integer.
+    static constexpr JsonType TYPE_CODE_UINT64 = 0x0a; // TypeCodeUInt64 indicates the JSON is a unsigned integer.
     static constexpr JsonType TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
     static constexpr JsonType TYPE_CODE_STRING = 0x0c; // TypeCodeString indicates the JSON is a string.
     static constexpr JsonType TYPE_CODE_OPAQUE = 0x0d; // TypeCodeOpaque indicates the JSON is an opaque.
@@ -123,6 +135,12 @@ public:
     UInt32 getElementCount() const;
     String toString() const;
     String unquote() const;
+
+    // Extract receives several path expressions as arguments, matches them in bj, and returns:
+    //
+    //	return target JSON if matched any path expressions. maybe autowrapped as an array
+    bool extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer);
+
     static String unquoteString(const StringRef & ref);
     static String unquoteJsonString(const StringRef & ref);
 
@@ -134,9 +152,11 @@ private:
     double getFloat64() const;
     StringRef getString() const;
     Opaque getOpaque() const;
+    char getChar(size_t offset) const;
+    StringRef getSubRef(size_t offset, size_t length) const;
 
     JsonBinary getArrayElement(size_t index) const;
-    StringRef getObjectKey(size_t index) const;
+    String getObjectKey(size_t index) const; /// Expect object key not be too long, use String instead of StringRef as return type
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;
 
@@ -144,6 +164,14 @@ private:
     void marshalObjectTo(String & str) const;
     void marshalArrayTo(String & str) const;
 
+    /// 'one' parameter is not used now, copied from TiDB's implementation, for future usage
+    void extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonPathExprRawPtr path_expr_ptr, DupCheckSet & dup_check_set, bool one) const;
+    /// Use binary search, since keys are guaranteed to be ascending ordered
+    UInt32 binarySearchKey(const JsonPathObjectKey & key, UInt32 element_count) const;
+    std::optional<JsonBinary> searchObjectKey(JsonPathObjectKey & key) const;
+
+    static void buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
+    static void buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
     static void marshalFloat64To(String & str, double f);
     static void marshalLiteralTo(String & str, UInt8 literal);
     static void marshalStringTo(String & str, const StringRef & ref);
@@ -155,7 +183,7 @@ private:
     /// 'data' doesn't contain type byte.
     /// In this way, when we construct new JsonBinary object for child field, new object's 'data' field can directly reference original object's data memory as a slice
     /// Avoid memory re-allocations
-    const StringRef & data;
+    StringRef data;
 };
-
+using JsonBinaryPtr = std::unique_ptr<JsonBinary>;
 } // namespace DB

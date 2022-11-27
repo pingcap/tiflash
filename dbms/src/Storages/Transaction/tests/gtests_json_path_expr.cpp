@@ -32,8 +32,8 @@ try
     for (size_t i = 0; i < input_paths.size(); ++i)
     {
         auto res = JsonPathExpr::parseJsonPathExpr(input_paths[i]);
-        ASSERT_TRUE(res.has_value());
-        ASSERT_TRUE(JsonPathExpr::containsAnyAsterisk(res->flag) == expect_result[i]);
+        ASSERT_TRUE(res);
+        ASSERT_TRUE(JsonPathExpr::containsAnyAsterisk(res->getFlag()) == expect_result[i]);
     }
 }
 CATCH
@@ -77,9 +77,9 @@ try
     for (size_t i = 0; i < test_data_vec.size(); ++i)
     {
         auto res = JsonPathExpr::parseJsonPathExpr(test_data_vec[i].expression);
-        ASSERT_TRUE(res.has_value() == test_data_vec[i].success);
-        if (res.has_value())
-            ASSERT_TRUE(res->legs.size() == test_data_vec[i].legs);
+        ASSERT_TRUE(!res == !test_data_vec[i].success);
+        if (res)
+            ASSERT_TRUE(res->getLegs().size() == test_data_vec[i].legs);
     }
 }
 CATCH

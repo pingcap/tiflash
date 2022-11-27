@@ -19,7 +19,6 @@
 
 #include <common/StringRef.h>
 
-
 /**
  * From MySQL 5.7, JSON path expression grammar:
 		pathExpression ::= scope (jsonPathLeg)*
@@ -55,6 +54,13 @@ enum JsonPathArraySelectionType
     JsonPathArraySelectionInvalid
 };
 
+enum JsonPathObjectKeyStatus
+{
+    JsonPathObjectKeyCacheDisabled, /// *, ** will disable caching
+    JsonPathObjectKeyUncached,
+    JsonPathObjectKeyCached,
+};
+
 // if index is positive, it represents the [index]
 // if index is negative, it represents the [len() + index]
 // a normal index "5" will be parsed into "5", and the "last - 5" will be "-6"
@@ -62,7 +68,7 @@ using JsonPathArrayIndex = Int32;
 
 struct JsonPathArraySelection
 {
-    JsonPathArraySelection(JsonPathArraySelectionType type_) : JsonPathArraySelection(type_, 0)
+    explicit JsonPathArraySelection(JsonPathArraySelectionType type_) : JsonPathArraySelection(type_, 0)
     {}
     JsonPathArraySelection(JsonPathArraySelectionType type_, JsonPathArrayIndex index_)
         : type(type_)
@@ -72,7 +78,7 @@ struct JsonPathArraySelection
         : type(type_)
         , index_range{start_, end_}
     {}
-    std::pair<JsonPathArrayIndex, JsonPathArrayIndex> getIndexRange(const JsonBinary & json);
+    std::pair<JsonPathArrayIndex, JsonPathArrayIndex> getIndexRange(const JsonBinary & json) const;
     JsonPathArraySelectionType type = JsonPathArraySelectionInvalid;
     union
     {
@@ -81,15 +87,22 @@ struct JsonPathArraySelection
     };
 };
 
+struct JsonPathObjectKey
+{
+    explicit JsonPathObjectKey(const String & key_)
+        : key(key_)
+        , status(JsonPathObjectKeyUncached)
+        , cached_index(-1)
+    {}
+    String key;
+    JsonPathObjectKeyStatus status;
+    Int32 cached_index;
+};
+
 struct JsonPathStream
 {
     explicit JsonPathStream(const String & str_)
         : str(str_)
-    {
-    }
-
-    explicit JsonPathStream(const StringRef & str_ref)
-        : str(str_ref)
     {
     }
 
@@ -124,10 +137,9 @@ std::pair<bool, String> JsonPathStream::readWhile(FF && f)
     return std::make_pair(false, String(str.data + start, pos - start));
 }
 
-struct JsonPathExpr
+using JsonPathLegType = UInt8;
+struct JsonPathLeg
 {
-public:
-    using JsonPathLegType = UInt8;
     /// JsonPathLegKey indicates the path leg with '.key'.
     static constexpr JsonPathLegType JsonPathLegKey = 0x01;
     /// JsonPathLegArraySelection indicates the path leg with form '[index]', '[index to index]'.
@@ -135,7 +147,29 @@ public:
     /// JsonPathLegDoubleAsterisk indicates the path leg with form '**'.
     static constexpr JsonPathLegType JsonPathLegDoubleAsterisk = 0x03;
 
-    using JsonPathExpressionFlag = UInt8;
+    JsonPathLeg(JsonPathLegType type_, JsonPathArraySelection selection_)
+        : type(type_)
+        , array_selection(selection_)
+        , dot_key("")
+    {}
+
+    JsonPathLeg(JsonPathLegType type_, const String & dot_key_)
+        : type(type_)
+        , array_selection(JsonPathArraySelectionInvalid)
+        , dot_key(dot_key_)
+    {}
+
+    JsonPathLegType type;
+    JsonPathArraySelection array_selection; // if typ is JsonPathLegArraySelection, the value should be parsed into here.
+    JsonPathObjectKey dot_key; // if typ is JsonPathLegKey, the key should be parsed into here.
+};
+using JsonPathLegPtr = std::unique_ptr<JsonPathLeg>;
+using JsonPathLegRawPtr = JsonPathLeg *;
+using JsonPathExpressionFlag = UInt8;
+/// JsonPathExpr instance should be un-mutable after it is created
+class JsonPathExpr
+{
+public:
     static constexpr JsonPathExpressionFlag JsonPathExpressionContainsAsterisk = 0x01;
     static constexpr JsonPathExpressionFlag JsonPathExpressionContainsDoubleAsterisk = 0x02;
     static constexpr JsonPathExpressionFlag JsonPathExpressionContainsRange = 0x04;
@@ -152,38 +186,22 @@ public:
         return flag != 0;
     }
 
-    static std::optional<JsonPathExpr> parseJsonPathExpr(const String & str);
-    static bool parseJsonPathArray(JsonPathStream & stream, JsonPathExpr & path_expr);
-    static bool parseJsonPathWildcard(JsonPathStream & stream, JsonPathExpr & path_expr);
-    static bool parseJsonPathMember(JsonPathStream & stream, JsonPathExpr & path_expr);
+    static std::shared_ptr<JsonPathExpr> parseJsonPathExpr(const String & str);
 
-    struct JsonPathLeg
-    {
-        JsonPathLeg(JsonPathLegType type_, JsonPathArraySelection selection_)
-            : type(type_)
-            , array_selection(selection_)
-        {}
+    JsonPathExpressionFlag getFlag() const { return flag; }
 
-        JsonPathLeg(JsonPathLegType type_, const String & dot_key_)
-            : type(type_)
-            , array_selection(JsonPathArraySelectionInvalid)
-            , dot_key(dot_key_)
-        {}
+    const std::vector<JsonPathLegPtr> & getLegs() const { return legs; }
+private:
+    JsonPathExpr() = default;
 
-        JsonPathLegType type;
-        JsonPathArraySelection array_selection; // if typ is JsonPathLegArraySelection, the value should be parsed into here.
-        String dot_key; // if typ is JsonPathLegKey, the key should be parsed into here.
-    };
+    static bool parseJsonPathArray(JsonPathStream & stream, JsonPathExpr * path_expr);
+    static bool parseJsonPathWildcard(JsonPathStream & stream, JsonPathExpr * path_expr);
+    static bool parseJsonPathMember(JsonPathStream & stream, JsonPathExpr * path_expr);
 
-    // CouldMatchMultipleValues returns true if pe contains any asterisk or range selection.
-    bool couldMatchMultipleValues() const
-    {
-        return containsAnyAsterisk(flag) || containsAnyRange(flag);
-    }
-
-    std::vector<JsonPathLeg> legs;
+    std::vector<JsonPathLegPtr> legs;
     JsonPathExpressionFlag flag = 0U;
 };
+using JsonPathExprPtr = std::shared_ptr<JsonPathExpr>;
 
 } // namespace DB
 

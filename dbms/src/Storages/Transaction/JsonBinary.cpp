@@ -14,6 +14,7 @@
 
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/JsonBinary.h>
+#include <Storages/Transaction/JsonPathExprRef.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -36,8 +37,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-using JsonVar = Poco::Dynamic::Var;
-
 constexpr size_t HEADER_SIZE = 8; // element size + data size.
 constexpr size_t VALUE_ENTRY_SIZE = 5;
 constexpr size_t VALUE_TYPE_SIZE = 1;
@@ -48,6 +47,7 @@ constexpr size_t DATA_SIZE_OFFSET = 4;
 template <typename T, typename S>
 inline T decodeNumeric(size_t & cursor, const S & raw_value)
 {
+    RUNTIME_CHECK(cursor + sizeof(T) <= raw_value.length());
     T res = *(reinterpret_cast<const T *>(raw_value.data() + cursor));
     toLittleEndianInPlace(res);
     cursor += sizeof(T);
@@ -57,10 +57,23 @@ inline T decodeNumeric(size_t & cursor, const S & raw_value)
 template <typename T>
 inline T decodeNumeric(size_t & cursor, const StringRef & raw_value)
 {
+    RUNTIME_CHECK(cursor + sizeof(T) <= raw_value.size);
     T res = *(reinterpret_cast<const T *>(raw_value.data + cursor));
     toLittleEndianInPlace(res);
     cursor += sizeof(T);
     return res;
+}
+
+char JsonBinary::getChar(size_t offset) const
+{
+    RUNTIME_CHECK(offset < data.size);
+    return data.data[offset];
+}
+
+StringRef JsonBinary::getSubRef(size_t offset, size_t length) const
+{
+    RUNTIME_CHECK(offset + length <= data.size);
+    return StringRef(data.data + offset, length);
 }
 
 UInt32 JsonBinary::getElementCount() const
@@ -74,12 +87,12 @@ JsonBinary JsonBinary::getArrayElement(size_t index) const
     return getValueEntry(HEADER_SIZE + index * VALUE_ENTRY_SIZE);
 }
 
-StringRef JsonBinary::getObjectKey(size_t index) const
+String JsonBinary::getObjectKey(size_t index) const
 {
     size_t cursor = HEADER_SIZE + index * KEY_ENTRY_SIZE;
-    size_t key_offset = decodeNumeric<UInt32>(cursor, data);
-    size_t key_length = decodeNumeric<UInt16>(cursor, data);
-    return StringRef(data.data + key_offset, key_length);
+    auto key_offset = decodeNumeric<UInt32>(cursor, data);
+    auto key_length = decodeNumeric<UInt16>(cursor, data);
+    return String(data.data + key_offset, key_length);
 }
 
 JsonBinary JsonBinary::getObjectValue(size_t index) const
@@ -90,12 +103,12 @@ JsonBinary JsonBinary::getObjectValue(size_t index) const
 
 JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
 {
-    JsonType entry_type = data.data[value_entry_offset];
+    JsonType entry_type = getChar(value_entry_offset);
     size_t cursor = value_entry_offset + VALUE_TYPE_SIZE;
     size_t value_offset = decodeNumeric<UInt32>(cursor, data); /// Literal type would padding zeros, thus it wouldn't cross array bound
     switch (entry_type) {
     case JsonBinary::TYPE_CODE_LITERAL:
-        return JsonBinary(JsonBinary::TYPE_CODE_LITERAL, StringRef(data.data + (value_entry_offset + VALUE_TYPE_SIZE), 1));
+        return JsonBinary(JsonBinary::TYPE_CODE_LITERAL, getSubRef(value_entry_offset + VALUE_TYPE_SIZE, 1));
     case JsonBinary::TYPE_CODE_INT64:
     case JsonBinary::TYPE_CODE_UINT64:
     case JsonBinary::TYPE_CODE_FLOAT64:
@@ -105,25 +118,25 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
         cursor = value_offset;
         auto str_length = DecodeVarUInt(cursor, data);
         auto str_length_length = cursor - value_offset;
-        return JsonBinary(entry_type, StringRef(data.data + value_offset, str_length_length + str_length));
+        return JsonBinary(entry_type, getSubRef(value_offset, str_length_length + str_length));
     }
     case JsonBinary::TYPE_CODE_OPAQUE:
     {
         cursor = value_offset + 1;
         auto data_length = DecodeVarUInt(cursor, data);
         auto data_length_length = cursor - value_offset - 1;
-        return JsonBinary(entry_type, StringRef(data.data + value_offset, data_length_length + data_length + 1));
+        return JsonBinary(entry_type, getSubRef(value_offset, data_length_length + data_length + 1)); /// one more byte for type
     }
     case JsonBinary::TYPE_CODE_DATE:
     case JsonBinary::TYPE_CODE_DATETIME:
     case JsonBinary::TYPE_CODE_TIMESTAMP:
-        return JsonBinary(entry_type, StringRef(data.data + value_offset, 8));
+        return JsonBinary(entry_type, getSubRef(value_offset, 8));
     case JsonBinary::TYPE_CODE_DURATION:
-        return JsonBinary(entry_type, StringRef(data.data + value_offset, 12));
+        return JsonBinary(entry_type, getSubRef(value_offset, 12));
     }
     cursor = value_offset + DATA_SIZE_OFFSET;
-    auto data_size = decodeNumeric<size_t>(cursor, data);
-    return JsonBinary(entry_type, StringRef(data.data + value_offset, data_size));
+    auto data_size = decodeNumeric<UInt32>(cursor, data);
+    return JsonBinary(entry_type, getSubRef(value_offset, data_size));
 }
 
 Int64 JsonBinary::getInt64() const
@@ -149,7 +162,7 @@ StringRef JsonBinary::getString() const
     size_t cursor = 0;
     size_t str_length = DecodeVarUInt(cursor, data);
     size_t str_length_length = cursor;
-    return StringRef(data.data + str_length_length, str_length);
+    return getSubRef(str_length_length, str_length);
 }
 
 JsonBinary::Opaque JsonBinary::getOpaque() const
@@ -158,7 +171,7 @@ JsonBinary::Opaque JsonBinary::getOpaque() const
     size_t cursor = 1;
     size_t data_length = DecodeVarUInt(cursor, data);
     size_t data_start = cursor;
-    return Opaque{ opaque_type, StringRef(data.data + data_start, data_length) };
+    return Opaque{ opaque_type, getSubRef(data_start, data_length) };
 }
 
 template <bool doDecode>
@@ -558,6 +571,253 @@ String JsonBinary::unquote() const
     default:
         return toString();
     }
+}
+
+bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer)
+{
+    std::vector<JsonBinary> extracted_json_binary_vec;
+	for (auto & path_expr_container : path_expr_container_vec)
+    {
+        DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
+        auto first_path_ref = path_expr_container->firstRef();
+        RUNTIME_CHECK(first_path_ref);
+        extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
+    }
+
+    bool found;
+    if (extracted_json_binary_vec.empty())
+    {
+        found = false;
+    }
+    else if (path_expr_container_vec.size() == 1 && extracted_json_binary_vec.size() == 1)
+    {
+        found = true;
+        // Fix https://github.com/pingcap/tidb/issues/30352
+        if (path_expr_container_vec[0]->firstRef()->couldMatchMultipleValues())
+        {
+            buildBinaryJsonArrayInBuffer(extracted_json_binary_vec, write_buffer);
+        }
+        else
+        {
+            write_buffer.write(extracted_json_binary_vec[0].type);
+            write_buffer.write(extracted_json_binary_vec[0].data.data, extracted_json_binary_vec[0].data.size);
+        }
+    }
+    else
+    {
+        found = true;
+        buildBinaryJsonArrayInBuffer(extracted_json_binary_vec, write_buffer);
+    }
+    return found;
+}
+
+bool jsonFinished(std::vector<JsonBinary> & json_binary_vec, bool one)
+{
+    return one && !json_binary_vec.empty();
+}
+
+std::optional<JsonBinary> JsonBinary::searchObjectKey(JsonPathObjectKey & key) const
+{
+    auto element_count = getElementCount();
+    if (element_count == 0)
+        return std::nullopt;
+
+    UInt32 found_index;
+    switch (key.status)
+    {
+    case JsonPathObjectKeyCached:
+        found_index = key.cached_index;
+        break;
+    case JsonPathObjectKeyCacheDisabled:
+    case JsonPathObjectKeyUncached:
+    default:
+        found_index = binarySearchKey(key, element_count);
+        break;
+    }
+
+    if (found_index < element_count && getObjectKey(found_index) == key.key)
+    {
+        if (key.status == JsonPathObjectKeyUncached)
+        {
+            key.cached_index = found_index;
+            key.status = JsonPathObjectKeyCached;
+        }
+        return {getObjectValue(found_index)};
+    }
+    return std::nullopt;
+}
+
+/// Use binary search, since keys are guaranteed to be ascending ordered
+UInt32 JsonBinary::binarySearchKey(const JsonPathObjectKey & key, UInt32 element_count) const
+{
+    RUNTIME_CHECK(element_count > 0);
+    Int32 first = 0;
+    Int32 distance = element_count - 1;
+    while (distance > 0)
+    {
+        Int32 step = distance >> 2;
+        const String & current_key = getObjectKey(first + step);
+        if (current_key < key.key)
+        {
+            first += step;
+            ++first;
+            distance -= (step + 1);
+        }
+        else
+            distance = step;
+    }
+
+    RUNTIME_CHECK(first >= 0);
+    return static_cast<UInt32>(first);
+}
+
+void JsonBinary::extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonPathExprRawPtr path_expr_ptr, DupCheckSet & dup_check_set, bool one) const
+{
+    if (!path_expr_ptr)
+    {
+        if (dup_check_set)
+        {
+            if (dup_check_set->find(data.data) != dup_check_set->end())
+                return;
+            dup_check_set->insert(data.data);
+        }
+        json_binary_vec.push_back(*this);
+        return;
+    }
+    auto current_leg_pair = path_expr_ptr->popOneLeg();
+    const auto & current_leg = current_leg_pair.first;
+    RUNTIME_CHECK(current_leg);
+    auto sub_path_expr_ptr = current_leg_pair.second;
+    if (current_leg->type == JsonPathLeg::JsonPathLegArraySelection)
+    {
+        if (type != TYPE_CODE_ARRAY)
+        {
+            // If the current object is not an array, still append them if the selection includes
+            // 0. But for asterisk, it still returns NULL.
+            //
+            // don't call `getIndexRange` or `getIndexFromStart`, they will panic if the argument
+            // is not array.
+            auto selection = current_leg->array_selection;
+            switch (selection.type)
+            {
+            case JsonPathArraySelectionIndex:
+                if (selection.index == 0)
+                    extractTo(json_binary_vec, sub_path_expr_ptr, dup_check_set, one);
+                break;
+            case JsonPathArraySelectionRange:
+                // for [0 to Non-negative Number] and [0 to last], it extracts itself
+                if (selection.index_range[0] == 0 && selection.index_range[1] >= -1)
+                    extractTo(json_binary_vec, sub_path_expr_ptr, dup_check_set, one);
+                break;
+            default:
+                break;
+            }
+            return;
+        }
+
+        auto result = current_leg->array_selection.getIndexRange(*this);
+        if (result.first >= 0 && result.first <= result.second)
+        {
+            auto start = static_cast<size_t>(result.first);
+            auto end = static_cast<size_t>(result.second);
+            for (size_t i = start; i <= end; ++i)
+            {
+                getArrayElement(i).extractTo(json_binary_vec, sub_path_expr_ptr, dup_check_set, one);
+            }
+        }
+    }
+    else if (current_leg->type == JsonPathLeg::JsonPathLegKey && type == TYPE_CODE_OBJECT)
+    {
+        auto element_count = getElementCount();
+        if (current_leg->dot_key.key == "*")
+        {
+            for (size_t i = 0; i < element_count && !jsonFinished(json_binary_vec, one); ++i)
+            {
+                getObjectValue(i).extractTo(json_binary_vec, sub_path_expr_ptr, dup_check_set, one);
+            }
+        }
+        else
+        {
+            auto search_result = searchObjectKey(current_leg->dot_key);
+            if (search_result)
+            {
+                search_result->extractTo(json_binary_vec, sub_path_expr_ptr, dup_check_set, one);
+            }
+        }
+    }
+    else if (current_leg->type == JsonPathLeg::JsonPathLegDoubleAsterisk)
+    {
+        extractTo(json_binary_vec, sub_path_expr_ptr, dup_check_set, one);
+        if (type == TYPE_CODE_ARRAY)
+        {
+            auto element_count = getElementCount();
+            for (size_t i = 0; i < element_count && !jsonFinished(json_binary_vec, one); ++i)
+            {
+                getArrayElement(i).extractTo(json_binary_vec, path_expr_ptr, dup_check_set, one);
+            }
+        }
+        else if (type == TYPE_CODE_OBJECT)
+        {
+            auto element_count = getElementCount();
+            for (size_t i = 0; i < element_count && !jsonFinished(json_binary_vec, one); ++i)
+            {
+                getObjectValue(i).extractTo(json_binary_vec, path_expr_ptr, dup_check_set, one);
+            }
+        }
+    }
+}
+
+void JsonBinary::buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer)
+{
+    /// first, write value entry with value offset
+    UInt32 value_offset = HEADER_SIZE + json_binary_vec.size() * VALUE_ENTRY_SIZE;
+    for (const auto & bj : json_binary_vec)
+    {
+        write_buffer.write(bj.type);
+        if (bj.type == TYPE_CODE_LITERAL)
+        {
+            /// Literal values are inlined in the value entry, total takes 4 bytes
+            write_buffer.write(bj.data.data[0]);
+            write_buffer.write(0);
+            write_buffer.write(0);
+            write_buffer.write(0);
+        }
+        else
+        {
+            auto endian_value_offset = value_offset;
+            toLittleEndianInPlace<UInt32>(endian_value_offset);
+            write_buffer.write(reinterpret_cast<const char *>(&endian_value_offset), sizeof(endian_value_offset));
+            /// update value_offset
+            value_offset += bj.data.size;
+        }
+    }
+
+    /// second, write actual data
+    for (const auto & bj : json_binary_vec)
+    {
+        if (bj.type != TYPE_CODE_LITERAL)
+            write_buffer.write(bj.data.data, bj.data.size);
+    }
+}
+
+void JsonBinary::buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer)
+{
+    UInt32 total_size = HEADER_SIZE + json_binary_vec.size() * VALUE_ENTRY_SIZE;
+	for (const auto & bj : json_binary_vec)
+    {
+        /// Literal type value are inlined in the value_entry memory
+        if (bj.type != TYPE_CODE_LITERAL)
+            total_size += bj.data.size;
+    }
+
+    write_buffer.write(TYPE_CODE_ARRAY);
+    UInt32 element_count = json_binary_vec.size();
+    toLittleEndianInPlace<UInt32>(element_count);
+    write_buffer.write(reinterpret_cast<const char *>(&element_count), sizeof(element_count));
+
+    toLittleEndianInPlace<UInt32>(total_size);
+    write_buffer.write(reinterpret_cast<const char *>(&total_size), sizeof(total_size));
+    buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
 }
 
 UInt64 GetJsonLength(const std::string_view & raw_value)
