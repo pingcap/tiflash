@@ -101,8 +101,8 @@ struct JsonPathObjectKey
 
 struct JsonPathStream
 {
-    explicit JsonPathStream(const String & str_)
-        : str(str_)
+    explicit JsonPathStream(const StringRef & str_ref)
+        : str(str_ref)
     {
     }
 
@@ -186,7 +186,7 @@ public:
         return flag != 0;
     }
 
-    static std::shared_ptr<JsonPathExpr> parseJsonPathExpr(const String & str);
+    static std::shared_ptr<JsonPathExpr> parseJsonPathExpr(const StringRef & str_ref);
 
     JsonPathExpressionFlag getFlag() const { return flag; }
 

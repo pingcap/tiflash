@@ -217,9 +217,9 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryParseArrayIndex()
     return InvalidIndexPair;
 }
 
-std::shared_ptr<JsonPathExpr> JsonPathExpr::parseJsonPathExpr(const String & str)
+std::shared_ptr<JsonPathExpr> JsonPathExpr::parseJsonPathExpr(const StringRef & str_ref)
 {
-    JsonPathStream stream(str);
+    JsonPathStream stream(str_ref);
 	stream.skipWhiteSpace();
 	if (stream.exhausted() || stream.read() != '$')
         return nullptr;

@@ -627,6 +627,10 @@ std::optional<JsonBinary> JsonBinary::searchObjectKey(JsonPathObjectKey & key) c
     {
     case JsonPathObjectKeyCached:
         found_index = key.cached_index;
+        if (found_index < element_count && getObjectKey(found_index) == key.key)
+            return {getObjectValue(found_index)};
+        else
+            found_index = binarySearchKey(key, element_count);
         break;
     case JsonPathObjectKeyCacheDisabled:
     case JsonPathObjectKeyUncached:

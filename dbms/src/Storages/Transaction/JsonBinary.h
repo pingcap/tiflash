@@ -118,7 +118,7 @@ public:
     static constexpr UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
     static constexpr UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
 
-    /// Opaque represents a raw binary type
+    /// Opaque represents a raw database binary type
     struct Opaque {
         // TypeCode is the same with TiDB database type code
         UInt8 type;
@@ -131,14 +131,13 @@ public:
     , data(ref)
     {}
 
-    // getElementCount gets the count of Object or Array only.
+    /// getElementCount gets the count of Object or Array only.
     UInt32 getElementCount() const;
     String toString() const;
     String unquote() const;
 
-    // Extract receives several path expressions as arguments, matches them in bj, and returns:
-    //
-    //	return target JSON if matched any path expressions. maybe autowrapped as an array
+    /// Extract receives several path expressions as arguments, matches them in bj, and returns true if any match:
+    ///	Serialize final results in 'write_buffer'
     bool extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer);
 
     static String unquoteString(const StringRef & ref);
@@ -185,5 +184,4 @@ private:
     /// Avoid memory re-allocations
     StringRef data;
 };
-using JsonBinaryPtr = std::unique_ptr<JsonBinary>;
 } // namespace DB

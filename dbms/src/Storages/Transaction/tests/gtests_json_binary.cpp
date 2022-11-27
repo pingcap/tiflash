@@ -622,7 +622,6 @@ try
                 offsets_to.push_back(write_buffer.count());
                 data_to.resize(write_buffer.count());
                 JsonBinary result(data_to[0], StringRef(col_to->getDataAt(0).data + 1, col_to->getDataAt(0).size - 1));
-                std::cout << result.toString() << "," << test_data_vec[i].expected_result << std::endl;
                 ASSERT_TRUE(test_data_vec[i].expected_result == JsonBinary::unquoteString(result.toString()));
             }
         }
