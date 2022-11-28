@@ -154,7 +154,6 @@ public:
     bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
 
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
@@ -185,8 +184,11 @@ public:
         UInt64 max_version = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    /// Return a stream which is suitable for exporting data.
-    ///  reorganize_block: put those rows with the same pk rows into the same block or not.
+    /**
+     * Return a sorted stream which is suitable for exporting data. Unlike `getInputStream`, deletes will be preserved.
+     * But outdated versions (exceeds GC safe point) will still be removed.
+     * @param reorganize_block  put those rows with the same pk rows into the same block or not.
+     */
     BlockInputStreamPtr getInputStreamForDataExport(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -354,30 +356,85 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
-    /**
-     * Only used in tests as a shortcut.
-     * Normally you should use `dangerouslyReplaceData`.
-     */
-    [[nodiscard]] SegmentPtr dangerouslyReplaceDataForTest(DMContext & dm_context, const DMFilePtr & data_file) const;
+    struct IngestDataInfo
+    {
+        bool option_clear_data;
+        bool is_snapshot_empty; // It's value makes sense only when option_clear_data == false.
+        SegmentSnapshotPtr snapshot; // It's not empty only when option_clear_data == false.
+    };
+
+    IngestDataInfo prepareIngestDataWithClearData() const;
+
+    IngestDataInfo prepareIngestDataWithPreserveData(
+        DMContext & dm_context,
+        const SegmentSnapshotPtr & segment_snap) const;
+
+    struct IngestDataResultSegmentReplaced
+    {
+        SegmentPtr segment;
+    };
+    struct IngestDataResultSegmentReused
+    {
+    };
+    struct IngestDataResultError
+    {
+    };
+    using IngestDataResult = std::variant<IngestDataResultSegmentReplaced, IngestDataResultSegmentReused, IngestDataResultError>;
 
     /**
-     * Discard all data in the current delta and stable layer, and use the specified DMFile as the stable instead.
-     * This API does not have a prepare & apply pair, as it should be quick enough. The specified DMFile is safe
-     * to be shared for multiple segments.
-     *
-     * Note 1: Should be protected behind the Segment update lock to ensure no new data will be appended to this
-     *         segment during the function call. Otherwise these new data will be lost in the new segment.
-     *
-     * Note 2: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
-     *         stable file for multiple segments. It is your own duty to enable GC later.
-     *
-     * Note 3: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
-     *         to the PageStorage's data. Otherwise there will be exceptions.
-     *
-     * Note 4: This API is subjected to be changed in future, as it relies on the knowledge that all current data
-     *         in this segment is useless, which is a pretty tough requirement.
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
      */
-    [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs) const;
+    [[nodiscard]] IngestDataResult applyIngestData(
+        const Lock &,
+        DMContext & dm_context,
+        const DMFilePtr & data_file,
+        const IngestDataInfo & prepared_info);
+
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareIngestDataWithXxx` and `applyIngestData`.
+     */
+    [[nodiscard]] IngestDataResult ingestDataForTest(DMContext & dm_context,
+                                                     const DMFilePtr & data_file,
+                                                     bool clear_data);
+
+    /**
+     * Use this function when the data file is small. The data file will be appended to the
+     * delta layer directly.
+     *
+     * If your data file is big,
+     *
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
+     *
+     * @returns false iff the segment is abandoned.
+     */
+    bool ingestDataToDelta(
+        DMContext & dm_context,
+        const RowKeyRange & range,
+        const DMFiles & data_files,
+        bool clear_data_in_range);
+
+    /**
+     * Replace all data in the snapshot using the specified DMFile as the stable instead.
+     * Newly appended data since the snapshot was created will be retained the segment.
+     *
+     * Snapshot is optional. If the snapshot is not specified, it means everything in the
+     * segment now will be replaced.
+     *
+     * This API does not have a prepare & apply pair, as it should be quick enough.
+     *
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
+     */
+    [[nodiscard]] SegmentPtr replaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, SegmentSnapshotPtr segment_snap_opt = nullptr) const;
 
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
@@ -437,10 +494,15 @@ public:
         return std::exchange(lock_opt, std::nullopt).value();
     }
 
-    /// Marks this segment as abandoned.
-    /// Note: Segment member functions never abandon the segment itself.
-    /// The abandon state is usually triggered by the DeltaMergeStore.
-    void abandon(DMContext & context)
+    /**
+     * Marks this segment as abandoned.
+     * Note: Segment member functions never abandon the segment itself.
+     * The abandon state is usually triggered by the DeltaMergeStore.
+     *
+     * You must hold a Segment update lock in order to abandon this segment.
+     * Otherwise, the abandon operation may break an existing segment update operation.
+     */
+    void abandon(const Lock &, DMContext & context)
     {
         LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);

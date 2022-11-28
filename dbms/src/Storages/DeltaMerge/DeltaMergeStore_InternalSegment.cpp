@@ -29,6 +29,7 @@ extern const Metric DT_SegmentMerge;
 extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
+extern const Metric DT_SnapshotOfSegmentIngest;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -163,7 +164,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         wbs.writeMeta();
 
-        segment->abandon(dm_context);
+        segment->abandon(segment_lock, dm_context);
         segments.erase(range.getEnd());
         id_to_segment.erase(segment->segmentId());
 
@@ -308,9 +309,10 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
         wbs.writeMeta();
 
-        for (const auto & seg : ordered_segments)
+        for (size_t i = 0; i < ordered_segments.size(); ++i)
         {
-            seg->abandon(dm_context);
+            const auto & seg = ordered_segments[i];
+            seg->abandon(locks[i], dm_context);
             segments.erase(seg->getRowKeyRange().getEnd());
             id_to_segment.erase(seg->segmentId());
         }
@@ -456,7 +458,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[new_segment->segmentId()] = new_segment;
 
-        segment->abandon(dm_context);
+        segment->abandon(segment_lock, dm_context);
 
         if constexpr (DM_RUN_CHECK)
         {
@@ -481,41 +483,73 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     return new_segment;
 }
 
-SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
+SegmentPtr DeltaMergeStore::segmentIngestData(
     DMContext & dm_context,
     const SegmentPtr & segment,
-    const DMFilePtr & data_file)
+    const DMFilePtr & data_file,
+    bool clear_all_data_in_segment)
 {
-    LOG_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
+    SegmentSnapshotPtr snapshot;
+    {
+        std::shared_lock lock(read_write_mutex);
+        if (!isSegmentValid(lock, segment))
+            return {};
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+        if (!clear_all_data_in_segment)
+        {
+            // Only clear_data == false needs a snapshot.
+            snapshot = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
+            if (!snapshot)
+                return {};
+        }
+    }
 
-    SegmentPtr new_segment;
+    Segment::IngestDataInfo ingest_info;
+    if (clear_all_data_in_segment)
+        ingest_info = segment->prepareIngestDataWithClearData();
+    else
+        ingest_info = segment->prepareIngestDataWithPreserveData(dm_context, snapshot);
+
+    SegmentPtr new_segment{};
     {
         std::unique_lock lock(read_write_mutex);
         if (!isSegmentValid(lock, segment))
-        {
-            LOG_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
             return {};
-        }
 
         auto segment_lock = segment->mustGetUpdateLock();
-        new_segment = segment->dangerouslyReplaceData(segment_lock, dm_context, data_file, wbs);
+        // Note: applyIngestData itself writes the wbs, and we don't need to pass a wbs by ourselves.
+        auto apply_result = segment->applyIngestData(segment_lock, dm_context, data_file, ingest_info);
 
-        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
-        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
+        if (auto * const result = std::get_if<Segment::IngestDataResultSegmentReplaced>(&apply_result); result)
+        {
+            new_segment = result->segment;
 
-        wbs.writeLogAndData();
-        wbs.writeMeta();
+            RUNTIME_CHECK(
+                compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
+                segment->info(),
+                new_segment->info());
+            RUNTIME_CHECK(
+                segment->segmentId() == new_segment->segmentId(),
+                segment->info(),
+                new_segment->info());
 
-        segment->abandon(dm_context);
-        segments[segment->getRowKeyRange().getEnd()] = new_segment;
-        id_to_segment[segment->segmentId()] = new_segment;
-
-        LOG_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
+            segment->abandon(segment_lock, dm_context);
+            segments[segment->getRowKeyRange().getEnd()] = new_segment;
+            id_to_segment[segment->segmentId()] = new_segment;
+        }
+        else if (std::holds_alternative<Segment::IngestDataResultError>(apply_result))
+        {
+            return {};
+        }
+        else if (std::holds_alternative<Segment::IngestDataResultSegmentReused>(apply_result))
+        {
+            return segment;
+        }
+        else
+        {
+            RUNTIME_CHECK(false);
+        }
     }
-
-    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

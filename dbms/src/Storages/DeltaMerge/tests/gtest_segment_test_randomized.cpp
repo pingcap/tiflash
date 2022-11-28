@@ -17,6 +17,11 @@
 
 #include <magic_enum.hpp>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfSegmentIngest;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 namespace DM
@@ -81,7 +86,14 @@ protected:
         {1.0, &SegmentRandomizedTest::mergeDeltaRandomSegment},
         {1.0, &SegmentRandomizedTest::flushCacheRandomSegment},
         {0.5, &SegmentRandomizedTest::replaceRandomSegmentsData},
-        {0.25, &SegmentRandomizedTest::writeRandomSegmentWithDeletedPack}};
+        {0.25, &SegmentRandomizedTest::writeRandomSegmentWithDeletedPack},
+
+        // This keeps a for-update snapshot. The snapshot will be revoked before doing other updates.
+        {0.25, &SegmentRandomizedTest::prepareReplaceDataSnapshot}};
+
+    SegmentSnapshotPtr for_update_snapshot;
+    std::optional<PageId> for_update_snapshot_segment_id;
+    std::optional<size_t> for_update_snapshot_rows;
 
     /**
      * (-∞, rand_min). Hack: This segment is intentionally removed from the "segments" map to avoid being picked up.
@@ -93,12 +105,41 @@ protected:
      */
     PageId outbound_right_seg{};
 
+    void clearReplaceDataSnapshot()
+    {
+        if (for_update_snapshot != nullptr)
+        {
+            LOG_DEBUG(logger, "cleared for_update snapshot to be used in replace data");
+            for_update_snapshot = nullptr;
+            for_update_snapshot_segment_id = std::nullopt;
+            for_update_snapshot_rows = std::nullopt;
+        }
+    }
+
+    void prepareReplaceDataSnapshot()
+    {
+        if (segments.empty())
+            return;
+        clearReplaceDataSnapshot();
+        auto segment_id = getRandomSegmentId();
+        for_update_snapshot_segment_id = segment_id;
+        LOG_DEBUG(logger, "prepare a for_update snapshot, segment_id={}", segment_id);
+        for_update_snapshot = segments[segment_id]->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
+        for_update_snapshot_rows = getSegmentRowNumWithoutMVCC(segment_id);
+        EXPECT_TRUE(for_update_snapshot != nullptr);
+    }
+
     void verifySegmentsIsEmpty()
     {
         // For all segments, when isEmpty() == true, verify the result against getSegmentRowNum.
         for (const auto & seg_it : segments)
         {
             const auto seg_id = seg_it.first;
+
+            if (for_update_snapshot_segment_id.has_value() && *for_update_snapshot_segment_id == seg_id)
+                // Skip segments when there is a buffered for_update snapshot.
+                continue;
+
             if (isSegmentDefinitelyEmpty(seg_id))
             {
                 auto rows = getSegmentRowNum(seg_id);
@@ -147,6 +188,7 @@ protected:
         // correlated actions.
         if (segments.size() > 10)
             return;
+        clearReplaceDataSnapshot();
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
         LOG_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
@@ -159,6 +201,7 @@ protected:
             return;
         if (segments.size() > 10)
             return;
+        clearReplaceDataSnapshot();
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
         const auto [start, end] = getSegmentKeyRange(segment_id);
@@ -173,6 +216,7 @@ protected:
     {
         if (segments.size() < 2)
             return;
+        clearReplaceDataSnapshot();
         auto segments_id = getRandomMergeableSegments();
         LOG_DEBUG(logger, "start random merge, segments_id=[{}] all_segments={}", fmt::join(segments_id, ","), segments.size());
         mergeSegment(segments_id);
@@ -182,6 +226,7 @@ protected:
     {
         if (segments.empty())
             return;
+        clearReplaceDataSnapshot();
         PageId random_segment_id = getRandomSegmentId();
         LOG_DEBUG(logger, "start random merge delta, segment_id={} all_segments={}", random_segment_id, segments.size());
         mergeSegmentDelta(random_segment_id);
@@ -201,61 +246,50 @@ protected:
         if (segments.empty())
             return;
 
-        auto segments_to_pick = std::uniform_int_distribution<size_t>{1, 5}(random);
-        std::vector<PageId> segments_list;
-        std::map<PageId, UInt64> expected_data_each_segment;
-        for (size_t i = 0; i < segments_to_pick; ++i)
+        auto segment_id = getRandomSegmentId();
+        size_t newly_written_rows_since_snapshot = 0;
+
+        if (for_update_snapshot != nullptr)
         {
-            auto id = getRandomSegmentId(); // allow duplicate
-            segments_list.emplace_back(id);
-            expected_data_each_segment[id] = 0;
+            LOG_DEBUG(logger, "random replace segment data using an existing snapshot, snapshot_segment_id={}", *for_update_snapshot_segment_id);
+            segment_id = *for_update_snapshot_segment_id;
+            newly_written_rows_since_snapshot = getSegmentRowNumWithoutMVCC(segment_id) - *for_update_snapshot_rows;
         }
 
-        auto [min_key, max_key] = getSegmentKeyRange(segments_list[0]);
-        for (size_t i = 1; i < segments_to_pick; ++i)
-        {
-            auto [new_min_key, new_max_key] = getSegmentKeyRange(segments_list[i]);
-            if (new_min_key < min_key)
-                min_key = new_min_key;
-            if (new_max_key > max_key)
-                max_key = new_max_key;
-        }
+        UNUSED(newly_written_rows_since_snapshot);
 
+        auto [min_key, max_key] = getSegmentKeyRange(segment_id);
+
+        std::vector<size_t> n_rows_collection{0, 10, 50, 1000};
+        auto block_rows = n_rows_collection[std::uniform_int_distribution<size_t>{0, n_rows_collection.size() - 1}(random)];
+
+        Int64 block_start_key = 0, block_end_key = 0;
         Block block{};
-        if (max_key > min_key)
-        {
-            // Now let's generate some data.
-            std::vector<size_t> n_rows_collection{0, 10, 50, 1000};
-            auto block_rows = n_rows_collection[std::uniform_int_distribution<size_t>{0, n_rows_collection.size() - 1}(random)];
-            if (block_rows > 0)
-            {
-                auto block_start_key = std::uniform_int_distribution<Int64>{min_key, max_key - 1}(random);
-                auto block_end_key = block_start_key + static_cast<Int64>(block_rows);
-                block = prepareWriteBlock(block_start_key, block_end_key);
 
-                // How many data will we have for each segment after replacing data? It should be BlockRange ∩ SegmentRange.
-                for (auto segment_id : segments_list)
-                {
-                    auto [seg_min_key, seg_max_key] = getSegmentKeyRange(segment_id);
-                    auto intersect_min = std::max(seg_min_key, block_start_key);
-                    auto intersect_max = std::min(seg_max_key, block_end_key);
-                    if (intersect_min <= intersect_max)
-                    {
-                        // There is an intersection
-                        expected_data_each_segment[segment_id] = static_cast<UInt64>(intersect_max - intersect_min);
-                    }
-                }
-            }
+        if (block_rows > 0)
+        {
+            block_start_key = std::uniform_int_distribution<Int64>{min_key - 100, max_key + 100}(random);
+            block_end_key = block_start_key + block_rows;
+            block = prepareWriteBlock(block_start_key, block_end_key);
         }
 
-        LOG_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
-        replaceSegmentData({segments_list}, block);
+        LOG_DEBUG(logger, "start random replace segment data, segment_id={} block=[{}, {}) all_segments={}", segment_id, block_start_key, block_end_key, segments.size());
+        replaceSegmentData(segment_id, block, for_update_snapshot);
 
-        // Verify rows.
-        for (auto segment_id : segments_list)
+        size_t data_in_segments = 0;
+        if (block_rows > 0)
         {
-            EXPECT_EQ(getSegmentRowNum(segment_id), expected_data_each_segment[segment_id]);
+            auto data_start_key = std::max(min_key, block_start_key);
+            auto data_end_key = std::min(max_key, block_end_key);
+            data_in_segments = data_end_key >= data_start_key ? data_end_key - data_start_key : 0;
         }
+
+        if (for_update_snapshot == nullptr)
+            EXPECT_EQ(getSegmentRowNum(segment_id), data_in_segments);
+        else
+            EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), data_in_segments + newly_written_rows_since_snapshot);
+
+        clearReplaceDataSnapshot();
     }
 
     Segment::SplitMode getRandomSplitMode()
@@ -317,9 +351,7 @@ protected:
 TEST_F(SegmentRandomizedTest, FastCommonHandle)
 try
 {
-    SegmentTestOptions options;
-    options.is_common_handle = true;
-    reloadWithOptions(options);
+    reloadWithOptions({.is_common_handle = true});
     run(/* n */ 500, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
@@ -328,9 +360,7 @@ CATCH
 TEST_F(SegmentRandomizedTest, FastIntHandle)
 try
 {
-    SegmentTestOptions options;
-    options.is_common_handle = false;
-    reloadWithOptions(options);
+    reloadWithOptions({.is_common_handle = false});
     run(/* n */ 500, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
@@ -340,9 +370,7 @@ CATCH
 TEST_F(SegmentRandomizedTest, DISABLED_ForCI)
 try
 {
-    SegmentTestOptions options;
-    options.is_common_handle = true;
-    reloadWithOptions(options);
+    reloadWithOptions({.is_common_handle = true});
     run(50000, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH

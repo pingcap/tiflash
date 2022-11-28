@@ -504,29 +504,30 @@ private:
         SegmentSnapshotPtr segment_snap = nullptr);
 
     /**
-     * Discard all data in the segment, and use the specified DMFile as the stable instead.
-     * The specified DMFile is safe to be shared for multiple segments.
+     * Ingest a DMFile into the segment, optionally causing a new segment being created.
      *
-     * Note 1: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
-     *         stable file for multiple segments. It is your own duty to enable GC later.
-     *
-     * Note 2: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
-     *         to the PageStorage's data. Otherwise there will be exceptions.
-     *
-     * Note 3: This API is subjected to be changed in future, as it relies on the knowledge that all current data
-     *         in this segment is useless, which is a pretty tough requirement.
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
+
+     * @param clear_all_data_in_segment Whether all data in the segment should be discarded.
+     * @returns the new segment. The returned segment may be nullptr. In this case, it IS NOT A FAILURE.
+     *          It means the ingest does not cause a segment created and the current segment
+     *          is still valid.
      */
-    SegmentPtr segmentDangerouslyReplaceData(
+    SegmentPtr segmentIngestData(
         DMContext & dm_context,
         const SegmentPtr & segment,
-        const DMFilePtr & data_file);
+        const DMFilePtr & data_file,
+        bool clear_all_data_in_segment);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
-    inline bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
@@ -553,7 +554,8 @@ private:
         DMContext & dm_context,
         const SegmentPtr & segment,
         const RowKeyRange & ingest_range,
-        const DMFilePtr & file);
+        const DMFilePtr & file,
+        bool clear_data_in_range);
 
     bool updateGCSafePoint();
 

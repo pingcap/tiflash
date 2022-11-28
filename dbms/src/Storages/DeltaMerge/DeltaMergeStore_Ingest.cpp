@@ -19,6 +19,13 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Segment.h>
 
+#include <magic_enum.hpp>
+
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfSegmentIngest;
+}
+
 namespace ProfileEvents
 {
 extern const Event DMWriteFile;
@@ -94,9 +101,13 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
 
             segment_range = segment->getRowKeyRange();
 
-            // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-            ColumnFiles column_files;
+            // Write could fail, because we do not lock the segment here.
+            // Thus, other threads may update the instance at any time, like split, merge, merge delta,
+            // causing the segment to be abandoned.
             WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
+
+            DMFiles data_files;
+            data_files.reserve(files.size());
 
             for (const auto & file : files)
             {
@@ -106,19 +117,15 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                 auto page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
                 auto ref_file = DMFile::restore(file_provider, file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
-                if (column_file->getRows() != 0)
-                {
-                    column_files.emplace_back(std::move(column_file));
-                    wbs.data.putRefPage(page_id, file->pageId());
-                }
+                data_files.emplace_back(std::move(ref_file));
+                wbs.data.putRefPage(page_id, file->pageId());
             }
 
             // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), column_files, clear_data_in_range);
+            bool ingest_success = segment->ingestDataToDelta(*dm_context, range.shrink(segment_range), data_files, clear_data_in_range);
             fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
             if (ingest_success)
             {
@@ -145,12 +152,9 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
 
 /**
  * Accept a target ingest range and a vector of DTFiles, ingest these DTFiles (clipped by the target ingest range)
- * using logical split. All data in the target ingest range will be cleared, and replaced by the specified DTFiles.
+ * using logical split.
  *
- * `clear_data_in_range` must be true. Otherwise exceptions will be thrown.
- *
- * You must ensure DTFiles do not overlap. Otherwise you will lose data.
- * // TODO: How to check this? Maybe we can enforce external_files to be ordered.
+ * You must ensure DTFiles are ordered and do not overlap.
  *
  * WARNING: This function does not guarantee isolation. You may observe partial results when
  * querying related segments when this function is running.
@@ -162,20 +166,49 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
     const DMFiles & files,
     bool clear_data_in_range)
 {
-    RUNTIME_CHECK(clear_data_in_range == true);
-    RUNTIME_CHECK(
-        files.size() == external_files.size(),
-        files.size(),
-        external_files.size());
-    for (size_t i = 0; i < files.size(); ++i)
     {
-        RUNTIME_CHECK(files[i]->pageId() == external_files[i].id);
+        RUNTIME_CHECK(
+            files.size() == external_files.size(),
+            files.size(),
+            external_files.size());
+        for (size_t i = 0; i < files.size(); ++i)
+            RUNTIME_CHECK(
+                files[i]->pageId() == external_files[i].id,
+                files[i]->pageId(),
+                external_files[i].toString());
+
+        // Verify external_files are ordered.
+        // Actually we also allow it to be not ordered, but then it will be hard to check overlap efficiently.
+        // So here we require it to be ordered.
+        RowKeyValue last_end;
+        if (is_common_handle)
+            last_end = RowKeyValue::COMMON_HANDLE_MIN_KEY;
+        else
+            last_end = RowKeyValue::INT_HANDLE_MIN_KEY;
+
+        // Suppose we have keys: 1, 2, | 3, 4, 5, | 6, | 7, 8
+        // Our file ranges will be: [1, 3), [3, 6), [6, 7), [7, 9)
+        //                              ↑    ↑
+        //                              A    B
+        //                         We require A <= B.
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(
+                !ext_file.range.none(),
+                ext_file.toString());
+            RUNTIME_CHECK(
+                compare(last_end.toRowKeyValueRef(), ext_file.range.getStart()) <= 0,
+                last_end.toDebugString(),
+                ext_file.toString());
+            last_end = ext_file.range.end;
+        }
     }
 
     std::set<SegmentPtr> updated_segments;
 
     // First phase (DeleteRange Phase):
     // Write DeleteRange to the covered segments to ensure that all data in the `ingest_range` is cleared.
+    if (clear_data_in_range)
     {
         RowKeyRange remaining_delete_range = ingest_range;
         LOG_INFO(
@@ -220,16 +253,16 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 // segment may be abandoned, retry current range by finding the segment again.
             }
         }
-    }
 
-    LOG_DEBUG(
-        log,
-        "Table ingest using split - delete range phase - finished, updated_segments_n={}",
-        updated_segments.size());
+        LOG_DEBUG(
+            log,
+            "Table ingest using split - delete range phase - finished, updated_segments_n={}",
+            updated_segments.size());
+    }
 
     /*
      * In second phase (SplitIngest Phase),
-     * we will try to ingest DMFile one by one into the segments in order.
+     * we will try to ingest DMFile one by one into the segments.
      *
      * Consider the following case:
      * -Inf                                                                         +Inf
@@ -323,7 +356,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
 
-            const bool succeeded = ingestDTFileIntoSegmentUsingSplit(*dm_context, segment, segment_ingest_range, files[file_idx]);
+            const bool succeeded = ingestDTFileIntoSegmentUsingSplit(*dm_context, segment, segment_ingest_range, files[file_idx], clear_data_in_range);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -356,7 +389,8 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     DMContext & dm_context,
     const SegmentPtr & segment,
     const RowKeyRange & ingest_range,
-    const DMFilePtr & file)
+    const DMFilePtr & file,
+    bool clear_data_in_range)
 {
     const auto & segment_range = segment->getRowKeyRange();
 
@@ -379,16 +413,47 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     if (is_start_matching && is_end_matching)
     {
         /*
-         * The segment and the ingest range is perfectly matched. We can
-         * simply replace all of the data from this segment.
+         * The segment and the ingest range is perfectly matched.
          *
          * Example:
          *    │----------- Segment ----------│
          *    │-------- Ingest Range --------│
          */
-        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, file);
-        const bool succeeded = new_segment_or_null != nullptr;
-        return succeeded;
+
+        auto delegate = dm_context.path_pool.getStableDiskDelegator();
+        auto file_provider = dm_context.db_context.getFileProvider();
+
+        WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+
+        // Generate DMFile instance with a new ref_id pointed to the file_id,
+        // because we may use the same DMFile to ingest into multiple segments.
+        auto new_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto ref_file = DMFile::restore(
+            file_provider,
+            file->fileId(),
+            new_page_id,
+            file->parentPath(),
+            DMFile::ReadMetaMode::all());
+        wbs.data.putRefPage(new_page_id, file->pageId());
+
+        // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
+        // they are visible for readers immediately, who require file_ids to be found in PageStorage.
+        wbs.writeLogAndData();
+
+        // clear_all_data_in_segment == clear_data_in_range is safe, because we have verified
+        // that current segment range is identical to the ingest range.
+        auto new_segment = segmentIngestData(dm_context, segment, ref_file, clear_data_in_range);
+        if (new_segment == nullptr)
+        {
+            // When ingest failed, just discard this ref file.
+            wbs.rollbackWrittenLogAndData();
+
+            // Failed, segment may be abandoned, or there is another update in progress.
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            return false;
+        }
+
+        return true;
     }
     else if (is_start_matching)
     {
@@ -491,7 +556,7 @@ void DeltaMergeStore::ingestFiles(
     }
 
     bool ingest_using_split = false;
-    if (clear_data_in_range && bytes >= dm_context->delta_small_column_file_bytes)
+    if (/*clear_data_in_range && */ bytes >= dm_context->delta_small_column_file_bytes)
     {
         // We still write small ssts directly into the delta layer.
         ingest_using_split = true;
