@@ -1090,7 +1090,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         }
 
         current_offset += rows_joined;
-        if (current_offset - probe_process_info_ptr->already_generate_rows >= probe_process_info_ptr->max_block_size)
+        if (current_offset >= probe_process_info_ptr->max_block_size)
         {
             probe_process_info_ptr->all_rows_joined_finish = false;
             probe_process_info_ptr->block_full = true;
@@ -1629,7 +1629,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
         filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
-    IColumn::Offset current_offset = probe_process_info_ptr->already_generate_rows;
+    IColumn::Offset current_offset = 0;
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate;
 
     if (strictness == ASTTableJoin::Strictness::All)
@@ -1668,11 +1668,18 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
+    size_t process_rows = probe_process_info_ptr->end_row - probe_process_info_ptr->start_row + 1;
+
     /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
     if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
     {
         for (size_t i = 0; i < existing_columns; ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
+
+        if (rows != process_rows)
+        {
+            filter->assign(filter->begin() + probe_process_info_ptr->start_row, filter->begin() + probe_process_info_ptr->end_row + 1);
+        }
     }
 
 
@@ -1681,13 +1688,18 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
     {
         for (size_t i = 0; i < existing_columns; ++i)
         {
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, probe_process_info_ptr->already_generate_rows, *offsets_to_replicate);
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, *offsets_to_replicate);
+        }
+
+        if (rows != process_rows)
+        {
+            offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
         }
 
         if (rows != 0)
         {
             probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
-            probe_process_info_ptr->already_generate_rows = (*offsets_to_replicate)[probe_process_info_ptr->end_row];
+            probe_process_info_ptr->end_row = probe_process_info_ptr->start_row;
         }
     }
 
@@ -2104,12 +2116,12 @@ const Join::ProbeProcessInfoPtrs & Join::getProbeProcessInfos() const
 
 void Join::setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 max_block_size)
 {
-    if (unlikely(probe_concurrency > 0 || max_block_size_for_hash_join > 0))
+    if (unlikely(probe_concurrency || max_block_size_for_hash_join))
         throw Exception("Logical error: `setProbeConcurrencyAndMaxBlockSize` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
     probe_concurrency = std::max(1, probe_concurrency_);
     for (size_t i = 0; i < probe_concurrency; i++)
     {
-        probe_process_infos.push_back(std::make_shared<ProbeProcessInfo>(Block{}, max_block_size, 0, 0, 0, true, false));
+        probe_process_infos.push_back(std::make_shared<ProbeProcessInfo>(Block{}, max_block_size, 0, 0, true, false));
     }
     max_block_size_for_hash_join = max_block_size;
     probe_initialized = true;
@@ -2120,7 +2132,6 @@ void Join::setBlockAndInitProbeProcessInfo(Block block, size_t probe_index)
     probe_process_infos[probe_index]->block = block;
     probe_process_infos[probe_index]->start_row = 0;
     probe_process_infos[probe_index]->end_row = 0;
-    probe_process_infos[probe_index]->already_generate_rows = 0;
     probe_process_infos[probe_index]->all_rows_joined_finish = true;
     probe_process_infos[probe_index]->block_full = false;
 }

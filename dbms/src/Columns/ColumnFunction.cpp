@@ -59,18 +59,21 @@ ColumnPtr ColumnFunction::replicate(const Offsets & offsets) const
     return ColumnFunction::create(replicated_size, function, capture);
 }
 
-ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     if (column_size != offsets.size())
         throw Exception(
             fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), column_size),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
+    if (start_row > end_row)
+        throw Exception("start row should not be bigger than end row.", ErrorCodes::LOGICAL_ERROR);
+
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
-        column.column = column.column->replicate(start_row, end_row, prev_offset, offsets);
+        column.column = column.column->replicate(start_row, end_row, offsets);
 
-    size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row] - prev_offset);
+    size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row]);
     return ColumnFunction::create(replicated_size, function, capture);
 }
 
@@ -83,20 +86,20 @@ ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
     return ColumnFunction::create(length, function, capture);
 }
 
-ColumnPtr ColumnFunction::filter(const Filter & filt, ssize_t result_size_hint) const
+ColumnPtr ColumnFunction::filter(const Filter & filter, ssize_t result_size_hint) const
 {
-    if (column_size != filt.size())
+    if (column_size != filter.size())
         throw Exception(
-            fmt::format("Size of filter ({}) doesn't match size of column ({})", filt.size(), column_size),
+            fmt::format("Size of filter ({}) doesn't match size of column ({})", filter.size(), column_size),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
-        column.column = column.column->filter(filt, result_size_hint);
+        column.column = column.column->filter(filter, result_size_hint);
 
     size_t filtered_size = 0;
     if (capture.empty())
-        filtered_size = countBytesInFilter(filt);
+        filtered_size = countBytesInFilter(filter);
     else
         filtered_size = capture.front().column->size();
 

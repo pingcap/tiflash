@@ -323,21 +323,24 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
     return res;
 }
 
-ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
-    size_t col_size = size();
-    if (col_size != offsets.size())
+    size_t col_rows = size();
+    if (col_rows != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    if (start_row > end_row)
+        throw Exception("start row should not be bigger than end row.", ErrorCodes::LOGICAL_ERROR);
 
     auto res = ColumnFixedString::create(n);
 
-    if (0 == col_size || start_row > end_row)
+    if (0 == col_rows || start_row > end_row)
         return res;
 
     Chars_t & res_chars = res->chars;
-    res_chars.resize(n * (offsets[end_row] - prev_offset));
+    res_chars.resize(n * (offsets[end_row]));
 
-    Offset curr_offset = prev_offset;
+    Offset curr_offset = 0;
     for (size_t i = start_row; i <= end_row; ++i)
         for (size_t next_offset = offsets[i]; curr_offset < next_offset; ++curr_offset)
             memcpySmallAllowReadWriteOverflow15(&res->chars[curr_offset * n], &chars[i * n], n);

@@ -263,7 +263,7 @@ public:
     using Offset = UInt64;
     using Offsets = PaddedPODArray<Offset>;
     virtual Ptr replicate(const Offsets & offsets) const = 0;
-    virtual Ptr replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const = 0;
+    virtual Ptr replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
 
     /** Split column to smaller columns. Each value goes to column index, selected by corresponding element of 'selector'.
       * Selector must contain values from 0 to num_columns - 1.

@@ -204,16 +204,14 @@ public:
         UInt64 max_block_size;
         size_t start_row;
         size_t end_row;
-        size_t already_generate_rows;
         bool all_rows_joined_finish;
         bool block_full;
 
-        ProbeProcessInfo(Block block_, UInt64 max_block_size_, size_t start_row_, size_t end_row_, size_t already_generate_rows_, bool all_rows_joined_finish_, bool block_full_)
+        ProbeProcessInfo(Block block_, UInt64 max_block_size_, size_t start_row_, size_t end_row_, bool all_rows_joined_finish_, bool block_full_)
             : block(block_)
             , max_block_size(max_block_size_)
             , start_row(start_row_)
             , end_row(end_row_)
-            , already_generate_rows(already_generate_rows_)
             , all_rows_joined_finish(all_rows_joined_finish_)
             , block_full(block_full_)
         {}

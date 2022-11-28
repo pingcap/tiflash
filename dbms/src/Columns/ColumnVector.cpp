@@ -315,19 +315,25 @@ ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets & offsets) const
 }
 
 template <typename T>
-ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    if (0 == size || start_row > end_row)
+
+    if (start_row > end_row)
+        throw Exception("start row should not be bigger than end row.", ErrorCodes::LOGICAL_ERROR);
+
+    if (0 == size)
         return this->create();
 
     auto res = this->create();
     typename Self::Container & res_data = res->getData();
 
-    res_data.reserve(offsets[end_row] - prev_offset);
+    res_data.reserve(offsets[end_row]);
+
+    size_t prev_offset = 0;
 
     for (size_t i = start_row; i <= end_row; ++i)
     {

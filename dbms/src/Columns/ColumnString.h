@@ -303,7 +303,7 @@ public:
 
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
 
-    ColumnPtr replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & replicate_offsets) const override;
+    ColumnPtr replicate(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {

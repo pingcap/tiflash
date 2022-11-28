@@ -172,7 +172,7 @@ public:
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr replicate(const Offsets & offsets) const override;
-    ColumnPtr replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 

@@ -60,7 +60,6 @@ Block HashJoinProbeBlockInputStream::readImpl()
     if (join_probe_actions->needGetBlockForHashJoinProbe(concurrency_probe_index))
     {
         Block block = children.back()->read();
-        std::cout<<"read block row : "<<block.rows()<<"----"<<concurrency_probe_index<<std::endl;
         if (!block)
             return block;
         join_probe_actions->updateBlockForHashJoinProbe(block, concurrency_probe_index);
@@ -68,7 +67,6 @@ Block HashJoinProbeBlockInputStream::readImpl()
 
     Block res;
     join_probe_actions->executeForHashJoinProbeSide(res, concurrency_probe_index);
-    std::cout<<"out block row : "<<res.rows()<<"----"<<concurrency_probe_index<<std::endl;
     return res;
 }
 

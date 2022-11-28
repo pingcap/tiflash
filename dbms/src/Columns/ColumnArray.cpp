@@ -768,7 +768,7 @@ ColumnPtr ColumnArray::replicate(const Offsets & replicate_offsets) const
     return replicateGeneric(replicate_offsets);
 }
 
-ColumnPtr ColumnArray::replicate(size_t /*start_row*/, size_t /*end_row*/, size_t /*prev_offset*/, const IColumn::Offsets & /*offsets*/) const
+ColumnPtr ColumnArray::replicate(size_t /*start_row*/, size_t /*end_row*/, const IColumn::Offsets & /*offsets*/) const
 {
     throw Exception("not implement.", ErrorCodes::NOT_IMPLEMENTED);
 }

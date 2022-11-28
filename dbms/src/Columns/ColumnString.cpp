@@ -275,23 +275,26 @@ ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
     return res;
 }
 
-ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, size_t prev_offset, const IColumn::Offsets & replicate_offsets) const
+ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const
 {
-    size_t col_size = size();
-    if (col_size != replicate_offsets.size())
+    size_t col_rows = size();
+    if (col_rows != replicate_offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    if (start_row > end_row)
+        throw Exception("start row should not be bigger than end row.", ErrorCodes::LOGICAL_ERROR);
 
     auto res = ColumnString::create();
 
-    if (0 == col_size || start_row > end_row)
+    if (0 == col_rows)
         return res;
 
     Chars_t & res_chars = res->chars;
     Offsets & res_offsets = res->offsets;
-    res_chars.reserve(chars.size() / col_size * (replicate_offsets[end_row] - prev_offset));
-    res_offsets.reserve(replicate_offsets[end_row] - prev_offset);
+    res_chars.reserve(chars.size() / col_rows * (replicate_offsets[end_row]));
+    res_offsets.reserve(replicate_offsets[end_row]);
 
-    Offset prev_replicate_offset = prev_offset;
+    Offset prev_replicate_offset = 0;
     Offset prev_string_offset = start_row == 0 ? 0 : offsets[start_row - 1];
     Offset current_new_offset = 0;
 
