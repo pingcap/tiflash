@@ -129,7 +129,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     background_task.begin();
     grpc::ServerBuilder builder;
 
-    if (context.getSecurityConfig()->hasTlsConfig())
+    if (!context.isTest() && context.getSecurityConfig()->hasTlsConfig())
     {
         builder.AddListeningPort(raft_config.flash_server_addr, sslServerCredentialsWithFetcher(context));
     }

@@ -43,6 +43,7 @@ public:
         : log(log_)
     {
         update(config);
+        inited = true;
     }
 
     void setLog(const LoggerPtr & log_)
@@ -86,6 +87,7 @@ public:
         std::unique_lock lock(mu);
         if (config.has("security"))
         {
+            has_security = true;
             bool miss_ca_path = true;
             bool miss_cert_path = true;
             bool miss_key_path = true;
@@ -110,7 +112,14 @@ public:
             }
             if (miss_ca_path && miss_cert_path && miss_key_path)
             {
-                LOG_INFO(log, "No security config is set.");
+                if (inited && has_tls_config)
+                {
+                    LOG_WARNING(log, "When TLS config is set, we can't remove it");
+                }
+                else
+                {
+                    LOG_INFO(log, "No TLS config is set.");
+                }
             }
             else if (miss_ca_path || miss_cert_path || miss_key_path)
             {
@@ -118,19 +127,27 @@ public:
             }
             else
             {
-                has_tls_config = true;
-                if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
+                if (inited && !has_tls_config)
                 {
-                    ca_path = new_ca_path;
-                    cert_path = new_cert_path;
-                    key_path = new_key_path;
-                    updated = true;
-                    LOG_INFO(
-                        log,
-                        "security config is updated: ca path is {} cert path is {} key path is {}",
-                        ca_path,
-                        cert_path,
-                        key_path);
+                    LOG_WARNING(log, "Can't add TLS config online");
+                    return false;
+                }
+                else
+                {
+                    has_tls_config = true;
+                    if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
+                    {
+                        ca_path = new_ca_path;
+                        cert_path = new_cert_path;
+                        key_path = new_key_path;
+                        updated = true;
+                        LOG_INFO(
+                            log,
+                            "security config is updated: ca path is {} cert path is {} key path is {}",
+                            ca_path,
+                            cert_path,
+                            key_path);
+                    }
                 }
             }
 
@@ -147,6 +164,17 @@ public:
                 redact_info_log = config.getBool("security.redact_info_log");
             }
             return updated;
+        }
+        else
+        {
+            if (inited && has_security)
+            {
+                LOG_WARNING(log, "Can't remove security config online");
+            }
+            else
+            {
+                LOG_INFO(log, "security config is not set");
+            }
         }
         return false;
     }
@@ -232,6 +260,8 @@ private:
     bool redact_info_log = false;
     std::set<String> allowed_common_names;
     bool has_tls_config = false;
+    bool has_security = false;
+    bool inited = false;
 
     LoggerPtr log;
 };

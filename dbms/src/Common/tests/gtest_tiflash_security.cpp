@@ -66,5 +66,37 @@ cert_allowed_cn="tidb"
     tiflash_config.update(*new_config);
     ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("tidb"), 1);
 }
+
+TEST(TestTiFlashSecurity, Update)
+{
+    String test =
+        R"(
+[security]
+cert_allowed_cn="tidb"
+        )";
+
+    auto config = loadConfigFromString(test);
+    const auto log = Logger::get();
+
+    TiFlashSecurityConfig tiflash_config(*config, log); // no TLS config is set
+    const auto * new_test =
+        R"(
+[security]
+ca_path="security/ca.pem"
+cert_path="security/cert.pem"
+key_path="security/key.pem"
+cert_allowed_cn="tidb"
+        )";
+    config = loadConfigFromString(new_test);
+    ASSERT_EQ(tiflash_config.update(*config), false); // can't add tls config online
+
+    config = loadConfigFromString(new_test);
+    TiFlashSecurityConfig tiflash_config_new(*config, log);
+    test =
+        R"(
+        )";
+    config = loadConfigFromString(test);
+    ASSERT_EQ(tiflash_config.update(*config), false); // can't remove security config online
+}
 } // namespace tests
 } // namespace DB
