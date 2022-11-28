@@ -561,18 +561,6 @@ String JsonBinary::unquoteString(const StringRef & ref)
     return ref.toString();
 }
 
-String JsonBinary::unquote() const
-{
-    String res;
-    switch (type)
-    {
-    case TYPE_CODE_STRING:
-        return unquoteString(getString());
-    default:
-        return toString();
-    }
-}
-
 bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;

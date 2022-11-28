@@ -21,5 +21,7 @@ namespace DB
 void registerFunctionsJson(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionsJsonExtract>();
+    factory.registerFunction<FunctionsJsonUnquote>();
+    factory.registerFunction<FunctionsCastJsonAsString>();
 }
 } // namespace DB

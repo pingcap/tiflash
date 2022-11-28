@@ -30,6 +30,7 @@ namespace DB
 /** Json related functions:
   *
   * json_extract(json_object, path_string...) - The function takes 1 or more path_string parameters. Return the extracted JsonObject.
+  * json_unquote(json_string)
   */
 
 namespace ErrorCodes
@@ -57,14 +58,13 @@ public:
     }
 
     bool useDefaultImplementationForNulls() const override { return true; }
-    bool useDefaultImplementationForConstants() const override { return false; }
     bool isVariadic() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         for (const auto & arg : arguments)
         {
-            if unlikely (!arg->isString())
+            if unlikely (!arg->isStringOrFixedString())
                 throw Exception(
                     "Illegal type " + arg->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -122,9 +122,9 @@ public:
         size_t rows = block.rows();
         if (const auto * const_col = checkAndGetColumnConst<ColumnString>(column.get()))
         {
-            const auto & data = const_col->getDataAtWithTerminatingZero(0);
+            const auto & data = const_col->getDataAt(0);
             /// Null JsonBinary
-            if (data.size <= 1)
+            if (data.size == 0)
             {
                 block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
                 return;
@@ -158,9 +158,17 @@ public:
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & from_data = col->getDataAtWithTerminatingZero(i);
-                JsonBinary json_binary(from_data.data[0], StringRef(from_data.data + 1, from_data.size - 1));
-                bool found = json_binary.extract(path_expr_container_vec, write_buffer);
+                const auto & from_data = col->getDataAt(i);
+                bool found;
+                if (from_data.size == 0)
+                {
+                    found = false;
+                }
+                else
+                {
+                    JsonBinary json_binary(from_data.data[0], StringRef(from_data.data + 1, from_data.size - 1));
+                    found = json_binary.extract(path_expr_container_vec, write_buffer);
+                }
                 if (!found)
                     vec_null_map[i] = 1;
                 writeChar(0, write_buffer);
@@ -173,6 +181,133 @@ public:
             throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
 
+private:
+};
+
+
+class FunctionsJsonUnquote : public IFunction
+{
+public:
+    static constexpr auto name = "json_unquote";
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<FunctionsJsonUnquote>();
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 1;
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr column = block.getByPosition(arguments[0]).column;
+        size_t rows = block.rows();
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_to = ColumnString::create();
+            ColumnString::Chars_t & data_to = col_to->getChars();
+            ColumnString::Offsets & offsets_to = col_to->getOffsets();
+            offsets_to.resize(rows);
+            ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                const auto & from_data = col->getDataAt(i);
+                auto str = JsonBinary::unquoteString(from_data);
+                write_buffer.write(str.c_str(), str.length());
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+            data_to.resize(write_buffer.count());
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        }
+        else
+            throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+    }
+private:
+};
+
+class FunctionsCastJsonAsString : public IFunction
+{
+public:
+    static constexpr auto name = "cast_json_as_string";
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<FunctionsCastJsonAsString>();
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 1;
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr column = block.getByPosition(arguments[0]).column;
+        size_t rows = block.rows();
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_to = ColumnString::create();
+            ColumnString::Chars_t & data_to = col_to->getChars();
+            ColumnString::Offsets & offsets_to = col_to->getOffsets();
+            offsets_to.resize(rows);
+            ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
+            ColumnUInt8::Container & vec_null_map = col_null_map->getData();
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                const auto & from_data = col->getDataAt(i);
+                if (from_data.size == 0)
+                {
+                    vec_null_map[i] = 1;
+                }
+                else
+                {
+                    JsonBinary json_binary(from_data.data[0], StringRef(from_data.data + 1, from_data.size - 1));
+                    auto str = json_binary.toString();
+                    write_buffer.write(str.c_str(), str.length());
+                }
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+            data_to.resize(write_buffer.count());
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        }
+        else
+            throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+    }
 private:
 };
 

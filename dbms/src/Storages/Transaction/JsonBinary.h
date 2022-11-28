@@ -134,7 +134,6 @@ public:
     /// getElementCount gets the count of Object or Array only.
     UInt32 getElementCount() const;
     String toString() const;
-    String unquote() const;
 
     /// Extract receives several path expressions as arguments, matches them in bj, and returns true if any match:
     ///	Serialize final results in 'write_buffer'
