@@ -111,10 +111,7 @@ public:
             auto path_expr = JsonPathExpr::parseJsonPathExpr(path_str);
             /// If any path_expr failed to parse, return null
             if (!path_expr)
-            {
-                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
-                return;
-            }
+                throw Exception(fmt::format("Illegal json path expression {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
             path_expr_container_vec.push_back(std::make_unique<JsonPathExprRefContainer>(path_expr));
         }
 

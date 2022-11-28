@@ -102,13 +102,18 @@ try
     std::vector<String> expect_string_vec{"3", "", "[2, 3]"};
     checkResult(res.column, expect_null_vec, expect_string_vec);
 
-    /// Either JsonBinary or Path is constant null
-    auto null_path_col = createConstColumn<Nullable<String>>(3, {});
-    res = executeFunction(func_name, {input_col, null_path_col});
-    ASSERT_TRUE(res.column->size() == 3);
-    expect_string_vec = {"", "", ""};
-    expect_null_vec = {1, 1, 1};
-    checkResult(res.column, expect_null_vec, expect_string_vec);
+    /// Path is constant null
+    try
+    {
+        auto null_path_col = createConstColumn<Nullable<String>>(3, {});
+        res = executeFunction(func_name, {input_col, null_path_col});
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "Illegal json path expression Const(String) of argument of function json_extract");
+    }
+
+    /// JsonBinary is constant null
     auto null_input_col = createConstColumn<Nullable<String>>(3, {});
     res = executeFunction(func_name, {null_input_col, path_col});
     ASSERT_TRUE(res.column->size() == 3);
