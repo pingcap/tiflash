@@ -202,6 +202,17 @@ public:
         if (kill)
             remote_reader->cancel();
     }
+
+    void readPrefixImpl() override
+    {
+        // for CoprocessorReader, we send Coprocessor requests in readPrefixImpl
+        if constexpr (std::is_same_v<RemoteReader, CoprocessorReader>)
+        {
+            remote_reader->open();
+        }
+        // note that for ExchangeReceiver, we have sent EstablishMPPConnection requests before we construct the pipeline
+    }
+
     Block readImpl() override
     {
         if (block_queue.empty())
