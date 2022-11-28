@@ -1090,7 +1090,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
-        [&](ConfigurationPtr config) {
+        [&](ConfigurationPtr config, bool is_new_tls_cert) {
             LOG_DEBUG(log, "run main config reloader");
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
@@ -1098,7 +1098,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
             bool updated = global_context->getSecurityConfig()->update(*config);
-            if (updated)
+            if (updated || is_new_tls_cert)
             {
                 auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
                 auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);

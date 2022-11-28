@@ -73,29 +73,68 @@ void ConfigReloader::run()
     }
 }
 
+bool ConfigReloader::tlsCertUpdated(Poco::AutoPtr<Poco::Util::AbstractConfiguration> config, bool init)
+{
+    try
+    {
+        LOG_DEBUG(log, "check tls cert file updated");
+        if (config->has("security") || config->has("security.ca_path") || config->has("security.cert_path") || config->has("security.key_path"))
+        {
+            if (init)
+            {
+                cert_files.addIfExists(config->getString("security.ca_path"));
+                cert_files.addIfExists(config->getString("security.cert_path"));
+                cert_files.addIfExists(config->getString("security.key_path"));
+            }
+            else
+            {
+                FilesChangesTracker new_files;
+                new_files.addIfExists(config->getString("security.ca_path"));
+                new_files.addIfExists(config->getString("security.cert_path"));
+                new_files.addIfExists(config->getString("security.key_path"));
+                bool updated = cert_files.isDifferOrNewerThan(new_files);
+                if (updated)
+                {
+                    cert_files = std::move(new_files);
+                }
+                return updated;
+            }
+        }
+        return false;
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Error loading config from `" + path + "'");
+        return false;
+    }
+}
+
 void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 {
     std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
-    if (force || new_files.isDifferOrNewerThan(files))
+
+    ConfigProcessor config_processor(path);
+    ConfigProcessor::LoadedConfig loaded_config;
+    try
     {
-        ConfigProcessor config_processor(path);
-        ConfigProcessor::LoadedConfig loaded_config;
-        try
-        {
-            LOG_DEBUG(log, "Loading config `{}`", path);
+        LOG_DEBUG(log, "Loading config `{}`", path);
+        loaded_config = config_processor.loadConfig();
+    }
+    catch (...)
+    {
+        if (throw_on_error)
+            throw;
 
-            loaded_config = config_processor.loadConfig();
-        }
-        catch (...)
-        {
-            if (throw_on_error)
-                throw;
+        tryLogCurrentException(log, "Error loading config from `" + path + "'");
+        return;
+    }
 
-            tryLogCurrentException(log, "Error loading config from `" + path + "'");
-            return;
-        }
+    bool is_new_tls_cert = tlsCertUpdated(loaded_config.configuration, force);
+
+    if (force || new_files.isDifferOrNewerThan(files) || is_new_tls_cert)
+    {
         config_processor.savePreprocessedConfig(loaded_config);
 
         /** We should remember last modification time if and only if config was sucessfully loaded
@@ -108,7 +147,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 
         try
         {
-            updater(loaded_config.configuration);
+            updater(loaded_config.configuration, is_new_tls_cert);
         }
         catch (...)
         {

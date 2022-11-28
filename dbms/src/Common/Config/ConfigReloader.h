@@ -44,7 +44,7 @@ class Context;
 class ConfigReloader
 {
 public:
-    using Updater = std::function<void(ConfigurationPtr)>;
+    using Updater = std::function<void(ConfigurationPtr, bool)>;
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
@@ -75,6 +75,8 @@ private:
         bool isDifferOrNewerThan(const FilesChangesTracker & rhs) const;
     };
 
+    bool tlsCertUpdated(Poco::AutoPtr<Poco::Util::AbstractConfiguration> config, bool init);
+
     FilesChangesTracker getNewFileList() const;
 
 protected:
@@ -87,6 +89,8 @@ private:
 
     std::string path;
     FilesChangesTracker files;
+
+    FilesChangesTracker cert_files;
 
     Updater updater;
 
