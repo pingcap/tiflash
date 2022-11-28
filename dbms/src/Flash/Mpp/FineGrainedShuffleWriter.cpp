@@ -45,12 +45,6 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::finishWrite()
-{
-    assert(0 == rows_in_blocks);
-}
-
-template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_block)
 {
     /// Initialize header block, use column type to create new empty column to handle potential null column cases
@@ -85,9 +79,9 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
         "Output column size mismatch with field type size");
 
     size_t rows = block.rows();
-    rows_in_blocks += rows;
     if (rows > 0)
     {
+        rows_in_blocks += rows;
         blocks.push_back(block);
     }
 

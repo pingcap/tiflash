@@ -311,7 +311,6 @@ public:
         for (const auto & block : source_blocks)
             dag_writer->write(block);
         dag_writer->flush();
-        dag_writer->finishWrite();
 
         // 3. send execution summary
         writer->add_summary = true;
@@ -338,7 +337,6 @@ public:
         for (const auto & block : source_blocks)
             dag_writer->write(block);
         dag_writer->flush();
-        dag_writer->finishWrite();
 
         // 3. send execution summary
         writer->add_summary = true;
