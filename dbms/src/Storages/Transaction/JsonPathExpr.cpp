@@ -15,7 +15,8 @@
 #include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/JsonPathExpr.h>
 
-#include "Common/Exception.h"
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -32,7 +33,7 @@ bool isEcmascriptIdentifier(const String & str)
     for (size_t i = 0; i < length; ++i)
     {
         char c = str[i];
-        if ((i != 0 && std::isdigit(c)) || std::isalpha(c) || c == '_' || c == '$' || static_cast<UInt8>(c) >= 0x80U)
+        if ((i != 0 && isNumericASCII(c)) || isAlphaASCII(c) || c == '_' || c == '$' || static_cast<UInt8>(c) >= 0x80U)
             continue;
         return false;
     }
@@ -106,8 +107,7 @@ void JsonPathStream::skipWhiteSpace()
 {
     for (; pos < str.size; ++pos)
     {
-        UInt8 byte = str.data[pos];
-        if (!std::isspace(byte)) /// Implementation is different from TiDB, which uses go lib's unicode.IsSpace
+        if (!isWhitespaceASCII(str.data[pos])) /// Implementation is different from TiDB, which uses go lib's unicode.IsSpace
             break;
     }
 }
@@ -136,7 +136,7 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryReadIndexNumber()
 {
     auto record_pos = pos;
     auto res= readWhile([](char c) {
-        return std::isdigit(c);
+        return isNumericASCII(c);
     });
     if (!res.first)
     {
@@ -180,7 +180,7 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryParseArrayIndex()
         return InvalidIndexPair;
 
     char c = peek();
-    if (std::isdigit(c))
+    if (isNumericASCII(c))
     {
         auto res = tryReadIndexNumber();
         if (!res.first) {
@@ -366,7 +366,7 @@ bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr * p
         else
         {
             auto res = stream.readWhile([](char c) {
-                return !(std::isspace(c) || c == '.' || c == '[' || c == '*');
+                return !(isWhitespaceASCII(c) || c == '.' || c == '[' || c == '*');
             });
             dot_key = res.second;
         }

@@ -38,6 +38,11 @@ namespace ErrorCodes
 extern const int ILLEGAL_COLUMN;
 }
 
+inline bool isNullJsonBinary(const StringRef & ref)
+{
+    return ref.size == 0;
+}
+
 class FunctionsJsonExtract : public IFunction
 {
 public:
@@ -121,7 +126,7 @@ public:
         {
             const auto & data = const_col->getDataAt(0);
             /// Null JsonBinary
-            if (data.size == 0)
+            if unlikely (isNullJsonBinary(data))
             {
                 block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
                 return;
@@ -157,7 +162,7 @@ public:
             {
                 const auto & from_data = col->getDataAt(i);
                 bool found;
-                if (from_data.size == 0)
+                if unlikely (isNullJsonBinary(from_data))
                 {
                     found = false;
                 }
@@ -215,17 +220,18 @@ public:
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         size_t rows = block.rows();
-        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_to = ColumnString::create();
             ColumnString::Chars_t & data_to = col_to->getChars();
+            data_to.reserve(col_from->getChars().size()); /// Reserve the same size of from string
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & from_data = col->getDataAt(i);
+                const auto & from_data = col_from->getDataAt(i);
                 auto str = JsonBinary::unquoteString(from_data);
                 write_buffer.write(str.c_str(), str.length());
                 writeChar(0, write_buffer);
@@ -274,10 +280,11 @@ public:
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         size_t rows = block.rows();
-        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_to = ColumnString::create();
             ColumnString::Chars_t & data_to = col_to->getChars();
+            data_to.reserve(col_from->getChars().size() * 3 / 2); /// Rough estimate, 1.5x from TiDB
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
@@ -285,8 +292,8 @@ public:
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & from_data = col->getDataAt(i);
-                if (from_data.size == 0)
+                const auto & from_data = col_from->getDataAt(i);
+                if unlikely (isNullJsonBinary(from_data))
                 {
                     vec_null_map[i] = 1;
                 }

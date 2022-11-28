@@ -323,7 +323,6 @@ void JsonBinary::marshalLiteralTo(String & str, UInt8 lit_type)
 
 void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
 {
-    const UInt8 ascii_max = 0x7F;
     str.append("\"");
     size_t start = 0;
     size_t ref_size = ref.size;
@@ -331,7 +330,7 @@ void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
     for (size_t i = 0; i < ref_size;)
     {
         auto byte_c = static_cast<UInt8>(ref.data[i]);
-        if (byte_c <= ascii_max)
+        if (isASCII(byte_c))
         {
             if (JsonSafeAscii[byte_c])
             {
