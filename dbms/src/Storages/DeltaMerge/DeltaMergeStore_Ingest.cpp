@@ -154,7 +154,8 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
  * Accept a target ingest range and a vector of DTFiles, ingest these DTFiles (clipped by the target ingest range)
  * using logical split.
  *
- * You must ensure DTFiles are ordered and do not overlap.
+ * You must ensure DTFiles do not overlap. Otherwise this function will not work properly when clear_data_in_range == true.
+ * The check is performed in `ingestFiles`.
  *
  * WARNING: This function does not guarantee isolation. You may observe partial results when
  * querying related segments when this function is running.
@@ -176,32 +177,6 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 files[i]->pageId() == external_files[i].id,
                 files[i]->pageId(),
                 external_files[i].toString());
-
-        // Verify external_files are ordered.
-        // Actually we also allow it to be not ordered, but then it will be hard to check overlap efficiently.
-        // So here we require it to be ordered.
-        RowKeyValue last_end;
-        if (is_common_handle)
-            last_end = RowKeyValue::COMMON_HANDLE_MIN_KEY;
-        else
-            last_end = RowKeyValue::INT_HANDLE_MIN_KEY;
-
-        // Suppose we have keys: 1, 2, | 3, 4, 5, | 6, | 7, 8
-        // Our file ranges will be: [1, 3), [3, 6), [6, 7), [7, 9)
-        //                              ↑    ↑
-        //                              A    B
-        //                         We require A <= B.
-        for (const auto & ext_file : external_files)
-        {
-            RUNTIME_CHECK(
-                !ext_file.range.none(),
-                ext_file.toString());
-            RUNTIME_CHECK(
-                compare(last_end.toRowKeyValueRef(), ext_file.range.getStart()) <= 0,
-                last_end.toDebugString(),
-                ext_file.toString());
-            last_end = ext_file.range.end;
-        }
     }
 
     std::set<SegmentPtr> updated_segments;
@@ -526,6 +501,41 @@ void DeltaMergeStore::ingestFiles(
         const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", log->identifier());
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
+    }
+
+    {
+        // `ingestDTFilesUsingSplit` requires external_files to be not overlapped. Otherwise the results will be incorrect.
+        // Here we verify the external_files are ordered and not overlapped.
+        // "Ordered" is actually not a hard requirement by `ingestDTFilesUsingSplit`. However "ordered" makes us easy to check overlap efficiently.
+        RowKeyValue last_end;
+        if (is_common_handle)
+            last_end = RowKeyValue::COMMON_HANDLE_MIN_KEY;
+        else
+            last_end = RowKeyValue::INT_HANDLE_MIN_KEY;
+
+        // Suppose we have keys: 1, 2, | 3, 4, 5, | 6, | 7, 8
+        // Our file ranges will be: [1, 3), [3, 6), [6, 7), [7, 9)
+        //                              ↑    ↑
+        //                              A    B
+        //                         We require A <= B.
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(
+                !ext_file.range.none(),
+                ext_file.toString());
+            RUNTIME_CHECK(
+                compare(last_end.toRowKeyValueRef(), ext_file.range.getStart()) <= 0,
+                last_end.toDebugString(),
+                ext_file.toString());
+            last_end = ext_file.range.end;
+        }
+
+        // Check whether all external files are contained by the range.
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(compare(range.getStart(), ext_file.range.getStart()) <= 0);
+            RUNTIME_CHECK(compare(range.getEnd(), ext_file.range.getEnd()) >= 0);
+        }
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
