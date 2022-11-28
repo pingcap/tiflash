@@ -24,23 +24,7 @@ static const UInt32 UTF8Self  = 0x80;       // characters below UTF8Self are rep
 static const UInt32 UNICODEMax = 0x0010FFFF;  // Maximum valid Unicode code point.
 static const UInt32 UTF8Error = UNICODEMax + 1;     // the "error" code
 
-static const char * JsonHexChars[] = {
-    "0",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "a",
-    "b",
-    "c",
-    "d",
-    "e",
-    "f"};
+static const char JsonHexChars[] = "0123456789abcdef";
 
 /// JsonSafeSet holds the value true if the ASCII character with the given array
 /// position can be represented inside a JSON string without any further

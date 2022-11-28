@@ -29,8 +29,12 @@ namespace DB
 {
 /** Json related functions:
   *
-  * json_extract(json_object, path_string...) - The function takes 1 or more path_string parameters. Return the extracted JsonObject.
+  * json_extract(json_object, path_string...) -
+  *     The function takes 1 or more path_string parameters. Return the extracted JsonObject.
+  *     Throw exception if any path_string failed to parse.
   * json_unquote(json_string)
+  * cast_json_as_string(json_object)
+  *
   */
 
 namespace ErrorCodes
@@ -38,9 +42,9 @@ namespace ErrorCodes
 extern const int ILLEGAL_COLUMN;
 }
 
-inline bool isNullJsonBinary(const StringRef & ref)
+inline bool isNullJsonBinary(size_t size)
 {
-    return ref.size == 0;
+    return size == 0;
 }
 
 class FunctionsJsonExtract : public IFunction
@@ -126,7 +130,7 @@ public:
         {
             const auto & data = const_col->getDataAt(0);
             /// Null JsonBinary
-            if unlikely (isNullJsonBinary(data))
+            if unlikely (isNullJsonBinary(data.size))
             {
                 block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
                 return;
@@ -149,8 +153,11 @@ public:
             auto nullable_col = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
             block.getByPosition(result).column = ColumnConst::create(std::move(nullable_col), rows);
         }
-        else if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        else if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
         {
+            const ColumnString::Chars_t & data_from = col_from->getChars();
+            const IColumn::Offsets & offsets_from = col_from->getOffsets();
+
             auto col_to = ColumnString::create();
             ColumnString::Chars_t & data_to = col_to->getChars();
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
@@ -158,23 +165,26 @@ public:
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            size_t current_offset = 0;
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & from_data = col->getDataAt(i);
+                size_t next_offset = offsets_from[i];
+                size_t data_length = next_offset - current_offset - 1;
                 bool found;
-                if unlikely (isNullJsonBinary(from_data))
+                if unlikely (isNullJsonBinary(data_length))
                 {
                     found = false;
                 }
                 else
                 {
-                    JsonBinary json_binary(from_data.data[0], StringRef(from_data.data + 1, from_data.size - 1));
+                    JsonBinary json_binary(data_from[current_offset], StringRef(&data_from[current_offset + 1], data_length - 1));
                     found = json_binary.extract(path_expr_container_vec, write_buffer);
                 }
                 if (!found)
                     vec_null_map[i] = 1;
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
+                current_offset = next_offset;
             }
             data_to.resize(write_buffer.count());
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
@@ -222,20 +232,25 @@ public:
         size_t rows = block.rows();
         if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
         {
+            const ColumnString::Chars_t & data_from = col_from->getChars();
+            const IColumn::Offsets & offsets_from = col_from->getOffsets();
+
             auto col_to = ColumnString::create();
             ColumnString::Chars_t & data_to = col_to->getChars();
-            data_to.reserve(col_from->getChars().size()); /// Reserve the same size of from string
+            data_to.reserve(data_from.size()); /// Reserve the same size of from string
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            size_t current_offset = 0;
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & from_data = col_from->getDataAt(i);
-                auto str = JsonBinary::unquoteString(from_data);
-                write_buffer.write(str.c_str(), str.length());
+                size_t next_offset = offsets_from[i];
+                size_t data_length = next_offset - current_offset - 1;
+                JsonBinary::unquoteStringInBuffer(StringRef(&data_from[current_offset], data_length), write_buffer);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
+                current_offset = next_offset;
             }
             data_to.resize(write_buffer.count());
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
@@ -282,29 +297,34 @@ public:
         size_t rows = block.rows();
         if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
         {
+            const ColumnString::Chars_t & data_from = col_from->getChars();
+            const IColumn::Offsets & offsets_from = col_from->getOffsets();
+
             auto col_to = ColumnString::create();
             ColumnString::Chars_t & data_to = col_to->getChars();
-            data_to.reserve(col_from->getChars().size() * 3 / 2); /// Rough estimate, 1.5x from TiDB
+            data_to.reserve(data_from.size() * 3 / 2); /// Rough estimate, 1.5x from TiDB
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            size_t current_offset = 0;
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & from_data = col_from->getDataAt(i);
-                if unlikely (isNullJsonBinary(from_data))
+                size_t next_offset = offsets_from[i];
+                size_t json_length = next_offset - current_offset - 1;
+                if unlikely (isNullJsonBinary(json_length))
                 {
                     vec_null_map[i] = 1;
                 }
                 else
                 {
-                    JsonBinary json_binary(from_data.data[0], StringRef(from_data.data + 1, from_data.size - 1));
-                    auto str = json_binary.toString();
-                    write_buffer.write(str.c_str(), str.length());
+                    JsonBinary json_binary(data_from[current_offset], StringRef(&data_from[current_offset + 1], json_length - 1));
+                    json_binary.toStringInBuffer(write_buffer);
                 }
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
+                current_offset = next_offset;
             }
             data_to.resize(write_buffer.count());
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));

@@ -37,6 +37,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
+constexpr char ELEM_SEPARATOR[] = ", ";
+constexpr char KEY_VALUE_SEPARATOR[] = ": ";
 constexpr size_t HEADER_SIZE = 8; // element size + data size.
 constexpr size_t VALUE_ENTRY_SIZE = 5;
 constexpr size_t VALUE_TYPE_SIZE = 1;
@@ -242,35 +244,36 @@ String JsonBinary::DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
     return DecodeJson<true>(cursor, raw_value);
 }
 
-void JsonBinary::marshalObjectTo(String & str) const
+void JsonBinary::marshalObjectTo(JsonBinaryWriteBuffer & write_buffer) const
 {
     auto element_count = getElementCount();
-    str.append("{");
-    for (size_t i = 0; i < element_count; ++i) {
+    write_buffer.write('{');
+    for (size_t i = 0; i < element_count; ++i)
+    {
         if (i != 0)
-            str.append(", ");
+            write_buffer.write(ELEM_SEPARATOR, 2);
 
-        marshalStringTo(str, getObjectKey(i));
-        str.append(": ");
-        getObjectValue(i).marshalTo(str);
+        marshalStringTo(write_buffer, getObjectKey(i));
+        write_buffer.write(KEY_VALUE_SEPARATOR, 2);
+        getObjectValue(i).marshalTo(write_buffer);
     }
-    str.append("}");
+    write_buffer.write('}');
 }
 
-void JsonBinary::marshalArrayTo(String & str) const
+void JsonBinary::marshalArrayTo(JsonBinaryWriteBuffer & write_buffer) const
 {
     auto element_count = getElementCount();
-	str.append("[");
+	write_buffer.write('[');
 	for (size_t i = 0; i < element_count; ++i) {
         if (i != 0)
-            str.append(", ");
+            write_buffer.write(ELEM_SEPARATOR, 2);
 
-        getArrayElement(i).marshalTo(str);
+        getArrayElement(i).marshalTo(write_buffer);
     }
-    str.append("]");
+    write_buffer.write(']');
 }
 
-void JsonBinary::marshalFloat64To(String & str, double f)
+void JsonBinary::marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f)
 {
     RUNTIME_CHECK(!isinf(f) && !isnan(f));
     /// Comments from TiDB:
@@ -297,33 +300,33 @@ void JsonBinary::marshalFloat64To(String & str, double f)
     // clean up e-09 to e-9; e+09 won't be scientific formatted
     if (length >= 4 && result[length - 4] == 'e' && result[length - 3] == '-' && result[length - 2] == '0')
     {
-        str.append(result.data(), length - 2);
-        str.append(result.data() + length - 1, 1);
+        write_buffer.write(result.data(), length - 2);
+        write_buffer.write(result.data() + length - 1, 1);
     }
     else
     {
-        str.append(result);
+        write_buffer.write(result.c_str(), result.length());
     }
 }
 
-void JsonBinary::marshalLiteralTo(String & str, UInt8 lit_type)
+void JsonBinary::marshalLiteralTo(JsonBinaryWriteBuffer & write_buffer, UInt8 lit_type)
 {
     switch (lit_type) {
     case LITERAL_NIL:
-        str.append("null");
+        write_buffer.write("null", 4);
         break;
     case LITERAL_TRUE:
-        str.append("true");
+        write_buffer.write("true", 4);
         break;
     case LITERAL_FALSE:
-        str.append("false");
+        write_buffer.write("false", 5);
         break;
     }
 }
 
-void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
+void JsonBinary::marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const StringRef & ref)
 {
-    str.append("\"");
+    write_buffer.write('"');
     size_t start = 0;
     size_t ref_size = ref.size;
 
@@ -338,23 +341,23 @@ void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
                 continue;
             }
             if (start < i)
-                str.append(ref.data + start, i - start);
+                write_buffer.write(ref.data + start, i - start);
             switch (byte_c)
             {
             case '\\':
-                str.append("\\\\");
+                write_buffer.write("\\\\", 2);
                 break;
             case '"':
-                str.append("\\\"");
+                write_buffer.write("\\\"", 2);
                 break;
             case '\n':
-                str.append("\\n");
+                write_buffer.write("\\n", 2);
                 break;
             case '\r':
-                str.append("\\r");
+                write_buffer.write("\\r", 2);
                 break;
             case '\t':
-                str.append("\\t");
+                write_buffer.write("\\t", 2);
                 break;
             default:
                 // This encodes bytes < 0x20 except for \t, \n and \r.
@@ -362,9 +365,9 @@ void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
                 // because they can lead to security holes when
                 // user-controlled strings are rendered into JSON
                 // and served to some browsers.
-                str.append("\\u00");
-                str.append(JsonHexChars[byte_c >> 4], 1);
-                str.append(JsonHexChars[byte_c & 0xF], 1);
+                write_buffer.write("\\u00", 4);
+                write_buffer.write(JsonHexChars[byte_c >> 4]);
+                write_buffer.write(JsonHexChars[byte_c & 0xF]);
             }
             ++i;
             start = i;
@@ -374,8 +377,8 @@ void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
         if (res.first == UTF8Error && res.second == 1)
         {
             if (start < i)
-                str.append(ref.data + start, i - start);
-            str.append("\\ufffd"); /// append 0xFFFD as "Unknown Character" aligned with golang
+                write_buffer.write(ref.data + start, i - start);
+            write_buffer.write("\\ufffd", 6); /// append 0xFFFD as "Unknown Character" aligned with golang
             i += 1;
             start = i;
             continue;
@@ -390,9 +393,9 @@ void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
         if (res.first == 0x2028 || res.first == 0x2029)
         {
             if (start < i)
-                str.append(ref.data + start, i - start);
-            str.append("\\u202");
-            str.append(JsonHexChars[res.first & 0xF], 1);
+                write_buffer.write(ref.data + start, i - start);
+            write_buffer.write("\\u202", 5);
+            write_buffer.write(JsonHexChars[res.first & 0xF]);
             i += res.second;
             start = i;
             continue;
@@ -401,9 +404,9 @@ void JsonBinary::marshalStringTo(String & str, const StringRef & ref)
     }
 
     if (start < ref_size)
-        str.append(ref.data + start, ref_size - start);
+        write_buffer.write(ref.data + start, ref_size - start);
 
-    str.append("\"");
+    write_buffer.write('"');
 }
 
 String encodeBase64(const StringRef & str)
@@ -417,60 +420,73 @@ String encodeBase64(const StringRef & str)
     return oss.str();
 }
 
-void JsonBinary::marshalOpaqueTo(String & str, const Opaque & opaque)
+void JsonBinary::marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opaque & opaque)
 {
     const String base64_padding_ends[] = {"", "===", "==", "="};
     String out = encodeBase64(opaque.data);
     size_t out_length = out.length();
     size_t padding_index = out_length & 0x3; /// Padding to be 4 bytes alignment
     auto output = fmt::format("\"base64:type{}:{}{}\"", static_cast<UInt32>(opaque.type), out, base64_padding_ends[padding_index]);
-    str.append(output);
+    write_buffer.write(output.c_str(), output.length());
 }
 
-void JsonBinary::marshalDurationTo(String & str, Int64 duration, UInt32 fsp)
+void JsonBinary::marshalDurationTo(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt32 fsp)
 {
-    str.append("\"");
-    str.append(MyDuration(duration, static_cast<UInt8>(fsp)).toString());
-    str.append("\"");
+    write_buffer.write('"');
+    const String & duration_str = MyDuration(duration, static_cast<UInt8>(fsp)).toString();
+    write_buffer.write(duration_str.c_str(), duration_str.length());
+    write_buffer.write('"');
 }
 
-void JsonBinary::marshalTo(String & str) const
+void JsonBinary::marshalTo(JsonBinaryWriteBuffer & write_buffer) const
 {
     switch (type)
     {
     case TYPE_CODE_OPAQUE:
-        return marshalOpaqueTo(str, getOpaque());
+        return marshalOpaqueTo(write_buffer, getOpaque());
     case TYPE_CODE_STRING:
-        return marshalStringTo(str, getString());
+        return marshalStringTo(write_buffer, getString());
     case TYPE_CODE_LITERAL:
-        return marshalLiteralTo(str, data.data[0]);
+        return marshalLiteralTo(write_buffer, data.data[0]);
     case TYPE_CODE_INT64:
-        str.append(fmt::format("{}", getInt64()));
+    {
+        auto str = fmt::format("{}", getInt64());
+        write_buffer.write(str.c_str(), str.length());
         return;
+    }
     case TYPE_CODE_UINT64:
-        str.append(fmt::format("{}", getUInt64()));
+    {
+        auto str = fmt::format("{}", getUInt64());
+        write_buffer.write(str.c_str(), str.length());
         return;
+    }
     case TYPE_CODE_FLOAT64:
-        return marshalFloat64To(str, getFloat64());
+        return marshalFloat64To(write_buffer, getFloat64());
     case TYPE_CODE_ARRAY:
-        return marshalArrayTo(str);
+        return marshalArrayTo(write_buffer);
     case TYPE_CODE_OBJECT:
-        return marshalObjectTo(str);
+        return marshalObjectTo(write_buffer);
     case TYPE_CODE_DATE:
-        str.append("\"");
-        str.append(createMyDateFromCoreTime(getUInt64()).toString());
-        str.append("\"");
+    {
+        write_buffer.write('"');
+        const auto & time_str = createMyDateFromCoreTime(getUInt64()).toString();
+        write_buffer.write(time_str.c_str(), time_str.length());
+        write_buffer.write('"');
         return;
+    }
     case TYPE_CODE_DATETIME:
     case TYPE_CODE_TIMESTAMP:
-        str.append("\"");
-        str.append(createMyDateTimeFromCoreTime(getUInt64()).toString(6));
-        str.append("\"");
+    {
+        write_buffer.write('"');
+        const auto & time_str = createMyDateTimeFromCoreTime(getUInt64()).toString(6);
+        write_buffer.write(time_str.c_str(), time_str.length());
+        write_buffer.write('"');
         return;
+    }
     case TYPE_CODE_DURATION:
     {
         size_t cursor = 8;
-        return marshalDurationTo(str, getInt64(), decodeNumeric<UInt32>(cursor, data));
+        return marshalDurationTo(write_buffer, getInt64(), decodeNumeric<UInt32>(cursor, data));
     }
     /// Do nothing for default
     }
@@ -478,71 +494,47 @@ void JsonBinary::marshalTo(String & str) const
 
 String JsonBinary::toString() const
 {
-    String res;
-    res.reserve(data.size * 3 / 2);
-    marshalTo(res);
-    return res;
+    ColumnString::Chars_t data_to;
+    data_to.reserve(data.size * 3 / 2);
+    JsonBinaryWriteBuffer write_buffer(data_to);
+    marshalTo(write_buffer);
+    write_buffer.finalize();
+    return String(reinterpret_cast<char *>(data_to.data()), data_to.size());
+}
+
+void JsonBinary::toStringInBuffer(JsonBinaryWriteBuffer & write_buffer) const
+{
+    marshalTo(write_buffer);
 }
 
 String JsonBinary::unquoteJsonString(const StringRef & ref)
 {
     String result;
-    size_t ref_size = ref.size;
-    result.reserve(ref_size);
-	for (size_t i = 0; i < ref_size; ++i)
-    {
-        if (ref.data[i] == '\\')
-        {
-            ++i;
-            RUNTIME_CHECK (i != ref_size);
-            switch (ref.data[i])
-            {
-            case '"':
-                result.append("\"");
-                break;
-            case 'b':
-                result.append("\b");
-                break;
-            case 'f':
-                result.append("\f");
-                break;
-            case 'n':
-                result.append("\n");
-                break;
-            case 'r':
-                result.append("\r");
-                break;
-            case 't':
-                result.append("\t");
-                break;
-            case '\\':
-                result.append("\\");
-                break;
-            case 'u':
-            {
-                RUNTIME_CHECK(i + 4 <= ref_size);
-                for (size_t j = i; j < i + 4; ++j)
-                    RUNTIME_CHECK(isHexDigit(ref.data[j]));
-                auto str = String(ref.data[i], 4);
-                auto val = std::stoul(str, nullptr, 16);
-                size_t utf_length = 0;
-                char utf_code_array[4];
-                utf8Encode(utf_code_array, utf_length, val);
-                result.append(utf_code_array, utf_length);
-                i += 4;
-                break;
-            }
-            default:
-                // For all other escape sequences, backslash is ignored.
-                result.append(ref.data + i, 1);
-            }
-        }
-        else
-        {
-            result.append(ref.data + i, 1);
-        }
-    }
+    WriteBufferFromVector<String> write_buffer(result);
+    unquoteJsonStringInBuffer(ref, write_buffer);
+    write_buffer.finalize();
     return result;
+}
+
+void JsonBinary::unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer)
+{
+    auto length = ref.size;
+    if (length < 2)
+    {
+        write_buffer.write(ref.data, ref.size);
+        return;
+    }
+
+    if (ref.data[0] == '"' && ref.data[length - 1] == '"')
+    {
+        // Remove prefix and suffix '"' before unquoting
+        unquoteJsonStringInBuffer(StringRef(ref.data + 1, length -2), write_buffer);
+    }
+    else
+    {
+        // if value is not double quoted, do nothing
+        write_buffer.write(ref.data, ref.size);
+    }
 }
 
 String JsonBinary::unquoteString(const StringRef & ref)

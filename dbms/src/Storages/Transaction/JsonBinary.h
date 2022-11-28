@@ -15,13 +15,15 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 
 #include <unordered_set>
 
 #include "Columns/ColumnString.h"
-#include <IO/WriteBufferFromVector.h>
+#include "Common/utf8Utility.h"
+#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -133,14 +135,17 @@ public:
 
     /// getElementCount gets the count of Object or Array only.
     UInt32 getElementCount() const;
-    String toString() const;
+    String toString() const; /// For test usage, not efficient at all
+    void toStringInBuffer(JsonBinaryWriteBuffer & write_buffer) const;
 
     /// Extract receives several path expressions as arguments, matches them in bj, and returns true if any match:
     ///	Serialize final results in 'write_buffer'
     bool extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer);
 
     static String unquoteString(const StringRef & ref);
+    static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
     static String unquoteJsonString(const StringRef & ref);
+
 
     static void SkipJson(size_t & cursor, const String & raw_value);
     static String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
@@ -158,9 +163,9 @@ private:
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;
 
-    void marshalTo(String & str) const;
-    void marshalObjectTo(String & str) const;
-    void marshalArrayTo(String & str) const;
+    void marshalTo(JsonBinaryWriteBuffer & write_buffer) const;
+    void marshalObjectTo(JsonBinaryWriteBuffer & write_buffer) const;
+    void marshalArrayTo(JsonBinaryWriteBuffer & write_buffer) const;
 
     /// 'one' parameter is not used now, copied from TiDB's implementation, for future usage
     void extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonPathExprRawPtr path_expr_ptr, DupCheckSet & dup_check_set, bool one) const;
@@ -168,14 +173,16 @@ private:
     UInt32 binarySearchKey(const JsonPathObjectKey & key, UInt32 element_count) const;
     std::optional<JsonBinary> searchObjectKey(JsonPathObjectKey & key) const;
 
+    template <class WriteBuffer>
+    static void unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & write_buffer);
     static void buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
     static void buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
-    static void marshalFloat64To(String & str, double f);
-    static void marshalLiteralTo(String & str, UInt8 literal);
-    static void marshalStringTo(String & str, const StringRef & ref);
+    static void marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f);
+    static void marshalLiteralTo(JsonBinaryWriteBuffer & write_buffer, UInt8 literal);
+    static void marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const StringRef & ref);
 
-    static void marshalOpaqueTo(String & str, const Opaque & o);
-    static void marshalDurationTo(String & str, Int64 duration, UInt32 fsp);
+    static void marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opaque & o);
+    static void marshalDurationTo(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt32 fsp);
 
     JsonType type;
     /// 'data' doesn't contain type byte.
@@ -183,4 +190,63 @@ private:
     /// Avoid memory re-allocations
     StringRef data;
 };
+
+template <class WriteBuffer>
+void JsonBinary::unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & write_buffer)
+{
+    size_t ref_size = ref.size;
+    for (size_t i = 0; i < ref_size; ++i)
+    {
+        if (ref.data[i] == '\\')
+        {
+            ++i;
+            RUNTIME_CHECK (i != ref_size);
+            switch (ref.data[i])
+            {
+            case '"':
+                write_buffer.write('\"');
+                break;
+            case 'b':
+                write_buffer.write('\b');
+                break;
+            case 'f':
+                write_buffer.write('\f');
+                break;
+            case 'n':
+                write_buffer.write('\n');
+                break;
+            case 'r':
+                write_buffer.write('\r');
+                break;
+            case 't':
+                write_buffer.write('\t');
+                break;
+            case '\\':
+                write_buffer.write('\\');
+                break;
+            case 'u':
+            {
+                RUNTIME_CHECK(i + 4 <= ref_size);
+                for (size_t j = i; j < i + 4; ++j)
+                    RUNTIME_CHECK(isHexDigit(ref.data[j]));
+                auto str = String(ref.data + i, 4);
+                auto val = std::stoul(str, nullptr, 16);
+                size_t utf_length = 0;
+                char utf_code_array[4];
+                utf8Encode(utf_code_array, utf_length, val);
+                write_buffer.write(utf_code_array, utf_length);
+                i += 4;
+                break;
+            }
+            default:
+                // For all other escape sequences, backslash is ignored.
+                write_buffer.write(ref.data[i]);
+            }
+        }
+        else
+        {
+            write_buffer.write(ref.data[i]);
+        }
+    }
+}
 } // namespace DB
