@@ -92,7 +92,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         }
     }
 
-    auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams) {
+    auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams, const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) {
         ExecutionSummary current;
         /// part 1: local execution info
         // get execution info from streams
@@ -106,8 +106,8 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
             }
             current.concurrency++;
         }
-        // get execution info from dag context's scan_context
-        if (const auto & iter = dag_context.scan_context_map.find(executor_id); iter != dag_context.scan_context_map.end())
+        // get execution info from scan_context
+        if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         {
             current.scan_context->merge(*(iter->second));
         }
@@ -149,7 +149,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     if (dag_context.return_executor_id)
     {
         for (auto & p : dag_context.getProfileStreamsMap())
-            fill_execution_summary(p.first, p.second);
+            fill_execution_summary(p.first, p.second, dag_context.scan_context_map);
     }
     else
     {
@@ -159,7 +159,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         {
             auto it = profile_streams_map.find(executor_id);
             assert(it != profile_streams_map.end());
-            fill_execution_summary(executor_id, it->second);
+            fill_execution_summary(executor_id, it->second, dag_context.scan_context_map);
         }
     }
 

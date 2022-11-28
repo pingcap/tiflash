@@ -782,7 +782,15 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
             const auto & scan_context = dag_context.scan_context_map.at(table_scan.getTableScanExecutorID());
-            pipeline.streams = std::dynamic_pointer_cast<StorageDeltaMerge>(storage)->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
+
+            // We need read with scan_context here, while IStorage::read() can't support it.
+            // Thus, we need first to cast to StorageDeltaMerge to call the corresponding read() function.
+            StorageDeltaMergePtr delta_merge_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            if (delta_merge_storage == nullptr)
+            {
+                throw TiFlashException(fmt::format("delta_merge_storage which cast from storage is null"), Errors::Storage::CastError);
+            }
+            pipeline.streams = delta_merge_storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
 
             injectFailPointForLocalRead(query_info);
 

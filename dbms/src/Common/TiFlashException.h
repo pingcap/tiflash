@@ -155,6 +155,7 @@ namespace DB
             "");)                                                                                                                    \
     C(Types, E(Truncated, "Data is truncated during conversion.", "", ""); E(WrongValue, "Input value is in wrong format", "", "");) \
     C(Expression, E(DivisionByZero, "Division by 0.", "", "");)                                                                      \
+    C(Storage, E(CastError, "Storage cast error.", "", "");)                                                                         \
     C(Checksum,                                                                                                                      \
         E(Missing, "Checksum info for disk I/O checksum was expected but not found.",                                                \
             "This may be caused by a failure during data file format upgrade or file lost; \n"                                       \
