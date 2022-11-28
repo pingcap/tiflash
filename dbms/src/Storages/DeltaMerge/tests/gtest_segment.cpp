@@ -20,6 +20,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
 #include <gtest/gtest.h>
@@ -1155,10 +1156,10 @@ class IsEmptyTest : public SegmentTestBasic
 TEST_F(IsEmptyTest, Basic)
 try
 {
-    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    });
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
     ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
@@ -1218,17 +1219,17 @@ try
 
     // We will consider it to be empty after compaction.
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    });
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 
     // For empty segment, delete range will not cause it to be "not empty".
     deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-    fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    });
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 }
 CATCH
 
@@ -1244,10 +1245,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This is the slow path, because ColumnFileInMemory exists for both left and right segments after logical split.
-    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptySlowPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
-    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
 }
 CATCH
 
@@ -1264,10 +1265,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This is the slow path, because ColumnFileTiny exists for both left and right segments after logical split.
-    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptySlowPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
-    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
 }
 CATCH
 
@@ -1285,10 +1286,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This goes into the fast path thanks to pack filter.
-    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 }
 CATCH
 
@@ -1310,10 +1311,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This is the slow path, because pack filter will not work.
-    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*seg_2));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptySlowPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*seg_2));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*seg_2));
-    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
 
     ASSERT_FALSE(isSegmentDefinitelyEmpty(*seg_3));
     ASSERT_EQ(42, getSegmentRowNum(*seg_3));
