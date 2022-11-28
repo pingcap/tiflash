@@ -48,7 +48,8 @@ try
     auto block1 = fillBlock({.range = {0, 100}});
     ASSERT_THROW({
         ingestFiles({.range = {20, 40}, .blocks = {block1}, .clear = false});
-    },  DB::Exception);
+    },
+                 DB::Exception);
 }
 CATCH
 
@@ -95,7 +96,8 @@ try
     auto block2 = fillBlock({.range = {100, 142}});
     ASSERT_THROW({
         ingestFiles({.range = {0, 500}, .blocks = {block2, block1}});
-    }, DB::Exception);
+    },
+                 DB::Exception);
 }
 CATCH
 
@@ -112,7 +114,7 @@ try
     ASSERT_EQ(128, getRowsN(0, 128));
 
     // Test that if we ingest a empty file list, the data in range will be removed.
-    ingestFiles({ .range = {32, 256}, .blocks = {}, .clear = true });
+    ingestFiles({.range = {32, 256}, .blocks = {}, .clear = true});
 
     // After ingesting, the data in [32, 128) should be overwrite by the data in ingested files.
     ASSERT_EQ(32, getRowsN());
