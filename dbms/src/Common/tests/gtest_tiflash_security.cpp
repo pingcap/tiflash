@@ -65,6 +65,15 @@ cert_allowed_cn="tidb"
     auto new_config = loadConfigFromString(test);
     tiflash_config.update(*new_config);
     ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("tidb"), 1);
+
+    test =
+        R"(
+[security]
+cert_allowed_cn="tidb"
+        )";
+    new_config = loadConfigFromString(test);
+    auto new_tiflash_config = TiFlashSecurityConfig(*new_config, log);
+    ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
 }
 
 TEST(TestTiFlashSecurity, Update)

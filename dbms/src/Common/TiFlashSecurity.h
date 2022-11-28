@@ -157,7 +157,6 @@ public:
                 parseAllowedCN(verify_cns);
             }
 
-            // redact_info_log = config.getBool("security.redact-info-log", false);
             // Mostly options name are combined with "_", keep this style
             if (config.has("security.redact_info_log"))
             {
