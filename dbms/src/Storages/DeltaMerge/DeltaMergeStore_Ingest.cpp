@@ -492,6 +492,13 @@ void DeltaMergeStore::ingestFiles(
                 ext_file.toString());
             last_end = ext_file.range.end;
         }
+
+        // Check whether all external files are contained by the range.
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(compare(range.getStart(), ext_file.range.getStart()) <= 0);
+            RUNTIME_CHECK(compare(range.getEnd(), ext_file.range.getEnd()) >= 0);
+        }
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
