@@ -164,7 +164,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         wbs.writeMeta();
 
-        segment->abandon(segment_lock, dm_context);
+        segment->abandon(dm_context);
         segments.erase(range.getEnd());
         id_to_segment.erase(segment->segmentId());
 
@@ -309,10 +309,9 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
         wbs.writeMeta();
 
-        for (size_t i = 0; i < ordered_segments.size(); ++i)
+        for (const auto & seg : ordered_segments)
         {
-            const auto & seg = ordered_segments[i];
-            seg->abandon(locks[i], dm_context);
+            seg->abandon(dm_context);
             segments.erase(seg->getRowKeyRange().getEnd());
             id_to_segment.erase(seg->segmentId());
         }
@@ -458,7 +457,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[new_segment->segmentId()] = new_segment;
 
-        segment->abandon(segment_lock, dm_context);
+        segment->abandon(dm_context);
 
         if constexpr (DM_RUN_CHECK)
         {
@@ -533,7 +532,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
                 segment->info(),
                 new_segment->info());
 
-            segment->abandon(segment_lock, dm_context);
+            segment->abandon(dm_context);
             segments[segment->getRowKeyRange().getEnd()] = new_segment;
             id_to_segment[segment->segmentId()] = new_segment;
         }

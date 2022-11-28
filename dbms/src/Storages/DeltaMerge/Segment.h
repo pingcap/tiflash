@@ -498,11 +498,10 @@ public:
      * Marks this segment as abandoned.
      * Note: Segment member functions never abandon the segment itself.
      * The abandon state is usually triggered by the DeltaMergeStore.
-     *
-     * You must hold a Segment update lock in order to abandon this segment.
+     * When triggering, remember to hold a unique_lock from the DeltaMergeStore.
      * Otherwise, the abandon operation may break an existing segment update operation.
      */
-    void abandon(const Lock &, DMContext & context)
+    void abandon(DMContext & context)
     {
         LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);

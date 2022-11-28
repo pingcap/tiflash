@@ -363,7 +363,7 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
                 id_to_segment.emplace(new_previous_segment->segmentId(), new_previous_segment);
             }
             auto drop_lock = segment_to_drop->mustGetUpdateLock();
-            segment_to_drop->abandon(drop_lock, *dm_context);
+            segment_to_drop->abandon(*dm_context);
             segment_to_drop->drop(global_context.getFileProvider(), wbs);
         }
     }
