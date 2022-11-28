@@ -25,6 +25,8 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     , join(join_)
 {
     children.push_back(input);
+
+    RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
 }
 
 Block HashJoinProbeBlockInputStream::getTotals()
