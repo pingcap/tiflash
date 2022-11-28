@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/config.h>
+#include <common/types.h>
 #include <re2/re2.h>
 
 #include <memory>
@@ -112,7 +113,13 @@ public:
         out_required_substring_is_prefix = required_substring_is_prefix;
     }
 
+    Int64 instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op);
+
 private:
+    Int64 processEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
+    Int64 getSubstrMatchedIndex(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op);
+
+
     bool is_trivial;
     bool required_substring_is_prefix;
     bool is_case_insensitive;
