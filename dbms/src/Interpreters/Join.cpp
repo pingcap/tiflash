@@ -1691,13 +1691,21 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, *offsets_to_replicate);
         }
 
-        if (rows != process_rows)
-        {
-            offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
-        }
-
         if (rows != 0)
         {
+            if (isLeftSemiFamily(kind))
+            {
+                const auto helper_pos = block.getPositionByName(match_helper_name);
+                auto new_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
+                new_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
+                block.safeGetByPosition(helper_pos).column = std::move(new_col);
+            }
+
+            if (rows != process_rows)
+            {
+                offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
+            }
+
             probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
             probe_process_info_ptr->end_row = probe_process_info_ptr->start_row;
         }
