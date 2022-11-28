@@ -841,5 +841,15 @@ protected:
 #define ASSERT_COLUMNS_EQ_R(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), true))
 /// unrestrictly checking columns equality, only checking data set equality
 #define ASSERT_COLUMNS_EQ_UR(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), false))
+
+/// Check the profile event change after the body.
+#define ASSERT_PROFILE_EVENT(event, diff_expr, ...)                          \
+    do                                                                       \
+    {                                                                        \
+        auto profile_event_count = ProfileEvents::get(event);                \
+        {__VA_ARGS__};                                                       \
+        ASSERT_EQ(profile_event_count diff_expr, ProfileEvents::get(event)); \
+    } while (false);
+
 } // namespace tests
 } // namespace DB

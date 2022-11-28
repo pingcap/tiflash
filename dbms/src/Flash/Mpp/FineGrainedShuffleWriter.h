@@ -36,7 +36,6 @@ public:
     void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
     void flush() override;
-    void finishWrite() override;
 
 private:
     void batchWriteFineGrainedShuffle();
