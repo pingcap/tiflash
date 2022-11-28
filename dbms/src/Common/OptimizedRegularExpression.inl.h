@@ -488,11 +488,8 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const 
 
 static inline void checkArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
-    if (unlikely(ret_op != 0 && ret_op != 1))
-        throw DB::Exception("Incorrect argument to regexp function: return_option must be 1 or 0");
-
-    if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
-        throw DB::Exception("Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(!(ret_op != 0 && ret_op != 1), "Incorrect argument to regexp function: return_option must be 1 or 0");
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
 }
 
 static inline void makeOccurValid(Int64 & occur)

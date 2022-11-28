@@ -2694,7 +2694,7 @@ TEST_F(Regexp, RegexpInstr)
                              createColumn<Int32>({}),
                              createColumn<Int32>({}),
                              createColumn<String>({})));
-        
+
         ASSERT_COLUMN_EQ(createColumn<Int64>({}),
                          executeFunction(
                              "regexp_instr",
