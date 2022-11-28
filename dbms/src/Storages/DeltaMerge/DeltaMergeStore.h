@@ -266,11 +266,13 @@ public:
 
     void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
                      const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
