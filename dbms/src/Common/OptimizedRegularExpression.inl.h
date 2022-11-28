@@ -480,10 +480,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const 
         return 0;
 
     StringPieceType expr_sp(expr, expr_size);
-    bool success = RegexType::FindAndConsume(&expr_sp, *re2);
-    if (!success)
-        return 0;
-    return pos;
+    return RegexType::FindAndConsume(&expr_sp, *re2) ? pos : 0;
 }
 
 static inline void checkArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
@@ -509,8 +506,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const c
 
     while (occur > 0)
     {
-        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
-        if (!success)
+        if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
             return 0;
 
         --occur;
