@@ -124,9 +124,9 @@ Int64 getIntFromField(Field & field)
 {
     switch (field.getType())
     {
-    case Field::Types::Which::Int64:
+    case Field::Types::Int64:
         return field.safeGet<Int64>();
-    case Field::Types::Which::UInt64:
+    case Field::Types::UInt64:
         return field.safeGet<UInt64>();
     default:
         throw Exception("Unexpected int type");
@@ -206,9 +206,6 @@ public:
     {
         // Deep copy
         const_string_data = new char[str_ref.size];
-        if (const_string_data == nullptr)
-            throw Exception("ParamString constructor get a nullptr");
-
         memcpy(const_string_data, str_ref.data, str_ref.size);
         const_string_data_size = str_ref.size;
         if constexpr (!is_const)
@@ -1486,7 +1483,7 @@ public:
         {
         case REGEXP_INSTR_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[5]).column;
-        case REGEXP_INSTR_MAX_PARAM_NUM -1:
+        case REGEXP_INSTR_MAX_PARAM_NUM - 1:
             col_return_option = block.getByPosition(arguments[4]).column;
         case REGEXP_INSTR_MAX_PARAM_NUM - 2:
             col_occur = block.getByPosition(arguments[3]).column;
@@ -1841,8 +1838,7 @@ private:
             Int64 pos,
             Int64 occur) const
     {
-        bool success = regexp.substr(subject, subject_size, res_ref, pos, occur);
-        if (success)
+        if (regexp.substr(subject, subject_size, res_ref, pos, occur))
         {
             col_res->insertData(res_ref.data, res_ref.size);
             null_map[idx] = 0;

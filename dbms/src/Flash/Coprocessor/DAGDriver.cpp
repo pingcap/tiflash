@@ -110,6 +110,11 @@ try
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
+        if (dag_context.collect_execution_summaries)
+        {
+            ExecutionSummaryCollector summary_collector(dag_context);
+            summary_collector.addExecuteSummaries(*dag_response);
+        }
     }
     else
     {

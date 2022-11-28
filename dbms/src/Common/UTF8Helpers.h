@@ -90,12 +90,8 @@ inline size_t countCodePoints(const UInt8 * data, size_t size)
 static inline Int64 utf8Pos2bytePos(const UInt8 * str, Int64 utf8_pos)
 {
     Int64 byte_index = 0;
-    utf8_pos--;
-    while (utf8_pos > 0)
-    {
+    while (--utf8_pos > 0)
         byte_index += seqLength(str[byte_index]);
-        utf8_pos--;
-    }
     return byte_index + 1;
 }
 
