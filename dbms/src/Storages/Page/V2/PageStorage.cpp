@@ -954,6 +954,8 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
+    // try compact the in-mem version list
+    versioned_page_entries.tryCompact();
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     ExternalPageCallbacks::PathAndIdsVec external_pages;
