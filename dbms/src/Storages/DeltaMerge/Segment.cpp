@@ -421,7 +421,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
             auto stream = builder
                               .setRowsThreshold(std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
                               .onlyReadOnePackEveryTime()
-                              .build(file, *columns_to_read, read_ranges);
+                              .build(file, *columns_to_read, read_ranges, dm_context.scan_context);
             streams.push_back(stream);
         }
 
@@ -457,6 +457,9 @@ bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & rang
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
+    Stopwatch watch;
+    SCOPE_EXIT(
+        dm_context.scan_context->total_create_snapshot_time_ms += watch.elapsedMilliseconds(););
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
@@ -1008,7 +1011,8 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
                       .build(
                           read_file,
                           /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
-                          /*rowkey_ranges=*/{RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+                          /*rowkey_ranges=*/{RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
+                          dm_context.scan_context);
 
     stream->readPrefix();
     auto block = stream->read();
