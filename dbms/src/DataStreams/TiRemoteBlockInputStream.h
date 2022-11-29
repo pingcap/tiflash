@@ -24,6 +24,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -78,6 +79,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows = execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations = execution_summary.num_iterations();
                 remote_execution_summary.concurrency = execution_summary.concurrency();
+                DM::ScanContext scan_context;
+                scan_context.deserialize(execution_summary.tiflash_scan_context());
+                remote_execution_summary.scan_context->merge(scan_context);
             }
         }
         execution_summaries_inited[index].store(true);
@@ -115,6 +119,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 remote_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
                 remote_execution_summary.num_iterations += execution_summary.num_iterations();
                 remote_execution_summary.concurrency += execution_summary.concurrency();
+                DM::ScanContext scan_context;
+                scan_context.deserialize(execution_summary.tiflash_scan_context());
+                remote_execution_summary.scan_context->merge(scan_context);
             }
         }
     }
@@ -195,6 +202,17 @@ public:
         if (kill)
             remote_reader->cancel();
     }
+
+    void readPrefixImpl() override
+    {
+        // for CoprocessorReader, we send Coprocessor requests in readPrefixImpl
+        if constexpr (std::is_same_v<RemoteReader, CoprocessorReader>)
+        {
+            remote_reader->open();
+        }
+        // note that for ExchangeReceiver, we have sent EstablishMPPConnection requests before we construct the pipeline
+    }
+
     Block readImpl() override
     {
         if (block_queue.empty())

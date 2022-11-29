@@ -483,10 +483,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(c
         return 0;
 
     StringPieceType expr_sp(expr, expr_size);
-    bool success = RegexType::FindAndConsume(&expr_sp, *re2);
-    if (!success)
-        return 0;
-    return pos;
+    return RegexType::FindAndConsume(&expr_sp, *re2) ? pos : 0;
 }
 
 template <bool thread_safe>
@@ -497,8 +494,7 @@ bool OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(c
     
     StringPieceType expr_sp(expr, expr_size);
     StringPieceType matched_str;
-    bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
-    if (!success)
+    if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
         return false;
 
     res.data = matched_str.data();
@@ -535,17 +531,13 @@ void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(
 
 static inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
-    if (unlikely(ret_op != 0 && ret_op != 1))
-        throw DB::Exception("Incorrect argument to regexp function: return_option must be 1 or 0");
-
-    if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
-        throw DB::Exception("Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(!(ret_op != 0 && ret_op != 1), "Incorrect argument to regexp function: return_option must be 1 or 0");
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
 }
 
 static inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
-        throw DB::Exception("Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
 }
 
 static inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos)
@@ -577,10 +569,10 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subjec
 
     StringPieceType expr_sp(expr, expr_size);
     StringPieceType matched_str;
+
     while (occur > 0)
     {
-        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
-        if (!success)
+        if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
             return 0;
 
         --occur;
@@ -601,8 +593,7 @@ bool OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subjec
     StringPieceType matched_str;
     while (occur > 0)
     {
-        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
-        if (!success)
+        if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
             return false;
 
         --occur;

@@ -14,7 +14,10 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/types.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -25,6 +28,9 @@ struct ExecutionSummary
     UInt64 num_produced_rows = 0;
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
+
+    std::unique_ptr<DB::DM::ScanContext> scan_context = std::make_unique<DB::DM::ScanContext>();
+
     ExecutionSummary() = default;
 
     void merge(const ExecutionSummary & other, bool streaming_call);
