@@ -92,8 +92,9 @@ public:
         // compact the versions.
         last_try_compact_index.store(release_idx);
 
+        // compact version list with the latest snapshot.
         // do NOT increase the index by this snapshot
-        auto snap = getSnapshot("ps-mem-compact", false);
+        auto snap = getSnapshot("ps-mem-compact", /*trigger_next_compact*/ false);
         compactOnDeltaRelease(snap->view.getSharedTailVersion());
 
         return true;

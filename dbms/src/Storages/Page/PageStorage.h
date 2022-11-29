@@ -326,6 +326,13 @@ public:
         return gcImpl(not_skip, write_limiter, read_limiter);
     }
 
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    virtual bool compactInMemVersions()
+    {
+        return false;
+    }
+
     // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
     virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};

@@ -123,6 +123,7 @@ namespace DB
         F(type_seg_merge, {"type", "seg_merge"}), F(type_place_index_update, {"type", "place_index_update"}))                             \
     M(tiflash_storage_page_snapshot, "Bucketed histogram of storage's snapshot", Histogram,                           \
         F(type_minor_compact_release, {{"type", "minor_compact_release"}}, ExpBuckets{0.001, 2, 20}),                                     \
+        F(type_version_compact_v2, {{"type", "version_compact_v2"}}, ExpBuckets{0.001, 2, 20}),                                     \
         F(type_lifetime_v3, {{"type", "lifetime_v3"}}, ExpBuckets{0.001, 2, 20}),                                                   \
         F(type_lifetime_v2, {{"type", "lifetime_v2"}}, ExpBuckets{0.001, 2, 20}))                                           \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \

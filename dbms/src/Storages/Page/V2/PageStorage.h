@@ -129,6 +129,8 @@ public:
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
+    bool compactInMemVersions() override;
+
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
     FileProviderPtr getFileProvider() const { return file_provider; }

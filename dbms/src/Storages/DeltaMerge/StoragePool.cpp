@@ -501,6 +501,10 @@ void StoragePool::enableGC()
     if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
+        ps_version_compact_handle = global_context.getPSBackgroundPool().addTask(
+            [this] { return this->doV2VersionCompact(global_context.getSettingsRef()); },
+            /*multi*/ false,
+            /*iterval_ms*/ 60 * 1000);
     }
 }
 
@@ -573,6 +577,18 @@ bool StoragePool::doV2Gc(const Settings & settings)
     config = extractConfig(settings, StorageType::Log);
     log_storage_v2->reloadSettings(config);
     done_anything |= log_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+    return done_anything;
+}
+
+bool StoragePool::doV2VersionCompact(const Settings & /*settings*/)
+{
+    if (run_mode == PageStorageRunMode::ONLY_V3)
+        return false;
+
+    bool done_anything = false;
+    done_anything |= meta_storage_v2->compactInMemVersions();
+    done_anything |= data_storage_v2->compactInMemVersions();
+    done_anything |= log_storage_v2->compactInMemVersions();
     return done_anything;
 }
 

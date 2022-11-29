@@ -170,6 +170,7 @@ public:
 private:
 #endif
     bool doV2Gc(const Settings & settings);
+    bool doV2VersionCompact(const Settings & settings);
 
     void forceTransformMetaV2toV3();
     void forceTransformDataV2toV3();
@@ -211,6 +212,7 @@ private:
     std::atomic<PageId> max_meta_page_id = 0;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
+    BackgroundProcessingPool::TaskHandle ps_version_compact_handle = nullptr;
 
     CurrentMetrics::Increment storage_pool_metrics;
 };

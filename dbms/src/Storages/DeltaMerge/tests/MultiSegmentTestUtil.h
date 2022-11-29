@@ -136,7 +136,6 @@ public:
                 ASSERT_EQ(expected_delta_rows[i], 0);
                 ASSERT_GT(expected_stable_rows[i], 0); // We don't check the exact rows of each segment.
                 total_stable_rows += expected_stable_rows[i];
-                (void)_key;
             }
             ASSERT_EQ(total_stable_rows, 4 * n_avg_rows_per_segment);
         }

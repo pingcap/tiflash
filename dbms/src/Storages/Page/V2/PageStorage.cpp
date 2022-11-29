@@ -985,6 +985,20 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
+bool PageStorage::compactInMemVersions()
+{
+    Stopwatch watch;
+    // try compact the in-mem version list
+    bool done_anything = versioned_page_entries.tryCompact();
+    if (done_anything)
+    {
+        auto elapsed_sec = watch.elapsedSeconds();
+        LOG_FMT_INFO(log, "{} GC in-mem versions cost {:.3f} sec.", storage_name, elapsed_sec);
+        GET_METRIC(tiflash_storage_page_snapshot, type_version_compact_v2).Observe(elapsed_sec);
+    }
+    return done_anything;
+}
+
 bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
@@ -996,9 +1010,6 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         bool is_running = true;
         gc_is_running.compare_exchange_strong(is_running, false);
     });
-
-    // try compact the in-mem version list
-    versioned_page_entries.tryCompact();
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     ExternalPageCallbacks::PathAndIdsVec external_pages;
