@@ -179,6 +179,19 @@ GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
     }
 }
 
+// We need to fill something into StringColumn when all elements are null
+inline void fillColumnStringWhenAllNull(decltype(ColumnString::create()) & col_res, size_t size)
+{
+    auto & col_res_data = col_res->getChars();
+    auto & col_res_offsets = col_res->getOffsets();
+    size_t offset = 0;
+    for (size_t i = 0; i < size; ++i)
+    {
+        col_res_data[offset++] = 0;
+        col_res_offsets[i] = offset;
+    }
+}
+
 template <bool is_const>
 class ParamString
 {
@@ -1516,52 +1529,52 @@ private:
 #undef GET_MATCH_TYPE_ACTUAL_PARAM
 #undef EXECUTE_REGEXP_INSTR
 
-#define EXECUTE_REGEXP_SUBSTR() \
-    do \
-    { \
+#define EXECUTE_REGEXP_SUBSTR()                                                                                                                                                                             \
+    do                                                                                                                                                                                                      \
+    {                                                                                                                                                                                                       \
         REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(POS_PARAM_PTR_VAR_NAME), *(OCCUR_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
 // Method to get actual match type param
-#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                                          \
-    do                                                                                                                             \
-    { \
+#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                               \
+    do                                                                                                              \
+    {                                                                                                               \
         GET_ACTUAL_STRING_PARAM(MATCH_TYPE_PV_VAR_NAME, MATCH_TYPE_PARAM_PTR_VAR_NAME, ({EXECUTE_REGEXP_SUBSTR()})) \
     } while (0);
 
 // Method to get actual occur param
-#define GET_OCCUR_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_OCCUR_ACTUAL_PARAM()                                                                             \
+    do                                                                                                       \
+    {                                                                                                        \
         GET_ACTUAL_INT_PARAM(OCCUR_PV_VAR_NAME, OCCUR_PARAM_PTR_VAR_NAME, ({GET_MATCH_TYPE_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual position param
-#define GET_POS_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_POS_ACTUAL_PARAM()                                                                      \
+    do                                                                                              \
+    {                                                                                               \
         GET_ACTUAL_INT_PARAM(POS_PV_VAR_NAME, POS_PARAM_PTR_VAR_NAME, ({GET_OCCUR_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual pattern param
-#define GET_PAT_ACTUAL_PARAM()                                                                                           \
-    do                                                                                                                       \
-    {                                                                                                                        \
+#define GET_PAT_ACTUAL_PARAM()                                                                       \
+    do                                                                                               \
+    {                                                                                                \
         GET_ACTUAL_STRING_PARAM(PAT_PV_VAR_NAME, PAT_PARAM_PTR_VAR_NAME, ({GET_POS_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual expression param
-#define GET_EXPR_ACTUAL_PARAM()                                                                                 \
-    do                                                                                                              \
-    {                                                                                                               \
+#define GET_EXPR_ACTUAL_PARAM()                                                                        \
+    do                                                                                                 \
+    {                                                                                                  \
         GET_ACTUAL_STRING_PARAM(EXPR_PV_VAR_NAME, EXPR_PARAM_PTR_VAR_NAME, ({GET_PAT_ACTUAL_PARAM()})) \
     } while (0);
 
 // The entry to get actual params and execute regexp functions
 #define GET_ACTUAL_PARAMS_AND_EXECUTE() \
-    do                                       \
-    {                                        \
-        GET_EXPR_ACTUAL_PARAM()          \
+    do                                  \
+    {                                   \
+        GET_EXPR_ACTUAL_PARAM()         \
     } while (0);
 
 // Implementation of regexp_substr function
@@ -1616,8 +1629,8 @@ public:
         GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
 
         // Container will not be used when parm is const
-        const void * pos_container =  pos_param.getContainer();
-        const void * occur_container =  occur_param.getContainer();
+        const void * pos_container = pos_param.getContainer();
+        const void * occur_container = occur_param.getContainer();
 
         // Const value will not be used when param is not const
         Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
@@ -1642,10 +1655,9 @@ public:
             pat = fmt::format("({})", pat);
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
-            StringRef res_ref;
-            bool success = regexp.substr(expr.c_str(), expr.size(), res_ref, pos_const_val, occur_const_val);
-            if (success)
-                res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(res_ref)));
+            auto res = regexp.substr(expr.c_str(), expr.size(), pos_const_val, occur_const_val);
+            if (res)
+                res_arg.column = res_arg.type->createColumnConst(col_size, toField(res.value().toString()));
             else
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
             return;
@@ -1653,24 +1665,25 @@ public:
 
         // Initialize result column
         auto col_res = ColumnString::create();
+        col_res->reserve(col_size * 15);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
 
-#define GET_POS_VALUE(idx) \
-    do \
-    { \
-        if constexpr (PosT::isConst()) \
-            pos = pos_const_val; \
-        else \
+#define GET_POS_VALUE(idx)                          \
+    do                                              \
+    {                                               \
+        if constexpr (PosT::isConst())              \
+            pos = pos_const_val;                    \
+        else                                        \
             pos = get_pos_func(pos_container, idx); \
     } while (0);
 
-#define GET_OCCUR_VALUE(idx) \
-    do \
-    { \
-        if constexpr (OccurT::isConst()) \
-            occur = occur_const_val; \
-        else \
+#define GET_OCCUR_VALUE(idx)                              \
+    do                                                    \
+    {                                                     \
+        if constexpr (OccurT::isConst())                  \
+            occur = occur_const_val;                      \
+        else                                              \
             occur = get_occur_func(occur_container, idx); \
     } while (0);
 
@@ -1679,10 +1692,9 @@ public:
         Int64 pos;
         Int64 occur;
         String match_type;
-        StringRef res_ref;
 
-        auto nullmap_col = ColumnUInt8::create();
-        typename ColumnUInt8::Container & null_map = nullmap_col->getData();
+        auto null_map_col = ColumnUInt8::create();
+        typename ColumnUInt8::Container & null_map = null_map_col->getData();
         null_map.resize(col_size);
 
         // Start to execute instr
@@ -1694,10 +1706,9 @@ public:
                 regexp = memorize<true>(pat_param, match_type_param, collator);
                 if (regexp == nullptr)
                 {
-                    auto nullmap_col = ColumnUInt8::create();
-                    typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize(col_size, 1);
-                    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+                    null_map.resize(col_size, 1);
+                    fillColumnStringWhenAllNull(col_res, col_size);
+                    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
                     return;
                 }
             }
@@ -1717,7 +1728,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    executeAndSetResult(*regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
+                    executeAndSetResult(*regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, pos, occur);
                 }
             }
             else
@@ -1728,7 +1739,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
 
-                    executeAndSetResult(*regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
+                    executeAndSetResult(*regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, pos, occur);
                 }
             }
         }
@@ -1756,7 +1767,7 @@ public:
                     pat = fmt::format("({})", pat);
 
                     auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
+                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, pos, occur);
                 }
             }
             else
@@ -1774,13 +1785,13 @@ public:
                     pat = fmt::format("({})", pat);
 
                     auto regexp = createRegexpWithMatchType(pat, match_type, collator);
-                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, res_ref, pos, occur);
+                    executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, pos, occur);
                 }
             }
         }
 #undef GET_OCCUR_VALUE
 #undef GET_POS_VALUE
-        res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+        res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1805,13 +1816,13 @@ public:
         ColumnPtr col_match_type;
 
         // Go through cases to get arguments
-        switch(arg_num)
+        switch (arg_num)
         {
         case REGEXP_SUBSTR_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[4]).column;
-        case REGEXP_MIN_PARAM_NUM + 2:
+        case REGEXP_SUBSTR_MAX_PARAM_NUM - 1:
             col_occur = block.getByPosition(arguments[3]).column;
-        case REGEXP_MIN_PARAM_NUM + 1:
+        case REGEXP_SUBSTR_MAX_PARAM_NUM - 2:
             col_pos = block.getByPosition(arguments[2]).column;
         };
 
@@ -1828,19 +1839,19 @@ public:
 
 private:
     void executeAndSetResult(
-            Regexps::Regexp & regexp,
-            ColumnString::MutablePtr & col_res,
-            typename ColumnUInt8::Container & null_map,
-            size_t idx,
-            const char * subject,
-            size_t subject_size,
-            StringRef & res_ref,
-            Int64 pos,
-            Int64 occur) const
+        Regexps::Regexp & regexp,
+        ColumnString::MutablePtr & col_res,
+        typename ColumnUInt8::Container & null_map,
+        size_t idx,
+        const char * subject,
+        size_t subject_size,
+        Int64 pos,
+        Int64 occur) const
     {
-        if (regexp.substr(subject, subject_size, res_ref, pos, occur))
+        auto res = regexp.substr(subject, subject_size, pos, occur);
+        if (res)
         {
-            col_res->insertData(res_ref.data, res_ref.size);
+            col_res->insertData(res.value().data, res.value().size);
             null_map[idx] = 0;
         }
         else

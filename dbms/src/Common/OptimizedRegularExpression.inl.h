@@ -17,11 +17,12 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
 #include <Poco/Exception.h>
+#include <common/StringRef.h>
 #include <common/defines.h>
 #include <common/types.h>
-#include <common/StringRef.h>
 
 #include <iostream>
+#include <optional>
 
 #define MIN_LENGTH_FOR_STRSTR 3
 #define MAX_SUBPATTERNS 5
@@ -485,19 +486,17 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(c
 }
 
 template <bool thread_safe>
-bool OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(const char * expr, size_t expr_size, StringRef & res, size_t byte_pos, Int64 occur)
+std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur)
 {
     if (occur != 1 || byte_pos != 1)
-        return false;
-    
+        return std::optional<StringRef>();
+
     StringPieceType expr_sp(expr, expr_size);
     StringPieceType matched_str;
     if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
-        return false;
+        return std::optional<StringRef>();
 
-    res.data = matched_str.data();
-    res.size = matched_str.size();
-    return true;
+    return std::optional<StringRef>(StringRef(matched_str.data(), matched_str.size()));
 }
 
 static inline void checkInstrArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
@@ -539,10 +538,10 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subjec
 }
 
 template <bool thread_safe>
-bool OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subject, size_t subject_size, StringRef & res, Int64 byte_pos, Int64 occur)
+std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
-    const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
+    const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
     StringPieceType expr_sp(expr, expr_size);
@@ -550,20 +549,19 @@ bool OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subjec
     while (occur > 0)
     {
         if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
-            return false;
+            return std::optional<StringRef>();
 
         --occur;
     }
 
-    res.data = matched_str.data();
-    res.size = matched_str.size();
-    return true;
+    return std::optional<StringRef>(StringRef(matched_str.data(), matched_str.size()));
 }
 
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
-    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);;
+    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
+    ;
     checkInstrArgs(utf8_total_len, subject_size, pos, ret_op);
     makeOccurValid(occur);
 
@@ -575,17 +573,17 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
 }
 
 template <bool thread_safe>
-bool OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, StringRef & res, Int64 pos, Int64 occur)
+std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
     checkSubstrArgs(utf8_total_len, subject_size, pos);
     makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
-        return processSubstrEmptyStringExpr(subject, subject_size, res, pos, occur);
+        return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
 
     size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
-    return substrImpl(subject, subject_size, res, byte_pos, occur);
+    return substrImpl(subject, subject_size, byte_pos, occur);
 }
 
 #undef MIN_LENGTH_FOR_STRSTR
