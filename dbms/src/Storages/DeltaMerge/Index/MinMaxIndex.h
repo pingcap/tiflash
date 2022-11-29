@@ -101,8 +101,8 @@ private:
     using Base = LRUCache<String, MinMaxIndex, std::hash<String>, MinMaxIndexWeightFunction>;
 
 public:
-    MinMaxIndexCache(size_t max_size_in_bytes, const Delay & expiration_delay)
-        : Base(max_size_in_bytes, expiration_delay)
+    explicit MinMaxIndexCache(size_t max_size_in_bytes)
+        : Base(max_size_in_bytes)
     {}
 
     template <typename LoadFunc>
