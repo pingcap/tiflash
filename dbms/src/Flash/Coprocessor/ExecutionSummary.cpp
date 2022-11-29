@@ -51,6 +51,6 @@ void ExecutionSummary::mergeFromRemoteRead(const ExecutionSummary & remote)
     time_processed_ns += remote.time_processed_ns;
     num_iterations += remote.num_iterations;
     concurrency += remote.concurrency;
-    scan_context->merge(*other.scan_context);
+    scan_context->merge(*remote.scan_context);
 }
 } // namespace DB
