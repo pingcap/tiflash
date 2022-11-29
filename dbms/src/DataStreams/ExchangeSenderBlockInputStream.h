@@ -46,7 +46,6 @@ protected:
     }
     void readSuffixImpl() override
     {
-        writer->finishWrite();
         LOG_DEBUG(log, "finish write with {} rows", total_rows);
     }
 

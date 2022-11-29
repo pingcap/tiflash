@@ -22,12 +22,6 @@ namespace DB
 namespace DM
 {
 
-static inline auto *
-toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
-{
-    return dynamic_cast<DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *>(ptr.get());
-}
-
 StoreStats DeltaMergeStore::getStoreStats()
 {
     std::shared_lock lock(read_write_mutex);
@@ -59,7 +53,9 @@ StoreStats DeltaMergeStore::getStoreStats()
             stat.total_delete_ranges += delta->getDeletes();
 
             stat.delta_count += 1;
-            stat.total_pack_count_in_delta += delta->getColumnFileCount();
+            const auto num_delta_column_file = delta->getColumnFileCount();
+            stat.total_pack_count_in_delta += num_delta_column_file;
+            stat.max_pack_count_in_delta = std::max(stat.max_pack_count_in_delta, num_delta_column_file);
 
             stat.total_delta_rows += delta->getRows();
             stat.total_delta_size += delta->getBytes();
@@ -111,27 +107,12 @@ StoreStats DeltaMergeStore::getStoreStats()
     stat.avg_pack_rows_in_stable = static_cast<Float64>(stat.total_stable_rows) / stat.total_pack_count_in_stable;
     stat.avg_pack_size_in_stable = static_cast<Float64>(stat.total_stable_size) / stat.total_pack_count_in_stable;
 
-    static const String useless_tracing_id("DeltaMergeStore::getStat");
     {
         auto snaps_stat = storage_pool->dataReader()->getSnapshotsStat();
         stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool->dataReader()->getSnapshot(useless_tracing_id);
-        if (const auto * concrete_snap = toConcreteSnapshot(stable_snapshot); concrete_snap != nullptr)
-        {
-            if (const auto * const version = concrete_snap->version(); version != nullptr)
-            {
-                stat.storage_stable_num_pages = version->numPages();
-                stat.storage_stable_num_normal_pages = version->numNormalPages();
-                stat.storage_stable_max_page_id = version->maxId();
-            }
-            else
-            {
-                LOG_ERROR(log, "Can't get any version from current snapshot, type=data");
-            }
-        }
     }
     {
         auto snaps_stat = storage_pool->logReader()->getSnapshotsStat();
@@ -139,20 +120,6 @@ StoreStats DeltaMergeStore::getStoreStats()
         stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr log_snapshot = storage_pool->logReader()->getSnapshot(useless_tracing_id);
-        if (const auto * concrete_snap = toConcreteSnapshot(log_snapshot); concrete_snap != nullptr)
-        {
-            if (const auto * const version = concrete_snap->version(); version != nullptr)
-            {
-                stat.storage_delta_num_pages = version->numPages();
-                stat.storage_delta_num_normal_pages = version->numNormalPages();
-                stat.storage_delta_max_page_id = version->maxId();
-            }
-            else
-            {
-                LOG_ERROR(log, "Can't get any version from current snapshot, type=log");
-            }
-        }
     }
     {
         auto snaps_stat = storage_pool->metaReader()->getSnapshotsStat();
@@ -160,20 +127,6 @@ StoreStats DeltaMergeStore::getStoreStats()
         stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool->metaReader()->getSnapshot(useless_tracing_id);
-        if (const auto * concrete_snap = toConcreteSnapshot(meta_snapshot); concrete_snap != nullptr)
-        {
-            if (const auto * const version = concrete_snap->version(); version != nullptr)
-            {
-                stat.storage_meta_num_pages = version->numPages();
-                stat.storage_meta_num_normal_pages = version->numNormalPages();
-                stat.storage_meta_max_page_id = version->maxId();
-            }
-            else
-            {
-                LOG_ERROR(log, "Can't get any version from current snapshot, type=meta");
-            }
-        }
     }
 
     stat.background_tasks_length = background_tasks.length();

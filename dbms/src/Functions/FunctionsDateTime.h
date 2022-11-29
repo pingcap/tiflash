@@ -2802,17 +2802,6 @@ public:
             dispatch<ExtractMyDateTimeImpl::extractDayHour>(col_from, vec_to);
         else if (unit == "year_month")
             dispatch<ExtractMyDateTimeImpl::extractYearMonth>(col_from, vec_to);
-        /// TODO: support ExtractDuration
-        // else if (unit == "hour");
-        // else if (unit == "minute");
-        // else if (unit == "second");
-        // else if (unit == "microsecond");
-        // else if (unit == "second_microsecond");
-        // else if (unit == "minute_microsecond");
-        // else if (unit == "minute_second");
-        // else if (unit == "hour_microsecond");
-        // else if (unit == "hour_second");
-        // else if (unit == "hour_minute");
         else
             throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
 

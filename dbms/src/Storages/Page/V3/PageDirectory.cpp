@@ -15,6 +15,9 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -35,12 +38,13 @@
 #include <type_traits>
 #include <utility>
 
+
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
 
 #include <pcg_random.hpp>
 #include <thread>
-#endif
+#endif // FIU_ENABLE
 
 namespace CurrentMetrics
 {
@@ -52,6 +56,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
+extern const char pause_before_full_gc_prepare[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -1121,12 +1126,14 @@ PageId PageDirectory::getMaxId() const
 std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
 {
     std::set<PageIdV3Internal> page_ids;
-    std::shared_lock read_lock(table_rw_mutex);
 
+    std::shared_lock read_lock(table_rw_mutex);
+    const auto seq = sequence.load();
     for (auto & [page_id, versioned] : mvcc_table_directory)
     {
-        (void)versioned;
-        page_ids.insert(page_id);
+        // Only return the page_id that is visible
+        if (versioned->isVisible(seq))
+            page_ids.insert(page_id);
     }
     return page_ids;
 }
@@ -1209,10 +1216,13 @@ void PageDirectory::applyRefEditRecord(
             resolved_ver));
     }
 
+    SYNC_FOR("before_PageDirectory::applyRefEditRecord_create_ref");
+
     // use the resolved_id to collapse ref chain 3->2, 2->1 ==> 3->1
     bool is_ref_created = version_list->createNewRef(version, resolved_id);
     if (is_ref_created)
     {
+        SYNC_FOR("before_PageDirectory::applyRefEditRecord_incr_ref_count");
         // Add the ref-count of being-ref entry
         if (auto resolved_iter = mvcc_table_directory.find(resolved_id); resolved_iter != mvcc_table_directory.end())
         {
@@ -1229,82 +1239,100 @@ void PageDirectory::applyRefEditRecord(
                 resolved_ver));
         }
     }
+    SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
 }
 
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
-    // Note that we need to make sure increasing `sequence` in order, so it
-    // also needs to be protected by `write_lock` throughout the `apply`
-    // TODO: It is totally serialized, make it a pipeline
-    std::unique_lock write_lock(table_rw_mutex);
-    const UInt64 last_sequence = sequence.load();
-    // new sequence allocated in this edit
-    UInt64 new_sequence = last_sequence + 1;
+    // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
+    // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
+    // before applying edit to `mvcc_table_directory`.
+    //
+    // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
+    // pipeline so that we can batch the incoming edit when doing IO.
 
-    // stage 1, persisted the changes to WAL with new versions
-    // Inorder to handle {put X, ref Y->X, del X} inside one WriteBatch (and
-    // in later batch pipeline), we will increase the sequence for each record.
+    Stopwatch watch;
+
+    std::unique_lock apply_lock(apply_mutex);
+
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
+    watch.restart();
+
+    UInt64 max_sequence = sequence.load();
+    const auto edit_size = edit.size();
+
+    // stage 1, persisted the changes to WAL.
+    // In order to handle {put X, ref Y->X, del X} inside one WriteBatch (and
+    // in later batch pipeline), we increase the sequence for each record.
     for (auto & r : edit.getMutRecords())
     {
-        r.version = PageVersion(new_sequence, 0);
-        new_sequence += 1;
+        ++max_sequence;
+        r.version = PageVersion(max_sequence, 0);
     }
+
     wal->apply(ser::serializeTo(edit), write_limiter);
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
+    watch.restart();
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
-    // stage 2, create entry version list for page_id.
-    for (const auto & r : edit.getRecords())
     {
-        // Protected in write_lock
-        max_page_id = std::max(max_page_id, r.page_id.low);
+        std::unique_lock table_lock(table_rw_mutex);
 
-        auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
-        if (created)
+        // stage 2, create entry version list for page_id.
+        for (const auto & r : edit.getRecords())
         {
-            iter->second = std::make_shared<VersionedPageEntries>();
-        }
+            // Protected in write_lock
+            max_page_id = std::max(max_page_id, r.page_id.low);
 
-        auto & version_list = iter->second;
-        try
-        {
-            switch (r.type)
+            auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
+            if (created)
             {
-            case EditRecordType::PUT_EXTERNAL:
+                iter->second = std::make_shared<VersionedPageEntries>();
+            }
+
+            auto & version_list = iter->second;
+            try
             {
-                auto holder = version_list->createNewExternal(r.version);
-                if (holder)
+                switch (r.type)
                 {
-                    // put the new created holder into `external_ids`
-                    *holder = r.page_id;
-                    external_ids_by_ns.addExternalId(holder);
+                case EditRecordType::PUT_EXTERNAL:
+                {
+                    auto holder = version_list->createNewExternal(r.version);
+                    if (holder)
+                    {
+                        // put the new created holder into `external_ids`
+                        *holder = r.page_id;
+                        external_ids_by_ns.addExternalId(holder);
+                    }
+                    break;
                 }
-                break;
+                case EditRecordType::PUT:
+                    version_list->createNewEntry(r.version, r.entry);
+                    break;
+                case EditRecordType::DEL:
+                    version_list->createDelete(r.version);
+                    break;
+                case EditRecordType::REF:
+                    applyRefEditRecord(mvcc_table_directory, version_list, r, r.version);
+                    break;
+                case EditRecordType::UPSERT:
+                case EditRecordType::VAR_DELETE:
+                case EditRecordType::VAR_ENTRY:
+                case EditRecordType::VAR_EXTERNAL:
+                case EditRecordType::VAR_REF:
+                    throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
+                }
             }
-            case EditRecordType::PUT:
-                version_list->createNewEntry(r.version, r.entry);
-                break;
-            case EditRecordType::DEL:
-                version_list->createDelete(r.version);
-                break;
-            case EditRecordType::REF:
-                applyRefEditRecord(mvcc_table_directory, version_list, r, r.version);
-                break;
-            case EditRecordType::UPSERT:
-            case EditRecordType::VAR_DELETE:
-            case EditRecordType::VAR_ENTRY:
-            case EditRecordType::VAR_EXTERNAL:
-            case EditRecordType::VAR_REF:
-                throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
+            catch (DB::Exception & e)
+            {
+                e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, r.version, edit_size));
+                e.rethrow();
             }
         }
-        catch (DB::Exception & e)
-        {
-            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, r.version, edit.size()));
-            e.rethrow();
-        }
-    }
 
-    // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
-    sequence.fetch_add(new_sequence - last_sequence);
+        // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
+        sequence.fetch_add(edit_size);
+    }
 }
 
 void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
@@ -1377,6 +1405,10 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             // do scan on the version list without lock on `mvcc_table_directory`.
             auto page_id = iter->first;
             const auto & version_entries = iter->second;
+            fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
+                if (page_id.low == 101)
+                    SYNC_FOR("before_PageDirectory::getEntriesByBlobIds_id_101");
+            });
             auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries, ref_ids_maybe_rewrite);
             total_page_size += single_page_size;
             if (single_page_size != 0)

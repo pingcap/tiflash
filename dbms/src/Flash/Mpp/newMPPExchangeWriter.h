@@ -17,19 +17,18 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
-#include <Flash/Mpp/HashParitionWriter.h>
+#include <Flash/Mpp/HashPartitionWriter.h>
 
 namespace DB
 {
-template <class StreamWriterPtr>
+template <class ExchangeWriterPtr>
 std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
-    const StreamWriterPtr & writer,
+    const ExchangeWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
     const tipb::ExchangeType & exchange_type,
     Int64 records_per_chunk,
     Int64 batch_send_min_limit,
-    bool should_send_exec_summary_at_last,
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
@@ -40,11 +39,10 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     {
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
-        return std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
+        return std::make_unique<StreamingDAGResponseWriter<ExchangeWriterPtr>>(
             writer,
             records_per_chunk,
             batch_send_min_limit,
-            should_send_exec_summary_at_last,
             dag_context);
     }
     else
@@ -53,33 +51,30 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
         {
             if (enable_fine_grained_shuffle)
             {
-                return std::make_unique<FineGrainedShuffleWriter<StreamWriterPtr>>(
+                return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
-                    should_send_exec_summary_at_last,
                     dag_context,
                     fine_grained_shuffle_stream_count,
                     fine_grained_shuffle_batch_size);
             }
             else
             {
-                return std::make_unique<HashPartitionWriter<StreamWriterPtr>>(
+                return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
                     batch_send_min_limit,
-                    should_send_exec_summary_at_last,
                     dag_context);
             }
         }
         else
         {
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
-            return std::make_unique<BroadcastOrPassThroughWriter<StreamWriterPtr>>(
+            return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
                 batch_send_min_limit,
-                should_send_exec_summary_at_last,
                 dag_context);
         }
     }

@@ -44,7 +44,7 @@ int StressWorkload::mainEntry(int argc, char ** argv)
         auto env = StressEnv::parse(argc, argv);
         env.setup();
 
-        auto & mamager = StressWorkloadManger::getInstance();
+        auto & mamager = PageWorkloadFactory::getInstance();
         mamager.setEnv(env);
         mamager.runWorkload();
 

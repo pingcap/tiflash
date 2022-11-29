@@ -354,10 +354,18 @@ public:
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
+    // Approximate number of pages in memory
     size_t numPages() const
     {
         std::shared_lock read_lock(table_rw_mutex);
         return mvcc_table_directory.size();
+    }
+
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        auto u = wal->getFileUsageStatistics();
+        u.num_pages = numPages();
+        return u;
     }
 
     // No copying and no moving
@@ -392,6 +400,11 @@ private:
 private:
     PageId max_page_id;
     std::atomic<UInt64> sequence;
+
+    // Used for avoid concurrently apply edits to wal and mvcc_table_directory.
+    mutable std::shared_mutex apply_mutex;
+
+    // Used to protect mvcc_table_directory between apply threads and read threads
     mutable std::shared_mutex table_rw_mutex;
     MVCCMapType mvcc_table_directory;
 

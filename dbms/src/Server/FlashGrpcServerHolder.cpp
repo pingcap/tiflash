@@ -123,7 +123,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
     builder.SetMaxReceiveMessageSize(-1);
     builder.SetMaxSendMessageSize(-1);
-    thread_manager = DB::newThreadManager();
     int async_cq_num = context.getSettingsRef().async_cqs;
     if (enable_async_server)
     {
@@ -153,8 +152,8 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
                 // EstablishCallData will handle its lifecycle by itself.
                 EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
             }
-            thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
-            thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
+            cq_workers.emplace_back(ThreadFactory::newThread(false, "async_poller", [cq, this] { handleRpcs(cq, log); }));
+            notify_cq_workers.emplace_back(ThreadFactory::newThread(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); }));
         }
     }
 }
@@ -178,7 +177,12 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
             cq->Shutdown();
         for (auto & cq : notify_cqs)
             cq->Shutdown();
-        thread_manager->wait();
+
+        for (auto & worker : cq_workers)
+            worker.join();
+        for (auto & worker : notify_cq_workers)
+            worker.join();
+
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
         if (GRPCCompletionQueuePool::global_instance)

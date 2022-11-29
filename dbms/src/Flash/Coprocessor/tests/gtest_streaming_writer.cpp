@@ -91,7 +91,7 @@ public:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-using MockStreamWriterChecker = std::function<void(tipb::SelectResponse &, uint16_t)>;
+using MockStreamWriterChecker = std::function<void(tipb::SelectResponse &)>;
 
 struct MockStreamWriter
 {
@@ -99,11 +99,7 @@ struct MockStreamWriter
         : checker(checker_)
     {}
 
-    void write(mpp::MPPDataPacket &) { FAIL() << "cannot reach here."; }
-    void write(mpp::MPPDataPacket &, uint16_t) { FAIL() << "cannot reach here."; }
-    void write(tipb::SelectResponse & response, uint16_t part_id) { checker(response, part_id); }
-    void write(tipb::SelectResponse & response) { checker(response, 0); }
-    uint16_t getPartitionNum() const { return 1; }
+    void write(tipb::SelectResponse & response) { checker(response); }
 
 private:
     MockStreamWriterChecker checker;
@@ -124,8 +120,6 @@ try
         const size_t block_num = 64;
         const size_t batch_send_min_limit = 108;
 
-        const bool should_send_exec_summary_at_last = true;
-
         // 1. Build Blocks.
         std::vector<Block> blocks;
         for (size_t i = 0; i < block_num; ++i)
@@ -137,8 +131,7 @@ try
 
         // 2. Build MockStreamWriter.
         std::vector<tipb::SelectResponse> write_report;
-        auto checker = [&write_report](tipb::SelectResponse & response, uint16_t part_id) {
-            ASSERT_EQ(part_id, 0);
+        auto checker = [&write_report](tipb::SelectResponse & response) {
             write_report.emplace_back(std::move(response));
         };
         auto mock_writer = std::make_shared<MockStreamWriter>(checker);
@@ -148,12 +141,10 @@ try
             mock_writer,
             batch_send_min_limit,
             batch_send_min_limit,
-            should_send_exec_summary_at_last,
             *dag_context_ptr);
         for (const auto & block : blocks)
             dag_writer->write(block);
         dag_writer->flush();
-        dag_writer->finishWrite();
 
         // 4. Start to check write_report.
         size_t expect_rows = block_rows * block_num;
@@ -180,41 +171,6 @@ try
             }
         }
         ASSERT_EQ(decoded_block_rows, expect_rows);
-    }
-}
-CATCH
-
-TEST_F(TestStreamingWriter, emptyBlock)
-try
-{
-    std::vector<tipb::EncodeType> encode_types{
-        tipb::EncodeType::TypeDefault,
-        tipb::EncodeType::TypeChunk,
-        tipb::EncodeType::TypeCHBlock};
-    for (const auto & encode_type : encode_types)
-    {
-        dag_context_ptr->encode_type = encode_type;
-
-        std::vector<tipb::SelectResponse> write_report;
-        auto checker = [&write_report](tipb::SelectResponse & response, uint16_t part_id) {
-            ASSERT_EQ(part_id, 0);
-            write_report.emplace_back(std::move(response));
-        };
-        auto mock_writer = std::make_shared<MockStreamWriter>(checker);
-
-        const size_t batch_send_min_limit = 5;
-        const bool should_send_exec_summary_at_last = true;
-        auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>>(
-            mock_writer,
-            batch_send_min_limit,
-            batch_send_min_limit,
-            should_send_exec_summary_at_last,
-            *dag_context_ptr);
-        dag_writer->finishWrite();
-
-        // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
-        ASSERT_EQ(write_report.size(), 1);
-        ASSERT_EQ(write_report.back().chunks_size(), 0);
     }
 }
 CATCH

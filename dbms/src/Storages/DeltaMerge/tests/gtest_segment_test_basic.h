@@ -74,7 +74,7 @@ public:
     void replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block);
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
-    std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
+    Block prepareWriteBlockInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
 
     size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
     size_t getSegmentRowNum(PageId segment_id);

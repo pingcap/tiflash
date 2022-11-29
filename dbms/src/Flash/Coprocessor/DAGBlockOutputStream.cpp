@@ -23,7 +23,7 @@ DAGBlockOutputStream::DAGBlockOutputStream(Block && header_, std::unique_ptr<DAG
 
 void DAGBlockOutputStream::writePrefix()
 {
-    //something to do here?
+    response_writer->prepare(header);
 }
 
 void DAGBlockOutputStream::write(const Block & block)
@@ -34,7 +34,7 @@ void DAGBlockOutputStream::write(const Block & block)
 void DAGBlockOutputStream::writeSuffix()
 {
     // todo error handle
-    response_writer->finishWrite();
+    response_writer->flush();
 }
 
 } // namespace DB
