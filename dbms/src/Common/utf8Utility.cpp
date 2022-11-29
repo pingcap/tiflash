@@ -20,7 +20,7 @@ namespace DB
 
 void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
 {
-    unsigned char * s = reinterpret_cast<unsigned char *>(buf);
+    auto * s = reinterpret_cast<unsigned char *>(buf);
     if (unicode > UNICODEMax || IS_SURROGATE(unicode))
         unicode = 0xFFFD; /// 'Unknown character'
 
@@ -54,7 +54,7 @@ void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
 
 std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
 {
-    static const char lengths[] = {
+    static const unsigned char lengths[] = {
         1,
         1,
         1,
@@ -95,8 +95,8 @@ std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
     if unlikely (buf_length == 0)
         return std::make_pair(UTF8Error, 0);
 
-    const unsigned char * s = reinterpret_cast<const unsigned char *>(buf);
-    size_t len = lengths[s[0] >> 3];
+    const auto * s = reinterpret_cast<const unsigned char *>(buf);
+    UInt32 len = lengths[s[0] >> 3];
     if unlikely (buf_length < len || len == 0)
         return std::make_pair(UTF8Error, 1);
 
