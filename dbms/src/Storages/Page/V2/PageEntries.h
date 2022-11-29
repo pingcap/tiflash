@@ -31,6 +31,11 @@
 #include <unordered_set>
 
 
+namespace CurrentMetrics
+{
+extern const int PSMVCCNumDelta;
+extern const int PSMVCCNumBase;
+} // namespace CurrentMetrics
 namespace DB
 {
 namespace ErrorCodes
@@ -118,12 +123,30 @@ class PageEntriesMixin
 {
 public:
     explicit PageEntriesMixin(bool is_base_)
-        : normal_pages()
-        , page_ref()
-        , ref_deletions()
-        , max_page_id(0)
+        : max_page_id(0)
         , is_base(is_base_)
-    {}
+    {
+        if (is_base)
+        {
+            CurrentMetrics::add(CurrentMetrics::PSMVCCNumBase);
+        }
+        else
+        {
+            CurrentMetrics::add(CurrentMetrics::PSMVCCNumDelta);
+        }
+    }
+
+    virtual ~PageEntriesMixin()
+    {
+        if (is_base)
+        {
+            CurrentMetrics::sub(CurrentMetrics::PSMVCCNumBase);
+        }
+        else
+        {
+            CurrentMetrics::sub(CurrentMetrics::PSMVCCNumDelta);
+        }
+    }
 
 public:
     static std::shared_ptr<T> createBase() { return std::make_shared<T>(true); }

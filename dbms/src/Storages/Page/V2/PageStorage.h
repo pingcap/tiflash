@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -89,6 +90,7 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const PageStorageConfig & config_,
                 const FileProviderPtr & file_provider_,
+                Context & global_ctx,
                 bool no_more_insert_ = false);
     ~PageStorage() override = default;
 
@@ -127,6 +129,8 @@ public:
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
+
+    void shutdown() override;
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
@@ -238,6 +242,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    bool compactInMemVersions();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -271,6 +279,9 @@ private:
     ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
+
+    BackgroundProcessingPool & compact_pool;
+    BackgroundProcessingPool::TaskHandle compact_handle = nullptr;
 
     // true means this instance runs under mix mode
     bool no_more_insert = false;
