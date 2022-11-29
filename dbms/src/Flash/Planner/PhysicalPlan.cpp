@@ -36,8 +36,6 @@
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
-#include <string_view>
-
 namespace DB
 {
 namespace
@@ -73,7 +71,7 @@ void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlan
 }
 } // namespace
 
-constexpr static std::string_view STREAM_AGG_ERROR("Group by key is not supported in StreamAgg");
+const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
 
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
