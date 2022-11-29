@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/utf8Utility.cpp>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <Common/utf8Utility.cpp>
 
 namespace DB
 {
@@ -27,8 +28,8 @@ unsigned char * utf8_encode(unsigned char * s, long c)
     {
         s[0] = 0xf0 | (c >> 18);
         s[1] = 0x80 | ((c >> 12) & 0x3f);
-        s[2] = 0x80 | ((c >>  6) & 0x3f);
-        s[3] = 0x80 | ((c >>  0) & 0x3f);
+        s[2] = 0x80 | ((c >> 6) & 0x3f);
+        s[3] = 0x80 | ((c >> 0) & 0x3f);
         return s + 4;
     }
     else if (c >= (1L << 11))
@@ -166,8 +167,7 @@ CATCH
 TEST_F(TestUTF8Utility, TestFloat64)
 try
 {
-    double a[] = {1e16 - 2, 1e16, 1e21, 112314.1231414123, 1e-4, 1e-5, 1e-6, 0.0,
-    2 - 1e16, -1e16, -1e21, -112314.1231414123, -1e-4, -1e-5, -1e-6, -0.0};
+    double a[] = {1e16 - 2, 1e16, 1e21, 112314.1231414123, 1e-4, 1e-5, 1e-6, 0.0, 2 - 1e16, -1e16, -1e21, -112314.1231414123, -1e-4, -1e-5, -1e-6, -0.0};
     for (size_t i = 0; i < 16; ++i)
     {
         String str;

@@ -15,10 +15,9 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <common/memcpy.h>
-
-#include <common/StringRef.h>
 #include <Storages/Transaction/JsonPathExpr.h>
+#include <common/StringRef.h>
+#include <common/memcpy.h>
 
 namespace DB
 {
@@ -40,6 +39,7 @@ public:
     }
     std::pair<JsonPathLegRawPtr, ConstJsonPathExprRawPtr> pop(ConstJsonPathExprRawPtr path_ref_ptr);
     size_t size() const { return all_refs.size(); }
+
 private:
     JsonPathExprPtr source;
     std::vector<JsonPathExprRefPtr> all_refs;
@@ -59,6 +59,7 @@ public:
     {
         return JsonPathExpr::containsAnyAsterisk(flag) || JsonPathExpr::containsAnyRange(flag);
     }
+
 private:
     friend JsonPathExprRefContainer;
     JsonPathExprRefContainer * container;

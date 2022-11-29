@@ -17,13 +17,13 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Storages/Transaction/JsonPathExprRef.h>
 #include <Storages/Transaction/JsonBinary.h>
+#include <Storages/Transaction/JsonPathExprRef.h>
 
 namespace DB
 {
@@ -104,7 +104,7 @@ public:
         for (size_t i = 1; i < arguments_size; ++i)
         {
             const ColumnPtr column = block.getByPosition(arguments[i]).column;
-            const auto nested_column  = static_cast<const ColumnConst *>(column.get())->getDataColumnPtr();
+            const auto nested_column = static_cast<const ColumnConst *>(column.get())->getDataColumnPtr();
             StringRef path_str;
             if (const auto * col = checkAndGetColumn<ColumnString>(nested_column.get()))
             {
@@ -258,6 +258,7 @@ public:
         else
             throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
+
 private:
 };
 
@@ -332,6 +333,7 @@ public:
         else
             throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
+
 private:
 };
 

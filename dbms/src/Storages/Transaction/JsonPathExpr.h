@@ -15,9 +15,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <common/memcpy.h>
-
 #include <common/StringRef.h>
+#include <common/memcpy.h>
 
 /**
  * From MySQL 5.7, JSON path expression grammar:
@@ -68,7 +67,8 @@ using JsonPathArrayIndex = Int32;
 
 struct JsonPathArraySelection
 {
-    explicit JsonPathArraySelection(JsonPathArraySelectionType type_) : JsonPathArraySelection(type_, 0)
+    explicit JsonPathArraySelection(JsonPathArraySelectionType type_)
+        : JsonPathArraySelection(type_, 0)
     {}
     JsonPathArraySelection(JsonPathArraySelectionType type_, JsonPathArrayIndex index_)
         : type(type_)
@@ -127,7 +127,7 @@ template <typename FF>
 std::pair<bool, String> JsonPathStream::readWhile(FF && f)
 {
     size_t start = pos;
-	for (; !exhausted(); skip(1))
+    for (; !exhausted(); skip(1))
     {
         if (!f(peek()))
         {
@@ -191,6 +191,7 @@ public:
     JsonPathExpressionFlag getFlag() const { return flag; }
 
     const std::vector<JsonPathLegPtr> & getLegs() const { return legs; }
+
 private:
     JsonPathExpr() = default;
 
@@ -204,4 +205,3 @@ private:
 using JsonPathExprPtr = std::shared_ptr<JsonPathExpr>;
 
 } // namespace DB
-

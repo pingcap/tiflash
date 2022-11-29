@@ -28,7 +28,6 @@
 /// But be noted that each layer could have their own datum codec implementations other than this file for endianness or specific data types - TiDB does so, thus so does TiFlash.
 namespace DB
 {
-
 static const size_t ENC_GROUP_SIZE = 8;
 static const UInt8 ENC_MARKER = static_cast<UInt8>(0xff);
 static const char ENC_ASC_PADDING[ENC_GROUP_SIZE] = {0};
@@ -77,7 +76,10 @@ inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, WriteBuffer
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
 }
 
-inline void EncodeInt64(Int64 i, WriteBuffer & ss) { EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss); }
+inline void EncodeInt64(Int64 i, WriteBuffer & ss)
+{
+    EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss);
+}
 
 void EncodeFloat64(Float64 num, WriteBuffer & ss);
 

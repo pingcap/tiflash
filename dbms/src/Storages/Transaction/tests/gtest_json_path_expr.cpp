@@ -41,12 +41,13 @@ CATCH
 TEST_F(TestJsonPathExpr, TestValidatePathExpr)
 try
 {
-    struct TestData {
+    struct TestData
+    {
         String expression;
         bool success;
         size_t legs;
     };
-    std::vector<TestData> test_data_vec {
+    std::vector<TestData> test_data_vec{
         {"   $  ", true, 0},
         {"   $ .   key1  [  3  ]\t[*].*.key3", true, 5},
         {"   $ .   key1  [  3  ]**[*].*.key3", true, 6},
@@ -61,19 +62,19 @@ try
         {"$.\\\"escaped quotes\\\"[3][*].*.key3", false, 0},
         {"$.hello \\\"escaped quotes\\\" world[3][*].*.key3", false, 0},
         {"$NoValidLegsHere", false, 0},
-		{"$        No Valid Legs Here .a.b.c", false, 0},
-		{"$.a[b]", false, 0},
-		{"$.*[b]", false, 0},
-		{"$**.a[b]", false, 0},
-		{"$.b[ 1 ].", false, 0},
-		{"$.performance.txn-entry-size-limit", false, 0},
-		{"$.\"performance\".txn-entry-size-limit", false, 0},
-		{"$.\"performance.\"txn-entry-size-limit", false, 0},
-		{"$.\"performance.\"txn-entry-size-limit\"", false, 0},
-		{"$[", false, 0},
-		{"$a.***[3]", false, 0},
-		{"$1a", false, 0},
-	};
+        {"$        No Valid Legs Here .a.b.c", false, 0},
+        {"$.a[b]", false, 0},
+        {"$.*[b]", false, 0},
+        {"$**.a[b]", false, 0},
+        {"$.b[ 1 ].", false, 0},
+        {"$.performance.txn-entry-size-limit", false, 0},
+        {"$.\"performance\".txn-entry-size-limit", false, 0},
+        {"$.\"performance.\"txn-entry-size-limit", false, 0},
+        {"$.\"performance.\"txn-entry-size-limit\"", false, 0},
+        {"$[", false, 0},
+        {"$a.***[3]", false, 0},
+        {"$1a", false, 0},
+    };
     for (size_t i = 0; i < test_data_vec.size(); ++i)
     {
         auto res = JsonPathExpr::parseJsonPathExpr(test_data_vec[i].expression);

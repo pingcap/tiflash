@@ -108,7 +108,8 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
     JsonType entry_type = getChar(value_entry_offset);
     size_t cursor = value_entry_offset + VALUE_TYPE_SIZE;
     size_t value_offset = decodeNumeric<UInt32>(cursor, data); /// Literal type would padding zeros, thus it wouldn't cross array bound
-    switch (entry_type) {
+    switch (entry_type)
+    {
     case JsonBinary::TYPE_CODE_LITERAL:
         return JsonBinary(JsonBinary::TYPE_CODE_LITERAL, getSubRef(value_entry_offset + VALUE_TYPE_SIZE, 1));
     case JsonBinary::TYPE_CODE_INT64:
@@ -173,7 +174,7 @@ JsonBinary::Opaque JsonBinary::getOpaque() const
     size_t cursor = 1;
     size_t data_length = DecodeVarUInt(cursor, data);
     size_t data_start = cursor;
-    return Opaque{ opaque_type, getSubRef(data_start, data_length) };
+    return Opaque{opaque_type, getSubRef(data_start, data_length)};
 }
 
 template <bool doDecode>
@@ -263,8 +264,9 @@ void JsonBinary::marshalObjectTo(JsonBinaryWriteBuffer & write_buffer) const
 void JsonBinary::marshalArrayTo(JsonBinaryWriteBuffer & write_buffer) const
 {
     auto element_count = getElementCount();
-	write_buffer.write('[');
-	for (size_t i = 0; i < element_count; ++i) {
+    write_buffer.write('[');
+    for (size_t i = 0; i < element_count; ++i)
+    {
         if (i != 0)
             write_buffer.write(ELEM_SEPARATOR, 2);
 
@@ -311,7 +313,8 @@ void JsonBinary::marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f
 
 void JsonBinary::marshalLiteralTo(JsonBinaryWriteBuffer & write_buffer, UInt8 lit_type)
 {
-    switch (lit_type) {
+    switch (lit_type)
+    {
     case LITERAL_NIL:
         write_buffer.write("null", 4);
         break;
@@ -488,7 +491,7 @@ void JsonBinary::marshalTo(JsonBinaryWriteBuffer & write_buffer) const
         size_t cursor = 8;
         return marshalDurationTo(write_buffer, getInt64(), decodeNumeric<UInt32>(cursor, data));
     }
-    /// Do nothing for default
+        /// Do nothing for default
     }
 }
 
@@ -528,7 +531,7 @@ void JsonBinary::unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuf
     if (ref.data[0] == '"' && ref.data[length - 1] == '"')
     {
         // Remove prefix and suffix '"' before unquoting
-        unquoteJsonStringInBuffer(StringRef(ref.data + 1, length -2), write_buffer);
+        unquoteJsonStringInBuffer(StringRef(ref.data + 1, length - 2), write_buffer);
     }
     else
     {
@@ -546,7 +549,7 @@ String JsonBinary::unquoteString(const StringRef & ref)
     if (ref.data[0] == '"' && ref.data[length - 1] == '"')
     {
         // Remove prefix and suffix '"' before unquoting
-        return unquoteJsonString(StringRef(ref.data + 1, length -2));
+        return unquoteJsonString(StringRef(ref.data + 1, length - 2));
     }
     // if value is not double quoted, do nothing
     return ref.toString();
@@ -555,7 +558,7 @@ String JsonBinary::unquoteString(const StringRef & ref)
 bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;
-	for (auto & path_expr_container : path_expr_container_vec)
+    for (auto & path_expr_container : path_expr_container_vec)
     {
         DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
         auto first_path_ref = path_expr_container->firstRef();
@@ -786,7 +789,7 @@ void JsonBinary::buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> &
 void JsonBinary::buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer)
 {
     UInt32 total_size = HEADER_SIZE + json_binary_vec.size() * VALUE_ENTRY_SIZE;
-	for (const auto & bj : json_binary_vec)
+    for (const auto & bj : json_binary_vec)
     {
         /// Literal type value are inlined in the value_entry memory
         if (bj.type != TYPE_CODE_LITERAL)

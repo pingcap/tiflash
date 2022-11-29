@@ -75,4 +75,3 @@ std::pair<JsonPathLegRawPtr, ConstJsonPathExprRawPtr> JsonPathExprRef::popOneLeg
     return container->pop(this);
 }
 } // namespace DB
-

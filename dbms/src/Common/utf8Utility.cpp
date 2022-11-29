@@ -16,7 +16,6 @@
 
 namespace DB
 {
-
 #define IS_SURROGATE(c) ((c) >= 0xD800U && (c) <= 0xDFFFU)
 
 void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
@@ -25,22 +24,29 @@ void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
     if (unicode > UNICODEMax || IS_SURROGATE(unicode))
         unicode = 0xFFFD; /// 'Unknown character'
 
-    if (unicode >= (1L << 16)) {
+    if (unicode >= (1L << 16))
+    {
         s[0] = 0xf0 | (unicode >> 18);
         s[1] = 0x80 | ((unicode >> 12) & 0x3f);
-        s[2] = 0x80 | ((unicode >>  6) & 0x3f);
-        s[3] = 0x80 | ((unicode >>  0) & 0x3f);
+        s[2] = 0x80 | ((unicode >> 6) & 0x3f);
+        s[3] = 0x80 | ((unicode >> 0) & 0x3f);
         used_length = 4;
-    } else if (unicode >= (1L << 11)) {
+    }
+    else if (unicode >= (1L << 11))
+    {
         s[0] = 0xe0 | (unicode >> 12);
-        s[1] = 0x80 | ((unicode >>  6) & 0x3f);
-        s[2] = 0x80 | ((unicode >>  0) & 0x3f);
+        s[1] = 0x80 | ((unicode >> 6) & 0x3f);
+        s[2] = 0x80 | ((unicode >> 0) & 0x3f);
         used_length = 3;
-    } else if (unicode >= (1L << 7)) {
-        s[0] = 0xc0 | (unicode >>  6);
-        s[1] = 0x80 | ((unicode >>  0) & 0x3f);
+    }
+    else if (unicode >= (1L << 7))
+    {
+        s[0] = 0xc0 | (unicode >> 6);
+        s[1] = 0x80 | ((unicode >> 0) & 0x3f);
         used_length = 2;
-    } else {
+    }
+    else
+    {
         s[0] = static_cast<UInt8>(unicode);
         used_length = 1;
     }
@@ -49,10 +55,39 @@ void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
 std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
 {
     static const char lengths[] = {
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
-    };
-    static const int masks[]  = {0x00, 0x7f, 0x1f, 0x0f, 0x07};
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        4,
+        0};
+    static const int masks[] = {0x00, 0x7f, 0x1f, 0x0f, 0x07};
     static const UInt32 mins[] = {4194304, 0, 128, 2048, 65536};
     static const int shiftc[] = {0, 18, 12, 6, 0};
     static const int shifte[] = {0, 6, 4, 2, 0};
@@ -99,12 +134,12 @@ std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
 
     /* Accumulate the various error conditions. */
     err |= (c < mins[len]) << 6; // non-canonical encoding
-    err |= ((c >> 11) == 0x1b) << 7;  // surrogate half?
-    err |= (c > UNICODEMax) << 8;  // out of range?
+    err |= ((c >> 11) == 0x1b) << 7; // surrogate half?
+    err |= (c > UNICODEMax) << 8; // out of range?
     err ^= 0x2a; // top two bits of each tail byte correct?
     err >>= shifte[len];
 
-    if likely(err == 0)
+    if likely (err == 0)
         return std::make_pair(c, len);
     else
         return std::make_pair(UTF8Error, 1);

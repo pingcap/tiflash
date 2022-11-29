@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/StringUtils/StringUtils.h>
 #include <Core/Types.h>
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
@@ -23,7 +24,6 @@
 
 #include "Columns/ColumnString.h"
 #include "Common/utf8Utility.h"
-#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -121,7 +121,8 @@ public:
     static constexpr UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
 
     /// Opaque represents a raw database binary type
-    struct Opaque {
+    struct Opaque
+    {
         // TypeCode is the same with TiDB database type code
         UInt8 type;
         // Buf is the underlying bytes of the data
@@ -129,8 +130,8 @@ public:
     };
 
     explicit JsonBinary(JsonType type_, const StringRef & ref)
-    : type(type_)
-    , data(ref)
+        : type(type_)
+        , data(ref)
     {}
 
     /// getElementCount gets the count of Object or Array only.
@@ -149,6 +150,7 @@ public:
 
     static void SkipJson(size_t & cursor, const String & raw_value);
     static String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
+
 private:
     Int64 getInt64() const;
     UInt64 getUInt64() const;
@@ -200,7 +202,7 @@ void JsonBinary::unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & 
         if (ref.data[i] == '\\')
         {
             ++i;
-            RUNTIME_CHECK (i != ref_size);
+            RUNTIME_CHECK(i != ref_size);
             switch (ref.data[i])
             {
             case '"':

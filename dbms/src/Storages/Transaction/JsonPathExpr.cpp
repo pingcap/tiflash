@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/JsonPathExpr.h>
 
-#include <Common/Exception.h>
-#include <Common/StringUtils/StringUtils.h>
-
 namespace DB
 {
-
 const std::pair<bool, JsonPathArrayIndex> JsonPathStream::InvalidIndexPair{false, 0};
 const JsonPathArraySelection AsteriskSelection{JsonPathArraySelectionAsterisk};
 
@@ -135,7 +133,7 @@ bool JsonPathStream::exhausted() const
 std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryReadIndexNumber()
 {
     auto record_pos = pos;
-    auto res= readWhile([](char c) {
+    auto res = readWhile([](char c) {
         return isNumericASCII(c);
     });
     if (!res.first)
@@ -145,7 +143,8 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryReadIndexNumber()
     }
 
     Int32 index = std::stoll(res.second);
-    if (index > std::numeric_limits<Int32>::max()) {
+    if (index > std::numeric_limits<Int32>::max())
+    {
         pos = record_pos;
         return InvalidIndexPair;
     }
@@ -183,7 +182,8 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryParseArrayIndex()
     if (isNumericASCII(c))
     {
         auto res = tryReadIndexNumber();
-        if (!res.first) {
+        if (!res.first)
+        {
             pos = record_pos;
             return InvalidIndexPair;
         }
@@ -220,18 +220,18 @@ std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryParseArrayIndex()
 std::shared_ptr<JsonPathExpr> JsonPathExpr::parseJsonPathExpr(const StringRef & str_ref)
 {
     JsonPathStream stream(str_ref);
-	stream.skipWhiteSpace();
-	if (stream.exhausted() || stream.read() != '$')
+    stream.skipWhiteSpace();
+    if (stream.exhausted() || stream.read() != '$')
         return nullptr;
 
-	stream.skipWhiteSpace();
+    stream.skipWhiteSpace();
 
     /// Not using std::make_shared for private constructor
     auto json_path_ptr = new JsonPathExpr();
     std::shared_ptr<JsonPathExpr> path_expr(json_path_ptr);
     path_expr->legs.reserve(16);
     bool ok = false;
-	while (!stream.exhausted())
+    while (!stream.exhausted())
     {
         switch (stream.peek())
         {
@@ -282,7 +282,8 @@ bool JsonPathExpr::parseJsonPathArray(JsonPathStream & stream, JsonPathExpr * pa
         path_expr->flag |= JsonPathExpressionContainsAsterisk;
         path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegArraySelection, AsteriskSelection));
     }
-    else {
+    else
+    {
         auto res = stream.tryParseArrayIndex();
         if (!res.first)
             return false;
@@ -348,7 +349,7 @@ bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr * p
         if (stream.peek() == '"')
         {
             stream.skip(1);
-            auto res = stream.readWhile([&stream](char c){
+            auto res = stream.readWhile([&stream](char c) {
                 if (c == '\\')
                 {
                     stream.skip(1);
@@ -381,4 +382,3 @@ bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr * p
 }
 
 } // namespace DB
-
