@@ -36,6 +36,8 @@
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
+#include <string_view>
+
 namespace DB
 {
 namespace
@@ -70,6 +72,8 @@ void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlan
     });
 }
 } // namespace
+
+constexpr static std::string_view STREAM_AGG_ERROR("Group by key is not supported in StreamAgg");
 
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
@@ -116,8 +120,9 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
             pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         break;
     }
-    case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
+        RUNTIME_CHECK_MSG(executor->aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
+    case tipb::ExecType::TypeAggregation:
         GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
         pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), FineGrainedShuffle(executor), popBack()));
         break;
