@@ -24,6 +24,7 @@
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <fmt/format.h>
+#include "common/defines.h"
 
 
 namespace CurrentMetrics
@@ -589,7 +590,9 @@ bool StoragePool::doV2VersionCompact(const Settings & /*settings*/)
     done_anything |= meta_storage_v2->compactInMemVersions();
     done_anything |= data_storage_v2->compactInMemVersions();
     done_anything |= log_storage_v2->compactInMemVersions();
-    return done_anything;
+    UNUSED(done_anything);
+    // always return false to run with interval 60s at least.
+    return false;
 }
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
