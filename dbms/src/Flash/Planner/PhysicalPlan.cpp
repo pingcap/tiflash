@@ -71,8 +71,6 @@ void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlan
 }
 } // namespace
 
-const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
-
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
     assert(dag_request);
