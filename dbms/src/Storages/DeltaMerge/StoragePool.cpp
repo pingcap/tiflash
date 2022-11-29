@@ -622,6 +622,11 @@ void StoragePool::shutdown()
         global_context.getBackgroundPool().removeTask(gc_handle);
         gc_handle = nullptr;
     }
+    if (ps_version_compact_handle)
+    {
+        global_context.getPSBackgroundPool().removeTask(ps_version_compact_handle);
+        ps_version_compact_handle = nullptr;
+    }
 }
 
 void StoragePool::drop()
