@@ -118,7 +118,7 @@ UInt64 DecodeVarUIntImpl(size_t & cursor, const char * raw_value, size_t length)
     int s = 0;
     for (int i = 0; cursor < length; i++)
     {
-        auto v = static_cast<UInt8>(raw_value[cursor++]);
+        UInt64 v = static_cast<UInt8>(raw_value[cursor++]);
         if (v < 0x80)
         {
             if (i > 9 || (i == 9 && v > 1))
