@@ -41,6 +41,8 @@ namespace FailPoints
 extern const char pause_when_ingesting_to_dt_store[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
+extern const char force_ingest_via_delta[];
+extern const char force_ingest_via_split[];
 } // namespace FailPoints
 
 namespace DM
@@ -566,11 +568,14 @@ void DeltaMergeStore::ingestFiles(
     }
 
     bool ingest_using_split = false;
-    if (/*clear_data_in_range && */ bytes >= dm_context->delta_small_column_file_bytes)
+    if (bytes >= dm_context->delta_small_column_file_bytes)
     {
         // We still write small ssts directly into the delta layer.
         ingest_using_split = true;
     }
+
+    fiu_do_on(FailPoints::force_ingest_via_delta, { ingest_using_split = false; });
+    fiu_do_on(FailPoints::force_ingest_via_split, { ingest_using_split = true; });
 
     {
         auto get_ingest_files = [&] {
