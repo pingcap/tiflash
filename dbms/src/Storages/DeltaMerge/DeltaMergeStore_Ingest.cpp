@@ -114,8 +114,8 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                 }
             }
 
-            // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
-            // they are visible for readers who require file_ids to be found in PageStorage.
+            // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
+            // they are visible for readers immediately, who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
             bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), column_files, clear_data_in_range);
@@ -386,8 +386,36 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │----------- Segment ----------│
          *    │-------- Ingest Range --------│
          */
-        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, file);
+        auto delegate = dm_context.path_pool.getStableDiskDelegator();
+        auto file_provider = dm_context.db_context.getFileProvider();
+
+        WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+
+        // Generate DMFile instance with a new ref_id pointed to the file_id,
+        // because we may use the same DMFile to ingest into multiple segments.
+        auto new_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto ref_file = DMFile::restore(
+            file_provider,
+            file->fileId(),
+            new_page_id,
+            file->parentPath(),
+            DMFile::ReadMetaMode::all());
+        wbs.data.putRefPage(new_page_id, file->pageId());
+
+        // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
+        // they are visible for readers immediately, who require file_ids to be found in PageStorage.
+        wbs.writeLogAndData();
+
+        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, ref_file);
         const bool succeeded = new_segment_or_null != nullptr;
+
+        if (!succeeded)
+        {
+            // When segment is not valid anymore, replaceData will fail.
+            // In this case, we just discard this ref file.
+            wbs.rollbackWrittenLogAndData();
+        }
+
         return succeeded;
     }
     else if (is_start_matching)

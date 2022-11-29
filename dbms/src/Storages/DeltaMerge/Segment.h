@@ -355,29 +355,20 @@ public:
         const StableValueSpacePtr & new_stable) const;
 
     /**
-     * Only used in tests as a shortcut.
-     * Normally you should use `dangerouslyReplaceData`.
+     * Replace all data in the snapshot using the specified DMFile as the stable instead.
+     * Newly appended data since the snapshot was created will be retained the segment.
+     *
+     * Snapshot is optional. If the snapshot is not specified, it means everything in the
+     * segment now will be replaced.
+     *
+     * This API does not have a prepare & apply pair, as it should be quick enough.
+     *
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
      */
-    [[nodiscard]] SegmentPtr dangerouslyReplaceDataForTest(DMContext & dm_context, const DMFilePtr & data_file) const;
-
-    /**
-     * Discard all data in the current delta and stable layer, and use the specified DMFile as the stable instead.
-     * This API does not have a prepare & apply pair, as it should be quick enough. The specified DMFile is safe
-     * to be shared for multiple segments.
-     *
-     * Note 1: Should be protected behind the Segment update lock to ensure no new data will be appended to this
-     *         segment during the function call. Otherwise these new data will be lost in the new segment.
-     *
-     * Note 2: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
-     *         stable file for multiple segments. It is your own duty to enable GC later.
-     *
-     * Note 3: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
-     *         to the PageStorage's data. Otherwise there will be exceptions.
-     *
-     * Note 4: This API is subjected to be changed in future, as it relies on the knowledge that all current data
-     *         in this segment is useless, which is a pretty tough requirement.
-     */
-    [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs) const;
+    [[nodiscard]] SegmentPtr replaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, SegmentSnapshotPtr segment_snap_opt = nullptr) const;
 
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
@@ -437,9 +428,13 @@ public:
         return std::exchange(lock_opt, std::nullopt).value();
     }
 
-    /// Marks this segment as abandoned.
-    /// Note: Segment member functions never abandon the segment itself.
-    /// The abandon state is usually triggered by the DeltaMergeStore.
+    /**
+      * Marks this segment as abandoned.
+      * Note: Segment member functions never abandon the segment itself.
+      * The abandon state is usually triggered by the DeltaMergeStore.
+      * When triggering, remember to hold a unique_lock from the DeltaMergeStore.
+      * Otherwise, the abandon operation may break an existing segment update operation.
+      */
     void abandon(DMContext & context)
     {
         LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
@@ -532,7 +527,7 @@ private:
         bool relevant_place) const;
 
 private:
-    /// The version of this segment. After split / merge / mergeDelta / dangerouslyReplaceData, epoch got increased by 1.
+    /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
     const UInt64 epoch;
 
     RowKeyRange rowkey_range;
