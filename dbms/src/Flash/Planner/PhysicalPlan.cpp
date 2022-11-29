@@ -119,7 +119,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         break;
     }
     case tipb::ExecType::TypeStreamAgg:
-        RUNTIME_CHECK_MSG(executor->aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
+        RUNTIME_CHECK_MSG(executor->aggregation().group_by_size() == 0, "Group by key is not supported in StreamAgg");
     case tipb::ExecType::TypeAggregation:
         GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
         pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), FineGrainedShuffle(executor), popBack()));
