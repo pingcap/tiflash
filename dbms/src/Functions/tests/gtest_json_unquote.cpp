@@ -33,7 +33,7 @@ try
     const String func_name = "json_unquote";
     static auto const nullable_string_type_ptr = makeNullable(std::make_shared<DataTypeString>());
     static auto const string_type_ptr = std::make_shared<DataTypeString>();
-    String bj2("\"hello, \\\"你好, \u554A world, null, true]\"");
+    String bj2("\"hello, \\\"你好, \\u554A world, null, true]\"");
     String bj4("[[0, 1], [2, 3], [4, [5, 6]]]");
     auto input_col = createColumn<Nullable<String>>({bj2, {}, bj4});
     auto output_col = createColumn<Nullable<String>>({"hello, \"你好, 啊 world, null, true]", {}, "[[0, 1], [2, 3], [4, [5, 6]]]"});

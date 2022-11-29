@@ -229,9 +229,9 @@ void JsonBinary::unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & 
             case 'u':
             {
                 RUNTIME_CHECK(i + 4 <= ref_size);
-                for (size_t j = i; j < i + 4; ++j)
+                for (size_t j = i + 1; j < i + 5; ++j)
                     RUNTIME_CHECK(isHexDigit(ref.data[j]));
-                auto str = String(ref.data + i, 4);
+                auto str = String(ref.data + i + 1, 4);
                 auto val = std::stoul(str, nullptr, 16);
                 size_t utf_length = 0;
                 char utf_code_array[4];
