@@ -108,12 +108,12 @@ SnapshotsStatistics PageEntriesVersionSetWithDelta::getSnapshotsStat() const
 }
 
 
-PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id)
+PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id, bool trigger_next_compact)
 {
     // acquire for unique_lock since we need to add all snapshots to link list
     std::unique_lock<std::shared_mutex> lock(read_write_mutex);
 
-    auto s = std::make_shared<Snapshot>(this, current, tracing_id);
+    auto s = std::make_shared<Snapshot>(this, current, tracing_id, trigger_next_compact);
     // Register a weak_ptr to snapshot into VersionSet so that we can get all living PageFiles
     // by `PageEntriesVersionSetWithDelta::listAllLiveFiles`, and it remove useless weak_ptr of snapshots.
     // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
@@ -165,7 +165,7 @@ std::unique_lock<std::shared_mutex> PageEntriesVersionSetWithDelta::acquireForLo
     return std::unique_lock<std::shared_mutex>(read_write_mutex);
 }
 
-bool PageEntriesVersionSetWithDelta::isValidVersion(const VersionPtr tail) const
+bool PageEntriesVersionSetWithDelta::isValidVersion(VersionPtr tail) const
 {
     for (auto node = current; node != nullptr; node = std::atomic_load(&node->prev))
     {

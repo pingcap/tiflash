@@ -79,6 +79,26 @@ public:
 
     size_t sizeUnlocked() const;
 
+    bool tryCompact()
+    {
+        const auto release_idx = last_released_snapshot_index.load();
+        const auto last_try_idx = last_try_compact_index.load();
+        if (release_idx <= last_try_idx)
+        {
+            return false;
+        }
+
+        // some new snapshot are released, let's try
+        // compact the versions.
+        last_try_compact_index.store(release_idx);
+
+        // do NOT increase the index by this snapshot
+        auto snap = getSnapshot("ps-mem-compact", false);
+        compactOnDeltaRelease(snap->view.getSharedTailVersion());
+
+        return true;
+    }
+
     SnapshotsStatistics getSnapshotsStat() const;
 
     std::string toDebugString() const
@@ -127,14 +147,16 @@ public:
 
     private:
         const TimePoint create_time;
+        const bool trigger_next_compact;
 
     public:
-        Snapshot(PageEntriesVersionSetWithDelta * vset_, VersionPtr tail_, const String & tracing_id_)
+        Snapshot(PageEntriesVersionSetWithDelta * vset_, VersionPtr tail_, const String & tracing_id_, bool trigger_next_compact_ = false)
             : vset(vset_)
             , view(std::move(tail_))
             , create_thread(Poco::ThreadNumber::get())
             , tracing_id(tracing_id_)
             , create_time(std::chrono::steady_clock::now())
+            , trigger_next_compact(trigger_next_compact_)
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -142,7 +164,14 @@ public:
         // Releasing a snapshot object may do compaction on vset's versions.
         ~Snapshot() override
         {
-            vset->compactOnDeltaRelease(view.getSharedTailVersion());
+            if (trigger_next_compact)
+            {
+                // vset->compactOnDeltaRelease(view.getSharedTailVersion());
+                // increase the index so that upper level know it should try
+                // the version compact.
+                vset->last_released_snapshot_index.fetch_add(1);
+            }
+
             // Remove snapshot from linked list
 
             view.release();
@@ -168,7 +197,7 @@ public:
     using SnapshotPtr = std::shared_ptr<Snapshot>;
     using SnapshotWeakPtr = std::weak_ptr<Snapshot>;
 
-    SnapshotPtr getSnapshot(const String & tracing_id = "");
+    SnapshotPtr getSnapshot(const String & tracing_id = "", bool trigger_next_compact = true);
 
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
 
@@ -207,7 +236,7 @@ private:
     std::unique_lock<std::shared_mutex> acquireForLock();
 
     // Return true if `tail` is in current version-list
-    bool isValidVersion(const VersionPtr tail) const;
+    bool isValidVersion(VersionPtr tail) const;
 
     // If `tail` is in the latest versions-list, do compaction on version-list [head, tail].
     // If there some versions after tail, use vset's `rebase` to concat them.
@@ -227,6 +256,9 @@ private:
         bool need_scan_page_ids);
 
 private:
+    std::atomic<UInt64> last_released_snapshot_index{0};
+    std::atomic<UInt64> last_try_compact_index{0};
+
     mutable std::shared_mutex read_write_mutex;
     VersionPtr current;
     mutable std::list<SnapshotWeakPtr> snapshots;
