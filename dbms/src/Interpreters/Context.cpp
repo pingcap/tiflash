@@ -1444,7 +1444,7 @@ BackgroundProcessingPool & Context::getBackgroundPool()
 {
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+        shared->background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-");
     return *shared->background_pool;
 }
 
@@ -1453,7 +1453,7 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     // TODO: choose a better thread pool size and maybe a better name for the pool
     auto lock = getLock();
     if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-block-");
     return *shared->blockable_background_pool;
 }
 
