@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -25,10 +26,11 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
+#include <Flash/Coprocessor/ExecutionSummaryCollector.cpp>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
-
+#include <memory>
 
 namespace DB
 {
@@ -41,7 +43,16 @@ using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
 {
-    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns);
+    /// We only sampled some fields to compare equality in this test.
+    /// It would be better to check all fields.
+    /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
+    /// https://en.cppreference.com/w/cpp/language/default_comparisons
+    return (left.concurrency == right.concurrency) && //
+        (left.num_iterations == right.num_iterations) && //
+        (left.num_produced_rows == right.num_produced_rows) && //
+        (left.time_processed_ns == right.time_processed_ns) && //
+        (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && //
+        (left.scan_context->total_dmfile_skipped_rows == right.scan_context->total_dmfile_skipped_rows);
 }
 
 struct MockWriter
@@ -50,13 +61,22 @@ struct MockWriter
         : queue(queue_)
     {}
 
-    ExecutionSummary mockExecutionSummary()
+    static ExecutionSummary mockExecutionSummary()
     {
         ExecutionSummary summary;
         summary.time_processed_ns = 100;
         summary.num_produced_rows = 10000;
         summary.num_iterations = 50;
         summary.concurrency = 1;
+        summary.scan_context = std::make_unique<DM::ScanContext>();
+
+        summary.scan_context->total_dmfile_scanned_packs = 1;
+        summary.scan_context->total_dmfile_skipped_packs = 2;
+        summary.scan_context->total_dmfile_scanned_rows = 8000;
+        summary.scan_context->total_dmfile_skipped_rows = 15000;
+        summary.scan_context->total_dmfile_rough_set_index_load_time_ms = 10;
+        summary.scan_context->total_dmfile_read_time_ms = 200;
+        summary.scan_context->total_create_snapshot_time_ms = 5;
         return summary;
     }
 
@@ -78,6 +98,7 @@ struct MockWriter
             summary_ptr->set_num_produced_rows(summary.num_produced_rows);
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
+            summary_ptr->mutable_tiflash_scan_context()->CopyFrom(summary.scan_context->serialize());
             summary_ptr->set_executor_id("Executor_0");
         }
         ++total_packets;
@@ -202,7 +223,7 @@ struct MockReceiverContext
         UnaryCallback<bool> *) const {}
 
     PacketQueuePtr queue;
-    std::vector<tipb::FieldType> field_types;
+    std::vector<tipb::FieldType> field_types{};
 };
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 using MockWriterPtr = std::shared_ptr<MockWriter>;
@@ -366,7 +387,7 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        auto summary = receiver_stream->getRemoteExecutionSummaries(0);
+        const auto * summary = receiver_stream->getRemoteExecutionSummaries(0);
         ASSERT_TRUE(summary != nullptr);
         ASSERT_EQ(summary->size(), 1);
         ASSERT_EQ(summary->begin()->first, "Executor_0");
@@ -436,7 +457,7 @@ public:
     }
 
     Context context;
-    std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DAGContext> dag_context_ptr{};
 };
 
 TEST_F(TestTiRemoteBlockInputStream, testNoChunkInResponse)

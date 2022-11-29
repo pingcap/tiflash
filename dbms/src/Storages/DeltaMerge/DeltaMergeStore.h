@@ -22,6 +22,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
@@ -266,11 +267,15 @@ public:
 
     void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
+    /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
                      const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
+    /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
@@ -307,7 +312,8 @@ public:
                            bool is_fast_scan = false,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
-                           size_t extra_table_id_index = InvalidColumnID);
+                           size_t extra_table_id_index = InvalidColumnID,
+                           const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
@@ -406,7 +412,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {
