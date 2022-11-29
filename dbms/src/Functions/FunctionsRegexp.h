@@ -2019,7 +2019,7 @@ public:
 
         // Initialize result column
         auto col_res = ColumnString::create();
-        col_res.reserve(col_size * 15);
+        col_res->reserve(col_size * 15);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || ReplT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
 
