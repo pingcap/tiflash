@@ -317,9 +317,7 @@ protected:
 TEST_F(SegmentRandomizedTest, FastCommonHandle)
 try
 {
-    SegmentTestOptions options;
-    options.is_common_handle = true;
-    reloadWithOptions(options);
+    reloadWithOptions({.is_common_handle = true});
     run(/* n */ 500, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
@@ -328,9 +326,7 @@ CATCH
 TEST_F(SegmentRandomizedTest, FastIntHandle)
 try
 {
-    SegmentTestOptions options;
-    options.is_common_handle = false;
-    reloadWithOptions(options);
+    reloadWithOptions({.is_common_handle = false});
     run(/* n */ 500, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
@@ -340,9 +336,7 @@ CATCH
 TEST_F(SegmentRandomizedTest, DISABLED_ForCI)
 try
 {
-    SegmentTestOptions options;
-    options.is_common_handle = true;
-    reloadWithOptions(options);
+    reloadWithOptions({.is_common_handle = true});
     run(50000, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
