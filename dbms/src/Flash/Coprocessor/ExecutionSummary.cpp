@@ -22,6 +22,7 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
     num_produced_rows += other.num_produced_rows;
     num_iterations += other.num_iterations;
     concurrency += other.concurrency;
+    scan_context->merge(*other.scan_context);
 }
 
 void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
@@ -30,6 +31,10 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows += other.num_produced_rows();
     num_iterations += other.num_iterations();
     concurrency += other.concurrency();
+
+    DM::ScanContext tmp_scan_context;
+    tmp_scan_context.deserialize(other.tiflash_scan_context());
+    scan_context->merge(tmp_scan_context);
 }
 
 void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
@@ -38,6 +43,7 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows = other.num_produced_rows();
     num_iterations = other.num_iterations();
     concurrency = other.concurrency();
+    scan_context->deserialize(other.tiflash_scan_context());
 }
 
 void ExecutionSummary::mergeFromRemoteRead(const ExecutionSummary & remote)
@@ -45,5 +51,6 @@ void ExecutionSummary::mergeFromRemoteRead(const ExecutionSummary & remote)
     time_processed_ns += remote.time_processed_ns;
     num_iterations += remote.num_iterations;
     concurrency += remote.concurrency;
+    scan_context->merge(*other.scan_context);
 }
 } // namespace DB

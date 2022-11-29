@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
@@ -44,7 +45,8 @@ private:
         tipb::SelectResponse & response,
         const String & executor_id,
         const BlockInputStreams & streams,
-        const RemoteExecutionSummary & remote_read_execution_summary) const;
+        const RemoteExecutionSummary & remote_read_execution_summary,
+        const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
 private:
     DAGContext & dag_context;

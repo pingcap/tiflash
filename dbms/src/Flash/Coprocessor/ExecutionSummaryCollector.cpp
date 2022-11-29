@@ -15,6 +15,10 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
+#include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -27,6 +31,8 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
     execution_summary->set_num_produced_rows(current.num_produced_rows);
     execution_summary->set_num_iterations(current.num_iterations);
     execution_summary->set_concurrency(current.concurrency);
+    execution_summary->mutable_tiflash_scan_context()->CopyFrom(current.scan_context->serialize());
+
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
@@ -69,10 +75,12 @@ void ExecutionSummaryCollector::fillLocalExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
     const BlockInputStreams & streams,
-    const RemoteExecutionSummary & remote_read_execution_summary) const
+    const RemoteExecutionSummary & remote_read_execution_summary,
+    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
     ExecutionSummary current;
     /// part 1: local execution info
+    // get execution info from streams
     for (const auto & stream_ptr : streams)
     {
         if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
@@ -82,6 +90,11 @@ void ExecutionSummaryCollector::fillLocalExecutionSummary(
             current.num_iterations += p_stream->getProfileInfo().blocks;
         }
         current.concurrency++;
+    }
+    // get execution info from scan_context
+    if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
+    {
+        current.scan_context->merge(*(iter->second));
     }
     /// part 2: remote execution info from remote read, merge to local execution info.
     if (auto it = remote_read_execution_summary.execution_summaries.find(executor_id); it != remote_read_execution_summary.execution_summaries.end())
@@ -127,7 +140,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     if (dag_context.return_executor_id)
     {
         for (auto & p : dag_context.getProfileStreamsMap())
-            fillLocalExecutionSummary(response, p.first, p.second, remote_read_execution_summary);
+            fillLocalExecutionSummary(response, p.first, p.second, remote_read_execution_summary, dag_context.scan_context_map);
     }
     else
     {
@@ -137,7 +150,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         {
             auto it = profile_streams_map.find(executor_id);
             assert(it != profile_streams_map.end());
-            fillLocalExecutionSummary(response, executor_id, it->second, remote_read_execution_summary);
+            fillLocalExecutionSummary(response, executor_id, it->second, remote_read_execution_summary, dag_context.scan_context_map);
         }
     }
 
