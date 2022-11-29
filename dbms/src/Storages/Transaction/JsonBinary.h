@@ -180,7 +180,7 @@ private:
     static void buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
     static void buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
     static void marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f);
-    static void marshalLiteralTo(JsonBinaryWriteBuffer & write_buffer, UInt8 literal);
+    static void marshalLiteralTo(JsonBinaryWriteBuffer & write_buffer, UInt8 lit_type);
     static void marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const StringRef & ref);
 
     static void marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opaque & o);

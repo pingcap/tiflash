@@ -178,24 +178,24 @@ JsonBinary::Opaque JsonBinary::getOpaque() const
 }
 
 template <bool doDecode>
-struct need_decode
+struct NeedDecode
 {
 };
 
 template <>
-struct need_decode<true>
+struct NeedDecode<true>
 {
-    typedef String type;
+    using Type = String;
 };
 
 template <>
-struct need_decode<false>
+struct NeedDecode<false>
 {
-    typedef void type;
+    using Type = void;
 };
 
 template <bool doDecode>
-typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & raw_value)
+typename NeedDecode<doDecode>::Type DecodeJson(size_t & cursor, const String & raw_value)
 {
     size_t base = cursor;
     UInt8 type = raw_value[cursor++];
@@ -230,9 +230,9 @@ typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & 
     size++;
     cursor = base + size;
     if (!doDecode)
-        return static_cast<typename need_decode<doDecode>::type>(0);
+        return static_cast<typename NeedDecode<doDecode>::Type>(nullptr);
     else
-        return static_cast<typename need_decode<doDecode>::type>(raw_value.substr(base, size));
+        return static_cast<typename NeedDecode<doDecode>::Type>(raw_value.substr(base, size));
 }
 
 void JsonBinary::SkipJson(size_t & cursor, const String & raw_value)
@@ -561,7 +561,7 @@ bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_co
     for (auto & path_expr_container : path_expr_container_vec)
     {
         DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
-        auto first_path_ref = path_expr_container->firstRef();
+        const auto * first_path_ref = path_expr_container->firstRef();
         RUNTIME_CHECK(first_path_ref);
         extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
     }
@@ -673,7 +673,7 @@ void JsonBinary::extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonP
     auto current_leg_pair = path_expr_ptr->popOneLeg();
     const auto & current_leg = current_leg_pair.first;
     RUNTIME_CHECK(current_leg);
-    auto sub_path_expr_ptr = current_leg_pair.second;
+    const auto * sub_path_expr_ptr = current_leg_pair.second;
     if (current_leg->type == JsonPathLeg::JsonPathLegArraySelection)
     {
         if (type != TYPE_CODE_ARRAY)
