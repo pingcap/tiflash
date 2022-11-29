@@ -124,7 +124,7 @@ namespace DB
         F(type_seg_split_bg, {"type", "seg_split_bg"}),                                                                                   \
         F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                   \
         F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                           \
-        F(type_seg_merge_bg_gc, {"type", "type_seg_merge_bg_gc"}),                                                                        \
+        F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                        \
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \

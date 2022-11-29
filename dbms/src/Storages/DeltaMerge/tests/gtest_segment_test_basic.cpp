@@ -305,7 +305,7 @@ Block mergeBlocks(std::vector<Block> && blocks)
 {
     auto accumulated_block = std::move(blocks[0]);
 
-    for (size_t block_idx = 1; block_idx < blocks.size(); block_idx++)
+    for (size_t block_idx = 1; block_idx < blocks.size(); ++block_idx)
     {
         auto block = std::move(blocks[block_idx]);
 
