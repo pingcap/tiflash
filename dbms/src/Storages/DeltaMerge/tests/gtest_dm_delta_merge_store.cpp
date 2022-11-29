@@ -31,8 +31,8 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include <gtest/gtest.h>
 #include <fmt/format.h>
+#include <gtest/gtest.h>
 
 #include <algorithm>
 #include <future>
