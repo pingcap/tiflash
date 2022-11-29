@@ -470,6 +470,7 @@ bool Segment::ingestDataToDelta(
     return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 Segment::IngestDataInfo Segment::prepareIngestDataWithClearData() const
 {
     return IngestDataInfo{

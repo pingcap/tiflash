@@ -256,8 +256,6 @@ protected:
             newly_written_rows_since_snapshot = getSegmentRowNumWithoutMVCC(segment_id) - *for_update_snapshot_rows;
         }
 
-        UNUSED(newly_written_rows_since_snapshot);
-
         auto [min_key, max_key] = getSegmentKeyRange(segment_id);
 
         std::vector<size_t> n_rows_collection{0, 10, 50, 1000};

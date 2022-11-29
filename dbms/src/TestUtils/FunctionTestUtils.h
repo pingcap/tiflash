@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/MyDuration.h>
-#include <Common/ProfileEvents.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>

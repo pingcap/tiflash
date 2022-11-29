@@ -405,7 +405,7 @@ public:
      * Use this function when the data file is small. The data file will be appended to the
      * delta layer directly.
      *
-     * If your data file is big,
+     * If your data file is big, try to use `prepareIngestDataXxx` and `applyIngestData`.
      *
      * Note 1: You must ensure the DMFile is not shared in multiple segments.
      * Note 2: You must enable the GC for the DMFile by yourself.
