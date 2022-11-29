@@ -229,10 +229,10 @@ typename NeedDecode<doDecode>::Type DecodeJson(size_t & cursor, const String & r
 
     size++;
     cursor = base + size;
-    if (!doDecode)
-        return static_cast<typename NeedDecode<doDecode>::Type>(nullptr);
+    if constexpr (!doDecode)
+        return static_cast<typename NeedDecode<false>::Type>(0);
     else
-        return static_cast<typename NeedDecode<doDecode>::Type>(raw_value.substr(base, size));
+        return static_cast<typename NeedDecode<true>::Type>(raw_value.substr(base, size));
 }
 
 void JsonBinary::SkipJson(size_t & cursor, const String & raw_value)

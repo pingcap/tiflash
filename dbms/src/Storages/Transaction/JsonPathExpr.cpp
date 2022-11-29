@@ -227,7 +227,7 @@ std::shared_ptr<JsonPathExpr> JsonPathExpr::parseJsonPathExpr(const StringRef & 
     stream.skipWhiteSpace();
 
     /// Not using std::make_shared for private constructor
-    auto json_path_ptr = new JsonPathExpr();
+    auto * json_path_ptr = new JsonPathExpr();
     std::shared_ptr<JsonPathExpr> path_expr(json_path_ptr);
     path_expr->legs.reserve(16);
     bool ok = false;

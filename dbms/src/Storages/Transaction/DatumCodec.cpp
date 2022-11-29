@@ -157,10 +157,10 @@ void SkipVarInt(size_t & cursor, const String & raw_value)
     SkipVarUInt(cursor, raw_value);
 }
 
-inline Int8 getWords(PrecType prec, ScaleType scale)
+inline Int32 getWords(PrecType prec, ScaleType scale)
 {
-    Int8 scale_word = scale / 9 + (scale % 9 > 0);
-    Int8 int_word = (prec - scale) / 9 + ((prec - scale) % 9 > 0);
+    Int32 scale_word = scale / 9 + (scale % 9 > 0);
+    Int32 int_word = (prec - scale) / 9 + ((prec - scale) % 9 > 0);
     return scale_word + int_word;
 }
 
@@ -513,7 +513,7 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
     int leading_digits = digits_int - words_int * digitsPerWord;
     int words_frac = frac / digitsPerWord;
     int trailing_digits = frac - words_frac * digitsPerWord;
-    int words = static_cast<Int32>(getWords(prec, frac));
+    int words = getWords(prec, frac);
 
     Int256 value = dec.value;
     Int32 mask = 0;
