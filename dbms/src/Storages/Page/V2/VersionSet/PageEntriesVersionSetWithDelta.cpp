@@ -110,12 +110,12 @@ SnapshotsStatistics PageEntriesVersionSetWithDelta::getSnapshotsStat() const
 }
 
 
-PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id, bool trigger_next_compact)
+PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id, BackgroundProcessingPool::TaskHandle handle)
 {
     // acquire for unique_lock since we need to add all snapshots to link list
     std::unique_lock<std::shared_mutex> lock(read_write_mutex);
 
-    auto s = std::make_shared<Snapshot>(this, current, tracing_id, trigger_next_compact);
+    auto s = std::make_shared<Snapshot>(this, current, tracing_id, handle);
     // Register a weak_ptr to snapshot into VersionSet so that we can get all living PageFiles
     // by `PageEntriesVersionSetWithDelta::listAllLiveFiles`, and it remove useless weak_ptr of snapshots.
     // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
@@ -352,7 +352,8 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         }
     }
     // Create a temporary latest snapshot by using `current`
-    valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current, ""));
+    // release this temporary snapshot won't cause version-list compact
+    valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current, "", nullptr));
 
     lock.unlock(); // Notice: unlock and we should free those valid snapshots without locking
 
