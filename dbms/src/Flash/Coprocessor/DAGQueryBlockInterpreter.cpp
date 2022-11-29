@@ -212,7 +212,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     const Block & right_input_header = input_streams_vec[1].back()->getHeader();
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
-    NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_pipeline.firstStream()->getHeader(), match_helper_name);
     NamesAndTypes join_output_columns = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
     /// add necessary transformation if the join key is an expression

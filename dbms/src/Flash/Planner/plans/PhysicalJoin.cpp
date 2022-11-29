@@ -106,7 +106,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const Block & build_side_header = build_plan->getSampleBlock();
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
-    NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_side_header, match_helper_name);
     NamesAndTypes join_output_schema = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
     auto & dag_context = *context.getDAGContext();
@@ -171,7 +170,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_plan,
         build_plan,
         join_ptr,
-        columns_added_by_join,
         probe_side_prepare_actions,
         build_side_prepare_actions,
         is_tiflash_right_join,
