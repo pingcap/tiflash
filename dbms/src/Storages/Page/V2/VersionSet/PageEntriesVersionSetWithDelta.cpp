@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
+#include <Common/ProfileEvents.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -32,6 +33,7 @@ namespace ProfileEvents
 extern const Event PSMVCCCompactOnDelta;
 extern const Event PSMVCCCompactOnDeltaRebaseRejected;
 extern const Event PSMVCCCompactOnBase;
+extern const Event PSMVCCCompactOnBaseCommit;
 extern const Event PSMVCCApplyOnCurrentBase;
 extern const Event PSMVCCApplyOnCurrentDelta;
 extern const Event PSMVCCApplyOnNewDelta;
@@ -205,20 +207,27 @@ void PageEntriesVersionSetWithDelta::compactOnDeltaRelease(VersionPtr tail)
         tail = tmp;
         tmp.reset();
     }
-    // do compact on base
-    if (tail->shouldCompactToBase(config))
+
+    if (!tail->shouldCompactToBase(config))
     {
-        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
-        auto old_base = std::atomic_load(&tail->prev);
-        assert(old_base != nullptr);
-        VersionPtr new_base = PageEntriesForDelta::compactDeltaAndBase(old_base, tail);
-        // replace nodes [head, tail] -> new_base
-        if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
-        {
-            // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
-            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
-            return;
-        }
+        return;
+    }
+
+    // do compact on base
+    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
+    auto old_base = std::atomic_load(&tail->prev);
+    assert(old_base != nullptr);
+    // create a new_base and copy the entries from `old_base` and `tail`
+    VersionPtr new_base = PageEntriesForDelta::compactDeltaAndBase(old_base, tail);
+    // replace nodes [head, tail] by new_base
+    if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
+    {
+        // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
+        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
+    }
+    else
+    {
+        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBaseCommit);
     }
 }
 
