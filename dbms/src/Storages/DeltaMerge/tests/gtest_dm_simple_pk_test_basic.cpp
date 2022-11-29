@@ -167,7 +167,7 @@ std::pair<Int64, Int64> SimplePKTestBasic::parseRange(const RowKeyRange & range)
     return {start_key, end_key};
 }
 
-Block SimplePKTestBasic::fillBlock(FillBlockOptions options)
+Block SimplePKTestBasic::fillBlock(const FillBlockOptions & options)
 {
     auto start_key = options.range.first;
     auto end_key = options.range.second;
@@ -328,7 +328,7 @@ ExternalDTFileInfo genDMFile(DeltaMergeStorePtr store, DMContext & context, cons
     return external_file;
 }
 
-void SimplePKTestBasic::ingestFiles(IngestFilesOptions options)
+void SimplePKTestBasic::ingestFiles(const IngestFilesOptions & options)
 {
     LOG_INFO(
         logger_op,

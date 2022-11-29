@@ -61,7 +61,7 @@ public:
         const std::vector<Block> & blocks;
         bool clear = false;
     };
-    void ingestFiles(IngestFilesOptions options);
+    void ingestFiles(const IngestFilesOptions & options);
 
     size_t getRowsN() const;
     size_t getRowsN(Int64 start_key, Int64 end_key) const;
@@ -72,7 +72,7 @@ public:
         std::pair<Int64, Int64> range;
         bool is_deleted = false;
     };
-    Block fillBlock(FillBlockOptions options);
+    Block fillBlock(const FillBlockOptions & options);
 
 public:
     SegmentPtr getSegmentAt(Int64 key) const;
