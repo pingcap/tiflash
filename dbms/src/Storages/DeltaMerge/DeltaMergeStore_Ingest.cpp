@@ -123,8 +123,8 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                 wbs.data.putRefPage(page_id, file->pageId());
             }
 
-            // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
-            // they are visible for readers who require file_ids to be found in PageStorage.
+            // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
+            // they are visible for readers immediately, who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
             bool ingest_success = segment->ingestDataToDelta(*dm_context, range.shrink(segment_range), data_files, clear_data_in_range);

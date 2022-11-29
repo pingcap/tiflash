@@ -593,7 +593,7 @@ private:
         bool relevant_place) const;
 
 private:
-    /// The version of this segment. After split / merge / mergeDelta / dangerouslyReplaceData, epoch got increased by 1.
+    /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
     const UInt64 epoch;
 
     RowKeyRange rowkey_range;
