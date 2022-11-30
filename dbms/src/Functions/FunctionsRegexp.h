@@ -1157,7 +1157,7 @@ public:
         ParamVariant PAT_PV_VAR_NAME(col_pat, col_size, StringRef("", 0));
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        GET_ACTUAL_PARAMS_AND_EXECUTE()
+        // GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1515,7 +1515,7 @@ public:
         ParamVariant RET_OP_PV_VAR_NAME(col_return_option, col_size, 0);
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        GET_ACTUAL_PARAMS_AND_EXECUTE()
+        // GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1835,7 +1835,7 @@ public:
         ParamVariant OCCUR_PV_VAR_NAME(col_occur, col_size, 1);
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        GET_ACTUAL_PARAMS_AND_EXECUTE()
+        // GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -2025,6 +2025,8 @@ public:
 
         auto & res_data = col_res->getChars();
         auto & res_offsets = col_res->getOffsets();
+        res_data.resize(col_size * 15);
+        res_offsets.resize(col_size);
         ColumnString::Offset res_offset = 0;
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || ReplT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
