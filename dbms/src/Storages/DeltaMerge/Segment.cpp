@@ -2270,7 +2270,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         expected_block_size,
         /*need_row_id*/ true);
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
-    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap->clone());
+    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap);
     for (;;)
     {
         auto blk = stream->read();
@@ -2296,7 +2296,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
-    auto segment_snap = bitmap_filter->snapshot();
+    auto & segment_snap = bitmap_filter->snapshot();
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         columns_to_read,

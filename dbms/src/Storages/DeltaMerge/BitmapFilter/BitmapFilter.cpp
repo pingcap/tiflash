@@ -57,9 +57,9 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     }
 }
 
-SegmentSnapshotPtr BitmapFilter::snapshot() const
+SegmentSnapshotPtr & BitmapFilter::snapshot()
 {
-    return snap == nullptr ? nullptr : snap->clone();
+    return snap;
 }
 
 void BitmapFilter::runOptimize()
