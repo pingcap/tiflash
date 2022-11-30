@@ -2255,8 +2255,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         bitmap_filter,
         max_version,
         expected_block_size,
-        /* enable_clean_read */ false,
-        /* is_fast_scan */ false);
+        /* enable_handle_clean_read */ false,
+        /* is_fast_scan */ false,
+        /* enable_del_clean_read */ false);
 
     auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
 
@@ -2326,8 +2327,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         bitmap_filter,
         max_version,
         expected_block_size,
-        /* enable_clean_read */ false,
-        /* is_fast_scan */ false);
+        /* enable_handle_clean_read */ false,
+        /* is_fast_scan */ false,
+        /* enable_del_clean_read */ false);
 
     auto rest_columns_to_read_ptr = std::make_shared<ColumnDefines>(rest_columns_to_read);
 
