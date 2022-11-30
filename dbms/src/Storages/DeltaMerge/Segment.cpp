@@ -873,49 +873,39 @@ SegmentPtr Segment::applyMergeDelta(const Segment::Lock & lock, //
     return new_me;
 }
 
-SegmentPtr Segment::dangerouslyReplaceDataForTest(DMContext & dm_context, //
-                                                  const DMFilePtr & data_file) const
+SegmentPtr Segment::replaceData(const Segment::Lock & lock, //
+                                DMContext & context,
+                                const DMFilePtr & data_file,
+                                SegmentSnapshotPtr segment_snap_opt) const
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    LOG_DEBUG(log, "ReplaceData - Begin, snapshot_rows={} data_file={}", segment_snap_opt == nullptr ? "<none>" : std::to_string(segment_snap_opt->getRows()), data_file->path());
 
-    auto lock = mustGetUpdateLock();
-    auto new_segment = dangerouslyReplaceData(lock, dm_context, data_file, wbs);
+    ColumnFiles in_memory_files{};
+    ColumnFilePersisteds persisted_files{};
 
-    wbs.writeAll();
-    return new_segment;
-}
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
-SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
-                                           DMContext & dm_context,
-                                           const DMFilePtr & data_file,
-                                           WriteBatches & wbs) const
-{
-    LOG_DEBUG(log, "ReplaceData - Begin, data_file={}", data_file->path());
+    // If a snapshot is specified, we retain newly written data since the snapshot.
+    // Otherwise, we just discard everything in the delta layer.
+    if (segment_snap_opt != nullptr)
+    {
+        std::tie(in_memory_files, persisted_files) = delta->cloneNewlyAppendedColumnFiles(
+            lock,
+            context,
+            rowkey_range,
+            *segment_snap_opt->delta,
+            wbs);
+    }
 
-    auto & storage_pool = dm_context.storage_pool;
-    auto delegate = dm_context.path_pool.getStableDiskDelegator();
-
-    RUNTIME_CHECK(delegate.getDTFilePath(data_file->fileId()) == data_file->parentPath());
-
-    // Always create a ref to the file to allow `data_file` being shared.
-    auto new_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-    // TODO: We could allow assigning multiple DMFiles in future.
-    auto ref_file = DMFile::restore(
-        dm_context.db_context.getFileProvider(),
-        data_file->fileId(),
-        new_page_id,
-        data_file->parentPath(),
-        DMFile::ReadMetaMode::all());
-    wbs.data.putRefPage(new_page_id, data_file->pageId());
+    auto new_delta = std::make_shared<DeltaValueSpace>(
+        delta->getId(),
+        persisted_files,
+        in_memory_files);
+    new_delta->saveMeta(wbs);
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
-    new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
+    new_stable->setFiles({data_file}, rowkey_range, &context);
     new_stable->saveMeta(wbs.meta);
-
-    // Empty new delta
-    auto new_delta = std::make_shared<DeltaValueSpace>(
-        delta->getId());
-    new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>( //
         parent_log,
@@ -929,6 +919,8 @@ SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
 
     delta->recordRemoveColumnFilesPages(wbs);
     stable->recordRemovePacksPages(wbs);
+
+    wbs.writeAll();
 
     LOG_DEBUG(log, "ReplaceData - Finish, old_me={} new_me={}", info(), new_me->info());
 
