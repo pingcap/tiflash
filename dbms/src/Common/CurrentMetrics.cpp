@@ -53,7 +53,6 @@
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
-    M(DT_SnapshotOfSegmentIngest)               \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
