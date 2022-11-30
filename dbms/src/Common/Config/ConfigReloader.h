@@ -58,7 +58,7 @@ public:
     void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true, is_main_config); }
 
     bool tlsInited() const { return tls_inited; }
-    
+
     /// Init tls certificate files when tls is enabled.
     void initTls(bool throw_on_error);
 
