@@ -184,6 +184,9 @@ inline void fillColumnStringWhenAllNull(decltype(ColumnString::create()) & col_r
 {
     auto & col_res_data = col_res->getChars();
     auto & col_res_offsets = col_res->getOffsets();
+    col_res_data.resize(size);
+    col_res_offsets.resize(size);
+
     size_t offset = 0;
     for (size_t i = 0; i < size; ++i)
     {
@@ -1665,7 +1668,7 @@ public:
 
         // Initialize result column
         auto col_res = ColumnString::create();
-        col_res->reserve(col_size * 15);
+        col_res->reserve(col_size);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1695,7 +1698,7 @@ public:
 
         auto null_map_col = ColumnUInt8::create();
         typename ColumnUInt8::Container & null_map = null_map_col->getData();
-        null_map.resize(col_size);
+        null_map.resize(col_size, 1);
 
         // Start to execute instr
         if (canMemorize<PatT, MatchTypeT>())
@@ -1706,7 +1709,6 @@ public:
                 regexp = memorize<true>(pat_param, match_type_param, collator);
                 if (regexp == nullptr)
                 {
-                    null_map.resize(col_size, 1);
                     fillColumnStringWhenAllNull(col_res, col_size);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
                     return;
@@ -1719,7 +1721,7 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
                     {
-                        null_map[i] = 1;
+                        // null_map has been set to 1 in the previous 
                         col_res->insertData("", 0);
                         continue;
                     }
@@ -1751,7 +1753,7 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
-                        null_map[i] = 1;
+                        // null_map has been set to 1 in the previous 
                         col_res->insertData("", 0);
                         continue;
                     }
