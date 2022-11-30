@@ -128,7 +128,7 @@ public:
         StringRef data;
     };
 
-    explicit JsonBinary(JsonType type_, const StringRef & ref)
+    JsonBinary(JsonType type_, const StringRef & ref)
         : type(type_)
         , data(ref)
     {}
@@ -257,7 +257,7 @@ void JsonBinary::unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & 
                 break;
             case 'u':
             {
-                RUNTIME_CHECK(i + 4 <= ref_size);
+                RUNTIME_CHECK((i + 4) <= ref_size);
                 for (size_t j = i + 1; j < i + 5; ++j)
                     RUNTIME_CHECK(isHexDigit(ref.data[j]));
                 auto str = String(ref.data + i + 1, 4);

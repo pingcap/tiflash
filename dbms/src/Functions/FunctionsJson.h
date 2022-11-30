@@ -192,8 +192,6 @@ public:
         else
             throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
-
-private:
 };
 
 
@@ -258,8 +256,6 @@ public:
         else
             throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
-
-private:
 };
 
 class FunctionsCastJsonAsString : public IFunction
@@ -333,8 +329,6 @@ public:
         else
             throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
-
-private:
 };
 
 } // namespace DB
