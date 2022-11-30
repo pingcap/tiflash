@@ -137,7 +137,20 @@ grpc::Status FlashService::Coprocessor(
 
     context->setMockStorage(mock_storage);
 
+    // We use this atomic variable metrics from the prometheus-cpp library to mark the number of queued queries.
+    // TODO: Use grpc asynchronous server and a more full-featured thread pool.
+    if (auto total = GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Value(); total > 500.0)
+    {
+        response->set_other_error("TiFlash server is busy: cop pool queued too much, current = {}, maximum = {}", total, 500.0);
+        return grpc::Status::OK;
+    }
+
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
+        if (watch.elapsedSeconds() > 20)
+        {
+            response->set_other_error("TiFlash server is busy: this task queued in cop pool too long, current = {}, maximum = {}", watch.elapsedSeconds(), 20);
+            return grpc::Status::OK;
+        }
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
