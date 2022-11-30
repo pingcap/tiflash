@@ -491,12 +491,12 @@ template <bool thread_safe>
 std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur)
 {
     if (occur != 1 || byte_pos != 1)
-        return std::optional<StringRef>();
+        return std::nullopt;
 
     StringPieceType expr_sp(expr, expr_size);
     StringPieceType matched_str;
     if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
-        return std::optional<StringRef>();
+        return std::nullopt;
 
     return std::optional<StringRef>(StringRef(matched_str.data(), matched_str.size()));
 }
@@ -593,7 +593,7 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substrImpl
     while (occur > 0)
     {
         if (!RegexType::FindAndConsume(&expr_sp, *re2, &matched_str))
-            return std::optional<StringRef>();
+            return std::nullopt;
 
         --occur;
     }

@@ -2828,7 +2828,6 @@ struct RegexpSubstrCase
     String match_type;
 };
 
-// TODO add empty column test
 TEST_F(Regexp, RegexpSubstr)
 {
     // Test: All columns are const
@@ -3078,6 +3077,36 @@ TEST_F(Regexp, RegexpSubstr)
                              createNullableVectorColumn<Int64>(positions, null_maps[RegexpSubstrCase::POS_NULL_MAP_IDX]),
                              createColumn<Int64>(occurs),
                              createColumn<String>(match_types)));
+    }
+
+    // Test: empty column tests
+    {
+        ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(0, ""),
+                         executeFunction(
+                             "regexp_substr",
+                             createConstColumn<String>(0, "m"),
+                             createConstColumn<String>(0, "m"),
+                             createConstColumn<Int32>(0, 1),
+                             createConstColumn<Int32>(0, 1),
+                             createConstColumn<String>(0, "m")));
+
+        ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}),
+                         executeFunction(
+                             "regexp_substr",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createColumn<Int32>({}),
+                             createColumn<Int32>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}),
+                         executeFunction(
+                             "regexp_substr",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createConstColumn<Int32>(0, 1),
+                             createColumn<Int32>({}),
+                             createConstColumn<String>(0, "")));
     }
 
     // Test: Invalid parameter handling
