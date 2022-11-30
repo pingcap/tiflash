@@ -210,12 +210,12 @@ void MPPTunnel::connectLocal(size_t source_index, const String & req_info, std::
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, msg_channels, queue_size, mem_tracker, log, tunnel_id);
+            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, msg_channels, log, queue_size, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_fine_grained_sender;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, msg_channels, queue_size, mem_tracker, log, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, msg_channels, log, queue_size, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_sender;
         }
 
@@ -388,29 +388,5 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
     thread_manager->schedule(true, "MPPTunnel", [this, writer] {
         sendJob(writer);
     });
-}
-
-std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
-{
-    TrackedMppDataPacketPtr res;
-    auto result = send_queue.pop(res);
-    if (result == MPMCQueueResult::OK)
-    {
-        // switch tunnel's memory tracker into receiver's
-        res->switchMemTracker(current_memory_tracker);
-        return res;
-    }
-    else if (result == MPMCQueueResult::CANCELLED)
-    {
-        RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
-        if (!cancel_reason_sent)
-        {
-            cancel_reason_sent = true;
-            res = std::make_shared<TrackedMppDataPacket>(getPacketWithError(send_queue.getCancelReason()), current_memory_tracker);
-            return res;
-        }
-    }
-    consumerFinish("");
-    return nullptr;
 }
 } // namespace DB

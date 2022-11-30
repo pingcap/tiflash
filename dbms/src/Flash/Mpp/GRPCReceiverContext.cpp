@@ -120,55 +120,6 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     }
 };
 
-struct LocalExchangePacketReader : public ExchangePacketReader
-{
-    LocalTunnelSenderPtr local_tunnel_sender;
-
-    explicit LocalExchangePacketReader(const LocalTunnelSenderPtr & local_tunnel_sender_)
-        : local_tunnel_sender(local_tunnel_sender_)
-    {}
-
-    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
-    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-    ~LocalExchangePacketReader() override
-    {
-        if (local_tunnel_sender)
-        {
-            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            local_tunnel_sender->consumerFinish("Receiver exists");
-            local_tunnel_sender.reset();
-        }
-    }
-
-    bool read(TrackedMppDataPacketPtr & packet) override
-    {
-        TrackedMppDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
-        bool success = tmp_packet != nullptr;
-        if (success)
-            packet = tmp_packet;
-        return success;
-    }
-
-    void cancel(const String & reason) override
-    {
-        if (local_tunnel_sender)
-        {
-            local_tunnel_sender->consumerFinish(fmt::format("Receiver cancelled, reason: {}", reason));
-            local_tunnel_sender.reset();
-        }
-    }
-
-    grpc::Status finish() override
-    {
-        if (local_tunnel_sender)
-        {
-            local_tunnel_sender->consumerFinish("Receiver finished!");
-            local_tunnel_sender.reset();
-        }
-        return ::grpc::Status::OK;
-    }
-};
-
 } // namespace
 
 GRPCReceiverContext::GRPCReceiverContext(

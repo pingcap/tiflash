@@ -223,28 +223,11 @@ public:
       , req_info(req_info_)
       , msg_channels(msg_channels_){}
 
-    TrackedMppDataPacketPtr readForLocal();
-
     ~LocalTunnelSender() override = default;
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        return pushPacketImpl<enable_fine_grained_shuffle, false>(source_index, req_info, data, msg_channels, log);
-    }
-
-    bool finish() override
-    {
-        // TODO
-    }
-
-    void cancelWith(const String & reason) override
-    {
-        // TODO
-    }
-
-    GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
-    {
-        // TODO
+        return pushPacketImpl<enable_fine_grained_shuffle, false, true>(source_index, req_info, data, msg_channels, log);
     }
 
 private:

@@ -28,6 +28,7 @@
 #include <grpcpp/completion_queue.h>
 
 #include <magic_enum.hpp>
+#include <memory>
 
 
 namespace DB
@@ -41,14 +42,14 @@ String constructStatusString(ExchangeReceiverState state, const String & error_m
     return fmt::format("Receiver state: {}, error message: {}", magic_enum::enum_name(state), error_message);
 }
 
-template <bool enable_fine_grained_shuffle, bool is_sync>
+template <bool enable_fine_grained_shuffle, bool is_sync, bool is_local_tunnel_data>
 bool pushPacket(size_t source_index,
                 const String & req_info,
                 const TrackedMppDataPacketPtr & tracked_packet,
                 const std::vector<MsgChannelPtr> & msg_channels,
                 LoggerPtr & log)
 {
-    return pushPacketImpl<enable_fine_grained_shuffle, is_sync>(source_index, req_info, tracked_packet, msg_channels, log);
+    return pushPacketImpl<enable_fine_grained_shuffle, is_sync, is_local_tunnel_data>(source_index, req_info, tracked_packet, msg_channels, log);
 }
 
 enum class AsyncRequestStage
@@ -268,7 +269,7 @@ private:
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            if (!pushPacket<enable_fine_grained_shuffle, false>(
+            if (!pushPacket<enable_fine_grained_shuffle, false, false>(
                     request->source_index,
                     req_info,
                     packet,
@@ -311,6 +312,16 @@ private:
 } // namespace
 
 template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
+{
+    if (enable_fine_grained_shuffle_flag)
+        for (size_t i = 0; i < output_stream_count; ++i)
+            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+    else
+        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+}
+
+template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
     size_t source_num_,
@@ -331,17 +342,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        if (enable_fine_grained_shuffle_flag)
-        {
-            for (size_t i = 0; i < output_stream_count; ++i)
-            {
-                msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
-            }
-        }
-        else
-        {
-            msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
-        }
+        prepareMsgChannels();
         rpc_context->fillSchema(schema);
         setUpConnection();
     }
@@ -509,7 +510,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!pushPacket<enable_fine_grained_shuffle, true>(
+                if (!pushPacket<enable_fine_grained_shuffle, true, false>(
                         req.source_index,
                         req_info,
                         packet,
@@ -616,6 +617,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+        
+        recv_msg->switchMemTracker();
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
 }
