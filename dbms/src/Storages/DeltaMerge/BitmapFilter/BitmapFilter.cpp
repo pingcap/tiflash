@@ -26,10 +26,15 @@ BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_)
 
 void BitmapFilter::set(const UInt32 * data, UInt32 size)
 {
+    if (size == 0)
+    {
+        return;
+    }
+    size_t max_row_id = *std::max_element(data, data + size);
+    RUNTIME_CHECK(max_row_id < filter.size(), max_row_id, filter.size());
     for (UInt32 i = 0; i < size; i++)
     {
         UInt32 row_id = *(data + i);
-        RUNTIME_CHECK(row_id < filter.size(), row_id, filter.size());
         filter[row_id] = true;
     }
 }
@@ -55,6 +60,27 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
             f[i] = filter[i + start];
         }
     }
+}
+
+bool BitmapFilter::test(UInt32 start, UInt32 limit) const
+{
+    size_t max_row_id = start + limit;
+    RUNTIME_CHECK(max_row_id <= filter.size(), start, limit, filter.size());
+    if (all_match)
+    {
+        return true;
+    }
+    else
+    {
+        for (UInt32 i = 0; i < limit; i++)
+        {
+            if (filter[i + start])
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 SegmentSnapshotPtr & BitmapFilter::snapshot()
