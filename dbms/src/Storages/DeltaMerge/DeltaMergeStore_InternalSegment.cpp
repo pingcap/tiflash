@@ -488,18 +488,31 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
     const DMFilePtr & data_file,
     bool clear_all_data_in_segment)
 {
+    LOG_INFO(
+        log,
+        "IngestData - Begin, data_file=dmf_{} clear_all_data_in_seg={} segment={}",
+        data_file->fileId(),
+        clear_all_data_in_segment,
+        segment->info());
+
     SegmentSnapshotPtr snapshot;
     {
         std::shared_lock lock(read_write_mutex);
         if (!isSegmentValid(lock, segment))
+        {
+            LOG_DEBUG(log, "IngestData - Give up segmentIngestData because segment not valid, segment={}", segment->simpleInfo());
             return {};
+        }
 
         if (!clear_all_data_in_segment)
         {
             // Only clear_data == false needs a snapshot.
             snapshot = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
             if (!snapshot)
+            {
+                LOG_DEBUG(log, "IngestData - Give up segmentIngestData because snapshot failed, segment={}", segment->simpleInfo());
                 return {};
+            }
         }
     }
 
@@ -513,7 +526,10 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
     {
         std::unique_lock lock(read_write_mutex);
         if (!isSegmentValid(lock, segment))
+        {
+            LOG_DEBUG(log, "IngestData - Give up segmentIngestData because segment not valid, segment={}", segment->simpleInfo());
             return {};
+        }
 
         auto segment_lock = segment->mustGetUpdateLock();
         // Note: applyIngestData itself writes the wbs, and we don't need to pass a wbs by ourselves.
@@ -535,13 +551,26 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
             segment->abandon(dm_context);
             segments[segment->getRowKeyRange().getEnd()] = new_segment;
             id_to_segment[segment->segmentId()] = new_segment;
+
+            LOG_INFO(
+                log,
+                "IngestData - Finish, new segment is created, old_segment={} new_segment={}",
+                segment->info(),
+                new_segment->info());
         }
         else if (std::holds_alternative<Segment::IngestDataResultError>(apply_result))
         {
+            // This should not happen, because we have verified segment is not abandoned.
+            LOG_DEBUG(log, "IngestData - Give up segmentIngestData because applyIngestData failed (usually this should not happen), segment={}", segment->simpleInfo());
             return {};
         }
         else if (std::holds_alternative<Segment::IngestDataResultSegmentReused>(apply_result))
         {
+            LOG_INFO(
+                log,
+                "IngestData - Finish, ingested to existing segment's delta, segment={}",
+                segment->info());
+
             return segment;
         }
         else

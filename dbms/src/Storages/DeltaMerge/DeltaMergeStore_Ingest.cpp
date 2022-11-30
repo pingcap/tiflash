@@ -425,8 +425,9 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
             // When ingest failed, just discard this ref file.
             wbs.rollbackWrittenLogAndData();
 
-            // Failed, segment may be abandoned, or there is another update in progress.
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            // likely caused by snapshot failed.
+            // Sleep awhile and retry.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             return false;
         }
 
@@ -448,7 +449,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
         {
             // Split failed, likely caused by snapshot failed.
             // Sleep awhile and retry.
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         // Always returning false, because we need to retry to get a new segment (as the old segment is abandoned)
         // even when split succeeded.
@@ -468,7 +469,9 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
         if (left == nullptr || right == nullptr)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            // Split failed, likely caused by snapshot failed.
+            // Sleep awhile and retry.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         return false;
     }
@@ -486,7 +489,9 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
         if (left == nullptr || right == nullptr)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            // Split failed, likely caused by snapshot failed.
+            // Sleep awhile and retry.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         return false;
     }
