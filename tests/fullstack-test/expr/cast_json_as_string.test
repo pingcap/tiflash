@@ -17,9 +17,9 @@ mysql> create table test.t(a json)
 mysql> alter table test.t set tiflash replica 1
 mysql> insert into test.t values(null)
 mysql> insert into test.t values('[1,2]')
-mysql> insert into test.t values('{"a":"b"}')
+mysql> insert into test.t values('{\"a\":\"b\"}') #NO_UNESCAPE 
 mysql> insert into test.t values(3.01)
-mysql> insert into test.t values("2020-01-02")
+mysql> insert into test.t values('\"2020-01-02\"') #NO_UNESCAPE 
 
 func> wait_table test t
 
