@@ -14,16 +14,15 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/UTF8Helpers.h>
 #include <Core/Types.h>
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 
 #include <unordered_set>
-
-#include "Columns/ColumnString.h"
-#include "Common/utf8Utility.h"
 
 namespace DB
 {
@@ -193,6 +192,36 @@ private:
     StringRef data;
 };
 
+static const char JsonHexChars[] = "0123456789abcdef";
+
+/// JsonSafeSet holds the value true if the ASCII character with the given array
+/// position can be represented inside a JSON string without any further
+/// escaping.
+
+/// All values are true except for the ASCII control characters (0-31), the
+/// double quote ("), and the backslash character ("\").
+/// Avoid expanding const arrays one element per line
+// clang-format off
+static const bool JsonSafeAscii[] = {
+    false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false,
+    true, true, /* '"' */ false, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, /* '\\' */ false, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true,
+    true, true, true, true, true, true, true, true
+};
+// clang-format on
+
 template <class WriteBuffer>
 void JsonBinary::unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & write_buffer)
 {
@@ -235,7 +264,7 @@ void JsonBinary::unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & 
                 auto val = std::stoul(str, nullptr, 16);
                 size_t utf_length = 0;
                 char utf_code_array[4];
-                utf8Encode(utf_code_array, utf_length, val);
+                UTF8::utf8Encode(utf_code_array, utf_length, val);
                 write_buffer.write(utf_code_array, utf_length);
                 i += 4;
                 break;

@@ -2640,6 +2640,23 @@ try
 }
 CATCH
 
+TEST_F(TestJsonBinary, TestConstant)
+try
+{
+    for (size_t i = 0; i < 32; ++i)
+    {
+        ASSERT_TRUE(!JsonSafeAscii[i]);
+    }
+
+    for (size_t i = 32; i < 128; ++i)
+    {
+        if (i == '"' || i == '\\')
+            ASSERT_TRUE(!JsonSafeAscii[i]);
+        else
+            ASSERT_TRUE(JsonSafeAscii[i]);
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

@@ -16,6 +16,7 @@
 
 #include <Common/BitHelpers.h>
 #include <Core/Types.h>
+#include <common/likely.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -28,6 +29,28 @@ namespace UTF8
 {
 static const UInt8 CONTINUATION_OCTET_MASK = 0b11000000u;
 static const UInt8 CONTINUATION_OCTET = 0b10000000u;
+static const UInt32 UTF8Self = 0x80; // characters below UTF8Self are represented as themselves in a single byte.
+static const UInt32 UNICODEMax = 0x0010FFFF; // Maximum valid Unicode code point.
+static const UInt32 UTF8Error = UNICODEMax + 1; // the "error" code
+
+/// Based on a public domain branch-less UTF-8 decoder by Christopher Wellons:
+/// https://github.com/skeeto/branchless-utf8 (Unlicensed)
+/// Changes:
+/// 1. check byte length check branch and padding zeros inside the function if input string length < 4
+/// 2. If 'buf' is empty it returns (UTF8Error, 0). Otherwise, if the encoding is invalid, it returns (UTF8Error, 1)
+///  (UTF8Error, 1), 1 to be aligned with go's DecodeRune library behavior
+/* Decode the next character, C, from BUF, reporting errors in E.
+ *
+ * Errors are reported in E, which will be non-zero if the parsed
+ * character was somehow invalid: invalid byte sequence, non-canonical
+ * encoding, or a surrogate half.
+ *
+ * The function returns <UTFChar, ConsumedSize> when correctly decoded. When an error
+ * occurs, behavior is described as Changes 2 above.
+ */
+std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length);
+
+void utf8Encode(char * buf, size_t & used_length, UInt32 unicode);
 
 /// return true if `octet` binary repr starts with 10 (octet is a UTF-8 sequence continuation)
 inline bool isContinuationOctet(const UInt8 octet)

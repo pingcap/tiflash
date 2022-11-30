@@ -14,7 +14,7 @@
 
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <Common/utf8Utility.cpp>
+#include <Common/UTF8Helpers.cpp>
 
 namespace DB
 {
@@ -62,14 +62,14 @@ try
     /* Make sure it can decode every character */
     {
         size_t failures = 0;
-        for (size_t i = 0; i < UNICODEMax; ++i)
+        for (size_t i = 0; i < UTF8::UNICODEMax; ++i)
         {
             if (!IS_SURROGATE(i))
             {
                 unsigned char buf[8] = {0};
                 unsigned char * end = utf8_encode(buf, i);
-                auto res = utf8Decode(reinterpret_cast<char *>(buf), 8);
-                failures += res.second != (end - buf) || res.first != i || res.first == UTF8Error;
+                auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 8);
+                failures += res.second != (end - buf) || res.first != i || res.first == UTF8::UTF8Error;
                 if (failures > 0)
                     break;
             }
@@ -84,8 +84,8 @@ try
         {
             unsigned char buf[8] = {0};
             utf8_encode(buf, i);
-            auto res = utf8Decode(reinterpret_cast<char *>(buf), 8);
-            failures += res.first != UTF8Error;
+            auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 8);
+            failures += res.first != UTF8::UTF8Error;
             failures += res.second != 1;
         }
         ASSERT_TRUE(failures == 0);
@@ -98,8 +98,8 @@ try
         {
             unsigned char buf[8] = {0};
             utf8_encode(buf, i);
-            auto res = utf8Decode(reinterpret_cast<char *>(buf), 8);
-            failures += res.first != UTF8Error;
+            auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 8);
+            failures += res.first != UTF8::UTF8Error;
         }
         ASSERT_TRUE(failures == 0);
     }
@@ -107,76 +107,42 @@ try
     /* How about non-canonical encodings? */
     {
         unsigned char buf2[8] = {0xc0, 0xA4};
-        auto res = utf8Decode(reinterpret_cast<char *>(buf2), 8);
-        ASSERT_TRUE(res.first == UTF8Error);
+        auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf2), 8);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
 
         unsigned char buf3[8] = {0xe0, 0x80, 0xA4};
-        res = utf8Decode(reinterpret_cast<char *>(buf3), 8);
-        ASSERT_TRUE(res.first == UTF8Error);
+        res = UTF8::utf8Decode(reinterpret_cast<char *>(buf3), 8);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
 
         unsigned char buf4[8] = {0xf0, 0x80, 0x80, 0xA4};
-        res = utf8Decode(reinterpret_cast<char *>(buf4), 8);
-        ASSERT_TRUE(res.first == UTF8Error);
+        res = UTF8::utf8Decode(reinterpret_cast<char *>(buf4), 8);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
     }
 
     /* Let's try some bogus byte sequences */
     {
         /* Invalid length */
         unsigned char buf[4] = {0xff};
-        auto res = utf8Decode(reinterpret_cast<char *>(buf), 0);
-        ASSERT_TRUE(res.first == UTF8Error);
+        auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 0);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
         ASSERT_TRUE(res.second == 0);
 
         /* Invalid first byte */
         unsigned char buf0[4] = {0xff};
-        res = utf8Decode(reinterpret_cast<char *>(buf0), 4);
-        ASSERT_TRUE(res.first == UTF8Error);
+        res = UTF8::utf8Decode(reinterpret_cast<char *>(buf0), 4);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
 
         /* Invalid first byte */
         unsigned char buf1[4] = {0x80};
-        res = utf8Decode(reinterpret_cast<char *>(buf1), 4);
-        ASSERT_TRUE(res.first == UTF8Error);
+        res = UTF8::utf8Decode(reinterpret_cast<char *>(buf1), 4);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
 
         /* Looks like a two-byte sequence but second byte is wrong */
         unsigned char buf2[4] = {0xc0, 0x0a};
-        res = utf8Decode(reinterpret_cast<char *>(buf2), 4);
-        ASSERT_TRUE(res.first == UTF8Error);
+        res = UTF8::utf8Decode(reinterpret_cast<char *>(buf2), 4);
+        ASSERT_TRUE(res.first == UTF8::UTF8Error);
     }
 }
 CATCH
-
-
-TEST_F(TestUTF8Utility, TestConstant)
-try
-{
-    for (size_t i = 0; i < 32; ++i)
-    {
-        ASSERT_TRUE(!JsonSafeAscii[i]);
-    }
-
-    for (size_t i = 32; i < 128; ++i)
-    {
-        if (i == '"' || i == '\\')
-            ASSERT_TRUE(!JsonSafeAscii[i]);
-        else
-            ASSERT_TRUE(JsonSafeAscii[i]);
-    }
-}
-CATCH
-
-TEST_F(TestUTF8Utility, TestFloat64)
-try
-{
-    double a[] = {1e16 - 2, 1e16, 1e21, 112314.1231414123, 1e-4, 1e-5, 1e-6, 0.0, 2 - 1e16, -1e16, -1e21, -112314.1231414123, -1e-4, -1e-5, -1e-6, -0.0};
-    for (size_t i = 0; i < 16; ++i)
-    {
-        String str;
-        str.reserve(20);
-        str = fmt::format("{:}", a[i]);
-        std::cout << "length: " << str.length() << ", str: " << str << std::endl;
-    }
-}
-CATCH
-
 } // namespace tests
 } // namespace DB

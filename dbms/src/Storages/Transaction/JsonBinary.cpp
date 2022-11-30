@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MyDuration.h>
+#include <Flash/Coprocessor/TiDBTime.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/JsonPathExprRef.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Common/utf8Utility.h>
+#include <Poco/Base64Decoder.h>
+#include <Poco/Base64Encoder.h>
+#include <Poco/MemoryStream.h>
+#include <Poco/StreamCopier.h>
 
 #include <cmath>
-
-#include "Common/MyDuration.h"
-#include "Flash/Coprocessor/TiDBTime.h"
-#include "Poco/Base64Decoder.h"
-#include "Poco/Base64Encoder.h"
-#include "Poco/MemoryStream.h"
-#include "Poco/StreamCopier.h"
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -376,8 +374,8 @@ void JsonBinary::marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const Str
             start = i;
             continue;
         }
-        auto res = utf8Decode(ref.data + i, ref_size - i);
-        if (res.first == UTF8Error && res.second == 1)
+        auto res = UTF8::utf8Decode(ref.data + i, ref_size - i);
+        if (res.first == UTF8::UTF8Error && res.second == 1)
         {
             if (start < i)
                 write_buffer.write(ref.data + start, i - start);

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/JsonPathExpr.h>
 #include <Storages/Transaction/JsonPathExprRef.h>
-
-#include "Common/Exception.h"
 
 namespace DB
 {

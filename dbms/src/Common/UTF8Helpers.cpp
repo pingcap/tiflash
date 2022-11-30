@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/utf8Utility.h>
+#include <Common/UTF8Helpers.h>
 
 namespace DB
+{
+namespace UTF8
 {
 #define IS_SURROGATE(c) ((c) >= 0xD800U && (c) <= 0xDFFFU)
 
@@ -54,39 +56,13 @@ void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
 
 std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
 {
-    static const unsigned char lengths[] = {
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        2,
-        2,
-        2,
-        2,
-        3,
-        3,
-        4,
-        0};
+    /// Avoid expanding const arrays one element per line
+    // clang-format off
+    static const char lengths[] = {
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
+    };
+    // clang-format on
     static const int masks[] = {0x00, 0x7f, 0x1f, 0x0f, 0x07};
     static const UInt32 mins[] = {4194304, 0, 128, 2048, 65536};
     static const int shiftc[] = {0, 18, 12, 6, 0};
@@ -144,4 +120,5 @@ std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
     else
         return std::make_pair(UTF8Error, 1);
 }
+} // namespace UTF8
 } // namespace DB
