@@ -219,6 +219,7 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider,
+        Context & global_ctx,
         bool use_v3 = false);
 
     PageStorage(
@@ -326,12 +327,7 @@ public:
         return gcImpl(not_skip, write_limiter, read_limiter);
     }
 
-    // Try compact in memory versions.
-    // Return true if compact is executed.
-    virtual bool compactInMemVersions()
-    {
-        return false;
-    }
+    virtual void shutdown() {}
 
     // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;

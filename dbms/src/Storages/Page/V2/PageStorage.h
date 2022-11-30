@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -88,8 +89,9 @@ public:
     PageStorage(String name,
                 PSDiskDelegatorPtr delegator, //
                 const Config & config_,
-                const FileProviderPtr & file_provider_);
-    ~PageStorage() = default;
+                const FileProviderPtr & file_provider_,
+                Context & global_ctx);
+    ~PageStorage() override = default;
 
     void restore() override;
 
@@ -129,7 +131,7 @@ public:
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
-    bool compactInMemVersions() override;
+    void shutdown() override;
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
@@ -240,6 +242,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    bool compactInMemVersions();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -273,6 +279,9 @@ private:
     ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
+
+    BackgroundProcessingPool & compact_pool;
+    BackgroundProcessingPool::TaskHandle compact_handle = nullptr;
 
 private:
     WriterPtr checkAndRenewWriter(

@@ -212,7 +212,6 @@ private:
     std::atomic<PageId> max_meta_page_id = 0;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
-    BackgroundProcessingPool::TaskHandle ps_version_compact_handle = nullptr;
 
     CurrentMetrics::Increment storage_pool_metrics;
 };

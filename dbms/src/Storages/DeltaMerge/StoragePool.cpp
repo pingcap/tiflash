@@ -23,8 +23,8 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <common/defines.h>
 #include <fmt/format.h>
-#include "common/defines.h"
 
 
 namespace CurrentMetrics
@@ -91,16 +91,19 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
                                       path_pool.getPSDiskDelegatorGlobalMulti("log"),
                                       extractConfig(settings, StorageType::Log),
                                       global_ctx.getFileProvider(),
+                                      global_ctx,
                                       true))
     , data_storage(PageStorage::create("__global__.data",
                                        path_pool.getPSDiskDelegatorGlobalMulti("data"),
                                        extractConfig(settings, StorageType::Data),
                                        global_ctx.getFileProvider(),
+                                      global_ctx,
                                        true))
     , meta_storage(PageStorage::create("__global__.meta",
                                        path_pool.getPSDiskDelegatorGlobalMulti("meta"),
                                        extractConfig(settings, StorageType::Meta),
                                        global_ctx.getFileProvider(),
+                                      global_ctx,
                                        true))
     , global_context(global_ctx)
 {
@@ -184,15 +187,18 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
-                                             global_context.getFileProvider());
+                                             global_context.getFileProvider(),
+                                             global_context);
         data_storage_v2 = PageStorage::create(name + ".data",
                                               storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         meta_storage_v2 = PageStorage::create(name + ".meta",
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, /*storage_v3_*/ nullptr, nullptr);
@@ -228,15 +234,18 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
-                                             global_context.getFileProvider());
+                                             global_context.getFileProvider(),
+                                             global_context);
         data_storage_v2 = PageStorage::create(name + ".data",
                                               storage_path_pool.getPSDiskDelegatorMulti("data"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         meta_storage_v2 = PageStorage::create(name + ".meta",
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
 
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, log_storage_v3, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, data_storage_v3, nullptr);
@@ -502,10 +511,6 @@ void StoragePool::enableGC()
     if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
-        ps_version_compact_handle = global_context.getPSBackgroundPool().addTask(
-            [this] { return this->doV2VersionCompact(global_context.getSettingsRef()); },
-            /*multi*/ false,
-            /*iterval_ms*/ 60 * 1000);
     }
 }
 
@@ -587,12 +592,10 @@ bool StoragePool::doV2VersionCompact(const Settings & /*settings*/)
         return false;
 
     bool done_anything = false;
-    done_anything |= meta_storage_v2->compactInMemVersions();
-    done_anything |= data_storage_v2->compactInMemVersions();
-    done_anything |= log_storage_v2->compactInMemVersions();
-    UNUSED(done_anything);
-    // always return false to run with interval 60s at least.
-    return false;
+    // done_anything |= meta_storage_v2->compactInMemVersions();
+    // done_anything |= data_storage_v2->compactInMemVersions();
+    // done_anything |= log_storage_v2->compactInMemVersions();
+    return done_anything;
 }
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
@@ -622,10 +625,11 @@ void StoragePool::shutdown()
         global_context.getBackgroundPool().removeTask(gc_handle);
         gc_handle = nullptr;
     }
-    if (ps_version_compact_handle)
+    if (run_mode != PageStorageRunMode::ONLY_V3)
     {
-        global_context.getPSBackgroundPool().removeTask(ps_version_compact_handle);
-        ps_version_compact_handle = nullptr;
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
     }
 }
 

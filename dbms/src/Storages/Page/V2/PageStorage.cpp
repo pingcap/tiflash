@@ -160,12 +160,14 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
 PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
                          const Config & config_,
-                         const FileProviderPtr & file_provider_)
+                         const FileProviderPtr & file_provider_,
+                         Context & global_ctx)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , write_files(std::max(1UL, config_.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
+    , compact_pool(global_ctx.getPSBackgroundPool())
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots.get());
@@ -182,6 +184,10 @@ PageStorage::PageStorage(String name,
         config.num_write_slots = num_paths * 2;
     }
     write_files.resize(config.num_write_slots);
+
+    // If there is no snapshot released, check with default interval (10s) and exit quickly
+    // If snapshot released, wakeup this handle to compact the version list
+    compact_handle = compact_pool.addTask([this] { return compactInMemVersions(); });
 }
 
 
@@ -360,7 +366,7 @@ void PageStorage::restore()
 PageId PageStorage::getMaxId()
 {
     std::lock_guard write_lock(write_mutex);
-    return versioned_page_entries.getSnapshot("")->version()->maxId();
+    return versioned_page_entries.getSnapshot("", compact_handle)->version()->maxId();
 }
 
 PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
@@ -584,13 +590,13 @@ void PageStorage::writeImpl(DB::WriteBatch && wb, const WriteLimiterPtr & write_
 
 DB::PageStorage::SnapshotPtr PageStorage::getSnapshot(const String & tracing_id)
 {
-    return versioned_page_entries.getSnapshot(tracing_id);
+    return versioned_page_entries.getSnapshot(tracing_id, compact_handle);
 }
 
 PageStorage::VersionedPageEntries::SnapshotPtr
 PageStorage::getConcreteSnapshot()
 {
-    return versioned_page_entries.getSnapshot(/*tracing_id*/ "");
+    return versioned_page_entries.getSnapshot(/*tracing_id*/ "", compact_handle);
 }
 
 SnapshotsStatistics PageStorage::getSnapshotsStat() const
@@ -985,6 +991,15 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
+void PageStorage::shutdown()
+{
+    if (compact_handle)
+    {
+        compact_pool.removeTask(compact_handle);
+        compact_handle = nullptr;
+    }
+}
+
 bool PageStorage::compactInMemVersions()
 {
     Stopwatch watch;
@@ -993,7 +1008,7 @@ bool PageStorage::compactInMemVersions()
     if (done_anything)
     {
         auto elapsed_sec = watch.elapsedSeconds();
-        LOG_FMT_INFO(log, "{} GC in-mem versions cost {:.3f} sec.", storage_name, elapsed_sec);
+        // LOG_FMT_INFO(log, "{} GC in-mem versions cost {:.3f} sec.", storage_name, elapsed_sec);
         GET_METRIC(tiflash_storage_page_snapshot, type_version_compact_v2).Observe(elapsed_sec);
     }
     return done_anything;
