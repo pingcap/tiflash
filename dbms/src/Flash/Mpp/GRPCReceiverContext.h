@@ -98,6 +98,8 @@ public:
 
     void fillSchema(DAGSchema & schema) const;
 
+    std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(const ExchangeRecvRequest & request, size_t source_index, const String & req_info, std::vector<MsgChannelPtr> & msg_channels, bool is_fine_grained);
+
 private:
     tipb::ExchangeReceiver exchange_receiver_meta;
     mpp::TaskMeta task_meta;

@@ -169,23 +169,6 @@ struct LocalExchangePacketReader : public ExchangePacketReader
     }
 };
 
-std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
-    const ::mpp::EstablishMPPConnectionRequest * request,
-    const std::shared_ptr<MPPTaskManager> & task_manager)
-{
-    std::chrono::seconds timeout(10);
-    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
-    if (tunnel == nullptr)
-    {
-        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
-    }
-    if (!tunnel->isLocal())
-    {
-        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
-    }
-    tunnel->connect(nullptr);
-    return std::make_tuple(tunnel, grpc::Status::OK);
-}
 } // namespace
 
 GRPCReceiverContext::GRPCReceiverContext(
@@ -226,26 +209,34 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
     return enable_async_grpc && !request.is_local;
 }
 
+std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocal(
+    const ExchangeRecvRequest & request,
+    size_t source_index,
+    const String & req_info,
+    std::vector<MsgChannelPtr> & msg_channels,
+    bool is_fine_grained)
+{
+    RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
+
+    std::chrono::seconds timeout(10);
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), timeout);
+    if (tunnel == nullptr)
+        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+    if (!tunnel->isLocal())
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
+
+    tunnel->connectLocal(source_index, req_info, msg_channels, is_fine_grained);
+    return std::make_tuple(tunnel, grpc::Status::OK);
+}
+
 ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
 {
-    if (request.is_local)
-    {
-        auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
-        if (!status.ok())
-        {
-            throw Exception("Exchange receiver meet error : " + status.error_message());
-        }
-        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSender());
-    }
-    else
-    {
-        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
-        reader->reader = cluster->rpc_client->sendStreamRequest(
-            request.req->sender_meta().address(),
-            &reader->client_context,
-            *reader->call);
-        return reader;
-    }
+    auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+    reader->reader = cluster->rpc_client->sendStreamRequest(
+        request.req->sender_meta().address(),
+        &reader->client_context,
+        *reader->call);
+    return reader;
 }
 
 void GRPCReceiverContext::makeAsyncReader(

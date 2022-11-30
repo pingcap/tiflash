@@ -22,19 +22,16 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/GRPCReceiverContext.h>
 #include <fmt/core.h>
+#include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
 
 #include <magic_enum.hpp>
 
+
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_receiver_sync_msg_push_failure_failpoint[];
-extern const char random_receiver_async_msg_push_failure_failpoint[];
-} // namespace FailPoints
-
 namespace
 {
 String constructStatusString(ExchangeReceiverState state, const String & error_message)
@@ -44,12 +41,6 @@ String constructStatusString(ExchangeReceiverState state, const String & error_m
     return fmt::format("Receiver state: {}, error message: {}", magic_enum::enum_name(state), error_message);
 }
 
-// If enable_fine_grained_shuffle:
-//      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
-// If fine grained_shuffle is disabled:
-//      Push all chunks to msg_channels[0].
-// Return true if all push succeed, otherwise return false.
-// NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
 template <bool enable_fine_grained_shuffle, bool is_sync>
 bool pushPacket(size_t source_index,
                 const String & req_info,
@@ -57,92 +48,7 @@ bool pushPacket(size_t source_index,
                 const std::vector<MsgChannelPtr> & msg_channels,
                 LoggerPtr & log)
 {
-    bool push_succeed = true;
-
-    const mpp::Error * error_ptr = nullptr;
-    auto & packet = tracked_packet->packet;
-    if (packet.has_error())
-        error_ptr = &packet.error();
-    const String * resp_ptr = nullptr;
-    if (!packet.data().empty())
-        resp_ptr = &packet.data();
-
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        std::vector<std::vector<const String *>> chunks(msg_channels.size());
-        if (!packet.chunks().empty())
-        {
-            // Packet not empty.
-            if (unlikely(packet.stream_ids().empty()))
-            {
-                // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
-                // This can happen when there are old version nodes when upgrading.
-                LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                               "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                               "Cannot handle this.",
-                          source_index);
-                return false;
-            }
-            // packet.stream_ids[i] is corresponding to packet.chunks[i],
-            // indicating which stream_id this chunk belongs to.
-            assert(packet.chunks_size() == packet.stream_ids_size());
-
-            for (int i = 0; i < packet.stream_ids_size(); ++i)
-            {
-                UInt64 stream_id = packet.stream_ids(i) % msg_channels.size();
-                chunks[stream_id].push_back(&packet.chunks(i));
-            }
-        }
-        // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
-        for (size_t i = 0; i < msg_channels.size() && push_succeed; ++i)
-        {
-            if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
-                continue;
-
-            std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-                source_index,
-                req_info,
-                tracked_packet,
-                error_ptr,
-                resp_ptr,
-                std::move(chunks[i]));
-            push_succeed = msg_channels[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-            if constexpr (is_sync)
-                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
-            else
-                fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
-
-            // Only the first ExchangeReceiverInputStream need to handle resp.
-            resp_ptr = nullptr;
-        }
-    }
-    else
-    {
-        std::vector<const String *> chunks(packet.chunks_size());
-        for (int i = 0; i < packet.chunks_size(); ++i)
-        {
-            chunks[i] = &packet.chunks(i);
-        }
-
-        if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
-        {
-            std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-                source_index,
-                req_info,
-                tracked_packet,
-                error_ptr,
-                resp_ptr,
-                std::move(chunks));
-
-            push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-            if constexpr (is_sync)
-                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
-            else
-                fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
-        }
-    }
-    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
-    return push_succeed;
+    return pushPacketImpl<enable_fine_grained_shuffle, is_sync>(source_index, req_info, tracked_packet, msg_channels, log);
 }
 
 enum class AsyncRequestStage
@@ -382,7 +288,7 @@ private:
     }
 
     std::shared_ptr<RPCContext> rpc_context;
-    grpc::Alarm alarm;
+    grpc::Alarm alarm{};
     grpc::CompletionQueue * cq; // won't be null and do not delete this pointer
     const Request * request; // won't be null
     MPMCQueue<Self *> * notify_queue; // won't be null
@@ -493,6 +399,11 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         auto req = rpc_context->makeRequest(index);
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
+        else if (req.is_local)
+        {
+            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            rpc_context->establishMPPConnectionLocal(req, req.source_index, req_info, msg_channels, enable_fine_grained_shuffle_flag);
+        }
         else
         {
             thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {

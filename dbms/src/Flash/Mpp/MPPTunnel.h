@@ -21,6 +21,7 @@
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -174,6 +175,8 @@ public:
         , queue(queue_size, func)
     {}
 
+    ~AsyncTunnelSender() override = default;
+
     bool push(TrackedMppDataPacketPtr && data) override
     {
         return queue.push(std::move(data));
@@ -203,23 +206,61 @@ private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
 };
 
-/// LocalTunnelSender just provide readForLocal method to return one element one time
-/// LocalTunnelSender is owned by the associated ExchangeReceiver
+template <bool enable_fine_grained_shuffle>
 class LocalTunnelSender : public TunnelSender
 {
 public:
-    using Base = TunnelSender;
-    using Base::Base;
+    LocalTunnelSender(
+        size_t source_index_,
+        const String & req_info_,
+        std::vector<MsgChannelPtr> & msg_channels_,
+        const LoggerPtr & log_,
+        size_t queue_size,
+        MemoryTrackerPtr & memory_tracker_,
+        const String & tunnel_id_)
+    : TunnelSender(queue_size, memory_tracker_, log_, tunnel_id_)
+      , source_index(source_index_)
+      , req_info(req_info_)
+      , msg_channels(msg_channels_){}
+
     TrackedMppDataPacketPtr readForLocal();
+
+    ~LocalTunnelSender() override = default;
+
+    bool push(TrackedMppDataPacketPtr && data) override
+    {
+        return pushPacketImpl<enable_fine_grained_shuffle, false>(source_index, req_info, data, msg_channels, log);
+    }
+
+    bool finish() override
+    {
+        // TODO
+    }
+
+    void cancelWith(const String & reason) override
+    {
+        // TODO
+    }
+
+    GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
+    {
+        // TODO
+    }
 
 private:
     bool cancel_reason_sent = false;
+    size_t source_index;
+    String req_info;
+
+    // This is actually got from ExchangeReceiver
+    std::vector<MsgChannelPtr> msg_channels;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
 using SyncTunnelSenderPtr = std::shared_ptr<SyncTunnelSender>;
 using AsyncTunnelSenderPtr = std::shared_ptr<AsyncTunnelSender>;
-using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender>;
+using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender<false>>;
+using LocalTunnelFineGrainedSenderPtr = std::shared_ptr<LocalTunnelSender<true>>;
 
 /**
  * MPPTunnel represents the sender of an exchange connection.
@@ -287,6 +328,8 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(PacketWriter * writer);
 
+    void connectLocal(size_t source_index, const String & req_info, std::vector<MsgChannelPtr> & msg_channels, bool is_fine_grained);
+
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
 
@@ -304,6 +347,7 @@ public:
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
     LocalTunnelSenderPtr getLocalTunnelSender() { return local_tunnel_sender; }
+    LocalTunnelFineGrainedSenderPtr getLocalTunnelFineGrainedSender() { return local_tunnel_fine_grained_sender; }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -327,6 +371,12 @@ private:
         return mem_tracker ? mem_tracker.get() : nullptr;
     }
 
+    void updateConnProfileInfo(size_t pushed_data_size)
+    {
+        connection_profile_info.bytes += pushed_data_size;
+        connection_profile_info.packets += 1;
+    }
+
     std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
@@ -347,6 +397,7 @@ private:
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderPtr local_tunnel_sender;
+    LocalTunnelFineGrainedSenderPtr local_tunnel_fine_grained_sender;
 };
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 

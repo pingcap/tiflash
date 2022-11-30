@@ -14,108 +14,19 @@
 
 #pragma once
 
-#include <Common/MPMCQueue.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Common/ThreadManager.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Interpreters/Context.h>
-#include <kvproto/mpp.pb.h>
-#include <tipb/executor.pb.h>
-#include <tipb/select.pb.h>
-
 #include <future>
 #include <mutex>
 #include <thread>
 
 namespace DB
 {
-struct ReceivedMessage
-{
-    size_t source_index;
-    String req_info;
-    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
-    const mpp::Error * error_ptr;
-    const String * resp_ptr;
-    std::vector<const String *> chunks;
-
-    // Constructor that move chunks.
-    ReceivedMessage(size_t source_index_,
-                    const String & req_info_,
-                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
-                    const mpp::Error * error_ptr_,
-                    const String * resp_ptr_,
-                    std::vector<const String *> && chunks_)
-        : source_index(source_index_)
-        , req_info(req_info_)
-        , packet(packet_)
-        , error_ptr(error_ptr_)
-        , resp_ptr(resp_ptr_)
-        , chunks(chunks_)
-    {}
-};
-
-struct ExchangeReceiverResult
-{
-    std::shared_ptr<tipb::SelectResponse> resp;
-    size_t call_index;
-    String req_info;
-    bool meet_error;
-    String error_msg;
-    bool eof;
-    DecodeDetail decode_detail;
-
-    ExchangeReceiverResult()
-        : ExchangeReceiverResult(nullptr, 0)
-    {}
-
-    static ExchangeReceiverResult newOk(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_)
-    {
-        return {resp_, call_index_, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false};
-    }
-
-    static ExchangeReceiverResult newEOF(const String & req_info_)
-    {
-        return {/*resp*/ nullptr, 0, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ true};
-    }
-
-    static ExchangeReceiverResult newError(size_t call_index, const String & req_info, const String & error_msg)
-    {
-        return {/*resp*/ nullptr, call_index, req_info, /*meet_error*/ true, error_msg, /*eof*/ false};
-    }
-
-private:
-    ExchangeReceiverResult(
-        std::shared_ptr<tipb::SelectResponse> resp_,
-        size_t call_index_,
-        const String & req_info_ = "",
-        bool meet_error_ = false,
-        const String & error_msg_ = "",
-        bool eof_ = false)
-        : resp(resp_)
-        , call_index(call_index_)
-        , req_info(req_info_)
-        , meet_error(meet_error_)
-        , error_msg(error_msg_)
-        , eof(eof_)
-    {}
-};
-
-enum class ExchangeReceiverState
-{
-    NORMAL,
-    ERROR,
-    CANCELED,
-    CLOSED,
-};
-
-using MsgChannelPtr = std::unique_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
-
 template <typename RPCContext>
 class ExchangeReceiverBase
 {

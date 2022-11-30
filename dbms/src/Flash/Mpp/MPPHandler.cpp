@@ -27,6 +27,17 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 } // namespace FailPoints
 
+namespace
+{
+inline void RandomFailPointTestBeforeRunningMPPTask(bool is_root_task)
+{
+    if (is_root_task)
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
+    else
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
+}
+}
+
 void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {
     if (task)
@@ -65,14 +76,8 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
                 retry_region->mutable_region_epoch()->set_version(region.region_version);
             }
         }
-        if (task->isRootMPPTask())
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
-        }
-        else
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
-        }
+
+        RandomFailPointTestBeforeRunningMPPTask(task->isRootMPPTask());
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }
