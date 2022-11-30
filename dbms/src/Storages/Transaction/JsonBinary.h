@@ -194,7 +194,7 @@ private:
 
 static const char JsonHexChars[] = "0123456789abcdef";
 
-/// JsonSafeSet holds the value true if the ASCII character with the given array
+/// JsonSafeAscii holds the value true if the ASCII character with the given array
 /// position can be represented inside a JSON string without any further
 /// escaping.
 
