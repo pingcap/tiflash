@@ -570,6 +570,7 @@ try
     };
 
     std::vector<TestData> test_data_vec{
+        {json_binary_3, {"$"}, true, R"({"properties": {"$type": "TiDB"}})"},
         {json_binary_1, {"$.a"}, true, R"([1, "2", {"aa": "bb"}, 4, {"aa": "cc"}])"},
         {json_binary_2, {"$.a"}, false, ""},
         {json_binary_1, {"$[0]"}, true, R"({"\"hello\"": "world", "a": [1, "2", {"aa": "bb"}, 4, {"aa": "cc"}], "b": true, "c": ["d"]})"},

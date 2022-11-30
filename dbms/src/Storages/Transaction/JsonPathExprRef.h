@@ -31,6 +31,7 @@ class JsonPathExprRefContainer
 {
 public:
     JsonPathExprRefContainer(JsonPathExprPtr source_);
+    /// Return nullptr for empty JsonPathExpr, which parsed from '$', means extract all
     ConstJsonPathExprRawPtr firstRef() const
     {
         if (all_refs.empty())

@@ -560,7 +560,6 @@ bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_co
     {
         DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
         const auto * first_path_ref = path_expr_container->firstRef();
-        RUNTIME_CHECK(first_path_ref);
         extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
     }
 
@@ -573,7 +572,7 @@ bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_co
     {
         found = true;
         // Fix https://github.com/pingcap/tidb/issues/30352
-        if (path_expr_container_vec[0]->firstRef()->couldMatchMultipleValues())
+        if (path_expr_container_vec[0]->firstRef() && path_expr_container_vec[0]->firstRef()->couldMatchMultipleValues())
         {
             buildBinaryJsonArrayInBuffer(extracted_json_binary_vec, write_buffer);
         }
