@@ -21,9 +21,30 @@ namespace DB
 {
 struct FileUsageStatistics
 {
+    // blob file
     size_t total_disk_size = 0;
     size_t total_valid_size = 0;
     size_t total_file_num = 0;
+
+    // log file
+    size_t total_log_disk_size = 0;
+    size_t total_log_file_num = 0;
+
+    // in-memory
+    size_t num_pages = 0;
+
+    FileUsageStatistics & merge(const FileUsageStatistics & rhs)
+    {
+        total_disk_size += rhs.total_disk_size;
+        total_valid_size += rhs.total_valid_size;
+        total_file_num += rhs.total_file_num;
+
+        total_log_disk_size += rhs.total_log_disk_size;
+        total_log_file_num += rhs.total_log_file_num;
+
+        num_pages += rhs.num_pages;
+        return *this;
+    }
 };
 
 } // namespace DB

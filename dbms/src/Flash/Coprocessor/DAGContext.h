@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ScanContext.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -58,6 +59,8 @@ struct JoinExecuteInfo
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
+
+class ProcessListEntry;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -202,7 +205,6 @@ public:
         initOutputInfo();
     }
 
-    void attachBlockIO(const BlockIO & io_);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
@@ -259,11 +261,6 @@ public:
     const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
 
     bool containsRegionsInfoForTable(Int64 table_id) const;
-
-    const BlockIO & getBlockIO() const
-    {
-        return io;
-    }
 
     UInt64 getFlags() const
     {
@@ -361,14 +358,18 @@ public:
     /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
     std::vector<String> list_based_executors_order;
 
+    /// executor_id, ScanContextPtr
+    /// Currently, max(scan_context_map.size()) == 1, because one mpp task only have do one table scan
+    /// While when we support collcate join later, scan_context_map.size() may > 1,
+    /// thus we need to pay attention to scan_context_map usage that time.
+    std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
-    /// Hold io for correcting the destruction order.
-    BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.

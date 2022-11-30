@@ -488,8 +488,6 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
 {
     LOG_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-
     SegmentPtr new_segment;
     {
         std::unique_lock lock(read_write_mutex);
@@ -500,13 +498,10 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
         }
 
         auto segment_lock = segment->mustGetUpdateLock();
-        new_segment = segment->dangerouslyReplaceData(segment_lock, dm_context, data_file, wbs);
+        new_segment = segment->replaceData(segment_lock, dm_context, data_file);
 
         RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
         RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
-
-        wbs.writeLogAndData();
-        wbs.writeMeta();
 
         segment->abandon(dm_context);
         segments[segment->getRowKeyRange().getEnd()] = new_segment;
@@ -514,8 +509,6 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
 
         LOG_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
     }
-
-    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

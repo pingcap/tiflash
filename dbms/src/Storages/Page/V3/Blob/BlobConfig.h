@@ -26,19 +26,17 @@ struct BlobConfig
 {
     SettingUInt64 file_limit_size = BLOBFILE_LIMIT_SIZE;
     SettingUInt64 spacemap_type = SpaceMap::SpaceMapType::SMAP64_STD_MAP;
-    SettingUInt64 cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
     SettingUInt64 block_alignment_bytes = 0;
     SettingDouble heavy_gc_valid_rate = 0.2;
 
     String toString()
     {
         return fmt::format("BlobStore Config Info: "
-                           "[file_limit_size={}],[spacemap_type={}],"
-                           "[cached_fd_size={}],[block_alignment_bytes={}],"
+                           "[file_limit_size={}] [spacemap_type={}] "
+                           "[block_alignment_bytes={}] "
                            "[heavy_gc_valid_rate={}]",
                            file_limit_size,
                            spacemap_type,
-                           cached_fd_size,
                            block_alignment_bytes,
                            heavy_gc_valid_rate);
     }
@@ -48,7 +46,6 @@ struct BlobConfig
         BlobConfig blob_config;
 
         blob_config.file_limit_size = config.blob_file_limit_size;
-        blob_config.cached_fd_size = config.blob_cached_fd_size;
         blob_config.spacemap_type = config.blob_spacemap_type;
         blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
         blob_config.block_alignment_bytes = config.blob_block_alignment_bytes;

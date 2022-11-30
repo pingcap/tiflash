@@ -34,18 +34,15 @@ public:
         StreamWriterPtr writer_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
-        bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
-    void finishWrite() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks();
 
+private:
     Int64 batch_send_min_limit;
-    bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
     StreamWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;

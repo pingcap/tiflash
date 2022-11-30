@@ -22,6 +22,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
@@ -121,7 +122,9 @@ struct StoreStats
     Float64 avg_stable_rows = 0;
     Float64 avg_stable_size = 0;
 
+    // statistics about column file in delta
     UInt64 total_pack_count_in_delta = 0;
+    UInt64 max_pack_count_in_delta = 0;
     Float64 avg_pack_count_in_delta = 0;
     Float64 avg_pack_rows_in_delta = 0;
     Float64 avg_pack_size_in_delta = 0;
@@ -135,25 +138,16 @@ struct StoreStats
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
     String storage_stable_oldest_snapshot_tracing_id;
-    UInt64 storage_stable_num_pages = 0;
-    UInt64 storage_stable_num_normal_pages = 0;
-    UInt64 storage_stable_max_page_id = 0;
 
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
     String storage_delta_oldest_snapshot_tracing_id;
-    UInt64 storage_delta_num_pages = 0;
-    UInt64 storage_delta_num_normal_pages = 0;
-    UInt64 storage_delta_max_page_id = 0;
 
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
     String storage_meta_oldest_snapshot_tracing_id;
-    UInt64 storage_meta_num_pages = 0;
-    UInt64 storage_meta_num_normal_pages = 0;
-    UInt64 storage_meta_max_page_id = 0;
 
     UInt64 background_tasks_length = 0;
 };
@@ -273,11 +267,15 @@ public:
 
     void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
+    /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
                      const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
+    /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
@@ -314,7 +312,8 @@ public:
                            bool is_fast_scan = false,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
-                           size_t extra_table_id_index = InvalidColumnID);
+                           size_t extra_table_id_index = InvalidColumnID,
+                           const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
@@ -328,7 +327,7 @@ public:
     /// Merge delta into the stable layer for all segments.
     ///
     /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
-    void mergeDeltaAll(const Context & context);
+    bool mergeDeltaAll(const Context & context);
 
     /// Merge delta into the stable layer for one segment located by the specified start key.
     /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
@@ -413,7 +412,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {
