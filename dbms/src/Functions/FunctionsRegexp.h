@@ -1700,7 +1700,7 @@ public:
         typename ColumnUInt8::Container & null_map = null_map_col->getData();
         null_map.resize(col_size, 1);
 
-        // Start to execute instr
+        // Start to execute substr
         if (canMemorize<PatT, MatchTypeT>())
         {
             std::unique_ptr<Regexps::Regexp> regexp;
