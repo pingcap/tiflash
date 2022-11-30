@@ -21,6 +21,7 @@
 
 #include <Common/MyTime.h>
 #include <Core/Types.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
