@@ -187,7 +187,7 @@ PageStorage::PageStorage(String name,
 
     // If there is no snapshot released, check with default interval (10s) and exit quickly
     // If snapshot released, wakeup this handle to compact the version list
-    compact_handle = compact_pool.addTask([this] { return compactInMemVersions(); });
+    compact_handle = compact_pool.addTask([this] { return compactInMemVersions(); }, /*multi*/ false);
 }
 
 
