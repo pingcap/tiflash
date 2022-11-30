@@ -170,7 +170,6 @@ public:
 private:
 #endif
     bool doV2Gc(const Settings & settings);
-    bool doV2VersionCompact(const Settings & settings);
 
     void forceTransformMetaV2toV3();
     void forceTransformDataV2toV3();

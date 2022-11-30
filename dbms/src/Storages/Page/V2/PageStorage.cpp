@@ -1008,7 +1008,7 @@ bool PageStorage::compactInMemVersions()
     if (done_anything)
     {
         auto elapsed_sec = watch.elapsedSeconds();
-        // LOG_FMT_INFO(log, "{} GC in-mem versions cost {:.3f} sec.", storage_name, elapsed_sec);
+        LOG_FMT_TRACE(log, "{} GC in-mem versions cost {:.3f} sec.", storage_name, elapsed_sec);
         GET_METRIC(tiflash_storage_page_snapshot, type_version_compact_v2).Observe(elapsed_sec);
     }
     return done_anything;

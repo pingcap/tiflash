@@ -586,18 +586,6 @@ bool StoragePool::doV2Gc(const Settings & settings)
     return done_anything;
 }
 
-bool StoragePool::doV2VersionCompact(const Settings & /*settings*/)
-{
-    if (run_mode == PageStorageRunMode::ONLY_V3)
-        return false;
-
-    bool done_anything = false;
-    // done_anything |= meta_storage_v2->compactInMemVersions();
-    // done_anything |= data_storage_v2->compactInMemVersions();
-    // done_anything |= log_storage_v2->compactInMemVersions();
-    return done_anything;
-}
-
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     if (run_mode == PageStorageRunMode::ONLY_V3)
