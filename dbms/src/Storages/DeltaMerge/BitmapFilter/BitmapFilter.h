@@ -32,7 +32,7 @@ public:
 
     void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
-    SegmentSnapshotPtr snapshot() const;
+    SegmentSnapshotPtr & snapshot();
 
     void runOptimize();
 
