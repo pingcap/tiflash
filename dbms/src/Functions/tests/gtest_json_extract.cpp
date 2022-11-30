@@ -86,7 +86,7 @@ try
         0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x22, 0x0, 0x0, 0x0, 0x9, 0x12, 0x0, 0x0, 0x0, 0x9, 0x1a, 0x0, 0x0, 0x0,
         0x5, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0
     };
-    // clang-format off
+    // clang-format on
     str_col->insertData(reinterpret_cast<const char *>(bj2), sizeof(bj2) / sizeof(UInt8));
     str_col->insertData("", 0);
     str_col->insertData(reinterpret_cast<const char *>(bj9), sizeof(bj9) / sizeof(UInt8));
@@ -97,28 +97,40 @@ try
     auto input_col = ColumnWithTypeAndName(std::move(json_col), nullable_string_type_ptr, "input0");
 
     auto path_col = createConstColumn<Nullable<String>>(3, {"$[1]"});
-    //auto output_col = createColumn<Nullable<UInt16>>({{}, {}, 1, 5, 1, 2, 3, 4, 5, 6, 7});
     auto res = executeFunction(func_name, {input_col, path_col});
-    std::cout << "Column size: " << res.column->size() << std::endl;
-    ASSERT_TRUE(res.column->size() == 3);
     std::vector<UInt8> expect_null_vec{0, 1, 0};
     std::vector<String> expect_string_vec{"3", "", "[2, 3]"};
     checkResult(res.column, expect_null_vec, expect_string_vec);
 
+    /// ColumnVector(null)
+    str_col = ColumnString::create();
+    str_col->insertData("", 0);
+    str_col->insertData("", 0);
+    str_col->insertData("", 0);
+    col_null_map = ColumnUInt8::create(3, 1);
+    json_col = ColumnNullable::create(std::move(str_col), std::move(col_null_map));
+    input_col = ColumnWithTypeAndName(std::move(json_col), nullable_string_type_ptr, "input0");
+    path_col = createConstColumn<Nullable<String>>(3, {"$[1]"});
+    res = executeFunction(func_name, {input_col, path_col});
+    expect_null_vec = {1, 1, 1};
+    expect_string_vec = {"", "", ""};
+    checkResult(res.column, expect_null_vec, expect_string_vec);
+
     /// Path is constant null
-    try
-    {
-        auto null_path_col = createConstColumn<Nullable<String>>(3, {});
-        executeFunction(func_name, {input_col, null_path_col});
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "Illegal json path expression Const(String) of argument of function json_extract");
-    }
+    auto null_path_col = createConstColumn<Nullable<String>>(3, {});
+    res = executeFunction(func_name, {input_col, null_path_col});
+    expect_null_vec = {1, 1, 1};
+    expect_string_vec = {"", "", ""};
+    checkResult(res.column, expect_null_vec, expect_string_vec);
 
     /// JsonBinary is constant null
-    auto null_input_col = createConstColumn<Nullable<String>>(3, {});
-    res = executeFunction(func_name, {null_input_col, path_col});
+    auto null_json = ColumnString::create();
+    null_json->insertData("", 0);
+    col_null_map = ColumnUInt8::create(1, 1);
+    json_col = ColumnNullable::create(std::move(null_json), std::move(col_null_map));
+    auto const_null_json_col = ColumnConst::create(std::move(json_col), 3);
+    auto const_null_input_col = ColumnWithTypeAndName(std::move(const_null_json_col), nullable_string_type_ptr, "input0");
+    res = executeFunction(func_name, {const_null_input_col, path_col});
     ASSERT_TRUE(res.column->size() == 3);
     expect_string_vec = {"", "", ""};
     expect_null_vec = {1, 1, 1};

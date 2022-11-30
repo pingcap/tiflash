@@ -65,8 +65,21 @@ try
     auto json_col = ColumnNullable::create(std::move(str_col), std::move(col_null_map));
     auto input_col = ColumnWithTypeAndName(std::move(json_col), nullable_string_type_ptr, "input0");
 
-    auto output_col = createColumn<Nullable<String>>({"[{\"a\": 1, \"b\": true}, 3, 3.5, \"hello, world\", null, true]", {}, "[[0, 1], [2, 3], [4, [5, 6]]]"});
+    auto output_col = createColumn<Nullable<String>>({R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])", {}, "[[0, 1], [2, 3], [4, [5, 6]]]"});
     auto res = executeFunction(func_name, input_col);
+    ASSERT_COLUMN_EQ(res, output_col);
+
+    /// ColumnVector(null)
+    str_col = ColumnString::create();
+    str_col->insertData("", 0);
+    str_col->insertData("", 0);
+    str_col->insertData("", 0);
+    col_null_map = ColumnUInt8::create(3, 1);
+    json_col = ColumnNullable::create(std::move(str_col), std::move(col_null_map));
+    input_col = ColumnWithTypeAndName(std::move(json_col), nullable_string_type_ptr, "input0");
+
+    output_col = createColumn<Nullable<String>>({{}, {}, {}});
+    res = executeFunction(func_name, input_col);
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnConst(null)
@@ -82,7 +95,7 @@ try
     non_null_str_col->insertData(reinterpret_cast<const char *>(bj9), sizeof(bj9) / sizeof(UInt8));
     auto non_null_input_col = ColumnWithTypeAndName(std::move(non_null_str_col), string_type_ptr, "input0");
     res = executeFunction(func_name, non_null_input_col);
-    output_col = createColumn<Nullable<String>>({"[{\"a\": 1, \"b\": true}, 3, 3.5, \"hello, world\", null, true]", "[{\"a\": 1, \"b\": true}, 3, 3.5, \"hello, world\", null, true]", "[[0, 1], [2, 3], [4, [5, 6]]]"});
+    output_col = createColumn<Nullable<String>>({R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])", R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])", "[[0, 1], [2, 3], [4, [5, 6]]]"});
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnConst(non-null)
@@ -90,7 +103,7 @@ try
     non_null_str_col->insertData(reinterpret_cast<const char *>(bj2), sizeof(bj2) / sizeof(UInt8));
     auto const_non_null_input_col = ColumnConst::create(std::move(non_null_str_col), 3);
     res = executeFunction(func_name, {std::move(const_non_null_input_col), string_type_ptr, ""});
-    output_col = createConstColumn<Nullable<String>>(3, {"[{\"a\": 1, \"b\": true}, 3, 3.5, \"hello, world\", null, true]"});
+    output_col = createConstColumn<Nullable<String>>(3, {R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])"});
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnConst(nullable)

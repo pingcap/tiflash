@@ -40,6 +40,12 @@ try
     auto res = executeFunction(func_name, input_col);
     ASSERT_COLUMN_EQ(res, output_col);
 
+    /// Normal case: ColumnVector(null)
+    input_col = createColumn<Nullable<String>>({{}, {}, {}});
+    output_col = createColumn<Nullable<String>>({{}, {}, {}});
+    res = executeFunction(func_name, input_col);
+    ASSERT_COLUMN_EQ(res, output_col);
+
     /// ColumnConst(null)
     auto null_input_col = createConstColumn<Nullable<String>>(3, {});
     output_col = createConstColumn<Nullable<String>>(3, {});
