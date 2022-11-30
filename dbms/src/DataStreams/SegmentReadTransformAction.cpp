@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/UnorderedTransformAction.h>
+#include <DataStreams/SegmentReadTransformAction.h>
 
 namespace DB
 {
-Block UnorderedTransformAction::getHeader() const
+Block SegmentReadTransformAction::getHeader() const
 {
     return header;
 }
 
-bool UnorderedTransformAction::transform(Block & block)
+bool SegmentReadTransformAction::transform(Block & block)
 {
     if (extra_table_id_index != InvalidColumnID)
     {

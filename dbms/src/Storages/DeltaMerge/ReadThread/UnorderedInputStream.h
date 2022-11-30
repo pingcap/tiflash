@@ -16,7 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/UnorderedTransformAction.h>
+#include <DataStreams/SegmentReadTransformAction.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -123,7 +123,7 @@ protected:
 private:
     SegmentReadTaskPoolPtr task_pool;
     Block header;
-    UnorderedTransformAction action;
+    SegmentReadTransformAction action;
 
     bool done = false;
     LoggerPtr log;

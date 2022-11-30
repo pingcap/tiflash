@@ -18,10 +18,10 @@
 
 namespace DB
 {
-struct UnorderedTransformAction
+struct SegmentReadTransformAction
 {
 public:
-    UnorderedTransformAction(
+    SegmentReadTransformAction(
         const Block & header_,
         int extra_table_id_index_,
         TableID physical_table_id_)
