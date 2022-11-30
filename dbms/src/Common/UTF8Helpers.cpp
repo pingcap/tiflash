@@ -58,7 +58,7 @@ std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
 {
     /// Avoid expanding const arrays one element per line
     // clang-format off
-    static const char lengths[] = {
+    static const unsigned char lengths[] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
     };

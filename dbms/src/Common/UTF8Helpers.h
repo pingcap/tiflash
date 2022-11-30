@@ -29,7 +29,6 @@ namespace UTF8
 {
 static const UInt8 CONTINUATION_OCTET_MASK = 0b11000000u;
 static const UInt8 CONTINUATION_OCTET = 0b10000000u;
-static const UInt32 UTF8Self = 0x80; // characters below UTF8Self are represented as themselves in a single byte.
 static const UInt32 UNICODEMax = 0x0010FFFF; // Maximum valid Unicode code point.
 static const UInt32 UTF8Error = UNICODEMax + 1; // the "error" code
 
