@@ -22,6 +22,8 @@
 
 #include <iterator>
 #include <memory>
+#include "Columns/ColumnsNumber.h"
+#include "Columns/IColumn.h"
 
 
 namespace DB
@@ -449,6 +451,18 @@ Names Block::getNames() const
         res.push_back(elem.name);
 
     return res;
+}
+
+void Block::fillSegmentRowId(UInt64 start, UInt64 limit)
+{
+    MutableColumnPtr new_seg_row_id_col = ColumnUInt32::create();
+    new_seg_row_id_col->reserve(limit);
+    for (UInt64 i = 0; i < limit; ++i)
+    {
+        auto row_id = start + i;
+        new_seg_row_id_col->insert(row_id);
+    }
+    segment_row_id_col = std::move(new_seg_row_id_col);
 }
 
 

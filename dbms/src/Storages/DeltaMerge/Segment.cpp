@@ -2238,6 +2238,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
             segment_snap->stable->getDMFilesRows(),
             segment_snap->delta->getRows(),
             bitmap_filter,
+            /* need_segment_col_id */ false,
             dm_context.tracing_id);
     }
 
@@ -2273,6 +2274,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         segment_snap->stable->getDMFilesRows(),
         segment_snap->delta->getRows(),
         bitmap_filter,
+        /* need_segment_col_id */ true,
         dm_context.tracing_id);
 
     /// phase 2: execute filter
@@ -2300,11 +2302,11 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
             break;
         }
     }
-    filtering_bitmap->runOptimize();
-    LOG_DEBUG(log, "build filtering bitmap total_rows={} {}, blocks size={}", total_rows, filtering_bitmap->toDebugString(), blocks.size());
 
     /// phase 4: and(bitmap_filter, filtering_bitmap)
     bitmap_filter->andWith(filtering_bitmap);
+    bitmap_filter->runOptimize();
+    LOG_DEBUG(log, "build final bitmap total_rows={} {}, blocks size={}", total_rows, bitmap_filter->toDebugString(), blocks.size());
 
     /// phase 5: read rest columns
     ColumnDefines rest_columns_to_read{columns_to_read};
@@ -2343,6 +2345,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         segment_snap->stable->getDMFilesRows(),
         segment_snap->delta->getRows(),
         bitmap_filter,
+        /* need_segment_col_id */ false,
         dm_context.tracing_id);
 }
 

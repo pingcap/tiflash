@@ -161,6 +161,8 @@ public:
     void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
     ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
 
+    void fillSegmentRowId(UInt64 start, UInt64 limit);
+
 private:
     void eraseImpl(size_t position);
     void initializeIndexByName();

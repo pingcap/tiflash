@@ -26,6 +26,7 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     size_t stable_rows_,
     size_t delta_rows_,
     const BitmapFilterPtr & bitmap_filter_,
+    bool need_segment_col_id_,
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
     , stable(stable_)
@@ -33,6 +34,7 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     , stable_rows(stable_rows_)
     , delta_rows(delta_rows_)
     , bitmap_filter(bitmap_filter_)
+    , need_segment_col_id(need_segment_col_id_)
     , log(Logger::get(NAME, req_id_))
 {
     if (intput_blocks_.has_value())
@@ -52,6 +54,10 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         if (from_delta)
         {
             block.setStartOffset(block.startOffset() + stable_rows);
+        }
+        if (need_segment_col_id && !block.segmentRowIdCol())
+        {
+            block.fillSegmentRowId(block.startOffset(), block.rows());
         }
 
         filter.resize(block.rows());

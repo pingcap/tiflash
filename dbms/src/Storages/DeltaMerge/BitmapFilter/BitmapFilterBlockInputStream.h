@@ -35,6 +35,7 @@ public:
         size_t stable_rows_,
         size_t delta_rows_,
         const BitmapFilterPtr & bitmap_filter_,
+        bool need_segment_col_id_,
         const String & req_id_);
 
     String getName() const override { return NAME; }
@@ -61,6 +62,7 @@ private:
     size_t stable_rows;
     [[maybe_unused]] size_t delta_rows;
     BitmapFilterPtr bitmap_filter;
+    bool need_segment_col_id;
     const LoggerPtr log;
     IColumn::Filter filter{};
     Stopwatch sw;
