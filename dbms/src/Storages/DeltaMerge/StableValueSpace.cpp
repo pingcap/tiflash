@@ -23,6 +23,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
+#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
+#include "Storages/DeltaMerge/Filter/RSOperator.h"
 
 namespace DB
 {
@@ -56,7 +58,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 index_cache,
                 /*set_cache_if_miss*/ true,
                 {range},
-                EMPTY_FILTER,
+                EMPTY_RS_OPERATOR,
+                EMPTY_BITMAP_FILTER,
                 {},
                 dm_context->db_context.getFileProvider(),
                 dm_context->getReadLimiter(),
@@ -256,7 +259,8 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
             {rowkey_range},
-            EMPTY_FILTER,
+            EMPTY_RS_OPERATOR,
+            EMPTY_BITMAP_FILTER,
             {},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
@@ -342,6 +346,7 @@ StableValueSpace::Snapshot::getInputStream(
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
     const RSOperatorPtr & filter,
+    const BitmapFilterPtr & bitmap_filter,
     UInt64 max_data_version,
     size_t expected_block_size,
     bool enable_handle_clean_read,
@@ -359,6 +364,7 @@ StableValueSpace::Snapshot::getInputStream(
         builder
             .enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
+            .setBitmapFilter(bitmap_filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
@@ -387,7 +393,8 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
             {range},
-            RSOperatorPtr{},
+            EMPTY_RS_OPERATOR,
+            EMPTY_BITMAP_FILTER,
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
@@ -432,7 +439,8 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
             {range},
-            RSOperatorPtr{},
+            EMPTY_RS_OPERATOR,
+            EMPTY_BITMAP_FILTER,
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),

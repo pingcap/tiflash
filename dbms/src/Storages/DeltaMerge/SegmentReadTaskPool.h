@@ -15,7 +15,7 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 
@@ -163,7 +163,7 @@ public:
         int64_t table_id_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
-        const RSOperatorPtr & filter_,
+        const PushDownFilterPtr & filter_,
         uint64_t max_version_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -262,7 +262,7 @@ private:
     const int64_t table_id;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
-    RSOperatorPtr filter;
+    PushDownFilterPtr filter;
     const uint64_t max_version;
     const size_t expected_block_size;
     ReadMode read_mode;

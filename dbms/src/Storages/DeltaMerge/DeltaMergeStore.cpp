@@ -28,7 +28,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
@@ -45,6 +44,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include "Storages/DeltaMerge/Filter/PushDownFilter.h"
 
 namespace ProfileEvents
 {
@@ -960,7 +960,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RowKeyRanges & sorted_ranges,
                                         size_t num_streams,
                                         UInt64 max_version,
-                                        const RSOperatorPtr & filter,
+                                        const PushDownFilterPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,

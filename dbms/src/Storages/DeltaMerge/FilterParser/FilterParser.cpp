@@ -251,7 +251,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
 {
     assert(isFunctionExpr(expr));
 
-    RSOperatorPtr op = EMPTY_FILTER;
+    RSOperatorPtr op = EMPTY_RS_OPERATOR;
     if (unlikely(isAggFunctionExpr(expr)))
     {
         op = createUnsupported(expr.ShortDebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
@@ -392,7 +392,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
                                           FilterParser::AttrCreatorByColumnID && creator,
                                           const LoggerPtr & log)
 {
-    RSOperatorPtr op = EMPTY_FILTER;
+    RSOperatorPtr op = EMPTY_RS_OPERATOR;
     if (dag_info.filters.empty())
         return op;
 
@@ -412,6 +412,25 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
         op = createAnd(children);
     }
     return op;
+}
+
+void FilterParser::parseFilterColumnsFromDAGQuery(const tipb::Expr & expr, const ColumnDefines & columns_to_read, std::unordered_set<ColId> & col_id_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (likely(isColumnExpr(expr)))
+        {
+            ColumnID id = cop::getColumnIDForColumnExpr(expr, columns_to_read);
+            col_id_set.insert(id);
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            parseFilterColumnsFromDAGQuery(child, columns_to_read, col_id_set);
+        }
+    }
 }
 
 std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{

@@ -176,6 +176,12 @@ bool FilterTransformAction::transform(Block & block)
             current_column.column = current_column.column->filter(*filter, filtered_rows);
     }
 
+    /// Filter segment_row_id_col if it exists.
+    if (block.segmentRowIdCol())
+    {
+        block.setSegmentRowIdCol(block.segmentRowIdCol()->filter(*filter, filtered_rows));
+    }
+
     return true;
 }
 } // namespace DB

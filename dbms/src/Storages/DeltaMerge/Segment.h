@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 
 namespace DB::DM
 {
@@ -165,7 +166,7 @@ public:
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
-        const RSOperatorPtr & filter,
+        const PushDownFilterPtr & filter,
         UInt64 max_version,
         size_t expected_block_size);
 
@@ -544,14 +545,14 @@ private:
                                                    const DMContext & dm_context,
                                                    const ColumnDefines & columns_to_read,
                                                    const RowKeyRanges & data_ranges,
-                                                   const RSOperatorPtr & filter,
+                                                   const PushDownFilterPtr & filter,
                                                    UInt64 max_version,
                                                    size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(const DMContext & dm_context,
                                                    const ColumnDefines & columns_to_read,
                                                    const SegmentSnapshotPtr & segment_snap,
                                                    const RowKeyRanges & data_ranges,
-                                                   const RSOperatorPtr & filter,
+                                                   const PushDownFilterPtr & filter,
                                                    UInt64 max_version,
                                                    size_t expected_block_size);
 

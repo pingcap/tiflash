@@ -22,6 +22,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
+#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace DB
 {
@@ -38,7 +39,7 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_)
+    explicit StableValueSpace(PageId id_)
         : id(id_)
         , log(Logger::get())
     {}
@@ -120,7 +121,7 @@ public:
         // number of rows having at least one version(include delete)
         UInt64 num_rows;
 
-        const String toDebugString() const
+        String toDebugString() const
         {
             return "StableProperty: gc_hint_version [" + std::to_string(this->gc_hint_version) + "] num_versions ["
                 + std::to_string(this->num_versions) + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows["
@@ -140,18 +141,18 @@ public:
     {
         StableValueSpacePtr stable;
 
-        PageId id;
-        UInt64 valid_rows;
-        UInt64 valid_bytes;
+        PageId id{};
+        UInt64 valid_rows{};
+        UInt64 valid_bytes{};
 
-        bool is_common_handle;
-        size_t rowkey_column_size;
+        bool is_common_handle{};
+        size_t rowkey_column_size{};
 
         /// TODO: The members below are not actually snapshots, they should not be here.
 
         ColumnCachePtrs column_caches;
 
-        Snapshot(StableValueSpacePtr stable_)
+        explicit Snapshot(StableValueSpacePtr stable_)
             : stable(stable_)
             , log(stable->log)
         {}
@@ -210,6 +211,7 @@ public:
                                                     const ColumnDefines & read_columns,
                                                     const RowKeyRanges & rowkey_ranges,
                                                     const RSOperatorPtr & filter,
+                                                    const BitmapFilterPtr & bitmap_filter,
                                                     UInt64 max_data_version,
                                                     size_t expected_block_size,
                                                     bool enable_handle_clean_read,
@@ -245,12 +247,12 @@ private:
 
     // Valid rows is not always the sum of rows in file,
     // because after logical split, two segments could reference to a same file.
-    UInt64 valid_rows; /* At most. The actual valid rows may be lower than this value. */
-    UInt64 valid_bytes; /* At most. The actual valid bytes may be lower than this value. */
+    UInt64 valid_rows{}; /* At most. The actual valid rows may be lower than this value. */
+    UInt64 valid_bytes{}; /* At most. The actual valid bytes may be lower than this value. */
 
     DMFiles files;
 
-    StableProperty property;
+    StableProperty property{};
     std::atomic<bool> is_property_cached = false;
 
     LoggerPtr log;

@@ -46,6 +46,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         /*set_cache_if_miss*/ true,
         rowkey_ranges,
         rs_filter,
+        bitmap_filter,
         read_packs,
         file_provider,
         read_limiter,

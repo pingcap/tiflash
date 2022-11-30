@@ -20,6 +20,9 @@ namespace DB::DM
 {
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
+class BitmapFilter;
+using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
+inline static const BitmapFilterPtr EMPTY_BITMAP_FILTER{};
 
 class BitmapFilter
 {
@@ -31,6 +34,10 @@ public:
     void set(const ColumnPtr & col);
 
     void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+
+    bool checkPack(UInt32 start, UInt32 limit) const;
+
+    void andWith(const BitmapFilterPtr & other);
 
     SegmentSnapshotPtr snapshot() const;
 
@@ -44,5 +51,4 @@ private:
     bool all_match;
 };
 
-using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 } // namespace DB::DM

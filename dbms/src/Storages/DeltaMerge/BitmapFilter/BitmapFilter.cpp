@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include "common/types.h"
 
 namespace DB::DM
 {
@@ -57,6 +58,30 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     }
 }
 
+bool BitmapFilter::checkPack(UInt32 start, UInt32 limit) const
+{
+    RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
+    // TODO: make sure it can be vectorized
+    for (UInt32 i = start; i < start + limit; ++i)
+    {
+        if (filter[i])
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void BitmapFilter::andWith(const BitmapFilterPtr & other)
+{
+    // TODO: make sure it can be vectorized
+    RUNTIME_CHECK(filter.size() == other->filter.size(), filter.size(), other->filter.size());
+    for (UInt32 i = 0; i < filter.size(); ++i)
+    {
+        filter[i] = filter[i] && other->filter[i];
+    }
+}
+
 SegmentSnapshotPtr BitmapFilter::snapshot() const
 {
     return snap == nullptr ? nullptr : snap->clone();
@@ -74,14 +99,16 @@ void BitmapFilter::runOptimize()
 
 String BitmapFilter::toDebugString() const
 {
-    String s(filter.size(), '1');
-    for (UInt32 i = 0; i < filter.size(); i++)
+    // String s(filter.size(), '1');
+    UInt32 positive = 0;
+    for (auto i : filter)
     {
-        if (!filter[i])
+        if (i)
         {
-            s[i] = '0';
+            // s[i] = '0';
+            ++positive;
         }
     }
-    return fmt::format("size {} => {}", s.size(), s);
+    return fmt::format("size={}, positive={}", filter.size(), positive);
 }
 } // namespace DB::DM

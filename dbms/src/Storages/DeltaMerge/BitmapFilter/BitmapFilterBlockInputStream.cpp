@@ -22,6 +22,7 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     const ColumnDefines & columns_to_read,
     BlockInputStreamPtr stable_,
     BlockInputStreamPtr delta_,
+    const std::optional<Blocks> & intput_blocks_,
     size_t stable_rows_,
     size_t delta_rows_,
     const BitmapFilterPtr & bitmap_filter_,
@@ -33,7 +34,12 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     , delta_rows(delta_rows_)
     , bitmap_filter(bitmap_filter_)
     , log(Logger::get(NAME, req_id_))
-{}
+{
+    if (intput_blocks_.has_value())
+    {
+        input_blocks = std::move(intput_blocks_.value());
+    }
+}
 
 Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
@@ -64,6 +70,8 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
             }
             filter_ns += sw.elapsed();
         }
+        // TODO: concat blocks
+        (void) cur_block_idx;
     }
     return block;
 }

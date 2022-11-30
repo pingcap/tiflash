@@ -51,7 +51,7 @@ public:
     {
     }
 
-    const DMFilePtr getFile() const { return writer.getFile(); }
+    DMFilePtr getFile() const { return writer.getFile(); }
 
     using BlockProperty = DMFileWriter::BlockProperty;
     void write(const Block & block, const BlockProperty & block_property) { writer.write(block, block_property); }

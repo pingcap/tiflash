@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace ProfileEvents
 {
@@ -51,13 +52,14 @@ public:
         bool set_cache_if_miss,
         const RowKeyRanges & rowkey_ranges,
         const RSOperatorPtr & filter,
+        const BitmapFilterPtr & bitmap_filter,
         const IdSetPtr & read_packs,
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context,
         const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, scan_context, tracing_id);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, bitmap_filter, read_packs, file_provider, read_limiter, scan_context, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
@@ -112,6 +114,7 @@ private:
                      bool set_cache_if_miss_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
+                     const BitmapFilterPtr & bitmap_filter_, // filter by bitmap filter
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
@@ -122,6 +125,7 @@ private:
         , set_cache_if_miss(set_cache_if_miss_)
         , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
+        , bitmap_filter(bitmap_filter_)
         , read_packs(read_packs_)
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
@@ -199,6 +203,19 @@ private:
             for (size_t i = 0; i < pack_count; ++i)
             {
                 use_packs[i] = (static_cast<bool>(use_packs[i])) && (filter->roughCheck(i, param) != None);
+            }
+        }
+
+        /// Check packs by bitmap
+        if (bitmap_filter)
+        {
+            // TODO: make sure it can be vectorized
+            const auto & pack_stats = dmfile->getPackStats();
+            auto start_index = 0;
+            for (size_t i = 0; i < pack_count; ++i)
+            {
+                use_packs[i] = (static_cast<bool>(use_packs[i])) && bitmap_filter->checkPack(start_index, pack_stats[i].rows);
+                start_index += pack_stats[i].rows;
             }
         }
 
@@ -302,6 +319,7 @@ private:
     bool set_cache_if_miss;
     RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
+    BitmapFilterPtr bitmap_filter;
     IdSetPtr read_packs;
     FileProviderPtr file_provider;
 

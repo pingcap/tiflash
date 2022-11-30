@@ -21,8 +21,10 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 
 #include <memory>
+
 namespace DB
 {
 class Context;
@@ -43,7 +45,7 @@ public:
         }
     }
 
-    ~DMFileBlockInputStream()
+    ~DMFileBlockInputStream() override
     {
         if (enable_read_thread)
         {
@@ -115,6 +117,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setBitmapFilter(const BitmapFilterPtr & filter_)
+    {
+        bitmap_filter = filter_;
+        return *this;
+    }
+
     DMFileBlockInputStreamBuilder & setReadPacks(const IdSetPtr & read_packs_)
     {
         read_packs = read_packs_;
@@ -174,6 +182,8 @@ private:
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
+    // Bitmap filter
+    BitmapFilterPtr bitmap_filter;
     // packs filter (filter by pack index)
     IdSetPtr read_packs{};
     MarkCachePtr mark_cache;

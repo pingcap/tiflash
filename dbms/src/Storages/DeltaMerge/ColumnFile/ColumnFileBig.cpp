@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/PathPool.h>
+#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace DB
 {
@@ -39,7 +40,8 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         index_cache,
         /*set_cache_if_miss*/ false,
         {segment_range},
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
+        EMPTY_BITMAP_FILTER,
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),
