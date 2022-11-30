@@ -82,6 +82,7 @@ public:
         return allowed_common_names;
     }
 
+    // return value indicate whether the tls cert path is changed.
     bool update(Poco::Util::AbstractConfiguration & config)
     {
         std::unique_lock lock(mu);

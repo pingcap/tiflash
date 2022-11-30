@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Config/ConfigProcessor.h>
 #include <time.h>
 
 #include <condition_variable>
@@ -23,8 +24,6 @@
 #include <set>
 #include <string>
 #include <thread>
-
-#include "ConfigProcessor.h"
 
 
 namespace Poco
@@ -48,7 +47,7 @@ public:
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
-    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, const char * name = "CfgReloader");
+    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, bool is_main_config, const char * name = "CfgReloader");
 
     virtual ~ConfigReloader();
 
@@ -56,10 +55,15 @@ public:
     virtual void start();
 
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
-    void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
+    void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true, is_main_config); }
+
+    bool tlsInited() const { return tls_inited; }
+    
+    /// Init tls certificate files when tls is enabled.
+    void initTls(bool throw_on_error);
 
 protected:
-    void reloadIfNewer(bool force, bool throw_on_error);
+    void reloadIfNewer(bool force, bool throw_on_error, bool is_main_config);
     Updater & getUpdater() { return updater; }
 
 private:
@@ -75,7 +79,8 @@ private:
         bool isDifferOrNewerThan(const FilesChangesTracker & rhs) const;
     };
 
-    bool tlsCertUpdated(Poco::AutoPtr<Poco::Util::AbstractConfiguration> config, bool init);
+    // If tls is enabled, It will check whether the tls certificate is changed
+    bool tlsCertUpdated();
 
     FilesChangesTracker getNewFileList() const;
 
@@ -96,6 +101,10 @@ private:
 
     std::atomic<bool> quit{false};
     std::thread thread;
+
+    // main config reloader will handle the reload process for tls certificate files
+    bool is_main_config;
+    bool tls_inited = false;
 
     /// Locked inside reloadIfNewer.
     std::mutex reload_mutex;

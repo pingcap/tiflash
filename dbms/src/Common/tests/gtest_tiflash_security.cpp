@@ -22,11 +22,11 @@ namespace DB
 {
 namespace tests
 {
-class TestTiFlashSecurity : public ext::Singleton<TestTiFlashSecurity>
+class TiFlashSecurityTest : public ext::Singleton<TiFlashSecurityTest>
 {
 };
 
-TEST(TestTiFlashSecurity, Config)
+TEST(TiFlashSecurityTest, Config)
 {
     TiFlashSecurityConfig tiflash_config;
     const auto log = Logger::get();
@@ -76,7 +76,7 @@ cert_allowed_cn="tidb"
     ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
 }
 
-TEST(TestTiFlashSecurity, Update)
+TEST(TiFlashSecurityTest, Update)
 {
     String test =
         R"(
@@ -88,7 +88,7 @@ cert_allowed_cn="tidb"
     const auto log = Logger::get();
 
     TiFlashSecurityConfig tiflash_config(*config, log); // no TLS config is set
-    const auto * new_test =
+    test =
         R"(
 [security]
 ca_path="security/ca.pem"
@@ -96,16 +96,49 @@ cert_path="security/cert.pem"
 key_path="security/key.pem"
 cert_allowed_cn="tidb"
         )";
-    config = loadConfigFromString(new_test);
+    config = loadConfigFromString(test);
     ASSERT_EQ(tiflash_config.update(*config), false); // can't add tls config online
 
-    config = loadConfigFromString(new_test);
+    ASSERT_EQ(tiflash_config.hasTlsConfig(), false);
+
+    config = loadConfigFromString(test);
     TiFlashSecurityConfig tiflash_config_new(*config, log);
     test =
         R"(
         )";
     config = loadConfigFromString(test);
-    ASSERT_EQ(tiflash_config.update(*config), false); // can't remove security config online
+    ASSERT_EQ(tiflash_config_new.update(*config), false); // can't remove security config online
+    ASSERT_EQ(tiflash_config_new.hasTlsConfig(), true);
+
+    test =
+        R"(
+[security]
+ca_path="security/ca_new.pem"
+cert_path="security/cert_new.pem"
+key_path="security/key_new.pem"
+cert_allowed_cn="tidb"
+        )";
+    config = loadConfigFromString(test);
+    tiflash_config_new.update(*config);
+    auto paths = tiflash_config_new.getPaths();
+
+    ASSERT_EQ(std::get<0>(paths), "security/ca_new.pem");
+    ASSERT_EQ(std::get<1>(paths), "security/cert_new.pem");
+    ASSERT_EQ(std::get<2>(paths), "security/key_new.pem");
+
+    test =
+        R"(
+[security]
+ca_path="security/ca_new.pem"
+cert_path="security/cert_new.pem"
+key_path="security/key_new.pem"
+cert_allowed_cn="[tidb, tiflash]"
+        )";
+    config = loadConfigFromString(test);
+    ASSERT_EQ(tiflash_config_new.update(*config), false);
+
+    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tidb"), 1);
+    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tiflash"), 1);
 }
 } // namespace tests
 } // namespace DB

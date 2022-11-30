@@ -71,9 +71,10 @@ ConfigReloaderPtr parseSettings(
 
     return std::make_unique<ConfigReloader>(
         users_config_path, //
-        /*updater=*/[&global_context](ConfigurationPtr cfg, bool is_new_tls_cert [[maybe_unused]]) { global_context->setUsersConfig(cfg); },
-        /*already_loaded=*/false,
-        /*name=*/"UserCfgReloader");
+        /* updater = */ [&global_context](ConfigurationPtr cfg, bool is_new_tls_cert [[maybe_unused]]) { global_context->setUsersConfig(cfg); },
+        /* already_loaded = */ false,
+        /* is_main_reloader = */ false,
+        /* name = */ "UserCfgReloader");
 }
 
 } // namespace UserConfig
