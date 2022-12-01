@@ -42,7 +42,7 @@ extern const char pause_when_ingesting_to_dt_store[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char force_ingest_via_delta[];
-extern const char force_ingest_via_split[];
+extern const char force_ingest_via_replace[];
 } // namespace FailPoints
 
 namespace DM
@@ -444,7 +444,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │--------------- Segment ------│--------│
          *    │-------- Ingest Range --------│
          */
-        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.end, SegmentSplitMode::Logical);
+        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::ForIngest, ingest_range.end, SegmentSplitMode::Logical);
         if (left == nullptr || right == nullptr)
         {
             // Split failed, likely caused by snapshot failed.
@@ -466,7 +466,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │--------│------ Segment ---------------│
          *             │-------- Ingest Range --------│
          */
-        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
+        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::ForIngest, ingest_range.start, SegmentSplitMode::Logical);
         if (left == nullptr || right == nullptr)
         {
             // Split failed, likely caused by snapshot failed.
@@ -486,7 +486,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │---│----------- Segment ---------------│
          *        │-------- Ingest Range --------│
          */
-        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
+        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::ForIngest, ingest_range.start, SegmentSplitMode::Logical);
         if (left == nullptr || right == nullptr)
         {
             // Split failed, likely caused by snapshot failed.
@@ -572,15 +572,15 @@ void DeltaMergeStore::ingestFiles(
         files.emplace_back(std::move(file));
     }
 
-    bool ingest_using_split = false;
+    bool use_split_replace = false;
     if (bytes >= dm_context->delta_small_column_file_bytes)
     {
         // We still write small ssts directly into the delta layer.
-        ingest_using_split = true;
+        use_split_replace = true;
     }
 
-    fiu_do_on(FailPoints::force_ingest_via_delta, { ingest_using_split = false; });
-    fiu_do_on(FailPoints::force_ingest_via_split, { ingest_using_split = true; });
+    fiu_do_on(FailPoints::force_ingest_via_delta, { use_split_replace = false; });
+    fiu_do_on(FailPoints::force_ingest_via_replace, { use_split_replace = true; });
 
     {
         auto get_ingest_files = [&] {
@@ -596,8 +596,8 @@ void DeltaMergeStore::ingestFiles(
         };
         LOG_INFO(
             log,
-            "Table ingest files - begin, ingest_by_split={} files={} rows={} bytes={} bytes_on_disk={} range={} clear={}",
-            ingest_using_split,
+            "Table ingest files - begin, use_split_replace={} files={} rows={} bytes={} bytes_on_disk={} range={} clear={}",
+            use_split_replace,
             get_ingest_files(),
             rows,
             bytes,
@@ -625,7 +625,7 @@ void DeltaMergeStore::ingestFiles(
     Segments updated_segments;
     if (!range.none())
     {
-        if (ingest_using_split)
+        if (use_split_replace)
             updated_segments = ingestDTFilesUsingSplit(dm_context, range, external_files, files, clear_data_in_range);
         else
             updated_segments = ingestDTFilesUsingColumnFile(dm_context, range, files, clear_data_in_range);

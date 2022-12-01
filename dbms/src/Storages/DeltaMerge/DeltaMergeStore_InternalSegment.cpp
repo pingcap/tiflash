@@ -90,7 +90,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     case SegmentSplitReason::Background:
         GET_METRIC(tiflash_storage_subtask_count, type_seg_split_bg).Increment();
         break;
-    case SegmentSplitReason::IngestBySplit:
+    case SegmentSplitReason::ForIngest:
         GET_METRIC(tiflash_storage_subtask_count, type_seg_split_ingest).Increment();
         break;
     }
@@ -105,7 +105,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         case SegmentSplitReason::Background:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_bg).Observe(watch_seg_split.elapsedSeconds());
             break;
-        case SegmentSplitReason::IngestBySplit:
+        case SegmentSplitReason::ForIngest:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_ingest).Observe(watch_seg_split.elapsedSeconds());
             break;
         }

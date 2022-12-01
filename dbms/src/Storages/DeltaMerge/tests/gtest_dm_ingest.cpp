@@ -25,7 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_ingest_via_delta[];
-extern const char force_ingest_via_split[];
+extern const char force_ingest_via_replace[];
 } // namespace FailPoints
 
 namespace DM
@@ -41,7 +41,7 @@ public:
         : ingest_by_split(GetParam())
     {
         if (ingest_by_split)
-            FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_split);
+            FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_replace);
         else
             FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_delta);
     }
@@ -49,7 +49,7 @@ public:
     ~StoreIngestTest()
     {
         if (ingest_by_split)
-            FailPointHelper::disableFailPoint(FailPoints::force_ingest_via_split);
+            FailPointHelper::disableFailPoint(FailPoints::force_ingest_via_replace);
         else
             FailPointHelper::disableFailPoint(FailPoints::force_ingest_via_delta);
     }

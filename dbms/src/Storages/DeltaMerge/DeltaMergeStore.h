@@ -442,7 +442,7 @@ private:
     {
         ForegroundWrite,
         Background,
-        IngestBySplit,
+        ForIngest,
     };
 
     /**
