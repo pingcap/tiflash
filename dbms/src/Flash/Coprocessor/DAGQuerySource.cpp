@@ -22,7 +22,7 @@ namespace DB
 {
 namespace
 {
-void fillOrderForListBasedExecutors(DAGContext & dag_context, const DAGQueryBlock & query_block)
+void fillOrderForListBasedExecutors(DagContext & dag_context, const DAGQueryBlock & query_block)
 {
     assert(query_block.source);
     auto & list_based_executors_order = dag_context.list_based_executors_order;
@@ -43,7 +43,7 @@ void fillOrderForListBasedExecutors(DAGContext & dag_context, const DAGQueryBloc
 DAGQuerySource::DAGQuerySource(Context & context_)
     : context(context_)
 {
-    const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
+    const tipb::DAGRequest & dag_request = *getDagContext().dag_request;
     if (dag_request.has_root_executor())
     {
         QueryBlockIDGenerator id_generator;
@@ -52,7 +52,7 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     else
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
-        auto & dag_context = getDAGContext();
+        auto & dag_context = getDagContext();
         if (!dag_context.return_executor_id)
             fillOrderForListBasedExecutors(dag_context, *root_query_block);
     }
@@ -63,12 +63,12 @@ std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
     // this is a WAR to avoid NPE when the MergeTreeDataSelectExecutor trying
     // to extract key range of the query.
     // todo find a way to enable key range extraction for dag query
-    return {getDAGContext().dummy_query_string, getDAGContext().dummy_ast};
+    return {getDagContext().dummy_query_string, getDagContext().dummy_ast};
 }
 
 String DAGQuerySource::str(size_t)
 {
-    return getDAGContext().dummy_query_string;
+    return getDagContext().dummy_query_string;
 }
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)

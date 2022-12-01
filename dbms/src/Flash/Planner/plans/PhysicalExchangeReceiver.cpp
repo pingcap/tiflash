@@ -42,7 +42,7 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
     const String & executor_id,
     const LoggerPtr & log)
 {
-    auto mpp_exchange_receiver = context.getDAGContext()->getMPPExchangeReceiver(executor_id);
+    auto mpp_exchange_receiver = context.getDagContext()->getMPPExchangeReceiver(executor_id);
     if (unlikely(mpp_exchange_receiver == nullptr))
         throw TiFlashException(
             fmt::format("Can not find exchange receiver for {}", executor_id),
@@ -62,7 +62,7 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
 
-    auto & dag_context = *context.getDAGContext();
+    auto & dag_context = *context.getDagContext();
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[executor_id];
 

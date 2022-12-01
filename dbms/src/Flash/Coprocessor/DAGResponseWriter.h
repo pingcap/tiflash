@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -24,18 +24,18 @@ class DAGResponseWriter
 public:
     DAGResponseWriter(
         Int64 records_per_chunk_,
-        DAGContext & dag_context_);
+        DagContext & dag_context_);
     /// prepared with sample block
     virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;
     /// flush cached blocks for batch writer
     virtual void flush() = 0;
     virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
+    const DagContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;
-    DAGContext & dag_context;
+    DagContext & dag_context;
 };
 
 } // namespace DB

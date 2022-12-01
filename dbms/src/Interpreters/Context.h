@@ -91,7 +91,7 @@ using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 struct TiFlashRaftConfig;
-class DAGContext;
+class DagContext;
 class IORateLimiter;
 class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
@@ -171,7 +171,7 @@ private:
 
     TimezoneInfo timezone_info;
 
-    DAGContext * dag_context = nullptr;
+    DagContext * dag_context = nullptr;
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -342,8 +342,8 @@ public:
     /// Can return nullptr if the query was not inserted into the ProcessList.
     ProcessListElement * getProcessListElement() const;
 
-    void setDAGContext(DAGContext * dag_context);
-    DAGContext * getDAGContext() const;
+    void setDagContext(DagContext * dag_context);
+    DagContext * getDagContext() const;
 
     /// List all queries.
     ProcessList & getProcessList();

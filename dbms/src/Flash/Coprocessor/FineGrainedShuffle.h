@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
 

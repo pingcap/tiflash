@@ -29,7 +29,7 @@ class TestFromDays : public DB::tests::FunctionTest
 TEST_F(TestFromDays, TestAll)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)

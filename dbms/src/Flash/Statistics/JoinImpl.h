@@ -36,7 +36,7 @@ using JoinStatisticsBase = ExecutorStatistics<JoinImpl>;
 class JoinStatistics : public JoinStatisticsBase
 {
 public:
-    JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
+    JoinStatistics(const tipb::Executor * executor, DagContext & dag_context_);
 
 private:
     size_t hash_table_bytes = 0;

@@ -68,7 +68,7 @@ public:
         sender_helper = std::make_shared<SenderHelper>(source_num, concurrency, fine_grained_shuffle_stream_count, fine_grained_shuffle_batch_size, receiver_helper->queues, receiver_helper->fields);
         sender_stream = sender_helper->buildUnionStream(total_rows, blocks);
 
-        context.setDAGContext(sender_helper->dag_context.get());
+        context.setDagContext(sender_helper->dag_context.get());
         std::vector<NameAndTypePair> source_columns{
             NameAndTypePair("c1", makeNullable(std::make_shared<DataTypeInt64>())),
             NameAndTypePair("c2", makeNullable(std::make_shared<DataTypeString>())),

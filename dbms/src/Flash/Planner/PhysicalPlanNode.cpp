@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
@@ -59,7 +59,7 @@ void PhysicalPlanNode::finalize()
 
 void PhysicalPlanNode::recordProfileStreams(DAGPipeline & pipeline, const Context & context)
 {
-    auto & profile_streams_map = context.getDAGContext()->getProfileStreamsMap();
+    auto & profile_streams_map = context.getDagContext()->getProfileStreamsMap();
     /// The profile stream of some operators has been recorded.
     /// For example, `DAGStorageInterpreter` records the profile streams of PhysicalTableScan.
     if (profile_streams_map.find(executor_id) == profile_streams_map.end())
@@ -76,8 +76,8 @@ void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size
         recordProfileStreams(pipeline, context);
     if (is_restore_concurrency)
     {
-        context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        context.getDagContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
+        restoreConcurrency(pipeline, context.getDagContext()->final_concurrency, log);
     }
 }
 } // namespace DB

@@ -263,7 +263,7 @@ struct SenderHelper
     std::vector<MockWriterPtr> mock_writers;
     std::vector<MockTunnelPtr> tunnels;
     MockTunnelSetPtr tunnel_set;
-    std::unique_ptr<DAGContext> dag_context;
+    std::unique_ptr<DagContext> dag_context;
 
     SenderHelper(
         int source_num_,

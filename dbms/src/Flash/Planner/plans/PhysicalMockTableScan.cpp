@@ -34,7 +34,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
 
-    auto & dag_context = *context.getDAGContext();
+    auto & dag_context = *context.getDagContext();
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 

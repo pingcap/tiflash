@@ -136,7 +136,7 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
     }
 
-    const auto & dag_context = *context.getDAGContext();
+    const auto & dag_context = *context.getDagContext();
     // Append final project results if needed.
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
@@ -772,7 +772,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            context.getDAGContext()->tunnel_set,
+            context.getDagContext()->tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_sender.tp(),

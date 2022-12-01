@@ -18,7 +18,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
@@ -1417,7 +1417,7 @@ tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
     return dag_req;
 }
 
-tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
+tipb::EncodeType analyzeDAGEncodeType(DagContext & dag_context)
 {
     const tipb::DAGRequest & dag_request = *dag_context.dag_request;
     const tipb::EncodeType encode_type = dag_request.encode_type();

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -35,7 +35,7 @@ bool strictSqlMode(UInt64 sql_mode)
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
 
-void DAGContext::initOutputInfo()
+void DagContext::initOutputInfo()
 {
     output_field_types = collectOutputFieldTypes(*dag_request);
     output_offsets.clear();
@@ -53,34 +53,34 @@ void DAGContext::initOutputInfo()
     keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
-bool DAGContext::allowZeroInDate() const
+bool DagContext::allowZeroInDate() const
 {
     return flags & TiDBSQLFlags::IGNORE_ZERO_IN_DATE;
 }
 
-bool DAGContext::allowInvalidDate() const
+bool DagContext::allowInvalidDate() const
 {
     return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
 }
 
-void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subquery)
+void DagContext::addSubquery(const String & subquery_id, SubqueryForSet && subquery)
 {
     SubqueriesForSets subqueries_for_sets;
     subqueries_for_sets[subquery_id] = std::move(subquery);
     subqueries.push_back(std::move(subqueries_for_sets));
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
+std::unordered_map<String, BlockInputStreams> & DagContext::getProfileStreamsMap()
 {
     return profile_streams_map;
 }
 
-void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
+void DagContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
 {
     final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
 }
 
-void DAGContext::initExecutorIdToJoinIdMap()
+void DagContext::initExecutorIdToJoinIdMap()
 {
     // only mpp task has join executor
     // for mpp, all executor has executor id.
@@ -105,22 +105,22 @@ void DAGContext::initExecutorIdToJoinIdMap()
     });
 }
 
-std::unordered_map<String, std::vector<String>> & DAGContext::getExecutorIdToJoinIdMap()
+std::unordered_map<String, std::vector<String>> & DagContext::getExecutorIdToJoinIdMap()
 {
     return executor_id_to_join_id_map;
 }
 
-std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
+std::unordered_map<String, JoinExecuteInfo> & DagContext::getJoinExecuteInfoMap()
 {
     return join_execute_info_map;
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
+std::unordered_map<String, BlockInputStreams> & DagContext::getInBoundIOInputStreamsMap()
 {
     return inbound_io_input_streams_map;
 }
 
-void DAGContext::handleTruncateError(const String & msg)
+void DagContext::handleTruncateError(const String & msg)
 {
     if (!(flags & TiDBSQLFlags::IGNORE_TRUNCATE || flags & TiDBSQLFlags::TRUNCATE_AS_WARNING))
     {
@@ -129,7 +129,7 @@ void DAGContext::handleTruncateError(const String & msg)
     appendWarning(msg);
 }
 
-void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
+void DagContext::handleOverflowError(const String & msg, const TiFlashError & error)
 {
     if (!(flags & TiDBSQLFlags::OVERFLOW_AS_WARNING))
     {
@@ -138,7 +138,7 @@ void DAGContext::handleOverflowError(const String & msg, const TiFlashError & er
     appendWarning("Overflow error: " + msg);
 }
 
-void DAGContext::handleDivisionByZero()
+void DagContext::handleDivisionByZero()
 {
     if (flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT)
     {
@@ -152,7 +152,7 @@ void DAGContext::handleDivisionByZero()
     appendWarning("Division by 0");
 }
 
-void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & error)
+void DagContext::handleInvalidTime(const String & msg, const TiFlashError & error)
 {
     if (!(error.is(Errors::Types::WrongValue) || error.is(Errors::Types::Truncated)))
     {
@@ -165,7 +165,7 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
     }
 }
 
-void DAGContext::appendWarning(const String & msg, int32_t code)
+void DagContext::appendWarning(const String & msg, int32_t code)
 {
     tipb::Error warning;
     warning.set_code(code);
@@ -173,12 +173,12 @@ void DAGContext::appendWarning(const String & msg, int32_t code)
     appendWarning(warning);
 }
 
-bool DAGContext::shouldClipToZero() const
+bool DagContext::shouldClipToZero() const
 {
     return flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_LOAD_DATA_STMT;
 }
 
-std::pair<bool, double> DAGContext::getTableScanThroughput()
+std::pair<bool, double> DagContext::getTableScanThroughput()
 {
     if (table_scan_executor_id.empty())
         return std::make_pair(false, 0.0);
@@ -206,7 +206,7 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
-ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_id) const
+ExchangeReceiverPtr DagContext::getMPPExchangeReceiver(const String & executor_id) const
 {
     if (!isMPPTask())
         throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
@@ -214,24 +214,24 @@ ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_i
     return mpp_receiver_set->getExchangeReceiver(executor_id);
 }
 
-void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
+void DagContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
 {
     if (!isMPPTask())
         return;
     coprocessor_readers.push_back(coprocessor_reader);
 }
 
-std::vector<CoprocessorReaderPtr> & DAGContext::getCoprocessorReaders()
+std::vector<CoprocessorReaderPtr> & DagContext::getCoprocessorReaders()
 {
     return coprocessor_readers;
 }
 
-bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
+bool DagContext::containsRegionsInfoForTable(Int64 table_id) const
 {
     return tables_regions_info.containsRegionsInfoForTable(table_id);
 }
 
-const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
+const SingleTableRegions & DagContext::getTableRegionsInfoByTableID(Int64 table_id) const
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }

@@ -18,7 +18,7 @@ namespace DB
 {
 DAGResponseWriter::DAGResponseWriter(
     Int64 records_per_chunk_,
-    DAGContext & dag_context_)
+    DagContext & dag_context_)
     : records_per_chunk(records_per_chunk_)
     , dag_context(dag_context_)
 {

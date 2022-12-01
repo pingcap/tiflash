@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 
@@ -29,8 +29,8 @@ public:
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
-    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
-    const tipb::DAGRequest & getDAGRequest() const { return *getDAGContext().dag_request; }
+    DagContext & getDagContext() const { return *context.getDagContext(); }
+    const tipb::DAGRequest & getDAGRequest() const { return *getDagContext().dag_request; }
 
 private:
     Context & context;

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeNullable.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -26,10 +26,10 @@ namespace DB::tests
 class DAGWarnings : public DB::tests::FunctionTest
 {
 public:
-    void initializeDAGContext() override
+    void initializeDagContext() override
     {
-        dag_context_ptr = std::make_unique<DAGContext>(5);
-        context.setDAGContext(dag_context_ptr.get());
+        dag_context_ptr = std::make_unique<DagContext>(5);
+        context.setDagContext(dag_context_ptr.get());
     }
 };
 
@@ -51,8 +51,8 @@ try
     };
     std::vector<std::string> expected_warnings{gen_warning_str("xxx"), gen_warning_str("xx1"), gen_warning_str("NULL"), gen_warning_str("xx2"), gen_warning_str("xx3")};
     std::vector<tipb::Error> actual_warnings;
-    getDAGContext().consumeWarnings(actual_warnings);
-    ASSERT_TRUE(getDAGContext().getWarningCount() == 6);
+    getDagContext().consumeWarnings(actual_warnings);
+    ASSERT_TRUE(getDagContext().getWarningCount() == 6);
     ASSERT_TRUE(expected_warnings.size() == actual_warnings.size());
     for (size_t i = 0; i < expected_warnings.size(); ++i)
     {

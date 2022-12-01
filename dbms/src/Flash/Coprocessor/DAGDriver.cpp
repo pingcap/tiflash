@@ -41,7 +41,7 @@ extern const int UNKNOWN_EXCEPTION;
 template <bool batch>
 const tipb::DAGRequest & DAGDriver<batch>::dagRequest() const
 {
-    return *context.getDAGContext()->dag_request;
+    return *context.getDagContext()->dag_request;
 }
 
 template <>
@@ -89,7 +89,7 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGContext & dag_context = *context.getDAGContext();
+    DagContext & dag_context = *context.getDagContext();
 
     BlockIO streams = executeQuery(context, internal);
     if (!streams.in || streams.out)

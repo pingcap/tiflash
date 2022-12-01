@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlan.h>
@@ -50,7 +50,7 @@ bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor
     return false;
 }
 
-void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlanNodePtr & root_node)
+void fillOrderForListBasedExecutors(DagContext & dag_context, const PhysicalPlanNodePtr & root_node)
 {
     auto & list_based_executors_order = dag_context.list_based_executors_order;
     PhysicalPlanVisitor::visitPostOrder(root_node, [&](const PhysicalPlanNodePtr & plan) {
@@ -207,9 +207,9 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
     pushBack(final_projection);
 }
 
-DAGContext & PhysicalPlan::dagContext() const
+DagContext & PhysicalPlan::dagContext() const
 {
-    return *context.getDAGContext();
+    return *context.getDagContext();
 }
 
 void PhysicalPlan::pushBack(const PhysicalPlanNodePtr & plan_node)

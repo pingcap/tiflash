@@ -14,7 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
 #include <common/logger_useful.h>
@@ -46,7 +46,7 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
     error_message.assign(error_message_.data, error_message_.size);
 }
 
-void MPPTaskStatistics::recordReadWaitIndex(DAGContext & dag_context)
+void MPPTaskStatistics::recordReadWaitIndex(DagContext & dag_context)
 {
     if (dag_context.has_read_wait_index)
     {
@@ -64,7 +64,7 @@ Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)
 }
 } // namespace
 
-void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
+void MPPTaskStatistics::initializeExecutorDAG(DagContext * dag_context)
 {
     assert(dag_context);
     assert(dag_context->isMPPTask());
@@ -87,7 +87,7 @@ const BaseRuntimeStatistics & MPPTaskStatistics::collectRuntimeStatistics()
 
     // record io bytes
     output_bytes = return_statistics.bytes;
-    recordInputBytes(executor_statistics_collector.getDAGContext());
+    recordInputBytes(executor_statistics_collector.getDagContext());
 
     return return_statistics;
 }
@@ -135,7 +135,7 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
     compile_end_timestamp = end_timestamp;
 }
 
-void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
+void MPPTaskStatistics::recordInputBytes(DagContext & dag_context)
 {
     for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {

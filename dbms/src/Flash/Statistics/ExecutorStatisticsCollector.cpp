@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
@@ -24,7 +24,7 @@
 
 namespace DB
 {
-DAGContext & ExecutorStatisticsCollector::getDAGContext() const
+DagContext & ExecutorStatisticsCollector::getDagContext() const
 {
     assert(dag_context);
     return *dag_context;
@@ -45,7 +45,7 @@ String ExecutorStatisticsCollector::resToJson() const
     return buffer.toString();
 }
 
-void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
+void ExecutorStatisticsCollector::initialize(DagContext * dag_context_)
 {
     assert(dag_context_);
     dag_context = dag_context_;

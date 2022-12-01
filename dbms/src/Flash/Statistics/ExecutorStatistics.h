@@ -18,7 +18,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <common/types.h>
@@ -35,7 +35,7 @@ template <typename ExecutorImpl>
 class ExecutorStatistics : public ExecutorStatisticsBase
 {
 public:
-    ExecutorStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    ExecutorStatistics(const tipb::Executor * executor, DagContext & dag_context_)
         : dag_context(dag_context_)
     {
         RUNTIME_CHECK(executor->has_executor_id());
@@ -108,7 +108,7 @@ protected:
 
     std::vector<String> children;
 
-    DAGContext & dag_context;
+    DagContext & dag_context;
 
     virtual void appendExtraJson(FmtBuffer &) const {}
 

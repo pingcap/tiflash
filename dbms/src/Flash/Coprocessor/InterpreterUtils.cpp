@@ -18,7 +18,7 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 
@@ -173,7 +173,7 @@ void executeCreatingSets(
     size_t max_streams,
     const LoggerPtr & log)
 {
-    DAGContext & dag_context = *context.getDAGContext();
+    DagContext & dag_context = *context.getDagContext();
     /// add union to run in parallel if needed
     if (unlikely(context.isExecutorTest()))
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");

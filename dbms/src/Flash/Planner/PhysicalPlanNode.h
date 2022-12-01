@@ -26,7 +26,6 @@ namespace DB
 {
 struct DAGPipeline;
 class Context;
-class DAGContext;
 
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;

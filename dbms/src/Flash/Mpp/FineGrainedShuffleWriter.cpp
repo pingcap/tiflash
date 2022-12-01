@@ -25,7 +25,7 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
-    DAGContext & dag_context_,
+    DagContext & dag_context_,
     uint64_t fine_grained_shuffle_stream_count_,
     UInt64 fine_grained_shuffle_batch_size_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)

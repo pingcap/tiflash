@@ -63,7 +63,7 @@ void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
     }
 }
 
-ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DagContext & dag_context_)
     : ExchangeReceiverStatisticsBase(executor, dag_context_)
 {
     assert(executor->tp() == tipb::ExecType::TypeExchangeReceiver);

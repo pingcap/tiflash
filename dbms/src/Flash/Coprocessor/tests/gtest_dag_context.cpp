@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <gtest/gtest.h>
 
 namespace DB
 {
 namespace tests
 {
-TEST(DAGContextTest, FlagsTest)
+TEST(DagContextTest, FlagsTest)
 {
-    DAGContext context(1024);
+    DagContext context(1024);
 
     ASSERT_EQ(context.getFlags(), static_cast<UInt64>(0));
 

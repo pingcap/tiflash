@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
@@ -29,7 +29,7 @@ public:
     BroadcastOrPassThroughWriter(
         ExchangeWriterPtr writer_,
         Int64 batch_send_min_limit_,
-        DAGContext & dag_context_);
+        DagContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
 

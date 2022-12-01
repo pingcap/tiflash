@@ -1362,11 +1362,11 @@ String DAGExpressionAnalyzer::appendCastForFunctionExpr(
             /// the performance of TiFlash
             if (removeNullable(expected_type)->equals(*actual_type))
             {
-                LOG_TRACE(context.getDAGContext()->log, "Skip implicit cast for column {}, expected type {}, actual type {}", expr_name, expected_type->getName(), actual_type->getName());
+                LOG_TRACE(context.getDagContext()->log, "Skip implicit cast for column {}, expected type {}, actual type {}", expr_name, expected_type->getName(), actual_type->getName());
                 return expr_name;
             }
         }
-        LOG_TRACE(context.getDAGContext()->log, "Add implicit cast for column {}, expected type {}, actual type {}", expr_name, expected_type->getName(), actual_type->getName());
+        LOG_TRACE(context.getDagContext()->log, "Add implicit cast for column {}, expected type {}, actual type {}", expr_name, expected_type->getName(), actual_type->getName());
         return appendCast(expected_type, actions, expr_name);
     }
     return expr_name;

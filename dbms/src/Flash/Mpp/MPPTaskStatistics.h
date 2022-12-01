@@ -40,9 +40,9 @@ public:
 
     void end(const TaskStatus & status_, StringRef error_message_ = "");
 
-    void recordReadWaitIndex(DAGContext & dag_context);
+    void recordReadWaitIndex(DagContext & dag_context);
 
-    void initializeExecutorDAG(DAGContext * dag_context);
+    void initializeExecutorDAG(DagContext * dag_context);
 
     /// return exchange sender runtime statistics
     const BaseRuntimeStatistics & collectRuntimeStatistics();
@@ -54,7 +54,7 @@ public:
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
 private:
-    void recordInputBytes(DAGContext & dag_context);
+    void recordInputBytes(DagContext & dag_context);
 
     const LoggerPtr logger;
 

@@ -30,7 +30,7 @@ extern const int LOGICAL_ERROR;
 UnaryDAGResponseWriter::UnaryDAGResponseWriter(
     tipb::SelectResponse * dag_response_,
     Int64 records_per_chunk_,
-    DAGContext & dag_context_)
+    DagContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , dag_response(dag_response_)
 {

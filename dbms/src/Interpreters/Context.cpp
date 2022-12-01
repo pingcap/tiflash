@@ -29,7 +29,7 @@
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/Context.h>
@@ -1213,12 +1213,12 @@ ProcessList::Element * Context::getProcessListElement() const
     return process_list_elem;
 }
 
-void Context::setDAGContext(DAGContext * dag_context_)
+void Context::setDagContext(DagContext * dag_context_)
 {
     dag_context = dag_context_;
 }
 
-DAGContext * Context::getDAGContext() const
+DagContext * Context::getDagContext() const
 {
     return dag_context;
 }

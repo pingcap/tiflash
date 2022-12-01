@@ -96,8 +96,8 @@ public:
         // TODO support multi-streams.
         size_t max_streams = 1;
 
-        DAGContext dag_context(*request, "executor_test", max_streams);
-        context.context.setDAGContext(&dag_context);
+        DagContext dag_context(*request, "executor_test", max_streams);
+        context.context.setDagContext(&dag_context);
         context.context.setMockStorage(context.mockStorage());
 
         PhysicalPlan physical_plan{context.context, log->identifier()};

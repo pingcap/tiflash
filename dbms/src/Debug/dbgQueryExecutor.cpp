@@ -285,10 +285,10 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 
     table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request);
+    DagContext dag_context(dag_request);
     dag_context.tables_regions_info = std::move(tables_regions_info);
     dag_context.log = log;
-    context.setDAGContext(&dag_context);
+    context.setDagContext(&dag_context);
 
     DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
@@ -315,10 +315,10 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
     auto & table_regions_info = tables_regions_info.getSingleTableRegions();
     table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request);
+    DagContext dag_context(dag_request);
     dag_context.tables_regions_info = std::move(tables_regions_info);
     dag_context.log = log;
-    context.setDAGContext(&dag_context);
+    context.setDagContext(&dag_context);
     DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
 

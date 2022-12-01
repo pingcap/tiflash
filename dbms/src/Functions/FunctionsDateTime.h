@@ -30,7 +30,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
@@ -3364,7 +3364,7 @@ struct TiDBLastDayTransformerImpl
         // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
         if (val.month == 0 || val.day == 0)
         {
-            context.getDAGContext()->handleInvalidTime(
+            context.getDagContext()->handleInvalidTime(
                 fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
                 Errors::Types::WrongValue);
             is_null = true;
@@ -3399,7 +3399,7 @@ struct TiDBDayOfWeekTransformerImpl
         // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
         if (val.month == 0 || val.day == 0)
         {
-            context.getDAGContext()->handleInvalidTime(
+            context.getDagContext()->handleInvalidTime(
                 fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
                 Errors::Types::WrongValue);
             is_null = true;
@@ -3436,7 +3436,7 @@ struct TiDBDayOfYearTransformerImpl
         // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
         if (val.month == 0 || val.day == 0)
         {
-            context.getDAGContext()->handleInvalidTime(
+            context.getDagContext()->handleInvalidTime(
                 fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
                 Errors::Types::WrongValue);
             is_null = true;
@@ -3471,7 +3471,7 @@ struct TiDBWeekOfYearTransformerImpl
         // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
         if (val.month == 0 || val.day == 0)
         {
-            context.getDAGContext()->handleInvalidTime(
+            context.getDagContext()->handleInvalidTime(
                 fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
                 Errors::Types::WrongValue);
             is_null = true;
@@ -3510,7 +3510,7 @@ struct TiDBToSecondsTransformerImpl
         // TiFlash aligns with MySQL to align the behavior with other functions like last_day.
         if (val.month == 0 || val.day == 0)
         {
-            context.getDAGContext()->handleInvalidTime(
+            context.getDagContext()->handleInvalidTime(
                 fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
                 Errors::Types::WrongValue);
             is_null = true;
@@ -3546,7 +3546,7 @@ struct TiDBToDaysTransformerImpl
         // TiFlash aligns with MySQL to align the behavior with other functions like last_day.
         if (val.month == 0 || val.day == 0)
         {
-            context.getDAGContext()->handleInvalidTime(
+            context.getDagContext()->handleInvalidTime(
                 fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
                 Errors::Types::WrongValue);
             is_null = true;

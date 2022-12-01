@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 
 namespace DB
 {
@@ -25,7 +25,7 @@ public:
     TiDBTableScan(
         const tipb::Executor * table_scan_,
         const String & executor_id_,
-        const DAGContext & dag_context);
+        const DagContext & dag_context);
     bool isPartitionTableScan() const
     {
         return is_partition_table_scan;

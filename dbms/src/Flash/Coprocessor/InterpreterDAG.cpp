@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -36,9 +36,9 @@ void setRestorePipelineConcurrency(DAGQueryBlock & query_block)
     }
 }
 
-DAGContext & InterpreterDAG::dagContext() const
+DagContext & InterpreterDAG::dagContext() const
 {
-    return *context.getDAGContext();
+    return *context.getDagContext();
 }
 
 /** executeQueryBlock recursively converts all the children of the DAGQueryBlock and itself (Coprocessor DAG request)

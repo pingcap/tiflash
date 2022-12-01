@@ -57,7 +57,7 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
     }
 }
 
-ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * executor, DagContext & dag_context_)
     : ExchangeSenderStatisticsBase(executor, dag_context_)
 {
     RUNTIME_CHECK(dag_context.isMPPTask());

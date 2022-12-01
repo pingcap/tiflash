@@ -29,7 +29,7 @@ class TestDayOfWeekYear : public DB::tests::FunctionTest
 TEST_F(TestDayOfWeekYear, TestDayOfWeek)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)
@@ -115,7 +115,7 @@ CATCH
 TEST_F(TestDayOfWeekYear, TestDayOfYear)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)

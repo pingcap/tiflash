@@ -32,7 +32,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -54,7 +54,7 @@ extern const char minimum_block_size_for_cross_join[];
 namespace
 {
 void recordJoinExecuteInfo(
-    DAGContext & dag_context,
+    DagContext & dag_context,
     const String & executor_id,
     const String & build_side_executor_id,
     const JoinPtr & join_ptr)
@@ -73,7 +73,7 @@ void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context 
     if (!probe_pipeline.streams_with_non_joined_data.empty())
     {
         executeUnion(probe_pipeline, max_streams, log, false, "final union for non_joined_data");
-        restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(probe_pipeline, context.getDagContext()->final_concurrency, log);
     }
 }
 
@@ -109,7 +109,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_side_header, match_helper_name);
     NamesAndTypes join_output_schema = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
-    auto & dag_context = *context.getDAGContext();
+    auto & dag_context = *context.getDagContext();
 
     /// add necessary transformation if the join key is an expression
 
@@ -183,7 +183,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context, size_t max_streams)
 {
     const auto & settings = context.getSettingsRef();
-    auto & dag_context = *context.getDAGContext();
+    auto & dag_context = *context.getDagContext();
 
     // TODO we can call `executeUnionForPreviousNonJoinedData` only when has_non_joined == true.
     executeUnionForPreviousNonJoinedData(probe_pipeline, context, max_streams, log);
@@ -217,7 +217,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
 
 void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
 {
-    auto & dag_context = *context.getDAGContext();
+    auto & dag_context = *context.getDagContext();
     size_t join_build_concurrency = std::max(build_pipeline.streams.size(), build_pipeline.streams_with_non_joined_data.size());
 
     /// build side streams

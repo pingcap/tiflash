@@ -55,7 +55,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         task = MPPTask::newTask(task_request.meta(), context);
 
         task->prepare(task_request);
-        for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
+        for (const auto & table_region_info : context->getDagContext()->tables_regions_info.getTableRegionsInfoMap())
         {
             for (const auto & region : table_region_info.second.remote_regions)
             {

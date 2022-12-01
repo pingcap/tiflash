@@ -903,8 +903,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
+    if (db_context.getDagContext() != nullptr && db_context.getDagContext()->isMPPTask())
+        req_info = db_context.getDagContext()->getMPPTaskId().toString();
     // We can use num_streams as parallelism when read thread is enabled.
     size_t final_num_stream = enable_read_thread ? num_streams : std::min(num_streams, tasks.size());
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
