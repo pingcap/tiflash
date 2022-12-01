@@ -535,9 +535,11 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
         // Note: applyIngestData itself writes the wbs, and we don't need to pass a wbs by ourselves.
         auto apply_result = segment->applyIngestData(segment_lock, dm_context, data_file, ingest_info);
 
-        if (auto * const result = std::get_if<Segment::IngestDataResultSegmentReplaced>(&apply_result); result)
+        if (apply_result.get() != segment.get())
         {
-            new_segment = result->segment;
+            // A new segment is created, we should abandon the current one.
+
+            new_segment = apply_result;
 
             RUNTIME_CHECK(
                 compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
@@ -558,7 +560,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
                 segment->info(),
                 new_segment->info());
         }
-        else if (std::holds_alternative<Segment::IngestDataResultSegmentReused>(apply_result))
+        else if (apply_result.get() == segment.get())
         {
             LOG_INFO(
                 log,
@@ -567,7 +569,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
 
             return segment;
         }
-        else if (std::holds_alternative<Segment::IngestDataResultError>(apply_result))
+        else if (apply_result == nullptr)
         {
             // This should not happen, because we have verified segment is not abandoned.
             RUNTIME_CHECK_MSG(false, "applyIngestData should not fail");

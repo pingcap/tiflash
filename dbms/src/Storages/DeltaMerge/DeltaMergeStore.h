@@ -518,9 +518,10 @@ private:
      *         to the PageStorage's data.
 
      * @param clear_all_data_in_segment Whether all data in the segment should be discarded.
-     * @returns the new segment. The returned segment may be nullptr. In this case, it IS NOT A FAILURE.
-     *          It means the ingest does not cause a segment created and the current segment
-     *          is still valid.
+     * @returns one of:
+     *          - A new segment: A new segment is created for containing the data
+     *          - The same segment as passed in: Data is ingested into the delta layer of current segment
+     *          - nullptr: when there are errors
      */
     SegmentPtr segmentIngestData(
         DMContext & dm_context,

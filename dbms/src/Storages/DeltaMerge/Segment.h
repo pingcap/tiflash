@@ -68,7 +68,9 @@ struct SegmentSnapshot : private boost::noncopyable
 ///
 /// The data of stable value space is stored in "data" storage, while data of delta value space is stored in "log" storage.
 /// And all meta data is stored in "meta" storage.
-class Segment : private boost::noncopyable
+class Segment
+    : public std::enable_shared_from_this<Segment>
+    , private boost::noncopyable
 {
 public:
     using DeltaTree = DefaultDeltaTree;
@@ -112,7 +114,7 @@ public:
 
     DISALLOW_COPY_AND_MOVE(Segment);
 
-    Segment(
+    explicit Segment(
         const LoggerPtr & parent_log_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
@@ -369,25 +371,18 @@ public:
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap) const;
 
-    struct IngestDataResultSegmentReplaced
-    {
-        SegmentPtr segment;
-    };
-    struct IngestDataResultSegmentReused
-    {
-    };
-    struct IngestDataResultError
-    {
-    };
-    using IngestDataResult = std::variant<IngestDataResultSegmentReplaced, IngestDataResultSegmentReused, IngestDataResultError>;
-
     /**
      * Note 1: You must ensure the DMFile is not shared in multiple segments.
      * Note 2: You must enable the GC for the DMFile by yourself.
      * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
      *         to the PageStorage's data.
+     *
+     * @returns one of:
+     *          - A new segment: A new segment is created for containing the data
+     *          - The same segment as this: Data is ingested into the delta layer of current segment
+     *          - nullptr: when there are errors
      */
-    [[nodiscard]] IngestDataResult applyIngestData(
+    [[nodiscard]] SegmentPtr applyIngestData(
         const Lock &,
         DMContext & dm_context,
         const DMFilePtr & data_file,
@@ -396,10 +391,15 @@ public:
     /**
      * Only used in tests as a shortcut.
      * Normally you should use `prepareIngestDataWithXxx` and `applyIngestData`.
+     *
+     * @returns one of:
+     *          - A new segment: A new segment is created for containing the data
+     *          - The same segment as this: Data is ingested into the delta layer of current segment
+     *          - nullptr: when there are errors
      */
-    [[nodiscard]] IngestDataResult ingestDataForTest(DMContext & dm_context,
-                                                     const DMFilePtr & data_file,
-                                                     bool clear_data);
+    [[nodiscard]] SegmentPtr ingestDataForTest(DMContext & dm_context,
+                                               const DMFilePtr & data_file,
+                                               bool clear_data);
 
     /**
      * Use this function when the data file is small. The data file will be appended to the

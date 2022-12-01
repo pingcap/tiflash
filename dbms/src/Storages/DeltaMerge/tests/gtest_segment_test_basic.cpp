@@ -492,13 +492,13 @@ void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_row
 
         ingest_wbs.rollbackWrittenLogAndData();
 
-        if (auto * const result = std::get_if<Segment::IngestDataResultSegmentReplaced>(&apply_result); result)
+        if (apply_result.get() != segment.get())
         {
             operation_statistics["ingestByReplace_NewSegment"]++;
-            const auto & new_segment = result->segment;
+            const auto & new_segment = apply_result;
             segments[new_segment->segmentId()] = new_segment;
         }
-        else if (std::holds_alternative<Segment::IngestDataResultSegmentReused>(apply_result))
+        else if (apply_result.get() == segment.get())
         {
             operation_statistics["ingestByReplace_ReuseSegment"]++;
         }

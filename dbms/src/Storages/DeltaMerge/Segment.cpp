@@ -492,7 +492,7 @@ Segment::IngestDataInfo Segment::prepareIngestDataWithPreserveData(
     };
 }
 
-Segment::IngestDataResult Segment::applyIngestData(
+SegmentPtr Segment::applyIngestData(
     const Segment::Lock & lock,
     DMContext & dm_context,
     const DMFilePtr & data_file,
@@ -500,7 +500,7 @@ Segment::IngestDataResult Segment::applyIngestData(
 {
     if (hasAbandoned())
     {
-        return IngestDataResultError{};
+        return nullptr;
     }
 
     // Fast path: if we don't want to preserve data in the segment, or the segment is empty,
@@ -510,7 +510,7 @@ Segment::IngestDataResult Segment::applyIngestData(
         ProfileEvents::increment(ProfileEvents::DMSegmentIngestDataByReplace);
         auto new_seg = replaceData(lock, dm_context, data_file, prepared_info.snapshot);
         RUNTIME_CHECK(new_seg != nullptr); // replaceData never returns nullptr.
-        return IngestDataResultSegmentReplaced{new_seg};
+        return new_seg;
     }
 
     ProfileEvents::increment(ProfileEvents::DMSegmentIngestDataIntoDelta);
@@ -521,12 +521,12 @@ Segment::IngestDataResult Segment::applyIngestData(
     RUNTIME_CHECK(success);
 
     // Current segment is still valid.
-    return IngestDataResultSegmentReused{};
+    return shared_from_this();
 }
 
-Segment::IngestDataResult Segment::ingestDataForTest(DMContext & dm_context,
-                                                     const DMFilePtr & data_file,
-                                                     bool clear_data)
+SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
+                                      const DMFilePtr & data_file,
+                                      bool clear_data)
 {
     IngestDataInfo ii;
     if (clear_data)
@@ -537,15 +537,14 @@ Segment::IngestDataResult Segment::ingestDataForTest(DMContext & dm_context,
     {
         auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
         if (!segment_snap)
-            return IngestDataResultError{};
+            return nullptr;
         ii = prepareIngestDataWithPreserveData(dm_context, segment_snap);
     }
 
     auto segment_lock = mustGetUpdateLock();
-    auto apply_result = applyIngestData(segment_lock, dm_context, data_file, ii);
-    if (auto * const v = std::get_if<IngestDataResultSegmentReplaced>(&apply_result); v)
+    auto new_segment = applyIngestData(segment_lock, dm_context, data_file, ii);
+    if (new_segment.get() != this)
     {
-        auto new_segment = v->segment;
         RUNTIME_CHECK(
             compare(getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
             info(),
@@ -556,7 +555,7 @@ Segment::IngestDataResult Segment::ingestDataForTest(DMContext & dm_context,
             new_segment->info());
     }
 
-    return apply_result;
+    return new_segment;
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
