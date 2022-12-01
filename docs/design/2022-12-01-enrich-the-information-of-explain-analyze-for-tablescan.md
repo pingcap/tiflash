@@ -15,16 +15,16 @@ Currently `Explain Analyze` show limited exection infos when SQL runs on TiFlash
 
 For the storage layer of TiFlash, `Explain Analyze` misses a lot of important and meaningful information, such as
 
-- The number of rows/packs in DMFiles scanned in the `TableFullScan` operator
-- The number of rows/packs in DMFiles skipped by the rough set index in `TableFullScan` operator
-- The time to load rough set index in `TableFullScan` operator
-- The time to read all related DMFiles in `TableFullScan` operator
-- The time to create snapshots in `TableFullScan` operator
+- The number of rows/packs in DMFiles scanned in the `TableFullScan/TableRangeScan` operator
+- The number of rows/packs in DMFiles skipped by the rough set index in `TableFullScan/TableRangeScan` operator
+- The time to load rough set index in `TableFullScan/TableRangeScan` operator
+- The time to read all related DMFiles in `TableFullScan/TableRangeScan` operator
+- The time to create snapshots in `TableFullScan/TableRangeScan` operator
 - ...
 
 Therefore, we consider putting more useful and meaningful information into `Explain Analyze`, to help us locate and analyze performance issues better.
 
-In conclusion, this RFC makes `Explain Analyze` contain richer information about the TableFullScan operator on TiFlash.
+In conclusion, this RFC makes `Explain Analyze` contain richer information about the `TableFullScan/TableRangeScan` operator on TiFlash.
 
 ## Background
 
@@ -40,7 +40,7 @@ Class `ExecutionSummaryCollector` is responsible for the collection of statistic
     - `dag_context.getInBoundIOInputStreamsMap()` mainly contains:
         - IO stream for storage level in the local node and remote nodes
         - The stream of interaction between tiflash nodes, which is `ExchangeReceiverInputStream`(for mpp) and `CoprocessorBlockInputStream`(for remote read)
-    - Now we just collect the execution summary from `ExchangeReceiverInputStream` and `CoprocessorBlockInputStream`.
+    - Before this proposal, we just collect the execution summary from `ExchangeReceiverInputStream` and `CoprocessorBlockInputStream`.
 2. Collect from various `IProfilingBlockInputStream` in `dag_context.getProfileStreamsMap()`
     - `IProfilingBlockInputStream` has one member called `BlockStreamProfileInfo info`, which stores the profiling information. When doing `IProfilingBlockInputStream::read`, it will simultaneously update the `BlockStreamProfileInfo info` based on the blocks the streams read.
 
@@ -48,7 +48,7 @@ Class `ExecutionSummaryCollector` is responsible for the collection of statistic
 
 ### Sending statistical information to TiDB
 
-`ExecutorExecutionSummary` is included in `SelectResponseand` and `SelectResponse` is wrapped in the data part of `MPPDataPacket`. Thus `ExecutorExecutionSummary` is sent to TiDB along with `MPPDataPacket` sent to TiDB.
+`ExecutorExecutionSummary` is included in `SelectResponse` and `SelectResponse` is wrapped in the data part of `MPPDataPacket`. Thus `ExecutorExecutionSummary` is sent to TiDB along with `MPPDataPacket` sent to TiDB.
 
 When TiDB gathers the `MPPDataPacket` sent by each TiFlash node, it will merge all the `ExecutorExecutionSummary` based on their executor ids, and output the result of `Explain Analyze` according to the predetermined format.
 
@@ -78,4 +78,4 @@ public:
 
 Considering that partitioned tables and non-partitioned tables involve different input streams, and in the future there may contain multiple table scan operations in one mpp task, we use an unordered_map `<executor_id, std::shared_ptr<ScanContext>>` to store it in `DAGContext`. Thus `ExecutionSummaryCollector` can fetch the `ScanContext` information directly based on the executor id.
 
-For statistical information about storage layer in remote nodes, it will be collected in the remote nodes with other statistical information by itself, and sent to the local node in `CoprocessorBlockInputStream`. In this way, the statistical information about `TableFullScan` in both local node and remote nodes can be collected correctly.
+For statistical information about storage layer in remote nodes, it will be collected in the remote nodes with other statistical information by itself, and sent to the local node in `CoprocessorBlockInputStream`. In this way, the statistical information about `TableFullScan/TableRangeScan` in both local node and remote nodes can be collected correctly.
