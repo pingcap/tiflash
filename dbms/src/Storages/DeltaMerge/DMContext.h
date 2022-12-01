@@ -20,6 +20,9 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/ScanContext.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -88,6 +91,8 @@ struct DMContext : private boost::noncopyable
 
     String tracing_id;
 
+    ScanContextPtr scan_context;
+
 public:
     DMContext(const Context & db_context_,
               StoragePathPool & path_pool_,
@@ -97,6 +102,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
+              const ScanContextPtr & scan_context_ = std::make_shared<ScanContext>(),
               const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
@@ -123,6 +129,7 @@ public:
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
         , tracing_id(tracing_id_)
+        , scan_context(scan_context_)
     {
     }
 
