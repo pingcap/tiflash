@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MyDuration.h>
 #include <Core/Field.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/DateLUTImpl.h>
@@ -129,6 +130,8 @@ struct MyDateTime : public MyTimeBase
 
     String toString(int fsp) const;
 
+    MyDuration convertToMyDuration(int fsp);
+
     static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &, UInt8 fsp);
 };
 
@@ -178,7 +181,7 @@ private:
 
     // Parsing method. Parse from ctx.view[ctx.pos].
     // If success, update `datetime`, `ctx` and return true.
-    // If fail, return false.
+    // If fails, return false.
     using ParserCallback = std::function<bool(MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
     std::vector<ParserCallback> parsers;
 };
@@ -196,6 +199,8 @@ static CheckTimeFunc DefaultCheckTimeFunc = noNeedCheckTime;
 Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
 Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat);
+
+Field parseMyDuration(const String & str, int8_t fsp = DefaultFsp);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
@@ -220,9 +225,7 @@ inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & tim
     return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
 }
 
-bool isPunctuation(char c);
-
-bool isValidSeperator(char c, int previous_parts);
+bool isValidSeparator(char c, int previous_parts);
 
 // Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
 // Note that this function will not check if the input is logically a valid datetime value.

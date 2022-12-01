@@ -20,6 +20,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/MyDuration.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -2751,14 +2752,12 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isString())
-            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
+            throw Exception(fmt::format("First argument for function {} (unit) must be String", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
-        // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
         if (!arguments[1]->isMyDateOrMyDateTime())
-            throw TiFlashException(
+            throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}. Must be DateOrDateTime.", arguments[1]->getName(), getName()),
-                Errors::Coprocessor::BadRequest);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -2770,9 +2769,9 @@ public:
     {
         const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
-            throw TiFlashException(
+            throw Exception(
                 fmt::format("First argument for function {} must be constant String", getName()),
-                Errors::Coprocessor::BadRequest);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
@@ -2803,7 +2802,7 @@ public:
         else if (unit == "year_month")
             dispatch<ExtractMyDateTimeImpl::extractYearMonth>(col_from, vec_to);
         else
-            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
+            throw Exception(fmt::format("Function {} does not support '{}' unit", getName(), unit), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         block.getByPosition(result).column = std::move(col_to);
     }
@@ -2814,42 +2813,282 @@ private:
     template <Func F>
     static void dispatch(const ColumnPtr col_from, PaddedPODArray<Int64> & vec_to)
     {
-        if (const auto * from = checkAndGetColumn<ColumnString>(col_from.get()); from)
-        {
-            const auto & data = from->getChars();
-            const auto & offsets = from->getOffsets();
-            if (checkColumnConst<ColumnString>(from))
-            {
-                StringRef string_ref(data.data(), offsets[0] - 1);
-                constantString<F>(string_ref, from->size(), vec_to);
-            }
-            else
-            {
-                vectorString<F>(data, offsets, vec_to);
-            }
-        }
-        else if (const auto * from = checkAndGetColumn<ColumnUInt64>(col_from.get()); from)
+        if (const auto * from = checkAndGetColumn<ColumnUInt64>(col_from.get()); from)
         {
             const auto & data = from->getData();
-            if (checkColumnConst<ColumnUInt64>(from))
-            {
-                constantDatetime<F>(from->getUInt(0), from->size(), vec_to);
-            }
-            else
-            {
-                vectorDatetime<F>(data, vec_to);
-            }
+            vectorDatetime<F>(data, vec_to);
         }
     }
 
     template <Func F>
-    static void constantString(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
+    static void vectorDatetime(const ColumnUInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
     {
-        vec_to.resize(size);
-        auto from_value = get<UInt64>(parseMyDateTime(from.toString()));
-        for (size_t i = 0; i < size; ++i)
+        vec_to.resize(vec_from.size());
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
-            vec_to[i] = F(from_value);
+            vec_to[i] = F(vec_from[i]);
+        }
+    }
+};
+
+struct ExtractMyDurationImpl
+{
+    static Int64 signMultiplier(const MyDuration & duration)
+    {
+        return duration.isNeg() ? -1 : 1;
+    }
+
+    static Int64 extractHour(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.hours();
+    }
+
+    static Int64 extractMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.minutes();
+    }
+
+    static Int64 extractSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.seconds();
+    }
+
+    static Int64 extractMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.microSecond();
+    }
+
+    static Int64 extractSecondMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.seconds() * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractMinuteMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractMinuteSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractHourMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractHourSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractHourMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+
+    static Int64 extractDayMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractDaySecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractDayMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+
+    static Int64 extractDayHour(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.hours();
+    }
+};
+
+struct ExtractMyDateTimeFromStringImpl
+{
+    static Int64 extractDayMicrosecond(String dtStr)
+    {
+        Field duration_field = parseMyDuration(dtStr);
+        Int64 result = 0;
+        if (duration_field.isNull())
+        {
+            // TODO: should return null
+            return 0;
+        }
+        MyDuration duration(duration_field.template safeGet<Int64>());
+        result = ExtractMyDurationImpl::extractDayMicrosecond(duration.nanoSecond());
+
+        Field datetime_field = parseMyDateTime(dtStr);
+        if (!datetime_field.isNull())
+        {
+            MyDateTime datetime(datetime_field.template safeGet<UInt64>());
+            if (datetime.hour == duration.hours() && datetime.minute == duration.minutes() && datetime.second == duration.seconds() && datetime.year > 0)
+            {
+                return ExtractMyDateTimeImpl::extractDayMicrosecond(datetime.toPackedUInt());
+            }
+        }
+        return result;
+    }
+
+    static Int64 extractDaySecond(String dtStr)
+    {
+        Field duration_field = parseMyDuration(dtStr);
+        Int64 result = 0;
+        if (duration_field.isNull())
+        {
+            // TODO: should return null
+            return 0;
+        }
+        MyDuration duration(duration_field.template safeGet<Int64>());
+        result = ExtractMyDurationImpl::extractDaySecond(duration.nanoSecond());
+
+        Field datetime_field = parseMyDateTime(dtStr);
+        if (!datetime_field.isNull())
+        {
+            MyDateTime datetime(datetime_field.template safeGet<UInt64>());
+            if (datetime.hour == duration.hours() && datetime.minute == duration.minutes() && datetime.second == duration.seconds() && datetime.year > 0)
+            {
+                return ExtractMyDateTimeImpl::extractDaySecond(datetime.toPackedUInt());
+            }
+        }
+        return result;
+    }
+
+    static Int64 extractDayMinute(String dtStr)
+    {
+        Field duration_field = parseMyDuration(dtStr);
+        Int64 result = 0;
+        if (duration_field.isNull())
+        {
+            // TODO: should return null
+            return 0;
+        }
+        MyDuration duration(duration_field.template safeGet<Int64>());
+        result = ExtractMyDurationImpl::extractDayMinute(duration.nanoSecond());
+
+        Field datetime_field = parseMyDateTime(dtStr);
+        if (!datetime_field.isNull())
+        {
+            MyDateTime datetime(datetime_field.template safeGet<UInt64>());
+            if (datetime.hour == duration.hours() && datetime.minute == duration.minutes() && datetime.second == duration.seconds() && datetime.year > 0)
+            {
+                return ExtractMyDateTimeImpl::extractDayMinute(datetime.toPackedUInt());
+            }
+        }
+        return result;
+    }
+
+    static Int64 extractDayHour(String dtStr)
+    {
+        Field duration_field = parseMyDuration(dtStr);
+        Int64 result = 0;
+        if (duration_field.isNull())
+        {
+            // TODO: should return null
+            return 0;
+        }
+        MyDuration duration(duration_field.template safeGet<Int64>());
+        result = ExtractMyDurationImpl::extractDayHour(duration.nanoSecond());
+
+        Field datetime_field = parseMyDateTime(dtStr);
+        if (!datetime_field.isNull())
+        {
+            MyDateTime datetime(datetime_field.template safeGet<UInt64>());
+            if (datetime.hour == duration.hours() && datetime.minute == duration.minutes() && datetime.second == duration.seconds() && datetime.year > 0)
+            {
+                return ExtractMyDateTimeImpl::extractDayHour(datetime.toPackedUInt());
+            }
+        }
+        return result;
+    }
+};
+
+class FunctionExtractMyDateTimeFromString : public IFunction
+{
+public:
+    static constexpr auto name = "extractMyDateTimeFromString";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionExtractMyDateTimeFromString>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(fmt::format("First argument for function {} (unit) must be String", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (!arguments[1]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}. Must be String.", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        if (!unit_column)
+            throw Exception(
+                fmt::format("First argument for function {} must be constant String", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        String unit = Poco::toLower(unit_column->getValue<String>());
+
+        auto col_from = block.getByPosition(arguments[1]).column;
+
+        size_t rows = block.rows();
+        auto col_to = ColumnInt64::create(rows);
+        auto & vec_to = col_to->getData();
+
+        if (unit == "day_microsecond")
+            dispatch<ExtractMyDateTimeFromStringImpl::extractDayMicrosecond>(col_from, vec_to);
+        else if (unit == "day_second")
+            dispatch<ExtractMyDateTimeFromStringImpl::extractDaySecond>(col_from, vec_to);
+        else if (unit == "day_minute")
+            dispatch<ExtractMyDateTimeFromStringImpl::extractDayMinute>(col_from, vec_to);
+        else if (unit == "day_hour")
+            dispatch<ExtractMyDateTimeFromStringImpl::extractDayHour>(col_from, vec_to);
+        else
+            throw Exception(fmt::format("Function {} does not support '{}' unit", getName(), unit), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    using Func = Int64 (*)(String);
+
+    template <Func F>
+    static void dispatch(const ColumnPtr col_from, PaddedPODArray<Int64> & vec_to)
+    {
+        if (const auto * from = checkAndGetColumn<ColumnString>(col_from.get()); from)
+        {
+            const auto & data = from->getChars();
+            const auto & offsets = from->getOffsets();
+            vectorString<F>(data, offsets, vec_to);
         }
     }
 
@@ -2859,36 +3098,15 @@ private:
         const ColumnString::Offsets & offsets_from,
         PaddedPODArray<Int64> & vec_to)
     {
-        vec_to.resize(offsets_from.size() + 1);
+        vec_to.resize(offsets_from.size());
         size_t current_offset = 0;
-        for (size_t i = 0; i < offsets_from.size(); i++)
+        for (size_t i = 0, sz = offsets_from.size(); i < sz; i++)
         {
             size_t next_offset = offsets_from[i];
             size_t string_size = next_offset - current_offset - 1;
             StringRef string_value(&vec_from[current_offset], string_size);
-            auto packed_value = get<UInt64>(parseMyDateTime(string_value.toString()));
-            vec_to[i] = F(packed_value);
+            vec_to[i] = F(string_value.toString());
             current_offset = next_offset;
-        }
-    }
-
-    template <Func F>
-    static void constantDatetime(const UInt64 & from, size_t size, PaddedPODArray<Int64> & vec_to)
-    {
-        vec_to.resize(size);
-        for (size_t i = 0; i < size; ++i)
-        {
-            vec_to[i] = F(from);
-        }
-    }
-
-    template <Func F>
-    static void vectorDatetime(const ColumnUInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
-    {
-        vec_to.resize(vec_from.size());
-        for (size_t i = 0; i < vec_from.size(); i++)
-        {
-            vec_to[i] = F(vec_from[i]);
         }
     }
 };
@@ -3132,7 +3350,7 @@ struct TiDBLastDayTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
@@ -3167,7 +3385,7 @@ struct TiDBDayOfWeekTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
@@ -3204,7 +3422,7 @@ struct TiDBDayOfYearTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
@@ -3239,7 +3457,7 @@ struct TiDBWeekOfYearTransformerImpl
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         bool is_null = false;
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
@@ -3277,7 +3495,7 @@ struct TiDBToSecondsTransformerImpl
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         bool is_null = false;
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
@@ -3313,7 +3531,7 @@ struct TiDBToDaysTransformerImpl
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         bool is_null = false;
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0, sz = vec_from.size(); i < sz; ++i)
         {
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
