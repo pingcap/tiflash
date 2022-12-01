@@ -138,8 +138,8 @@ grpc::Status FlashService::Coprocessor(
     context->setMockStorage(mock_storage);
 
     auto settings = context->getSettingsRef();
-    auto handle_limit = settings.handle_coprocessor_limit ? settings.handle_coprocessor_limit : 10 * cop_pool->size();
-    auto max_queued_duration_seconds = settings.max_coprocessor_queued_duration_seconds;
+    auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+    auto max_queued_duration_seconds = settings.cop_pool_max_queued_duration.get().seconds();
 
     // We use this atomic variable metrics from the prometheus-cpp library to mark the number of queued queries.
     // TODO: Use grpc asynchronous server and a more full-featured thread pool.
