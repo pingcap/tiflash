@@ -20,13 +20,15 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
+
+#include <algorithm>
 
 namespace ProfileEvents
 {
@@ -163,18 +165,13 @@ private:
 
         ProfileEvents::increment(ProfileEvents::DMFileFilterNoFilter, pack_count);
 
-        size_t after_pk = 0;
-        size_t after_read_packs = 0;
-        size_t after_filter = 0;
-
         /// Check packs by handle_res
         for (size_t i = 0; i < pack_count; ++i)
         {
             use_packs[i] = handle_res[i] != None;
         }
 
-        for (auto u : use_packs)
-            after_pk += u;
+        size_t after_pk = std::count(use_packs.begin(), use_packs.end(), 1);
 
         /// Check packs by read_packs
         if (read_packs)
@@ -185,8 +182,7 @@ private:
             }
         }
 
-        for (auto u : use_packs)
-            after_read_packs += u;
+        size_t after_read_packs = std::count(use_packs.begin(), use_packs.end(), 1);
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftPKAndPackSet, after_read_packs);
 
 
@@ -219,8 +215,7 @@ private:
             }
         }
 
-        for (auto u : use_packs)
-            after_filter += u;
+        size_t after_filter = std::count(use_packs.begin(), use_packs.end(), 1);
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
         Float64 filter_rate = 0.0;

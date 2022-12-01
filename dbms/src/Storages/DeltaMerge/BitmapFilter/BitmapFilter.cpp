@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Segment.h>
+
 #include <algorithm>
 
 namespace DB::DM
@@ -51,28 +52,24 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     }
     else
     {
-        for (UInt32 i = 0; i < limit; ++i)
-        {
-            f[i] = filter[i + start];
-        }
+        std::transform(filter.begin() + start, filter.begin() + start + limit, f.begin(), [](bool v) { return v; });
+        // for (UInt32 i = 0; i < limit; ++i)
+        // {
+        //     f[i] = filter[i + start];
+        // }
     }
 }
 
 bool BitmapFilter::checkPack(UInt32 start, UInt32 limit) const
 {
-    // TODO: make sure it can be vectorized
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
     return all_match || (std::find(filter.begin() + start, filter.begin() + start + limit, true) != filter.begin() + start + limit);
 }
 
 void BitmapFilter::andWith(const BitmapFilterPtr & other)
 {
-    // TODO: make sure it can be vectorized
     RUNTIME_CHECK(filter.size() == other->filter.size(), filter.size(), other->filter.size());
-    for (UInt32 i = 0; i < filter.size(); ++i)
-    {
-        filter[i] = filter[i] && other->filter[i];
-    }
+    std::transform(filter.begin(), filter.end(), other->filter.begin(), filter.begin(), std::logical_and<bool>());
 }
 
 SegmentSnapshotPtr & BitmapFilter::snapshot()

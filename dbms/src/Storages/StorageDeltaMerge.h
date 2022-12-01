@@ -19,6 +19,7 @@
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
@@ -27,7 +28,6 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 
 namespace DB
 {
@@ -216,9 +216,9 @@ private:
 
     /// Get Rough set filter from query
     DM::PushDownFilterPtr parsePushDownFilter(const SelectQueryInfo & query_info,
-                                          const DM::ColumnDefines & columns_to_read,
-                                          const Context & context,
-                                          const LoggerPtr & tracing_logger);
+                                              const DM::ColumnDefines & columns_to_read,
+                                              const Context & context,
+                                              const LoggerPtr & tracing_logger);
 
     DM::RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
                                         unsigned num_streams,

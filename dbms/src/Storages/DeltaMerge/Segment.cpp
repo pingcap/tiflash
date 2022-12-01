@@ -22,6 +22,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Poco/Logger.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
@@ -45,15 +46,8 @@
 #include <fiu.h>
 #include <fmt/core.h>
 
-#include <cstddef>
 #include <ext/scope_guard.h>
-#include <memory>
 #include <numeric>
-
-#include "Columns/IColumn.h"
-#include "Core/Block.h"
-#include "Core/ColumnsWithTypeAndName.h"
-#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace ProfileEvents
 {
@@ -2252,7 +2246,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     }
 
     /*+----------------------- late materialization -----------------------+*/
-    
+
     Stopwatch sw_total;
 
     /// phase 1: read columns of filters

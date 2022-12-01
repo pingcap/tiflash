@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
@@ -22,7 +23,6 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
-#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace DB
 {

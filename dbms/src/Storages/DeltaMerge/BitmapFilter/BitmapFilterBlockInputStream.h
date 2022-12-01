@@ -18,7 +18,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <cstddef>
+
 
 namespace DB::DM
 {

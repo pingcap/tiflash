@@ -23,8 +23,6 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
-#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
-#include "Storages/DeltaMerge/Filter/RSOperator.h"
 
 namespace DB
 {

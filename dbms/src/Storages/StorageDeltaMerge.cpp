@@ -25,6 +25,8 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -39,6 +41,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/MutableSupport.h>
@@ -55,11 +58,6 @@
 #include <common/logger_useful.h>
 
 #include <random>
-
-#include "Core/NamesAndTypes.h"
-#include "Flash/Coprocessor/DAGExpressionAnalyzer.h"
-#include "Flash/Coprocessor/DAGQueryInfo.h"
-#include "Storages/DeltaMerge/Filter/PushDownFilter.h"
 
 namespace DB
 {
@@ -707,9 +705,9 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(const DB::MvccQueryInfo &
 
 
 DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
-                                                         const ColumnDefines & columns_to_read,
-                                                         const Context & context,
-                                                         const LoggerPtr & tracing_logger)
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
 {
     /// build rough set filter
     DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
