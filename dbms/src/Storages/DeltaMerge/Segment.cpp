@@ -73,6 +73,8 @@ extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
 extern const Event DMSegmentIsEmptyFastPath;
 extern const Event DMSegmentIsEmptySlowPath;
+extern const Event DMSegmentIngestDataByReplace;
+extern const Event DMSegmentIngestDataIntoDelta;
 
 } // namespace ProfileEvents
 
@@ -87,6 +89,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfSegmentIngest;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -447,12 +450,112 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
     return true;
 }
 
-bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
+bool Segment::ingestDataToDelta(
+    DMContext & dm_context,
+    const RowKeyRange & range,
+    const DMFiles & data_files,
+    bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
-    LOG_TRACE(log, "Segment write region snapshot, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
+    LOG_TRACE(log, "Segment ingest data to delta, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
 
+    ColumnFiles column_files;
+    column_files.reserve(data_files.size());
+    for (const auto & data_file : data_files)
+    {
+        auto column_file = std::make_shared<ColumnFileBig>(dm_context, data_file, rowkey_range);
+        if (column_file->getRows() != 0)
+            column_files.emplace_back(std::move(column_file));
+    }
     return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+Segment::IngestDataInfo Segment::prepareIngestDataWithClearData() const
+{
+    return IngestDataInfo{
+        .option_clear_data = true,
+        .is_snapshot_empty = true,
+        .snapshot = nullptr,
+    };
+}
+
+Segment::IngestDataInfo Segment::prepareIngestDataWithPreserveData(
+    DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap) const
+{
+    auto is_empty = isDefinitelyEmpty(dm_context, segment_snap);
+    return IngestDataInfo{
+        .option_clear_data = false,
+        .is_snapshot_empty = is_empty,
+        .snapshot = segment_snap,
+    };
+}
+
+SegmentPtr Segment::applyIngestData(
+    const Segment::Lock & lock,
+    DMContext & dm_context,
+    const DMFilePtr & data_file,
+    const IngestDataInfo & prepared_info)
+{
+    if (hasAbandoned())
+    {
+        return nullptr;
+    }
+
+    // Fast path: if we don't want to preserve data in the segment, or the segment is empty,
+    // we could just replace the segment with the specified data file.
+    if (prepared_info.option_clear_data || prepared_info.is_snapshot_empty)
+    {
+        ProfileEvents::increment(ProfileEvents::DMSegmentIngestDataByReplace);
+        auto new_seg = replaceData(lock, dm_context, data_file, prepared_info.snapshot);
+        RUNTIME_CHECK(new_seg != nullptr); // replaceData never returns nullptr.
+        return new_seg;
+    }
+
+    ProfileEvents::increment(ProfileEvents::DMSegmentIngestDataIntoDelta);
+    // Slow path: the destination is not empty, and we want to preserve the destination data,
+    // so we have to ingest the data into the delta layer and trigger a delta merge later.
+    auto success = ingestDataToDelta(dm_context, rowkey_range, {data_file}, /* clear_data_in_range */ false);
+    // ingest to delta should always success as long as segment is not abandoned.
+    RUNTIME_CHECK(success);
+
+    // Current segment is still valid.
+    return shared_from_this();
+}
+
+SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
+                                      const DMFilePtr & data_file,
+                                      bool clear_data)
+{
+    IngestDataInfo ii;
+    if (clear_data)
+    {
+        ii = prepareIngestDataWithClearData();
+    }
+    else
+    {
+        auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
+        if (!segment_snap)
+            return nullptr;
+        ii = prepareIngestDataWithPreserveData(dm_context, segment_snap);
+    }
+
+    auto segment_lock = mustGetUpdateLock();
+    auto new_segment = applyIngestData(segment_lock, dm_context, data_file, ii);
+    if (new_segment.get() != this)
+    {
+        RUNTIME_CHECK(
+            compare(getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
+            info(),
+            new_segment->info());
+        RUNTIME_CHECK(
+            segmentId() == new_segment->segmentId(),
+            info(),
+            new_segment->info());
+    }
+
+    return new_segment;
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const

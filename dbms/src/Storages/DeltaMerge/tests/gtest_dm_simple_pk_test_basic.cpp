@@ -352,11 +352,10 @@ void SimplePKTestBasic::ingestFiles(const IngestFilesOptions & options)
 
 size_t SimplePKTestBasic::getRowsN() const
 {
-    const auto & columns = store->getTableColumns();
     auto in = store->read(
         *db_context,
         db_context->getSettingsRef(),
-        columns,
+        store->getTableColumns(),
         {RowKeyRange::newAll(is_common_handle, 1)},
         /* num_streams= */ 1,
         /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -370,11 +369,10 @@ size_t SimplePKTestBasic::getRowsN() const
 
 size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
 {
-    const auto & columns = store->getTableColumns();
     auto in = store->read(
         *db_context,
         db_context->getSettingsRef(),
-        columns,
+        store->getTableColumns(),
         {buildRowRange(start_key, end_key)},
         /* num_streams= */ 1,
         /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -383,6 +381,17 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
         /* keep_order= */ false,
         /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024)[0];
+    return getInputStreamNRows(in);
+}
+
+size_t SimplePKTestBasic::getRawRowsN() const
+{
+    auto in = store->readRaw(
+        *db_context,
+        db_context->getSettingsRef(),
+        store->getTableColumns(),
+        /* num_streams= */ 1,
+        false)[0];
     return getInputStreamNRows(in);
 }
 
