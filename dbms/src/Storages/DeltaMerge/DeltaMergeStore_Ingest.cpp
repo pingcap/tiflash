@@ -114,8 +114,8 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                 }
             }
 
-            // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
-            // they are visible for readers who require file_ids to be found in PageStorage.
+            // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
+            // they are visible for readers immediately, who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
             bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), column_files, clear_data_in_range);
@@ -149,8 +149,8 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
  *
  * `clear_data_in_range` must be true. Otherwise exceptions will be thrown.
  *
- * You must ensure DTFiles do not overlap. Otherwise you will lose data.
- * // TODO: How to check this? Maybe we can enforce external_files to be ordered.
+ * You must ensure DTFiles do not overlap. Otherwise this function will not work properly when clear_data_in_range == true.
+ * The check is performed in `ingestFiles`.
  *
  * WARNING: This function does not guarantee isolation. You may observe partial results when
  * querying related segments when this function is running.
@@ -162,14 +162,17 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
     const DMFiles & files,
     bool clear_data_in_range)
 {
-    RUNTIME_CHECK(clear_data_in_range == true);
-    RUNTIME_CHECK(
-        files.size() == external_files.size(),
-        files.size(),
-        external_files.size());
-    for (size_t i = 0; i < files.size(); ++i)
     {
-        RUNTIME_CHECK(files[i]->pageId() == external_files[i].id);
+        RUNTIME_CHECK(clear_data_in_range == true);
+        RUNTIME_CHECK(
+            files.size() == external_files.size(),
+            files.size(),
+            external_files.size());
+        for (size_t i = 0; i < files.size(); ++i)
+            RUNTIME_CHECK(
+                files[i]->pageId() == external_files[i].id,
+                files[i]->pageId(),
+                external_files[i].toString());
     }
 
     std::set<SegmentPtr> updated_segments;
@@ -386,8 +389,36 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │----------- Segment ----------│
          *    │-------- Ingest Range --------│
          */
-        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, file);
+        auto delegate = dm_context.path_pool.getStableDiskDelegator();
+        auto file_provider = dm_context.db_context.getFileProvider();
+
+        WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+
+        // Generate DMFile instance with a new ref_id pointed to the file_id,
+        // because we may use the same DMFile to ingest into multiple segments.
+        auto new_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto ref_file = DMFile::restore(
+            file_provider,
+            file->fileId(),
+            new_page_id,
+            file->parentPath(),
+            DMFile::ReadMetaMode::all());
+        wbs.data.putRefPage(new_page_id, file->pageId());
+
+        // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
+        // they are visible for readers immediately, who require file_ids to be found in PageStorage.
+        wbs.writeLogAndData();
+
+        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, ref_file);
         const bool succeeded = new_segment_or_null != nullptr;
+
+        if (!succeeded)
+        {
+            // When segment is not valid anymore, replaceData will fail.
+            // In this case, we just discard this ref file.
+            wbs.rollbackWrittenLogAndData();
+        }
+
         return succeeded;
     }
     else if (is_start_matching)
@@ -461,6 +492,41 @@ void DeltaMergeStore::ingestFiles(
         const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", log->identifier());
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
+    }
+
+    {
+        // `ingestDTFilesUsingSplit` requires external_files to be not overlapped. Otherwise the results will be incorrect.
+        // Here we verify the external_files are ordered and not overlapped.
+        // "Ordered" is actually not a hard requirement by `ingestDTFilesUsingSplit`. However "ordered" makes us easy to check overlap efficiently.
+        RowKeyValue last_end;
+        if (is_common_handle)
+            last_end = RowKeyValue::COMMON_HANDLE_MIN_KEY;
+        else
+            last_end = RowKeyValue::INT_HANDLE_MIN_KEY;
+
+        // Suppose we have keys: 1, 2, | 3, 4, 5, | 6, | 7, 8
+        // Our file ranges will be: [1, 3), [3, 6), [6, 7), [7, 9)
+        //                              ↑    ↑
+        //                              A    B
+        //                         We require A <= B.
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(
+                !ext_file.range.none(),
+                ext_file.toString());
+            RUNTIME_CHECK(
+                compare(last_end.toRowKeyValueRef(), ext_file.range.getStart()) <= 0,
+                last_end.toDebugString(),
+                ext_file.toString());
+            last_end = ext_file.range.end;
+        }
+
+        // Check whether all external files are contained by the range.
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(compare(range.getStart(), ext_file.range.getStart()) <= 0);
+            RUNTIME_CHECK(compare(range.getEnd(), ext_file.range.getEnd()) >= 0);
+        }
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
