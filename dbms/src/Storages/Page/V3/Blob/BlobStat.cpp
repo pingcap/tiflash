@@ -197,7 +197,6 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
 std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
-    double smallest_valid_rate = 2;
 
     // No stats exist
     if (stats_map.empty())
@@ -218,20 +217,11 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)
         {
-            auto lock = stat->lock(); // TODO: will it bring performance regression?
-            if (stat->isNormal()
-                && stat->sm_max_caps >= buf_size
-                && stat->sm_valid_rate < smallest_valid_rate)
+            auto defer_lock = stat->defer_lock();
+            if (defer_lock.try_lock() && stat->isNormal() && stat->sm_max_caps >= buf_size)
             {
-                smallest_valid_rate = stat->sm_valid_rate;
-                stat_ptr = stat;
+                return std::make_pair(stat, INVALID_BLOBFILE_ID);
             }
-        }
-
-        // Already find the available stat under current path.
-        if (stat_ptr != nullptr)
-        {
-            break;
         }
 
         // Try to find stat in the next path.
@@ -246,12 +236,7 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
     stats_map_path_index += path_iter_idx + 1;
 
     // Can not find a suitable stat under all paths
-    if (stat_ptr == nullptr)
-    {
-        return std::make_pair(nullptr, roll_id);
-    }
-
-    return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
+    return std::make_pair(nullptr, roll_id);
 }
 
 BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)

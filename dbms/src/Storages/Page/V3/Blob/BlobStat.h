@@ -79,9 +79,14 @@ public:
             , sm_max_caps(sm_max_caps_)
         {}
 
-        [[nodiscard]] std::lock_guard<std::mutex> lock()
+        [[nodiscard]] std::unique_lock<std::mutex> lock()
         {
-            return std::lock_guard(sm_lock);
+            return std::unique_lock(sm_lock);
+        }
+
+        [[nodiscard]] std::unique_lock<std::mutex> defer_lock()
+        {
+            return std::unique_lock(sm_lock, std::defer_lock);
         }
 
         bool isNormal() const
