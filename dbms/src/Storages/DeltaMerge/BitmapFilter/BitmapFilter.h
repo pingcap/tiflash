@@ -39,7 +39,7 @@ public:
 
     void andWith(const BitmapFilterPtr & other);
 
-    SegmentSnapshotPtr snapshot() const;
+    SegmentSnapshotPtr & snapshot();
 
     void runOptimize();
 

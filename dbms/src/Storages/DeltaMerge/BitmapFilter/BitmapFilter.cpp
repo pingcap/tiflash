@@ -15,7 +15,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include "common/types.h"
+#include <algorithm>
 
 namespace DB::DM
 {
@@ -27,7 +27,7 @@ BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_)
 
 void BitmapFilter::set(const UInt32 * data, UInt32 size)
 {
-    for (UInt32 i = 0; i < size; i++)
+    for (UInt32 i = 0; i < size; ++i)
     {
         UInt32 row_id = *(data + i);
         RUNTIME_CHECK(row_id < filter.size(), row_id, filter.size());
@@ -51,7 +51,7 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     }
     else
     {
-        for (UInt32 i = 0; i < limit; i++)
+        for (UInt32 i = 0; i < limit; ++i)
         {
             f[i] = filter[i + start];
         }
@@ -60,16 +60,9 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 
 bool BitmapFilter::checkPack(UInt32 start, UInt32 limit) const
 {
-    RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
     // TODO: make sure it can be vectorized
-    for (UInt32 i = start; i < start + limit; ++i)
-    {
-        if (filter[i])
-        {
-            return true;
-        }
-    }
-    return false;
+    RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
+    return all_match || (std::find(filter.begin() + start, filter.begin() + start + limit, true) != filter.begin() + start + limit);
 }
 
 void BitmapFilter::andWith(const BitmapFilterPtr & other)
@@ -82,33 +75,20 @@ void BitmapFilter::andWith(const BitmapFilterPtr & other)
     }
 }
 
-SegmentSnapshotPtr BitmapFilter::snapshot() const
+SegmentSnapshotPtr & BitmapFilter::snapshot()
 {
-    return snap == nullptr ? nullptr : snap->clone();
+    return snap;
 }
 
 void BitmapFilter::runOptimize()
 {
-    bool temp = true;
-    for (bool i : filter)
-    {
-        temp = (temp && i);
-    }
-    all_match = temp;
+    all_match = (std::find(filter.begin(), filter.end(), false) == filter.end());
 }
 
 String BitmapFilter::toDebugString() const
 {
-    // String s(filter.size(), '1');
-    UInt32 positive = 0;
-    for (auto i : filter)
-    {
-        if (i)
-        {
-            // s[i] = '0';
-            ++positive;
-        }
-    }
+    UInt32 positive = std::count(filter.begin(), filter.end(), true);
     return fmt::format("size={}, positive={}", filter.size(), positive);
 }
+
 } // namespace DB::DM

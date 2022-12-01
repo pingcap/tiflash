@@ -639,7 +639,7 @@ Block hstackBlocks(const Blocks & blocks, const Block & header)
     size_t num_rows = blocks.front().rows();
     for (const auto & block : blocks)
     {
-        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot concatenate blocks with different number of rows");
+        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
         for (const auto & elem : block)
         {
             res.getByName(elem.name).column = std::move(elem.column);
@@ -658,7 +658,7 @@ Block vstackBlocks(const std::vector<Block> & blocks)
     for (const auto & block : blocks)
         num_rows += block.rows();
 
-    Block out = blocks[0].cloneEmpty();
+    Block out = blocks.front().cloneEmpty();
     MutableColumns columns = out.mutateColumns();
 
     for (size_t i = 0; i < columns.size(); ++i)

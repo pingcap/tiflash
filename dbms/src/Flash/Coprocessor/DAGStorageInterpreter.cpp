@@ -378,7 +378,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle pushed down filter for local and remote table scan.
-    if (push_down_filter.hasValue())
+    /// When late materialization is enable, pushed down filters are executed in tablescan operator, so skip it here.
+    if (push_down_filter.hasValue() && !settings.dt_enable_late_materialization.get())
     {
         executePushedDownFilter(remote_read_streams_start_index, pipeline);
         recordProfileStreams(pipeline, push_down_filter.executor_id);

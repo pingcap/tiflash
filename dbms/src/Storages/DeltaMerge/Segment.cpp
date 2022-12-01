@@ -53,6 +53,7 @@
 #include "Columns/IColumn.h"
 #include "Core/Block.h"
 #include "Core/ColumnsWithTypeAndName.h"
+#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace ProfileEvents
 {
@@ -2187,7 +2188,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         expected_block_size,
         /*need_row_id*/ true);
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
-    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap->clone());
+    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap);
     while (true)
     {
         auto blk = stream->read();
@@ -2201,7 +2202,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         }
     }
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilter total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log, "build MVCC-bitmap {}, cost={}ms", bitmap_filter->toDebugString(), sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -2213,9 +2214,12 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    auto is_fast_scan = true;
+    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
     if (!dm_context.db_context.getSettingsRef().dt_enable_late_materialization.get())
     {
-        auto segment_snap = bitmap_filter->snapshot();
+        auto & segment_snap = bitmap_filter->snapshot();
         BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
             dm_context,
             columns_to_read,
@@ -2224,11 +2228,11 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
             bitmap_filter,
             max_version,
             expected_block_size,
-            /* enable_clean_read */ false,
-            /* is_fast_scan */ false);
+            enable_handle_clean_read,
+            is_fast_scan,
+            enable_del_clean_read);
 
         auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
-        // TODO: Scanning the filter and determine which block to read instead of read block and filter.
         BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
             dm_context,
             segment_snap->delta,
@@ -2248,21 +2252,23 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     }
 
     /*+----------------------- late materialization -----------------------+*/
+    
+    Stopwatch sw_total;
 
     /// phase 1: read columns of filters
-    auto segment_snap = bitmap_filter->snapshot();
+    auto & segment_snap = bitmap_filter->snapshot();
     const auto & filter_columns = filter->filter_columns;
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         filter_columns,
         data_ranges,
         filter->rs_operator,
-        bitmap_filter,
+        EMPTY_BITMAP_FILTER, // Usually MVCC bitmap filter does not work for filter packs, disable it here.
         max_version,
         expected_block_size,
-        /* enable_handle_clean_read */ false,
-        /* is_fast_scan */ false,
-        /* enable_del_clean_read */ false);
+        enable_handle_clean_read,
+        is_fast_scan,
+        enable_del_clean_read);
 
     auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
 
@@ -2313,7 +2319,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     /// phase 4: and(bitmap_filter, filtering_bitmap)
     bitmap_filter->andWith(filtering_bitmap);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "build final bitmap total_rows={} {}", total_rows, bitmap_filter->toDebugString());
+    LOG_DEBUG(log, "build final bitmap {}, cost={}ms", bitmap_filter->toDebugString(), sw_total.elapsedMilliseconds());
 
     /// phase 5: read rest columns
     ColumnDefines rest_columns_to_read{columns_to_read};
@@ -2333,9 +2339,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         bitmap_filter,
         max_version,
         expected_block_size,
-        /* enable_handle_clean_read */ false,
-        /* is_fast_scan */ false,
-        /* enable_del_clean_read */ false);
+        enable_handle_clean_read,
+        is_fast_scan,
+        enable_del_clean_read);
 
     auto rest_columns_to_read_ptr = std::make_shared<ColumnDefines>(rest_columns_to_read);
 
@@ -2346,7 +2352,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         this->rowkey_range);
 
     return std::make_shared<BitmapFilterBlockInputStream>(
-        columns_to_read,
+        columns_to_read, // use columns_to_read to generate header
         stable_stream,
         delta_stream,
         std::move(filter_column_block),

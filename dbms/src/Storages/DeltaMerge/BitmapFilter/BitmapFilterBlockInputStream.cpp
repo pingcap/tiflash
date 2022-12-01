@@ -16,7 +16,6 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
-#include "Columns/IColumn.h"
 
 namespace DB::DM
 {
@@ -76,17 +75,18 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         }
         if (input_block.has_value())
         {
+            // copy range [cur_read_rows, cur_read_rows + block.rows()) from input_block to filter_block
             Columns filter_columns(input_block->columns());
             for (size_t i = 0; i < input_block->columns(); ++i)
             {
                 filter_columns[i] = input_block->safeGetByPosition(i).column->cut(cur_read_rows, block.rows());
             }
+            Block filter_block = input_block->cloneWithColumns(std::move(filter_columns));
             cur_read_rows += block.rows();
-            Block filter_block = input_block->cloneEmpty();
-            filter_block.cloneWithColumns(std::move(filter_columns));
+
+            // hstack filter_block and block
             block = hstackBlocks({block, filter_block}, header);
         }
-        // TODO: hstack block with input_block
     }
     return block;
 }
