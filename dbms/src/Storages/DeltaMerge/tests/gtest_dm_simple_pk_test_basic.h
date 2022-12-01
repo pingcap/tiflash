@@ -54,8 +54,25 @@ public:
     void mergeDelta();
     bool merge(Int64 start_key, Int64 end_key);
     void deleteRange(Int64 start_key, Int64 end_key);
+
+    struct IngestFilesOptions
+    {
+        std::pair<Int64, Int64> range;
+        const std::vector<Block> & blocks;
+        bool clear = false;
+    };
+    void ingestFiles(const IngestFilesOptions & options);
+
     size_t getRowsN() const;
     size_t getRowsN(Int64 start_key, Int64 end_key) const;
+    bool isFilled(Int64 start_key, Int64 end_key) const;
+
+    struct FillBlockOptions
+    {
+        std::pair<Int64, Int64> range;
+        bool is_deleted = false;
+    };
+    Block fillBlock(const FillBlockOptions & options);
 
 public:
     SegmentPtr getSegmentAt(Int64 key) const;
@@ -89,8 +106,6 @@ protected:
     RowKeyRange buildRowRange(Int64 start, Int64 end) const;
 
     std::pair<Int64, Int64> parseRange(const RowKeyRange & range) const;
-
-    Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
 
 protected:
     DeltaMergeStorePtr store;

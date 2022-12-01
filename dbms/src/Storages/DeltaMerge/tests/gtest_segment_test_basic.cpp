@@ -301,7 +301,34 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         is_deleted);
 }
 
-std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
+Block mergeBlocks(std::vector<Block> && blocks)
+{
+    auto accumulated_block = std::move(blocks[0]);
+
+    for (size_t block_idx = 1; block_idx < blocks.size(); ++block_idx)
+    {
+        auto block = std::move(blocks[block_idx]);
+
+        size_t columns = block.columns();
+        size_t rows = block.rows();
+
+        for (size_t i = 0; i < columns; ++i)
+        {
+            MutableColumnPtr mutable_column = (*std::move(accumulated_block.getByPosition(i).column)).mutate();
+            mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
+            accumulated_block.getByPosition(i).column = std::move(mutable_column);
+        }
+    }
+
+    SortDescription sort;
+    sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
+    sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
+    stableSortBlock(accumulated_block, sort);
+
+    return accumulated_block;
+}
+
+Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
 {
     RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
 
@@ -364,7 +391,7 @@ std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId seg
                   remaining_rows);
     }
 
-    return blocks;
+    return mergeBlocks(std::move(blocks));
 }
 
 void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
@@ -380,11 +407,8 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::o
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
     LOG_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    for (const auto & block : blocks)
-    {
-        segment->write(*dm_context, block, false);
-    }
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+    segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["write"]++;
@@ -399,46 +423,35 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
 
-    auto ingest_data = [&](SegmentPtr segment, const Block & block) {
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+
+    {
+        auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
         WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(
-            *dm_context,
-            table_columns,
-            input_stream,
-            file_id,
-            parent_path,
-            flags);
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
-        {
-            WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
-            auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-            wbs.data.putRefPage(ref_id, dm_file->pageId());
-            auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
-            wbs.writeLogAndData();
-            auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
-            ColumnFiles column_files;
-            column_files.push_back(column_file);
-            ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
-        }
+
+        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        wbs.writeLogAndData();
+        auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
+        ColumnFiles column_files;
+        column_files.push_back(column_file);
+        ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
+
         ingest_wbs.rollbackWrittenLogAndData();
-    };
-
-    auto segment = segments[segment_id];
-    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
-    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
-
-    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    for (const auto & block : blocks)
-    {
-        ingest_data(segment, block);
     }
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
@@ -458,11 +471,8 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 wri
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
     LOG_DEBUG(logger, "write deleted pack to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
-    for (const auto & block : blocks)
-    {
-        segment->write(*dm_context, block, false);
-    }
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
+    segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["writeDelete"]++;
@@ -478,9 +488,11 @@ void SegmentTestBasic::deleteRangeSegment(PageId segment_id)
     EXPECT_EQ(getSegmentRowNum(segment_id), 0);
 }
 
-void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block)
+void SegmentTestBasic::replaceSegmentData(PageId segment_id, const Block & block, SegmentSnapshotPtr snapshot)
 {
-    LOG_DEBUG(logger, "replace segment data using block, segments_id={} block_rows={}", fmt::join(segments_id, ","), block.rows());
+    // This function always create a new DTFile for the block.
+
+    LOG_DEBUG(logger, "replace segment data using block, segment_id={} block_rows={}", segment_id, block.rows());
 
     auto delegator = storage_path_pool->getStableDiskDelegator();
     auto parent_path = delegator.choosePath();
@@ -490,37 +502,35 @@ void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_i
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
-    auto dm_file = writeIntoNewDMFile(
-        *dm_context,
-        table_columns,
-        input_stream,
-        file_id,
-        parent_path,
-        {});
+    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, {});
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();
+
     delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-    replaceSegmentData(segments_id, dm_file);
+    replaceSegmentData(segment_id, dm_file, snapshot);
 
     dm_file->enableGC();
-    ingest_wbs.rollbackWrittenLogAndData();
 }
 
-void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_id, const DMFilePtr & file)
+void SegmentTestBasic::replaceSegmentData(PageId segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot)
 {
-    LOG_INFO(logger_op, "replaceSegmentData, segments_id={} file_rows={} file={}", fmt::join(segments_id, ","), file->getRows(), file->path());
+    LOG_INFO(logger_op, "replaceSegmentData, segment_id={} file_rows={} file=dmf_{}", segment_id, file->getRows(), file->fileId());
 
-    for (const auto segment_id : segments_id)
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
     {
-        RUNTIME_CHECK(segments.find(segment_id) != segments.end());
-        auto segment = segments[segment_id];
-        auto new_segment = segment->dangerouslyReplaceDataForTest(*dm_context, file);
-        ASSERT_TRUE(new_segment != nullptr);
-        segments[new_segment->segmentId()] = new_segment;
+        auto lock = segment->mustGetUpdateLock();
+        auto new_segment = segment->replaceData(lock, *dm_context, file, snapshot);
+        if (new_segment != nullptr)
+            segments[new_segment->segmentId()] = new_segment;
     }
-    operation_statistics["replaceData"]++;
+
+    if (snapshot != nullptr)
+        operation_statistics["replaceDataWithSnapshot"]++;
+    else
+        operation_statistics["replaceData"]++;
 }
 
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id) const
@@ -591,6 +601,111 @@ void SegmentTestBasic::printFinishedOperations() const
     }
     LOG_INFO(logger, "======= End Finished Operations Statistics =======");
 }
+
+class SegmentFrameworkTest : public SegmentTestBasic
+{
+};
+
+TEST_F(SegmentFrameworkTest, PrepareWriteBlock)
+try
+{
+    reloadWithOptions({.is_common_handle = false});
+
+    auto s1_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10);
+    ASSERT_TRUE(s1_id.has_value());
+    auto s2_id = splitSegmentAt(*s1_id, 20);
+    ASSERT_TRUE(s2_id.has_value());
+
+    // s1 has range [10, 20)
+    {
+        auto [begin, end] = getSegmentKeyRange(*s1_id);
+        ASSERT_EQ(10, begin);
+        ASSERT_EQ(20, end);
+    }
+
+    {
+        // write_rows == segment_rows, start_key not specified
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 10);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+    }
+    {
+        // write_rows > segment_rows, start_key not specified
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 13);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1}));
+    }
+    {
+        // start_key specified, end_key - start_key < write_rows
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 2, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 17}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 1}));
+    }
+    {
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 4, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 1, 1, 1}));
+    }
+    {
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 5, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 2, 1, 1, 1}));
+    }
+    {
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 10, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 16, 16, 17, 17, 17, 18, 18, 19, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
+    }
+    {
+        // write rows < segment rows, start key not specified, should choose a random start.
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 3);
+        ASSERT_EQ(3, block.rows());
+    }
+    {
+        // Let's check whether the generated handles will be starting from 12, for at least once.
+        auto start_from_12 = 0;
+        for (size_t i = 0; i < 100; i++)
+        {
+            auto block = prepareWriteBlockInSegmentRange(*s1_id, 3);
+            if (block.getByName(EXTRA_HANDLE_COLUMN_NAME).column->getInt(0) == 12)
+                start_from_12++;
+        }
+        ASSERT_TRUE(start_from_12 > 0); // We should hit at least 1 times in 100 iters.
+        ASSERT_TRUE(start_from_12 < 50); // We should not hit 50 times in 100 iters :)
+    }
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DM
