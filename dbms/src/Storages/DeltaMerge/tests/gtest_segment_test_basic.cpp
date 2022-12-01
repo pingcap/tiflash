@@ -414,9 +414,9 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::o
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
-    LOG_INFO(logger_op, "ingestDTFileIntoSegment, segment_id={} write_rows={}", segment_id, write_rows);
+    LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
     if (write_rows == 0)
         return;
@@ -426,7 +426,7 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+    LOG_DEBUG(logger, "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
@@ -446,16 +446,72 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
-        auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
-        ColumnFiles column_files;
-        column_files.push_back(column_file);
-        ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
+        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ true));
 
         ingest_wbs.rollbackWrittenLogAndData();
     }
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["ingest"]++;
+}
+
+void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
+{
+    LOG_INFO(logger_op, "ingestDTFileByReplace, segment_id={} write_rows={}", segment_id, write_rows);
+
+    if (write_rows == 0)
+        return;
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_DEBUG(logger, "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+
+    {
+        auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto delegator = storage_path_pool->getStableDiskDelegator();
+        auto parent_path = delegator.choosePath();
+        auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        DMFileBlockOutputStream::Flags flags;
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
+        ingest_wbs.data.putExternal(file_id, /* tag */ 0);
+        ingest_wbs.writeLogAndData();
+        delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
+
+        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        wbs.writeLogAndData();
+
+        auto apply_result = segment->ingestDataForTest(*dm_context, ref_file, clear);
+
+        ingest_wbs.rollbackWrittenLogAndData();
+
+        if (apply_result.get() != segment.get())
+        {
+            operation_statistics["ingestByReplace_NewSegment"]++;
+            const auto & new_segment = apply_result;
+            segments[new_segment->segmentId()] = new_segment;
+        }
+        else if (apply_result.get() == segment.get())
+        {
+            operation_statistics["ingestByReplace_ReuseSegment"]++;
+        }
+        else
+        {
+            RUNTIME_CHECK(false);
+        }
+    }
+
+    if (clear)
+        EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), write_rows);
+    else
+        EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
 }
 
 void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)

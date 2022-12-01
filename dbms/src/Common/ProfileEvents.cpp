@@ -100,6 +100,8 @@
     M(DMCleanReadRows)                         \
     M(DMSegmentIsEmptyFastPath)                \
     M(DMSegmentIsEmptySlowPath)                \
+    M(DMSegmentIngestDataByReplace)            \
+    M(DMSegmentIngestDataIntoDelta)            \
                                                \
     M(FileFSync)                               \
                                                \
