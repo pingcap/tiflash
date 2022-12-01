@@ -13,17 +13,23 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Poco/File.h>
+#include <Poco/Thread_STD.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
+
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -225,7 +231,8 @@ DMFileReader::DMFileReader(
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
-    bool enable_col_sharing_cache)
+    bool enable_col_sharing_cache,
+    const ScanContextPtr & scan_context_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
@@ -240,6 +247,7 @@ DMFileReader::DMFileReader(
     , mark_cache(mark_cache_)
     , enable_column_cache(enable_column_cache_ && column_cache_)
     , column_cache(column_cache_)
+    , scan_context(scan_context_)
     , rows_threshold_per_read(rows_threshold_per_read_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
@@ -290,6 +298,8 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
+        scan_context->total_dmfile_skipped_packs += 1;
+        scan_context->total_dmfile_skipped_rows += pack_stats[next_pack_id].rows;
     }
     return next_pack_id < use_packs.size();
 }
@@ -306,8 +316,13 @@ inline bool isCacheableColumn(const ColumnDefine & cd)
 
 Block DMFileReader::read()
 {
+    Stopwatch watch;
+    SCOPE_EXIT(
+        scan_context->total_dmfile_read_time_ms += watch.elapsedMilliseconds(););
+
     // Go to next available pack.
     size_t skip_rows;
+
     getSkippedRows(skip_rows);
 
     const auto & use_packs = pack_filter.getUsePacks();
@@ -362,6 +377,9 @@ Block DMFileReader::read()
     {
         throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
     }
+
+    scan_context->total_dmfile_scanned_packs += read_packs;
+    scan_context->total_dmfile_scanned_rows += read_rows;
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_scan);
