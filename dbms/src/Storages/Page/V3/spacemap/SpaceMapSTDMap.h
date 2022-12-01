@@ -40,7 +40,7 @@ public:
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override
     {
         size_t idx = 0;
-        for (const auto & [offset, length] : offset_to_length_free_map)
+        for (const auto & [offset, length] : free_map)
         {
             if (!checker(idx, offset, offset + length))
                 return false;
@@ -55,7 +55,8 @@ protected:
         : SpaceMap(start, end, SMAP64_STD_MAP)
     {
         free_map.insert({start, end});
-        free_map_invert_index.emplace(end, start);
+        std::set<UInt64> offsets{start};
+        free_map_invert_index.emplace(end, offsets);
     }
 
     String toDebugString() override
@@ -222,7 +223,7 @@ protected:
         free_map.erase(offset);
         if (length > size)
         {
-            free_map.insert(offset + size, length - size);
+            free_map.insert({offset + size, length - size});
             insertIntoInvertIndex(length - size, offset + size);
         }
         UInt64 biggest_cap = free_map_invert_index.empty() ? 0 : free_map_invert_index.cend()->first;
@@ -305,7 +306,7 @@ protected:
                 deleteFromInvertIndex(it_prev->second, it_prev->first);
                 deleteFromInvertIndex(length, offset);
                 insertIntoInvertIndex(it->first + it->second - it_prev->first, it_prev->first);
-                it = it_prev;
+                                               it = it_prev;
             }
 
             // prev can't merge
@@ -350,7 +351,8 @@ private:
         }
         else
         {
-            free_map_invert_index.emplace(length, offset);
+            std::set<UInt64> offsets{offset};
+            free_map_invert_index.emplace(length, offsets);
         }
     }
 
