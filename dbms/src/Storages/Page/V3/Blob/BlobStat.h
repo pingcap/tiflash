@@ -104,12 +104,12 @@ public:
             type.store(BlobStatType::READ_ONLY);
         }
 
-        BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
+        BlobFileOffset getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &);
 
         /**
              * The return value is the valid data size remained in the BlobFile after the remove
              */
-        size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
+        size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::unique_lock<std::mutex> &);
 
         /**
              * This method is only used when blobstore restore

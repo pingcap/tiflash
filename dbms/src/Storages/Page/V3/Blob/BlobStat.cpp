@@ -268,7 +268,7 @@ BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_n
   * BlobStat methods *
   ********************/
 
-BlobFileOffset BlobStats::BlobStat::getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &)
+BlobFileOffset BlobStats::BlobStat::getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &)
 {
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
@@ -306,7 +306,7 @@ BlobFileOffset BlobStats::BlobStat::getPosFromStat(size_t buf_size, const std::l
     return offset;
 }
 
-size_t BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &)
+size_t BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::unique_lock<std::mutex> &)
 {
     if (!smap->markFree(offset, buf_size))
     {
