@@ -245,10 +245,7 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
     }
 
     for (const auto & f : new_column_files)
-    {
-        RUNTIME_CHECK(f->isBigFile());
         appendColumnFileInner(f);
-    }
 }
 
 ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap, bool disable_sharing)

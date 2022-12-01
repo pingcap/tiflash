@@ -506,7 +506,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
 
         if (!clear_all_data_in_segment)
         {
-            // Only clear_data == false needs a snapshot.
+            // When clear_data == false, we need a snapshot to decide which column files to be replaced
             snapshot = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
             if (!snapshot)
             {
@@ -558,12 +558,6 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
                 segment->info(),
                 new_segment->info());
         }
-        else if (std::holds_alternative<Segment::IngestDataResultError>(apply_result))
-        {
-            // This should not happen, because we have verified segment is not abandoned.
-            LOG_DEBUG(log, "IngestData - Give up segmentIngestData because applyIngestData failed (usually this should not happen), segment={}", segment->simpleInfo());
-            return {};
-        }
         else if (std::holds_alternative<Segment::IngestDataResultSegmentReused>(apply_result))
         {
             LOG_INFO(
@@ -573,9 +567,14 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
 
             return segment;
         }
+        else if (std::holds_alternative<Segment::IngestDataResultError>(apply_result))
+        {
+            // This should not happen, because we have verified segment is not abandoned.
+            RUNTIME_CHECK_MSG(false, "applyIngestData should not fail");
+        }
         else
         {
-            RUNTIME_CHECK(false);
+            RUNTIME_CHECK_MSG(false, "applyIngestData returns unexpected result");
         }
     }
 
