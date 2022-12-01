@@ -16,13 +16,15 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
+#include "Columns/IColumn.h"
+
 namespace DB::DM
 {
 BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     const ColumnDefines & columns_to_read,
     BlockInputStreamPtr stable_,
     BlockInputStreamPtr delta_,
-    const std::optional<Blocks> & intput_blocks_,
+    const std::optional<Block> & intput_block_,
     size_t stable_rows_,
     size_t delta_rows_,
     const BitmapFilterPtr & bitmap_filter_,
@@ -31,17 +33,13 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     : header(toEmptyBlock(columns_to_read))
     , stable(stable_)
     , delta(delta_)
+    , input_block(intput_block_)
     , stable_rows(stable_rows_)
     , delta_rows(delta_rows_)
     , bitmap_filter(bitmap_filter_)
     , need_segment_col_id(need_segment_col_id_)
     , log(Logger::get(NAME, req_id_))
-{
-    if (intput_blocks_.has_value())
-    {
-        input_blocks = std::move(intput_blocks_.value());
-    }
-}
+{}
 
 Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
@@ -76,8 +74,19 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
             }
             filter_ns += sw.elapsed();
         }
-        // TODO: concat blocks
-        (void) cur_block_idx;
+        if (input_block.has_value())
+        {
+            Columns filter_columns(input_block->columns());
+            for (size_t i = 0; i < input_block->columns(); ++i)
+            {
+                filter_columns[i] = input_block->safeGetByPosition(i).column->cut(cur_read_rows, block.rows());
+            }
+            cur_read_rows += block.rows();
+            Block filter_block = input_block->cloneEmpty();
+            filter_block.cloneWithColumns(std::move(filter_columns));
+            block = hstackBlocks({block, filter_block}, header);
+        }
+        // TODO: hstack block with input_block
     }
     return block;
 }

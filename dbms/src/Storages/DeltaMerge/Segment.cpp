@@ -35,6 +35,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -44,10 +45,14 @@
 #include <fiu.h>
 #include <fmt/core.h>
 
+#include <cstddef>
 #include <ext/scope_guard.h>
 #include <memory>
 #include <numeric>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+
+#include "Columns/IColumn.h"
+#include "Core/Block.h"
+#include "Core/ColumnsWithTypeAndName.h"
 
 namespace ProfileEvents
 {
@@ -2303,20 +2308,21 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
             break;
         }
     }
+    Block filter_column_block = vstackBlocks(std::move(blocks));
 
     /// phase 4: and(bitmap_filter, filtering_bitmap)
     bitmap_filter->andWith(filtering_bitmap);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "build final bitmap total_rows={} {}, blocks size={}", total_rows, bitmap_filter->toDebugString(), blocks.size());
+    LOG_DEBUG(log, "build final bitmap total_rows={} {}", total_rows, bitmap_filter->toDebugString());
 
     /// phase 5: read rest columns
     ColumnDefines rest_columns_to_read{columns_to_read};
     // remove columns of pushed down filter
     // TODO: optimize this algorithm
-    // for (const auto & col : filter_columns)
-    // {
-    //     rest_columns_to_read.erase(std::remove_if(rest_columns_to_read.begin(), rest_columns_to_read.end(), [&](const ColumnDefine & c) { return c.id == col.id; }), rest_columns_to_read.end());
-    // }
+    for (const auto & col : filter_columns)
+    {
+        rest_columns_to_read.erase(std::remove_if(rest_columns_to_read.begin(), rest_columns_to_read.end(), [&](const ColumnDefine & c) { return c.id == col.id; }), rest_columns_to_read.end());
+    }
 
     segment_snap = bitmap_filter->snapshot();
     stable_stream = segment_snap->stable->getInputStream(
@@ -2340,10 +2346,10 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         this->rowkey_range);
 
     return std::make_shared<BitmapFilterBlockInputStream>(
-        rest_columns_to_read,
+        columns_to_read,
         stable_stream,
         delta_stream,
-        std::move(blocks),
+        std::move(filter_column_block),
         segment_snap->stable->getDMFilesRows(),
         segment_snap->delta->getRows(),
         bitmap_filter,

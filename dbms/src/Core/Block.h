@@ -199,4 +199,11 @@ struct BlockExtraInfo
     bool is_valid = false;
 };
 
+
+/// join blocks by columns
+Block hstackBlocks(const Blocks & blocks, const Block & header);
+
+/// join blocks by rows
+Block vstackBlocks(const std::vector<Block> & blocks);
+
 } // namespace DB

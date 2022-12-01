@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
 #include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
@@ -22,8 +23,6 @@
 
 #include <iterator>
 #include <memory>
-#include "Columns/ColumnsNumber.h"
-#include "Columns/IColumn.h"
 
 
 namespace DB
@@ -627,6 +626,53 @@ void Block::updateHash(SipHash & hash) const
     for (size_t row_no = 0, num_rows = rows(); row_no < num_rows; ++row_no)
         for (const auto & col : data)
             col.column->updateHashWithValue(row_no, hash);
+}
+
+
+Block hstackBlocks(const Blocks & blocks, const Block & header)
+{
+    if (blocks.empty())
+        return {};
+
+    Block res = header.cloneEmpty();
+
+    size_t num_rows = blocks.front().rows();
+    for (const auto & block : blocks)
+    {
+        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot concatenate blocks with different number of rows");
+        for (const auto & elem : block)
+        {
+            res.getByName(elem.name).column = std::move(elem.column);
+        }
+    }
+
+    return res;
+}
+
+Block vstackBlocks(const std::vector<Block> & blocks)
+{
+    if (blocks.empty())
+        return {};
+
+    size_t num_rows = 0;
+    for (const auto & block : blocks)
+        num_rows += block.rows();
+
+    Block out = blocks[0].cloneEmpty();
+    MutableColumns columns = out.mutateColumns();
+
+    for (size_t i = 0; i < columns.size(); ++i)
+    {
+        columns[i]->reserve(num_rows);
+        for (const auto & block : blocks)
+        {
+            const auto & tmp_column = *block.getByPosition(i).column;
+            columns[i]->insertRangeFrom(tmp_column, 0, block.rows());
+        }
+    }
+
+    out.setColumns(std::move(columns));
+    return out;
 }
 
 } // namespace DB

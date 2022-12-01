@@ -31,7 +31,7 @@ public:
         const ColumnDefines & columns_to_read,
         BlockInputStreamPtr stable_,
         BlockInputStreamPtr delta_,
-        const std::optional<Blocks> & intput_blocks_,
+        const std::optional<Block> & intput_block_,
         size_t stable_rows_,
         size_t delta_rows_,
         const BitmapFilterPtr & bitmap_filter_,
@@ -57,8 +57,8 @@ private:
     Block header;
     BlockInputStreamPtr stable;
     BlockInputStreamPtr delta;
-    Blocks input_blocks;
-    size_t cur_block_idx = 0;
+    std::optional<Block> input_block;
+    size_t cur_read_rows = 0;
     size_t stable_rows;
     [[maybe_unused]] size_t delta_rows;
     BitmapFilterPtr bitmap_filter;
