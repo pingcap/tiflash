@@ -186,25 +186,25 @@ protected:
                 auto shrink_offset = it->first + length;
                 auto shrink_size = it->second - length;
                 free_map.erase(it);
-                free_map[shrink_offset] = shrink_size;
                 insertIntoInvertIndex(shrink_size, shrink_offset);
+                free_map[shrink_offset] = shrink_size;
             }
         }
         else if (it->first + it->second == offset + length)
         {
             // Shrink the free block from right
             assert(it->second != length); // should not run into here
-            free_map[it->first] = it->second - length;
             insertIntoInvertIndex(it->second - length, it->first);
+            free_map[it->first] = it->second - length;
         }
         else
         {
             // In the mid, and not match the left or right.
             // Split to two space
+            insertIntoInvertIndex(it->first + it->second - offset - length, offset + length);
+            insertIntoInvertIndex(offset - it->first, it->first);
             free_map.insert({offset + length, it->first + it->second - offset - length});
             free_map[it->first] = offset - it->first;
-            insertIntoInvertIndex(it->first + it->second - offset - length, offset + length);
-            insertIntoInvertIndex(offset - it->first - length, it->first);
         }
 
         return true;
@@ -212,9 +212,18 @@ protected:
 
     std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) override
     {
-        RUNTIME_CHECK_MSG(!free_map.empty() && !free_map_invert_index.empty(), "Current space map is full");
+        if (unlikely(free_map.empty()))
+        {
+            LOG_ERROR(log, "Current space map is full");
+            return std::make_tuple(UINT64_MAX, 0, false);
+        }
+        RUNTIME_CHECK_MSG(!free_map_invert_index.empty(), "Invalid state: free_map is empty but invert index is not empty");
         auto iter = free_map_invert_index.lower_bound(size);
-        RUNTIME_CHECK_MSG(iter != free_map_invert_index.end(), fmt::format("Can't found any place to insert for size {}", size));
+        if (unlikely(iter == free_map_invert_index.end()))
+        {
+            LOG_ERROR(log, "Can't found any place to insert for size {}", size);
+            return std::make_tuple(UINT64_MAX, free_map_invert_index.rbegin()->first, false);
+        }
         auto length = iter->first;
         auto offset = *(iter->second.begin());
         bool is_expansion = (offset + length == end);
@@ -226,13 +235,13 @@ protected:
             free_map.insert({offset + size, length - size});
             insertIntoInvertIndex(length - size, offset + size);
         }
-        UInt64 biggest_cap = free_map_invert_index.empty() ? 0 : free_map_invert_index.cend()->first;
+        UInt64 biggest_cap = free_map_invert_index.empty() ? 0 : free_map_invert_index.rbegin()->first;
         return std::make_tuple(offset, biggest_cap, is_expansion);
     }
 
     UInt64 updateAccurateMaxCapacity() override
     {
-        return free_map_invert_index.empty() ? 0 : free_map_invert_index.cend()->first;
+        return free_map_invert_index.empty() ? 0 : free_map_invert_index.rbegin()->first;
     }
 
     bool markFreeImpl(UInt64 offset, size_t length) override
@@ -301,12 +310,12 @@ protected:
             // Prev space can merge
             if (it_prev->first + it_prev->second == it->first)
             {
-                free_map[it_prev->first] = it->first + it->second - it_prev->first;
-                free_map.erase(it);
                 deleteFromInvertIndex(it_prev->second, it_prev->first);
                 deleteFromInvertIndex(length, offset);
                 insertIntoInvertIndex(it->first + it->second - it_prev->first, it_prev->first);
-                                               it = it_prev;
+                free_map[it_prev->first] = it->first + it->second - it_prev->first;
+                free_map.erase(it);
+                it = it_prev;
             }
 
             // prev can't merge
@@ -322,11 +331,11 @@ protected:
 
         if (it->first + it->second == it_next->first)
         {
+            deleteFromInvertIndex(it_next->second, it_next->first);
+            deleteFromInvertIndex(it->second, it->first);
+            insertIntoInvertIndex(it_next->first + it_next->second - it->first, it->first);
             free_map[it->first] = it_next->first + it_next->second - it->first;
             free_map.erase(it_next);
-            deleteFromInvertIndex(it_next->second, it_next->first);
-            deleteFromInvertIndex(length, offset);
-            insertIntoInvertIndex(it_next->first + it_next->second - it->first, it->first);
         }
         // next can't merge
         return true;
