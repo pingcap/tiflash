@@ -2327,6 +2327,7 @@ struct RegexpInstrCase
         case 2:
             pats = getPatVec(test_cases);
             exprs = getExprVec(test_cases);
+            break;
         default:
             throw DB::Exception("Invalid param_num");
         }
