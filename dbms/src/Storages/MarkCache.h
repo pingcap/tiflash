@@ -51,8 +51,8 @@ private:
     using Base = LRUCache<String, MarksInCompressedFile, std::hash<String>, MarksWeightFunction>;
 
 public:
-    MarkCache(size_t max_size_in_bytes, const Delay & expiration_delay)
-        : Base(max_size_in_bytes, expiration_delay)
+    explicit MarkCache(size_t max_size_in_bytes)
+        : Base(max_size_in_bytes)
     {}
 
     template <typename LoadFunc>
