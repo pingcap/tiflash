@@ -2673,4 +2673,23 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
     return my_time.toPackedUInt();
 }
 
+MyDate createMyDateFromCoreTime(UInt64 coreTime)
+{
+    auto year = static_cast<UInt16>((coreTime & MyTimeBase::YEAR_BIT_FIELD_MASK) >> MyTimeBase::YEAR_BIT_FIELD_OFFSET);
+    auto month = static_cast<UInt8>((coreTime & MyTimeBase::MONTH_BIT_FIELD_MASK) >> MyTimeBase::MONTH_BIT_FIELD_OFFSET);
+    auto day = static_cast<UInt8>((coreTime & MyTimeBase::DAY_BIT_FIELD_MASK) >> MyTimeBase::DAY_BIT_FIELD_OFFSET);
+    return MyDate(year, month, day);
+}
+
+MyDateTime createMyDateTimeFromCoreTime(UInt64 coreTime)
+{
+    auto year = static_cast<UInt16>((coreTime & MyTimeBase::YEAR_BIT_FIELD_MASK) >> MyTimeBase::YEAR_BIT_FIELD_OFFSET);
+    auto month = static_cast<UInt8>((coreTime & MyTimeBase::MONTH_BIT_FIELD_MASK) >> MyTimeBase::MONTH_BIT_FIELD_OFFSET);
+    auto day = static_cast<UInt8>((coreTime & MyTimeBase::DAY_BIT_FIELD_MASK) >> MyTimeBase::DAY_BIT_FIELD_OFFSET);
+    auto hour = static_cast<UInt16>((coreTime & MyTimeBase::HOUR_BIT_FIELD_MASK) >> MyTimeBase::HOUR_BIT_FIELD_OFFSET);
+    auto minute = static_cast<UInt8>((coreTime & MyTimeBase::MINUTE_BIT_FIELD_MASK) >> MyTimeBase::MINUTE_BIT_FIELD_OFFSET);
+    auto second = static_cast<UInt8>((coreTime & MyTimeBase::SECOND_BIT_FIELD_MASK) >> MyTimeBase::SECOND_BIT_FIELD_OFFSET);
+    auto micro_second = static_cast<UInt32>((coreTime & MyTimeBase::MICROSECOND_BIT_FIELD_MASK) >> MyTimeBase::MICROSECOND_BIT_FIELD_OFFSET);
+    return MyDateTime(year, month, day, hour, minute, second, micro_second);
+}
 } // namespace DB
