@@ -5973,7 +5973,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isString()) {
+        if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
