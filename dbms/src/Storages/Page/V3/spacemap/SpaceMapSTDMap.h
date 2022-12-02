@@ -54,9 +54,9 @@ protected:
     STDMapSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_STD_MAP)
     {
-        free_map.insert({start, end});
+        free_map.insert({start, end - start});
         std::set<UInt64> offsets{start};
-        free_map_invert_index.emplace(end, offsets);
+        free_map_invert_index.emplace(end - start, offsets);
     }
 
     String toDebugString() override
@@ -344,7 +344,9 @@ protected:
 private:
     inline void deleteFromInvertIndex(UInt64 length, UInt64 offset)
     {
-        auto & offsets = free_map_invert_index[length];
+        auto index_iter = free_map_invert_index.find(length);
+        RUNTIME_CHECK_MSG(index_iter != free_map_invert_index.end(), "Fail to find length {} offset {} in free_map_invert_index", length, offset);
+        auto & offsets = index_iter->second;
         offsets.erase(offset);
         if (offsets.empty())
         {
