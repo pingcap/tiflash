@@ -324,7 +324,9 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
+    LOG_DEBUG(log, "init exchange receiver");
     query_executor_holder.set(queryExecute(*context));
+    LOG_DEBUG(log, "init query executor");
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
         if (status != RUNNING)
