@@ -3549,15 +3549,12 @@ try
     // Write: [128, 256) --> tso: 1
     store->write(*db_context, db_context->getSettingsRef(), block2);
 
-    // Ingest 2 files.
+    // Ingest files.
     auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
     auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+    store->ingestFiles(dm_context, range1, file_ids1, false);
     auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-    auto range = range1.merge(range3);
-    auto file_ids = file_ids1;
-    file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-    store->ingestFiles(dm_context, range, file_ids, false);
-
+    store->ingestFiles(dm_context, range3, file_ids3, false);
     //store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     //store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
