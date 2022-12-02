@@ -18,6 +18,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
@@ -387,6 +388,10 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     try
     {
+        Stopwatch watch;
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_storage_page_write_duration_seconds, type_blob_write).Observe(watch.elapsedSeconds());
+        });
         auto blob_file = getBlobFile(blob_id);
         blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
     }
@@ -450,6 +455,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 
 std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
+    Stopwatch watch;
     BlobStatPtr stat;
 
     auto lock_stat = [size, this, &stat]() {
@@ -470,6 +476,11 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         // and throwing exception.
         return stat->lock();
     }();
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_choose_stat).Observe(watch.elapsedSeconds());
+    watch.restart();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_page_write_duration_seconds, type_search_pos).Observe(watch.elapsedSeconds());
+    });
 
     // We need to assume that this insert will reduce max_cap.
     // Because other threads may also be waiting for BlobStats to chooseStat during this time.
