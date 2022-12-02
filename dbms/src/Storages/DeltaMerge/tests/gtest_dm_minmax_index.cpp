@@ -125,7 +125,8 @@ bool checkMatch(
     store->mergeDeltaAll(context);
 
     const ColumnDefine & col_to_read = check_pk ? getExtraHandleColumnDefine(is_common_handle) : cd;
-    auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), filter, name, false);
+    auto push_down_filter = std::make_shared<PushDownFilter>(filter);
+    auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), push_down_filter, name, false);
     auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 

@@ -49,6 +49,8 @@
 #include <ext/scope_guard.h>
 #include <numeric>
 
+#include "Storages/DeltaMerge/Filter/RSOperator.h"
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -484,9 +486,9 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
     switch (read_mode)
     {
     case ReadMode::Normal:
-        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter->rs_operator, max_version, expected_block_size);
+        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, max_version, expected_block_size);
     case ReadMode::Fast:
-        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter->rs_operator, expected_block_size);
+        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, expected_block_size);
     case ReadMode::Raw:
         return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, expected_block_size);
     case ReadMode::Bitmap:
@@ -2211,14 +2213,15 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
-    if (!dm_context.db_context.getSettingsRef().dt_enable_late_materialization.get())
+    // TODO: disable late materialization when bitmap filter is all zero.
+    if (!dm_context.db_context.getSettingsRef().dt_enable_late_materialization.get() || !filter || !filter->beofre_where)
     {
         auto & segment_snap = bitmap_filter->snapshot();
         BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
             dm_context,
             columns_to_read,
             data_ranges,
-            filter->rs_operator,
+            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
             bitmap_filter,
             max_version,
             expected_block_size,
@@ -2369,7 +2372,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         dm_context,
         segment_snap,
         data_ranges,
-        filter->rs_operator,
+        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
         expected_block_size);
 

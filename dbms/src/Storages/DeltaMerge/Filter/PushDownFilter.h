@@ -37,6 +37,13 @@ public:
         , filter_column_name(std::move(filter_column_name_))
     {}
 
+    explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
+        : rs_operator(rs_operator_)
+        , beofre_where(nullptr)
+        , project_after_where(nullptr)
+        , filter_columns({})
+    {}
+
     RSOperatorPtr rs_operator;
     ExpressionActionsPtr beofre_where;
     ExpressionActionsPtr project_after_where;
