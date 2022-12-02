@@ -746,7 +746,8 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
     const bool enable_late_materialization = context.getSettingsRef().dt_enable_late_materialization.get();
     if (enable_late_materialization && likely(query_info.dag_query))
     {
-        if (query_info.dag_query->filters.empty()) {
+        if (query_info.dag_query->filters.empty())
+        {
             return EMPTY_FILTER;
         }
         std::unordered_set<ColId> filter_column_ids;

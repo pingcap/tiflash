@@ -13,13 +13,12 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-
-#include "Storages/DeltaMerge/Filter/PushDownFilter.h"
 /// This test file is mainly test on the correctness of read in fast mode.
 /// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
 

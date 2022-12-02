@@ -3085,7 +3085,7 @@ protected:
     DMContextPtr dm_context;
 
     UInt64 ps_ver{};
-    DMTestEnv::PkType pk_type;
+    DMTestEnv::PkType pk_type = DMTestEnv::PkType::CommonHandle;
 };
 
 INSTANTIATE_TEST_CASE_P(
@@ -3439,6 +3439,7 @@ try
     {
         std::this_thread::sleep_for(10ms);
     }
+    // NOLINTNEXTLINE (readability-identifier-naming)
     auto getIntHandleKey = [](Int64 i) {
         WriteBufferFromOwnString ss;
         DB::EncodeInt64(i, ss);
@@ -3465,7 +3466,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         auto block = in->read();
         const auto & col = block.getByPosition(0);
-        auto * ids = toColumnVectorDataPtr<Int64>(col.column);
+        const auto * ids = toColumnVectorDataPtr<Int64>(col.column);
         std::vector<Int64> v(ids->data(), ids->data() + col.column->size());
         std::cout << fmt::format("{}", v) << std::endl;
     }
