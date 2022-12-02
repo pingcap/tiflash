@@ -45,6 +45,7 @@ WORD_PH = '{#WORD}'
 LINE_PH = '{#LINE}'
 REGEXP_MATCH = '{#REGEXP}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
+NO_UNESCAPE_SUFFIX = ' #NO_UNESCAPE'
 
 # Some third-party module might output messge directly to stderr/stdin, use this list to ignore such outputs
 IGNORED_CLIENT_OUTPUTS = ['<jemalloc>: Number of CPUs detected is not deterministic. Per-CPU arena disabled.']
@@ -67,15 +68,19 @@ class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd):
-        return exec_func(self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1')
+    def exe(self, cmd, unescape = True):
+        if unescape:
+            cmd = self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1'
+        else:
+            cmd = self.dbc + ' "' + cmd + '" 2>&1'
+        return exec_func(cmd)
 
 
 class ShellFuncExecutor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd):
+    def exe(self, cmd, unescape = False):
         return exec_func(cmd + ' "' + self.dbc + '" 2>&1')
 
 
@@ -272,6 +277,10 @@ class Matcher:
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
         elif line.startswith(CMD_PREFIX_TIDB):
+            unescape_flag = True
+            if line.endswith(NO_UNESCAPE_SUFFIX):
+                unescape_flag = False
+                line = line[:-len(NO_UNESCAPE_SUFFIX)]
             if verbose: print('running', line)
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
@@ -280,7 +289,7 @@ class Matcher:
             self.is_mysql = True
             self.query = line[len(CMD_PREFIX_TIDB):]
             # for mysql commands ignore errors since they may be part of the test logic.
-            self.outputs, _ = self.executor_tidb.exe(self.query)
+            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag)
             self.outputs = [x.strip() for x in self.outputs if len(x.strip()) != 0]
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
