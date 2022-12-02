@@ -62,14 +62,14 @@ try
     /* Make sure it can decode every character */
     {
         size_t failures = 0;
-        for (size_t i = 0; i < UTF8::UNICODEMax; ++i)
+        for (size_t i = 0; i < UTF8::UNICODE_Max; ++i)
         {
             if (!IS_SURROGATE(i))
             {
                 unsigned char buf[8] = {0};
                 unsigned char * end = utf8_encode(buf, i);
                 auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 8);
-                failures += res.second != (end - buf) || res.first != i || res.first == UTF8::UTF8Error;
+                failures += res.second != (end - buf) || res.first != i || res.first == UTF8::UTF8_Error;
                 if (failures > 0)
                     break;
             }
@@ -85,7 +85,7 @@ try
             unsigned char buf[8] = {0};
             utf8_encode(buf, i);
             auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 8);
-            failures += res.first != UTF8::UTF8Error;
+            failures += res.first != UTF8::UTF8_Error;
             failures += res.second != 1;
         }
         ASSERT_TRUE(failures == 0);
@@ -99,7 +99,7 @@ try
             unsigned char buf[8] = {0};
             utf8_encode(buf, i);
             auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 8);
-            failures += res.first != UTF8::UTF8Error;
+            failures += res.first != UTF8::UTF8_Error;
         }
         ASSERT_TRUE(failures == 0);
     }
@@ -108,15 +108,15 @@ try
     {
         unsigned char buf2[8] = {0xc0, 0xA4};
         auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf2), 8);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
 
         unsigned char buf3[8] = {0xe0, 0x80, 0xA4};
         res = UTF8::utf8Decode(reinterpret_cast<char *>(buf3), 8);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
 
         unsigned char buf4[8] = {0xf0, 0x80, 0x80, 0xA4};
         res = UTF8::utf8Decode(reinterpret_cast<char *>(buf4), 8);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
     }
 
     /* Let's try some bogus byte sequences */
@@ -124,23 +124,23 @@ try
         /* Invalid length */
         unsigned char buf[4] = {0xff};
         auto res = UTF8::utf8Decode(reinterpret_cast<char *>(buf), 0);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
         ASSERT_TRUE(res.second == 0);
 
         /* Invalid first byte */
         unsigned char buf0[4] = {0xff};
         res = UTF8::utf8Decode(reinterpret_cast<char *>(buf0), 4);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
 
         /* Invalid first byte */
         unsigned char buf1[4] = {0x80};
         res = UTF8::utf8Decode(reinterpret_cast<char *>(buf1), 4);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
 
         /* Looks like a two-byte sequence but second byte is wrong */
         unsigned char buf2[4] = {0xc0, 0x0a};
         res = UTF8::utf8Decode(reinterpret_cast<char *>(buf2), 4);
-        ASSERT_TRUE(res.first == UTF8::UTF8Error);
+        ASSERT_TRUE(res.first == UTF8::UTF8_Error);
     }
 }
 CATCH

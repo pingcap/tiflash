@@ -23,7 +23,7 @@ namespace UTF8
 void utf8Encode(char * buf, size_t & used_length, UInt32 unicode)
 {
     auto * s = reinterpret_cast<unsigned char *>(buf);
-    if (unicode > UNICODEMax || IS_SURROGATE(unicode))
+    if (unicode > UNICODE_Max || IS_SURROGATE(unicode))
         unicode = 0xFFFD; /// 'Unknown character'
 
     if (unicode >= (1L << 16))
@@ -69,12 +69,12 @@ std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
     static const int shifte[] = {0, 6, 4, 2, 0};
 
     if unlikely (buf_length == 0)
-        return std::make_pair(UTF8Error, 0);
+        return std::make_pair(UTF8_Error, 0);
 
     const auto * s = reinterpret_cast<const unsigned char *>(buf);
     UInt32 len = lengths[s[0] >> 3];
     if unlikely (buf_length < len || len == 0)
-        return std::make_pair(UTF8Error, 1);
+        return std::make_pair(UTF8_Error, 1);
 
     /// buf_length >= len > 0
     UInt32 c = static_cast<UInt32>(s[0] & masks[len]) << 18;
@@ -111,14 +111,14 @@ std::pair<UInt32, UInt32> utf8Decode(const char * buf, UInt32 buf_length)
     /* Accumulate the various error conditions. */
     err |= (c < mins[len]) << 6; // non-canonical encoding
     err |= ((c >> 11) == 0x1b) << 7; // surrogate half?
-    err |= (c > UNICODEMax) << 8; // out of range?
+    err |= (c > UNICODE_Max) << 8; // out of range?
     err ^= 0x2a; // top two bits of each tail byte correct?
     err >>= shifte[len];
 
     if likely (err == 0)
         return std::make_pair(c, len);
     else
-        return std::make_pair(UTF8Error, 1);
+        return std::make_pair(UTF8_Error, 1);
 }
 } // namespace UTF8
 } // namespace DB

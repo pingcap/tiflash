@@ -375,7 +375,7 @@ void JsonBinary::marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const Str
             continue;
         }
         auto res = UTF8::utf8Decode(ref.data + i, ref_size - i);
-        if (res.first == UTF8::UTF8Error && res.second == 1)
+        if (res.first == UTF8::UTF8_Error && res.second == 1)
         {
             if (start < i)
                 write_buffer.write(ref.data + start, i - start);

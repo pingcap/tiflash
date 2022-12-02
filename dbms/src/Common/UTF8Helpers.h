@@ -29,8 +29,8 @@ namespace UTF8
 {
 static const UInt8 CONTINUATION_OCTET_MASK = 0b11000000u;
 static const UInt8 CONTINUATION_OCTET = 0b10000000u;
-static const UInt32 UNICODEMax = 0x0010FFFF; // Maximum valid Unicode code point.
-static const UInt32 UTF8Error = UNICODEMax + 1; // the "error" code
+static const UInt32 UNICODE_Max = 0x0010FFFF; // Maximum valid Unicode code point.
+static const UInt32 UTF8_Error = UNICODE_Max + 1; // the "error" code
 
 /// Based on a public domain branch-less UTF-8 decoder by Christopher Wellons:
 /// https://github.com/skeeto/branchless-utf8 (Unlicensed)
