@@ -55,7 +55,6 @@
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
-    M(DT_SnapshotOfSegmentIngest)               \
     M(DT_SnapshotOfBitmapFilter)                \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
