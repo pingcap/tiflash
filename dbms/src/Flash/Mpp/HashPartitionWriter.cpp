@@ -18,6 +18,7 @@
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
+#include <cassert>
 #include <cstddef>
 
 #include "Common/Exception.h"
@@ -159,8 +160,9 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 if (dest_block_rows > 0)
                 {
                     auto * codec_stream = chunk_codec_stream.get();
-                    if (compress_chunk_codec_stream && !writer->getTunnels()[part_id]->isLocal())
+                    if (tracked_packets[part_id]->getPacket().compress() != mpp::CompressMethod::NONE)
                     {
+                        assert(compress_chunk_codec_stream);
                         // no need compress
                         codec_stream = compress_chunk_codec_stream.get();
                     }
