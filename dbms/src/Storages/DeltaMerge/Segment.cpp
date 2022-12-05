@@ -2306,7 +2306,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         size_t expected_block_size)
 {
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
-    auto is_fast_scan = true;
+    constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
     // TODO: disable late materialization when bitmap filter is all zero.
     if (!dm_context.db_context.getSettingsRef().dt_enable_late_materialization.get() || !filter || !filter->beofre_where)
@@ -2346,6 +2346,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     /*+----------------------- late materialization -----------------------+*/
 
     Stopwatch sw_total;
+
+    //TODO: maybe we can remove handle column from columns_to_read.
+    // to avoid redundantly read handle/version/delmark column.
 
     /// phase 1: read columns of filters
     auto & segment_snap = bitmap_filter->snapshot();
@@ -2388,6 +2391,11 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     // after filter, do project action to remove tmp columns
     stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
     stream->setExtraInfo("projection after push down filter");
+    if (filter_columns.size() == columns_to_read.size())
+    {
+        // no need to read columns again
+        return stream;
+    }
 
     /// phase 3: build filtering-bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
