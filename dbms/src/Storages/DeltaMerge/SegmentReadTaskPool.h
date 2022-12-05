@@ -255,6 +255,7 @@ private:
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
+    ReadMode readModeOfSegment(SegmentReadTaskPtr & t);
 
     const uint64_t pool_id;
     const int64_t table_id;
@@ -263,7 +264,7 @@ private:
     RSOperatorPtr filter;
     const uint64_t max_version;
     const size_t expected_block_size;
-    ReadMode read_mode;
+    const ReadMode read_mode;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;

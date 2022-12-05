@@ -534,6 +534,10 @@ public:
 
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
+    static bool useBitmapFilter(const DMContext & dm_context,
+                                const SegmentSnapshotPtr & segment_snap,
+                                const ColumnDefines & columns_to_read);
+
 private:
     ReadInfo getReadInfo(
         const DMContext & dm_context,
@@ -595,6 +599,8 @@ private:
         const RowKeyRange & relevant_range,
         bool relevant_place) const;
 
+    static bool useCleanRead(const SegmentSnapshotPtr & segment_snap,
+                             const ColumnDefines & columns_to_read);
     BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context,
                                       const SegmentSnapshotPtr & segment_snap,
                                       const RowKeyRanges & read_ranges,
