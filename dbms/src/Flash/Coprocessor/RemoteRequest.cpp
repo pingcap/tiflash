@@ -32,7 +32,14 @@ RemoteRequest RemoteRequest::build(
 {
     DAGSchema schema;
     tipb::DAGRequest dag_req;
-    auto * executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
+    tipb::Executor * executor = dag_req.mutable_root_executor();
+    if (!is_disaggregated_compute_mode)
+    {
+        // For now, to avoid versions of tiflash_compute nodes and tiflash_storage being different,
+        // disable filter push down to avoid unsupported expression in tiflash_storage.
+        // Uncomment this when we are sure versions are same.
+        executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
+    }
 
     tipb::Executor * ts_exec = executor;
     ts_exec->set_tp(tipb::ExecType::TypeTableScan);
