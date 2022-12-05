@@ -154,6 +154,47 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
     }
 }
 
+TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        auto region_id = 1;
+        TableID table_id = 0;
+        {
+            initStorages();
+            KVStore & kvs = getKVS();
+            table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+        }
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_NE(r1, nullptr);
+            ASSERT_NE(kvr1, nullptr);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            {
+                r1->getLatestAppliedIndex();
+                std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
+                std::string v = "4486809092ACFEC38906";
+                auto strKey = Redact::debugStringToKey(k.data(), k.size());
+                auto strVal = Redact::debugStringToKey(v.data(), v.size());
+
+                auto [index1, term1] = proxy_instance->rawWrite(region_id, {RecordKVFormat::genKey(table_id, 33, 1)}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index1);
+                UNUSED(term1);
+                auto [index, term] = proxy_instance->rawWrite(region_id, {strKey}, {strVal}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+                EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                UNUSED(term);
+                EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
+            }
+        }
+    }
+}
+
 TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();

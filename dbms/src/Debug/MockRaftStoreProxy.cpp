@@ -381,6 +381,37 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
     return std::make_tuple(index, term);
 }
 
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
+    UInt64 region_id,
+    std::vector<std::string> && keys,
+    std::vector<std::string> && vals,
+    std::vector<WriteCmdType> && cmd_types,
+    std::vector<ColumnFamilyType> && cmd_cf)
+{
+    uint64_t index = 0;
+    uint64_t term = 0;
+    {
+        auto region = getRegion(region_id);
+        assert(region != nullptr);
+        // We have a new entry.
+        index = region->getLatestCommitIndex() + 1;
+        term = region->getLatestCommitTerm();
+        // The new entry is committed on Proxy's side.
+        region->updateCommitIndex(index);
+        // We record them, as persisted raft log, for potential recovery.
+        region->commands[index] = {
+            term,
+            MockProxyRegion::RawWrite{
+                keys,
+                vals,
+                cmd_types,
+                cmd_cf,
+            }};
+    }
+    return std::make_tuple(index, term);
+}
+
+
 std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index)
 {
     uint64_t index = 0;
@@ -456,6 +487,35 @@ void MockRaftStoreProxy::doApply(
             }
         }
     }
+    else if (cmd.has_raw_write_request())
+    {
+        auto & c = cmd.raw_write();
+        auto & keys = c.keys;
+        auto & vals = c.vals;
+        auto & cmd_types = c.cmd_types;
+        auto & cmd_cf = c.cmd_cf;
+        size_t n = keys.size();
+
+        assert(n == vals.size());
+        assert(n == cmd_types.size());
+        assert(n == cmd_cf.size());
+        for (size_t i = 0; i < n; i++)
+        {
+            if (cmd_types[i] == WriteCmdType::Put)
+            {
+                auto cf_name = CFToName(cmd_cf[i]);
+                auto key = TiKVKey(keys[i].data(), keys[i].size());
+                TiKVValue value = std::move(vals[i]);
+                RegionBench::setupPutRequest(request.add_requests(), cf_name, key, value);
+            }
+            else
+            {
+                auto cf_name = CFToName(cmd_cf[i]);
+                auto key = TiKVKey(keys[i].data(), keys[i].size());
+                RegionBench::setupDelRequest(request.add_requests(), cf_name, key);
+            }
+        }
+    }
     else if (cmd.has_admin_request())
     {
     }
@@ -465,7 +525,7 @@ void MockRaftStoreProxy::doApply(
 
     auto old_applied = kvs.getRegion(region_id)->appliedIndex();
     auto old_applied_term = kvs.getRegion(region_id)->appliedIndexTerm();
-    if (cmd.has_write_request())
+    if (cmd.has_write_request() || cmd.has_raw_write_request())
     {
         // TiFlash write
         kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);

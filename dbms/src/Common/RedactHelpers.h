@@ -35,6 +35,7 @@ public:
     static std::string keyToHexString(const char * key, size_t size);
 
     static void keyToDebugString(const char * key, size_t size, std::ostream & oss);
+    static std::string debugStringToKey(const char * start, size_t len);
 
     friend class DB::FieldVisitorToDebugString;
 
