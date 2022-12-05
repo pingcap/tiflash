@@ -107,6 +107,10 @@ private:
 
     int estimateCountOfNewThreads();
 
+    void sendCancelToQuery(bool kill);
+
+    BlockInputStreamPtr getDataStream();
+
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
@@ -125,6 +129,10 @@ private:
 
     // which targeted task we should send data by which tunnel.
     std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+
+    std::mutex stream_mu;
+    // must destroy before DAGContext.
+    BlockInputStreamPtr data_stream;
 
     MPPTaskManager * manager = nullptr;
 
