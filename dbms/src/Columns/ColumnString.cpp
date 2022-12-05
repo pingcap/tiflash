@@ -281,8 +281,8 @@ ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, const IColum
     if (col_rows != replicate_offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(start_row > end_row, start_row, end_row);
-    RUNTIME_CHECK(end_row < col_rows, end_row, col_rows);
+    RUNTIME_CHECK(start_row < end_row, start_row, end_row);
+    RUNTIME_CHECK(end_row <= col_rows, end_row, col_rows);
 
     auto res = ColumnString::create();
 
@@ -291,14 +291,14 @@ ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, const IColum
 
     Chars_t & res_chars = res->chars;
     Offsets & res_offsets = res->offsets;
-    res_chars.reserve(chars.size() / col_rows * (replicate_offsets[end_row]));
-    res_offsets.reserve(replicate_offsets[end_row]);
+    res_chars.reserve(chars.size() / col_rows * (replicate_offsets[end_row - 1]));
+    res_offsets.reserve(replicate_offsets[end_row - 1]);
 
     Offset prev_replicate_offset = 0;
     Offset prev_string_offset = start_row == 0 ? 0 : offsets[start_row - 1];
     Offset current_new_offset = 0;
 
-    for (size_t i = start_row; i <= end_row; ++i)
+    for (size_t i = start_row; i < end_row; ++i)
     {
         size_t size_to_replicate = replicate_offsets[i] - prev_replicate_offset;
         size_t string_size = offsets[i] - prev_string_offset;

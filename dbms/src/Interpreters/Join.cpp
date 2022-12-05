@@ -1246,7 +1246,7 @@ void NO_INLINE joinBlockImplTypeCase(
                     probe_process_info_ptr);
             keyHolderDiscardKey(key_holder);
         }
-        probe_process_info_ptr->end_row = i;
+        probe_process_info_ptr->end_row = i + 1;
     }
 
     // if i == rows, it means that all probe rows have been joined finish.
@@ -1668,7 +1668,10 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
-    size_t process_rows = probe_process_info_ptr->end_row - probe_process_info_ptr->start_row + 1;
+    if (rows == 0)
+        return;
+
+    size_t process_rows = probe_process_info_ptr->end_row - probe_process_info_ptr->start_row;
 
     /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
     if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
@@ -1678,7 +1681,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
 
         if (rows != 0 && rows != process_rows)
         {
-            filter->assign(filter->begin() + probe_process_info_ptr->start_row, filter->begin() + probe_process_info_ptr->end_row + 1);
+            filter->assign(filter->begin() + probe_process_info_ptr->start_row, filter->begin() + probe_process_info_ptr->end_row);
         }
     }
 
@@ -1691,27 +1694,20 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, *offsets_to_replicate);
         }
 
-        if (rows != 0)
+        if (rows != process_rows)
         {
             if (isLeftSemiFamily(kind))
             {
                 const auto helper_pos = block.getPositionByName(match_helper_name);
                 auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
-                new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
+                new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row);
                 block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
             }
-
-            if (rows != process_rows)
-            {
-                offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
-            }
+            offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row);
         }
     }
 
-    if (rows != 0)
-    {
-        resetProcessRowRange(probe_process_info_ptr);
-    }
+    resetProcessStartRow(probe_process_info_ptr);
 
     /// handle other conditions
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
@@ -2417,11 +2413,10 @@ BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sampl
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
-void Join::resetProcessRowRange(ProbeProcessInfoPtr probe_process_info_ptr)
+void Join::resetProcessStartRow(ProbeProcessInfoPtr probe_process_info_ptr)
 {
     RUNTIME_CHECK(probe_process_info_ptr != nullptr);
-    probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
-    probe_process_info_ptr->end_row = probe_process_info_ptr->start_row;
+    probe_process_info_ptr->start_row = probe_process_info_ptr->end_row;
 }
 
 bool Join::needGetBlockForHashJoinProbe(size_t stream_index)

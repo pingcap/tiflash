@@ -73,7 +73,9 @@ ColumnPtr ColumnConst::replicate(size_t /*start_row*/, size_t end_row, const ICo
             fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), s),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    size_t replicated_size = 0 == s ? 0 : (offsets[end_row]);
+    RUNTIME_CHECK(end_row <= s);
+
+    size_t replicated_size = 0 == s ? 0 : (offsets[end_row - 1]);
     return ColumnConst::create(data, replicated_size);
 }
 

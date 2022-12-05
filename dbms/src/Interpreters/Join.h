@@ -447,7 +447,7 @@ private:
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
 
-    static void resetProcessRowRange(ProbeProcessInfoPtr probe_process_info_ptr);
+    static void resetProcessStartRow(ProbeProcessInfoPtr probe_process_info_ptr);
 };
 
 using JoinPtr = std::shared_ptr<Join>;
