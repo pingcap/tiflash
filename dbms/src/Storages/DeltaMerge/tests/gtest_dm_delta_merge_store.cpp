@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
@@ -30,6 +31,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <gtest/gtest.h>
 
 #include <algorithm>
 #include <future>
@@ -412,6 +414,104 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStoreRWTest, SimpleReadCheckTableScanContext)
+try
+{
+    const ColumnDefine col_a_define(2, "col_a", std::make_shared<DataTypeInt64>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_a_define);
+
+        store = reload(table_column_defines);
+    }
+
+    const size_t num_rows_write = 50000;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            block.insert(DB::tests::createColumn<Int64>(
+                createSignedNumbers(0, num_rows_write),
+                col_a_define.name,
+                col_a_define.id));
+        }
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*db_context, db_context->getSettingsRef(), block);
+            break;
+        default:
+        {
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->ingestFiles(dm_context, range, file_ids, false);
+            break;
+        }
+        }
+    }
+
+    // merge into stable layer
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->mergeDeltaAll(*db_context);
+
+    const auto & columns = store->getTableColumns();
+    auto scan_context = std::make_shared<ScanContext>();
+    auto in = store->read(*db_context,
+                          db_context->getSettingsRef(),
+                          columns,
+                          {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                          /* num_streams= */ 1,
+                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                          EMPTY_FILTER,
+                          TRACING_NAME,
+                          /* keep_order= */ false,
+                          /* is_fast_scan= */ false,
+                          /* expected_block_size= */ 1024,
+                          /* read_segments */ {},
+                          /* extra_table_id_index */ InvalidColumnID,
+                          /* scan_context */ scan_context)[0];
+    in->readPrefix();
+    while (in->read()) {};
+    in->readSuffix();
+
+    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 7);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 50000);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 0);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0);
+
+    auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
+    scan_context = std::make_shared<ScanContext>();
+    in = store->read(*db_context,
+                     db_context->getSettingsRef(),
+                     columns,
+                     {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                     /* num_streams= */ 1,
+                     /* max_version= */ std::numeric_limits<UInt64>::max(),
+                     filter,
+                     TRACING_NAME,
+                     /* keep_order= */ false,
+                     /* is_fast_scan= */ false,
+                     /* expected_block_size= */ 1024,
+                     /* read_segments */ {},
+                     /* extra_table_id_index */ InvalidColumnID,
+                     /* scan_context */ scan_context)[0];
+
+    in->readPrefix();
+    while (in->read()) {};
+    in->readSuffix();
+
+    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 6);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 41808);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 1);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 8192);
+}
+CATCH
+
+
 TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithoutCache)
 try
 {
@@ -747,13 +847,11 @@ try
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            store->ingestFiles(dm_context, range2, {file_ids2}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            auto range = range1.merge(range2).merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         case TestMode::V2_Mix:
@@ -762,11 +860,9 @@ try
 
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            auto range = range1.merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         }
@@ -1251,81 +1347,6 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, IngestEmptyFileLists)
-try
-{
-    if (mode == TestMode::V1_BlockOnly)
-        return;
-
-    /// If users create an empty table with TiFlash replica, we will apply Region
-    /// snapshot without any rows, which make it ingest with an empty DTFile list.
-    /// Test whether we can clean the original data if `clear_data_in_range` is true.
-
-    const UInt64 tso1 = 4;
-    const size_t num_rows_before_ingest = 128;
-    // Write to store [0, 128)
-    {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
-        store->write(*db_context, db_context->getSettingsRef(), block);
-    }
-
-    // Test that if we ingest a empty file list, the data in range will be removed.
-    // The ingest range is [32, 256)
-    {
-        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, /*file_ids*/ {}, /*clear_data_in_range*/ true);
-    }
-
-
-    // After ingesting, the data in [32, 128) should be overwrite by the data in ingested files.
-    {
-        // Read all data <= tso1
-        // We can only get [0, 32) with tso1
-        const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso1,
-                                            EMPTY_FILTER,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
-        ASSERT_EQ(ins.size(), 1);
-        BlockInputStreamPtr in = ins[0];
-        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
-            in,
-            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, 32)),
-                createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
-            }))
-            << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
-    }
-
-    {
-        // Read all data
-        const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
-        ASSERT_EQ(ins.size(), 1);
-        BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_NROWS(in, 32) << "The rows number after ingest is not match";
-    }
-}
-CATCH
 
 TEST_P(DeltaMergeStoreRWTest, Split)
 try

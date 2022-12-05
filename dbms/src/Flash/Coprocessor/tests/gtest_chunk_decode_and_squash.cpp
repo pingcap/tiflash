@@ -23,7 +23,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
-#include <Flash/Coprocessor/IChunkDecodeAndSquash.cpp>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.cpp>
 namespace DB
 {
 namespace tests

@@ -19,13 +19,10 @@
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 
-#include <memory>
-
 
 namespace DB
 {
-class WindowBlockInputStream;
-using WindowBlockInputStreamPtr = std::shared_ptr<WindowBlockInputStream>;
+struct WindowTransformAction;
 
 class IWindowFunction
 {
@@ -41,7 +38,7 @@ public:
     virtual DataTypePtr getReturnType() const = 0;
     // Must insert the result for current_row.
     virtual void windowInsertResultInto(
-        WindowBlockInputStreamPtr streamPtr,
+        WindowTransformAction & action,
         size_t function_index,
         const ColumnNumbers & arguments)
         = 0;

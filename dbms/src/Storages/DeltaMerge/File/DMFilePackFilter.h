@@ -19,10 +19,13 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace ProfileEvents
 {
@@ -51,9 +54,10 @@ public:
         const IdSetPtr & read_packs,
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
+        const ScanContextPtr & scan_context,
         const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, scan_context, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
@@ -111,6 +115,7 @@ private:
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
+                     const ScanContextPtr & scan_context_,
                      const String & tracing_id)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
@@ -121,6 +126,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
+        , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
     {
@@ -284,7 +290,10 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
+        Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
+
+        scan_context->total_dmfile_rough_set_index_load_time_ms += watch.elapsedMilliseconds();
     }
 
 private:
@@ -300,6 +309,8 @@ private:
 
     std::vector<RSResult> handle_res;
     std::vector<UInt8> use_packs;
+
+    const ScanContextPtr scan_context;
 
     LoggerPtr log;
     ReadLimiterPtr read_limiter;

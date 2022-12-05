@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # fio test for EBS(with filesystem) write/randwrite test.
-# doc : https://docs.google.com/document/d/1NoHeigyfNyB9Bp8cYzYFv-In0dQzjR7smLltMBXCmgs
+
 if [ $# -lt 1 ]; then
     echo 'Usage: "./auto-fio.sh <path>" '
     echo '  output for test case 1: t1_{wr}_ncore{cores}_depth{iodepth}_fio.output'

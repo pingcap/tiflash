@@ -207,8 +207,8 @@ TEST(ReadLimiterTest, GetIOStatPeroid200ms)
     ASSERT_EQ(limiter.getAvailableBalance(), -31);
     request(limiter, 1);
     TimePointMS t2 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-    elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    ASSERT_GE(elasped, 2 * refill_period_ms);
+    elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t0).count();
+    ASSERT_GE(elasped, 3 * refill_period_ms);
     ASSERT_EQ(limiter.getAvailableBalance(), 8);
     request(limiter, 9);
     ASSERT_EQ(limiter.getAvailableBalance(), -1);
@@ -368,10 +368,14 @@ TEST(ReadLimiterTest, ReadMany)
     ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
 
-    std::this_thread::sleep_for(1200ms);
     Stopwatch sw;
-    request(read_limiter, 100);
-    ASSERT_LE(sw.elapsedMilliseconds(), 1); // Not blocked.
+    request(read_limiter, 1); // About 1000ms
+    auto req_ms = sw.elapsedMilliseconds();
+    // Theoretical value of `req_ms` is 1000.
+    // But time can be affected by many factors,
+    // such as machine load, process scheduling delays, clock jitter.
+    ASSERT_GE(req_ms, 950);
+    ASSERT_LT(req_ms, 1100);
 }
 
 #ifdef __linux__

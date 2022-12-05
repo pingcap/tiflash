@@ -2198,10 +2198,11 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
             join_key_names_left,
             join_key_names_right,
             settings.join_use_nulls,
-            SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
             join_params.kind,
             join_params.strictness,
-            /*req_id=*/"");
+            "" /*req_id=*/,
+            false /*enable_fine_grained_shuffle_*/,
+            0 /*fine_grained_shuffle_count_*/);
 
         Names required_joined_columns(join_key_names_right.begin(), join_key_names_right.end());
         for (const auto & name_type : columns_added_by_join)

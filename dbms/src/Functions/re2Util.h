@@ -14,13 +14,24 @@
 
 #pragma once
 
-#include <Core/Types.h>
+#include <Common/Exception.h>
+#include <Common/config.h>
+#include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/CollatorUtils.h>
+#include <re2/re2.h>
+
+
+#if USE_RE2_ST
+#include <re2_st/re2.h>
+#else
+#define re2_st re2
+#endif
 
 namespace DB
 {
-
-void SkipJson(size_t & cursor, const String & raw_value);
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
-String DecodeJsonAsString(size_t & cursor, const String & raw_value);
-
+namespace re2Util
+{
+re2_st::RE2::Options getDefaultRe2Options();
+String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator = nullptr);
+} // namespace re2Util
 } // namespace DB

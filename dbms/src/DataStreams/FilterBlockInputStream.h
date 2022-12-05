@@ -14,15 +14,11 @@
 
 #pragma once
 
-#include <Columns/FilterDescription.h>
+#include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-
 
 namespace DB
 {
-class ExpressionActions;
-
-
 /** Implements WHERE, HAVING operations.
   * A stream of blocks and an expression, which adds to the block one ColumnUInt8 column containing the filtering conditions, are passed as input.
   * The expression is evaluated and a stream of blocks is returned, which contains only the filtered rows.
@@ -49,11 +45,7 @@ protected:
     Block readImpl() override;
 
 private:
-    ExpressionActionsPtr expression;
-    Block header;
-    ssize_t filter_column;
-
-    ConstantFilterDescription constant_filter_description;
+    FilterTransformAction filter_transform_action;
 
     const LoggerPtr log;
 };

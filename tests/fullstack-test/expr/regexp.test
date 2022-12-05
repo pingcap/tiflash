@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# test regexp and regexp_like
 mysql> drop table if exists test.t
 mysql> create table test.t (data varchar(30), data_not_null varchar(30) not null, pattern varchar(30), pattern_not_null varchar(30) not null); 
 mysql> insert into test.t values ('aaaa', 'AAAA', '^a.*', '^A.*'), ('abcd', 'abcd', null, '^a..d$'), (null, 'bbb', 'bb$', 'bb$'),('中文测试','中文测试','中文','^....$'),('中English混合','中English混合','^中English','^..nglish..$');
@@ -71,13 +72,66 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; se
 
 mysql> drop table if exists test.t
 mysql> create table test.t (data varchar(30), pattern varchar(30)); 
-mysql> insert into test.t values ('', ''), ('abcd', 'abcd');
+mysql> insert into test.t values ('abcd', 'abcd');
 mysql> alter table test.t set tiflash replica 1
 func> wait_table test t
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp pattern, data regexp '', '' regexp pattern from test.t;
-+---------------------+----------------+-------------------+
-| data regexp pattern | data regexp '' | '' regexp pattern |
-+---------------------+----------------+-------------------+
-|                   1 |              1 |                 1 |
-|                   1 |              1 |                 0 |
-+---------------------+----------------+-------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp pattern, '' regexp pattern from test.t;
++---------------------+-------------------+
+| data regexp pattern | '' regexp pattern |
++---------------------+-------------------+
+|                   1 |                 0 |
++---------------------+-------------------+
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (data varchar(30), pattern varchar(30), match_type varchar(30)); 
+mysql> insert into test.t values ('a', 'A', 'i'), ('\n', '.', 's'), ('ab\nabc', '^abc$', 'm');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_like(data, pattern, match_type) as res from test.t;
++------+
+| res  |
++------+
+|    1 |
+|    1 |
+|    1 |
++------+
+
+# test regexp_instr
+mysql> drop table if exists test.t;
+mysql> create table test.t (expr varchar(30), pattern varchar(30), pos int, occur int, ret_op int, match_type varchar(30));
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_instr(_utf8mb4'1', _utf8mb4'1', pos, occur, 1, match_type) as res from test.t;
+mysql> set tidb_enforce_mpp=1; select regexp_instr(_utf8mb4'1', _utf8mb4'', pos, occur, 1, match_type) as res from test.t;
+
+mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', 1, 1, 0, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', 1, 1, 0, _utf8mb4'i'), (_utf8mb4'ab\nabc', _utf8mb4'^abc$', 1, 1, 0, _utf8mb4'm');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_instr(expr, pattern, 1, 1, 0, match_type) as res from test.t;
++------+
+| res  |
++------+
+|    1 |
+|    2 |
+|    4 |
++------+
+
+# test regexp_substr
+mysql> drop table if exists test.t;
+mysql> create table test.t (expr varchar(30), pattern varchar(30), pos int, occur int, match_type varchar(30));
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_substr(_utf8mb4'1', _utf8mb4'1', pos, occur, match_type) as res from test.t;
+mysql> set tidb_enforce_mpp=1; select regexp_substr(_utf8mb4'1', _utf8mb4'', pos, occur, match_type) as res from test.t;
+
+mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', 1, 1, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', 1, 1, _utf8mb4'i'), (_utf8mb4'ab\nabc', _utf8mb4'^abc$', 1, 1, _utf8mb4'm');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_substr(expr, pattern, 1, 1, match_type) as res from test.t;
++------+
+| res  |
++------+
+| 123  |
+| Bb   |
+| abc  |
++------+

@@ -72,6 +72,8 @@ WALStore::WALStore(
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
+    , num_log_files(0)
+    , bytes_on_disk(0)
     , logger(Logger::get(storage_name))
     , config(config_)
 {
@@ -131,6 +133,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
         (manual_flush ? LogFileStage::Temporary : LogFileStage::Normal),
         new_log_lvl.first,
         new_log_lvl.second,
+        0,
         path};
     auto filename = log_filename.filename(log_filename.stage);
     auto fullname = log_filename.fullname(log_filename.stage);
@@ -145,10 +148,25 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     return {std::move(log_writer), log_filename};
 }
 
+void WALStore::updateDiskUsage(const LogFilenameSet & log_filenames)
+{
+    size_t n_bytes_on_disk = 0;
+    for (const auto & f : log_filenames)
+    {
+        n_bytes_on_disk += f.bytes_on_disk;
+    }
+    {
+        std::lock_guard guard(mtx_disk_usage);
+        num_log_files = log_filenames.size();
+        bytes_on_disk = n_bytes_on_disk;
+    }
+}
+
 WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_files, bool force)
 {
     // First we simply check whether the number of files is enough for compaction
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
+    updateDiskUsage(persisted_log_files);
     if (!force && persisted_log_files.size() <= max_persisted_log_files)
     {
         return WALStore::FilesSnapshot{};

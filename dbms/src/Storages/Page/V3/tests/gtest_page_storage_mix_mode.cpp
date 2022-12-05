@@ -274,17 +274,6 @@ try
     }
 
     {
-        PageIds page_ids = {1, 2, 3, 4};
-        PageHandler hander = [](DB::PageId /*page_id*/, const Page & /*page*/) {
-        };
-        ASSERT_NO_THROW(page_reader_mix->read(page_ids, hander));
-
-        // Read page ids which only exited in V2
-        page_ids = {1, 2, 7};
-        ASSERT_NO_THROW(page_reader_mix->read(page_ids, hander));
-    }
-
-    {
         std::vector<PageStorage::PageReadFields> read_fields;
         read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
         read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(4, {1, 3, 4, 8, 10}));

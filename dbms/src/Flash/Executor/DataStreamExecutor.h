@@ -12,25 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsRandom.h>
+#pragma once
+
+#include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
-namespace detail
+class DataStreamExecutor : public QueryExecutor
 {
-void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed)
-{
-    generator.seed(intHash64(randomSeed() ^ intHash64(additional_seed)));
-}
-} // namespace detail
+public:
+    explicit DataStreamExecutor(const BlockIO & block_io)
+        : QueryExecutor(block_io.process_list_entry)
+        , data_stream(block_io.in)
+    {
+        assert(data_stream);
+    }
 
+    String dump() const override;
 
-void registerFunctionsRandom(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionRand>();
-    factory.registerFunction<FunctionRand64>();
-    factory.registerFunction<FunctionRandConstant>();
-}
+    void cancel(bool is_kill) override;
 
+    int estimateNewThreadCount() override;
+
+protected:
+    ExecutionResult execute(ResultHandler result_handler) override;
+
+protected:
+    BlockInputStreamPtr data_stream;
+};
 } // namespace DB

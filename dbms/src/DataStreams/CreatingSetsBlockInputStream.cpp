@@ -85,7 +85,7 @@ Block CreatingSetsBlockInputStream::readImpl()
 {
     Block res;
 
-    createAll();
+    RUNTIME_CHECK(created == true);
 
     if (isCancelledOrThrowIfKilled())
         return res;
@@ -211,14 +211,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             {
                 if (!subquery.set->insertFromBlock(block, /*fill_set_elements=*/false))
                     done_with_set = true;
-            }
-
-            if (!done_with_join)
-            {
-                // move building hash tables into `HashJoinBuildBlockInputStream`, so that fetch block and insert block into a hash table are
-                // running into a thread, avoiding generating more threads.
-                if (subquery.join->isBuildSetExceeded())
-                    done_with_join = true;
             }
 
             if (!done_with_table)

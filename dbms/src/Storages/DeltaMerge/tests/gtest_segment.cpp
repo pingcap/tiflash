@@ -20,6 +20,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
 #include <gtest/gtest.h>
@@ -53,119 +54,6 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 }
 namespace tests
 {
-class SegmentFrameworkTest : public SegmentTestBasic
-{
-};
-
-TEST_F(SegmentFrameworkTest, PrepareWriteBlock)
-try
-{
-    reloadWithOptions(SegmentTestOptions{.is_common_handle = false});
-
-    auto s1_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10);
-    ASSERT_TRUE(s1_id.has_value());
-    auto s2_id = splitSegmentAt(*s1_id, 20);
-    ASSERT_TRUE(s2_id.has_value());
-
-    // s1 has range [10, 20)
-    {
-        auto [begin, end] = getSegmentKeyRange(*s1_id);
-        ASSERT_EQ(10, begin);
-        ASSERT_EQ(20, end);
-    }
-
-    {
-        // write_rows == segment_rows, start_key not specified
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 10);
-        ASSERT_EQ(1, blocks.size());
-        auto handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-        const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-        ASSERT_EQ(PaddedPODArray<Handle>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}), handle_data);
-    }
-    {
-        // write_rows > segment_rows, start_key not specified
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 13);
-        ASSERT_EQ(2, blocks.size());
-        {
-            auto handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}), handle_data);
-        }
-        {
-            auto handle_column = blocks[1].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({10, 11, 12}), handle_data);
-        }
-    }
-    {
-        // start_key specified, end_key - start_key < write_rows
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 2, /* at */ 16);
-        ASSERT_EQ(1, blocks.size());
-        const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-        const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-        ASSERT_EQ(PaddedPODArray<Handle>({16, 17}), handle_data);
-    }
-    {
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 4, /* at */ 16);
-        ASSERT_EQ(1, blocks.size());
-        const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-        const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-        ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
-    }
-    {
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 5, /* at */ 16);
-        ASSERT_EQ(2, blocks.size());
-        {
-            const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
-        }
-        {
-            const auto & handle_column = blocks[1].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({16}), handle_data);
-        }
-    }
-    {
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 10, /* at */ 16);
-        ASSERT_EQ(3, blocks.size());
-        {
-            const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
-        }
-        {
-            const auto & handle_column = blocks[1].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
-        }
-        {
-            const auto & handle_column = blocks[2].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({16, 17}), handle_data);
-        }
-    }
-    {
-        // write rows < segment rows, start key not specified, should choose a random start.
-        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 3);
-        ASSERT_EQ(1, blocks.size());
-        ASSERT_EQ(3, blocks[0].rows());
-    }
-    {
-        // Let's check whether the generated handles will be starting from 12, for at least once.
-        auto start_from_12 = 0;
-        for (size_t i = 0; i < 100; i++)
-        {
-            auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 3);
-            if (blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column->getInt(0) == 12)
-                start_from_12++;
-        }
-        ASSERT_TRUE(start_from_12 > 0); // We should hit at least 1 times in 100 iters.
-        ASSERT_TRUE(start_from_12 < 50); // We should not hit 50 times in 100 iters :)
-    }
-}
-CATCH
-
 
 class SegmentOperationTest : public SegmentTestBasic
 {
@@ -308,7 +196,7 @@ try
 
         // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_merge_delta_apply.next();
         th_seg_merge_delta.get();
 
@@ -367,7 +255,7 @@ try
 
         // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_split_apply.next();
         th_seg_split.get();
 
@@ -428,7 +316,7 @@ try
 
         // non-flushed column files
         writeSegment(new_seg_id, 100);
-        ingestDTFileIntoSegment(new_seg_id, 100);
+        ingestDTFileIntoDelta(new_seg_id, 100);
         sp_seg_merge_apply.next();
         th_seg_merge.get();
 
@@ -491,7 +379,7 @@ try
     }
 
     {
-        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     }
     ASSERT_EQ(segments.size(), 1);
@@ -524,12 +412,11 @@ CATCH
 TEST_F(SegmentOperationTest, SegmentLogicalSplit)
 try
 {
-    {
-        SegmentTestOptions options;
-        options.db_settings.dt_segment_stable_pack_rows = 100;
-        options.db_settings.dt_enable_logical_split = true;
-        reloadWithOptions(options);
-    }
+    reloadWithOptions(
+        {.db_settings = {
+             .dt_segment_stable_pack_rows = 100,
+             .dt_enable_logical_split = true,
+         }});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -560,12 +447,8 @@ CATCH
 TEST_F(SegmentOperationTest, Issue5570)
 try
 {
-    {
-        SegmentTestOptions options;
-        // a smaller pack rows for logical split
-        options.db_settings.dt_segment_stable_pack_rows = 100;
-        reloadWithOptions(options);
-    }
+    // a smaller pack rows for logical split
+    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -622,13 +505,12 @@ CATCH
 TEST_F(SegmentOperationTest, DeltaPagesAfterDeltaMerge)
 try
 {
-    {
-        SegmentTestOptions options;
-        // a smaller pack rows for logical split
-        options.db_settings.dt_segment_stable_pack_rows = 100;
-        options.db_settings.dt_enable_logical_split = true;
-        reloadWithOptions(options);
-    }
+    // a smaller pack rows for logical split
+    reloadWithOptions(
+        {.db_settings = {
+             .dt_segment_stable_pack_rows = 100,
+             .dt_enable_logical_split = true,
+         }});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
@@ -716,10 +598,11 @@ protected:
     void SetUp() override
     {
         SegmentOperationTest::SetUp();
-        SegmentTestOptions options;
-        options.db_settings.dt_segment_stable_pack_rows = 100;
-        options.db_settings.dt_enable_logical_split = true;
-        reloadWithOptions(options);
+        reloadWithOptions(
+            {.db_settings = {
+                 .dt_segment_stable_pack_rows = 100,
+                 .dt_enable_logical_split = true,
+             }});
         ASSERT_TRUE(dm_context->enable_logical_split);
     }
 };
@@ -792,9 +675,7 @@ class SegmentSplitTest : public SegmentTestBasic
 TEST_F(SegmentSplitTest, AutoModePhycialSplitByDefault)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_segment_stable_pack_rows = 100;
-    reloadWithOptions(options);
+    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
     ASSERT_FALSE(dm_context->enable_logical_split);
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
@@ -811,11 +692,12 @@ CATCH
 TEST_F(SegmentSplitTest, PhysicalSplitMode)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_segment_stable_pack_rows = 100;
     // Even if we explicitly set enable_logical_split, we will still do physical split in SplitMode::Physical.
-    options.db_settings.dt_enable_logical_split = true;
-    reloadWithOptions(options);
+    reloadWithOptions(
+        {.db_settings = {
+             .dt_segment_stable_pack_rows = 100,
+             .dt_enable_logical_split = true,
+         }});
     ASSERT_TRUE(dm_context->enable_logical_split);
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
@@ -870,9 +752,7 @@ CATCH
 TEST_F(SegmentSplitTest, LogicalSplitModeDoesLogicalSplit)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_segment_stable_pack_rows = 100;
-    reloadWithOptions(options);
+    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
     // Logical split will be performed if we use logical split mode, even when enable_logical_split is false.
     ASSERT_FALSE(dm_context->enable_logical_split);
 
@@ -912,9 +792,7 @@ CATCH
 TEST_F(SegmentSplitTest, LogicalSplitModeOnePackInStable)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_segment_stable_pack_rows = 100;
-    reloadWithOptions(options);
+    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 50);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -932,9 +810,7 @@ CATCH
 TEST_F(SegmentSplitTest, LogicalSplitModeOnePackWithHoleInStable)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_segment_stable_pack_rows = 100;
-    reloadWithOptions(options);
+    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 0);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 90);
@@ -1008,9 +884,7 @@ CATCH
 TEST_F(SegmentSplitAtTest, AutoModeEnableLogicalSplit)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_enable_logical_split = true;
-    reloadWithOptions(options);
+    reloadWithOptions({.db_settings = {.dt_enable_logical_split = true}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -1047,9 +921,7 @@ CATCH
 TEST_F(SegmentSplitAtTest, PhysicalSplitMode)
 try
 {
-    SegmentTestOptions options;
-    options.db_settings.dt_enable_logical_split = true;
-    reloadWithOptions(options);
+    reloadWithOptions({.db_settings = {.dt_enable_logical_split = true}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -1284,10 +1156,10 @@ class IsEmptyTest : public SegmentTestBasic
 TEST_F(IsEmptyTest, Basic)
 try
 {
-    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    });
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
     ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
@@ -1347,17 +1219,17 @@ try
 
     // We will consider it to be empty after compaction.
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    });
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 
     // For empty segment, delete range will not cause it to be "not empty".
     deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-    fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    });
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 }
 CATCH
 
@@ -1373,10 +1245,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This is the slow path, because ColumnFileInMemory exists for both left and right segments after logical split.
-    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptySlowPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
-    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
 }
 CATCH
 
@@ -1393,10 +1265,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This is the slow path, because ColumnFileTiny exists for both left and right segments after logical split.
-    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptySlowPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
-    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
 }
 CATCH
 
@@ -1414,10 +1286,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This goes into the fast path thanks to pack filter.
-    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptyFastPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
-    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
 }
 CATCH
 
@@ -1439,10 +1311,10 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // This is the slow path, because pack filter will not work.
-    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
-    ASSERT_TRUE(isSegmentDefinitelyEmpty(*seg_2));
+    ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIsEmptySlowPath, +1, {
+        ASSERT_TRUE(isSegmentDefinitelyEmpty(*seg_2));
+    });
     ASSERT_EQ(0, getSegmentRowNum(*seg_2));
-    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
 
     ASSERT_FALSE(isSegmentDefinitelyEmpty(*seg_3));
     ASSERT_EQ(42, getSegmentRowNum(*seg_3));

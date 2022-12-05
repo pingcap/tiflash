@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/LRUCache.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
@@ -30,6 +29,7 @@
 #include <Storages/PathPool.h>
 
 #include <mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -67,8 +67,6 @@ public:
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
     Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
-
-    void read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
     struct FieldReadInfo
     {
@@ -126,7 +124,8 @@ private:
 
     BlobStats blob_stats;
 
-    DB::LRUCache<BlobFileId, BlobFile> cached_files;
+    std::mutex mtx_blob_files;
+    std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
 };
 using BlobStorePtr = std::shared_ptr<BlobStore>;
 

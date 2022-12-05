@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsFormatting.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
-void registerFunctionsFormatting(FunctionFactory & factory)
+ExecutionResult QueryExecutor::execute()
 {
-    factory.registerFunction<FunctionBitmaskToList>();
-    factory.registerFunction<FunctionFormatReadableSize>();
+    return execute(ResultHandler{});
 }
 
+ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
+{
+    return execute(ResultHandler{handler});
+}
 } // namespace DB

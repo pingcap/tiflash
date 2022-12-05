@@ -12,9 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set (FULL_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-set (FULL_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-set (FULL_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-message (STATUS "compiler C   = ${CMAKE_C_COMPILER} ${FULL_C_FLAGS}")
-message (STATUS "compiler CXX = ${CMAKE_CXX_COMPILER} ${FULL_CXX_FLAGS}")
-message (STATUS "LINKER_FLAGS = ${FULL_EXE_LINKER_FLAGS}")
+mysql> drop table if exists test.t
+mysql> create table test.t (a varchar(50))
+mysql> insert into test.t values('2021-03-13 12:34:56.123456')
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select a from test.t where extract(day_microsecond from a) = 13123456123456 and extract(day_second from a) = 13123456 and extract(day_minute from a) = 131234 and extract(day_hour from a) = 1312;
+a
+2021-03-13 12:34:56.123456
+
+
+mysql> drop table if exists test.t
