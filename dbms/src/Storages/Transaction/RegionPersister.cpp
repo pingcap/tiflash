@@ -168,7 +168,7 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         auto region = Region::deserialize(buf, proxy_helper);
         if (page_id != region->id())
-            throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("region id and page id not match page_id={} region_id={}!", page_id, region->id()), ErrorCodes::LOGICAL_ERROR);
 
         regions.emplace(region->id(), region);
     };
