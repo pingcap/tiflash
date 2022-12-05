@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -285,6 +286,7 @@ void UniversalPageStorage::cleanExternalPage(Stopwatch & /* gc_watch */, GCTimeS
     }
 
     Stopwatch external_watch;
+    SYNC_FOR("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
 
     while (true)
     {
@@ -350,6 +352,7 @@ UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLim
     statistics.blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_ids_need_gc.empty())
     {
+        cleanExternalPage(gc_watch, statistics);
         statistics.stage = GCStageType::OnlyInMem;
         statistics.total_cost_ms = gc_watch.elapsedMilliseconds();
         return statistics;

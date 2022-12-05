@@ -276,7 +276,7 @@ public:
     }
 
     // scan the pages between [start, end)
-    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const DB::Page & page)> & acceptor)
+    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor)
     {
         // always traverse with the latest snapshot
         auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
@@ -284,7 +284,7 @@ public:
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
+            acceptor(DB::PS::V3::universal::ExternalIdTrait::getU64ID(page_id), uni_storage.blob_store->read(page_id_and_entry));
         }
     }
 

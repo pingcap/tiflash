@@ -260,7 +260,8 @@ PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffVie
         UniversalPageId start_id{start_page_id.data, start_page_id.len};
         UniversalPageId end_id{end_page_id.data, end_page_id.len};
         std::vector<DB::Page *> pages;
-        auto checker = [&](const DB::Page & page) {
+        auto checker = [&](PageId page_id, const DB::Page & page) {
+            UNUSED(page_id);
             pages.push_back(new Page(page));
         };
         reader.traverse(start_id, end_id, checker);

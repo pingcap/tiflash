@@ -108,14 +108,12 @@ try
 
     DB::Page page0 = storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -149,14 +147,12 @@ try
 
     DB::Page page0 = storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -194,7 +190,6 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), page0_byte);
@@ -202,7 +197,6 @@ try
 
         DB::Page page1 = storage->read(pid);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, pid);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(num_repeat % 0xff));
@@ -214,7 +208,6 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), page0_byte);
@@ -222,7 +215,6 @@ try
 
         DB::Page page1 = storage->read(pid);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, pid);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(num_repeat % 0xff));
@@ -281,11 +273,9 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), 0UL);
-        ASSERT_EQ(page0.page_id, 0UL);
 
         DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), 0UL);
-        ASSERT_EQ(page2.page_id, 2UL);
     }
 
     snapshot.reset();
@@ -504,14 +494,12 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -525,14 +513,12 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -551,21 +537,18 @@ try
         {
             DB::Page page0 = storage->read(0);
             ASSERT_EQ(page0.data.size(), buf_sz);
-            ASSERT_EQ(page0.page_id, 0UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
             }
             DB::Page page1 = storage->read(1);
             ASSERT_EQ(page1.data.size(), buf_sz);
-            ASSERT_EQ(page1.page_id, 1UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
             }
             DB::Page page2 = storage->read(2);
             ASSERT_EQ(page2.data.size(), buf_sz);
-            ASSERT_EQ(page2.page_id, 2UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
@@ -580,21 +563,18 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), buf_sz);
-        ASSERT_EQ(page2.page_id, 2UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
@@ -668,7 +648,6 @@ try
 
         {
             Page page0 = pages.at(0);
-            ASSERT_EQ(page0.page_id, 0UL);
             for (auto index : p0_fields.second)
             {
                 auto data = page0.getFieldData(index);
@@ -684,7 +663,6 @@ try
         }
         {
             DB::Page page1 = pages.at(1);
-            ASSERT_EQ(page1.page_id, 1UL);
             for (auto index : p1_fields.second)
             {
                 auto data = page1.getFieldData(index);
@@ -711,7 +689,6 @@ try
 
         {
             DB::Page page0 = pages.at(0);
-            ASSERT_EQ(page0.page_id, 0UL);
             ASSERT_EQ(page0.field_offsets.size(), p0_fields.second.size());
             for (auto index : p0_fields.second)
             {
@@ -728,7 +705,6 @@ try
         }
         {
             DB::Page page1 = pages.at(1);
-            ASSERT_EQ(page1.page_id, 1UL);
             ASSERT_EQ(page1.field_offsets.size(), p1_fields.second.size());
             for (auto index : p1_fields.second)
             {
@@ -747,12 +723,10 @@ try
         // Read as single page
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
@@ -791,7 +765,7 @@ try
 
     {
         size_t num_pages = 0;
-        storage->traverse([&num_pages](const DB::Page &) { num_pages += 1; });
+        storage->traverse([&num_pages](PageId, const DB::Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 0);
     }
 
@@ -820,7 +794,7 @@ try
 
     {
         size_t num_pages = 0;
-        storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        storage->traverse([&num_pages](PageId, const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
         auto page1 = storage->read(1);
@@ -865,7 +839,7 @@ try
     FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
     {
         size_t num_pages = 0;
-        storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        storage->traverse([&num_pages](PageId, const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 0);
     }
 
@@ -894,7 +868,7 @@ try
 
     {
         size_t num_pages = 0;
-        storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        storage->traverse([&num_pages](PageId, const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
         auto page1 = storage->read(1);

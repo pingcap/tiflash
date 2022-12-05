@@ -109,15 +109,21 @@ extern const char force_context_path[];
 
 struct UniversalPageStorageWrapper
 {
+    explicit UniversalPageStorageWrapper(Context & global_context_)
+        :global_context(global_context_)
+    {
+
+    }
+    Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
-    void restore(Context & global_context)
+    void restore()
     {
         uni_page_storage->restore();
         gc_handle = global_context.getBackgroundPool().addTask(
-            [this, global_context] {
+            [this] {
                 return this->gc();
             },
             false);
@@ -132,6 +138,15 @@ struct UniversalPageStorageWrapper
 
         last_try_gc_time = now;
         return this->uni_page_storage->gc();
+    }
+
+    ~UniversalPageStorageWrapper()
+    {
+        if (gc_handle)
+        {
+            global_context.getBackgroundPool().removeTask(gc_handle);
+            gc_handle = nullptr;
+        }
     }
 };
 using UniversalPageStorageWrapperPtr = std::shared_ptr<UniversalPageStorageWrapper>;
@@ -189,7 +204,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
-    PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
+    PageStorageRunMode storage_run_mode = PageStorageRunMode::UNI_PS;
     DM::GlobalStoragePoolPtr global_storage_pool;
     UniversalPageStorageWrapperPtr uni_page_storage_wrapper;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -1654,11 +1669,14 @@ void Context::initializeGlobalUniversalPageStorage(const PathPool & path_pool, c
 {
     auto lock = getLock();
     if (shared->uni_page_storage_wrapper)
-        throw Exception("UniversalPageStorage has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    {
+        // GlobalStoragePool may be initialized many times in some test cases for restore.
+        LOG_WARNING(shared->log, "GlobalUniversalPageStorage has already been initialized.");
+    }
 
-    shared->uni_page_storage_wrapper = std::make_shared<UniversalPageStorageWrapper>();
+    shared->uni_page_storage_wrapper = std::make_shared<UniversalPageStorageWrapper>(*this);
     shared->uni_page_storage_wrapper->uni_page_storage = UniversalPageStorage::create("global", path_pool.getPSDiskDelegatorGlobalMulti("global"), {}, file_provider);
-    shared->uni_page_storage_wrapper->restore(*this);
+    shared->uni_page_storage_wrapper->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage");
 }
 

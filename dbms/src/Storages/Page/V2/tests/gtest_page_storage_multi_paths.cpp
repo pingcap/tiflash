@@ -117,14 +117,12 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -139,14 +137,12 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -165,21 +161,18 @@ try
         {
             DB::Page page0 = storage->read(0);
             ASSERT_EQ(page0.data.size(), buf_sz);
-            ASSERT_EQ(page0.page_id, 0UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
             }
             DB::Page page1 = storage->read(1);
             ASSERT_EQ(page1.data.size(), buf_sz);
-            ASSERT_EQ(page1.page_id, 1UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
             }
             DB::Page page2 = storage->read(2);
             ASSERT_EQ(page2.data.size(), buf_sz);
-            ASSERT_EQ(page2.page_id, 2UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
@@ -195,21 +188,18 @@ try
     {
         DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
         }
         DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), buf_sz);
-        ASSERT_EQ(page2.page_id, 2UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));

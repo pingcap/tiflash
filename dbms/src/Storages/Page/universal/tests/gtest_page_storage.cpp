@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <IO/ReadBufferFromFile.h>
-#include <Storages/Page/UniversalPage.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
@@ -101,12 +101,11 @@ TEST_F(UniPageStorageTest, RaftLog)
     }
 
     RaftLogReader raft_log_reader(*page_storage);
-    auto checker = [this](const DB::UniversalPage & page) {
-        LOG_INFO(log, "{}", page.page_id);
+    auto checker = [this](DB::PageId page_id, const DB::Page & page) {
+        LOG_INFO(log, "{} {}", page_id, page.isValid());
     };
     raft_log_reader.traverse(RaftLogReader::toFullPageId(10, 0), RaftLogReader::toFullPageId(101, 0), checker);
 }
-
 
 // ===== Begin Remote Checkpoint Tests =====
 // These tests should be moved to other places, when these methods are reorganized.
@@ -450,5 +449,11 @@ CATCH
 // ===== End Remote Checkpoint Tests =====
 
 
+// FIXME: move to a separate test file
+TEST_F(UniPageStorageTest, UniversalPageId)
+{
+    auto u_id = buildTableUniversalPageId(getStoragePrefix(TableStorageTag::Log), 1, 1);
+    ASSERT_EQ(DB::PS::V3::universal::ExternalIdTrait::getU64ID(u_id), 1);
+}
 } // namespace PS::universal::tests
 } // namespace DB

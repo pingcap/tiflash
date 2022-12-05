@@ -26,6 +26,11 @@ struct UniversalPageIdFormat
         return toBigEndian(x);
     }
 
+    inline UInt64 decodeUInt64(const UInt64 x)
+    {
+        return toBigEndian(x);
+    }
+
     static inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
     {
         auto u = UniversalPageIdFormat::encodeUInt64(x);
@@ -36,6 +41,12 @@ struct UniversalPageIdFormat
     static inline T read(const char * s)
     {
         return *(reinterpret_cast<const T *>(s));
+    }
+
+    static inline UInt64 decodeUInt64(const char * s)
+    {
+        auto v = read<UInt64>(s);
+        return toBigEndian(v);
     }
 };
 }
@@ -83,7 +94,7 @@ struct ExternalIdTrait
     static inline U64PageId getU64ID(const PageId & page_id)
     {
         // FIXME: ignore page_id without table prefix
-        return DB::UniversalPageIdFormat::read<UInt64>(page_id.data() + page_id.size() - sizeof(UInt64));
+        return DB::UniversalPageIdFormat::decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
     }
     static inline Prefix getPrefix(const PageId & page_id)
     {

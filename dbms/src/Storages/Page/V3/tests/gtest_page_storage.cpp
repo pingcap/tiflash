@@ -411,14 +411,12 @@ try
 
     DB::Page page0 = page_storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = page_storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -670,14 +668,12 @@ try
 
     DB::Page page1 = page_storage_enc->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page2 = page_storage_enc->read(2);
     ASSERT_EQ(page2.data.size(), buf_sz);
-    ASSERT_EQ(page2.page_id, 2UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
@@ -734,12 +730,11 @@ try
         PageIds page_ids = {1, 2, 5};
         // readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true);
         auto page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
-        ASSERT_EQ(page_maps[1].page_id, 1);
         ASSERT_FALSE(page_maps[2].isValid());
         ASSERT_FALSE(page_maps[5].isValid());
 
         const auto & page1 = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
-        ASSERT_EQ(page1.page_id, 1);
+        ASSERT_TRUE(page1.isValid());
 
         const auto & page2 = page_storage->readImpl(TEST_NAMESPACE_ID, 2, nullptr, nullptr, false);
         ASSERT_FALSE(page2.isValid());
@@ -752,7 +747,6 @@ try
         };
 
         page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
-        ASSERT_EQ(page_maps[4].page_id, 4);
         ASSERT_EQ(page_maps[4].fieldSize(), 3);
         ASSERT_EQ(page_maps[4].data.size(), 20 + 20 + 30);
         // the invalid page ids in input param are returned with INVALID_ID
@@ -782,14 +776,12 @@ try
 
     DB::Page page0 = page_storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = page_storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
@@ -820,14 +812,12 @@ try
 
     DB::Page page0 = page_storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = page_storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff + 1));
@@ -887,7 +877,6 @@ TEST_F(PageStorageTest, WriteReadOnSamePageId)
 
         DB::Page page0 = page_storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
@@ -907,7 +896,6 @@ TEST_F(PageStorageTest, WriteReadOnSamePageId)
 
         DB::Page page0 = page_storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(0x01));
@@ -945,7 +933,6 @@ try
     {
         DB::Page page0 = page_storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), page0_byte);
@@ -953,7 +940,6 @@ try
 
         DB::Page page1 = page_storage->read(pid);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, pid);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(num_repeat % 0xff));
@@ -965,7 +951,6 @@ try
     {
         DB::Page page0 = page_storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
-        ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), page0_byte);
@@ -973,7 +958,6 @@ try
 
         DB::Page page1 = page_storage->read(pid);
         ASSERT_EQ(page1.data.size(), buf_sz);
-        ASSERT_EQ(page1.page_id, pid);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(num_repeat % 0xff));
@@ -1076,7 +1060,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const DB::Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](PageId, const DB::Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 0);
     }
 
@@ -1105,7 +1089,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](PageId, const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
         auto page1 = page_storage->read(1);
@@ -1151,7 +1135,7 @@ try
     FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](PageId, const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 0);
     }
 
@@ -1180,7 +1164,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](PageId, const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
         auto page1 = page_storage->read(1);

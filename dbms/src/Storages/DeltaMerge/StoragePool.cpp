@@ -674,22 +674,23 @@ bool StoragePool::doV2Gc(const Settings & settings)
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
-    if (run_mode == PageStorageRunMode::ONLY_V3)
-        return false;
-
+    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
-        std::lock_guard lock(mutex);
-        // Just do gc for owned storage, otherwise the gc will be handled globally
+        {
+            std::lock_guard lock(mutex);
+            // Just do gc for owned storage, otherwise the gc will be handled globally
 
-        Timepoint now = Clock::now();
-        if (now < (last_try_gc_time.load() + try_gc_period))
-            return false;
+            Timepoint now = Clock::now();
+            if (now < (last_try_gc_time.load() + try_gc_period))
+                return false;
 
-        last_try_gc_time = now;
+            last_try_gc_time = now;
+        }
+
+        // Only do the v2 GC
+        return doV2Gc(settings);
     }
-
-    // Only do the v2 GC
-    return doV2Gc(settings);
+    return false;
 }
 
 void StoragePool::shutdown()
