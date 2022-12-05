@@ -1668,6 +1668,9 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
+    if (rows == 0)
+        return;
+
     size_t process_rows = probe_process_info_ptr->end_row - probe_process_info_ptr->start_row + 1;
 
     /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
@@ -1691,27 +1694,21 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, *offsets_to_replicate);
         }
 
-        if (rows != 0)
+        if (isLeftSemiFamily(kind))
         {
-            if (isLeftSemiFamily(kind))
-            {
-                const auto helper_pos = block.getPositionByName(match_helper_name);
-                auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
-                new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
-                block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
-            }
+            const auto helper_pos = block.getPositionByName(match_helper_name);
+            auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
+            new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
+            block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
+        }
 
-            if (rows != process_rows)
-            {
-                offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
-            }
+        if (rows != process_rows)
+        {
+            offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
         }
     }
 
-    if (rows != 0)
-    {
-        resetProcessRowRange(probe_process_info_ptr);
-    }
+    resetProcessRowRange(probe_process_info_ptr);
 
     /// handle other conditions
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())

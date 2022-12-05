@@ -329,7 +329,7 @@ ColumnPtr ColumnFixedString::replicate(size_t start_row, size_t end_row, const I
     if (col_rows != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(start_row > end_row, start_row, end_row);
+    RUNTIME_CHECK(start_row <= end_row, start_row, end_row);
     RUNTIME_CHECK(end_row < col_rows, end_row, col_rows);
 
     auto res = ColumnFixedString::create(n);
