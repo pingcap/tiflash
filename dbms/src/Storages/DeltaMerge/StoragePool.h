@@ -198,6 +198,8 @@ private:
     PageStoragePtr data_storage_v3;
     PageStoragePtr meta_storage_v3;
 
+    UniversalPageStoragePtr uni_ps;
+
     PageReaderPtr log_storage_reader;
     PageReaderPtr data_storage_reader;
     PageReaderPtr meta_storage_reader;

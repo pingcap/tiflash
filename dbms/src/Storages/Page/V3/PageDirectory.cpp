@@ -1299,6 +1299,29 @@ typename Trait::PageIdSet PageDirectory<Trait>::getRangePageIds(const typename T
 }
 
 template <typename Trait>
+typename Trait::PageIdSet PageDirectory<Trait>::getPageIdsWithPrefix(const typename Trait::PageId & /*prefix*/)
+{
+    throw Exception("not implemented", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+template <>
+typename universal::PageDirectoryTrait::PageIdSet PageDirectory<universal::PageDirectoryTrait>::getPageIdsWithPrefix(const typename universal::PageDirectoryTrait::PageId & prefix)
+{
+    typename universal::PageDirectoryTrait::PageIdSet page_ids;
+
+    std::shared_lock read_lock(table_rw_mutex);
+    for (auto iter = mvcc_table_directory.lower_bound(prefix);
+         iter != mvcc_table_directory.end();
+         ++iter)
+    {
+        if (iter->first.rfind(prefix, 0) != 0)
+            break;
+        page_ids.insert(iter->first);
+    }
+    return page_ids;
+}
+
+template <typename Trait>
 void PageDirectory<Trait>::applyRefEditRecord(
     MVCCMapType & mvcc_table_directory,
     const VersionedPageEntriesPtr & version_list,

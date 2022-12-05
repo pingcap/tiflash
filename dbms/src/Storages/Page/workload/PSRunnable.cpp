@@ -21,7 +21,6 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
-#include <Storages/Page/UniversalPage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/workload/PSRunnable.h>
@@ -291,7 +290,7 @@ bool PSReader::runImpl()
     }
     else
     {
-        auto handler = [&](const PageId &, const UniversalPage & page) {
+        auto handler = [&](const PageId &, const Page & page) {
             if (heavy_read_delay_ms > 0)
                 usleep(heavy_read_delay_ms * 1000);
             ++pages_used;

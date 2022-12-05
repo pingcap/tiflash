@@ -70,7 +70,7 @@ public:
 
     Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
+    void traverseImpl(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 

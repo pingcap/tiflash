@@ -1591,6 +1591,11 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
         shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
         return;
     }
+    case PageFormat::V4:
+    {
+        shared->storage_run_mode = PageStorageRunMode::UNI_PS;
+        return;
+    }
     default:
         throw Exception(fmt::format("Can't detect the format version of Page [page_version={}]", storage_page_format_version),
                         ErrorCodes::LOGICAL_ERROR);

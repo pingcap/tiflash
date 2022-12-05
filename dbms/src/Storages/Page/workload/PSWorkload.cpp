@@ -137,7 +137,8 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
     if (ps)
     {
         ps->restore();
-        ps->traverse([&num_of_pages](const DB::Page &) {
+        ps->traverse([&num_of_pages](PageId page_id, const DB::Page &) {
+            UNUSED(page_id);
             num_of_pages++;
         });
         LOG_INFO(StressEnv::logger, "Recover {} pages.", num_of_pages);

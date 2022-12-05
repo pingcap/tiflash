@@ -200,9 +200,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
         PageMap page_map = blob_store.read(page_entries, read_limiter);
         for (const auto & page_id_not_found : page_ids_not_found)
         {
-            Page page_not_found;
-            page_not_found.page_id = INVALID_PAGE_ID;
-            page_map[page_id_not_found.low] = page_not_found;
+            page_map[page_id_not_found.low] = Page::invalidPage();
         }
         return page_map;
     }
@@ -238,9 +236,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
     PageMap page_map = blob_store.read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
-        Page page_not_found;
-        page_not_found.page_id = INVALID_PAGE_ID;
-        page_map[page_id_not_found] = page_not_found;
+        page_map[page_id_not_found] = Page::invalidPage();
     }
     return page_map;
 }
@@ -250,7 +246,7 @@ Page PageStorageImpl::readImpl(NamespaceId /*ns_id*/, const PageReadFields & /*p
     throw Exception("Not support read single filed on V3", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorageImpl::traverseImpl(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -262,7 +258,7 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
     for (const auto & valid_page : page_ids)
     {
         const auto & page_id_and_entry = page_directory->getByID(valid_page, snapshot);
-        acceptor(blob_store.read(page_id_and_entry));
+        acceptor(u128::ExternalIdTrait::getU64ID(page_id_and_entry.first), blob_store.read(page_id_and_entry));
     }
 }
 

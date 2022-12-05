@@ -1091,8 +1091,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
 
     /// PageStorage run mode has been determined above
-    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+//    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+//    LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     ///
     global_context->initializeGlobalUniversalPageStorage(global_context->getPathPool(), global_context->getFileProvider());
