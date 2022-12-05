@@ -1380,7 +1380,7 @@ void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::C
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config, isDisaggregatedComputeMode());
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
 }
 
 void Context::initializePathCapacityMetric( //

@@ -83,8 +83,7 @@ public:
 
     explicit TMTContext(Context & context_,
             const TiFlashRaftConfig & raft_config,
-            const pingcap::ClusterConfig & cluster_config_,
-            bool disaggregated_compute_node_);
+            const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
 
