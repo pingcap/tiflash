@@ -39,12 +39,10 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
     case ColumnFamilyType::Write:
     {
         cf_data_size += write_cf.insert(std::move(key), std::move(value));
-        LOG_INFO(&Poco::Logger::get("!!! X"), "!!!! type Write {}", write_cf.getSize());
         return;
     }
     case ColumnFamilyType::Default:
     {
-        LOG_INFO(&Poco::Logger::get("!!! X"), "!!!! type Default {}", default_cf.getSize());
         cf_data_size += default_cf.insert(std::move(key), std::move(value));
         return;
     }

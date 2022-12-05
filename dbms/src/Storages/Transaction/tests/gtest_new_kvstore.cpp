@@ -183,9 +183,6 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
                 auto strKey = Redact::debugStringToKey(k.data(), k.size());
                 auto strVal = Redact::debugStringToKey(v.data(), v.size());
 
-                auto [index1, term1] = proxy_instance->rawWrite(region_id, {RecordKVFormat::genKey(table_id, 33, 1)}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index1);
-                UNUSED(term1);
                 auto [index, term] = proxy_instance->rawWrite(region_id, {strKey}, {strVal}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
                 EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
                 UNUSED(term);
