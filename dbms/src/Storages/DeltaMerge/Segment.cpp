@@ -2297,31 +2297,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         size_t expected_block_size)
 {
     auto & segment_snap = bitmap_filter->snapshot();
-    // TODO: Scanning the filter and determine which block to read instead of read block and filter.
-    /*const auto & dmfiles = segment_snap->stable_snap->getDMFiles();
-    std::vector<IdSetPtr> idsets;
-    idsets.reserve(dmfiles.size());
-    size_t start_offset_in_bitmap = 0;
-    for (size_t i = 0; i < dmfiles.size(); i++)
-    {
-        const auto & dmfile = dmfiles[i];
-        const auto & pack_stats  = dmfile->getPackStats();
-        auto read_packs = std::make_shared<IdSet>{};
-        auto offset = start_offset_in_bitmap;
-        for (size_t pack_id = 0; pack_id < pack_stats.size(); pack_id++)
-        {
-            auto limit = pack_stats[pack_id].rows;
-            if (filter->test(offset, limit))
-            {
-                read_packs->insert(pack_id);
-            }
-            offset += limit;
-        }
-        idsets.push_back(read_packs);
-    }*/
-
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
-    auto is_fast_scan = true;
+    constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
