@@ -56,7 +56,6 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
 
-    const NamesAndTypes * storage_schema = nullptr;
     if (context.isDisaggregatedComputeMode())
     {
         DisaggregatedTiFlashTableScanInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);

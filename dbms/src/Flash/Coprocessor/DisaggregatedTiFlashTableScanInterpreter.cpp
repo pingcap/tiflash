@@ -82,11 +82,13 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
     return batch_cop_tasks;
 }
 
-std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
+DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs DisaggregatedTiFlashTableScanInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request;
 
+    // For error handling, need to record region_ids and store_id to invalidate cache.
+    std::vector<pingcap::kv::RegionVerID> region_ids;
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
     dispatch_req_meta->set_start_ts(sender_target_task_start_ts);
@@ -103,6 +105,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
         // For non-partition table.
         for (const auto & region_info : batch_cop_task.region_infos)
         {
+            region_ids.push_back(region_info.region_id);
             auto * region = dispatch_req->add_regions();
             region->set_region_id(region_info.region_id.id);
             region->mutable_region_epoch()->set_version(region_info.region_id.ver);
@@ -123,6 +126,7 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
             auto * region = req_table_region->add_regions();
             for (const auto & region_info : table_region.region_infos)
             {
+                region_ids.push_back(region_info.region_id);
                 region->set_region_id(region_info.region_id.id);
                 region->mutable_region_epoch()->set_version(region_info.region_id.ver);
                 region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
@@ -167,39 +171,78 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
     dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
-    return dispatch_req;
+    return DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
-std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> DisaggregatedTiFlashTableScanInterpreter::buildAndDispatchMPPTaskRequests()
+std::vector<DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs>
+DisaggregatedTiFlashTableScanInterpreter::buildAndDispatchMPPTaskRequests()
 {
     auto batch_cop_tasks = buildBatchCopTasks();
-    std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> dispatch_reqs;
+    std::vector<RequestAndRegionIDs> dispatch_reqs;
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
         dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
 
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
-    for (const auto & dispatch_req : dispatch_reqs)
+    for (const RequestAndRegionIDs & dispatch_req : dispatch_reqs)
     {
-        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", dispatch_req->DebugString());
+        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [dispatch_req, this] {
-                pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(dispatch_req);
-                this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(dispatch_req->meta().address(), rpc_call, /*timeout=*/60);
+                // When send req succeed or backoff timeout, need_retry is false.
+                bool need_retry = true;
+                pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
+                while (need_retry)
+                {
+                    try
+                    {
+                        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
+                        this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
+                        need_retry = false;
+                    }
+                    catch (...)
+                    {
+                        std::string local_err_msg = getCurrentExceptionMessage(true);
+                        try
+                        {
+                            bo.backoff(pingcap::kv::boTiFlashRPC, pingcap::Exception(local_err_msg));
+                        }
+                        catch (...)
+                        {
+                            need_retry = false;
+                            this->setGRPCErrorMsg(local_err_msg);
+                            pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+                            cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
+                        }
+                    }
+                }
         });
     }
 
     thread_manager->wait();
+
+    // No need to lock, because all concurrent threads are done.
+    if (!err_msg.empty())
+        throw Exception(err_msg);
     return dispatch_reqs;
 }
 
-void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
-        const std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> & dispatch_reqs, DAGPipeline & pipeline)
+void DisaggregatedTiFlashTableScanInterpreter::setGRPCErrorMsg(const std::string & err)
+{
+    std::lock_guard<std::mutex> lock(err_msg_mu);
+    // Only record first err_msg.
+    if (err_msg.empty())
+    {
+        err_msg = err;
+    }
+}
+
+void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, DAGPipeline & pipeline)
 {
     tipb::ExchangeReceiver receiver;
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     for (const auto & dispatch_req : dispatch_reqs)
     {
-        const ::mpp::TaskMeta & sender_task_meta = dispatch_req->meta();
+        const ::mpp::TaskMeta & sender_task_meta = std::get<0>(dispatch_req)->meta();
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
     }
 

@@ -54,9 +54,11 @@ public:
     void execute(DAGPipeline & pipeline);
 
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
-    std::shared_ptr<mpp::DispatchTaskRequest> buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> buildAndDispatchMPPTaskRequests();
-    void buildReceiverStreams(const std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> & dispatch_reqs, DAGPipeline & pipeline);
+
+    using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+    RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+    std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests();
+    void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, DAGPipeline & pipeline);
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
@@ -64,6 +66,7 @@ private:
     void buildRemoteRequests();
     void buildAnalyzer();
     void pushDownFilter(DAGPipeline & pipeline);
+    void setGRPCErrorMsg(const std::string & err);
 
     Context & context;
     const TiDBTableScan & table_scan;
@@ -72,6 +75,8 @@ private:
     LoggerPtr log;
     uint64_t sender_target_task_start_ts;
     int64_t sender_target_task_task_id;
+    std::mutex err_msg_mu;
+    std::string err_msg;
 
     std::vector<RemoteRequest> remote_requests;
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
