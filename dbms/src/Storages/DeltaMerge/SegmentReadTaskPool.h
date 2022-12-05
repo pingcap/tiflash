@@ -185,18 +185,7 @@ public:
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
-    {
-        if (read_mode == ReadMode::Normal && enable_read_thread_ && // keep_order is not required.
-            dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter)
-        {
-            read_mode = ReadMode::Bitmap;
-        }
-        /* For test
-        if (read_mode == ReadMode::Fast)
-        {
-            read_mode = ReadMode::Bitmap;
-        }*/
-    }
+    {}
 
     ~SegmentReadTaskPool()
     {
@@ -257,6 +246,7 @@ private:
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
+    ReadMode readModeOfSegment(SegmentReadTaskPtr & t);
 
     const uint64_t pool_id;
     const int64_t table_id;
@@ -265,7 +255,7 @@ private:
     RSOperatorPtr filter;
     const uint64_t max_version;
     const size_t expected_block_size;
-    ReadMode read_mode;
+    const ReadMode read_mode;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     std::mutex mutex;

@@ -596,6 +596,31 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
     }
 }
 
+bool Segment::useCleanRead(const SegmentSnapshotPtr & segment_snap,
+                           const ColumnDefines & columns_to_read)
+{
+    return segment_snap->delta->getRows() == 0 //
+        && segment_snap->delta->getDeletes() == 0 //
+        && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
+        && !hasColumn(columns_to_read, VERSION_COLUMN_ID) //
+        && !hasColumn(columns_to_read, TAG_COLUMN_ID);
+}
+
+bool Segment::useBitmapFilter(const DMContext & dm_context,
+                              const SegmentSnapshotPtr & segment_snap,
+                              const ColumnDefines & columns_to_read)
+{
+    if (!dm_context.db_context.getSettingsRef().dt_enable_bitmap_filter)
+    {
+        return false;
+    }
+    if (dm_context.read_delta_only || dm_context.read_stable_only)
+    {
+        return false;
+    }
+    return !useCleanRead(segment_snap, columns_to_read);
+}
+
 BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_context,
                                                       const ColumnDefines & columns_to_read,
                                                       const SegmentSnapshotPtr & segment_snap,
@@ -636,10 +661,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
             expected_block_size,
             false);
     }
-    else if (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0 //
-             && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
-             && !hasColumn(columns_to_read, VERSION_COLUMN_ID) //
-             && !hasColumn(columns_to_read, TAG_COLUMN_ID))
+    else if (useCleanRead(segment_snap, columns_to_read))
     {
         // No delta, let's try some optimizations.
         use_clean_read = true;
