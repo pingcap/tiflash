@@ -13,7 +13,38 @@
 // limitations under the License.
 #pragma once
 
+#include <IO/Endian.h>
+#include <IO/WriteBuffer.h>
 #include <Storages/Page/PageDefines.h>
+
+namespace DB
+{
+struct UniversalPageIdFormat
+{
+    static inline UInt64 encodeUInt64(const UInt64 x)
+    {
+        return toBigEndian(x);
+    }
+
+    static inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
+    {
+        auto u = UniversalPageIdFormat::encodeUInt64(x);
+        ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
+    }
+
+    template <typename T>
+    static inline T read(const char * s)
+    {
+        return *(reinterpret_cast<const T *>(s));
+    }
+
+    static inline UInt64 decodeUInt64(const char * s)
+    {
+        auto v = read<UInt64>(s);
+        return toBigEndian(v);
+    }
+};
+}
 
 namespace DB::PS::V3
 {
@@ -37,6 +68,10 @@ struct ExternalIdTrait
     {
         return page_id.high;
     }
+    static inline U64PageId getPageMapKey(const PageId & page_id)
+    {
+        return page_id.low;
+    }
 };
 } // namespace u128
 namespace universal
@@ -51,15 +86,18 @@ struct ExternalIdTrait
     {
         return "";
     }
-    static inline U64PageId getU64ID(const PageId & /*page_id*/)
+    static inline U64PageId getU64ID(const PageId & page_id)
     {
-        // FIXME: we need to ignore some page_id with prefix
-        return 0;
+        // FIXME: ignore page_id without table prefix
+        return DB::UniversalPageIdFormat::decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
     }
-    static inline Prefix getPrefix(const PageId & /*page_id*/)
+    static inline Prefix getPrefix(const PageId & page_id)
     {
-        // FIXME
-        return "";
+        return page_id.substr(0, page_id.size() - sizeof(UInt64));
+    }
+    static inline PageId getPageMapKey(const PageId & page_id)
+    {
+        return page_id;
     }
 };
 } // namespace universal

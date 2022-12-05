@@ -779,7 +779,7 @@ Page PageStorage::readImpl(NamespaceId /*ns_id*/, const PageReadFields & page_fi
     return file_reader->read(field_info, read_limiter);
 }
 
-void PageStorage::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorage::traverseImpl(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -805,7 +805,7 @@ void PageStorage::traverseImpl(const std::function<void(const DB::Page & page)> 
         auto pages = readImpl(MAX_NAMESPACE_ID, p.second, nullptr, snapshot, true);
         for (const auto & id_page : pages)
         {
-            acceptor(id_page.second);
+            acceptor(id_page.first, id_page.second);
         }
     }
 }

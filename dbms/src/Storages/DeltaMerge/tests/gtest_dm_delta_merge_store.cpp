@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -102,12 +103,19 @@ try
     ASSERT_NE(store, nullptr);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalUniversalPageStorage();
 
     // Start a PageStorage gc and suspend it before clean external page
     auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
     auto th_gc = std::async([&]() {
         if (global_page_storage)
+        {
             global_page_storage->gc();
+        }
+        else if (global_uni_page_storage)
+        {
+            global_uni_page_storage->gc();
+        }
     });
     sp_gc.waitAndPause();
 
@@ -134,12 +142,19 @@ try
     ASSERT_NE(store, nullptr);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalUniversalPageStorage();
 
     // Start a PageStorage gc and suspend it before removing dtfiles
     auto sp_gc = SyncPointCtl::enableInScope("before_DeltaMergeStore::callbacks_remover_remove");
     auto th_gc = std::async([&]() {
         if (global_page_storage)
+        {
             global_page_storage->gc();
+        }
+        else if (global_uni_page_storage)
+        {
+            global_uni_page_storage->gc();
+        }
     });
     sp_gc.waitAndPause();
 
@@ -166,12 +181,19 @@ try
     ASSERT_NE(store, nullptr);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalUniversalPageStorage();
 
     // Start a PageStorage gc and suspend it before clean external page
     auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
     auto th_gc = std::async([&]() {
         if (global_page_storage)
+        {
             global_page_storage->gc();
+        }
+        else if (global_uni_page_storage)
+        {
+            global_uni_page_storage->gc();
+        }
     });
     sp_gc.waitAndPause();
 

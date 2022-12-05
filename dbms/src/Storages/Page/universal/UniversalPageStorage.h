@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Stopwatch.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Config.h>
@@ -21,11 +22,10 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
-#include <Storages/Page/UniversalPage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
 #include <common/defines.h>
 
 namespace DB
@@ -46,6 +46,23 @@ class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 class KVStoreReader;
+
+using UniversalPages = std::vector<UniversalPageId>;
+using UniversalPageMap = std::map<UniversalPageId, Page>;
+
+struct UniversalExternalPageCallbacks
+{
+    // `scanner` for scanning available external page ids on disks.
+    // `remover` will be called with living normal page ids after gc run a round, user should remove those
+    //           external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
+    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
+    using ExternalPagesScanner = std::function<PathAndIdsVec()>;
+    using ExternalPagesRemover
+        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageId> & valid_normal_pages)>;
+    ExternalPagesScanner scanner = nullptr;
+    ExternalPagesRemover remover = nullptr;
+    String prefix;
+};
 
 class UniversalPageStorage final
 {
@@ -132,44 +149,28 @@ public:
 
     void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
 
-    UniversalPageMap read(const UniversalPageId & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
-    {
-        UNUSED(page_ids, read_limiter, snapshot);
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
-    }
+    Page read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
+
+    UniversalPageMap read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<UniversalPageId, FieldIndices>;
 
-    UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
-    {
-        UNUSED(page_fields, read_limiter, snapshot);
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
-    }
+    UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
 
-    UniversalPage read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
-    {
-        UNUSED(page_field, read_limiter, snapshot);
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
-    }
+    Page read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
+
+    UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
+
+    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
+
+    PageId getMaxId() const;
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr)
-    {
-        std::ignore = not_skip;
-        // If another thread is running gc, just return;
-        bool v = false;
-        if (!gc_is_running.compare_exchange_strong(v, true))
-            return false;
-
-        const GCTimeStatistics statistics = doGC(write_limiter, read_limiter);
-        assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
-        LOG_DEBUG(log, statistics.toLogging());
-
-        return statistics.executeNextImmediately();
-    }
+    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
     GCTimeStatistics doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
+    void cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics);
 
     bool isEmpty() const
     {
@@ -178,8 +179,8 @@ public:
 
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
-    void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) { UNUSED(callbacks); }
-    void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/) {}
+    void registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks);
+    void unregisterUniversalExternalPagesCallbacks(const String & prefix);
 
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
@@ -190,6 +191,11 @@ public:
     PS::V3::universal::BlobStorePtr blob_store;
 
     std::atomic<bool> gc_is_running = false;
+
+    std::mutex callbacks_mutex;
+    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
+    using UniversalExternalPageCallbacksContainer = std::map<String, std::shared_ptr<UniversalExternalPageCallbacks>>;
+    UniversalExternalPageCallbacksContainer callbacks_container;
 
     LoggerPtr log;
 };
@@ -204,7 +210,15 @@ public:
     static UniversalPageId toFullPageId(PageId page_id)
     {
         // TODO: Does it need to be mem comparable?
-        return fmt::format("k_{}", page_id);
+        WriteBufferFromOwnString buff;
+        writeString("k_", buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
+        return buff.releaseStr();
+    }
+
+    static PageId parseRegionId(const UniversalPageId & u_id)
+    {
+        return UniversalPageIdFormat::decodeUInt64(u_id.data() + u_id.size() - sizeof(PageId));
     }
 
     bool isAppliedIndexExceed(PageId page_id, UInt64 applied_index)
@@ -216,7 +230,7 @@ public:
         return (entry.isValid() && entry.tag > applied_index);
     }
 
-    void read(const PageIds & /*page_ids*/, std::function<void(const PageId &, const UniversalPage &)> /*handler*/) const
+    void read(const PageIds & /*page_ids*/, std::function<void(const PageId &, const Page &)> /*handler*/) const
     {
         // UniversalPageIds uni_page_ids;
         // uni_page_ids.reserve(page_ids.size());
@@ -228,15 +242,23 @@ public:
         throw Exception("Not implemented");
     }
 
-    void traverse(const std::function<void(const DB::UniversalPage & page)> & /*acceptor*/)
+    void traverse(const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor)
     {
         // Only traverse pages with id prefix
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+        auto snapshot = uni_storage.getSnapshot("scan_region_persister");
+        // FIXME: use a better end
+        const auto page_ids = uni_storage.page_directory->getRangePageIds("k_", "l_");
+        for (const auto & page_id : page_ids)
+        {
+            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
+            acceptor(parseRegionId(page_id), uni_storage.blob_store->read(page_id_and_entry));
+        }
     }
 
 private:
     UniversalPageStorage & uni_storage;
 };
+using KVStoreReaderPtr = std::shared_ptr<KVStoreReader>;
 
 class RaftLogReader final
 {
@@ -250,15 +272,15 @@ public:
         // TODO: Does it need to be mem comparable?
         WriteBufferFromOwnString buff;
         writeString("r_", buff);
-        RecordKVFormat::encodeUInt64(ns_id, buff);
+        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
         writeString("_", buff);
-        RecordKVFormat::encodeUInt64(page_id, buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
         return buff.releaseStr();
         // return fmt::format("r_{}_{}", ns_id, page_id);
     }
 
     // scan the pages between [start, end)
-    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const DB::UniversalPage & page)> & acceptor)
+    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor)
     {
         // always traverse with the latest snapshot
         auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
@@ -266,23 +288,11 @@ public:
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
+            acceptor(DB::PS::V3::universal::ExternalIdTrait::getU64ID(page_id), uni_storage.blob_store->read(page_id_and_entry));
         }
     }
 
-    void traverse2(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::UniversalPage page)> & acceptor)
-    {
-        // always traverse with the latest snapshot
-        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
-        const auto page_ids = uni_storage.page_directory->getRangePageIds(start, end);
-        for (const auto & page_id : page_ids)
-        {
-            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
-        }
-    }
-
-    UniversalPage read(const UniversalPageId & page_id)
+    Page read(const UniversalPageId & page_id)
     {
         // always traverse with the latest snapshot
         auto snapshot = uni_storage.getSnapshot(fmt::format("read_{}", page_id));
@@ -293,7 +303,7 @@ public:
         }
         else
         {
-            return UniversalPage({});
+            return DB::Page::invalidPage();
         }
     }
 
@@ -304,6 +314,63 @@ public:
 
 private:
     UniversalPageStorage & uni_storage;
+};
+
+class StorageReader final
+{
+public:
+    explicit StorageReader(UniversalPageStorage & storage, const String & prefix_, NamespaceId ns_id_)
+        : uni_storage(storage)
+        , prefix(prefix_)
+        , ns_id(ns_id_)
+    {
+    }
+
+    UniversalPageId toPrefix() const
+    {
+        WriteBufferFromOwnString buff;
+        writeString(prefix, buff);
+        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        writeString("_", buff);
+        return buff.releaseStr();
+    }
+
+    UniversalPageId toFullPageId(PageId page_id) const
+    {
+        return buildTableUniversalPageId(prefix, ns_id, page_id);
+    }
+
+    UniversalPageIds toFullPageIds(PageIds page_ids) const
+    {
+        UniversalPageIds us_page_ids;
+        for (const auto page_id : page_ids)
+        {
+            us_page_ids.push_back(toFullPageId(page_id));
+        }
+        return us_page_ids;
+    }
+
+    static PageId parsePageId(const UniversalPageId & u_id)
+    {
+        return DB::PS::V3::universal::ExternalIdTrait::getU64ID(u_id);
+    }
+
+    void traverse(const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor) const
+    {
+        // always traverse with the latest snapshot
+        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_{}_{}", prefix, ns_id));
+        const auto page_ids = uni_storage.page_directory->getPageIdsWithPrefix(toPrefix());
+        for (const auto & page_id : page_ids)
+        {
+            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
+            acceptor(parsePageId(page_id_and_entry.first), uni_storage.blob_store->read(page_id_and_entry));
+        }
+    }
+
+private:
+    UniversalPageStorage & uni_storage;
+    String prefix;
+    NamespaceId ns_id;
 };
 
 } // namespace DB

@@ -52,30 +52,29 @@ struct FieldOffsetInsidePage
 struct Page
 {
 public:
-    // only take the low u64, ignoring the high u64(NamespaceId)
-    explicit Page(const PageIdV3Internal & page_id_v3_)
-        : page_id(page_id_v3_.low)
+    static Page invalidPage()
     {
+        Page page;
+        page.is_valid = false;
+        return page;
     }
 
-    Page()
-        : page_id(INVALID_PAGE_ID)
-    {}
-
-    PageId page_id;
     ByteBuffer data;
     MemHolder mem_holder;
     // Field offsets inside this page.
     std::set<FieldOffsetInsidePage> field_offsets;
 
+private:
+    bool is_valid = true;
+
 public:
-    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
+    inline bool isValid() const { return is_valid; }
 
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
+            throw Exception(fmt::format("Try to getFieldData with invalid field index [field_index={}] is_valid={} field_offsets.size()={}", index, is_valid, field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
 
         PageFieldOffset beg = iter->offset;

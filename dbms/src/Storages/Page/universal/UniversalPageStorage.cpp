@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -56,6 +57,165 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
     auto edit = blob_store->write(write_batch, write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
 }
+
+Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
+    return blob_store->read(page_entry, read_limiter);
+}
+
+UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    if (throw_on_not_exist)
+    {
+        auto page_entries = page_directory->getByIDs(page_ids, snapshot);
+        return blob_store->read(page_entries, read_limiter);
+    }
+    else
+    {
+        auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_ids, snapshot);
+        UniversalPageMap page_map = blob_store->read(page_entries, read_limiter);
+        for (const auto & page_id_not_found : page_ids_not_found)
+        {
+            page_map[page_id_not_found] = Page::invalidPage();
+        }
+        return page_map;
+    }
+}
+
+UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    // get the entries from directory, keep track
+    // for not found page_ids
+    UniversalPageIds page_ids_not_found;
+    PS::V3::universal::BlobStoreTrait::FieldReadInfos read_infos;
+    for (const auto & [page_id, field_indices] : page_fields)
+    {
+        const auto & [id, entry] = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
+
+        if (entry.isValid())
+        {
+            auto info = PS::V3::universal::BlobStoreTrait::FieldReadInfo(page_id, entry, field_indices);
+            read_infos.emplace_back(info);
+        }
+        else
+        {
+            page_ids_not_found.emplace_back(id);
+        }
+    }
+
+    // read page data from blob_store
+    UniversalPageMap page_map = blob_store->read(read_infos, read_limiter);
+    for (const auto & page_id_not_found : page_ids_not_found)
+    {
+        page_map[page_id_not_found] = Page::invalidPage();
+    }
+    return page_map;
+}
+
+Page UniversalPageStorage::read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+{
+    UNUSED(page_field, read_limiter, snapshot, throw_on_not_exist);
+    throw Exception("Not support read single filed on Universal", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    return page_directory->getNormalPageId(page_id, snapshot, throw_on_not_exist);
+}
+
+DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    try
+    {
+        const auto & [id, entry] = page_directory->getByIDOrNull(page_id, snapshot);
+        (void)id;
+        PageEntry entry_ret;
+        entry_ret.file_id = entry.file_id;
+        entry_ret.offset = entry.offset;
+        entry_ret.tag = entry.tag;
+        entry_ret.size = entry.size;
+        entry_ret.field_offsets = entry.field_offsets;
+        entry_ret.checksum = entry.checksum;
+
+        return entry_ret;
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_WARNING(log, "{}", e.message());
+        return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
+    }
+}
+
+PageId UniversalPageStorage::getMaxId() const
+{
+    return page_directory->getMaxId();
+}
+
+bool UniversalPageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+{
+    std::ignore = not_skip;
+    // If another thread is running gc, just return;
+    bool v = false;
+    if (!gc_is_running.compare_exchange_strong(v, true))
+        return false;
+
+    const GCTimeStatistics statistics = doGC(write_limiter, read_limiter);
+    assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
+    LOG_DEBUG(log, statistics.toLogging());
+
+    return statistics.executeNextImmediately();
+}
+
+void UniversalPageStorage::registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks)
+{
+    std::scoped_lock lock{callbacks_mutex};
+    assert(callbacks.scanner != nullptr);
+    assert(callbacks.remover != nullptr);
+    assert(!callbacks.prefix.empty());
+    // NamespaceId(TableID) should not be reuse
+    RUNTIME_CHECK_MSG(
+        callbacks_container.count(callbacks.prefix) == 0,
+        "Try to create callbacks for duplicated namespace id {}",
+        callbacks.prefix);
+    // `emplace` won't invalid other iterator
+    callbacks_container.emplace(callbacks.prefix, std::make_shared<UniversalExternalPageCallbacks>(callbacks));
+}
+void UniversalPageStorage::unregisterUniversalExternalPagesCallbacks(const String & prefix)
+{
+    {
+        std::scoped_lock lock{callbacks_mutex};
+        callbacks_container.erase(prefix);
+    }
+    // clean all external ids ptrs
+    page_directory->unregisterNamespace(prefix);
+}
+
 
 String UniversalPageStorage::GCTimeStatistics::toLogging() const
 {
@@ -102,6 +262,61 @@ String UniversalPageStorage::GCTimeStatistics::toLogging() const
                        get_external_msg());
 }
 
+// Remove external pages for all tables
+// TODO: `clean_external_page` for all tables may slow down the whole gc process when there are lots of table.
+void UniversalPageStorage::cleanExternalPage(Stopwatch & /* gc_watch */, GCTimeStatistics & statistics)
+{
+    // Fine grained lock on `callbacks_mutex`.
+    // So that adding/removing a storage will not be blocked for the whole
+    // processing time of `cleanExternalPage`.
+    std::shared_ptr<UniversalExternalPageCallbacks> ns_callbacks;
+    {
+        std::scoped_lock lock{callbacks_mutex};
+        // check and get the begin iter
+        statistics.num_external_callbacks = callbacks_container.size();
+        auto iter = callbacks_container.begin();
+        if (iter == callbacks_container.end()) // empty
+        {
+            return;
+        }
+
+        assert(iter != callbacks_container.end()); // early exit in the previous code
+        // keep the shared_ptr so that erasing ns_id from PageStorage won't invalid the `ns_callbacks`
+        ns_callbacks = iter->second;
+    }
+
+    Stopwatch external_watch;
+    SYNC_FOR("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+
+    while (true)
+    {
+        // 1. Note that we must call `scanner` before `getAliveExternalIds`.
+        // Or some committed external ids is not included in `alive_ids`
+        // but exist in `pending_external_pages`. They will be removed by
+        // accident with `remover` under this situation.
+        // 2. Assume calling the callbacks after erasing ns_is is safe.
+
+        // the external pages on disks.
+        auto pending_external_pages = ns_callbacks->scanner();
+        statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
+        auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->prefix);
+        statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
+        // remove the external pages that is not alive now.
+        ns_callbacks->remover(pending_external_pages, alive_external_ids);
+        statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
+
+        // move to next namespace callbacks
+        {
+            std::scoped_lock lock{callbacks_mutex};
+            // next ns_id that is greater than `ns_id`
+            auto iter = callbacks_container.upper_bound(ns_callbacks->prefix);
+            if (iter == callbacks_container.end())
+                break;
+            ns_callbacks = iter->second;
+        }
+    }
+}
+
 UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     Stopwatch gc_watch;
@@ -137,6 +352,7 @@ UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLim
     statistics.blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_ids_need_gc.empty())
     {
+        cleanExternalPage(gc_watch, statistics);
         statistics.stage = GCStageType::OnlyInMem;
         statistics.total_cost_ms = gc_watch.elapsedMilliseconds();
         return statistics;
@@ -151,6 +367,7 @@ UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLim
     statistics.full_gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_gc_info.empty())
     {
+        cleanExternalPage(gc_watch, statistics);
         statistics.stage = GCStageType::FullGCNothingMoved;
         statistics.total_cost_ms = gc_watch.elapsedMilliseconds();
         return statistics;
@@ -173,6 +390,7 @@ UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLim
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
+    cleanExternalPage(gc_watch, statistics);
     statistics.stage = GCStageType::FullGC;
     statistics.total_cost_ms = gc_watch.elapsedMilliseconds();
     return statistics;

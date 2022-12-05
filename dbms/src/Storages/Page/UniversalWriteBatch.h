@@ -18,6 +18,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
 
 #include <vector>
 
@@ -27,6 +28,25 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+inline UniversalPageId buildTableUniversalPageId(const String & prefix, NamespaceId ns_id, PageId id)
+{
+    WriteBufferFromOwnString buff;
+    writeString(prefix, buff);
+    UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+    writeString("_", buff);
+    UniversalPageIdFormat::encodeUInt64(id, buff);
+    return buff.releaseStr();
+}
+
+inline UniversalPageId buildTableUniversalPrefix(const String & prefix, NamespaceId ns_id)
+{
+    WriteBufferFromOwnString buff;
+    writeString(prefix, buff);
+    UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+    writeString("_", buff);
+    return buff.releaseStr();
+}
 
 class UniversalWriteBatch : private boost::noncopyable
 {
@@ -57,6 +77,36 @@ private:
 
 public:
     UniversalWriteBatch() = default;
+
+    UniversalWriteBatch(UniversalWriteBatch && rhs)
+        : writes(std::move(rhs.writes))
+        , total_data_size(rhs.total_data_size)
+    {}
+
+    static UniversalWriteBatch fromWriteBatch(const String & prefix, WriteBatch && batch)
+    {
+        UniversalWriteBatch us_batch;
+        const auto & writes = batch.getWrites();
+        auto & us_writes = us_batch.getWrites();
+        auto ns_id = batch.getNamespaceId();
+        for (const auto & w : writes)
+        {
+            us_writes.push_back(Write{
+                .type = w.type,
+                .page_id = buildTableUniversalPageId(prefix, ns_id, w.page_id),
+                .tag = w.tag,
+                .read_buffer = w.read_buffer,
+                .size = w.size,
+                .ori_page_id = buildTableUniversalPageId(prefix, ns_id, w.ori_page_id),
+                .offsets = std::move(w.offsets),
+                .page_offset = w.page_offset,
+                .page_checksum = w.page_checksum,
+                .target_file_id = w.target_file_id
+            });
+        }
+        us_batch.total_data_size = batch.getTotalDataSize();
+        return us_batch;
+    }
 
     void putPage(UniversalPageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
