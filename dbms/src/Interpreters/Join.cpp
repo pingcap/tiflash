@@ -1676,7 +1676,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
         for (size_t i = 0; i < existing_columns; ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
 
-        if (rows != process_rows)
+        if (rows != 0 && rows != process_rows)
         {
             filter->assign(filter->begin() + probe_process_info_ptr->start_row, filter->begin() + probe_process_info_ptr->end_row + 1);
         }
@@ -1696,19 +1696,21 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             if (isLeftSemiFamily(kind))
             {
                 const auto helper_pos = block.getPositionByName(match_helper_name);
-                auto new_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
-                new_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
-                block.safeGetByPosition(helper_pos).column = std::move(new_col);
+                auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
+                new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row + 1);
+                block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
             }
 
             if (rows != process_rows)
             {
                 offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row + 1);
             }
-
-            probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
-            probe_process_info_ptr->end_row = probe_process_info_ptr->start_row;
         }
+    }
+
+    if (rows != 0)
+    {
+        resetProcessRowRange(probe_process_info_ptr);
     }
 
     /// handle other conditions
@@ -2418,6 +2420,13 @@ private:
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
 {
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
+}
+
+void Join::resetProcessRowRange(ProbeProcessInfoPtr probe_process_info_ptr) const
+{
+    RUNTIME_CHECK(probe_process_info_ptr != nullptr);
+    probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
+    probe_process_info_ptr->end_row = probe_process_info_ptr->start_row;
 }
 
 } // namespace DB
