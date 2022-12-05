@@ -26,11 +26,6 @@ struct UniversalPageIdFormat
         return toBigEndian(x);
     }
 
-    inline UInt64 decodeUInt64(const UInt64 x)
-    {
-        return toBigEndian(x);
-    }
-
     static inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
     {
         auto u = UniversalPageIdFormat::encodeUInt64(x);

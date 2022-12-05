@@ -210,7 +210,10 @@ public:
     static UniversalPageId toFullPageId(PageId page_id)
     {
         // TODO: Does it need to be mem comparable?
-        return fmt::format("k_{}", page_id);
+        WriteBufferFromOwnString buff;
+        writeString("k_", buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
+        return buff.releaseStr();
     }
 
     static PageId parseRegionId(const UniversalPageId & u_id)
@@ -243,7 +246,8 @@ public:
     {
         // Only traverse pages with id prefix
         auto snapshot = uni_storage.getSnapshot("scan_region_persister");
-        const auto page_ids = uni_storage.page_directory->getRangePageIds("k_", "k_{}");
+        // FIXME: use a better end
+        const auto page_ids = uni_storage.page_directory->getRangePageIds("k_", "l_");
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
