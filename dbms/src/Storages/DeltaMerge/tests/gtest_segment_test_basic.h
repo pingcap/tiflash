@@ -92,6 +92,8 @@ public:
 
     void printFinishedOperations() const;
 
+    BitmapFilterPtr buildBitmapFilter(PageId segment_id);
+    Block getSegmentRowId(PageId segment_id);
 protected:
     std::mt19937 random;
 
@@ -114,6 +116,7 @@ protected:
      */
     void reloadDMContext();
 
+    std::pair<SegmentPtr, SegmentSnapshot> getSegmentForRead(PageId segment_id);
 protected:
     inline static constexpr PageId NAMESPACE_ID = 100;
 

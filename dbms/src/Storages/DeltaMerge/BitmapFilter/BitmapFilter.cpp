@@ -108,6 +108,6 @@ String BitmapFilter::toDebugString() const
             s[i] = '0';
         }
     }
-    return fmt::format("size {} => {}", s.size(), s);
+    return fmt::format("{}", s);
 }
 } // namespace DB::DM
