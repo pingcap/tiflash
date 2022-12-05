@@ -41,6 +41,24 @@ DataTypePtr DataTypeFactory::get(const String & full_name) const
     return get(ast);
 }
 
+DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
+{
+    auto it = fullname_types.find(full_name);
+    if (it != fullname_types.end())
+    {
+        return it->second;
+    }
+    ParserIdentifierWithOptionalParameters parser;
+    ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
+    DataTypePtr datatype_ptr = get(ast);
+    // avoid big hashmap in rare cases.
+    if (fullname_types.size() < MAX_FULLNAME_TYPES)
+    {
+        fullname_types.emplace(full_name, datatype_ptr);
+    }
+    return datatype_ptr;
+}
+
 DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
 {
     if (const ASTFunction * func = typeid_cast<const ASTFunction *>(ast.get()))
