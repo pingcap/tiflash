@@ -118,7 +118,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
 
     std::ignore = value;
 
-    if (pk.toDebugString().empty())
+    if (pk->empty())
     {
         throw Exception("Observe empty PK: raw key " + key->toDebugString(), ErrorCodes::ILLFORMAT_RAFT_ROW);
     }
