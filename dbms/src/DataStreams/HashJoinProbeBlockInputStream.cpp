@@ -49,8 +49,7 @@ Block HashJoinProbeBlockInputStream::getTotals()
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
-    if (res.rows() != 0)
-        res = res.cloneEmpty();
+    assert(res.rows() == 0);
     join_probe_actions->executeForHashJoinProbeSide(res);
     return res;
 }
