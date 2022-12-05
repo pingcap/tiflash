@@ -212,7 +212,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     const Block & right_input_header = input_streams_vec[1].back()->getHeader();
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
-    NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_pipeline.firstStream()->getHeader(), match_helper_name);
     NamesAndTypes join_output_columns = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
     /// add necessary transformation if the join key is an expression
@@ -302,8 +301,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
     pipeline.streams = probe_pipeline.streams;
     /// add join input stream
     if (is_tiflash_right_join)
@@ -323,7 +320,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     }
     for (auto & stream : pipeline.streams)
     {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, chain.getLastActions(), log->identifier());
+        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, log->identifier());
         stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}", query_block.source_name));
     }
 
