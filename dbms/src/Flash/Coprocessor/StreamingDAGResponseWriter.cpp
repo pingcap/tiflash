@@ -34,11 +34,9 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
 {
     rows_in_blocks = 0;
@@ -63,22 +61,6 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
-{
-    assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->write(response);
-}
-
-template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
@@ -92,9 +74,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
     size_t rows = block.rows();
-    rows_in_blocks += rows;
     if (rows > 0)
     {
+        rows_in_blocks += rows;
         blocks.push_back(block);
     }
 

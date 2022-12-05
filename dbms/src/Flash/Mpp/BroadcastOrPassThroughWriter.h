@@ -29,20 +29,15 @@ public:
     BroadcastOrPassThroughWriter(
         ExchangeWriterPtr writer_,
         Int64 batch_send_min_limit_,
-        bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
-    void finishWrite() override;
 
 private:
     void encodeThenWriteBlocks();
 
-    void sendExecutionSummary();
-
 private:
     Int64 batch_send_min_limit;
-    bool should_send_exec_summary_at_last;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;

@@ -154,6 +154,15 @@ public:
     bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
+    /// judge if need get new block in probe
+    bool needGetBlockForHashJoinProbe(size_t stream_index);
+
+    /// update block if prev block has been join finish
+    void updateBlockForHashJoinProbe(Block block, size_t stream_index);
+
+    /// Execute Hash Join Probe Side
+    void executeForHashJoinProbeSide(Block & block, size_t stream_index = 0);
+
     size_t getBuildConcurrency() const
     {
         std::shared_lock lock(rwlock);
@@ -219,8 +228,6 @@ public:
 
     using ProbeProcessInfoPtr = std::shared_ptr<ProbeProcessInfo>;
     using ProbeProcessInfoPtrs = std::vector<ProbeProcessInfoPtr>;
-
-    const ProbeProcessInfoPtrs & getProbeProcessInfos() const;
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
       * For implementation of RIGHT and FULL JOINs.

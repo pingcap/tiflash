@@ -19,20 +19,16 @@ namespace DB
 {
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
-    const ExpressionActionsPtr & join_probe_actions_,
+    const JoinPtr & join_,
     const String & req_id,
     size_t concurrency_probe_index_)
     : log(Logger::get(req_id))
-    , join_probe_actions(join_probe_actions_)
+    , join(join_)
     , concurrency_probe_index(concurrency_probe_index_)
 {
     children.push_back(input);
 
-    if (!join_probe_actions || join_probe_actions->getActions().size() != 1
-        || join_probe_actions->getActions().back().type != ExpressionAction::Type::JOIN)
-    {
-        throw Exception("isn't valid join probe actions", ErrorCodes::LOGICAL_ERROR);
-    }
+    RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
 }
 
 Block HashJoinProbeBlockInputStream::getTotals()
@@ -40,7 +36,21 @@ Block HashJoinProbeBlockInputStream::getTotals()
     if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
     {
         totals = child->getTotals();
-        join_probe_actions->executeOnTotals(totals);
+        if (!totals)
+        {
+            if (join->hasTotals())
+            {
+                for (const auto & name_and_type : child->getHeader().getColumnsWithTypeAndName())
+                {
+                    auto column = name_and_type.type->createColumn();
+                    column->insertDefault();
+                    totals.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
+                }
+            }
+            else
+                return totals; /// There's nothing to JOIN.
+        }
+        join->joinTotals(totals);
     }
 
     return totals;
@@ -50,24 +60,22 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
-    join_probe_actions->executeForHashJoinProbeSide(res);
+    join->joinBlock(res);
     return res;
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    if (join_probe_actions->needGetBlockForHashJoinProbe(concurrency_probe_index))
+    if (join->needGetBlockForHashJoinProbe(concurrency_probe_index))
     {
         Block block = children.back()->read();
-        //        std::cout<<"read block row : "<<block.rows()<<"----"<<concurrency_probe_index<<std::endl;
         if (!block)
             return block;
-        join_probe_actions->updateBlockForHashJoinProbe(block, concurrency_probe_index);
+        join->updateBlockForHashJoinProbe(block, concurrency_probe_index);
     }
 
     Block res;
-    join_probe_actions->executeForHashJoinProbeSide(res, concurrency_probe_index);
-    //    std::cout<<"out block row : "<<res.rows()<<"----"<<concurrency_probe_index<<std::endl;
+    join->joinBlock(res, concurrency_probe_index);
     return res;
 }
 

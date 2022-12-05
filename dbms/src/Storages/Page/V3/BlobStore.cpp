@@ -18,6 +18,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
@@ -76,7 +77,6 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     , config(config_)
     , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
-    , cached_files(config.cached_fd_size)
 {
 }
 
@@ -96,9 +96,9 @@ void BlobStore::registerPaths()
         for (const auto & blob_name : file_list)
         {
             const auto & [blob_id, err_msg] = BlobStats::getBlobIdFromName(blob_name);
-            auto lock_stats = blob_stats.lock();
             if (blob_id != INVALID_BLOBFILE_ID)
             {
+                auto lock_stats = blob_stats.lock();
                 Poco::File blob(fmt::format("{}/{}", path, blob_name));
                 auto blob_size = blob.getSize();
                 delegator->addPageFileUsedSize({blob_id, 0}, blob_size, path, true);
@@ -123,7 +123,6 @@ void BlobStore::reloadConfig(const BlobConfig & rhs)
     // until it is changed to read only type by gc thread or tiflash is restarted.
     config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
-    config.cached_fd_size = rhs.cached_fd_size;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
     config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
 }
@@ -389,6 +388,10 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     try
     {
+        Stopwatch watch;
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_storage_page_write_duration_seconds, type_blob_write).Observe(watch.elapsedSeconds());
+        });
         auto blob_file = getBlobFile(blob_id);
         blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
     }
@@ -452,6 +455,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 
 std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
+    Stopwatch watch;
     BlobStatPtr stat;
 
     auto lock_stat = [size, this, &stat]() {
@@ -472,6 +476,11 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         // and throwing exception.
         return stat->lock();
     }();
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_choose_stat).Observe(watch.elapsedSeconds());
+    watch.restart();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_page_write_duration_seconds, type_search_pos).Observe(watch.elapsedSeconds());
+    });
 
     // We need to assume that this insert will reduce max_cap.
     // Because other threads may also be waiting for BlobStats to chooseStat during this time.
@@ -502,27 +511,42 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    bool need_remove_stat = false;
     const auto & stat = blob_stats.blobIdToStat(blob_id);
     {
         auto lock = stat->lock();
         auto remaining_valid_size = stat->removePosFromStat(offset, size, lock);
+        if (bool remove_file_on_disk = stat->isReadOnly() && (remaining_valid_size == 0);
+            !remove_file_on_disk)
+        {
+            return;
+        }
         // BlobFile which is read-only won't be reused for another writing,
-        // so it's safe and necessary to remove it here.
-        need_remove_stat = stat->isReadOnly() && (remaining_valid_size == 0);
+        // so it's safe and necessary to remove it from disk.
     }
 
-    // We don't need hold the BlobStat lock(Also can't do that).
-    // Because once BlobStat become Read-Only type, Then valid size won't increase.
-    if (need_remove_stat)
-    {
-        LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
-        auto blob_file = getBlobFile(blob_id);
+    // Note that we must release the lock on blob_stat before removing it
+    // from all blob_stats, or deadlocks could happen.
+    // As the blob_stat has been became read-only, it is safe to release the lock.
+    LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+
+    {
+        // Remove the stat from memory
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        blob_file->remove();
-        cached_files.remove(blob_id);
+    }
+    {
+        // Remove the blob file from disk and memory
+        std::lock_guard files_gurad(mtx_blob_files);
+        if (auto iter = blob_files.find(blob_id);
+            iter != blob_files.end())
+        {
+            auto blob_file = iter->second;
+            blob_file->remove();
+            blob_files.erase(iter);
+        }
+        // If the blob_id does not exist, the blob_file is never
+        // opened for read/write. It is safe to ignore it.
     }
 }
 
@@ -1138,10 +1162,12 @@ String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
-                       })
-        .first;
+    std::lock_guard files_gurad(mtx_blob_files);
+    if (auto iter = blob_files.find(blob_id); iter != blob_files.end())
+        return iter->second;
+    auto file = std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
+    blob_files.emplace(blob_id, file);
+    return file;
 }
 
 } // namespace PS::V3

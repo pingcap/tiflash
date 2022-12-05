@@ -20,7 +20,6 @@ DAGResponseWriter::DAGResponseWriter(
     Int64 records_per_chunk_,
     DAGContext & dag_context_)
     : records_per_chunk(records_per_chunk_)
-    , summary_collector(dag_context_)
     , dag_context(dag_context_)
 {
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)

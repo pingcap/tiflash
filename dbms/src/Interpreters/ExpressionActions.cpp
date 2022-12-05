@@ -511,37 +511,6 @@ void ExpressionActions::execute(Block & block) const
     }
 }
 
-void ExpressionActions::executeForHashJoinProbeSide(Block & block, size_t stream_index)
-{
-    assert(actions.size() == 1);
-    if (actions.front().type != ExpressionAction::JOIN)
-    {
-        throw Exception("action type in executeForHashJoinProbeSide must be JOIN", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    actions.front().join->joinBlock(block, stream_index);
-}
-
-void ExpressionActions::updateBlockForHashJoinProbe(Block block, size_t stream_index)
-{
-    assert(actions.size() == 1);
-    if (actions.front().type != ExpressionAction::JOIN)
-    {
-        throw Exception("action type in updateBlockForHashJoinProbe must be JOIN", ErrorCodes::LOGICAL_ERROR);
-    }
-    actions.front().join->setBlockAndInitProbeProcessInfo(block, stream_index);
-}
-
-bool ExpressionActions::needGetBlockForHashJoinProbe(size_t stream_index)
-{
-    assert(actions.size() == 1);
-    if (actions.front().type != ExpressionAction::JOIN)
-    {
-        throw Exception("action type in needGetBlockForHashJoinProbe must be JOIN", ErrorCodes::LOGICAL_ERROR);
-    }
-    return actions.front().join->getProbeProcessInfos()[stream_index]->all_rows_joined_finish;
-}
-
 void ExpressionActions::executeOnTotals(Block & block) const
 {
     /// If there is `totals` in the subquery for JOIN, but we do not have totals, then take the block with the default values instead of `totals`.

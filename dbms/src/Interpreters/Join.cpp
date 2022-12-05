@@ -2119,11 +2119,6 @@ void Join::joinTotals(Block & block) const
     }
 }
 
-const Join::ProbeProcessInfoPtrs & Join::getProbeProcessInfos() const
-{
-    return probe_process_infos;
-}
-
 void Join::setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 max_block_size)
 {
     if (unlikely(probe_concurrency || max_block_size_for_hash_join))
@@ -2427,6 +2422,16 @@ void Join::resetProcessRowRange(ProbeProcessInfoPtr probe_process_info_ptr)
     RUNTIME_CHECK(probe_process_info_ptr != nullptr);
     probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
     probe_process_info_ptr->end_row = probe_process_info_ptr->start_row;
+}
+
+bool Join::needGetBlockForHashJoinProbe(size_t stream_index)
+{
+    return probe_process_infos[stream_index]->all_rows_joined_finish;
+}
+
+void Join::updateBlockForHashJoinProbe(Block block, size_t stream_index)
+{
+    setBlockAndInitProbeProcessInfo(block, stream_index);
 }
 
 } // namespace DB

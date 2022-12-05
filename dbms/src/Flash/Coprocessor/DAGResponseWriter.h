@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -30,13 +30,11 @@ public:
     virtual void write(const Block & block) = 0;
     /// flush cached blocks for batch writer
     virtual void flush() = 0;
-    virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
     const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;
-    ExecutionSummaryCollector summary_collector;
     DAGContext & dag_context;
 };
 
