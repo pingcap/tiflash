@@ -43,6 +43,7 @@ void registerFunctionsNull(FunctionFactory &);
 void registerFunctionsStringMath(FunctionFactory &);
 void registerFunctionsDuration(FunctionFactory &);
 void registerFunctionsRegexp(FunctionFactory &);
+void registerFunctionsJson(FunctionFactory &);
 
 
 void registerFunctions()
@@ -71,6 +72,7 @@ void registerFunctions()
     registerFunctionsStringMath(factory);
     registerFunctionsDuration(factory);
     registerFunctionsRegexp(factory);
+    registerFunctionsJson(factory);
 }
 
 } // namespace DB

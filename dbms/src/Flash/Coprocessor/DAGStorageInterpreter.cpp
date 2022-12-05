@@ -24,14 +24,17 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -317,7 +320,10 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
+    {
+        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = std::make_shared<DM::ScanContext>();
         buildLocalStreams(pipeline, settings.max_block_size);
+    }
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
@@ -775,7 +781,14 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         try
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+            const auto & scan_context = dag_context.scan_context_map.at(table_scan.getTableScanExecutorID());
+
+            // We want to collect performance metrics in storage level, thus we need read with scan_context here.
+            // while IStorage::read() can't support it, and only StorageDeltaMerge support to read with scan_context to collect the information.
+            // Thus, storage must cast to StorageDeltaMergePtr here to call the corresponding read() function.
+            StorageDeltaMergePtr delta_merge_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            RUNTIME_CHECK_MSG(delta_merge_storage != nullptr, "delta_merge_storage which cast from storage is null");
+            pipeline.streams = delta_merge_storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
 
             injectFailPointForLocalRead(query_info);
 

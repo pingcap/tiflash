@@ -15,7 +15,7 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/Operators.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/JSONCodec.h>
+#include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 
@@ -68,7 +68,7 @@ void DecodeBytes(size_t & cursor, const String & raw_value, StringStream & ss)
         size_t next_cursor = cursor + 9;
         if (next_cursor > raw_value.size())
             throw Exception("Wrong format, cursor over buffer size. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
-        UInt8 marker = (UInt8)raw_value[cursor + 8];
+        auto marker = static_cast<UInt8>(raw_value[cursor + 8]);
         UInt8 pad_size = ENC_MARKER - marker;
 
         if (pad_size > 8)
@@ -112,13 +112,13 @@ void SkipCompactBytes(size_t & cursor, const String & raw_value)
     cursor += size;
 }
 
-UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
+UInt64 DecodeVarUIntImpl(size_t & cursor, const char * raw_value, size_t length)
 {
     UInt64 res = 0;
     int s = 0;
-    for (int i = 0; cursor < raw_value.size(); i++)
+    for (int i = 0; cursor < length; i++)
     {
-        UInt64 v = raw_value[cursor++];
+        UInt64 v = static_cast<UInt8>(raw_value[cursor++]);
         if (v < 0x80)
         {
             if (i > 9 || (i == 9 && v > 1))
@@ -129,6 +129,15 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
         s += 7;
     }
     throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
+}
+UInt64 DecodeVarUInt(size_t & cursor, const StringRef & raw_value)
+{
+    return DecodeVarUIntImpl(cursor, raw_value.data, raw_value.size);
+}
+
+UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
+{
+    return DecodeVarUIntImpl(cursor, raw_value.data(), raw_value.length());
 }
 
 void SkipVarUInt(size_t & cursor, const String & raw_value)
@@ -148,21 +157,21 @@ void SkipVarInt(size_t & cursor, const String & raw_value)
     SkipVarUInt(cursor, raw_value);
 }
 
-inline Int8 getWords(PrecType prec, ScaleType scale)
+inline Int32 getWords(PrecType prec, ScaleType scale)
 {
-    Int8 scale_word = scale / 9 + (scale % 9 > 0);
-    Int8 int_word = (prec - scale) / 9 + ((prec - scale) % 9 > 0);
+    Int32 scale_word = scale / 9 + (scale % 9 > 0);
+    Int32 int_word = (prec - scale) / 9 + ((prec - scale) % 9 > 0);
     return scale_word + int_word;
 }
 
 inline int getBytes(PrecType prec, ScaleType scale)
 {
-    int digitsInt = prec - scale;
-    int wordsInt = digitsInt / digitsPerWord;
-    int wordsFrac = scale / digitsPerWord;
-    int xInt = digitsInt - wordsInt * digitsPerWord; // leading digits.
-    int xFrac = scale - wordsFrac * digitsPerWord; // traling digits.
-    return wordsInt * wordSize + dig2Bytes[xInt] + wordsFrac * wordSize + dig2Bytes[xFrac];
+    int digits_int = prec - scale;
+    int words_int = digits_int / digitsPerWord;
+    int words_frac = scale / digitsPerWord;
+    int x_int = digits_int - words_int * digitsPerWord; // leading digits.
+    int x_frac = scale - words_frac * digitsPerWord; // traling digits.
+    return words_int * wordSize + dig2Bytes[x_int] + words_frac * wordSize + dig2Bytes[x_frac];
 }
 
 inline UInt32 readWord(int binIdx, const String & dec, int size)
@@ -201,20 +210,20 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 {
     static_assert(IsDecimal<T>);
 
-    int digitsInt = prec - frac;
-    int wordsInt = digitsInt / digitsPerWord;
-    int leadingDigits = digitsInt - wordsInt * digitsPerWord;
-    int wordsFrac = frac / digitsPerWord;
-    int trailingDigits = frac - wordsFrac * digitsPerWord;
+    int digits_int = prec - frac;
+    int words_int = digits_int / digitsPerWord;
+    int leading_digits = digits_int - words_int * digitsPerWord;
+    int words_frac = frac / digitsPerWord;
+    int trailing_digits = frac - words_frac * digitsPerWord;
     //    int wordsIntTo = wordsInt + (leadingDigits > 0);
     //    int wordsFracTo = wordsFrac + (trailingDigits > 0);
 
-    int binSize = getBytes(prec, frac);
-    String dec = raw_value.substr(cursor, binSize);
-    cursor += binSize;
+    int bin_size = getBytes(prec, frac);
+    String dec = raw_value.substr(cursor, bin_size);
+    cursor += bin_size;
     int mask = -1;
-    int binIdx = 0;
-    if (dec[binIdx] & 0x80)
+    int bin_idx = 0;
+    if (dec[bin_idx] & 0x80)
     {
         mask = 0;
     }
@@ -222,29 +231,29 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 
     typename T::NativeType value = 0;
 
-    if (leadingDigits)
+    if (leading_digits)
     {
-        int i = dig2Bytes[leadingDigits];
-        UInt32 x = readWord(binIdx, dec, i);
-        binIdx += i;
+        int i = dig2Bytes[leading_digits];
+        UInt32 x = readWord(bin_idx, dec, i);
+        bin_idx += i;
         value = x ^ mask;
     }
-    const int wordMax = int(1e9);
-    for (int stop = binIdx + wordsInt * wordSize + wordsFrac * wordSize; binIdx < stop; binIdx += wordSize)
+    const int word_max = int(1e9);
+    for (int stop = bin_idx + words_int * wordSize + words_frac * wordSize; bin_idx < stop; bin_idx += wordSize)
     {
-        UInt32 v = readWord(binIdx, dec, 4) ^ mask;
-        if (v >= wordMax)
+        UInt32 v = readWord(bin_idx, dec, 4) ^ mask;
+        if (v >= word_max)
         {
             throw Exception("bad number: " + std::to_string(v));
         }
-        value *= wordMax;
+        value *= word_max;
         value += v;
     }
-    if (trailingDigits)
+    if (trailing_digits)
     {
-        int len = dig2Bytes[trailingDigits];
-        UInt32 x = readWord(binIdx, dec, len);
-        for (int i = 0; i < trailingDigits; i++)
+        int len = dig2Bytes[trailing_digits];
+        UInt32 x = readWord(bin_idx, dec, len);
+        for (int i = 0; i < trailing_digits; i++)
             value *= 10;
         value += x ^ mask;
     }
@@ -255,8 +264,8 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 
 Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType scale = raw_value[cursor++];
+    PrecType prec = static_cast<UInt8>(raw_value[cursor++]);
+    ScaleType scale = static_cast<UInt8>(raw_value[cursor++]);
     auto type = createDecimal(column_info.flen, column_info.decimal);
     if (checkDecimal<Decimal32>(*type))
     {
@@ -282,8 +291,8 @@ Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiD
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType scale = raw_value[cursor++];
+    PrecType prec = static_cast<UInt8>(raw_value[cursor++]);
+    ScaleType scale = static_cast<UInt8>(raw_value[cursor++]);
     auto type = createDecimal(prec, scale);
     if (checkDecimal<Decimal32>(*type))
     {
@@ -309,11 +318,11 @@ Field DecodeDecimal(size_t & cursor, const String & raw_value)
 
 void SkipDecimal(size_t & cursor, const String & raw_value)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType frac = raw_value[cursor++];
+    PrecType prec = static_cast<UInt8>(raw_value[cursor++]);
+    ScaleType frac = static_cast<UInt8>(raw_value[cursor++]);
 
-    int binSize = getBytes(prec, frac);
-    cursor += binSize;
+    int bin_size = getBytes(prec, frac);
+    cursor += bin_size;
 }
 
 Field DecodeDatumForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
@@ -354,7 +363,7 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
     case TiDB::CodecFlagDecimal:
         return DecodeDecimal(cursor, raw_value);
     case TiDB::CodecFlagJson:
-        return DecodeJsonAsBinary(cursor, raw_value);
+        return JsonBinary::DecodeJsonAsBinary(cursor, raw_value);
     default:
         throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
@@ -394,7 +403,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
         SkipDecimal(cursor, raw_value);
         return;
     case TiDB::CodecFlagJson:
-        SkipJson(cursor, raw_value);
+        JsonBinary::SkipJson(cursor, raw_value);
         return;
     default:
         throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
@@ -403,7 +412,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
 
 void EncodeFloat64(Float64 num, WriteBuffer & ss)
 {
-    UInt64 u = enforce_cast<UInt64>(num);
+    auto u = enforce_cast<UInt64>(num);
     if (u & SIGN_MASK)
         u = ~u;
     else
@@ -429,7 +438,7 @@ void EncodeBytes(const String & ori_str, WriteBuffer & ss)
             ss.write(ori_str.data() + index, remain);
             ss.write(ENC_ASC_PADDING, pad);
         }
-        ss.write(static_cast<char>(ENC_MARKER - (UInt8)pad));
+        ss.write(static_cast<char>(ENC_MARKER - static_cast<UInt8>(pad)));
         index += ENC_GROUP_SIZE;
     }
 }
@@ -499,11 +508,11 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
     ss.write(UInt8(prec));
     ss.write(UInt8(frac));
 
-    int digitsInt = prec - frac;
-    int wordsInt = digitsInt / digitsPerWord;
-    int leadingDigits = digitsInt - wordsInt * digitsPerWord;
-    int wordsFrac = frac / digitsPerWord;
-    int trailingDigits = frac - wordsFrac * digitsPerWord;
+    int digits_int = prec - frac;
+    int words_int = digits_int / digitsPerWord;
+    int leading_digits = digits_int - words_int * digitsPerWord;
+    int words_frac = frac / digitsPerWord;
+    int trailing_digits = frac - words_frac * digitsPerWord;
     int words = getWords(prec, frac);
 
     Int256 value = dec.value;
@@ -518,10 +527,10 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
 
     for (int i = 0; i < words; i++)
     {
-        if (i == 0 && trailingDigits > 0)
+        if (i == 0 && trailing_digits > 0)
         {
-            v.push_back(static_cast<Int32>(value % powers10[trailingDigits]));
-            value /= powers10[trailingDigits];
+            v.push_back(static_cast<Int32>(value % powers10[trailing_digits]));
+            value /= powers10[trailing_digits];
         }
         else
         {
@@ -539,14 +548,14 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
     for (int i = 0; i < words; i++)
     {
         v[i] ^= mask;
-        if (i == 0 && leadingDigits > 0)
+        if (i == 0 && leading_digits > 0)
         {
-            int size = dig2Bytes[leadingDigits];
+            int size = dig2Bytes[leading_digits];
             writeWord(buf, v[i], size);
         }
-        else if (i + 1 == words && trailingDigits > 0)
+        else if (i + 1 == words && trailing_digits > 0)
         {
-            int size = dig2Bytes[trailingDigits];
+            int size = dig2Bytes[trailing_digits];
             writeWord(buf, v[i], size);
         }
         else
@@ -577,7 +586,7 @@ void EncodeDecimalForRow(const Field & field, WriteBuffer & ss, const ColumnInfo
     }
     else if (field.getType() == Field::Types::Decimal256)
     {
-        auto decimal_field = field.get<DecimalField<Decimal256>>();
+        const auto & decimal_field = field.get<DecimalField<Decimal256>>();
         return EncodeDecimalImpl(decimal_field.getValue(), column_info.flen, column_info.decimal, ss);
     }
     else
@@ -605,7 +614,7 @@ void EncodeDecimal(const Field & field, WriteBuffer & ss)
     }
     else if (field.getType() == Field::Types::Decimal256)
     {
-        auto decimal_field = field.get<DecimalField<Decimal256>>();
+        const auto & decimal_field = field.get<DecimalField<Decimal256>>();
         return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
     }
     else
