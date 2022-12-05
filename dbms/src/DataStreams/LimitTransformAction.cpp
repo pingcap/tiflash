@@ -64,5 +64,4 @@ bool LimitTransformAction::transform(Block & block)
         return true;
     }
 }
-
 } // namespace DB
