@@ -38,10 +38,14 @@ class DataTypeFactory final : public ext::Singleton<DataTypeFactory>
 private:
     using Creator = std::function<DataTypePtr(const ASTPtr & parameters)>;
     using SimpleCreator = std::function<DataTypePtr()>;
+    // family_name -> Creator
     using DataTypesDictionary = std::unordered_map<String, Creator>;
+    // full_name -> DataTypePtr
+    using FullnameTypes = std::unordered_map<String, DataTypePtr>;
 
 public:
     DataTypePtr get(const String & full_name) const;
+    DataTypePtr getOrSet(const String & full_name);
     DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
     DataTypePtr get(const ASTPtr & ast) const;
 
@@ -64,6 +68,8 @@ private:
     /// Case insensitive data types will be additionally added here with lowercased name.
     DataTypesDictionary case_insensitive_data_types;
 
+    static constexpr int MAX_FULLNAME_TYPES = 10000;
+    FullnameTypes fullname_types;
     DataTypeFactory();
     friend class ext::Singleton<DataTypeFactory>;
 };
