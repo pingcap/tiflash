@@ -215,7 +215,7 @@ public:
 
     static PageId parseRegionId(const UniversalPageId & u_id)
     {
-        return UniversalPageIdFormat::read<PageId>(u_id.data() + u_id.size() - sizeof(PageId));
+        return UniversalPageIdFormat::decodeUInt64(u_id.data() + u_id.size() - sizeof(PageId));
     }
 
     bool isAppliedIndexExceed(PageId page_id, UInt64 applied_index)
