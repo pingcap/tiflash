@@ -36,7 +36,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
+#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
@@ -189,7 +189,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 
     if (context.isDisaggregatedComputeMode())
     {
-        DisaggregatedTiFlashTableScanInterpreter disaggregated_tiflash_interpreter(context, table_scan, push_down_filter, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, push_down_filter, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
         analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
     }

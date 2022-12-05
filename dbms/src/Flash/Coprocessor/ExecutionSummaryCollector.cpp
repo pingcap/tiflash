@@ -15,7 +15,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
-#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
+#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 
 namespace DB
 {
@@ -154,7 +154,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     for (auto & p : merged_remote_execution_summaries)
     {
         auto target_exec_id = p.first;
-        if (p.first.find(DisaggregatedTiFlashTableScanInterpreter::ExecIDPrefixForTiFlashStorageSender) != std::string::npos)
+        if (p.first.find(StorageDisaggregated::ExecIDPrefixForTiFlashStorageSender) != std::string::npos)
         {
             target_exec_id = dag_context.table_scan_executor_id;
         }

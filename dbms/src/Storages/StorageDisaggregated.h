@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/IStorage.h>
 #include <Common/Logger.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -30,55 +31,67 @@
 namespace DB
 {
 
-// For TableScan in disaggregated tiflash mode, we convert it to ExchangeReceiver(executed in tiflash_compute node),
+// Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
+// rewrite this when local cache is supported.
+// Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),
 // and ExchangeSender + TableScan(executed in tiflash_storage node).
-class DisaggregatedTiFlashTableScanInterpreter
+class StorageDisaggregated : public IStorage
 {
 public:
-    // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
-    static const String ExecIDPrefixForTiFlashStorageSender;
-
-    DisaggregatedTiFlashTableScanInterpreter(
+    StorageDisaggregated(
             Context & context_,
             const TiDBTableScan & table_scan_,
-            const PushDownFilter & push_down_filter_,
-            size_t max_streams_)
-        : context(context_)
+            const std::vector<RemoteRequest> & remote_requests_)
+        : IStorage()
+        , context(context_)
         , table_scan(table_scan_)
-        , push_down_filter(push_down_filter_)
-        , max_streams(max_streams_)
         , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
         , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
-        , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id()) {}
+        , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id())
+        , remote_requests(remote_requests_) {}
 
-    void execute(DAGPipeline & pipeline);
+    std::string getName() const override
+    {
+        return "StorageDisaggregated";
+    }
 
+    std::string getTableName() const override
+    {
+        return "StorageDisaggregated_" + table_scan.getTableScanExecutorID();
+    }
+
+    BlockInputStreams read(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        QueryProcessingStage::Enum & processed_stage,
+        size_t max_block_size,
+        unsigned num_streams) override;
+
+    // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
+    std::shared_ptr<ExchangeReceiver> getExchangeReceiver() const { return exchange_receiver; }
+    static const String ExecIDPrefixForTiFlashStorageSender;
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
 
     using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
     RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests();
-    void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, DAGPipeline & pipeline);
+    void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 private:
-    void buildRemoteRequests();
-    void buildAnalyzer();
     void pushDownFilter(DAGPipeline & pipeline);
     void setGRPCErrorMsg(const std::string & err);
 
     Context & context;
     const TiDBTableScan & table_scan;
-    const PushDownFilter & push_down_filter;
-    size_t max_streams;
     LoggerPtr log;
     uint64_t sender_target_task_start_ts;
     int64_t sender_target_task_task_id;
+    const std::vector<RemoteRequest> & remote_requests;
+    std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::mutex err_msg_mu;
     std::string err_msg;
-
-    std::vector<RemoteRequest> remote_requests;
-    std::shared_ptr<ExchangeReceiver> exchange_receiver;
 };
 } // namespace DB

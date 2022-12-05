@@ -12,57 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ThreadManager.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
-#include <DataStreams/SquashingBlockInputStream.h>
+#include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
-const String DisaggregatedTiFlashTableScanInterpreter::ExecIDPrefixForTiFlashStorageSender = "exec_id_disaggregated_tiflash_storage_sender";
 
-void DisaggregatedTiFlashTableScanInterpreter::execute(DAGPipeline & pipeline)
+const String StorageDisaggregated::ExecIDPrefixForTiFlashStorageSender = "exec_id_disaggregated_tiflash_storage_sender";
+
+BlockInputStreams StorageDisaggregated::read(
+        const Names &,
+        const SelectQueryInfo &,
+        const Context &,
+        QueryProcessingStage::Enum &,
+        size_t,
+        unsigned num_streams)
 {
-    buildRemoteRequests();
-
     auto dispatch_reqs = buildAndDispatchMPPTaskRequests();
-    buildReceiverStreams(dispatch_reqs, pipeline);
 
-    pushDownFilter(pipeline);
+    DAGPipeline pipeline;
+    buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
+
+    return pipeline.streams;
 }
 
-void DisaggregatedTiFlashTableScanInterpreter::buildRemoteRequests()
-{
-    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
-    for (auto physical_table_id : table_scan.getPhysicalTableIDs())
-    {
-        const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
-
-        RUNTIME_CHECK_MSG(table_regions_info.local_regions.empty(), "in disaggregated_compute_mode, local_regions should be empty");
-        for (const auto & reg : table_regions_info.remote_regions)
-            all_remote_regions[physical_table_id].emplace_back(std::cref(reg));
-    }
-
-    for (auto physical_table_id : table_scan.getPhysicalTableIDs())
-    {
-        const auto & remote_regions = all_remote_regions[physical_table_id];
-        if (remote_regions.empty())
-            continue;
-        remote_requests.push_back(RemoteRequest::build(
-                    remote_regions,
-                    *context.getDAGContext(),
-                    table_scan,
-                    TiDB::TableInfo{},
-                    push_down_filter,
-                    log,
-                    physical_table_id,
-                    /*is_disaggregated_compute_mode=*/true));
-    }
-}
-
-std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInterpreter::buildBatchCopTasks()
+std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks()
 {
     std::vector<Int64> physical_table_ids;
     physical_table_ids.reserve(remote_requests.size());
@@ -82,7 +56,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
     return batch_cop_tasks;
 }
 
-DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs DisaggregatedTiFlashTableScanInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
+StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request;
@@ -171,11 +145,11 @@ DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs DisaggregatedTiFla
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
     dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
-    return DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
+    return StorageDisaggregated::RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
-std::vector<DisaggregatedTiFlashTableScanInterpreter::RequestAndRegionIDs>
-DisaggregatedTiFlashTableScanInterpreter::buildAndDispatchMPPTaskRequests()
+std::vector<StorageDisaggregated::RequestAndRegionIDs>
+StorageDisaggregated::buildAndDispatchMPPTaskRequests()
 {
     auto batch_cop_tasks = buildBatchCopTasks();
     std::vector<RequestAndRegionIDs> dispatch_reqs;
@@ -226,7 +200,7 @@ DisaggregatedTiFlashTableScanInterpreter::buildAndDispatchMPPTaskRequests()
     return dispatch_reqs;
 }
 
-void DisaggregatedTiFlashTableScanInterpreter::setGRPCErrorMsg(const std::string & err)
+void StorageDisaggregated::setGRPCErrorMsg(const std::string & err)
 {
     std::lock_guard<std::mutex> lock(err_msg_mu);
     // Only record first err_msg.
@@ -236,7 +210,7 @@ void DisaggregatedTiFlashTableScanInterpreter::setGRPCErrorMsg(const std::string
     }
 }
 
-void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, DAGPipeline & pipeline)
+void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
 {
     tipb::ExchangeReceiver receiver;
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
@@ -265,7 +239,7 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(const std::v
                 context.getSettingsRef().enable_local_tunnel,
                 context.getSettingsRef().enable_async_grpc_client),
             receiver.encoded_task_meta_size(),
-            context.getMaxStreams(),
+            num_streams,
             log->identifier(),
             executor_id,
             /*fine_grained_shuffle_stream_count=*/0,
@@ -277,7 +251,7 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(const std::v
     // We can use PhysicalExchange::transform() to build InputStream after
     // DAGQueryBlockInterpreter is deprecated to avoid duplicated code here.
     const String extra_info = "disaggregated compute node exchange receiver";
-    for (size_t i = 0; i < max_streams; ++i)
+    for (size_t i = 0; i < num_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
                                                                                    log->identifier(),
@@ -289,23 +263,5 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(const std::v
 
     auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
     pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
-}
-
-void DisaggregatedTiFlashTableScanInterpreter::pushDownFilter(DAGPipeline & pipeline)
-{
-    NamesAndTypes source_columns = genNamesAndTypes(table_scan, "exchange_receiver");
-    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    assert(receiver_dag_schema.size() == source_columns.size());
-
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-
-    if (push_down_filter.hasValue())
-    {
-        // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/0, push_down_filter, *analyzer, log, pipeline);
-
-        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[push_down_filter.executor_id];
-        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
-    }
 }
 } // namespace DB

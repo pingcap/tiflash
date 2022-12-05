@@ -14,14 +14,14 @@
 
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
+#include <Storages/StorageDisaggregated.h>
 
 namespace DB
 {
 namespace tests
 {
 
-class DisaggregatedTiFlashInterpreterTest : public DB::tests::ExecutorTest
+class StorageDisaggregatedTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
@@ -30,7 +30,7 @@ public:
     }
 };
 
-TEST_F(DisaggregatedTiFlashInterpreterTest, BasicTest)
+TEST_F(StorageDisaggregatedTest, BasicTest)
 try
 {
     ::mpp::DispatchTaskRequest dispatch_req;
@@ -65,22 +65,22 @@ try
     auto dag_context = std::make_shared<DAGContext>(dag_req, dispatch_req.meta(), true);
     TiFlashTestEnv::getGlobalContext().setDAGContext(dag_context.get());
     TiDBTableScan tidb_table_scan(&table_scan, table_scan.executor_id(), *dag_context);
-    // Empty, because buildDispatchMPPTaskRequest() doesn't use it.
-    RemoteRequest mock_remote_requests(::tipb::DAGRequest(), DAGSchema(), std::vector<pingcap::coprocessor::KeyRange>(), 0);
-    DisaggregatedTiFlashTableScanInterpreter interpreter(
+    // It's ok to be empty, because buildDispatchMPPTaskRequest() doesn't use it.
+    auto remote_requests = std::vector<RemoteRequest>{RemoteRequest(::tipb::DAGRequest(), DAGSchema(), std::vector<pingcap::coprocessor::KeyRange>(), 0)};
+    StorageDisaggregated storage(
             TiFlashTestEnv::getGlobalContext(),
             tidb_table_scan,
-            std::vector<RemoteRequest>{mock_remote_requests},
-            dag_context_ptr->log);
+            remote_requests);
 
     ::pingcap::coprocessor::RegionInfo mock_region_info;
     ::pingcap::coprocessor::BatchCopTask mock_batch_cop_task;
     mock_batch_cop_task.store_addr = "127.0.0.1:9000";
     mock_batch_cop_task.region_infos = std::vector<::pingcap::coprocessor::RegionInfo>{mock_region_info};
-    auto tiflash_storage_dispatch_req = interpreter.buildDispatchMPPTaskRequest(mock_batch_cop_task);
+    std::shared_ptr<::mpp::DispatchTaskRequest> tiflash_storage_dispatch_req;
+    std::tie(tiflash_storage_dispatch_req, std::ignore, std::ignore) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task);
 
     // Check if field number of DispatchTaskRequest and DAGRequest is correct.
-    // In case we add/remove filed but forget to update build processing of DisaggregatedTiFlashTableScanInterpreter.
+    // In case we add/remove filed but forget to update build processing of StorageDisaggregated.
     const auto * dispatch_req_desc = tiflash_storage_dispatch_req->GetDescriptor();
     ASSERT_EQ(dispatch_req_desc->field_count(), 6);
 

@@ -15,7 +15,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
+#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
@@ -58,7 +58,7 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
 
     if (context.isDisaggregatedComputeMode())
     {
-        DisaggregatedTiFlashTableScanInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
         buildProjection(context, pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
