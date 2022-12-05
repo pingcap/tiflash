@@ -2422,7 +2422,7 @@ BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sampl
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
-void Join::resetProcessRowRange(ProbeProcessInfoPtr probe_process_info_ptr) const
+void Join::resetProcessRowRange(ProbeProcessInfoPtr probe_process_info_ptr)
 {
     RUNTIME_CHECK(probe_process_info_ptr != nullptr);
     probe_process_info_ptr->start_row = probe_process_info_ptr->end_row + 1;
