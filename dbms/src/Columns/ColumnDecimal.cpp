@@ -358,8 +358,8 @@ ColumnPtr ColumnDecimal<T>::replicate(size_t start_row, size_t end_row, const IC
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    if (start_row > end_row)
-        throw Exception("start row should not be bigger than end row.", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK(start_row > end_row, start_row, end_row);
+    RUNTIME_CHECK(end_row < size, end_row, size);
 
     auto res = this->create(0, scale);
     if (0 == size)
