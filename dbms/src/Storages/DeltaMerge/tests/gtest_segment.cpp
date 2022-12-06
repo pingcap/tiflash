@@ -295,6 +295,63 @@ try
 }
 CATCH
 
+TEST_F(SegmentOperationTest, CheckColumnFileSchema)
+try
+{
+    SegmentTestOptions options;
+    reloadWithOptions(options);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    {
+        LOG_DEBUG(log, "beginSegmentMergeDelta");
+
+        // Start a segment merge and suspend it before applyMerge
+        auto sp_seg_merge_delta_apply = SyncPointCtl::enableInScope("before_Segment::applyMergeDelta");
+        auto th_seg_merge_delta = std::async([&]() {
+            mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID, /* check_rows */ false);
+        });
+        sp_seg_merge_delta_apply.waitAndPause();
+
+        LOG_DEBUG(log, "pausedBeforeApplyMergeDelta");
+
+        // non-flushed column files
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        sp_seg_merge_delta_apply.next();
+        th_seg_merge_delta.get();
+
+        LOG_DEBUG(log, "finishApplyMergeDelta");
+    }
+
+    {
+        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    }
+    ASSERT_EQ(segments.size(), 1);
+    {
+        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+        auto delta = segment->getDelta();
+        auto mem_table_set = delta->getMemTableSet();
+        WriteBatches wbs(dm_context->storage_pool);
+        auto column_files = mem_table_set->cloneColumnFiles(*dm_context, segment->getRowKeyRange(), wbs);
+        ASSERT_FALSE(column_files.empty());
+        BlockPtr last_schema;
+        for (const auto & column_file : column_files)
+        {
+            if (auto * t_file = column_file->tryToTinyFile(); t_file)
+            {
+                auto current_schema = t_file->getSchema();
+                ASSERT_TRUE(!last_schema || (last_schema == current_schema));
+                last_schema = current_schema;
+            }
+        }
+        // check last_schema is not nullptr after all
+        ASSERT_NE(last_schema, nullptr);
+    }
+}
+CATCH
+
 TEST_F(SegmentOperationTest, SegmentLogicalSplit)
 try
 {
