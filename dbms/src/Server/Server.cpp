@@ -1187,9 +1187,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Load metadata done.");
 
-    LOG_INFO(log, "MyDebug: max_threads {}", settings.max_threads);
-    LOG_INFO(log, "MyDebug: max_streams {}", global_context->getMaxStreams());
-
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     for (int i = 0; i < 60; i++) // retry for 3 mins
     {
