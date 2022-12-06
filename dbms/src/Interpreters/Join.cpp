@@ -2420,12 +2420,12 @@ void Join::updateStartRow(ProbeProcessInfoPtr probe_process_info_ptr)
     probe_process_info_ptr->start_row = probe_process_info_ptr->end_row;
 }
 
-bool Join::needGetBlockForHashJoinProbe(size_t stream_index)
+bool Join::needGetNewBlock(size_t stream_index)
 {
     return probe_process_infos[stream_index]->all_rows_joined_finish;
 }
 
-void Join::updateBlockForHashJoinProbe(Block block, size_t stream_index)
+void Join::updateProcessBlock(Block block, size_t stream_index)
 {
     setBlockAndInitProbeProcessInfo(block, stream_index);
 }

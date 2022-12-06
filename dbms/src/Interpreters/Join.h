@@ -155,10 +155,10 @@ public:
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
     /// judge if need get new block in probe
-    bool needGetBlockForHashJoinProbe(size_t stream_index);
+    bool needGetNewBlock(size_t stream_index);
 
     /// update block if prev block has been join finish
-    void updateBlockForHashJoinProbe(Block block, size_t stream_index);
+    void updateProcessBlock(Block block, size_t stream_index);
 
     /// Execute Hash Join Probe Side
     void executeForHashJoinProbeSide(Block & block, size_t stream_index = 0);
