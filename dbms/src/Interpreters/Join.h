@@ -160,9 +160,6 @@ public:
     /// update block if prev block has been join finish
     void updateProcessBlock(Block block, size_t stream_index);
 
-    /// Execute Hash Join Probe Side
-    void executeForHashJoinProbeSide(Block & block, size_t stream_index = 0);
-
     size_t getBuildConcurrency() const
     {
         std::shared_lock lock(rwlock);
