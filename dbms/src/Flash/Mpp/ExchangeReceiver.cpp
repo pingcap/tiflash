@@ -412,7 +412,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
-    bool is_tiflash_storage_receiver_)
+    bool is_receiver_for_tiflash_storage_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
@@ -423,7 +423,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
-    , is_tiflash_storage_receiver(is_tiflash_storage_receiver_)
+    , is_receiver_for_tiflash_storage(is_receiver_for_tiflash_storage_)
 {
     try
     {
@@ -475,7 +475,7 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 {
     setEndState(ExchangeReceiverState::CANCELED);
     cancelAllMsgChannels();
-    if (is_tiflash_storage_receiver)
+    if (is_receiver_for_tiflash_storage)
     {
         try
         {

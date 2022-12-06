@@ -131,7 +131,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        bool is_tiflash_storage_receiver);
+        bool is_receiver_for_tiflash_storage);
 
     ~ExchangeReceiverBase();
 
@@ -219,7 +219,7 @@ private:
     ///   1. we are in disaggregated tiflash mode
     ///   2. and this receiver is receiving data from tiflash_storage node.
     /// If it's true, when this ExchangeReciever is canceled, need to cancel MPPTasks in tiflash_storage node.
-    bool is_tiflash_storage_receiver;
+    bool is_receiver_for_tiflash_storage;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
