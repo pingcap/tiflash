@@ -355,7 +355,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         ASSERT_EQ(tasks[1].to_compact.size(), 1);
         ASSERT_EQ(tasks[1].is_trivial_move, true);
         ASSERT_EQ(tasks[2].to_compact.size(), 1);
-        ASSERT_EQ(tasks[3].is_trivial_move, true);
+        ASSERT_EQ(tasks[2].is_trivial_move, true);
         compaction_task->prepare(dmContext(), wbs, reader);
     }
 
