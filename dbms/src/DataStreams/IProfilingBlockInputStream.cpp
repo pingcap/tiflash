@@ -67,13 +67,22 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (!checkTimeLimit())
         limit_exceeded_need_break = true;
 
+    auto myid = std::this_thread::get_id();
+    std::stringstream ss;
+    ss << myid;
+    std::string tid = ss.str();
+
+    auto * log = &Poco::Logger::get("LRUCache");
+    LOG_INFO(log, "TRACK: enter {}, {}", typeid(*this).name(), tid);
     if (!limit_exceeded_need_break)
     {
+
         if (return_filter)
             res = readImpl(res_filter, return_filter);
         else
             res = readImpl();
     }
+    LOG_INFO(log, "TRACK: leave {}, {}", typeid(*this).name(), tid);
 
     if (res)
     {

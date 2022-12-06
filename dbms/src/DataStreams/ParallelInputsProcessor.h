@@ -250,15 +250,26 @@ private:
 
     void thread(size_t thread_num)
     {
+        auto myid = std::this_thread::get_id();
+        std::stringstream ss;
+        ss << myid;
+        std::string tid = ss.str();
+
+        auto * logg = &Poco::Logger::get("LRUCache");
+        LOG_INFO(logg, "AGGTHD: start, {}", tid);
         work(thread_num, working_inputs);
+        LOG_INFO(logg, "AGGTHD: work1 done, {}", tid);
         work(thread_num, working_additional_inputs);
+        LOG_INFO(logg, "AGGTHD: work2 done, {}", tid);
 
         handler.onFinishThread(thread_num);
+        LOG_INFO(logg, "AGGTHD: onFinishThread done, {}", tid);
 
         if (0 == --active_threads)
         {
             handler.onFinish();
         }
+        LOG_INFO(logg, "AGGTHD: onFinish done, {}", tid);
     }
 
     void work(size_t thread_num, WorkingInputs & work)

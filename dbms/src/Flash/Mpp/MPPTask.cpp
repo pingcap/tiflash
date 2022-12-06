@@ -366,6 +366,7 @@ void MPPTask::runImpl()
         unregisterTask();
         return;
     }
+
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
@@ -373,6 +374,7 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
+
     String err_msg;
     try
     {
@@ -393,6 +395,7 @@ void MPPTask::runImpl()
         }
         mpp_task_statistics.start();
 
+        LOG_INFO(log, "is root mpptask: {}", isRootMPPTask());
         auto result = query_executor_holder->execute();
         if (likely(result.is_success))
         {

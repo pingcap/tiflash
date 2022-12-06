@@ -25,6 +25,8 @@
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <atomic>
+#include "common/defines.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -213,7 +215,7 @@ public:
     LocalTunnelSender(
         size_t source_index_,
         const String & req_info_,
-        std::vector<MsgChannelPtr> & msg_channels_,
+        ExchangeReceiverBase * recv_base_,
         const LoggerPtr & log_,
         size_t queue_size,
         MemoryTrackerPtr & memory_tracker_,
@@ -221,22 +223,71 @@ public:
     : TunnelSender(queue_size, memory_tracker_, log_, tunnel_id_)
       , source_index(source_index_)
       , req_info(req_info_)
-      , msg_channels(msg_channels_){}
+      , recv_base(recv_base_)
+      , is_done(false){
+        auto myid = std::this_thread::get_id();
+        std::stringstream ss;
+        ss << myid;
+        std::string tid = ss.str();
 
-    ~LocalTunnelSender() override = default;
+        auto * logg = &Poco::Logger::get("LRUCache");
+        auto & msg_channels = recv_base->getMsgChannels();
+        for (auto & channel : msg_channels)
+            LOG_INFO(logg, "TunnelS: addr {}", long(channel.get()));
+      }
+
+    ~LocalTunnelSender() override
+    {
+        closeLocalTunnel(false, "");
+    }
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        return pushPacketImpl<enable_fine_grained_shuffle, false, true>(source_index, req_info, data, msg_channels, log);
+        auto myid = std::this_thread::get_id();
+        std::stringstream ss;
+        ss << myid;
+        std::string tid = ss.str();
+
+        if (unlikely(checkPacketErr(data)))
+            return false;
+
+        auto * logg = &Poco::Logger::get("LRUCache");
+        LOG_INFO(logg, "ESender, before push, {}", tid);
+        auto res = pushPacket<enable_fine_grained_shuffle, false, true>(source_index, req_info, data, recv_base->getMsgChannels(), log);
+        LOG_INFO(logg, "ESender, after push, {}", tid);
+        if (unlikely(!res))
+            closeLocalTunnel(true, "Push mpp packet failed at local tunnel");
+        return res;
     }
 
 private:
+    bool checkPacketErr(TrackedMppDataPacketPtr & packet)
+    {
+        if (packet->hasError())
+        {
+            closeLocalTunnel(true, packet->error());
+            return true;
+        }
+        return false;
+    }
+
+    void closeLocalTunnel(bool meet_error, const String & local_err_msg)
+    {
+        std::lock_guard lock(mu);
+        if (is_done)
+        {
+            is_done = true;
+            recv_base->connectionLocalDone(meet_error, local_err_msg, log);
+        }
+    }
+
     bool cancel_reason_sent = false;
     size_t source_index;
     String req_info;
+    ExchangeReceiverBase * recv_base;
 
-    // This is actually got from ExchangeReceiver
-    std::vector<MsgChannelPtr> msg_channels;
+    std::mutex mu;
+    bool is_done;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -311,7 +362,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, const String & req_info, std::vector<MsgChannelPtr> & msg_channels, bool is_fine_grained);
+    void connectLocal(size_t source_index, const String & req_info, ExchangeReceiverBase * recv_base, bool is_fine_grained);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);

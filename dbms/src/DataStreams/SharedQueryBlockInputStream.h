@@ -146,16 +146,28 @@ protected:
     {
         try
         {
+            auto myid = std::this_thread::get_id();
+            std::stringstream ss;
+            ss << myid;
+            std::string tid = ss.str();
+            auto * log = &Poco::Logger::get("LRUCache");
+            LOG_INFO(log, "SHARED: before prefix, {}", tid);
             in->readPrefix();
+            LOG_INFO(log, "SHARED: after prefix, {}", tid);
             while (true)
             {
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_sharedquery_failpoint);
+                LOG_INFO(log, "SHARED: before read, {}", tid);
                 Block block = in->read();
+                LOG_INFO(log, "SHARED: after read, {}", tid);
                 // in is finished or queue is canceled
                 if (!block || queue.push(block) != MPMCQueueResult::OK)
                     break;
+                LOG_INFO(log, "SHARED: here, {}", tid);
             }
+            LOG_INFO(log, "SHARED: before suffix, {}", tid);
             in->readSuffix();
+            LOG_INFO(log, "SHARED: after suffix, {}", tid);
         }
         catch (Exception & e)
         {

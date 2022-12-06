@@ -196,6 +196,7 @@ grpc::Status FlashService::DispatchMPPTask(
     const mpp::DispatchTaskRequest * request,
     mpp::DispatchTaskResponse * response)
 {
+    LOG_INFO(log, "TRACK: yes");
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     auto check_result = checkGrpcContext(grpc_context);

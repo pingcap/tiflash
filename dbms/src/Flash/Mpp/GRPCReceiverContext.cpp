@@ -164,7 +164,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnecti
     const ExchangeRecvRequest & request,
     size_t source_index,
     const String & req_info,
-    std::vector<MsgChannelPtr> & msg_channels,
+    ExchangeReceiverBase * recv_base,
     bool is_fine_grained)
 {
     RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
@@ -176,7 +176,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnecti
     if (!tunnel->isLocal())
         return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
 
-    tunnel->connectLocal(source_index, req_info, msg_channels, is_fine_grained);
+    tunnel->connectLocal(source_index, req_info, recv_base, is_fine_grained);
     return std::make_tuple(tunnel, grpc::Status::OK);
 }
 

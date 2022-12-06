@@ -15,6 +15,7 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Executor/DataStreamExecutor.h>
+#include <thread>
 
 namespace DB
 {
@@ -22,18 +23,37 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
 {
     try
     {
+        auto myid = std::this_thread::get_id();
+        std::stringstream ss;
+        ss << myid;
+        std::string tid = ss.str();
+
+        auto * log = &Poco::Logger::get("LRUCache");
         data_stream->readPrefix();
         if (result_handler.isIgnored())
         {
+            LOG_INFO(log, "ENTRY: in {}", tid);
             while (data_stream->read())
-                continue;
+            {
+                LOG_INFO(log, "ENTRY: out {}", tid);
+                LOG_INFO(log, "ENTRY: in {}", tid);
+                // continue;
+            }
+            LOG_INFO(log, "ENTRY: out {}", tid);
         }
         else
         {
+            LOG_INFO(log, "ENTRY: in {}", tid);
             while (Block block = data_stream->read())
+            {
+                LOG_INFO(log, "ENTRY: out {}", tid);
+                LOG_INFO(log, "ENTRY: in {}", tid);
                 result_handler(block);
+            }
+            LOG_INFO(log, "ENTRY: out {}", tid);
         }
         data_stream->readSuffix();
+        LOG_INFO(log, "ENTRY: finish {}", tid);
         return ExecutionResult::success();
     }
     catch (...)

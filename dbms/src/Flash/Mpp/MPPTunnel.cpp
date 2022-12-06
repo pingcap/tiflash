@@ -19,6 +19,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
+#include "Flash/Mpp/ExchangeReceiverCommon.h"
 
 namespace DB
 {
@@ -155,10 +156,17 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
         waitUntilConnectedOrFinished(lk);
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel which is already closed.");
     }
+    auto myid = std::this_thread::get_id();
+    std::stringstream ss;
+    ss << myid;
+    std::string tid = ss.str();
 
+    auto * logg = &Poco::Logger::get("LRUCache");
+    LOG_INFO(logg, "ESender: before push, {}", tid);;
+    auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
-        auto pushed_data_size = data->getPacket().ByteSizeLong();
+        LOG_INFO(logg, "ESender: after push, {}", tid);;
         updateMetric(pushed_data_size, mode);
         updateConnProfileInfo(pushed_data_size);
         return;
@@ -169,6 +177,13 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 /// done normally and being called exactly once after writing all packets
 void MPPTunnel::writeDone()
 {
+    auto myid = std::this_thread::get_id();
+    std::stringstream ss;
+    ss << myid;
+    std::string tid = ss.str();
+
+    auto * logg = &Poco::Logger::get("LRUCache");
+    LOG_INFO(logg, "ESender: writeDone 1, {}", tid);
     LOG_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     {
         std::unique_lock lk(mu);
@@ -177,8 +192,11 @@ void MPPTunnel::writeDone()
         if (tunnel_sender == nullptr)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
+    LOG_INFO(logg, "ESender: writeDone 2, {}", tid);
     tunnel_sender->finish();
+    LOG_INFO(logg, "ESender: writeDone 3, {}", tid);
     waitForSenderFinish(/*allow_throw=*/true);
+    LOG_INFO(logg, "ESender: writeDone 4, {}", tid);
 }
 
 void MPPTunnel::connect(PacketWriter * writer)
@@ -200,7 +218,7 @@ void MPPTunnel::connect(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocal(size_t source_index, const String & req_info, std::vector<MsgChannelPtr> & msg_channels, bool is_fine_grained)
+void MPPTunnel::connectLocal(size_t source_index, const String & req_info, ExchangeReceiverBase * recv_base, bool is_fine_grained)
 {
     {
         std::unique_lock lk(mu);
@@ -210,12 +228,12 @@ void MPPTunnel::connectLocal(size_t source_index, const String & req_info, std::
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, msg_channels, log, queue_size, mem_tracker, tunnel_id);
+            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, recv_base, log, queue_size, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_fine_grained_sender;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, msg_channels, log, queue_size, mem_tracker, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, recv_base, log, queue_size, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_sender;
         }
 

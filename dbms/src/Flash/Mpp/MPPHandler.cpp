@@ -29,6 +29,20 @@ extern const char exception_before_mpp_root_task_run[];
 
 namespace
 {
+inline void addRetryRegion(const ContextPtr & context, mpp::DispatchTaskResponse * response)
+{
+    for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
+    {
+        for (const auto & region : table_region_info.second.remote_regions)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
+        }
+    }
+}
+
 inline void RandomFailPointTestBeforeRunningMPPTask(bool is_root_task)
 {
     if (is_root_task)
@@ -64,20 +78,11 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     {
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
-
         task->prepare(task_request);
-        for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
-        {
-            for (const auto & region : table_region_info.second.remote_regions)
-            {
-                auto * retry_region = response->add_retry_regions();
-                retry_region->set_id(region.region_id);
-                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
-                retry_region->mutable_region_epoch()->set_version(region.region_version);
-            }
-        }
 
+        addRetryRegion(context, response);
         RandomFailPointTestBeforeRunningMPPTask(task->isRootMPPTask());
+
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }
