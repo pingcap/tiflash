@@ -34,11 +34,27 @@ extern const Metric DT_SnapshotOfBitmapFilter;
 
 namespace DB::DM::tests
 {
-std::pair<SegmentPtr, SegmentSnapshot> get
-BitmapFilterPtr SegmentTestBasic::buildBitmapFilter(PageId segment_id)
-{
-    LOG_INFO(logger_op, "buildBitmapFilter, segment_id={}", segment_id);
+Block mergeBlocks(std::vector<Block> && blocks);
 
+Block mergeSegmentRowIds(std::vector<Block> && blocks)
+{
+    auto accumulated_block = std::move(blocks[0]);
+    RUNTIME_CHECK(accumulated_block.segmentRowIdCol() != nullptr);
+    for (size_t block_idx = 1; block_idx < blocks.size(); ++block_idx)
+    {
+        auto block = std::move(blocks[block_idx]);
+        auto accu_row_id_col = accumulated_block.segmentRowIdCol();
+        auto row_id_col = block.segmentRowIdCol();
+        RUNTIME_CHECK(row_id_col != nullptr);
+        auto mut_col = (*std::move(accu_row_id_col)).mutate();
+        mut_col->insertRangeFrom(*row_id_col, 0, row_id_col->size());
+        accumulated_block.setSegmentRowIdCol(std::move(mut_col));
+    }
+    return accumulated_block;
+}
+
+std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageId segment_id)
+{
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
     auto snapshot = segment->createSnapshot(
@@ -46,20 +62,59 @@ BitmapFilterPtr SegmentTestBasic::buildBitmapFilter(PageId segment_id)
         /* for_update */ false,
         CurrentMetrics::DT_SnapshotOfBitmapFilter);
     RUNTIME_CHECK(snapshot != nullptr);
+    return {segment, snapshot};
+}
 
-    return segment->buildBitmapFilter(
+ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id)
+{
+    LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
+    auto [segment, snapshot] = getSegmentForRead(segment_id);
+    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle)};
+    auto stream = segment->getInputStreamModeNormal(
         *dm_context,
+        columns_to_read,
         snapshot,
         {segment->getRowKeyRange()},
         nullptr,
         std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
+        DEFAULT_BLOCK_SIZE,
+        true);
+    
+    std::vector<Block> blks;
+    for (auto blk = stream->read(); blk; blk = stream->read())
+    {
+        blks.push_back(blk);
+    }
+    auto block = mergeSegmentRowIds(std::move(blks));
+    RUNTIME_CHECK(!block.has(EXTRA_HANDLE_COLUMN_NAME));
+    RUNTIME_CHECK(block.segmentRowIdCol() != nullptr);
+    return block.segmentRowIdCol();  
 }
 
-Block SegmentTestBasic::getSegmentRowId(PageId segment_id)
+ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id)
 {
-    LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
-
-
+    LOG_INFO(logger_op, "getSegmentHandle, segment_id={}", segment_id);
+    auto [segment, snapshot] = getSegmentForRead(segment_id);
+    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
+                                     getVersionColumnDefine()};
+    auto stream = segment->getInputStreamModeNormal(
+        *dm_context,
+        columns_to_read,
+        snapshot,
+        {segment->getRowKeyRange()},
+        nullptr,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        false);
+    
+    std::vector<Block> blks;
+    for (auto blk = stream->read(); blk; blk = stream->read())
+    {
+        blks.push_back(blk);
+    }
+    auto block = mergeBlocks(std::move(blks));
+    RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
+    RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
+    return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
 }
 }
