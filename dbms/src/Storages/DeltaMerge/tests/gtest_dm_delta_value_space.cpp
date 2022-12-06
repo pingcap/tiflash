@@ -334,6 +334,10 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         {
             delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch)));
         }
+        {
+            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
+            total_rows_write += num_rows_write_per_batch;
+        }
         delta->flush(dmContext());
     }
     // build compaction task and finish prepare stage
@@ -341,18 +345,20 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     {
         PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
-        ASSERT_EQ(compaction_task->getCompactionSourceLevel(), 0);
         // There should be two compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one,
         // and the second task is just a trivial move for the last column file which is a delete range.
         const auto & tasks = compaction_task->getTasks();
-        ASSERT_EQ(tasks.size(), 2);
+        ASSERT_EQ(tasks.size(), 3);
         ASSERT_EQ(tasks[0].to_compact.size(), 3);
         ASSERT_EQ(tasks[0].is_trivial_move, false);
         ASSERT_EQ(tasks[1].to_compact.size(), 1);
         ASSERT_EQ(tasks[1].is_trivial_move, true);
+        ASSERT_EQ(tasks[2].to_compact.size(), 1);
+        ASSERT_EQ(tasks[3].is_trivial_move, true);
         compaction_task->prepare(dmContext(), wbs, reader);
     }
+
     // another thread write more data to the delta value space and flush it
     {
         appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
@@ -361,18 +367,27 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         ASSERT_EQ(delta->getUnsavedRows(), 0);
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
         ASSERT_EQ(persisted_file_set->getDeletes(), 1);
-        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 5);
+        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 6);
     }
     // commit the compaction task and check the status
     {
         ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
         ASSERT_EQ(persisted_file_set->getDeletes(), 1);
+        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 4);
+    }
+    // now the column files in persisted_file_set should be: T_300, D_0_100, T_100, T_100
+    {
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        compaction_task->prepare(dmContext(), wbs, reader);
+        ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
+        ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
+        ASSERT_EQ(persisted_file_set->getDeletes(), 1);
         ASSERT_EQ(persisted_file_set->getColumnFileCount(), 3);
     }
-    // after compaction, the column file in persisted_file_set should be like the following:
-    // level 0: T_100
-    // level 1: T_300, D_0_100
+    // now the column files in persisted_file_set should be: T_300, D_0_100, T_200
     // so there is no compaction task to do
     {
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
@@ -431,7 +446,6 @@ TEST_F(DeltaValueSpaceTest, Restore)
             total_rows_write += num_rows_write_per_batch;
         }
         delta->flush(dmContext());
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 2);
         ASSERT_EQ(delta->getColumnFileCount(), 3);
         ASSERT_EQ(delta->getRows(), total_rows_write);
     }
@@ -475,9 +489,7 @@ TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
     auto persisted_file_set = delta->getPersistedFileSet();
     size_t total_rows_write = 0;
     WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
-    // create three levels in persisted_file_set
     {
-        // one column file in level 1
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -489,8 +501,6 @@ TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
         delta->flush(dmContext());
         delta->compact(dmContext());
         ASSERT_EQ(delta->getColumnFileCount(), 1);
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 2);
-        // one column files in level 2
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -500,13 +510,8 @@ TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
             total_rows_write += num_rows_write_per_batch;
         }
         delta->flush(dmContext());
-        // compact two level 0 files to level 1
-        delta->compact(dmContext());
-        // compact two level 1 files to level 2
         delta->compact(dmContext());
         ASSERT_EQ(delta->getColumnFileCount(), 1);
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 3);
-        // one column files in level 1 and one column files in level 2
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -517,8 +522,7 @@ TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
         }
         delta->flush(dmContext());
         delta->compact(dmContext());
-        ASSERT_EQ(delta->getColumnFileCount(), 2);
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 3);
+        ASSERT_EQ(delta->getColumnFileCount(), 1);
     }
     {
         auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
