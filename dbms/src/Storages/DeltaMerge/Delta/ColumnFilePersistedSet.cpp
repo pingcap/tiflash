@@ -64,17 +64,14 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
         new_deletes += file->isDeleteRange();
     }
 
-    if (unlikely(new_rows != rows || new_deletes != deletes))
-    {
-        LOG_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", //
-                  new_rows,
-                  new_deletes,
-                  rows.load(),
-                  deletes.load(),
-                  columnFilesToString(persisted_files),
-                  columnFilesToString(new_column_files));
-        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
-    }
+    RUNTIME_CHECK_MSG(new_rows == rows && new_deletes == deletes,
+                      "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", //
+                      new_rows,
+                      new_deletes,
+                      rows.load(),
+                      deletes.load(),
+                      columnFilesToString(persisted_files),
+                      columnFilesToString(new_column_files));
 }
 
 ColumnFilePersistedSet::ColumnFilePersistedSet( //
