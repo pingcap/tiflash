@@ -62,7 +62,7 @@ std::vector<RemoteRequest> StorageDisaggregatedInterpreter::buildRemoteRequests(
 
 void StorageDisaggregatedInterpreter::pushDownFilter(DAGPipeline & pipeline, std::shared_ptr<ExchangeReceiver> exchange_receiver)
 {
-    NamesAndTypes source_columns = genNamesAndTypes(table_scan, "exchange_receiver");
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
     assert(receiver_dag_schema.size() == source_columns.size());
 
@@ -71,7 +71,7 @@ void StorageDisaggregatedInterpreter::pushDownFilter(DAGPipeline & pipeline, std
     if (push_down_filter.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/0, push_down_filter, *analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), push_down_filter, *analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[push_down_filter.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });

@@ -23,6 +23,8 @@
 
 namespace DB
 {
+NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_scan);
+String genNameForExchangeReceiver(Int32 col_index);
 DataTypePtr genTypeByTiDBColumnInfo(const TiDB::ColumnInfo & column_info);
 NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan);
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);

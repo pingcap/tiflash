@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -284,7 +285,7 @@ void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
     schema.clear();
     for (int i = 0; i < exchange_receiver_meta.field_types_size(); ++i)
     {
-        String name = "exchange_receiver_" + std::to_string(i);
+        String name = genNameForExchangeReceiver(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
         schema.emplace_back(std::move(name), std::move(info));
     }
