@@ -99,6 +99,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
+    std::cout << query_executor->dump() << std::endl;
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 

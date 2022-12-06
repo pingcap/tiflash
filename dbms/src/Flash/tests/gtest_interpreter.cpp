@@ -391,12 +391,110 @@ Union: <for test>
 }
 CATCH
 
+TEST_F(InterpreterExecuteTest, FineGrainedShuffleJoin)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    {
+        // Join Source.
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", enable);
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")},
+                                    enable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+    {
+        // Join Source.
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", disable);
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")},
+                                    disable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, FineGrainedShuffleAgg)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    {
+        DAGRequestBuilder receiver1 = context.receive("sender_1", enable);
+        auto request = receiver1
+                           .aggregation({Max(col("s1"))}, {col("s2")}, enable)
+                           .build(context);
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Aggregating: <enable fine grained shuffle>
+   MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        DAGRequestBuilder receiver1 = context.receive("sender_1", disable);
+        auto request = receiver1
+                           .aggregation({Max(col("s1"))}, {col("s2")}, disable)
+                           .build(context);
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   ParallelAggregating, max_threads: 10, final: true
+    MockExchangeReceiver x 10)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
 TEST_F(InterpreterExecuteTest, Join)
 try
 {
     // TODO: Find a way to write the request easier.
     {
-        // Join Source.
+        // join + ExchangeReceiver
         DAGRequestBuilder table1 = context.scan("test_db", "r_table");
         DAGRequestBuilder table2 = context.scan("test_db", "l_table");
         DAGRequestBuilder table3 = context.scan("test_db", "r_table");
