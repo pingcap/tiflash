@@ -258,7 +258,11 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(*context);
-    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    auto block_io = executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    {
+        std::lock_guard lock(stream_mu);
+        data_stream = block_io.in;
+    }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
@@ -300,7 +304,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = dag_context->getBlockIO().in;
+        auto from = getDataStream();
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
 
@@ -351,7 +355,7 @@ void MPPTask::runImpl()
     }
     else
     {
-        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+        sendCancelToQuery(true);
         if (dag_context)
             dag_context->cancelAllExchangeReceiver();
         writeErrToAllTunnels(err_msg);
@@ -366,6 +370,21 @@ void MPPTask::runImpl()
 
     mpp_task_statistics.end(status.load(), err_msg);
     mpp_task_statistics.logTracingJson();
+}
+
+void MPPTask::sendCancelToQuery(bool kill)
+{
+    auto stream = getDataStream();
+    if (!stream)
+        return;
+    if (auto p_stream = std::dynamic_pointer_cast<IProfilingBlockInputStream>(stream); p_stream)
+        p_stream->cancel(kill);
+}
+
+BlockInputStreamPtr MPPTask::getDataStream()
+{
+    std::lock_guard lock(stream_mu);
+    return data_stream;
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
@@ -407,7 +426,7 @@ void MPPTask::cancel(const String & reason)
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
             scheduleThisTask(ScheduleState::FAILED);
-            context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+            sendCancelToQuery(true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish cancel task from running");
@@ -462,11 +481,12 @@ bool MPPTask::scheduleThisTask(ScheduleState state)
 
 int MPPTask::estimateCountOfNewThreads()
 {
-    if (dag_context == nullptr || dag_context->getBlockIO().in == nullptr || dag_context->tunnel_set == nullptr)
+    auto stream = getDataStream();
+    if (dag_context == nullptr || stream == nullptr || dag_context->tunnel_set == nullptr)
         throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
 
     // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
-    return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
+    return stream->estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
 }
 
