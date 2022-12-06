@@ -159,11 +159,10 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
         auto region_id = 1;
-        TableID table_id = 0;
         {
             initStorages();
             KVStore & kvs = getKVS();
-            table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
+            proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         }
         {
