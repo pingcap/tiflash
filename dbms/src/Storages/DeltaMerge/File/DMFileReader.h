@@ -16,6 +16,7 @@
 
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
@@ -23,6 +24,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/MarkCache.h>
 
 namespace DB
@@ -94,7 +96,8 @@ public:
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
         const String & tracing_id_,
-        bool enable_col_sharing_cache);
+        bool enable_col_sharing_cache,
+        const ScanContextPtr & scan_context_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -131,14 +134,14 @@ private:
 private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;
-    ColumnStreams column_streams;
+    ColumnStreams column_streams{};
 
     const bool is_common_handle;
 
     // read_one_pack_every_time is used to create info for every pack
     const bool read_one_pack_every_time;
 
-    const bool single_file_mode;
+    const bool single_file_mode{};
 
     /// Clean read optimize
     // In normal mode, if there is no delta for some packs in stable, we can try to do clean read (enable_handle_clean_read is true).
@@ -153,12 +156,14 @@ private:
     /// Filters
     DMFilePackFilter pack_filter;
 
-    std::vector<size_t> skip_packs_by_column;
+    std::vector<size_t> skip_packs_by_column{};
 
     /// Caches
     MarkCachePtr mark_cache;
     const bool enable_column_cache;
     ColumnCachePtr column_cache;
+
+    const ScanContextPtr scan_context;
 
     const size_t rows_threshold_per_read;
 
@@ -168,8 +173,8 @@ private:
 
     LoggerPtr log;
 
-    std::unique_ptr<ColumnSharingCacheMap> col_data_cache;
-    std::unordered_map<ColId, bool> last_read_from_cache;
+    std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+    std::unordered_map<ColId, bool> last_read_from_cache{};
 };
 
 } // namespace DM

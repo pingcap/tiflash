@@ -23,7 +23,7 @@ SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_bl
     , min_block_size_bytes(min_block_size_bytes)
     , log(Logger::get(req_id))
 {
-    LOG_DEBUG(log, "Squashing config - min_block_size_rows: {} min_block_size_bytes: {}", min_block_size_rows, min_block_size_bytes);
+    LOG_TRACE(log, "Squashing config - min_block_size_rows: {} min_block_size_bytes: {}", min_block_size_rows, min_block_size_bytes);
 }
 
 

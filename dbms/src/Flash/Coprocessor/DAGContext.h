@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ScanContext.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -365,6 +366,12 @@ public:
     /// Hold the order of list based executors.
     /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
     std::vector<String> list_based_executors_order;
+
+    /// executor_id, ScanContextPtr
+    /// Currently, max(scan_context_map.size()) == 1, because one mpp task only have do one table scan
+    /// While when we support collcate join later, scan_context_map.size() may > 1,
+    /// thus we need to pay attention to scan_context_map usage that time.
+    std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
 
 private:
     void initExecutorIdToJoinIdMap();

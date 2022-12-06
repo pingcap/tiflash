@@ -160,8 +160,8 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(const DMContextPtr
     // Note: it is possible that there is a very small segment close to a very large segment.
     // In this case, the small segment will not get merged. It is possible that we can allow
     // segment merging for this case in future.
-    auto max_total_rows = context->small_segment_rows;
-    auto max_total_bytes = context->small_segment_bytes;
+    auto max_total_rows = context->segment_limit_rows;
+    auto max_total_bytes = context->segment_limit_bytes;
 
     std::vector<SegmentPtr> results;
     {
@@ -517,7 +517,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
 {
     auto segment_rows = segment->getEstimatedRows();
     auto segment_bytes = segment->getEstimatedBytes();
-    if (segment_rows >= dm_context->small_segment_rows || segment_bytes >= dm_context->small_segment_bytes)
+    if (segment_rows >= dm_context->segment_limit_rows || segment_bytes >= dm_context->segment_limit_bytes)
     {
         LOG_TRACE(
             log,
