@@ -65,6 +65,7 @@ public:
     {
         return table_scan;
     }
+
 private:
     const tipb::Executor * table_scan;
     String executor_id;

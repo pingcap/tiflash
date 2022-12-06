@@ -70,8 +70,8 @@ void executeCreatingSets(
     const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-        const PushDownFilter & push_down_filter,
-        DAGExpressionAnalyzer & analyzer);
+    const PushDownFilter & push_down_filter,
+    DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
     size_t remote_read_streams_start_index,

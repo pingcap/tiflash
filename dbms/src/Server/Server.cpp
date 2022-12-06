@@ -210,7 +210,10 @@ static DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfigura
     {
         std::string mode_str = config.getString(config_key);
         RUNTIME_ASSERT(mode_str == DISAGGREGATED_MODE_STORAGE || mode_str == DISAGGREGATED_MODE_COMPUTE,
-                "Expect disaggregated_mode is {} or {}, got: {}", DISAGGREGATED_MODE_STORAGE, DISAGGREGATED_MODE_COMPUTE, mode_str);
+                       "Expect disaggregated_mode is {} or {}, got: {}",
+                       DISAGGREGATED_MODE_STORAGE,
+                       DISAGGREGATED_MODE_COMPUTE,
+                       mode_str);
         if (mode_str == DISAGGREGATED_MODE_COMPUTE)
         {
             mode = DisaggregatedMode::Compute;
@@ -1229,11 +1232,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 const int wait_seconds = 3;
                 LOG_ERROR(
-                        log,
-                        "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
-                        " seconds and try again.",
-                        e.displayText(),
-                        wait_seconds);
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    wait_seconds);
                 ::sleep(wait_seconds);
             }
         }

@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Storages/IStorage.h>
 #include <Common/Logger.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
+#include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -39,16 +39,17 @@ class StorageDisaggregated : public IStorage
 {
 public:
     StorageDisaggregated(
-            Context & context_,
-            const TiDBTableScan & table_scan_,
-            const std::vector<RemoteRequest> & remote_requests_)
+        Context & context_,
+        const TiDBTableScan & table_scan_,
+        const std::vector<RemoteRequest> & remote_requests_)
         : IStorage()
         , context(context_)
         , table_scan(table_scan_)
         , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
         , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
         , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id())
-        , remote_requests(remote_requests_) {}
+        , remote_requests(remote_requests_)
+    {}
 
     std::string getName() const override
     {
@@ -80,6 +81,7 @@ public:
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+
 private:
     void pushDownFilter(DAGPipeline & pipeline);
     void setGRPCErrorMsg(const std::string & err);

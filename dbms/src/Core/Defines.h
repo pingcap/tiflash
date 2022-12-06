@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/defines.h>
+
 #include <string>
 
 #define DBMS_NAME "ClickHouse"

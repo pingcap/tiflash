@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 
 
 namespace DB
@@ -47,11 +47,11 @@ std::vector<RemoteRequest> StorageDisaggregatedInterpreter::buildRemoteRequests(
         if (remote_regions.empty())
             continue;
         remote_requests.push_back(RemoteRequest::buildDisaggregated(
-                    remote_regions,
-                    table_scan,
-                    push_down_filter,
-                    log,
-                    physical_table_id));
+            remote_regions,
+            table_scan,
+            push_down_filter,
+            log,
+            physical_table_id));
     }
     return remote_requests;
 }

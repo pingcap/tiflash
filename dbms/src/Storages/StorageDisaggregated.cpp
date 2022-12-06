@@ -21,12 +21,12 @@ namespace DB
 const String StorageDisaggregated::ExecIDPrefixForTiFlashStorageSender = "exec_id_disaggregated_tiflash_storage_sender";
 
 BlockInputStreams StorageDisaggregated::read(
-        const Names &,
-        const SelectQueryInfo &,
-        const Context &,
-        QueryProcessingStage::Enum &,
-        size_t,
-        unsigned num_streams)
+    const Names &,
+    const SelectQueryInfo &,
+    const Context &,
+    QueryProcessingStage::Enum &,
+    size_t,
+    unsigned num_streams)
 {
     auto dispatch_reqs = buildAndDispatchMPPTaskRequests();
 
@@ -72,8 +72,9 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     dispatch_req->set_timeout(settings.mpp_task_timeout);
     dispatch_req->set_schema_ver(settings.read_tso);
     RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
-            "region_infos and table_regions should not exist at the same time, single table region info: {}, partition table region info: {}",
-            batch_cop_task.region_infos.size(), batch_cop_task.table_regions.size());
+                      "region_infos and table_regions should not exist at the same time, single table region info: {}, partition table region info: {}",
+                      batch_cop_task.region_infos.size(),
+                      batch_cop_task.table_regions.size());
     if (!batch_cop_task.region_infos.empty())
     {
         // For non-partition table.
@@ -129,7 +130,9 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
     // Exec summary of ExchangeSender will be merged into TableScan.
     executor->set_executor_id(fmt::format("{}_{}_{}",
-                ExecIDPrefixForTiFlashStorageSender, sender_target_task_start_ts, sender_target_task_task_id));
+                                          ExecIDPrefixForTiFlashStorageSender,
+                                          sender_target_task_start_ts,
+                                          sender_target_task_task_id));
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
@@ -163,33 +166,33 @@ StorageDisaggregated::buildAndDispatchMPPTaskRequests()
     {
         LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [dispatch_req, this] {
-                // When send req succeed or backoff timeout, need_retry is false.
-                bool need_retry = true;
-                pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
-                while (need_retry)
+            // When send req succeed or backoff timeout, need_retry is false.
+            bool need_retry = true;
+            pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
+            while (need_retry)
+            {
+                try
                 {
+                    pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
+                    this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
+                    need_retry = false;
+                }
+                catch (...)
+                {
+                    std::string local_err_msg = getCurrentExceptionMessage(true);
                     try
                     {
-                        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
-                        this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
-                        need_retry = false;
+                        bo.backoff(pingcap::kv::boTiFlashRPC, pingcap::Exception(local_err_msg));
                     }
                     catch (...)
                     {
-                        std::string local_err_msg = getCurrentExceptionMessage(true);
-                        try
-                        {
-                            bo.backoff(pingcap::kv::boTiFlashRPC, pingcap::Exception(local_err_msg));
-                        }
-                        catch (...)
-                        {
-                            need_retry = false;
-                            this->setGRPCErrorMsg(local_err_msg);
-                            pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-                            cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
-                        }
+                        need_retry = false;
+                        this->setGRPCErrorMsg(local_err_msg);
+                        pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+                        cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
                     }
                 }
+            }
         });
     }
 
@@ -232,19 +235,19 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const String executor_id = table_scan.getTableScanExecutorID();
     exchange_receiver = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(
-                receiver,
-                sender_target_task_meta,
-                context.getTMTContext().getKVCluster(),
-                context.getTMTContext().getMPPTaskManager(),
-                context.getSettingsRef().enable_local_tunnel,
-                context.getSettingsRef().enable_async_grpc_client),
-            receiver.encoded_task_meta_size(),
-            num_streams,
-            log->identifier(),
-            executor_id,
-            /*fine_grained_shuffle_stream_count=*/0,
-            /*is_tiflash_storage_receiver=*/true);
+        std::make_shared<GRPCReceiverContext>(
+            receiver,
+            sender_target_task_meta,
+            context.getTMTContext().getKVCluster(),
+            context.getTMTContext().getMPPTaskManager(),
+            context.getSettingsRef().enable_local_tunnel,
+            context.getSettingsRef().enable_async_grpc_client),
+        receiver.encoded_task_meta_size(),
+        num_streams,
+        log->identifier(),
+        executor_id,
+        /*fine_grained_shuffle_stream_count=*/0,
+        /*is_receiver_for_tiflash_storage=*/true);
 
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);

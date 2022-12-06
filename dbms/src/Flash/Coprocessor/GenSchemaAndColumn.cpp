@@ -60,12 +60,12 @@ DataTypePtr genTypeByTiDBColumnInfo(const TiDB::ColumnInfo & column_info)
 {
     switch (column_info.id)
     {
-        case TiDBPkColumnID:
-            return getPkType(column_info);
-        case ExtraTableIDColumnID:
-            return MutableSupport::extra_table_id_column_type;
-        default:
-            return getDataTypeByColumnInfoForComputingLayer(column_info);
+    case TiDBPkColumnID:
+        return getPkType(column_info);
+    case ExtraTableIDColumnID:
+        return MutableSupport::extra_table_id_column_type;
+    default:
+        return getDataTypeByColumnInfoForComputingLayer(column_info);
     }
 }
 

@@ -420,7 +420,7 @@ public:
             "mock_req_id",
             "mock_exchange_receiver_id",
             0,
-            /*is_tiflash_storage_receiver*/false);
+            /*is_receiver_for_tiflash_storage=*/false);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",

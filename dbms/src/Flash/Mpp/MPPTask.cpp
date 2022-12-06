@@ -176,7 +176,7 @@ void MPPTask::initExchangeReceivers()
                 log->identifier(),
                 executor_id,
                 executor.fine_grained_shuffle_stream_count(),
-                /*is_tiflash_storage_receiver=*/false);
+                /*is_receiver_for_tiflash_storage=*/false);
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 

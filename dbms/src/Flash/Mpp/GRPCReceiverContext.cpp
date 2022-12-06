@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -235,9 +235,9 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode()
         cancel_req->set_allocated_meta(sender_task.release());
         auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::CancelTaskRequest>>(cancel_req);
         thread_manager->schedule(/*mem_tracker=*/true, "", [cancel_req, this] {
-                auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
-                // No need to retry.
-                this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
+            auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
+            // No need to retry.
+            this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
         });
     }
     thread_manager->wait();

@@ -495,6 +495,7 @@ public:
     {
         return disaggregated_mode == DisaggregatedMode::Storage;
     }
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/StorageDisaggregated.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <Storages/StorageDisaggregated.h>
 
 namespace DB
 {
@@ -68,9 +68,9 @@ try
     // It's ok to be empty, because buildDispatchMPPTaskRequest() doesn't use it.
     auto remote_requests = std::vector<RemoteRequest>{RemoteRequest(::tipb::DAGRequest(), DAGSchema(), std::vector<pingcap::coprocessor::KeyRange>(), 0)};
     StorageDisaggregated storage(
-            TiFlashTestEnv::getGlobalContext(),
-            tidb_table_scan,
-            remote_requests);
+        TiFlashTestEnv::getGlobalContext(),
+        tidb_table_scan,
+        remote_requests);
 
     ::pingcap::coprocessor::RegionInfo mock_region_info;
     ::pingcap::coprocessor::BatchCopTask mock_batch_cop_task;

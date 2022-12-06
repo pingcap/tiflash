@@ -146,10 +146,10 @@ std::string RemoteRequest::printRetryRegions(const RegionRetryList & retry_regio
     FmtBuffer buffer;
     buffer.fmtAppend("Start to build remote request for {} regions (", retry_regions.size());
     buffer.joinStr(
-            retry_regions.cbegin(),
-            retry_regions.cend(),
-            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
-            ",");
+        retry_regions.cbegin(),
+        retry_regions.cend(),
+        [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
+        ",");
     buffer.fmtAppend(") for table {}", table_id);
     return buffer.toString();
 }

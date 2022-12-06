@@ -197,8 +197,8 @@ void executeCreatingSets(
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-        const PushDownFilter & push_down_filter,
-        DAGExpressionAnalyzer & analyzer)
+    const PushDownFilter & push_down_filter,
+    DAGExpressionAnalyzer & analyzer)
 {
     assert(push_down_filter.hasValue());
 

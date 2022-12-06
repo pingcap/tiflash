@@ -82,8 +82,8 @@ public:
     const Context & getContext() const;
 
     explicit TMTContext(Context & context_,
-            const TiFlashRaftConfig & raft_config,
-            const pingcap::ClusterConfig & cluster_config_);
+                        const TiFlashRaftConfig & raft_config,
+                        const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
 

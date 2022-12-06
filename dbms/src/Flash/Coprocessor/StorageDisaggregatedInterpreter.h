@@ -24,27 +24,29 @@
 namespace DB
 {
 
-// For TableScan in disaggregated tiflash mode, 
+// For TableScan in disaggregated tiflash mode,
 // we convert it to ExchangeReceiver(executed in tiflash_compute node),
 // and ExchangeSender + TableScan(executed in tiflash_storage node).
 class StorageDisaggregatedInterpreter
 {
 public:
     StorageDisaggregatedInterpreter(
-            Context & context_,
-            const TiDBTableScan & table_scan_,
-            const PushDownFilter & push_down_filter_,
-            size_t max_streams_)
+        Context & context_,
+        const TiDBTableScan & table_scan_,
+        const PushDownFilter & push_down_filter_,
+        size_t max_streams_)
         : context(context_)
         , table_scan(table_scan_)
         , push_down_filter(push_down_filter_)
         , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
-        , max_streams(max_streams_) {}
+        , max_streams(max_streams_)
+    {}
 
     void execute(DAGPipeline & pipeline);
     std::vector<RemoteRequest> buildRemoteRequests();
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+
 private:
     void pushDownFilter(DAGPipeline & pipeline, std::shared_ptr<ExchangeReceiver> exchange_receiver);
 

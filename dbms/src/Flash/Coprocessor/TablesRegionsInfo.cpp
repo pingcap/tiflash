@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Interpreters/Context.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 

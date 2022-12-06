@@ -56,11 +56,11 @@ struct RemoteRequest
         const LoggerPtr & log,
         Int64 physical_table_id);
     static RemoteRequest buildDisaggregated(
-            const RegionRetryList & retry_regions,
-            const TiDBTableScan & table_scan,
-            const PushDownFilter &,
-            const LoggerPtr & log,
-            Int64 physical_table_id);
+        const RegionRetryList & retry_regions,
+        const TiDBTableScan & table_scan,
+        const PushDownFilter &,
+        const LoggerPtr & log,
+        Int64 physical_table_id);
     static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const RegionRetryList & retry_regions);
     static std::string printRetryRegions(const RegionRetryList & retry_regions, TableID table_id);
 
