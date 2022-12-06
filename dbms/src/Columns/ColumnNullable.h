@@ -31,7 +31,7 @@ using ConstNullMapPtr = const NullMap *;
 /// over a bitmap because columns are usually stored on disk as compressed
 /// files. In this regard, using a bitmap instead of a byte map would
 /// greatly complicate the implementation with little to no benefits.
-class ColumnNullable final : public COWPtrHelper<IColumn, ColumnNullable>
+class ColumnNullable final : public COWPtrHelper<IColumn, ColumnNullable> // nullable 列是怎么形成的，一般是一个普通列，一个伴随 bitmap，这里使用的 byte map 来存的 null mapping 而不是 bits
 {
 private:
     friend class COWPtrHelper<IColumn, ColumnNullable>;

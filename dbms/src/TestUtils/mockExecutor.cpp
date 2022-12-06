@@ -17,6 +17,7 @@
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/ExpandBinder.h>
 #include <Debug/MockExecutor/JoinBinder.h>
 #include <Debug/MockExecutor/LimitBinder.h>
 #include <Debug/MockExecutor/ProjectBinder.h>
@@ -358,6 +359,29 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 {
     assert(root);
     root = compileSort(root, getExecutorIndex(), buildOrderByItemVec(order_by_vec), is_partial_sort, fine_grained_shuffle_stream_count);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::repeat(MockVVecColumnNameVec grouping_set_columns)
+{
+    assert(root);
+    auto grouping_sets_ast =  mock::MockVVecGroupingNameVec();
+    auto grouping_col_collection = std::set<String>();
+    for (const auto & grouping_set : grouping_set_columns) {
+        auto grouping_set_ast = mock::MockVecGroupingNameVec();
+        for (const auto &grouping_exprs : grouping_set) {
+            auto grouping_exprs_ast = mock::MockGroupingNameVec();
+            for (const auto &grouping_col : grouping_exprs)
+            {
+                auto ast_col_ptr = buildColumn(grouping_col);             // string identifier change to ast column ref
+                grouping_exprs_ast.emplace_back(std::move(ast_col_ptr));
+                grouping_col_collection.insert(grouping_col);
+            }
+            grouping_set_ast.emplace_back(std::move(grouping_exprs_ast));
+        }
+        grouping_sets_ast.emplace_back(std::move(grouping_set_ast));
+    }
+    root = compileRepeat(root, getExecutorIndex(), grouping_sets_ast, grouping_col_collection);
     return *this;
 }
 

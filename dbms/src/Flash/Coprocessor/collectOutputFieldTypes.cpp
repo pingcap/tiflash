@@ -99,6 +99,35 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
+bool collectForRepeat(std::vector<tipb::FieldType> &out_field_types, const tipb::Executor & executor)
+{
+
+    auto &out_child_fields = out_field_types;
+    // collect output_field_types of children
+    getChildren(executor).forEach([&out_child_fields](const tipb::Executor & child) {
+        traverseExecutorTree(child, [&out_child_fields](const tipb::Executor & e) { return collectForExecutor(out_child_fields, e); });
+    });
+
+//    executor.repeat_source().grouping_sets().Get(1).grouping_exprs().Get(1).grouping_expr().Get(1).
+//    /// the type of grouping set column is always nullable
+//    auto updated_field_type = field_type;
+//    updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+//    output_field_types.push_back(updated_field_type);
+
+    {
+        // for additional groupingID column.
+        tipb::FieldType field_type{};
+        field_type.set_tp(TiDB::TypeLongLong);
+        field_type.set_charset("binary");
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_flag(0);
+        field_type.set_flen(-1);
+        field_type.set_decimal(-1);
+        out_field_types.push_back(field_type);
+    }
+    return false;
+}
+
 bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
     // collect output_field_types of children
@@ -190,6 +219,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         return collectForTableScan(output_field_types, executor.partition_table_scan());
     case tipb::ExecType::TypeJoin:
         return collectForJoin(output_field_types, executor);
+    case tipb::ExecType::TypeRepeatSource:
+        return collectForRepeat(output_field_types, executor);
     default:
         return true;
     }

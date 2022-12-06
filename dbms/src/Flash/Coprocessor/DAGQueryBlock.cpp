@@ -46,6 +46,7 @@ bool isSourceNode(const tipb::Executor * root)
 const static String SOURCE_NAME("source");
 const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
+const static String REPEAT_NAME("repeat_source");
 const static String WINDOW_NAME("window");
 const static String WINDOW_SORT_NAME("window_sort");
 const static String HAVING_NAME("having");
@@ -96,6 +97,12 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             }
             current = &current->selection().child();
             break;
+        case tipb::ExecType::TypeRepeatSource:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_repeat_source).Increment();
+            assignOrThrowException(&repeat_source, current, REPEAT_NAME);
+            repeat_source_name = current->executor_id();
+            current = &current->repeat_source().child();         // 非叶节点，继续孩子递归下去
+            break;
         case tipb::ExecType::TypeStreamAgg:
             RUNTIME_CHECK_MSG(current->aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
         case tipb::ExecType::TypeAggregation:
@@ -134,6 +141,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
 
     assignOrThrowException(&source, current, SOURCE_NAME);
     source_name = current->executor_id();
+    // source 节点，
     if (current->tp() == tipb::ExecType::TypeJoin)
     {
         if (source->join().children_size() != 2)

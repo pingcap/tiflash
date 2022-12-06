@@ -34,6 +34,7 @@ using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
 
 class Join;
+class Repeat;
 
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
@@ -65,6 +66,8 @@ public:
 
         /// Reorder and rename the columns, delete the extra ones. The same column names are allowed in the result.
         PROJECT,
+
+        REPEAT,
     };
 
     Type type;
@@ -90,6 +93,10 @@ public:
     /// For PROJECT.
     NamesWithAliases projections;
 
+    /// For REPEAT_SOURCE.
+    std::shared_ptr<const Repeat> repeat;
+    NamesAndTypesList columns_added_by_repeat;
+
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
         const FunctionBuilderPtr & function_,
@@ -103,6 +110,7 @@ public:
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
     static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
+    static ExpressionAction repeatSource(std::shared_ptr<const Repeat> repeat_source_);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;

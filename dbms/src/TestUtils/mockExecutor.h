@@ -38,6 +38,8 @@ using MockOrderByItemVec = std::vector<MockOrderByItem>;
 using MockPartitionByItem = std::pair<String, bool>;
 using MockPartitionByItemVec = std::vector<MockPartitionByItem>;
 using MockColumnNameVec = std::vector<String>;
+using MockVecColumnNameVec = std::vector<MockColumnNameVec>;     // for grouping set (every groupingExpr element inside is slice of column)
+using MockVVecColumnNameVec = std::vector<MockVecColumnNameVec>; // for grouping sets
 using MockAstVec = std::vector<ASTPtr>;
 using MockWindowFrame = mock::MockWindowFrame;
 
@@ -144,6 +146,9 @@ public:
     DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+
+    // repeat
+    DAGRequestBuilder & repeat(MockVVecColumnNameVec grouping_set_columns);
 
     void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }

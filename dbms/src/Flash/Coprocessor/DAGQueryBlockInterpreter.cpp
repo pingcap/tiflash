@@ -44,6 +44,7 @@
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Join.h>
+#include <Interpreters/Repeat.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -75,6 +76,7 @@ struct AnalysisResult
     ExpressionActionsPtr before_having;
     ExpressionActionsPtr before_order_and_select;
     ExpressionActionsPtr final_projection;
+    ExpressionActionsPtr before_repeat_source;
 
     String filter_column_name;
     String having_column_name;
@@ -131,6 +133,11 @@ AnalysisResult analyzeExpressions(
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
+        chain.addStep();
+    }
+
+    if (query_block.repeat_source) {
+        res.before_repeat_source = analyzer.appendRepeatSource(query_block.repeat_source->repeat_source(), chain);
     }
 
     const auto & dag_context = *context.getDAGContext();
@@ -237,6 +244,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
 
     // prepare probe side
+    // 准备 join 的 probe 端，主要是 append join key 和 filter expr 的 action 的加入
     auto [probe_side_prepare_actions, probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         probe_pipeline.firstStream()->getHeader(),
@@ -245,9 +253,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         true,
         is_tiflash_right_join,
         tiflash_join.getProbeConditions());
-    RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
+    RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr"); // 有 init 之后至少都有一个
 
     // prepare build side
+    // 这里的调用函数是同上的一个入口，所以做的事情是如出一辙的
     auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         build_pipeline.firstStream()->getHeader(),
@@ -258,14 +267,15 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
+    // 对 other condition 和 other eq condition 做了一些 where 的 col append
     auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
         = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
 
     const Settings & settings = context.getSettingsRef();
-    size_t max_block_size_for_cross_join = settings.max_block_size;
+    size_t max_block_size_for_cross_join = settings.max_block_size;   // 如果 repeat 的结果数量超过 max 控制怎么办？
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
-    JoinPtr join_ptr = std::make_shared<Join>(
+    JoinPtr join_ptr = std::make_shared<Join>(   // make join
         probe_key_names,
         build_key_names,
         tiflash_join.kind,
@@ -471,7 +481,7 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
 
 void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 {
-    auto exchange_receiver = dagContext().getMPPExchangeReceiver(query_block.source_name);
+    auto exchange_receiver = dagContext().getMPPExchangeReceiver(query_block.source_name);   // 从注册的 exchanger 中拿到 source 源
     if (unlikely(exchange_receiver == nullptr))
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
@@ -494,14 +504,14 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
                                                                                    /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream->setExtraInfo(extra_info);
-        pipeline.streams.push_back(stream);
+        pipeline.streams.push_back(stream);                      // 每个 pipeline 底层的输入流
     }
     NamesAndTypes source_columns;
     for (const auto & col : pipeline.firstStream()->getHeader())
     {
         source_columns.emplace_back(col.name, col.type);
     }
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);   // 这里初始化了 analyzer
 }
 
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
@@ -517,7 +527,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
 {
     NamesAndTypes input_columns;
     pipeline.streams = input_streams_vec[0];
-    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList()) // 初始的的 block column name
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
     ExpressionActionsChain chain;
@@ -527,12 +537,12 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     UniqueNameGenerator unique_name_generator;
     for (const auto & expr : projection.exprs())
     {
-        auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
-        last_step.required_output.emplace_back(expr_name);
+        auto expr_name = dag_analyzer.getActions(expr, last_step.actions);     // 添加 expr 产生的额外列
+        last_step.required_output.emplace_back(expr_name);                     // 加到这个 step 的最后输出列里面
         const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
         String alias = unique_name_generator.toUniqueName(col.name);
         output_columns.emplace_back(alias, col.type);
-        project_cols.emplace_back(col.name, alias);
+        project_cols.emplace_back(col.name, alias);                    // 我只要保证当前 projection 输出列中不含有重复的列名就行了
     }
     executeExpression(pipeline, chain.getLastActions(), log, "before projection");
     executeProject(pipeline, project_cols, "projection");
@@ -570,18 +580,18 @@ void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const t
 }
 
 // To execute a query block, you have to:
-// 1. generate the date stream and push it to pipeline.
+// 1. generate the data stream and push it to pipeline.
 // 2. assign the analyzer
 // 3. construct a final projection, even if it's not necessary. just construct it.
 // Talking about projection, it has the following rules.
 // 1. if the query block does not contain agg, then the final project is the same as the source Executor
-// 2. if the query block contains agg, then the final project is the same as agg Executor
+// 2. if the query block contains agg/repeat, then the final project is the same as agg/repeat Executor
 // 3. if the cop task may contains more then 1 query block, and the current query block is not the root
 //    query block, then the project should add an alias for each column that needs to be projected, something
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
-    if (query_block.source->tp() == tipb::ExecType::TypeJoin)
+    if (query_block.source->tp() == tipb::ExecType::TypeJoin)   // 看底层的 source 算子来源是什么
     {
         SubqueryForSet right_query;
         handleJoin(query_block.source->join(), pipeline, right_query, query_block.source->fine_grained_shuffle_stream_count());
@@ -632,6 +642,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             Errors::Coprocessor::BadRequest);
     }
 
+    // analyzer 是这里用的, analyzer 先拿到最基础的 source column base，然后在来分析 query block 非叶节点的上层各个算子
     auto res = analyzeExpressions(
         context,
         *analyzer,
@@ -676,14 +687,25 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
-    // execute final project action
-    executeProject(pipeline, final_project, "final projection");
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
+
+    // execute the repeat source OP after all filter/limits and so on.
+    // since repeat source OP has some row replication work to do, place it after limit can reduce some unnecessary burden.
+    // and put it before the final projection, because we should recognize some base col as grouping set col before change their alias.
+    if (res.before_repeat_source)
+    {
+        executeRepeatSource(pipeline, res.before_repeat_source);
+        recordProfileStreams(pipeline, query_block.repeat_source_name);
+    }
+
+    // execute final project action
+    executeProject(pipeline, final_project, "final projection");
+
     restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
@@ -722,6 +744,13 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
         executeUnion(pipeline, max_streams, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     }
+}
+
+void DAGQueryBlockInterpreter::executeRepeatSource(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
+{
+    pipeline.transform([&](auto &stream) {
+        stream = std::make_shared<RepeatSourceBlockInputStream>(stream, expr);
+    });
 }
 
 void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)

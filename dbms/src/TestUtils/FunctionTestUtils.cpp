@@ -220,7 +220,10 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         ASSERT_EQUAL(expect_col.column->size(), actual_col.column->size(), fmt::format("Column {} size mismatch", i));
         auto type_eq = dataTypeEqual(expected[i].type, actual[i].type);
         if (!type_eq)
+        {
+            std::cout << "type equal false" << std::endl;
             return type_eq;
+        }
     }
 
     auto const expected_row_set = columnsToRowSet(expected);
@@ -259,6 +262,7 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
                 .append("\n");
         }
         buf.append("...\n");
+        std::cout<<buf.toString()<<std::endl;
 
         return testing::AssertionFailure() << buf.toString();
     }

@@ -952,6 +952,7 @@ ColumnPtr ColumnArray::replicateNullable(const Offsets & replicate_offsets) cons
 
 ColumnPtr ColumnArray::replicateTuple(const Offsets & replicate_offsets) const
 {
+    // data 是一个父累指针
     const auto & tuple = static_cast<const ColumnTuple &>(*data);
 
     /// Make temporary arrays for each components of Tuple. In the same way as for Nullable.

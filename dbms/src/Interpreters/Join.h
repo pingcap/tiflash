@@ -39,7 +39,7 @@ struct ProbeProcessInfo;
   * JOIN-s could be of nine types: ANY/ALL × LEFT/INNER/RIGHT/FULL, and also CROSS.
   *
   * If ANY is specified - then select only one row from the "right" table, (first encountered row), even if there was more matching rows.
-  * If ALL is specified - usual JOIN, when rows are multiplied by number of matching rows from the "right" table.
+  * If ALL is specified - usual JOIN, when rows are multiplied by number of matching rows from the "right" table. ALL 会复制行
   * ANY is more efficient.
   *
   * If INNER is specified - leave only rows that have matching rows from "right" table.
@@ -187,7 +187,7 @@ public:
     /// Reference to the row in block.
     struct RowRef
     {
-        const Block * block;
+        const Block * block;   // block + row num
         size_t row_num;
 
         RowRef() = default;

@@ -52,6 +52,7 @@ private:
     int needed_threads;
 
     std::mutex schedule_mu;
+    // 条件变量
     std::condition_variable schedule_cv;
     ScheduleState schedule_state;
     const LoggerPtr log;

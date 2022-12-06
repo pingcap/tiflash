@@ -160,6 +160,30 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, FmtBuff
     buf.fmtAppend("}}, limit: {}\n", top_n.limit());
 }
 
+void serializeRepeatSource(const String & executor_id, const tipb::RepeatSource & repeat, FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | repeat_source_by: [", executor_id);
+    for (const auto & grouping_set : repeat.grouping_sets())
+    {
+        buf.fmtAppend("<");
+        for (const auto & grouping_exprs : grouping_set.grouping_exprs())
+        {
+            buf.fmtAppend("{");
+            for (auto i = 0; i < grouping_exprs.grouping_expr().size(); i++)
+            {
+                if (i != 0) {
+                    buf.fmtAppend(",");
+                }
+                auto expr =  grouping_exprs.grouping_expr().Get(i);
+                serializeExpression(expr, buf);
+            }
+            buf.fmtAppend("}");
+        }
+        buf.fmtAppend(">");
+    }
+    buf.fmtAppend("]\n");
+}
+
 void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffer & buf)
 {
     buf.fmtAppend("{} | {}, {}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
@@ -282,6 +306,9 @@ void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_reques
         case tipb::ExecType::TypeLimit:
             serializeLimit("Limit", executor.limit(), buf);
             break;
+        case tipb::ExecType::TypeRepeatSource:
+            serializeRepeatSource("Repeat", executor.repeat_source(), buf);
+            break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }
@@ -338,6 +365,9 @@ void ExecutorSerializer::serializeTreeStruct(const tipb::Executor & root_executo
             break;
         case tipb::ExecType::TypeWindow:
             serializeWindow(executor.executor_id(), executor.window(), buf);
+            break;
+        case tipb::ExecType::TypeRepeatSource:
+            serializeRepeatSource(executor.executor_id(), executor.repeat_source(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);

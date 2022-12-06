@@ -539,7 +539,7 @@ void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * s
 {
     elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
     list->next = elem;
-    elem->block = stored_block;
+    elem->block = stored_block;  // 因为 map all 所以是 list 结构
     elem->row_num = index;
 }
 
@@ -579,7 +579,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
             auto elem = reinterpret_cast<MappedType *>(pool.alloc(sizeof(MappedType)));
-            insertRowToList(&emplace_result.getMapped(), elem, stored_block, i);
+            insertRowToList(&emplace_result.getMapped(), elem, stored_block, i); // hash 表中维护的就是到存储的 store block 和其 row number，这个 list 结果作为 hash key 的 value
         }
     }
 };
@@ -834,7 +834,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
 
     const auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
-    for (size_t i = 0, size = nested_column->size(); i < size; ++i)
+    for (size_t i = 0, size = nested_column->size(); i < size; ++i) // 伴随 column 如果取 int 取不出来，说明也是个 null？
         mutable_null_map[i] |= (!nested_column->getInt(i));
 
     null_map_holder = std::move(mutable_null_map_holder);
@@ -861,11 +861,13 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
+    //  物化一个 block 出来
     Block * stored_block = nullptr;
     {
         std::lock_guard lk(blocks_lock);
         total_input_build_rows += block.rows();
         blocks.push_back(block);
+        // block cp
         stored_block = &blocks.back();
         original_blocks.push_back(block);
     }
@@ -1371,9 +1373,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 {
     other_condition_ptr->execute(block);
 
-    auto filter_column = ColumnUInt8::create();
+    auto filter_column = ColumnUInt8::create();    // 创建了一个 u8 表示 true or false 的结果吧
     auto & filter = filter_column->getData();
-    filter.assign(block.rows(), static_cast<UInt8>(1));
+    filter.assign(block.rows(), static_cast<UInt8>(1));  // 直接都给 1？
     if (!other_filter_column.empty())
     {
         mergeNullAndFilterResult(block, filter, other_filter_column, false);
@@ -1562,6 +1564,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Memoize key columns to work with.
     for (size_t i = 0; i < keys_size; ++i)
     {
+        // 因为 ColumnPtr 是继承 intrusive_ptr，所以 get 函数可以得到这个类型的原始指针（raw column）
         key_columns[i] = block.getByName(key_names_left[i]).column.get();
 
         if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
@@ -1574,9 +1577,12 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Keys with NULL value in any column won't join to anything.
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
+    // 抽取一下 join key 上的 null 或属性
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
+    // 相当于把 left filter column 上的 null 属性输出也叠加到了 null map 里面
     recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
 
     size_t existing_columns = block.columns();
@@ -1611,12 +1617,12 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
     MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add);
+    added_columns.reserve(num_columns_to_add);   // 创建了几个需要新加的 columns
 
     std::vector<size_t> right_table_column_indexes;
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
-        right_table_column_indexes.push_back(i + existing_columns);
+        right_table_column_indexes.push_back(i + existing_columns);  // 记录插入的 offset 下标
     }
 
     std::vector<size_t> right_indexes;
@@ -1639,17 +1645,17 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(rows);
+        filter = std::make_unique<IColumn::Filter>(rows);  // 用来从 right block 中 remove elements
 
     /// Used with ALL ... JOIN
     IColumn::Offset current_offset = 0;
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate;
 
     if (strictness == ASTTableJoin::Strictness::All)
-        offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);
+        offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);  // join 的时候暂时标识一下，用来在 left block 中的 replicate rows
 
     switch (type)
-    {
+    { // join 完了之后，右侧 join 行都 append 到了 add columns 里面，并且填了一行的 replicate 的 offset = joined rows number
 #define M(TYPE)                                                                                                                                \
     case Join::Type::TYPE:                                                                                                                     \
         joinBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
@@ -1676,7 +1682,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     for (size_t i = 0; i < num_columns_to_add; ++i)
-    {
+    {   // 将 added cols 插入到左侧的 block 中
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
@@ -1698,6 +1704,14 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
         /// If ALL ... JOIN - we replicate all the columns except the new ones.
         if (offsets_to_replicate)
         {
+            /*
+             *   a, b, c, d   offset
+            *   1, y  1  x   2         这个时候右侧的位置已经填好了，但是左侧 block 的位置还没填好，所以 offsets 是给左侧行看的，尽量复制，跟右侧的行对齐
+            *   2, z  1  x
+            *
+            *   1, y  1  x   2
+            *   1, y  1  x
+            */
             for (size_t i = 0; i < existing_columns; ++i)
             {
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicateRange(probe_process_info.start_row, probe_process_info.end_row, *offsets_to_replicate);
@@ -1719,7 +1733,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
         if (!offsets_to_replicate)
-            throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
+            throw Exception("Should not reach here, the strictness of join with other condition must be ALL");   // 处理 other condition
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
     }
 }

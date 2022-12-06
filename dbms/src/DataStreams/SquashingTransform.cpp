@@ -60,7 +60,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
         return Result(std::move(block));
     }
 
-    append(std::move(block));
+    append(std::move(block));   // 攒批
 
     accumulated_block_rows = accumulated_block.rows();
     accumulated_block_bytes = accumulated_block.bytes();
@@ -93,10 +93,15 @@ void SquashingTransform::append(Block && block)
     {
         MutableColumnPtr mutable_column = (*std::move(accumulated_block.getByPosition(i).column)).mutate();
         mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
-        accumulated_block.getByPosition(i).column = std::move(mutable_column);
+        accumulated_block.getByPosition(i).column = std::move(mutable_column);   // column 中的 append 值操作
     }
 }
 
+// 我们可能需要用一个高效的复制行操作，repeatSource 算子首先是 append additional column，然后对于原来的 block 的数据进行
+// 多重 n 复制，每重复制上，修改 block 中特定非 target 列的其他 grouping set column 为 null 值，并且设置 grouping ID
+// 列为常量 n.
+//
+// sample_block
 
 bool SquashingTransform::isEnoughSize(size_t rows, size_t bytes) const
 {

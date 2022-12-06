@@ -179,7 +179,7 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
         return {nullptr, "", ""};
 
-    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
+    DAGExpressionAnalyzer dag_analyzer(source_columns, context);  // 新开了一个 dag analyzer
     ExpressionActionsChain chain;
 
     String filter_column_for_other_condition;
@@ -190,7 +190,7 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector); // other filter 不会对已经有点 schema 造成影响
     }
 
     String filter_column_for_other_eq_condition;
@@ -201,7 +201,7 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);  // other eq filter 不会对已经有点 schema 造成影响
     }
 
     return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition)};
@@ -230,7 +230,7 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
     {
         match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, ++i);
     }
-    return match_helper_name;
+    return match_helper_name; //一个 unique name
 }
 
 NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
@@ -248,7 +248,8 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
         }
         return true;
     };
-    if (unlikely(!is_prepare_actions_valid(build_side_index == 1 ? left_input_header : right_input_header, probe_prepare_join_actions)))
+    // assert 一下 probe side original block 都能在 probe actions 中找到
+    if (unlikely(!is_prepare_actions_valid(build_side_index == 1 ? left_input_header : right_input_header, probe_prepare_join_actions))) // 传参数也能三元运算吗
     {
         throw TiFlashException("probe_prepare_join_actions isn't valid", Errors::Coprocessor::Internal);
     }
@@ -295,9 +296,9 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     bool make_nullable = build_side_index == 1
         ? join.join_type() == tipb::JoinType::TypeRightOuterJoin
         : join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    append_new_columns(probe_prepare_join_actions->getSampleBlock(), make_nullable);
+    append_new_columns(probe_prepare_join_actions->getSampleBlock(), make_nullable);  // probe side 产生的新 column 需要 append
 
-    return columns_for_other_join_filter;
+    return columns_for_other_join_filter; // 需要根据 probe 侧函数的 1-0 来顺势填 null，但是如果势 build 侧的函数 1-0 直接会被过滤护着忽略
 }
 
 NamesAndTypes TiFlashJoin::genJoinOutputColumns(
@@ -334,13 +335,14 @@ std::tuple<ExpressionActionsPtr, String, String> TiFlashJoin::genJoinOtherCondit
     const Block & right_input_header,
     const ExpressionActionsPtr & probe_side_prepare_join) const
 {
+    // append 左右的 original col 和 probe side 生成的 col
     auto columns_for_other_join_filter
         = genColumnsForOtherJoinFilter(
             left_input_header,
             right_input_header,
             probe_side_prepare_join);
 
-    return doGenJoinOtherConditionAction(context, join, columns_for_other_join_filter);
+    return doGenJoinOtherConditionAction(context, join, columns_for_other_join_filter); // 再根据 other condition 生成新 action （列）
 }
 
 std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
@@ -359,6 +361,7 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     ExpressionActionsChain chain;
     Names key_names;
     String filter_column_name;
+    // 名副其实，append join key and 一侧的 join filter
     dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, left, is_right_out_join, filters, filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(filter_column_name)};
 }

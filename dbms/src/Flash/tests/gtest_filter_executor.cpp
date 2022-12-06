@@ -208,6 +208,15 @@ try
         request,
         {toNullableVec<String>({"banana"}),
          toNullableVec<String>({"banana"})});
+
+    request = context
+                  .scan("test_db", "test_table")
+                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>({"banana"}),
+         toNullableVec<String>({"banana"})});
 }
 CATCH
 
