@@ -168,7 +168,7 @@ void serializeRepeatSource(const String & executor_id, const tipb::RepeatSource 
         buf.fmtAppend("<");
         for (const auto & grouping_exprs : grouping_set.grouping_exprs())
         {
-            buf.fmtAppend("{");
+            buf.fmtAppend("{{");
             for (auto i = 0; i < grouping_exprs.grouping_expr().size(); i++)
             {
                 if (i != 0) {
@@ -177,7 +177,7 @@ void serializeRepeatSource(const String & executor_id, const tipb::RepeatSource 
                 auto expr =  grouping_exprs.grouping_expr().Get(i);
                 serializeExpression(expr, buf);
             }
-            buf.fmtAppend("}");
+            buf.fmtAppend("}}");
         }
         buf.fmtAppend(">");
     }

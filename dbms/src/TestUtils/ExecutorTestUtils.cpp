@@ -19,6 +19,7 @@
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+#include <Columns/ColumnNullable.h>
 
 #include <functional>
 
@@ -183,7 +184,8 @@ Block mergeBlocks(Blocks blocks)
         {
             for (size_t j = 0; j < block.rows(); ++j)
             {
-                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
+                auto field = (*(block.getColumnsWithTypeAndName())[i].column)[j];
+                actual_cols[i]->insert(field);
             }
         }
     }
@@ -214,6 +216,9 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     Blocks actual_blocks;
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
+    if (auto cast_col = typeid_cast<const ColumnNullable *>( actual_blocks.data()[0].getColumns()[0].get())) {
+        std::cout<<&cast_col<<std::endl;
+    }
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 

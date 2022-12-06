@@ -120,7 +120,8 @@ bool collectForRepeat(std::vector<tipb::FieldType> &out_field_types, const tipb:
         field_type.set_tp(TiDB::TypeLongLong);
         field_type.set_charset("binary");
         field_type.set_collate(TiDB::ITiDBCollator::BINARY);
-        field_type.set_flag(0);
+        // groupingID column should be Uint64 and NOT NULL.
+        field_type.set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
         field_type.set_flen(-1);
         field_type.set_decimal(-1);
         out_field_types.push_back(field_type);
