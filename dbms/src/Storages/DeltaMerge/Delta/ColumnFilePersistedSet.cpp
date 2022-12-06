@@ -138,7 +138,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles &
         while (it_1 != previous_column_files.end() && it_2 != persisted_files.end())
         {
             // We allow passing unflushed memtable files to `previous_column_files`, these heads will be skipped anyway.
-            if (!(*it_2)->mayBeFlushedFrom(&**it_1) && !(*it_2)->isSame(&**it_1))
+            if (!(*it_2)->mayBeFlushedFrom(&(**it_1)) && !(*it_2)->isSame(&(**it_1)))
             {
                 check_success = false;
                 break;
