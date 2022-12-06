@@ -64,32 +64,23 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
         new_deletes += file->isDeleteRange();
     }
 
-<<<<<<< HEAD
     if (unlikely(new_rows != rows || new_deletes != deletes))
     {
-        LOG_FMT_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", new_rows, new_deletes, rows.load(), deletes.load(), columnFilesToString(flattenColumnFileLevels(persisted_files_levels)), columnFilesToString(flattenColumnFileLevels(new_column_file_levels)));
-        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
-    }
-=======
-    RUNTIME_CHECK_MSG(new_rows == rows && new_deletes == deletes,
-                      "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", //
+        LOG_FMT_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", //
                       new_rows,
                       new_deletes,
                       rows.load(),
                       deletes.load(),
                       columnFilesToString(persisted_files),
                       columnFilesToString(new_column_files));
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
+        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
-<<<<<<< HEAD
-    , log(&Poco::Logger::get("ColumnFilePersistedSet"))
-=======
     , persisted_files(persisted_column_files)
-    , log(Logger::get())
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
+    , log(&Poco::Logger::get("ColumnFilePersistedSet"))
 {
     updateColumnFileStats();
 }
@@ -129,50 +120,14 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
                                                                    const ColumnFiles & head_column_files,
                                                                    WriteBatches & wbs) const
 {
-<<<<<<< HEAD
-    // We check in the direction from the last level to the first level.
-    // In every level, we check from the begin to the last.
     auto it_1 = head_column_files.begin();
-    auto level_it = persisted_files_levels.rbegin();
-    auto it_2 = level_it->begin();
-=======
-    // It should not be not possible that files in the snapshots are removed when calling this
-    // function. So we simply expect there are more column files now.
-    // Major compaction and minor compaction are segment updates, which should be blocked by
-    // the for_update snapshot.
-    // TODO: We'd better enforce user to specify a for_update snapshot in the args, to ensure
-    //       that this function is called under a for_update snapshot context.
-    RUNTIME_CHECK(previous_column_files.size() <= getColumnFileCount());
-
-    auto it_1 = previous_column_files.begin();
     auto it_2 = persisted_files.begin();
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
     bool check_success = true;
     if (likely(head_column_files.size() <= persisted_files_count.load()))
     {
-<<<<<<< HEAD
-        while (it_1 != head_column_files.end() && level_it != persisted_files_levels.rend())
+        while (it_1 != head_column_files.end() && it_2 != persisted_files.end())
         {
-            if (it_2 == level_it->end())
-            {
-                level_it++;
-                if (unlikely(level_it == persisted_files_levels.rend()))
-                    throw Exception("Delta Check head algorithm broken", ErrorCodes::LOGICAL_ERROR);
-                it_2 = level_it->begin();
-                continue;
-            }
             if ((*it_1)->getId() != (*it_2)->getId() || (*it_1)->getRows() != (*it_2)->getRows())
-=======
-        while (it_1 != previous_column_files.end() && it_2 != persisted_files.end())
-        {
-            // We allow passing unflushed memtable files to `previous_column_files`, these heads will be skipped anyway.
-            if (!(*it_2)->mayBeFlushedFrom(&(**it_1)) && !(*it_2)->isSame(&(**it_1)))
-            {
-                check_success = false;
-                break;
-            }
-            if ((*it_1)->getRows() != (*it_2)->getRows() || (*it_1)->getBytes() != (*it_2)->getBytes())
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
             {
                 check_success = false;
                 break;
@@ -188,21 +143,12 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
 
     if (unlikely(!check_success))
     {
-<<<<<<< HEAD
-        LOG_FMT_ERROR(log, "{}, Delta Check head failed, unexpected size. head column files: {}, level details: {}", info(), columnFilesToString(head_column_files), levelsInfo());
+        LOG_FMT_ERROR(log, "{}, Delta Check head failed, unexpected size. head column files: {}, persisted column files: {}", info(), columnFilesToString(head_column_files), detailInfo());
         throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
 
     ColumnFilePersisteds cloned_tail;
-    while (level_it != persisted_files_levels.rend())
-=======
-        LOG_ERROR(log, "{}, Delta Check head failed, unexpected size. head column files: {}, persisted column files: {}", info(), columnFilesToString(previous_column_files), detailInfo());
-        throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    ColumnFilePersisteds tail;
     while (it_2 != persisted_files.end())
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
     {
         const auto & column_file = *it_2;
         if (auto * d_file = column_file->tryToDeleteRange(); d_file)
@@ -318,11 +264,7 @@ bool ColumnFilePersistedSet::appendPersistedColumnFiles(const ColumnFilePersiste
     /// Commit updates in memory.
     persisted_files.swap(new_persisted_files);
     updateColumnFileStats();
-<<<<<<< HEAD
-    LOG_FMT_DEBUG(log, "{}, after append {} column files, level info: {}", info(), column_files.size(), levelsInfo());
-=======
-    LOG_DEBUG(log, "{}, after append {} column files, persisted column files: {}", info(), column_files.size(), detailInfo());
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
+    LOG_FMT_DEBUG(log, "{}, after append {} column files, persisted column files: {}", info(), column_files.size(), detailInfo());
 
     return true;
 }
@@ -384,17 +326,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         return false;
     }
     minor_compaction_version += 1;
-<<<<<<< HEAD
-    LOG_FMT_DEBUG(log, "{}, before commit compaction, level info: {}", info(), levelsInfo());
-    ColumnFilePersistedLevels new_persisted_files_levels;
-    auto compaction_src_level = compaction->getCompactionSourceLevel();
-    // Copy column files in level range [0, compaction_src_level)
-    for (size_t i = 0; i < compaction_src_level; i++)
-=======
-    LOG_DEBUG(log, "{}, before commit compaction, persisted column files: {}", info(), detailInfo());
+    LOG_FMT_DEBUG(log, "{}, before commit compaction, persisted column files: {}", info(), detailInfo());
     ColumnFilePersisteds new_persisted_files;
     for (const auto & task : compaction->getTasks())
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
     {
         if (task.is_trivial_move)
             new_persisted_files.push_back(task.to_compact[0]);
@@ -430,11 +364,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     /// Commit updates in memory.
     persisted_files.swap(new_persisted_files);
     updateColumnFileStats();
-<<<<<<< HEAD
-    LOG_FMT_DEBUG(log, "{}, after commit compaction, level info: {}", info(), levelsInfo());
-=======
-    LOG_DEBUG(log, "{}, after commit compaction, persisted column files: {}", info(), detailInfo());
->>>>>>> 8d406ba868 (reduce column files num under heavy write pressure (#6432))
+    LOG_FMT_DEBUG(log, "{}, after commit compaction, persisted column files: {}", info(), detailInfo());
 
     return true;
 }
