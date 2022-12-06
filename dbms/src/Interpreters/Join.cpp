@@ -1668,46 +1668,47 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
-    if (rows == 0)
-        return;
-
     size_t process_rows = probe_process_info_ptr->end_row - probe_process_info_ptr->start_row;
 
-    /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
-    if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
+    // if rows equal 0 means that it call getHeader, we could ignore filter and offsets_to_replicate, and do not need to update start row.
+    if (rows != 0)
     {
-        for (size_t i = 0; i < existing_columns; ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
-
-        if (rows != 0 && rows != process_rows)
+        /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
+        if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
         {
-            filter->assign(filter->begin() + probe_process_info_ptr->start_row, filter->begin() + probe_process_info_ptr->end_row);
-        }
-    }
+            for (size_t i = 0; i < existing_columns; ++i)
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
 
-
-    /// If ALL ... JOIN - we replicate all the columns except the new ones.
-    if (offsets_to_replicate)
-    {
-        for (size_t i = 0; i < existing_columns; ++i)
-        {
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, *offsets_to_replicate);
-        }
-
-        if (rows != process_rows)
-        {
-            if (isLeftSemiFamily(kind))
+            if (rows != process_rows)
             {
-                const auto helper_pos = block.getPositionByName(match_helper_name);
-                auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
-                new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row);
-                block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
+                filter->assign(filter->begin() + probe_process_info_ptr->start_row, filter->begin() + probe_process_info_ptr->end_row);
             }
-            offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row);
         }
-    }
 
-    resetProcessStartRow(probe_process_info_ptr);
+
+        /// If ALL ... JOIN - we replicate all the columns except the new ones.
+        if (offsets_to_replicate)
+        {
+            for (size_t i = 0; i < existing_columns; ++i)
+            {
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row, *offsets_to_replicate);
+            }
+
+            if (rows != process_rows)
+            {
+                if (isLeftSemiFamily(kind))
+                {
+                    const auto helper_pos = block.getPositionByName(match_helper_name);
+                    auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
+                    new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row);
+                    block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
+                }
+                offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row);
+            }
+        }
+
+        updateStartRow(probe_process_info_ptr);
+    }
 
     /// handle other conditions
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
@@ -2413,7 +2414,7 @@ BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sampl
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
-void Join::resetProcessStartRow(ProbeProcessInfoPtr probe_process_info_ptr)
+void Join::updateStartRow(ProbeProcessInfoPtr probe_process_info_ptr)
 {
     RUNTIME_CHECK(probe_process_info_ptr != nullptr);
     probe_process_info_ptr->start_row = probe_process_info_ptr->end_row;
