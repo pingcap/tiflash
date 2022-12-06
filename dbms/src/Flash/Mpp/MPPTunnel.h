@@ -238,6 +238,13 @@ public:
 
     ~LocalTunnelSender() override
     {
+        auto myid = std::this_thread::get_id();
+        std::stringstream ss;
+        ss << myid;
+        std::string tid = ss.str();
+
+        auto * logg = &Poco::Logger::get("LRUCache");
+        LOG_INFO(logg, "TLocal: local tunnel is destructed, {}", tid);
         closeLocalTunnel(false, "");
     }
 
@@ -260,6 +267,17 @@ public:
         return res;
     }
 
+    void cancelWith(const String & reason) override
+    {
+        closeLocalTunnel(true, reason);
+    }
+
+    bool finish() override
+    {
+        closeLocalTunnel(false, "");
+        return true;
+    }
+
 private:
     bool checkPacketErr(TrackedMppDataPacketPtr & packet)
     {
@@ -273,10 +291,19 @@ private:
 
     void closeLocalTunnel(bool meet_error, const String & local_err_msg)
     {
+        auto myid = std::this_thread::get_id();
+        std::stringstream ss;
+        ss << myid;
+        std::string tid = ss.str();
+
+        auto * logg = &Poco::Logger::get("LRUCache");
+        LOG_INFO(logg, "TLocal: closeLocalTunnel is called {}", tid);
         std::lock_guard lock(mu);
-        if (is_done)
+        LOG_INFO(logg, "TLocal: closeLocalTunnel checks is_done {}, {}", is_done, tid);
+        if (!is_done)
         {
             is_done = true;
+            LOG_INFO(logg, "TLocal: closeLocalTunnel is ready to call connectionLocalDone {}", tid);
             recv_base->connectionLocalDone(meet_error, local_err_msg, log);
         }
     }
