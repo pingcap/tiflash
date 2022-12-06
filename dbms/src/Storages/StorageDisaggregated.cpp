@@ -58,9 +58,6 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
 
 StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
-    const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const auto * dag_req = context.getDAGContext()->dag_request;
-
     // For error handling, need to record region_ids and store_id to invalidate cache.
     std::vector<pingcap::kv::RegionVerID> region_ids;
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
@@ -113,6 +110,8 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
         }
     }
 
+    const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
+    const auto * dag_req = context.getDAGContext()->dag_request;
     tipb::DAGRequest sender_dag_req;
     sender_dag_req.set_time_zone_name(dag_req->time_zone_name());
     sender_dag_req.set_time_zone_offset(dag_req->time_zone_offset());
