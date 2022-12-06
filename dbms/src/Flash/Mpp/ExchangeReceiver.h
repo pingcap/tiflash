@@ -214,7 +214,6 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    uint64_t fine_grained_shuffle_stream_count;
 
     /// True when:
     ///   1. we are in disaggregated tiflash mode

@@ -115,7 +115,8 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     tipb::DAGRequest sender_dag_req;
     sender_dag_req.set_time_zone_name(dag_req->time_zone_name());
     sender_dag_req.set_time_zone_offset(dag_req->time_zone_offset());
-    sender_dag_req.set_collect_execution_summaries(true);
+    // TODO: We have exec summaries bug for now, remote exec summary will not be merged.
+    sender_dag_req.set_collect_execution_summaries(false);
     sender_dag_req.set_flags(dag_req->flags());
     sender_dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
     const auto & column_infos = table_scan.getColumns();
@@ -213,7 +214,6 @@ void StorageDisaggregated::setGRPCErrorMsg(const std::string & err)
 void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
 {
     tipb::ExchangeReceiver receiver;
-    const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     for (const auto & dispatch_req : dispatch_reqs)
     {
         const ::mpp::TaskMeta & sender_task_meta = std::get<0>(dispatch_req)->meta();
@@ -229,6 +229,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     }
 
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
+    const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const String executor_id = table_scan.getTableScanExecutorID();
     exchange_receiver = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(

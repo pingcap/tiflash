@@ -423,7 +423,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
-    , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , is_tiflash_storage_receiver(is_tiflash_storage_receiver_)
 {
     try

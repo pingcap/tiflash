@@ -1066,8 +1066,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             push_down_filter,
             log,
-            physical_table_id,
-            /*is_disaggregated_compute_mode=*/false));
+            physical_table_id));
     }
     return remote_requests;
 }

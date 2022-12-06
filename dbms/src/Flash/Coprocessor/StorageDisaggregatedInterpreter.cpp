@@ -46,15 +46,12 @@ std::vector<RemoteRequest> StorageDisaggregatedInterpreter::buildRemoteRequests(
         const auto & remote_regions = all_remote_regions[physical_table_id];
         if (remote_regions.empty())
             continue;
-        remote_requests.push_back(RemoteRequest::build(
+        remote_requests.push_back(RemoteRequest::buildDisaggregated(
                     remote_regions,
-                    *context.getDAGContext(),
                     table_scan,
-                    TiDB::TableInfo{},
                     push_down_filter,
                     log,
-                    physical_table_id,
-                    /*is_disaggregated_compute_mode=*/true));
+                    physical_table_id));
     }
     return remote_requests;
 }
