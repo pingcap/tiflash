@@ -60,18 +60,18 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
-    join->joinBlock(res);
+    join->joinBlock(res, concurrency_probe_index);
     return res;
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    if (join->needGetBlockForHashJoinProbe(concurrency_probe_index))
+    if (join->needGetNewBlock(concurrency_probe_index))
     {
         Block block = children.back()->read();
         if (!block)
             return block;
-        join->updateBlockForHashJoinProbe(block, concurrency_probe_index);
+        join->updateProcessBlock(block, concurrency_probe_index);
     }
 
     Block res;
