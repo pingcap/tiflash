@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/ColumnWithTypeAndName.h>
-
-#include <vector>
-
-
+#include <DataStreams//RepeatSourceBlockInputStream.h>
 namespace DB
 {
-// 这里是一个多列组合的数据
-using ColumnsWithTypeAndName = std::vector<ColumnWithTypeAndName>;
-
+Block RepeatSourceBlockInputStream::readImpl()
+{
+    Block block = children.back()->read();
+    if (!block)
+        return block;
+    repeat_source_actions->execute(block);
+    return block;
 }
+
+Block RepeatSourceBlockInputStream::getHeader() const
+{
+    Block res = children.back()->getHeader();
+    repeat_source_actions->execute(res);
+    return res;
+}
+
+} // namespace DB

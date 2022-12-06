@@ -54,6 +54,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
 
+        // 注册一些 tunnel
         task->prepare(task_request);
         // For tiflash_compute mode, all regions are fetched from remote, so no need to refresh TiDB's region cache.
         if (!context->isDisaggregatedComputeMode())
@@ -77,6 +78,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
+        // 所需要的东西，放包到了 DAGContext 里面
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }

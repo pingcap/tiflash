@@ -1130,7 +1130,7 @@ Field decodeLiteral(const tipb::Expr & expr)
     }
 }
 
-String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
+String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col) // 这个是将 expr 中的 index 顺序转成 vector 向量中的 column name
 {
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))

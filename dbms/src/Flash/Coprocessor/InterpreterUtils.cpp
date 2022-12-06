@@ -103,7 +103,7 @@ void executeExpression(
 {
     if (expr_actions && !expr_actions->getActions().empty())
     {
-        pipeline.transform([&](auto & stream) {
+        pipeline.transform([&](auto & stream) {   // 数据流变了，用 ExpressionBlockInputStream 包了一下
             stream = std::make_shared<ExpressionBlockInputStream>(stream, expr_actions, log->identifier());
             stream->setExtraInfo(extra_info);
         });

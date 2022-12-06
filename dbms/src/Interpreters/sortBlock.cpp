@@ -410,6 +410,7 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
             : block.safeGetByPosition(description[0].column_number).column.get();
 
         IColumn::Permutation perm;
+        // permutation 是列的 offset 调序
         if (NeedCollation(column, description[0]))
             column->getPermutation(*description[0].collator, reverse, limit, description[0].nulls_direction, perm);
         else
@@ -417,7 +418,7 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
 
         size_t columns = block.columns();
         for (size_t i = 0; i < columns; ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->permute(perm, limit);
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->permute(perm, limit); // 根据 offset 调序结果重新组织 column 数据
     }
     else
     {
