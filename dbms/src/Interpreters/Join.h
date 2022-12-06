@@ -442,10 +442,10 @@ private:
 
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    void joinBlockImplCross(Block & block) const;
+    void joinBlockImplCross(Block & block, ProbeProcessInfoPtr probe_process_info_ptr) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, ProbeProcessInfoPtr probe_process_info_ptr) const;
 
     static void updateStartRow(ProbeProcessInfoPtr probe_process_info_ptr);
 };
