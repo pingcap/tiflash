@@ -261,14 +261,13 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
     {
         bool is_all_trivial_move = true;
         MinorCompaction::Task cur_task;
+        auto pack_up_cur_task = [&]() {
+            bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
+            is_all_trivial_move = is_all_trivial_move && is_trivial_move;
+            cur_task = {};
+        };
         for (auto & file : persisted_files)
         {
-            auto pack_up_cur_task = [&]() {
-                bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
-                is_all_trivial_move = is_all_trivial_move && is_trivial_move;
-                cur_task = {};
-            };
-
             if (auto * t_file = file->tryToTinyFile(); t_file)
             {
                 bool cur_task_full = cur_task.total_rows >= context.delta_small_column_file_rows;
@@ -292,8 +291,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                 cur_task.addColumnFile(file);
             }
         }
-        bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
-        is_all_trivial_move = is_all_trivial_move && is_trivial_move;
+        pack_up_cur_task();
 
         if (!is_all_trivial_move)
             return compaction;
