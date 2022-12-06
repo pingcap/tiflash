@@ -837,12 +837,12 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendRepeatSource(
         const tipb::RepeatSource & repeatSource, ExpressionActionsChain & chain)
 {
     auto & last_step = initAndGetLastStep(chain);
-    auto shared_repeat = buildRepeatGroupingColumns(repeatSource, last_step.actions);
-    last_step.actions->add(ExpressionAction::repeatSource(shared_repeat));
     for (const auto &origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
     {
         last_step.required_output.push_back(origin_col.name);
     }
+    auto shared_repeat = buildRepeatGroupingColumns(repeatSource, last_step.actions);
+    last_step.actions->add(ExpressionAction::repeatSource(shared_repeat));
     // an added column from REPEAT action.
     source_columns.emplace_back(Repeat::grouping_identifier_column_name, Repeat::grouping_identifier_column_type);
     auto before_repeat_source = chain.getLastActions();

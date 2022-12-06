@@ -213,10 +213,12 @@ try
                   .scan("test_db", "test_table")
                   .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .build(context);
+    // test is ok now for non-planner enabled.
     executeAndAssertColumnsEqual(
         request,
-        {toNullableVec<String>({"banana"}),
-         toNullableVec<String>({"banana"})});
+        {toNullableVec<String>({"banana", {}, {}, {}, "banana", {}}),
+         toNullableVec<String>({{}, "apple", {}, {}, {}, "banana"}),
+         toVec<UInt64>({1,2,1,2,1,2})});
 }
 CATCH
 

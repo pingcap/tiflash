@@ -21,6 +21,7 @@
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+#include <Columns/ColumnNullable.h>
 
 #include <functional>
 

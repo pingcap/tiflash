@@ -193,6 +193,7 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
     {
         for (size_t i = 0, size = col.column->size(); i < size; ++i)
         {
+        
             new (rows[i].place(col_id)) Field((*col.column)[i]);
         }
     }
@@ -228,6 +229,30 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
 
     auto const expected_row_set = columnsToRowSet(expected);
     auto const actual_row_set = columnsToRowSet(actual);
+
+    {
+        auto expect_it = expected_row_set.begin();
+        auto actual_it = actual_row_set.begin();
+        FmtBuffer buf1;
+        FmtBuffer buf2;
+        for (; expect_it != expected_row_set.end(); ++expect_it, ++actual_it)
+        {
+            buf1.joinStr(
+                   expect_it->begin(),
+                   expect_it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
+            buf2.joinStr(
+                    actual_it->begin(),
+                    actual_it->end(),
+                    [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                    " ")
+                .append("\n");
+        }
+        auto res1 = buf1.toString();
+        auto res2 = buf2.toString();
+    }
 
     if (expected_row_set != actual_row_set)
     {
