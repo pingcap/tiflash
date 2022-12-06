@@ -16,8 +16,8 @@
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
 #if defined(OS_LINUX)
-#    include <cmath>
-#    include <fstream>
+#include <cmath>
+#include <fstream>
 #endif
 
 #include <thread>
