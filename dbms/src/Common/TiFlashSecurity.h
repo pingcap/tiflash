@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/Config/ConfigObject.h>
+#include <Common/FileChangesTracker.h>
 #include <Common/grpcpp.h>
 #include <Core/Types.h>
 #include <IO/createReadBufferFromFileBase.h>
@@ -34,7 +36,7 @@ namespace ErrorCodes
 extern const int INVALID_CONFIG_PARAMETER;
 }
 
-struct TiFlashSecurityConfig
+class TiFlashSecurityConfig : public ConfigObject
 {
 public:
     TiFlashSecurityConfig() = default;
@@ -141,6 +143,10 @@ public:
                         ca_path = new_ca_path;
                         cert_path = new_cert_path;
                         key_path = new_key_path;
+                        cert_files.files.clear();
+                        cert_files.addIfExists(ca_path);
+                        cert_files.addIfExists(cert_path);
+                        cert_files.addIfExists(key_path);
                         updated = true;
                         LOG_INFO(
                             log,
@@ -234,6 +240,19 @@ public:
         return new_options;
     }
 
+    bool fileUpdated() override
+    {
+        FilesChangesTracker new_files;
+        for (const auto & file : cert_files.files)
+            new_files.addIfExists(file.path);
+
+        bool updated = new_files.isDifferOrNewerThan(cert_files);
+        LOG_DEBUG(log, "tls cert file updated: {}", updated);
+        if (updated)
+            cert_files = std::move(new_files);
+        return updated;
+    }
+
 private:
     static String readFile(const String & filename)
     {
@@ -257,6 +276,8 @@ private:
     String ca_path;
     String cert_path;
     String key_path;
+
+    FilesChangesTracker cert_files;
     bool redact_info_log = false;
     std::set<String> allowed_common_names;
     bool has_tls_config = false;

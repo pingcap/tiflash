@@ -15,15 +15,18 @@
 #pragma once
 
 #include <Common/Config/ConfigProcessor.h>
+#include <Common/FileChangesTracker.h>
 #include <time.h>
 
 #include <condition_variable>
 #include <functional>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
 #include <thread>
+#include "ConfigObject.h"
 
 
 namespace Poco
@@ -47,7 +50,7 @@ public:
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
-    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, bool is_main_config, const char * name = "CfgReloader");
+    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, const char * name = "CfgReloader");
 
     virtual ~ConfigReloader();
 
@@ -55,32 +58,19 @@ public:
     virtual void start();
 
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
-    void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true, is_main_config); }
+    void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
-    bool tlsInited() const { return tls_inited; }
-
-    /// Init tls certificate files when tls is enabled.
-    void initTls(bool throw_on_error);
+    void addObject(std::shared_ptr<ConfigObject> object) 
+    {
+        config_objects.push_back(object);
+    }
 
 protected:
-    void reloadIfNewer(bool force, bool throw_on_error, bool is_main_config);
+    void reloadIfNewer(bool force, bool throw_on_error);
     Updater & getUpdater() { return updater; }
 
 private:
     void run();
-
-    struct FileWithTimestamp;
-
-    struct FilesChangesTracker
-    {
-        std::set<FileWithTimestamp> files;
-
-        void addIfExists(const std::string & path);
-        bool isDifferOrNewerThan(const FilesChangesTracker & rhs) const;
-    };
-
-    // If tls is enabled, It will check whether the tls certificate is changed
-    bool tlsCertUpdated();
 
     FilesChangesTracker getNewFileList() const;
 
@@ -94,17 +84,11 @@ private:
 
     std::string path;
     FilesChangesTracker files;
-
-    FilesChangesTracker cert_files;
-
     Updater updater;
+    std::vector<std::shared_ptr<ConfigObject>> config_objects;
 
     std::atomic<bool> quit{false};
     std::thread thread;
-
-    // main config reloader will handle the reload process for tls certificate files
-    bool is_main_config;
-    bool tls_inited = false;
 
     /// Locked inside reloadIfNewer.
     std::mutex reload_mutex;

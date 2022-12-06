@@ -1090,15 +1090,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
-        [&](ConfigurationPtr config, bool tls_cert_updated /* whether cert file content is changed */) {
-            LOG_DEBUG(log, "run main config reloader, tls_cert_updated: {}", tls_cert_updated);
+        [&](ConfigurationPtr config, bool config_object_updated) {
+            LOG_DEBUG(log, "run main config reloader, config_object_updated: {}", config_object_updated);
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
             bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path is updated.
-            if (tls_cert_updated || updated)
+            if (updated || config_object_updated)
             {
                 auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
                 auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
@@ -1106,8 +1106,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_DEBUG(log, "TMTContext updated");
             }
         },
-        /* already_loaded = */ true,
-        /* is_main_reloader = */ true);
+        /* already_loaded = */ true);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -1266,7 +1265,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
 
-        main_config_reloader->initTls(false);
+        main_config_reloader->addObject(global_context->getSecurityConfig());
         main_config_reloader->start();
         users_config_reloader->start();
 

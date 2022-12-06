@@ -25,14 +25,13 @@ namespace DB
 {
 constexpr decltype(ConfigReloader::reload_interval) ConfigReloader::reload_interval;
 
-ConfigReloader::ConfigReloader(const std::string & path_, Updater && updater_, bool already_loaded, bool is_main_config_, const char * name_)
+ConfigReloader::ConfigReloader(const std::string & path_, Updater && updater_, bool already_loaded, const char * name_)
     : name(name_)
     , path(path_)
     , updater(std::move(updater_))
-    , is_main_config(is_main_config_)
 {
     if (!already_loaded)
-        reloadIfNewer(/* force = */ true, /* throw_on_error = */ true, is_main_config);
+        reloadIfNewer(/* force = */ true, /* throw_on_error = */ true);
 }
 
 
@@ -40,7 +39,6 @@ void ConfigReloader::start()
 {
     thread = std::thread(&ConfigReloader::run, this);
 }
-
 
 ConfigReloader::~ConfigReloader()
 {
@@ -68,26 +66,26 @@ void ConfigReloader::run()
             return;
 
         std::this_thread::sleep_for(reload_interval);
-        reloadIfNewer(false, /* throw_on_error = */ false, is_main_config);
+        reloadIfNewer(false, /* throw_on_error = */ false);
     }
 }
 
-void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool is_main_config)
+void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 {
     std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
-    bool new_files_differ = new_files.isDifferOrNewerThan(files);
-    bool tls_cert_updated = false;
-
-    if (is_main_config && !new_files_differ && cert_files.files.size() == 3)
+    bool config_object_updated = false;
+    for (const auto & conf : config_objects)
     {
-        // We only check tls cert updated when the config is main config.
-        // We have 3 cert files if tls is enabled.
-        tls_cert_updated = tlsCertUpdated();
+        if (conf->fileUpdated())
+        {
+            config_object_updated = true;
+            break;
+        }
     }
 
-    if (force || new_files_differ || tls_cert_updated)
+    if (force || new_files.isDifferOrNewerThan(files) || config_object_updated)
     {
         ConfigProcessor config_processor(path);
         ConfigProcessor::LoadedConfig loaded_config;
@@ -117,7 +115,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool is_main
 
         try
         {
-            updater(loaded_config.configuration, tls_cert_updated);
+            updater(loaded_config.configuration, config_object_updated);
         }
         catch (...)
         {
@@ -128,82 +126,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool is_main
     }
 }
 
-struct ConfigReloader::FileWithTimestamp
-{
-    std::string path;
-    time_t modification_time;
-
-    FileWithTimestamp(const std::string & path_, time_t modification_time_)
-        : path(path_)
-        , modification_time(modification_time_)
-    {}
-
-    bool operator<(const FileWithTimestamp & rhs) const { return path < rhs.path; }
-
-    static bool isTheSame(const FileWithTimestamp & lhs, const FileWithTimestamp & rhs)
-    {
-        return (lhs.modification_time == rhs.modification_time) && (lhs.path == rhs.path);
-    }
-};
-
-void ConfigReloader::initTls(bool throw_on_error)
-{
-    if (is_main_config && !tls_inited)
-    {
-        LOG_DEBUG(log, "init tls cert file");
-        tls_inited = true;
-        ConfigProcessor config_processor(path);
-        ConfigProcessor::LoadedConfig loaded_config;
-        try
-        {
-            LOG_DEBUG(log, "Loading config for tls cert file init from `{}`", path);
-            loaded_config = config_processor.loadConfig();
-        }
-        catch (...)
-        {
-            if (throw_on_error)
-                throw;
-
-            tryLogCurrentException(log, fmt::format("Error loading config from `{}`", path));
-        }
-
-        auto config = loaded_config.configuration;
-        if (config->has("security") && config->has("security.ca_path") && config->has("security.cert_path") && config->has("security.key_path"))
-        {
-            cert_files.addIfExists(config->getString("security.ca_path"));
-            cert_files.addIfExists(config->getString("security.cert_path"));
-            cert_files.addIfExists(config->getString("security.key_path"));
-        }
-    }
-}
-
-bool ConfigReloader::tlsCertUpdated()
-{
-    FilesChangesTracker new_files;
-    for (const auto & file : cert_files.files)
-        new_files.addIfExists(file.path);
-
-    bool updated = new_files.isDifferOrNewerThan(cert_files);
-    LOG_DEBUG(log, "tls cert file updated: {}", updated);
-    if (updated)
-        cert_files = std::move(new_files);
-    return updated;
-}
-
-void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path)
-{
-    if (!path.empty() && Poco::File(path).exists())
-    {
-        files.emplace(path, Poco::File(path).getLastModified().epochTime());
-    }
-}
-
-bool ConfigReloader::FilesChangesTracker::isDifferOrNewerThan(const FilesChangesTracker & rhs) const
-{
-    return (files.size() != rhs.files.size()) || !std::equal(files.begin(), files.end(), rhs.files.begin(), FileWithTimestamp::isTheSame);
-}
-
-ConfigReloader::FilesChangesTracker ConfigReloader::getNewFileList() const
+FilesChangesTracker ConfigReloader::getNewFileList() const
 {
     FilesChangesTracker file_list;
 

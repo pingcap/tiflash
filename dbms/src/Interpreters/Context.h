@@ -100,7 +100,7 @@ class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
 using MockStorage = DB::tests::MockStorage;
-struct TiFlashSecurityConfig;
+class TiFlashSecurityConfig;
 using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
 
 enum class PageStorageRunMode : UInt8;
