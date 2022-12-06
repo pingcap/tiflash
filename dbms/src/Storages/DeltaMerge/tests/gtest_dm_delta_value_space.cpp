@@ -345,9 +345,10 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     {
         PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
-        // There should be two compaction sub_tasks.
-        // The first task try to compact the first three column files to a larger one,
-        // and the second task is just a trivial move for the last column file which is a delete range.
+        // There should be three compaction sub_tasks.
+        // The first task try to compact the first three column files to a larger one.
+        // The second task is a trivial move for a ColumnFileDeleteRange.
+        // The third task is a trivial move for and a ColumnFileTiny.
         const auto & tasks = compaction_task->getTasks();
         ASSERT_EQ(tasks.size(), 3);
         ASSERT_EQ(tasks[0].to_compact.size(), 3);
