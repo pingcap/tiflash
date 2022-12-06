@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Config/ConfigObject.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/FileChangesTracker.h>
 #include <time.h>
@@ -26,7 +27,6 @@
 #include <set>
 #include <string>
 #include <thread>
-#include "ConfigObject.h"
 
 
 namespace Poco
@@ -60,7 +60,7 @@ public:
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
     void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
-    void addObject(std::shared_ptr<ConfigObject> object) 
+    void addObject(std::shared_ptr<ConfigObject> object)
     {
         config_objects.push_back(object);
     }
