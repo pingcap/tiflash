@@ -819,7 +819,7 @@ Union: <for test>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <before aggregation>
-      MockExchangeReceiver x 10)";
+      MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }
