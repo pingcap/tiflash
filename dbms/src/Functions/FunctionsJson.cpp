@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/Types.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsJson.h>
 
 namespace DB
 {
-
-void SkipJson(size_t & cursor, const String & raw_value);
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
-String DecodeJsonAsString(size_t & cursor, const String & raw_value);
-
+void registerFunctionsJson(FunctionFactory & factory)
+{
+    factory.registerFunction<FunctionsJsonExtract>();
+    factory.registerFunction<FunctionsJsonUnquote>();
+    factory.registerFunction<FunctionsCastJsonAsString>();
+}
 } // namespace DB
