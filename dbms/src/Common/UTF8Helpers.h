@@ -83,6 +83,26 @@ inline size_t countCodePoints(const UInt8 * data, size_t size)
     return res;
 }
 
+// Convert utf8 position to byte position.
+// For Example:
+//   Taking string "ni好a" as an example.
+//   utf8 position of character 'a' in this string is 4 and byte position is 6.
+static inline Int64 utf8Pos2bytePos(const UInt8 * str, Int64 utf8_pos)
+{
+    Int64 byte_index = 0;
+    while (--utf8_pos > 0)
+        byte_index += seqLength(str[byte_index]);
+    return byte_index + 1;
+}
+
+static inline Int64 bytePos2Utf8Pos(const UInt8 * str, Int64 byte_pos)
+{
+    // byte_num means the number of byte before this byte_pos
+    Int64 byte_num = byte_pos - 1;
+    Int64 utf8_num = countCodePoints(str, byte_num);
+    return utf8_num + 1;
+}
+
 } // namespace UTF8
 
 
