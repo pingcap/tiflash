@@ -457,11 +457,54 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, Ranges)
 try
 {
+    read_ranges.emplace_back(buildRowKeyRange(222, 244));
+    read_ranges.emplace_back(buildRowKeyRange(300, 303));
+    read_ranges.emplace_back(buildRowKeyRange(555, 666));
+    runTestCase(TestCase{
+        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+        136,
+        "[1056, 1078)|[1091, 1094)|[555, 666)",
+        "[222, 244)|[300, 303)|[555, 666)"});
+}
+CATCH
+
+TEST_F(SegmentBitmapFilterTest, LogicalSplit)
+try
+{
     runTestCase(TestCase{
         "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
         946,
         "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
         "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+
+    auto new_seg_id = splitSegmentAt(SEG_ID, 512, Segment::SplitMode::Logical);
+
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
+
+    auto left_handle = getSegmentHandle(SEG_ID, {});
+    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
+    auto expected_left_handle = genSequence<Int64>("[0, 128)|[200, 255)|[256, 305)|[310, 512)");
+    ASSERT_EQ(expected_left_handle.size(), left_h->size());
+    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+
+    auto left_row_id = getSegmentRowId(SEG_ID, {});
+    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    auto expected_left_row_id = genSequence<UInt32>("[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 512)");
+    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+
+    auto right_handle = getSegmentHandle(*new_seg_id, {});
+    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
+    auto expected_right_handle = genSequence<Int64>("[512, 1024)");
+    ASSERT_EQ(expected_right_handle.size(), right_h->size());
+    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+
+    auto right_row_id = getSegmentRowId(*new_seg_id, {});
+    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    auto expected_right_row_id = genSequence<UInt32>("[512, 1024)");
+    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
 }
 CATCH
 
