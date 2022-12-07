@@ -32,7 +32,6 @@
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
@@ -200,6 +199,10 @@ namespace Debug
 {
 extern void setServiceAddr(const std::string & addr);
 }
+
+// It's used for the initialization of Context, so we need to ensure
+// that context in Server is created after ServerInfo has set this variable.
+UInt16 max_logical_cpu_cores = 0;
 
 static std::string getCanonicalPath(std::string path)
 {
@@ -882,6 +885,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto * helper = tiflash_instance_wrap.proxy_helper;
         helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
         server_info.parseSysInfo(response);
+        max_logical_cpu_cores = server_info.cpu_info.logical_cores;
         LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else

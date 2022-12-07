@@ -16,7 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/FieldVisitors.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
 #include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>
 #include <IO/CompressedStream.h>
@@ -25,7 +25,7 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/Timespan.h>
-
+#include <memory>
 
 namespace DB
 {
@@ -127,7 +127,7 @@ public:
 
     void set(UInt64 x)
     {
-        value = x ? x : getAutoValue();
+        value = x ? x : getNumberOfLogicalCPUCores();
         is_auto = x == 0;
         changed = true;
     }
@@ -162,20 +162,14 @@ public:
 
     void setAuto()
     {
-        value = getAutoValue();
+        value = getNumberOfLogicalCPUCores();
         is_auto = true;
     }
 
-    UInt64 getAutoValue() const
+    static UInt64 getAutoValue()
     {
-        static auto res = getAutoValueImpl();
+        static auto res = getNumberOfLogicalCPUCores();
         return res;
-    }
-
-    /// Executed once for all time. Executed from one thread.
-    UInt64 getAutoValueImpl() const
-    {
-        return getNumberOfPhysicalCPUCores();
     }
 
     UInt64 get() const

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #pragma once
-#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <common/getMemoryAmount.h>
 #include <common/types.h>
 
@@ -38,7 +37,7 @@ public:
         /// number of logical CPU cores
         UInt16 logical_cores = std::thread::hardware_concurrency();
         /// number of physical CPU cores
-        UInt16 physical_cores = getNumberOfPhysicalCPUCores();
+        UInt16 physical_cores = std::thread::hardware_concurrency();
         /// number of L1 cache size
         /// units: Byte
         UInt32 l1_cache_size = 16384; // 16KB (typical value)

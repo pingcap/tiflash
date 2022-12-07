@@ -14,6 +14,13 @@
 
 #pragma once
 
-/// Get number of CPU cores without hyper-threading.
-/// Note: do not support environment under resource isolation mechanism like Docker, CGroup.
-unsigned getNumberOfPhysicalCPUCores();
+#include <thread>
+
+extern UInt16 max_logical_cpu_cores;
+
+inline UInt16 getNumberOfLogicalCPUCores()
+{
+    if (max_logical_cpu_cores != 0)
+        return max_logical_cpu_cores;
+    return std::thread::hardware_concurrency();
+}
