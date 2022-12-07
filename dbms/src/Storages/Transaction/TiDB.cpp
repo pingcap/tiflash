@@ -525,10 +525,38 @@ try
 
     auto defs_json = json->getArray("definitions");
     definitions.clear();
+    std::unordered_set<TableID> part_id_set;
     for (size_t i = 0; i < defs_json->size(); i++)
     {
         PartitionDefinition definition(defs_json->getObject(i));
         definitions.emplace_back(definition);
+        part_id_set.emplace(definition.id);
+    }
+
+    auto add_defs_json = json->getArray("adding_definitions");
+    if (!add_defs_json.isNull()) {
+        for (size_t i = 0; i < add_defs_json->size(); i++)
+        {
+            PartitionDefinition definition(add_defs_json->getObject(i));
+            if (part_id_set.count(definition.id) == 0)
+            {
+                definitions.emplace_back(definition);
+                part_id_set.emplace(definition.id);
+            }
+        }
+    }
+
+    auto drop_defs_json = json->getArray("dropping_definitions");
+    if (!drop_defs_json.isNull()) {
+        for (size_t i = 0; i < drop_defs_json->size(); i++)
+        {
+            PartitionDefinition definition(drop_defs_json->getObject(i));
+            if (part_id_set.count(definition.id) == 0)
+            {
+                definitions.emplace_back(definition);
+                part_id_set.emplace(definition.id);
+            }
+        }
     }
 
     num = json->getValue<UInt64>("num");
