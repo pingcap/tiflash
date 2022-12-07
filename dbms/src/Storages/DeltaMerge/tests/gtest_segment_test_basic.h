@@ -92,9 +92,9 @@ public:
 
     void printFinishedOperations() const;
 
-    std::vector<Block> readSegment(PageId segment_id, bool need_row_id);
-    ColumnPtr getSegmentRowId(PageId segment_id);
-    ColumnPtr getSegmentHandle(PageId segment_id);
+    std::vector<Block> readSegment(PageId segment_id, bool need_row_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentRowId(PageId segment_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentHandle(PageId segment_id, const RowKeyRanges & ranges);
     void writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end);
 
 protected:

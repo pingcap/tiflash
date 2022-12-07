@@ -170,7 +170,7 @@ protected:
     static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
     ColumnPtr hold_row_id;
     ColumnPtr hold_handle;
-
+    RowKeyRanges read_ranges;
 
     /*
     0----------------stable_rows----------------stable_rows + delta_rows <-- append
@@ -194,8 +194,8 @@ protected:
         {
             writeSegment(unit);
         }
-        hold_row_id = getSegmentRowId(SEG_ID);
-        hold_handle = getSegmentHandle(SEG_ID);
+        hold_row_id = getSegmentRowId(SEG_ID, read_ranges);
+        hold_handle = getSegmentHandle(SEG_ID, read_ranges);
         if (hold_row_id == nullptr)
         {
             RUNTIME_CHECK(hold_handle == nullptr);
@@ -453,6 +453,5 @@ try
         "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
 }
 CATCH
-
 
 } // namespace DB::DM::tests
