@@ -26,8 +26,6 @@
 #include <Poco/String.h>
 #include <Poco/Timespan.h>
 
-#include <memory>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -128,7 +126,7 @@ public:
 
     void set(UInt64 x)
     {
-        value = x ? x : getNumberOfLogicalCPUCores();
+        value = x ? x : getAutoValue();
         is_auto = x == 0;
         changed = true;
     }
@@ -163,7 +161,7 @@ public:
 
     void setAuto()
     {
-        value = getNumberOfLogicalCPUCores();
+        value = getAutoValue();
         is_auto = true;
     }
 
