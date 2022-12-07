@@ -54,7 +54,6 @@ public:
 private:
     Tasks tasks;
 
-    size_t compaction_src_level;
     size_t current_compaction_version;
 
     size_t total_compact_files = 0;
@@ -62,7 +61,7 @@ private:
     size_t result_compact_files = 0;
 
 public:
-    MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
+    explicit MinorCompaction(size_t current_compaction_version_);
 
     // Add new task and return whether this task is a trivial move
     inline bool packUpTask(Task && task)
@@ -90,7 +89,6 @@ public:
 
     const Tasks & getTasks() const { return tasks; }
 
-    size_t getCompactionSourceLevel() const { return compaction_src_level; }
     size_t getCompactionVersion() const { return current_compaction_version; }
 
     /// Create new column file by combining several small `ColumnFileTiny`s
