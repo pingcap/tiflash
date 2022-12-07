@@ -23,6 +23,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/JsonBinary.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
@@ -1097,7 +1098,7 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
 String genJsonNull()
 {
     // null
-    const static String null({static_cast<char>(DB::TYPE_CODE_LITERAL), static_cast<char>(DB::LITERAL_NIL)});
+    const static String null({static_cast<char>(DB::JsonBinary::TYPE_CODE_LITERAL), static_cast<char>(DB::JsonBinary::LITERAL_NIL)});
     return null;
 }
 

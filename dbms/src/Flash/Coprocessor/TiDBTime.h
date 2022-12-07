@@ -21,6 +21,7 @@
 
 #include <Common/MyTime.h>
 #include <Core/Types.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -35,7 +36,7 @@ public:
     }
     MyDateTime my_date_time;
     UInt8 time_type;
-    Int8 fsp;
+    Int32 fsp;
     UInt64 toChunkTime() const
     {
         UInt64 ret = 0;
