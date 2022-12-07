@@ -15,6 +15,7 @@
 #pragma once
 
 #include <thread>
+
 #include "common/types.h"
 
 inline UInt16 getNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores = 0)

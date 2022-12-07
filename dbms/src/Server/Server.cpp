@@ -32,8 +32,8 @@
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/setThreadName.h>
 #include <Common/getNumberOfLogicalCPUCores.h>
+#include <Common/setThreadName.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
