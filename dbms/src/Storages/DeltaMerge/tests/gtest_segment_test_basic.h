@@ -92,8 +92,10 @@ public:
 
     void printFinishedOperations() const;
 
+    std::vector<Block> readSegment(PageId segment_id, bool need_row_id);
     ColumnPtr getSegmentRowId(PageId segment_id);
     ColumnPtr getSegmentHandle(PageId segment_id);
+
 protected:
     std::mt19937 random;
 
@@ -117,6 +119,7 @@ protected:
     void reloadDMContext();
 
     std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageId segment_id);
+
 protected:
     inline static constexpr PageId NAMESPACE_ID = 100;
 
