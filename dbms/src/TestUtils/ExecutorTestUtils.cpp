@@ -216,9 +216,9 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     Blocks actual_blocks;
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
-    if (auto cast_col = typeid_cast<const ColumnNullable *>( actual_blocks.data()[0].getColumns()[0].get())) {
-        std::cout<<&cast_col<<std::endl;
-    }
+    //if (auto cast_col = typeid_cast<const ColumnNullable *>( actual_blocks.data()[0].getColumns()[0].get())) {
+    //    std::cout<<&cast_col<<std::endl;
+    //}
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
