@@ -21,6 +21,7 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalWindow.h>
+#include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -38,6 +39,11 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     /// PhysicalWindow relies on the ordered data stream provided by PhysicalSort,
     /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
     child->disableRestoreConcurrency();
+
+    if (auto * sort = dynamic_cast<PhysicalWindowSort *>(child.get()))
+    {
+        sort->partition_item_count = window.partition_by().size();
+    }
 
     DAGExpressionAnalyzer analyzer(child->getSchema(), context);
     WindowDescription window_description = analyzer.buildWindowDescription(window);

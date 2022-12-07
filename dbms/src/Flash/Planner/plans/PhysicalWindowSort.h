@@ -53,6 +53,9 @@ private:
 
 private:
     SortDescription order_descr;
+    std::optional<size_t> partition_item_count;
     FineGrainedShuffle fine_grained_shuffle;
+
+    friend class PhysicalWindow;
 };
 } // namespace DB

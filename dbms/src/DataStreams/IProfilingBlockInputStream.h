@@ -257,6 +257,11 @@ private:
                 if (f(*p_child))
                     return;
     }
+
+    void process1();
+    void process2(FilterPtr & res_filter, Block & res, bool return_filter);
+    void process3(Block & res);
+    void process4(Block & res);
 };
 
 } // namespace DB

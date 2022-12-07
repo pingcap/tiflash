@@ -364,7 +364,9 @@ struct Settings
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_planner, true, "Enable planner")
+    M(SettingBool, enable_planner, true, "Enable planner") \
+    M(SettingBool, debug_enable_optimize_hash_sort_window, true, "Enable optimize: hash sort window") \
+    M(SettingUInt64, debug_hash_sort_window_reserve_size, 200000, "hash sort reserve size for hash table")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

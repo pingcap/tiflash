@@ -14,6 +14,7 @@
 
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/HashOrderBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
@@ -165,6 +166,43 @@ void orderStreams(
             context.getTemporaryPath(),
             log->identifier());
     }
+}
+
+void hashOrderStreams(
+    DAGPipeline & pipeline,
+    size_t,
+    SortDescription order_descr,
+    Int64 limit,
+    size_t hash_items_count,
+    [[maybe_unused]] bool enable_fine_grained_shuffle,
+    const Context & context,
+    const LoggerPtr & log,
+    const Block & sample_block)
+{
+    assert(enable_fine_grained_shuffle);
+
+    const Settings & settings = context.getSettingsRef();
+    String extra_info;
+    extra_info = enableFineGrainedShuffleExtraInfo;
+
+    // TODO: if already sorted once for this partition(without split block), we don't need to rebuild hash table.
+    SortDescription hash_items(order_descr.begin(), order_descr.begin() + hash_items_count);
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<HashOrderBlockInputStream>(stream, order_descr, log->identifier(), context, sample_block, limit);
+    });
+
+    pipeline.transform([&](auto & stream) {
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
+
+        /// Limits on sorting
+        IProfilingBlockInputStream::LocalLimits limits;
+        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
+        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
+        sorting_stream->setLimits(limits);
+
+        stream = sorting_stream;
+        stream->setExtraInfo(extra_info);
+    });
 }
 
 void executeCreatingSets(
