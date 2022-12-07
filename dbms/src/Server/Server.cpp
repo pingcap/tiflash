@@ -185,6 +185,10 @@ extern const Metric LogicalCPUCores;
 extern const Metric MemoryCapacity;
 } // namespace CurrentMetrics
 
+// It's used for the initialization of Context, so we need to ensure
+// that context in Server is created after ServerInfo has set this variable.
+UInt16 max_logical_cpu_cores = 0;
+
 namespace DB
 {
 namespace ErrorCodes
@@ -199,10 +203,6 @@ namespace Debug
 {
 extern void setServiceAddr(const std::string & addr);
 }
-
-// It's used for the initialization of Context, so we need to ensure
-// that context in Server is created after ServerInfo has set this variable.
-UInt16 max_logical_cpu_cores = 0;
 
 static std::string getCanonicalPath(std::string path)
 {
