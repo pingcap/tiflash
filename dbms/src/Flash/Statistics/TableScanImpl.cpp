@@ -32,7 +32,8 @@ void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.fmtAppend(
         R"("connection_details":[{},{}])",
         local_table_scan_detail.toJson(),
-        cop_table_scan_detail.toJson());
+        cop_table_scan_detail.toJson(),
+        exchange_table_scan_detail.toJson());
 }
 
 void TableScanStatistics::collectExtraRuntimeDetail()
@@ -51,10 +52,22 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                     cop_table_scan_detail.bytes += connection_profile_info.bytes;
                 }
             }
+            else if (auto * exchange_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get()); exchange_stream)
+            {
+                for (const auto & connection_profile_info : exchange_stream->getConnectionProfileInfos())
+                {
+                    exchange_table_scan_detail.packets += connection_profile_info.packets;
+                    exchange_table_scan_detail.bytes += connection_profile_info.bytes;
+                }
+            }
             else if (auto * local_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); local_stream)
             {
                 /// local read input stream also is IProfilingBlockInputStream
                 local_table_scan_detail.bytes += local_stream->getProfileInfo().bytes;
+            }
+            else
+            {
+                RUNTIME_ASSERT(false, "unexpected type of BlockInputStream, got {}", io_stream->getName());
             }
         }
     }
