@@ -36,15 +36,6 @@ struct MockProxyRegion : MutexLockWrap
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
-
-    struct NormalWrite
-    {
-        std::vector<HandleID> keys;
-        std::vector<std::string> vals;
-        std::vector<WriteCmdType> cmd_types;
-        std::vector<ColumnFamilyType> cmd_cf;
-    };
-
     struct RawWrite
     {
         std::vector<std::string> keys;
@@ -52,7 +43,6 @@ struct MockProxyRegion : MutexLockWrap
         std::vector<WriteCmdType> cmd_types;
         std::vector<ColumnFamilyType> cmd_cf;
     };
-
     struct AdminCommand
     {
         raft_cmdpb::AdminRequest request;
@@ -66,16 +56,11 @@ struct MockProxyRegion : MutexLockWrap
     struct CachedCommand
     {
         uint64_t term;
-        std::variant<NormalWrite, AdminCommand, RawWrite> inner;
+        std::variant<AdminCommand, RawWrite> inner;
 
         bool has_admin_request() const
         {
             return std::holds_alternative<AdminCommand>(inner);
-        }
-
-        bool has_write_request() const
-        {
-            return std::holds_alternative<NormalWrite>(inner);
         }
 
         bool has_raw_write_request() const
@@ -86,11 +71,6 @@ struct MockProxyRegion : MutexLockWrap
         AdminCommand & admin()
         {
             return std::get<AdminCommand>(inner);
-        }
-
-        NormalWrite & write()
-        {
-            return std::get<NormalWrite>(inner);
         }
 
         RawWrite & raw_write()

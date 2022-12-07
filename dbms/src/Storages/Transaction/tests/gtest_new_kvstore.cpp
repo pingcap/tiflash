@@ -164,10 +164,7 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
             KVStore & kvs = getKVS();
             proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
-        }
-        {
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+
             MockRaftStoreProxy::FailCond cond;
 
             auto kvr1 = kvs.getRegion(region_id);
@@ -177,10 +174,11 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
             {
                 r1->getLatestAppliedIndex();
+                // This key has empty PK which is actually truncated.
                 std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
                 std::string v = "4486809092ACFEC38906";
-                auto strKey = Redact::debugStringToKey(k.data(), k.size());
-                auto strVal = Redact::debugStringToKey(v.data(), v.size());
+                auto strKey = Redact::hexStringToKey(k.data(), k.size());
+                auto strVal = Redact::hexStringToKey(v.data(), v.size());
 
                 auto [index, term] = proxy_instance->rawWrite(region_id, {strKey}, {strVal}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
                 EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
