@@ -479,11 +479,11 @@ void ExchangeReceiverBase<RPCContext>::cancel()
     {
         try
         {
-            rpc_context->cancelMPPTaskOnTiFlashStorageNode();
+            rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
         }
         catch (...)
         {
-            String cancel_err_msg = getCurrentExceptionMessage(false, false);
+            String cancel_err_msg = getCurrentExceptionMessage(true, true);
             LOG_INFO(exc_log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
         }
     }

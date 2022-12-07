@@ -222,7 +222,7 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     return req;
 }
 
-void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode()
+void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
 {
     auto sender_task_size = exchange_receiver_meta.encoded_task_meta_size();
     auto thread_manager = newThreadManager();
@@ -234,10 +234,18 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode()
         auto cancel_req = std::make_shared<mpp::CancelTaskRequest>();
         cancel_req->set_allocated_meta(sender_task.release());
         auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::CancelTaskRequest>>(cancel_req);
-        thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [cancel_req, this] {
-            auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
-            // No need to retry.
-            this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
+        thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [cancel_req, log, this] {
+            try
+            {
+                auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
+                // No need to retry.
+                this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
+            }
+            catch (...)
+            {
+                String cancel_err_msg = getCurrentExceptionMessage(true);
+                LOG_INFO(log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+            }
         });
     }
     thread_manager->wait();

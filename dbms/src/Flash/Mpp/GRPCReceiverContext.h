@@ -102,7 +102,7 @@ public:
     // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),
     // and ExchangeSender+TableScan(executed in tiflash_storage node).
     // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
-    void cancelMPPTaskOnTiFlashStorageNode();
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log);
 
 private:
     tipb::ExchangeReceiver exchange_receiver_meta;
