@@ -147,7 +147,7 @@ grpc::Status FlashService::Coprocessor(
     {
         if (auto current = GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Value(); current > handle_limit)
         {
-            response->set_other_error(fmt::format("TiFlash server is busy: cop pool queued too much, current = {}, limit = {}", current, handle_limit));
+            response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("tiflash cop pool queued too much, current = {}, limit = {}", current, handle_limit));
             return grpc::Status::OK;
         }
     }
@@ -158,7 +158,7 @@ grpc::Status FlashService::Coprocessor(
         {
             if (auto current = watch.elapsedSeconds(); current > max_queued_duration_seconds)
             {
-                response->set_other_error(fmt::format("TiFlash server is busy: this task queued in cop pool too long, current = {}, limit = {}", current, max_queued_duration_seconds));
+                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {}, limit = {}", current, max_queued_duration_seconds));
                 return grpc::Status::OK;
             }
         }
