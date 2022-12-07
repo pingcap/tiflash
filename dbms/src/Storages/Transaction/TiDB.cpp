@@ -534,7 +534,8 @@ try
     }
 
     auto add_defs_json = json->getArray("adding_definitions");
-    if (!add_defs_json.isNull()) {
+    if (!add_defs_json.isNull())
+    {
         for (size_t i = 0; i < add_defs_json->size(); i++)
         {
             PartitionDefinition definition(add_defs_json->getObject(i));
@@ -547,7 +548,8 @@ try
     }
 
     auto drop_defs_json = json->getArray("dropping_definitions");
-    if (!drop_defs_json.isNull()) {
+    if (!drop_defs_json.isNull())
+    {
         for (size_t i = 0; i < drop_defs_json->size(); i++)
         {
             PartitionDefinition definition(drop_defs_json->getObject(i));
