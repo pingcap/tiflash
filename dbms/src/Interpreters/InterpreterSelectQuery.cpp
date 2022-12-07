@@ -1284,7 +1284,7 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     if (query.limit_length)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, 0, /*req_id=*/"", false);
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, /*req_id=*/"");
         });
     }
 }
@@ -1341,25 +1341,8 @@ void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
     /// If there is LIMIT
     if (query.limit_length)
     {
-        /** Rare case:
-          *  if there is no WITH TOTALS and there is a subquery in FROM, and there is WITH TOTALS on one of the levels,
-          *  then when using LIMIT, you should read the data to the end, rather than cancel the query earlier,
-          *  because if you cancel the query, we will not get `totals` data from the remote server.
-          *
-          * Another case:
-          *  if there is WITH TOTALS and there is no ORDER BY, then read the data to the end,
-          *  otherwise TOTALS is counted according to incomplete data.
-          */
-        bool always_read_till_end = false;
-
-        if (query.group_by_with_totals && !query.order_expression_list)
-            always_read_till_end = true;
-
-        if (!query.group_by_with_totals && hasWithTotalsInAnySubqueryInFromClause(query))
-            always_read_till_end = true;
-
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, limit_offset, /*req_id=*/"", always_read_till_end);
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, /*req_id=*/"");
         });
     }
 }

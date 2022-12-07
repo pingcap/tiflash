@@ -406,6 +406,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
 
 bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
 {
+    Stopwatch watch;
     if (index)
     {
         // We set actual index when handling CompactLog.
@@ -416,6 +417,7 @@ bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succ
         persistRegion(curr_region, region_task_lock, "tryFlushRegionData");
         curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
         return true;
     }
     else
