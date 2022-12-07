@@ -124,6 +124,10 @@ public:
       */
     void joinBlock(Block & block, size_t stream_index = 0) const;
 
+    Block joinBlock(size_t stream_index = 0) const;
+
+    void getHeader(Block & block, size_t stream_index = 0) const;
+
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
     void setTotals(const Block & block) { totals = block; }
@@ -132,8 +136,6 @@ public:
     void joinTotals(Block & block) const;
 
     void setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 max_block_size);
-
-    void setBlockAndInitProbeProcessInfo(Block block, size_t probe_index);
 
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
@@ -158,7 +160,7 @@ public:
     bool needGetNewBlock(size_t stream_index);
 
     /// update block if prev block has been join finish
-    void updateProcessBlock(Block block, size_t stream_index);
+    void updateProcessBlock(Block && block, size_t stream_index);
 
     size_t getBuildConcurrency() const
     {
@@ -210,20 +212,16 @@ public:
         UInt64 max_block_size;
         size_t start_row;
         size_t end_row;
-        bool all_rows_joined_finish;
-        bool block_full;
+        bool all_rows_joined_finish = true;
+        bool block_full = false;
 
-        ProbeProcessInfo(Block block_, UInt64 max_block_size_, size_t start_row_, size_t end_row_, bool all_rows_joined_finish_, bool block_full_)
-            : block(block_)
-            , max_block_size(max_block_size_)
-            , start_row(start_row_)
-            , end_row(end_row_)
-            , all_rows_joined_finish(all_rows_joined_finish_)
-            , block_full(block_full_)
-        {}
+        ProbeProcessInfo(UInt64 max_block_size_)
+            : max_block_size(max_block_size_){};
+
+        void setAndInit(Block && block_);
     };
 
-    using ProbeProcessInfoPtr = std::shared_ptr<ProbeProcessInfo>;
+    using ProbeProcessInfoPtr = std::unique_ptr<ProbeProcessInfo>;
     using ProbeProcessInfoPtrs = std::vector<ProbeProcessInfoPtr>;
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
@@ -326,8 +324,6 @@ private:
 
     size_t probe_concurrency;
 
-    UInt64 max_block_size_for_hash_join;
-
     ProbeProcessInfoPtrs probe_process_infos;
 
 private:
@@ -429,7 +425,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr probe_process_info_ptr) const;
+    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & probe_process_info) const;
 
     /** Handle non-equal join conditions
       *
@@ -444,7 +440,7 @@ private:
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
 
-    static void updateStartRow(ProbeProcessInfoPtr probe_process_info_ptr);
+    static void updateStartRow(ProbeProcessInfo & probe_process_info);
 };
 
 using JoinPtr = std::shared_ptr<Join>;

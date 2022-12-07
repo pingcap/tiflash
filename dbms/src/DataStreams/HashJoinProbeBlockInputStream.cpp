@@ -60,7 +60,7 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
-    join->joinBlock(res, concurrency_probe_index);
+    join->getHeader(res, concurrency_probe_index);
     return res;
 }
 
@@ -71,12 +71,10 @@ Block HashJoinProbeBlockInputStream::readImpl()
         Block block = children.back()->read();
         if (!block)
             return block;
-        join->updateProcessBlock(block, concurrency_probe_index);
+        join->updateProcessBlock(std::move(block), concurrency_probe_index);
     }
 
-    Block res;
-    join->joinBlock(res, concurrency_probe_index);
-    return res;
+    return join->joinBlock(concurrency_probe_index);
 }
 
 } // namespace DB
