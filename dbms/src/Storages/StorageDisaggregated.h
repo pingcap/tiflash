@@ -30,10 +30,6 @@
 
 namespace DB
 {
-namespace tests
-{
-class StorageDisaggregatedTest;
-} // namespace tests
 
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
@@ -74,6 +70,8 @@ public:
         unsigned num_streams) override;
 
     std::shared_ptr<ExchangeReceiver> getExchangeReceiver() const { return exchange_receiver; }
+    using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+    RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
     static const String ExecIDPrefixForTiFlashStorageSender;
@@ -81,15 +79,9 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
-    friend class tests::StorageDisaggregatedTest;
-
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
-    using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
-    RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests();
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-
-
     void pushDownFilter(DAGPipeline & pipeline);
     void setGRPCErrorMsg(const std::string & err);
 
