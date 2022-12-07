@@ -15,12 +15,18 @@
 #pragma once
 
 #include <thread>
+#include "common/types.h"
 
-extern UInt16 max_logical_cpu_cores;
-
-inline UInt16 getNumberOfLogicalCPUCores()
+inline UInt16 getNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores = 0)
 {
-    if (max_logical_cpu_cores != 0)
-        return max_logical_cpu_cores;
-    return std::thread::hardware_concurrency();
+    static UInt64 n = max_logical_cpu_cores;
+    return n;
+}
+
+// We should call this function before Context has been created,
+// which will call `getNumberOfLogicalCPUCores` and we can not
+// set cpu cores any more.
+inline void setNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores = 0)
+{
+    getNumberOfLogicalCPUCores(max_logical_cpu_cores);
 }

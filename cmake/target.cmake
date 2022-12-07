@@ -14,7 +14,6 @@
 
 if (CMAKE_SYSTEM MATCHES "Linux")
     set (OS_LINUX 1)
-    add_definitions(-D OS_LINUX)
 elseif (CMAKE_SYSTEM MATCHES "FreeBSD")
     set (OS_FREEBSD 1)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")

@@ -33,6 +33,7 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -184,10 +185,6 @@ namespace CurrentMetrics
 extern const Metric LogicalCPUCores;
 extern const Metric MemoryCapacity;
 } // namespace CurrentMetrics
-
-// It's used for the initialization of Context, so we need to ensure
-// that context in Server is created after ServerInfo has set this variable.
-UInt16 max_logical_cpu_cores = 0;
 
 namespace DB
 {
@@ -885,11 +882,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto * helper = tiflash_instance_wrap.proxy_helper;
         helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
         server_info.parseSysInfo(response);
-        max_logical_cpu_cores = server_info.cpu_info.logical_cores;
+        setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
         LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else
     {
+        setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
         LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
@@ -1190,6 +1188,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         loadMetadata(*global_context);
     }
     LOG_DEBUG(log, "Load metadata done.");
+
+    LOG_INFO(log, "MyDebug: max_threads {}", settings.max_threads);
+    LOG_INFO(log, "MyDebug: max_streams {}", global_context->getMaxStreams());
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     for (int i = 0; i < 60; i++) // retry for 3 mins
