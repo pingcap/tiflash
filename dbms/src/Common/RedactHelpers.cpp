@@ -90,6 +90,8 @@ std::string Redact::hexStringToKey(const char * start, size_t len)
             ss >> x;
             s.push_back(x);
         }
-    } else throw DB::Exception("Invalid length: " + std::string(start, len), DB::ErrorCodes::LOGICAL_ERROR);
+    }
+    else
+        throw DB::Exception("Invalid length: " + std::string(start, len), DB::ErrorCodes::LOGICAL_ERROR);
     return s;
 }
