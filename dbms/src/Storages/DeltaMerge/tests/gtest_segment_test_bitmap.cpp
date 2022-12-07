@@ -71,7 +71,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
-std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_row_id)
+std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);
     ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
@@ -80,7 +80,7 @@ std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_ro
         *dm_context,
         columns_to_read,
         snapshot,
-        {segment->getRowKeyRange()},
+        ranges.empty() ? RowKeyRanges{segment->getRowKeyRange()} : ranges,
         nullptr,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
@@ -93,10 +93,10 @@ std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_ro
     return blks;
 }
 
-ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id)
+ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id, const RowKeyRanges & ranges)
 {
     LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
-    auto blks = readSegment(segment_id, true);
+    auto blks = readSegment(segment_id, true, ranges);
     if (blks.empty())
     {
         return nullptr;
@@ -110,10 +110,10 @@ ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id)
     }
 }
 
-ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id)
+ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id, const RowKeyRanges & ranges)
 {
     LOG_INFO(logger_op, "getSegmentHandle, segment_id={}", segment_id);
-    auto blks = readSegment(segment_id, false);
+    auto blks = readSegment(segment_id, false, ranges);
     if (blks.empty())
     {
         return nullptr;
