@@ -231,6 +231,37 @@ try
             ASSERT_EQ(col_4->getElement(i), res4[i]);
         }
     }
+    {
+        /// test a empty block
+        const ColumnsWithTypeAndName
+            ori_col
+            = {
+                toVec<Int64>(col_name[0], ColumnWithInt64{}),  // without data.
+                toVec<String>(col_name[1], ColumnWithString{}),
+                toVec<String>(col_name[2], ColumnWithString{}),
+                toVec<UInt64>(col_name[3], ColumnWithUInt64{}),
+            };
+        // group set<gender>, group set<country>
+        GroupingSet g_gender = GroupingSet{GroupingColumnNames{col_name[1]}};
+        GroupingSet g_country = GroupingSet{GroupingColumnNames{col_name[2]}};
+        GroupingSet g_region = GroupingSet{GroupingColumnNames{col_name[3]}};
+        GroupingSets group_sets = GroupingSets{g_gender, g_country, g_region};
+        Repeat repeat = Repeat(group_sets);
+        Block block(ori_col);
+        auto origin_rows = block.rows();
+
+        repeat.replicateAndFillNull(block);
+        // assert the col size is added with 1.
+        ASSERT_EQ(block.getColumns().size(), size_t(5));
+        // assert the new col groupingID is appended.
+        ASSERT_EQ(block.getColumnsWithTypeAndName()[4].name, "groupingID");
+        // assert the block size is equal to origin rows * grouping set num.
+        auto repeat_rows = block.rows();
+        auto grouping_set_num = repeat.getGroupSetNum();
+        ASSERT_EQ(origin_rows, 0);
+        ASSERT_EQ(origin_rows * grouping_set_num, repeat_rows); // 0
+        // assert grouping set column are nullable.
+    }
 }
 CATCH
 

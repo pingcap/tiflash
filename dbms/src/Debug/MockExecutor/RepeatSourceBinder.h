@@ -25,7 +25,7 @@ class RepeatSourceBinder : public ExecutorBinder
 {
 public:
     RepeatSourceBinder(size_t & index_, const DAGSchema & output_schema_, MockVVecGroupingNameVec gss)
-        : ExecutorBinder(index_, "repeat_source" + std::to_string(index_), output_schema_)
+        : ExecutorBinder(index_, "repeat_source_" + std::to_string(index_), output_schema_)
         , grouping_sets_columns(gss)
     {}
 
