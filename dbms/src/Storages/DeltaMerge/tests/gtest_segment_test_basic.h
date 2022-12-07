@@ -63,7 +63,7 @@ public:
      * written randomly in the segment range.
      */
     void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
-    void ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
     void ingestDTFileByReplace(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
     void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void deleteRangeSegment(PageId segment_id);
@@ -95,6 +95,7 @@ public:
     std::vector<Block> readSegment(PageId segment_id, bool need_row_id);
     ColumnPtr getSegmentRowId(PageId segment_id);
     ColumnPtr getSegmentHandle(PageId segment_id);
+    void writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end);
 
 protected:
     std::mt19937 random;
