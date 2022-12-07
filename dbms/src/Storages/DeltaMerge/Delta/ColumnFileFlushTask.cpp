@@ -99,7 +99,7 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
     }
 
     // serialize metadata and update persisted_file_set
-    if (!persisted_file_set->appendPersistedColumnFilesToLevel0(new_column_files, wbs))
+    if (!persisted_file_set->appendPersistedColumnFiles(new_column_files, wbs))
         return false;
 
     mem_table_set->removeColumnFilesInFlushTask(*this);
