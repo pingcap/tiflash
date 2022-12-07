@@ -14,12 +14,11 @@
 
 #pragma once
 
-#include <Common/Exception.h>
 #include <common/types.h>
 
 #include <thread>
 
-UInt16 getNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores = 0);
+UInt16 getNumberOfLogicalCPUCores();
 
 // We should call this function before Context has been created,
 // which will call `getNumberOfLogicalCPUCores`, or we can not
