@@ -137,7 +137,7 @@ grpc::Status FlashService::Coprocessor(
 
     context->setMockStorage(mock_storage);
 
-    auto settings = context->getSettingsRef();
+    const auto & settings = context->getSettingsRef();
     auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
     auto max_queued_duration_seconds = settings.cop_pool_max_queued_seconds;
 
