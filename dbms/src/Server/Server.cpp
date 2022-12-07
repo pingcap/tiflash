@@ -34,7 +34,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
-#include <Core/Defines.h>
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -200,30 +200,6 @@ extern const int INVALID_CONFIG_PARAMETER;
 namespace Debug
 {
 extern void setServiceAddr(const std::string & addr);
-}
-
-static DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & config)
-{
-    static const std::string config_key = "flash.disaggregated_mode";
-    DisaggregatedMode mode = DisaggregatedMode::None;
-    if (config.has(config_key))
-    {
-        std::string mode_str = config.getString(config_key);
-        RUNTIME_ASSERT(mode_str == DISAGGREGATED_MODE_STORAGE || mode_str == DISAGGREGATED_MODE_COMPUTE,
-                       "Expect disaggregated_mode is {} or {}, got: {}",
-                       DISAGGREGATED_MODE_STORAGE,
-                       DISAGGREGATED_MODE_COMPUTE,
-                       mode_str);
-        if (mode_str == DISAGGREGATED_MODE_COMPUTE)
-        {
-            mode = DisaggregatedMode::Compute;
-        }
-        else
-        {
-            mode = DisaggregatedMode::Storage;
-        }
-    }
-    return mode;
 }
 
 static std::string getCanonicalPath(std::string path)

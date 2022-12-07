@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
 #include <Debug/MockStorage.h>

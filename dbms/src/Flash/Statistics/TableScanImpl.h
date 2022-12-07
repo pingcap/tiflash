@@ -51,9 +51,7 @@ public:
 
 private:
     TableScanDetail local_table_scan_detail{true};
-    TableScanDetail cop_table_scan_detail{false};
-    // For tiflash_compute node, TableScan will be converted to ExchangeReceiver.
-    TableScanDetail exchange_table_scan_detail{false};
+    TableScanDetail remote_table_scan_detail{false};
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;

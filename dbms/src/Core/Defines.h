@@ -16,8 +16,6 @@
 
 #include <common/defines.h>
 
-#include <string>
-
 #define DBMS_NAME "ClickHouse"
 #define DBMS_VERSION_MAJOR 1
 #define DBMS_VERSION_MINOR 1
@@ -111,17 +109,3 @@
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
-
-#define DISAGGREGATED_MODE_NONE "tiflash"
-#define DISAGGREGATED_MODE_STORAGE "tiflash_storage"
-#define DISAGGREGATED_MODE_COMPUTE "tiflash_compute"
-
-namespace DB
-{
-enum class DisaggregatedMode
-{
-    None,
-    Compute,
-    Storage,
-};
-} // namespace DB

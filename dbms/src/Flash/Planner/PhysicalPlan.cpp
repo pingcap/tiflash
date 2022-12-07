@@ -35,7 +35,6 @@
 #include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
