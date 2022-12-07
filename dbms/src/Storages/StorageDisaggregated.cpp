@@ -202,11 +202,21 @@ StorageDisaggregated::buildAndDispatchMPPTaskRequests(const std::vector<RemoteRe
             pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
             while (need_retry)
             {
+                pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
                 try
                 {
                     pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
-                    this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
+                    cluster->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
                     need_retry = false;
+                    auto resp = rpc_call.getResp();
+                    for (const auto & retry_region : resp->retry_regions())
+                    {
+                        auto region_id = pingcap::kv::RegionVerID(
+                            retry_region.id(),
+                            retry_region.region_epoch().conf_ver(),
+                            retry_region.region_epoch().version());
+                        cluster->region_cache->dropRegion(region_id);
+                    }
                 }
                 catch (...)
                 {
@@ -219,7 +229,6 @@ StorageDisaggregated::buildAndDispatchMPPTaskRequests(const std::vector<RemoteRe
                     {
                         need_retry = false;
                         this->setGRPCErrorMsg(local_err_msg);
-                        pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
                         cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
                     }
                 }
