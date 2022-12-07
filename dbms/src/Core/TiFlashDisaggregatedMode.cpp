@@ -40,4 +40,18 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
     }
     return mode;
 }
+
+std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)
+{
+    switch (mode)
+    {
+    case DisaggregatedMode::Compute:
+        return DISAGGREGATED_MODE_COMPUTE_PROXY_LABEL;
+    case DisaggregatedMode::Storage:
+    case DisaggregatedMode::None:
+        return DEF_PROXY_LABEL;
+    default:
+        __builtin_unreachable();
+    };
+}
 } // namespace DB

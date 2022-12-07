@@ -60,7 +60,7 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
-        // For tiflash_compute mode, all region are fetch from remote, no need to buildProjection.
+        buildProjection(context, pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
     else
     {

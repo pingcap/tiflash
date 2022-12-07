@@ -267,10 +267,7 @@ struct TiFlashProxyConfig
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
             auto disaggregated_mode = getDisaggregatedMode(config);
-            if (disaggregated_mode == DisaggregatedMode::Compute)
-                args_map[engine_label] = DISAGGREGATED_MODE_COMPUTE;
-            else
-                args_map[engine_label] = DISAGGREGATED_MODE_NONE;
+            args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
 
             for (auto && [k, v] : args_map)
             {

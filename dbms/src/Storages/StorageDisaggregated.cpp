@@ -151,6 +151,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     sender_dag_req.set_collect_execution_summaries(false);
     sender_dag_req.set_flags(dag_req->flags());
     sender_dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+    sender_dag_req.set_force_encode_type(true);
     const auto & column_infos = table_scan.getColumns();
     for (auto off = 0; off < column_infos.size(); ++off)
     {

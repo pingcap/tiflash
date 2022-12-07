@@ -18,7 +18,8 @@
 
 #include <string>
 
-#define DISAGGREGATED_MODE_NONE "tiflash"
+#define DEF_PROXY_LABEL "tiflash"
+#define DISAGGREGATED_MODE_COMPUTE_PROXY_LABEL DISAGGREGATED_MODE_COMPUTE
 #define DISAGGREGATED_MODE_STORAGE "tiflash_storage"
 #define DISAGGREGATED_MODE_COMPUTE "tiflash_compute"
 
@@ -32,4 +33,5 @@ enum class DisaggregatedMode
 };
 
 DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & config);
+std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode);
 } // namespace DB

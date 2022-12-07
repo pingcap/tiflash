@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Storages/StorageDisaggregated.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -86,6 +87,20 @@ try
     ASSERT_EQ(sender_dag_req_desc->field_count(), 17);
 
     TiFlashTestEnv::getGlobalContext().setDAGContext(ori_dag_context);
+}
+CATCH
+
+TEST_F(StorageDisaggregatedTest, LabelTest)
+try
+{
+    ASSERT_EQ(getProxyLabelByDisaggregatedMode(DisaggregatedMode::Compute), "tiflash_compute");
+    ASSERT_EQ(getProxyLabelByDisaggregatedMode(DisaggregatedMode::Compute), DISAGGREGATED_MODE_COMPUTE_PROXY_LABEL);
+
+    ASSERT_EQ(getProxyLabelByDisaggregatedMode(DisaggregatedMode::Storage), "tiflash");
+    ASSERT_EQ(getProxyLabelByDisaggregatedMode(DisaggregatedMode::Storage), DEF_PROXY_LABEL);
+
+    ASSERT_EQ(getProxyLabelByDisaggregatedMode(DisaggregatedMode::None), "tiflash");
+    ASSERT_EQ(getProxyLabelByDisaggregatedMode(DisaggregatedMode::None), DEF_PROXY_LABEL);
 }
 CATCH
 
