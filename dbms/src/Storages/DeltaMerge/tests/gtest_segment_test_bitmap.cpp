@@ -53,6 +53,13 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
+std::shared_ptr<String> getIntHandleKey(Int64 i)
+{
+    WriteBufferFromOwnString ss;
+    DB::EncodeInt64(i, ss);
+    return std::make_shared<String>(ss.releaseStr());
+};
+
 std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageId segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
@@ -118,5 +125,15 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id)
         RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
         return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
     }
+}
+
+void SegmentTestBasic::writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end)
+{
+    auto begin_key = RowKeyValue(options.is_common_handle, getIntHandleKey(begin), begin);
+    auto end_key = RowKeyValue(options.is_common_handle, getIntHandleKey(end), end);
+    auto range = RowKeyRange(begin_key, end_key, options.is_common_handle, 1);
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    RUNTIME_CHECK(segment->write(*dm_context, range));
 }
 } // namespace DB::DM::tests

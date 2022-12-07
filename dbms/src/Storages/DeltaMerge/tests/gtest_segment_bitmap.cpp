@@ -170,13 +170,22 @@ protected:
     static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
     ColumnPtr hold_row_id;
     ColumnPtr hold_handle;
+
+
     /*
-    s:[a, b)|d_tiny:[a, b)|d_tiny_del:[a, b)|d_big:[a, b)|d_dr:[a, b)|d_mem:[a, b)|d_mem_del
+    0----------------stable_rows----------------stable_rows + delta_rows <-- append
+    | stable value space | delta value space ..........................  <-- append
+    |--------------------|--ColumnFilePersisted--|ColumnFileInMemory...  <-- append
+    |--------------------|-Tiny|DeleteRange|Big--|ColumnFileInMemory...  <-- append
+
+    `seg_data`: s:[a, b)|d_tiny:[a, b)|d_tiny_del:[a, b)|d_big:[a, b)|d_dr:[a, b)|d_mem:[a, b)|d_mem_del
     - s: stable
     - d_tiny: delta ColumnFileTiny
     - d_del_tiny: delta ColumnFileTiny with delete flag
     - d_big: delta ColumnFileBig
     - d_dr: delta delete range
+
+    Returns {row_id, handle}.
     */
     std::pair<const PaddedPODArray<UInt32> *, const PaddedPODArray<Int64> *> writeSegment(std::string_view seg_data)
     {
@@ -222,6 +231,19 @@ protected:
             SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, end - begin, begin);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
+        else if (type == "d_big")
+        {
+            SegmentTestBasic::ingestDTFileIntoDelta(SEG_ID, end - begin, begin, false);
+        }
+        else if (type == "d_dr")
+        {
+            SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end);
+        }
+        else if (type == "s")
+        {
+            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::mergeSegmentDelta(SEG_ID);
+        }
         else
         {
             RUNTIME_CHECK(false, type);
@@ -265,13 +287,6 @@ protected:
         }
     }
 };
-
-/*
-0----------------stable_rows----------------stable_rows + delta_rows
-| stable value space | delta value space .......................... <-- append
-|--------------------|--ColumnFilePersisted--|ColumnFileInMemory... <-- append
-|--------------------|-Tiny|DeleteRange|Big--|ColumnFileInMemory... <-- append
-*/
 
 TEST_F(SegmentBitmapFilterTest, InMemory_1)
 try
@@ -372,41 +387,72 @@ try
 }
 CATCH
 
-/*
-
-TEST_F(SegmentBitmapFilterTest, InMemory_3)
+TEST_F(SegmentBitmapFilterTest, DeleteRange)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[100, 200)");
-    {
-        ASSERT_EQ(1000, row_id->size());
-        auto expected = genSequence<UInt32>("[0, 100)|[1000, 1100)|[200, 1000)");
-        ASSERT_TRUE(sequenceEqual(expected.data(), row_id->data(), 1000));
-    }
-    {
-        ASSERT_EQ(1000, handle->size());
-        auto expected = genSequence<Int64>("[0, 1000)");
-        ASSERT_TRUE(sequenceEqual(expected.data(), handle->data(), 1000));
-    }
+    runTestCase(TestCase{
+        "d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)",
+        390,
+        "[0, 140)|[400, 450)|[200, 400)",
+        "[100, 290)|[300, 500)"});
+}
+CATCH
+
+TEST_F(SegmentBitmapFilterTest, Big)
+try
+{
+    runTestCase(TestCase{
+        "d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)",
+        900,
+        "[0, 140)|[1150, 1200)|[440, 1150)",
+        "[100, 1000)"});
+}
+CATCH
+
+TEST_F(SegmentBitmapFilterTest, Stable_1)
+try
+{
+    runTestCase(TestCase{
+        "s:[0, 1024)",
+        1024,
+        "[0, 1024)",
+        "[0, 1024)"});
+}
+CATCH
+
+TEST_F(SegmentBitmapFilterTest, Stable_2)
+try
+{
+    runTestCase(TestCase{
+        "s:[0, 1024)|d_dr:[0, 1023)",
+        1,
+        "[1023, 1024)",
+        "[1023, 1024)"});
 }
 CATCH
 
 
-TEST_F(SegmentBitmapFilterTest, InMemory_4)
+TEST_F(SegmentBitmapFilterTest, Stable_3)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[-100, 100)");
-    {
-        ASSERT_EQ(1100, row_id->size());
-        auto expected = genSequence<UInt32>("[1000, 1200)|[100, 1000)");
-        ASSERT_TRUE(sequenceEqual(expected.data(), row_id->data(), 1100));
-    }
-    {
-        ASSERT_EQ(1100, handle->size());
-        auto expected = genSequence<Int64>("[-100, 1000)");
-        ASSERT_TRUE(sequenceEqual(expected.data(), handle->data(), 1100));
-    }
+    runTestCase(TestCase{
+        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)",
+        886,
+        "[0, 128)|[256, 300)|[310, 1024)",
+        "[0, 128)|[256, 300)|[310, 1024)"});
 }
 CATCH
-*/
+
+TEST_F(SegmentBitmapFilterTest, Mix)
+try
+{
+    runTestCase(TestCase{
+        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+        946,
+        "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+        "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+}
+CATCH
+
+
 } // namespace DB::DM::tests
