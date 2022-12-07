@@ -209,6 +209,12 @@ elseif (ARCH_AMD64)
         add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=1)
     endif ()
 
+    set (TIFLASH_COMPILER_MOVBE_FLAG "-mmovbe")
+    check_cxx_compiler_flag("${TIFLASH_COMPILER_MOVBE_FLAG}" TIFLASH_COMPILER_MOVBE_SUPPORT)
+    set (TIFLASH_COMPILER_BMI2_FLAG "-mbmi2")
+    check_cxx_compiler_flag("${TIFLASH_COMPILER_BMI2_FLAG}" TIFLASH_COMPILER_BMI2_SUPPORT)
+    set (TIFLASH_COMPILER_ARCH_HASWELL_FLAG "-march=haswell")
+    check_cxx_compiler_flag("${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}" TIFLASH_COMPILER_ARCH_HASWELL_SUPPORT)
 else ()
     # ignore all other platforms
 endif ()
