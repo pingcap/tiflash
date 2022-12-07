@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable (expression expression.cpp)
-target_link_libraries (expression dbms)
-
 add_executable (create_query create_query.cpp)
 target_link_libraries (create_query dbms)
 

@@ -65,6 +65,7 @@ public:
 
     size_t getRowsN() const;
     size_t getRowsN(Int64 start_key, Int64 end_key) const;
+    size_t getRawRowsN() const;
     bool isFilled(Int64 start_key, Int64 end_key) const;
 
     struct FillBlockOptions
