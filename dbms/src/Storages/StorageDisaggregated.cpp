@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -27,15 +28,45 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    auto dispatch_reqs = buildAndDispatchMPPTaskRequests();
+    auto remote_requests = buildRemoteRequests();
+    auto dispatch_reqs = buildAndDispatchMPPTaskRequests(remote_requests);
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
+    pushDownFilter(pipeline);
 
     return pipeline.streams;
 }
 
-std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks()
+std::vector<RemoteRequest> StorageDisaggregated::buildRemoteRequests()
+{
+    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
+    for (auto physical_table_id : table_scan.getPhysicalTableIDs())
+    {
+        const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
+
+        RUNTIME_CHECK_MSG(table_regions_info.local_regions.empty(), "in disaggregated_compute_mode, local_regions should be empty");
+        for (const auto & reg : table_regions_info.remote_regions)
+            all_remote_regions[physical_table_id].emplace_back(std::cref(reg));
+    }
+
+    std::vector<RemoteRequest> remote_requests;
+    for (auto physical_table_id : table_scan.getPhysicalTableIDs())
+    {
+        const auto & remote_regions = all_remote_regions[physical_table_id];
+        if (remote_regions.empty())
+            continue;
+        remote_requests.push_back(RemoteRequest::buildDisaggregated(
+            remote_regions,
+            table_scan,
+            push_down_filter,
+            log,
+            physical_table_id));
+    }
+    return remote_requests;
+}
+
+std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(const std::vector<RemoteRequest> & remote_requests)
 {
     std::vector<Int64> physical_table_ids;
     physical_table_ids.reserve(remote_requests.size());
@@ -55,7 +86,9 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     return batch_cop_tasks;
 }
 
-StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
+StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
+    const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+    const std::vector<RemoteRequest> & remote_requests)
 {
     // For error handling, need to record region_ids and store_id to invalidate cache.
     std::vector<pingcap::kv::RegionVerID> region_ids;
@@ -151,13 +184,13 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
 }
 
 std::vector<StorageDisaggregated::RequestAndRegionIDs>
-StorageDisaggregated::buildAndDispatchMPPTaskRequests()
+StorageDisaggregated::buildAndDispatchMPPTaskRequests(const std::vector<RemoteRequest> & remote_requests)
 {
-    auto batch_cop_tasks = buildBatchCopTasks();
+    auto batch_cop_tasks = buildBatchCopTasks(remote_requests);
     std::vector<RequestAndRegionIDs> dispatch_reqs;
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
-        dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
+        dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task, remote_requests));
 
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
     for (const RequestAndRegionIDs & dispatch_req : dispatch_reqs)
@@ -269,5 +302,23 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
     });
+}
+
+void StorageDisaggregated::pushDownFilter(DAGPipeline & pipeline)
+{
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
+    assert(receiver_dag_schema.size() == source_columns.size());
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    if (push_down_filter.hasValue())
+    {
+        // No need to cast, because already done by tiflash_storage node.
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), push_down_filter, *analyzer, log, pipeline);
+
+        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[push_down_filter.executor_id];
+        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    }
 }
 } // namespace DB

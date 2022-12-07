@@ -69,13 +69,11 @@ try
     // Mock remote requests.
     // It's ok to be empty, because buildDispatchMPPTaskRequest() doesn't use it.
     auto remote_requests = std::vector<RemoteRequest>{RemoteRequest(::tipb::DAGRequest(), DAGSchema(), std::vector<pingcap::coprocessor::KeyRange>(), 0)};
-    StorageDisaggregated storage(
-        TiFlashTestEnv::getGlobalContext(),
-        tidb_table_scan,
-        remote_requests);
+    PushDownFilter filter;
+    StorageDisaggregated storage(TiFlashTestEnv::getGlobalContext(), tidb_table_scan, filter);
 
     std::shared_ptr<::mpp::DispatchTaskRequest> tiflash_storage_dispatch_req;
-    std::tie(tiflash_storage_dispatch_req, std::ignore, std::ignore) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task);
+    std::tie(tiflash_storage_dispatch_req, std::ignore, std::ignore) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task, remote_requests);
 
     // Check if field number of DispatchTaskRequest and DAGRequest is correct.
     // In case we add/remove filed but forget to update build processing of StorageDisaggregated.

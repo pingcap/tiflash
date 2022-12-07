@@ -41,14 +41,14 @@ public:
     StorageDisaggregated(
         Context & context_,
         const TiDBTableScan & table_scan_,
-        const std::vector<RemoteRequest> & remote_requests_)
+        const PushDownFilter & push_down_filter_)
         : IStorage()
         , context(context_)
         , table_scan(table_scan_)
         , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
         , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
         , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id())
-        , remote_requests(remote_requests_)
+        , push_down_filter(push_down_filter_)
     {}
 
     std::string getName() const override
@@ -69,9 +69,10 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    std::shared_ptr<ExchangeReceiver> getExchangeReceiver() const { return exchange_receiver; }
     using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
-    RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+    RequestAndRegionIDs buildDispatchMPPTaskRequest(
+        const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+        const std::vector<RemoteRequest> & remote_requests);
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
     static const String ExecIDPrefixForTiFlashStorageSender;
@@ -79,8 +80,9 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
-    std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
-    std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests();
+    std::vector<RemoteRequest> buildRemoteRequests();
+    std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteRequest> & remote_requests);
+    std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests(const std::vector<RemoteRequest> & remote_requests);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
     void pushDownFilter(DAGPipeline & pipeline);
     void setGRPCErrorMsg(const std::string & err);
@@ -90,7 +92,8 @@ private:
     LoggerPtr log;
     uint64_t sender_target_task_start_ts;
     int64_t sender_target_task_task_id;
-    const std::vector<RemoteRequest> & remote_requests;
+    const PushDownFilter & push_down_filter;
+
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::mutex err_msg_mu;
     std::string err_msg;

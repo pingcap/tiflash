@@ -46,7 +46,7 @@ NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_sc
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto column_info = TiDB::toTiDBColumnInfo(table_scan.getColumns()[i]);
-        names_and_types.emplace_back(genNameForExchangeReceiver(i), genTypeByTiDBColumnInfo(column_info));
+        names_and_types.emplace_back(genNameForExchangeReceiver(i), getDataTypeByColumnInfoForComputingLayer(column_info));
     }
     return names_and_types;
 }
@@ -54,19 +54,6 @@ NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_sc
 String genNameForExchangeReceiver(Int32 col_index)
 {
     return "exchange_receiver_" + std::to_string(col_index);
-}
-
-DataTypePtr genTypeByTiDBColumnInfo(const TiDB::ColumnInfo & column_info)
-{
-    switch (column_info.id)
-    {
-    case TiDBPkColumnID:
-        return getPkType(column_info);
-    case ExtraTableIDColumnID:
-        return MutableSupport::extra_table_id_column_type;
-    default:
-        return getDataTypeByColumnInfoForComputingLayer(column_info);
-    }
 }
 
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
@@ -79,13 +66,13 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
         switch (column_info.id)
         {
         case TiDBPkColumnID:
-            names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, genTypeByTiDBColumnInfo(column_info));
+            names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getPkType(column_info));
             break;
         case ExtraTableIDColumnID:
-            names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, genTypeByTiDBColumnInfo(column_info));
+            names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
             break;
         default:
-            names_and_types.emplace_back(fmt::format("{}_{}", column_prefix, i), genTypeByTiDBColumnInfo(column_info));
+            names_and_types.emplace_back(fmt::format("{}_{}", column_prefix, i), getDataTypeByColumnInfoForComputingLayer(column_info));
         }
     }
     return names_and_types;

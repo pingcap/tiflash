@@ -473,9 +473,9 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
+    if (setEndState(ExchangeReceiverState::CANCELED))
     {
-        std::unique_lock lock(mu);
-        if (is_receiver_for_tiflash_storage && state != ExchangeReceiverState::CANCELED)
+        if (is_receiver_for_tiflash_storage)
         {
             try
             {
@@ -488,7 +488,6 @@ void ExchangeReceiverBase<RPCContext>::cancel()
             }
         }
     }
-    setEndState(ExchangeReceiverState::CANCELED);
     cancelAllMsgChannels();
 }
 

@@ -53,8 +53,7 @@ struct RemoteRequest
         const TiDBTableScan & table_scan,
         const TiDB::TableInfo & table_info,
         const PushDownFilter & push_down_filter,
-        const LoggerPtr & log,
-        Int64 physical_table_id);
+        const LoggerPtr & log);
     static RemoteRequest buildDisaggregated(
         const RegionRetryList & retry_regions,
         const TiDBTableScan & table_scan,

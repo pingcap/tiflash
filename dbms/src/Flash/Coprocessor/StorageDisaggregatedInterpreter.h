@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
@@ -36,24 +35,23 @@ public:
         const PushDownFilter & push_down_filter_,
         size_t max_streams_)
         : context(context_)
-        , table_scan(table_scan_)
-        , push_down_filter(push_down_filter_)
-        , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
+        , storage(std::make_unique<StorageDisaggregated>(context_, table_scan_, push_down_filter_))
         , max_streams(max_streams_)
     {}
 
-    void execute(DAGPipeline & pipeline);
-    std::vector<RemoteRequest> buildRemoteRequests();
+    void execute(DAGPipeline & pipeline)
+    {
+        auto stage = QueryProcessingStage::Enum::FetchColumns;
+        pipeline.streams = storage->read(Names(), SelectQueryInfo(), context, stage, 0, max_streams);
+        analyzer = std::move(storage->analyzer);
+    }
+
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
-    void pushDownFilter(DAGPipeline & pipeline, std::shared_ptr<ExchangeReceiver> exchange_receiver);
-
     Context & context;
-    const TiDBTableScan & table_scan;
-    const PushDownFilter & push_down_filter;
-    LoggerPtr log;
+    std::unique_ptr<StorageDisaggregated> storage;
     size_t max_streams;
 };
 } // namespace DB
