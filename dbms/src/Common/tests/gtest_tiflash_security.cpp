@@ -125,6 +125,9 @@ cert_allowed_cn="tidb"
     ASSERT_EQ(std::get<0>(paths), "security/ca_new.pem");
     ASSERT_EQ(std::get<1>(paths), "security/cert_new.pem");
     ASSERT_EQ(std::get<2>(paths), "security/key_new.pem");
+    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tidb"), 1);
+    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tiflash"), 0);
+
 
     test =
         R"(
@@ -136,7 +139,10 @@ cert_allowed_cn="[tidb, tiflash]"
         )";
     config = loadConfigFromString(test);
     ASSERT_EQ(tiflash_config_new.update(*config), false);
-
+    paths = tiflash_config_new.getPaths();
+    ASSERT_EQ(std::get<0>(paths), "security/ca_new.pem");
+    ASSERT_EQ(std::get<1>(paths), "security/cert_new.pem");
+    ASSERT_EQ(std::get<2>(paths), "security/key_new.pem");
     ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tidb"), 1);
     ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tiflash"), 1);
 }

@@ -115,7 +115,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 
         try
         {
-            updater(loaded_config.configuration, config_object_updated);
+            updater(loaded_config.configuration);
         }
         catch (...)
         {

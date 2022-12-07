@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <ext/singleton.h>
+#include <memory>
 #include <thread>
 
 namespace DB
@@ -30,9 +31,9 @@ class ConfigReloaderTest : public ext::Singleton<ConfigReloaderTest>
 {
 };
 
-TEST(ConfigReloaderTest, TlsCertInited)
+TEST(ConfigReloaderTest, Basic)
 {
-    auto path = DB::tests::TiFlashTestEnv::getTemporaryPath("ConfigReloaderTest_TlsCertUpdate");
+    auto path = DB::tests::TiFlashTestEnv::getTemporaryPath("ConfigReloaderTest_Basic");
     Poco::File file(path);
     if (file.exists())
         file.remove();
@@ -49,33 +50,45 @@ cert_allowed_cn="tidb"
     int call_times = 0;
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         path,
-        [&](ConfigurationPtr config [[maybe_unused]], bool is_new_tls_cert [[maybe_unused]]) {
+        [&](ConfigurationPtr config [[maybe_unused]]) {
             call_times++;
         },
-        /* already_loaded = */ false,
-        /* is_main_reloader = */ true);
+        /* already_loaded = */ false);
 
     auto other_config_reloader = std::make_unique<ConfigReloader>(
         path,
-        [&](ConfigurationPtr config [[maybe_unused]], bool is_new_tls_cert [[maybe_unused]]) {
+        [&](ConfigurationPtr config [[maybe_unused]]) {
             call_times++;
         },
         /* already_loaded = */ false,
-        /* is_main_reloader = */ false,
         "otherCfgLoader");
-    main_config_reloader->initTls(false);
+
     main_config_reloader->start();
-    other_config_reloader->initTls(false);
     other_config_reloader->start();
     std::this_thread::sleep_for(std::chrono::seconds(3));
     ASSERT_EQ(call_times, 2);
-    ASSERT_EQ(main_config_reloader->tlsInited(), true);
-    ASSERT_EQ(other_config_reloader->tlsInited(), false);
 }
 
-TEST(ConfigReloaderTest, NoTlsCert)
+class TestConfigObject : public ConfigObject
 {
-    auto path = DB::tests::TiFlashTestEnv::getTemporaryPath("ConfigReloaderTest_TlsCertUpdate");
+public:
+    bool fileUpdated() override
+    {
+        if (!inited)
+        {
+            inited = true;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    bool inited = false;
+};
+
+TEST(ConfigReloaderTest, WithConfigObject)
+{
+    auto path = DB::tests::TiFlashTestEnv::getTemporaryPath("ConfigReloaderTest_WithConfigObject");
     Poco::File file(path);
     if (file.exists())
         file.remove();
@@ -90,17 +103,14 @@ max_memory_usage = 0
     int call_times = 0;
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         path,
-        [&](ConfigurationPtr config [[maybe_unused]], bool is_new_tls_cert [[maybe_unused]]) {
+        [&](ConfigurationPtr config [[maybe_unused]]) {
             call_times++;
         },
-        /* already_loaded = */ false,
-        /* is_main_reloader = */ true);
-
-    main_config_reloader->initTls(false);
+        /* already_loaded = */ false);
+    main_config_reloader->addConfigObject(std::make_shared<TestConfigObject>());
     main_config_reloader->start();
     std::this_thread::sleep_for(std::chrono::seconds(3));
-    ASSERT_EQ(call_times, 1);
-    ASSERT_EQ(main_config_reloader->tlsInited(), true);
+    ASSERT_EQ(call_times, 2);
 }
 } // namespace tests
 } // namespace DB

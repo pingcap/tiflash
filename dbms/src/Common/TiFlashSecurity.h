@@ -84,79 +84,15 @@ public:
         return allowed_common_names;
     }
 
-    // return value indicate whether the tls cert path is changed.
+    // return value indicate whether the Ssl certificate path is changed.
     bool update(Poco::Util::AbstractConfiguration & config)
     {
         std::unique_lock lock(mu);
         if (config.has("security"))
         {
             has_security = true;
-            bool miss_ca_path = true;
-            bool miss_cert_path = true;
-            bool miss_key_path = true;
-            String new_ca_path;
-            String new_cert_path;
-            String new_key_path;
-            bool updated = false;
-            if (config.has("security.ca_path"))
-            {
-                new_ca_path = config.getString("security.ca_path");
-                miss_ca_path = false;
-            }
-            if (config.has("security.cert_path"))
-            {
-                new_cert_path = config.getString("security.cert_path");
-                miss_cert_path = false;
-            }
-            if (config.has("security.key_path"))
-            {
-                new_key_path = config.getString("security.key_path");
-                miss_key_path = false;
-            }
-            if (miss_ca_path && miss_cert_path && miss_key_path)
-            {
-                if (inited && has_tls_config)
-                {
-                    LOG_WARNING(log, "When TLS config is set, we can't remove it");
-                }
-                else
-                {
-                    LOG_INFO(log, "No TLS config is set.");
-                }
-            }
-            else if (miss_ca_path || miss_cert_path || miss_key_path)
-            {
-                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
-            }
-            else
-            {
-                if (inited && !has_tls_config)
-                {
-                    LOG_WARNING(log, "Can't add TLS config online");
-                    return false;
-                }
-                else
-                {
-                    has_tls_config = true;
-                    if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
-                    {
-                        ca_path = new_ca_path;
-                        cert_path = new_cert_path;
-                        key_path = new_key_path;
-                        cert_files.files.clear();
-                        cert_files.addIfExists(ca_path);
-                        cert_files.addIfExists(cert_path);
-                        cert_files.addIfExists(key_path);
-                        updated = true;
-                        LOG_INFO(
-                            log,
-                            "security config is updated: ca path is {} cert path is {} key path is {}",
-                            ca_path,
-                            cert_path,
-                            key_path);
-                    }
-                }
-            }
+
+            bool cert_file_updated = updateCertPath(config);
 
             if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
@@ -169,7 +105,7 @@ public:
             {
                 redact_info_log = config.getBool("security.redact_info_log");
             }
-            return updated;
+            return cert_file_updated;
         }
         else
         {
@@ -229,15 +165,17 @@ public:
         return allowed_common_names.count(cert.commonName()) > 0;
     }
 
-    grpc::SslCredentialsOptions readSecurityInfo()
+    grpc::SslCredentialsOptions readAndCacheSslCredentialOptions()
     {
         std::unique_lock lock(mu);
-        grpc::SslCredentialsOptions new_options;
-        new_options.pem_root_certs = readFile(ca_path);
-        new_options.pem_cert_chain = readFile(cert_path);
-        new_options.pem_private_key = readFile(key_path);
-        LOG_INFO(log, "read SecurityInfo: cert_path: {}, key_path: {}", cert_path, key_path);
-        return new_options;
+        if (ssl_cerd_options_cached)
+            return options;
+        options.pem_root_certs = readFile(ca_path);
+        options.pem_cert_chain = readFile(cert_path);
+        options.pem_private_key = readFile(key_path);
+        ssl_cerd_options_cached = true;
+        LOG_INFO(log, "read new SslCredentialOptions: ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+        return options;
     }
 
     bool fileUpdated() override
@@ -247,9 +185,7 @@ public:
             new_files.addIfExists(file.path);
 
         bool updated = new_files.isDifferOrNewerThan(cert_files);
-        LOG_DEBUG(log, "tls cert file updated: {}", updated);
-        if (updated)
-            cert_files = std::move(new_files);
+        LOG_DEBUG(log, "Ssl certificate files updated: {}", updated);
         return updated;
     }
 
@@ -271,6 +207,94 @@ private:
         return result;
     }
 
+    bool updateCertPath(Poco::Util::AbstractConfiguration & config)
+    {
+        bool miss_ca_path = true;
+        bool miss_cert_path = true;
+        bool miss_key_path = true;
+        String new_ca_path;
+        String new_cert_path;
+        String new_key_path;
+        bool updated = false;
+        if (config.has("security.ca_path"))
+        {
+            new_ca_path = config.getString("security.ca_path");
+            miss_ca_path = false;
+        }
+        if (config.has("security.cert_path"))
+        {
+            new_cert_path = config.getString("security.cert_path");
+            miss_cert_path = false;
+        }
+        if (config.has("security.key_path"))
+        {
+            new_key_path = config.getString("security.key_path");
+            miss_key_path = false;
+        }
+        if (miss_ca_path && miss_cert_path && miss_key_path)
+        {
+            if (inited && has_tls_config)
+            {
+                LOG_WARNING(log, "When TLS config is set, we can't remove it");
+            }
+            else
+            {
+                LOG_INFO(log, "No TLS config is set.");
+            }
+        }
+        else if (miss_ca_path || miss_cert_path || miss_key_path)
+        {
+            throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+        else
+        {
+            if (inited && !has_tls_config)
+            {
+                LOG_WARNING(log, "Can't add TLS config online");
+                return false;
+            }
+            else
+            {
+                has_tls_config = true;
+                if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
+                {
+                    ca_path = new_ca_path;
+                    cert_path = new_cert_path;
+                    key_path = new_key_path;
+                    cert_files.files.clear();
+                    cert_files.addIfExists(ca_path);
+                    cert_files.addIfExists(cert_path);
+                    cert_files.addIfExists(key_path);
+                    updated = true;
+                    ssl_cerd_options_cached = false;
+                    LOG_INFO(
+                        log,
+                        "Ssl certificate config path is updated: ca path is {} cert path is {} key path is {}",
+                        ca_path,
+                        cert_path,
+                        key_path);
+                }
+                else
+                {
+                    // whether the cert file content is updated
+                    updated = fileUpdated();
+                    // update cert files
+                    if (updated)
+                    {
+                        FilesChangesTracker new_files;
+                        for (const auto & file : cert_files.files)
+                        {
+                            new_files.addIfExists(file.path);
+                        }
+                        cert_files = std::move(new_files);
+                        ssl_cerd_options_cached = false;
+                    }
+                }
+            }
+        }
+        return updated;
+    }
+
 private:
     mutable std::mutex mu;
     String ca_path;
@@ -283,6 +307,9 @@ private:
     bool has_tls_config = false;
     bool has_security = false;
     bool inited = false;
+
+    bool ssl_cerd_options_cached = false;
+    grpc::SslCredentialsOptions options;
 
     LoggerPtr log;
 };

@@ -46,7 +46,7 @@ class Context;
 class ConfigReloader
 {
 public:
-    using Updater = std::function<void(ConfigurationPtr, bool)>;
+    using Updater = std::function<void(ConfigurationPtr)>;
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
@@ -60,10 +60,8 @@ public:
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
     void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
-    void addObject(std::shared_ptr<ConfigObject> object)
-    {
-        config_objects.push_back(object);
-    }
+    /// Add ConfigObject to keep tracker of files that will be changed in config
+    void addConfigObject(std::shared_ptr<ConfigObject> object) { config_objects.push_back(object); }
 
 protected:
     void reloadIfNewer(bool force, bool throw_on_error);
@@ -85,6 +83,10 @@ private:
     std::string path;
     FilesChangesTracker files;
     Updater updater;
+
+    // ConfigObject contains a set of files that are used in config file.
+    // We can check if the files in ConfigObject are updated.
+    // If they are updated, the reloadIfNewer will be called.
     std::vector<std::shared_ptr<ConfigObject>> config_objects;
 
     std::atomic<bool> quit{false};

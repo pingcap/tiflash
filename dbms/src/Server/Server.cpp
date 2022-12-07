@@ -1090,20 +1090,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
-        [&](ConfigurationPtr config, bool config_object_updated) {
-            LOG_DEBUG(log, "run main config reloader, config_object_updated: {}", config_object_updated);
+        [&](ConfigurationPtr config) {
+            LOG_DEBUG(log, "run main config reloader");
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
-            bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path is updated.
-            if (updated || config_object_updated)
+
             {
-                auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
-                global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
-                LOG_DEBUG(log, "TMTContext updated");
+                // update TiFlashSecurity and related config in client for ssl certificate reload.
+                bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
+                if (updated)
+                {
+                    auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
+                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
+                    global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
+                    LOG_DEBUG(log, "TMTContext updated security config");
+                }
             }
         },
         /* already_loaded = */ true);
@@ -1265,7 +1269,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
 
-        main_config_reloader->addObject(global_context->getSecurityConfig());
+        main_config_reloader->addConfigObject(global_context->getSecurityConfig());
         main_config_reloader->start();
         users_config_reloader->start();
 

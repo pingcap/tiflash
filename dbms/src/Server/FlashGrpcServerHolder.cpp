@@ -94,7 +94,7 @@ sslServerCertificateConfigCallback(
         return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_FAIL;
     }
     auto * context = static_cast<Context *>(arg);
-    auto options = context->getSecurityConfig()->readSecurityInfo();
+    auto options = context->getSecurityConfig()->readAndCacheSslCredentialOptions();
     grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
     *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
                                                         &pem_key_cert_pair,

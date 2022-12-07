@@ -16,6 +16,11 @@
 
 namespace DB
 {
+/** Base class for Configuration component that keep track of a set of files
+  *
+  *  If the set of files are changed, the ConfigReloader will call reloadIfNewer
+  *  to reload all the config.
+  */
 class ConfigObject
 {
 public:
