@@ -454,4 +454,15 @@ try
 }
 CATCH
 
+TEST_F(SegmentBitmapFilterTest, Ranges)
+try
+{
+    runTestCase(TestCase{
+        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+        946,
+        "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+        "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+}
+CATCH
+
 } // namespace DB::DM::tests
