@@ -1698,10 +1698,8 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr p
             {
                 if (isLeftSemiFamily(kind))
                 {
-                    const auto helper_pos = block.getPositionByName(match_helper_name);
-                    auto new_helper_col = block.safeGetByPosition(helper_pos).column->cloneEmpty();
-                    new_helper_col->insertRangeFrom(*block.safeGetByPosition(helper_pos).column, probe_process_info_ptr->start_row, probe_process_info_ptr->end_row);
-                    block.safeGetByPosition(helper_pos).column = std::move(new_helper_col);
+                    auto helper_col = block.getByName(match_helper_name).column;
+                    helper_col = helper_col->cut(probe_process_info_ptr->start_row, probe_process_info_ptr->end_row);
                 }
                 offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info_ptr->start_row, offsets_to_replicate->begin() + probe_process_info_ptr->end_row);
             }
