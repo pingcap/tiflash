@@ -1,7 +1,7 @@
 // Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
+// you may not use this file expected in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
@@ -34,18 +34,18 @@ namespace DB::DM::tests
 {
 
 template <typename E, typename A>
-::testing::AssertionResult sequenceEqual(const E * except, const A * actual, size_t size)
+::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size)
 {
     for (size_t i = 0; i < size; i++)
     {
-        if (except[i] != actual[i])
+        if (expected[i] != actual[i])
         {
             return ::testing::AssertionFailure()
-                << fmt::format("Value at index {} mismatch: except {} vs actual {}. except => {} actual => {}",
+                << fmt::format("Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
                                i,
-                               except[i],
+                               expected[i],
                                actual[i],
-                               std::vector<E>(except, except + size),
+                               std::vector<E>(expected, expected + size),
                                std::vector<A>(actual, actual + size));
         }
     }
@@ -144,9 +144,9 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
         RUNTIME_CHECK(begin < end, begin, end);
     }
     RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
-    std::vector<size_t> except_mem_units(mem_units.size());
-    std::iota(except_mem_units.begin(), except_mem_units.end(), seg_data_units.size() - mem_units.size());
-    RUNTIME_CHECK(mem_units == except_mem_units, except_mem_units, mem_units);
+    std::vector<size_t> expected_mem_units(mem_units.size());
+    std::iota(expected_mem_units.begin(), expected_mem_units.end(), seg_data_units.size() - mem_units.size());
+    RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
 }
 
 std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
@@ -227,6 +227,43 @@ protected:
             RUNTIME_CHECK(false, type);
         }
     }
+
+    struct TestCase
+    {
+        TestCase(std::string_view seg_data_,
+                 size_t expected_size_,
+                 std::string_view expected_row_id_,
+                 std::string_view expected_handle_)
+            : seg_data(seg_data_)
+            , expected_size(expected_size_)
+            , expected_row_id(expected_row_id_)
+            , expected_handle(expected_handle_)
+        {}
+        std::string seg_data;
+        size_t expected_size;
+        std::string expected_row_id;
+        std::string expected_handle;
+    };
+
+    void runTestCase(TestCase test_case)
+    {
+        auto [row_id, handle] = writeSegment(test_case.seg_data);
+        if (test_case.expected_size == 0)
+        {
+            ASSERT_EQ(nullptr, row_id);
+            ASSERT_EQ(nullptr, handle);
+        }
+        else
+        {
+            ASSERT_EQ(test_case.expected_size, row_id->size());
+            auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
+            ASSERT_TRUE(sequenceEqual(expected_row_id.data(), row_id->data(), test_case.expected_size));
+
+            ASSERT_EQ(test_case.expected_size, handle->size());
+            auto expected_handle = genSequence<Int64>(test_case.expected_handle);
+            ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
+        }
+    }
 };
 
 /*
@@ -236,167 +273,102 @@ protected:
 |--------------------|-Tiny|DeleteRange|Big--|ColumnFileInMemory... <-- append
 */
 
-
-/*
-     |stable|Persisted|InMemory
-data |empty |empty    |[0, 1000)
-*/
 TEST_F(SegmentBitmapFilterTest, InMemory_1)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)");
-    {
-        ASSERT_EQ(1000, row_id->size());
-        auto except = genSequence<UInt32>("[0, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 1000));
-    }
-    {
-        ASSERT_EQ(1000, handle->size());
-        auto except = genSequence<Int64>("[0, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 1000));
-    }
+    runTestCase(TestCase(
+        "d_mem:[0, 1000)",
+        1000,
+        "[0, 1000)",
+        "[0, 1000)"));
 }
 CATCH
 
-/*
-     |stable|Persisted|InMemory
-data |empty |empty    |[0, 1000),[0, 1000)
-*/
 TEST_F(SegmentBitmapFilterTest, InMemory_2)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[0, 1000)");
-    {
-        ASSERT_EQ(1000, row_id->size());
-        auto except = genSequence<UInt32>("[1000, 2000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 1000));
-    }
-    {
-        ASSERT_EQ(1000, handle->size());
-        auto except = genSequence<Int64>("[0, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 1000));
-    }
+    runTestCase(TestCase{
+        "d_mem:[0, 1000)|d_mem:[0, 1000)",
+        1000,
+        "[1000, 2000)",
+        "[0, 1000)"});
 }
 CATCH
 
-/*
-     |stable|Persisted|InMemory
-data |empty |empty    |[0, 1000),[100, 200)
-id   |empty |empty    |[0, 1000),[1000, 1100)
-*/
 TEST_F(SegmentBitmapFilterTest, InMemory_3)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[100, 200)");
-    {
-        ASSERT_EQ(1000, row_id->size());
-        auto except = genSequence<UInt32>("[0, 100)|[1000, 1100)|[200, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 1000));
-    }
-    {
-        ASSERT_EQ(1000, handle->size());
-        auto except = genSequence<Int64>("[0, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 1000));
-    }
+    runTestCase(TestCase{
+        "d_mem:[0, 1000)|d_mem:[100, 200)",
+        1000,
+        "[0, 100)|[1000, 1100)|[200, 1000)",
+        "[0, 1000)"});
 }
 CATCH
 
-/*
-     |stable|Persisted|InMemory
-data |empty |empty    |[0, 1000),[-100, 100)
-id   |empty |empty    |[0, 1000),[1000, 1200)
-*/
 TEST_F(SegmentBitmapFilterTest, InMemory_4)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[-100, 100)");
-    {
-        ASSERT_EQ(1100, row_id->size());
-        auto except = genSequence<UInt32>("[1000, 1200)|[100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 1100));
-    }
-    {
-        ASSERT_EQ(1100, handle->size());
-        auto except = genSequence<Int64>("[-100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 1100));
-    }
+    runTestCase(TestCase{
+        "d_mem:[0, 1000)|d_mem:[-100, 100)",
+        1100,
+        "[1000, 1200)|[100, 1000)",
+        "[-100, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory_5)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem_del:[0, 1000)");
-    ASSERT_EQ(nullptr, row_id);
-    ASSERT_EQ(nullptr, handle);
+    runTestCase(TestCase{
+        "d_mem:[0, 1000)|d_mem_del:[0, 1000)",
+        0,
+        "",
+        ""});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory_6)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem_del:[100, 200)");
-    {
-        ASSERT_EQ(900, row_id->size());
-        auto except = genSequence<UInt32>("[0, 100)|[200, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 900));
-    }
-    {
-        ASSERT_EQ(900, handle->size());
-        auto except = genSequence<Int64>("[0, 100)|[200, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 900));
-    }
+    runTestCase(TestCase{
+        "d_mem:[0, 1000)|d_mem_del:[100, 200)",
+        900,
+        "[0, 100)|[200, 1000)",
+        "[0, 100)|[200, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory_7)
 try
 {
-    auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem_del:[-100, 100)");
-    {
-        ASSERT_EQ(900, row_id->size());
-        auto except = genSequence<UInt32>("[100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 900));
-    }
-    {
-        ASSERT_EQ(900, handle->size());
-        auto except = genSequence<Int64>("[100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 900));
-    }
+    runTestCase(TestCase{
+        "d_mem:[0, 1000)|d_mem_del:[-100, 100)",
+        900,
+        "[100, 1000)",
+        "[100, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Tiny_1)
 try
 {
-    auto [row_id, handle] = writeSegment("d_tiny:[100, 500)|d_mem:[200, 1000)");
-    {
-        ASSERT_EQ(900, row_id->size());
-        auto except = genSequence<UInt32>("[0, 100)|[400, 1200)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 900));
-    }
-    {
-        ASSERT_EQ(900, handle->size());
-        auto except = genSequence<Int64>("[100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 900));
-    }
+    runTestCase(TestCase{
+        "d_tiny:[100, 500)|d_mem:[200, 1000)",
+        900,
+        "[0, 100)|[400, 1200)",
+        "[100, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, TinyDel_1)
 try
 {
-    auto [row_id, handle] = writeSegment("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)");
-    {
-        ASSERT_EQ(400, row_id->size());
-        auto except = genSequence<UInt32>("[500, 600)|[0, 100)|[200, 400)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 400));
-    }
-    {
-        ASSERT_EQ(400, handle->size());
-        auto except = genSequence<Int64>("[0, 200)|[300, 500)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 400));
-    }
+    runTestCase(TestCase{
+        "d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)",
+        400,
+        "[500, 600)|[0, 100)|[200, 400)",
+        "[0, 200)|[300, 500)"});
 }
 CATCH
 
@@ -408,13 +380,13 @@ try
     auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[100, 200)");
     {
         ASSERT_EQ(1000, row_id->size());
-        auto except = genSequence<UInt32>("[0, 100)|[1000, 1100)|[200, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 1000));
+        auto expected = genSequence<UInt32>("[0, 100)|[1000, 1100)|[200, 1000)");
+        ASSERT_TRUE(sequenceEqual(expected.data(), row_id->data(), 1000));
     }
     {
         ASSERT_EQ(1000, handle->size());
-        auto except = genSequence<Int64>("[0, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 1000));
+        auto expected = genSequence<Int64>("[0, 1000)");
+        ASSERT_TRUE(sequenceEqual(expected.data(), handle->data(), 1000));
     }
 }
 CATCH
@@ -426,13 +398,13 @@ try
     auto [row_id, handle] = writeSegment("d_mem:[0, 1000)|d_mem:[-100, 100)");
     {
         ASSERT_EQ(1100, row_id->size());
-        auto except = genSequence<UInt32>("[1000, 1200)|[100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), row_id->data(), 1100));
+        auto expected = genSequence<UInt32>("[1000, 1200)|[100, 1000)");
+        ASSERT_TRUE(sequenceEqual(expected.data(), row_id->data(), 1100));
     }
     {
         ASSERT_EQ(1100, handle->size());
-        auto except = genSequence<Int64>("[-100, 1000)");
-        ASSERT_TRUE(sequenceEqual(except.data(), handle->data(), 1100));
+        auto expected = genSequence<Int64>("[-100, 1000)");
+        ASSERT_TRUE(sequenceEqual(expected.data(), handle->data(), 1100));
     }
 }
 CATCH
