@@ -16,8 +16,6 @@
 
 #include <common/types.h>
 
-#include <thread>
-
 inline UInt16 getNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores = 0)
 {
     static UInt64 n = max_logical_cpu_cores;
