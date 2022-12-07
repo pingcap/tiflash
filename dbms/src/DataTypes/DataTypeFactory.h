@@ -19,8 +19,8 @@
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
+#include <shared_mutex>
 #include <unordered_map>
-
 
 namespace DB
 {
@@ -69,6 +69,7 @@ private:
     DataTypesDictionary case_insensitive_data_types;
 
     static constexpr int MAX_FULLNAME_TYPES = 10000;
+    std::shared_mutex rw_lock;
     FullnameTypes fullname_types;
     DataTypeFactory();
     friend class ext::Singleton<DataTypeFactory>;

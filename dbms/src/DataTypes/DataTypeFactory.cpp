@@ -40,13 +40,16 @@ DataTypePtr DataTypeFactory::get(const String & full_name) const
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
     return get(ast);
 }
-
+// DataTypeFactory is a Singleton, so need to be protected by lock.
 DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
 {
-    auto it = fullname_types.find(full_name);
-    if (it != fullname_types.end())
     {
-        return it->second;
+        std::shared_lock lock(rw_lock);
+        auto it = fullname_types.find(full_name);
+        if (it != fullname_types.end())
+        {
+            return it->second;
+        }
     }
     ParserIdentifierWithOptionalParameters parser;
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
@@ -54,6 +57,7 @@ DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
     // avoid big hashmap in rare cases.
     if (fullname_types.size() < MAX_FULLNAME_TYPES)
     {
+        std::unique_lock lock(rw_lock);
         fullname_types.emplace(full_name, datatype_ptr);
     }
     return datatype_ptr;
