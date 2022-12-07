@@ -144,7 +144,7 @@ grpc::Status FlashService::Coprocessor(
     if (handle_limit > 0)
     {
         // We use this atomic variable metrics from the prometheus-cpp library to mark the number of queued queries.
-        // TODO: Use grpc asynchronous server and a more full-featured thread pool.
+        // TODO: Use grpc asynchronous server and a more fully-featured thread pool.
         if (auto current = GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Value(); current > handle_limit)
         {
             response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("tiflash cop pool queued too much, current = {}, limit = {}", current, handle_limit));
