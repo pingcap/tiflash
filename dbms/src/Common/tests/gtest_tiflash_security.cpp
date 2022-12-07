@@ -98,9 +98,7 @@ cert_allowed_cn="tidb"
         )";
     config = loadConfigFromString(test);
     ASSERT_EQ(tiflash_config.update(*config), false); // can't add tls config online
-
     ASSERT_EQ(tiflash_config.hasTlsConfig(), false);
-
     config = loadConfigFromString(test);
     TiFlashSecurityConfig tiflash_config_new(*config, log);
     test =
@@ -109,6 +107,7 @@ cert_allowed_cn="tidb"
     config = loadConfigFromString(test);
     ASSERT_EQ(tiflash_config_new.update(*config), false); // can't remove security config online
     ASSERT_EQ(tiflash_config_new.hasTlsConfig(), true);
+
 
     test =
         R"(
@@ -121,14 +120,13 @@ cert_allowed_cn="tidb"
     config = loadConfigFromString(test);
     tiflash_config_new.update(*config);
     auto paths = tiflash_config_new.getPaths();
-
     ASSERT_EQ(std::get<0>(paths), "security/ca_new.pem");
     ASSERT_EQ(std::get<1>(paths), "security/cert_new.pem");
     ASSERT_EQ(std::get<2>(paths), "security/key_new.pem");
     ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tidb"), 1);
     ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tiflash"), 0);
 
-
+    // add cert allowed cn
     test =
         R"(
 [security]

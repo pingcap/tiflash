@@ -19,7 +19,6 @@
 #include <set>
 #include <string>
 
-
 namespace DB
 {
 struct FileWithTimestamp
