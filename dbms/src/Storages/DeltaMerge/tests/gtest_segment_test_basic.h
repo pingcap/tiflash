@@ -96,6 +96,8 @@ public:
     ColumnPtr getSegmentRowId(PageId segment_id, const RowKeyRanges & ranges);
     ColumnPtr getSegmentHandle(PageId segment_id, const RowKeyRanges & ranges);
     void writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end);
+    RowKeyValue buildRowKeyValue(Int64 key);
+    RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
 
 protected:
     std::mt19937 random;

@@ -60,6 +60,18 @@ std::shared_ptr<String> getIntHandleKey(Int64 i)
     return std::make_shared<String>(ss.releaseStr());
 };
 
+RowKeyValue SegmentTestBasic::buildRowKeyValue(Int64 key)
+{
+    return RowKeyValue(options.is_common_handle, getIntHandleKey(key), key);
+}
+
+RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
+{
+    auto begin_key = buildRowKeyValue(begin);
+    auto end_key = buildRowKeyValue(end);
+    return RowKeyRange(begin_key, end_key, options.is_common_handle, 1);
+}
+
 std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageId segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
@@ -129,9 +141,7 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id, const RowKeyRang
 
 void SegmentTestBasic::writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end)
 {
-    auto begin_key = RowKeyValue(options.is_common_handle, getIntHandleKey(begin), begin);
-    auto end_key = RowKeyValue(options.is_common_handle, getIntHandleKey(end), end);
-    auto range = RowKeyRange(begin_key, end_key, options.is_common_handle, 1);
+    auto range = buildRowKeyRange(begin, end);
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
     RUNTIME_CHECK(segment->write(*dm_context, range));
