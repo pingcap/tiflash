@@ -513,7 +513,7 @@ private:
     void checkIsConfigLoaded() const;
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
-    DisaggregatedMode disaggregated_mode;
+    DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
 };
 
 using ContextPtr = std::shared_ptr<Context>;
