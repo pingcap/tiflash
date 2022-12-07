@@ -112,6 +112,7 @@
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
 
+#define DISAGGREGATED_MODE_NONE "tiflash"
 #define DISAGGREGATED_MODE_STORAGE "tiflash_storage"
 #define DISAGGREGATED_MODE_COMPUTE "tiflash_compute"
 

@@ -292,9 +292,9 @@ struct TiFlashProxyConfig
 
             auto disaggregated_mode = getDisaggregatedMode(config);
             if (disaggregated_mode == DisaggregatedMode::Compute)
-                args_map[engine_label] = "tiflash_compute";
+                args_map[engine_label] = DISAGGREGATED_MODE_COMPUTE;
             else
-                args_map[engine_label] = "tiflash";
+                args_map[engine_label] = DISAGGREGATED_MODE_NONE;
 
             for (auto && [k, v] : args_map)
             {

@@ -473,20 +473,23 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    setEndState(ExchangeReceiverState::CANCELED);
-    cancelAllMsgChannels();
-    if (is_receiver_for_tiflash_storage)
     {
-        try
+        std::unique_lock lock(mu);
+        if (is_receiver_for_tiflash_storage && state != ExchangeReceiverState::CANCELED)
         {
-            rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
-        }
-        catch (...)
-        {
-            String cancel_err_msg = getCurrentExceptionMessage(true, true);
-            LOG_INFO(exc_log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+            try
+            {
+                rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
+            }
+            catch (...)
+            {
+                String cancel_err_msg = getCurrentExceptionMessage(true, true);
+                LOG_INFO(exc_log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+            }
         }
     }
+    setEndState(ExchangeReceiverState::CANCELED);
+    cancelAllMsgChannels();
 }
 
 template <typename RPCContext>

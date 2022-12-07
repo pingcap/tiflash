@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 const String StorageDisaggregated::ExecIDPrefixForTiFlashStorageSender = "exec_id_disaggregated_tiflash_storage_sender";
 
 BlockInputStreams StorageDisaggregated::read(
@@ -164,7 +163,7 @@ StorageDisaggregated::buildAndDispatchMPPTaskRequests()
     for (const RequestAndRegionIDs & dispatch_req : dispatch_reqs)
     {
         LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
-        thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [dispatch_req, this] {
+        thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [dispatch_req, this] {
             // When send req succeed or backoff timeout, need_retry is false.
             bool need_retry = true;
             pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
@@ -265,6 +264,10 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     }
 
     auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
-    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[table_scan.getTableScanExecutorID()];
+    pipeline.transform([&](auto & stream) {
+        table_scan_io_input_streams.push_back(stream);
+        profile_streams.push_back(stream);
+    });
 }
 } // namespace DB
