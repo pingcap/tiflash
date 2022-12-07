@@ -14,11 +14,15 @@
 
 #include <Common/getNumberOfLogicalCPUCores.h>
 
+namespace CPUCores
+{
 UInt16 number_of_logical_cpu_cores = std::thread::hardware_concurrency();
+} // namespace CPUCores
+
 
 UInt16 getNumberOfLogicalCPUCores()
 {
-    return number_of_logical_cpu_cores;
+    return CPUCores::number_of_logical_cpu_cores;
 }
 
 // We should call this function before Context has been created,
@@ -26,5 +30,5 @@ UInt16 getNumberOfLogicalCPUCores()
 // set cpu cores any more.
 void setNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores)
 {
-    number_of_logical_cpu_cores = max_logical_cpu_cores;
+    CPUCores::number_of_logical_cpu_cores = max_logical_cpu_cores;
 }
