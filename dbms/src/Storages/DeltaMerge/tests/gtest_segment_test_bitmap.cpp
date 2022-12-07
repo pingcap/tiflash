@@ -64,36 +64,8 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
-
-ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id)
+std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_row_id)
 {
-    LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
-    auto [segment, snapshot] = getSegmentForRead(segment_id);
-    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle)};
-    auto stream = segment->getInputStreamModeNormal(
-        *dm_context,
-        columns_to_read,
-        snapshot,
-        {segment->getRowKeyRange()},
-        nullptr,
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE,
-        true);
-    
-    std::vector<Block> blks;
-    for (auto blk = stream->read(); blk; blk = stream->read())
-    {
-        blks.push_back(blk);
-    }
-    auto block = mergeSegmentRowIds(std::move(blks));
-    RUNTIME_CHECK(!block.has(EXTRA_HANDLE_COLUMN_NAME));
-    RUNTIME_CHECK(block.segmentRowIdCol() != nullptr);
-    return block.segmentRowIdCol();  
-}
-
-ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id)
-{
-    LOG_INFO(logger_op, "getSegmentHandle, segment_id={}", segment_id);
     auto [segment, snapshot] = getSegmentForRead(segment_id);
     ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
                                      getVersionColumnDefine()};
@@ -105,16 +77,46 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id)
         nullptr,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
-        false);
-    
+        need_row_id);
     std::vector<Block> blks;
     for (auto blk = stream->read(); blk; blk = stream->read())
     {
         blks.push_back(blk);
     }
-    auto block = mergeBlocks(std::move(blks));
-    RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
-    RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
-    return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+    return blks;
 }
+
+ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id)
+{
+    LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
+    auto blks = readSegment(segment_id, true);
+    if (blks.empty())
+    {
+        return nullptr;
+    }
+    else
+    {
+        auto block = mergeSegmentRowIds(std::move(blks));
+        RUNTIME_CHECK(!block.has(EXTRA_HANDLE_COLUMN_NAME));
+        RUNTIME_CHECK(block.segmentRowIdCol() != nullptr);
+        return block.segmentRowIdCol();
+    }
 }
+
+ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id)
+{
+    LOG_INFO(logger_op, "getSegmentHandle, segment_id={}", segment_id);
+    auto blks = readSegment(segment_id, false);
+    if (blks.empty())
+    {
+        return nullptr;
+    }
+    else
+    {
+        auto block = mergeBlocks(std::move(blks));
+        RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
+        RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
+        return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+    }
+}
+} // namespace DB::DM::tests
