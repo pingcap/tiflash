@@ -28,8 +28,8 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    auto remote_requests = buildRemoteRequests();
-    auto dispatch_reqs = buildAndDispatchMPPTaskRequests(remote_requests);
+    auto remote_table_ranges = buildRemoteTableRanges();
+    auto dispatch_reqs = buildAndDispatchMPPTaskRequests(remote_table_ranges);
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
@@ -38,7 +38,7 @@ BlockInputStreams StorageDisaggregated::read(
     return pipeline.streams;
 }
 
-std::vector<RemoteRequest> StorageDisaggregated::buildRemoteRequests()
+std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
 {
     std::unordered_map<Int64, RegionRetryList> all_remote_regions;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
@@ -50,32 +50,28 @@ std::vector<RemoteRequest> StorageDisaggregated::buildRemoteRequests()
             all_remote_regions[physical_table_id].emplace_back(std::cref(reg));
     }
 
-    std::vector<RemoteRequest> remote_requests;
+    std::vector<RemoteTableRange> remote_table_ranges;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & remote_regions = all_remote_regions[physical_table_id];
         if (remote_regions.empty())
             continue;
-        remote_requests.push_back(RemoteRequest::buildDisaggregated(
-            remote_regions,
-            table_scan,
-            push_down_filter,
-            log,
-            physical_table_id));
+        auto key_ranges = RemoteRequest::buildKeyRanges(remote_regions);
+        remote_table_ranges.emplace_back(RemoteTableRange{physical_table_id, key_ranges});
     }
-    return remote_requests;
+    return remote_table_ranges;
 }
 
-std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(const std::vector<RemoteRequest> & remote_requests)
+std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges)
 {
     std::vector<Int64> physical_table_ids;
-    physical_table_ids.reserve(remote_requests.size());
+    physical_table_ids.reserve(remote_table_ranges.size());
     std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
-    ranges_for_each_physical_table.reserve(remote_requests.size());
-    for (const auto & remote_request : remote_requests)
+    ranges_for_each_physical_table.reserve(remote_table_ranges.size());
+    for (const auto & remote_table_range : remote_table_ranges)
     {
-        physical_table_ids.emplace_back(remote_request.physical_table_id);
-        ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
+        physical_table_ids.emplace_back(remote_table_range.first);
+        ranges_for_each_physical_table.emplace_back(remote_table_range.second);
     }
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
@@ -87,8 +83,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
 }
 
 StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
-    const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-    const std::vector<RemoteRequest> & remote_requests)
+    const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     // For error handling, need to record region_ids and store_id to invalidate cache.
     std::vector<pingcap::kv::RegionVerID> region_ids;
@@ -98,8 +93,8 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     dispatch_req_meta->set_task_id(sender_target_task_task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
     const auto & settings = context.getSettings();
-    dispatch_req->set_timeout(settings.mpp_task_timeout);
-    dispatch_req->set_schema_ver(settings.read_tso);
+    dispatch_req->set_timeout(60);
+    dispatch_req->set_schema_ver(settings.schema_version);
     RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
                       "region_infos and table_regions should not exist at the same time, single table region info: {}, partition table region info: {}",
                       batch_cop_task.region_infos.size(),
@@ -170,8 +165,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     sender->set_tp(tipb::ExchangeType::PassThrough);
     sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
     auto * child = sender->mutable_child();
-    RUNTIME_CHECK(!remote_requests.empty());
-    child->CopyFrom(remote_requests[0].dag_request.root_executor());
+    child->CopyFrom(buildTableScanTiPB());
     for (const auto & column_info : column_infos)
     {
         auto * field_type = sender->add_all_field_types();
@@ -184,14 +178,41 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     return StorageDisaggregated::RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
-std::vector<StorageDisaggregated::RequestAndRegionIDs>
-StorageDisaggregated::buildAndDispatchMPPTaskRequests(const std::vector<RemoteRequest> & remote_requests)
+tipb::Executor StorageDisaggregated::buildTableScanTiPB()
 {
-    auto batch_cop_tasks = buildBatchCopTasks(remote_requests);
+    // TODO: For now, to avoid versions of tiflash_compute nodes and tiflash_storage being different,
+    // disable filter push down to avoid unsupported expression in tiflash_storage.
+    // Uncomment this when we are sure versions are same.
+    // executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
+
+    tipb::Executor ts_exec;
+    ts_exec.set_tp(tipb::ExecType::TypeTableScan);
+    ts_exec.set_executor_id(table_scan.getTableScanExecutorID());
+
+    // In disaggregated mode, use DAGRequest sent from TiDB directly, so no need to rely on SchemaSyncer.
+    if (table_scan.isPartitionTableScan())
+    {
+        ts_exec.set_tp(tipb::ExecType::TypePartitionTableScan);
+        auto * mutable_partition_table_scan = ts_exec.mutable_partition_table_scan();
+        *mutable_partition_table_scan = table_scan.getTableScanPB()->partition_table_scan();
+    }
+    else
+    {
+        ts_exec.set_tp(tipb::ExecType::TypeTableScan);
+        auto * mutable_table_scan = ts_exec.mutable_tbl_scan();
+        *mutable_table_scan = table_scan.getTableScanPB()->tbl_scan();
+    }
+    return ts_exec;
+}
+
+std::vector<StorageDisaggregated::RequestAndRegionIDs>
+StorageDisaggregated::buildAndDispatchMPPTaskRequests(const std::vector<RemoteTableRange> & remote_table_ranges)
+{
+    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
     std::vector<RequestAndRegionIDs> dispatch_reqs;
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
-        dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task, remote_requests));
+        dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
 
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
     for (const RequestAndRegionIDs & dispatch_req : dispatch_reqs)

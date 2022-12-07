@@ -85,47 +85,7 @@ RemoteRequest RemoteRequest::build(
         dag_req.set_time_zone_offset(original_dag_req.time_zone_offset());
 
     std::vector<pingcap::coprocessor::KeyRange> key_ranges = buildKeyRanges(retry_regions);
-    return {std::move(dag_req), std::move(schema), std::move(key_ranges), table_info.id};
-}
-
-RemoteRequest RemoteRequest::buildDisaggregated(
-    const RegionRetryList & retry_regions,
-    const TiDBTableScan & table_scan,
-    const PushDownFilter &,
-    const LoggerPtr & log,
-    Int64 physical_table_id)
-{
-    LOG_INFO(log, "tiflash_compute remote request: {}", printRetryRegions(retry_regions, physical_table_id));
-
-    DAGSchema schema;
-    tipb::DAGRequest dag_req;
-    tipb::Executor * executor = dag_req.mutable_root_executor();
-
-    // TODO: For now, to avoid versions of tiflash_compute nodes and tiflash_storage being different,
-    // disable filter push down to avoid unsupported expression in tiflash_storage.
-    // Uncomment this when we are sure versions are same.
-    // executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
-
-    tipb::Executor * ts_exec = executor;
-    ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-    ts_exec->set_executor_id(table_scan.getTableScanExecutorID());
-
-    // In disaggregated mode, use DAGRequest sent from TiDB directly, so no need to rely on SchemaSyncer.
-    if (table_scan.isPartitionTableScan())
-    {
-        ts_exec->set_tp(tipb::ExecType::TypePartitionTableScan);
-        auto * mutable_partition_table_scan = ts_exec->mutable_partition_table_scan();
-        *mutable_partition_table_scan = table_scan.getTableScanPB()->partition_table_scan();
-    }
-    else
-    {
-        ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-        auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
-        *mutable_table_scan = table_scan.getTableScanPB()->tbl_scan();
-    }
-
-    auto key_ranges = buildKeyRanges(retry_regions);
-    return {std::move(dag_req), std::move(schema), std::move(key_ranges), physical_table_id};
+    return {std::move(dag_req), std::move(schema), std::move(key_ranges)};
 }
 
 std::vector<pingcap::coprocessor::KeyRange> RemoteRequest::buildKeyRanges(const RegionRetryList & retry_regions)

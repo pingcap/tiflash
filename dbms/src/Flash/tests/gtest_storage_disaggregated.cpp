@@ -51,8 +51,10 @@ try
 
     // Mock batch_cop_task.
     ::pingcap::coprocessor::RegionInfo mock_region_info;
+    mock_region_info.region_id = pingcap::kv::RegionVerID{100, 1, 1};
     ::pingcap::coprocessor::BatchCopTask mock_batch_cop_task;
     mock_batch_cop_task.store_addr = "127.0.0.1:9000";
+    mock_batch_cop_task.store_id = 1;
     mock_batch_cop_task.region_infos = std::vector<::pingcap::coprocessor::RegionInfo>{mock_region_info};
 
     // Mock DispatchTaskRequest.Meta.
@@ -67,14 +69,16 @@ try
     TiFlashTestEnv::getGlobalContext().setDAGContext(dag_context.get());
     TiDBTableScan tidb_table_scan(&table_scan, table_scan.executor_id(), *dag_context);
 
-    // Mock remote requests.
-    // It's ok to be empty, because buildDispatchMPPTaskRequest() doesn't use it.
-    auto remote_requests = std::vector<RemoteRequest>{RemoteRequest(::tipb::DAGRequest(), DAGSchema(), std::vector<pingcap::coprocessor::KeyRange>(), 0)};
     PushDownFilter filter;
     StorageDisaggregated storage(TiFlashTestEnv::getGlobalContext(), tidb_table_scan, filter);
 
+    uint64_t store_id;
+    std::vector<pingcap::kv::RegionVerID> region_ids;
     std::shared_ptr<::mpp::DispatchTaskRequest> tiflash_storage_dispatch_req;
-    std::tie(tiflash_storage_dispatch_req, std::ignore, std::ignore) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task, remote_requests);
+    std::tie(tiflash_storage_dispatch_req, region_ids, store_id) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task);
+    ASSERT_EQ(region_ids.size(), 1);
+    ASSERT_EQ(region_ids[0].id, 100);
+    ASSERT_EQ(store_id, 1);
 
     // Check if field number of DispatchTaskRequest and DAGRequest is correct.
     // In case we add/remove filed but forget to update build processing of StorageDisaggregated.
@@ -85,6 +89,11 @@ try
     sender_dag_req.ParseFromString(tiflash_storage_dispatch_req->encoded_plan());
     const auto * sender_dag_req_desc = sender_dag_req.GetDescriptor();
     ASSERT_EQ(sender_dag_req_desc->field_count(), 17);
+
+    const auto & sender1 = sender_dag_req.root_executor();
+    ASSERT_EQ(sender1.tp(), ::tipb::TypeExchangeSender);
+    const auto & table_scan1 = sender1.exchange_sender().child();
+    ASSERT_EQ(table_scan1.tp(), ::tipb::TypeTableScan);
 
     TiFlashTestEnv::getGlobalContext().setDAGContext(ori_dag_context);
 }

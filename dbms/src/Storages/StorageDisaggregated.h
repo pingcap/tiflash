@@ -70,9 +70,7 @@ public:
         unsigned num_streams) override;
 
     using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
-    RequestAndRegionIDs buildDispatchMPPTaskRequest(
-        const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-        const std::vector<RemoteRequest> & remote_requests);
+    RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
     static const String ExecIDPrefixForTiFlashStorageSender;
@@ -80,12 +78,14 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
-    std::vector<RemoteRequest> buildRemoteRequests();
-    std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteRequest> & remote_requests);
-    std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests(const std::vector<RemoteRequest> & remote_requests);
+    using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
+    std::vector<RemoteTableRange> buildRemoteTableRanges();
+    std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
+    std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests(const std::vector<RemoteTableRange> & remote_table_ranges);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
     void pushDownFilter(DAGPipeline & pipeline);
     void setGRPCErrorMsg(const std::string & err);
+    tipb::Executor buildTableScanTiPB();
 
     Context & context;
     const TiDBTableScan & table_scan;
