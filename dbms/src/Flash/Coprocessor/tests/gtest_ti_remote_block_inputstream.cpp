@@ -210,7 +210,7 @@ struct MockReceiverContext
         return std::make_shared<Reader>(queue);
     }
 
-    void cancelMPPTaskOnTiFlashStorageNode()
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
     {
         throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
     }
