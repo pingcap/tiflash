@@ -14,11 +14,14 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <common/types.h>
 
 inline UInt16 getNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores = 0)
 {
     static UInt64 n = max_logical_cpu_cores;
+    if (unlikely(n == 0))
+        throw DB::Exception("Number of logical cpu cores is illegal 0, ensure this function is not called before ServerInfo is initialized");
     return n;
 }
 
