@@ -17,6 +17,7 @@
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/EstablishCall.h>
@@ -74,7 +75,7 @@ void FlashService::init(const TiFlashSecurityConfig & security_config_, Context 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
-    const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
+    const size_t default_size = getNumberOfLogicalCPUCores();
 
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
