@@ -90,7 +90,7 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const PageStorageConfig & config_,
                 const FileProviderPtr & file_provider_,
-                Context & global_ctx,
+                BackgroundProcessingPool & ver_compact_pool_,
                 bool no_more_insert_ = false);
     ~PageStorage() override = default;
 
@@ -280,8 +280,9 @@ private:
 
     StatisticsInfo last_gc_statistics;
 
-    BackgroundProcessingPool & compact_pool;
-    BackgroundProcessingPool::TaskHandle compact_handle = nullptr;
+    // background pool for running compact on `versioned_page_entries`
+    BackgroundProcessingPool & ver_compact_pool;
+    BackgroundProcessingPool::TaskHandle ver_compact_handle = nullptr;
 
     // true means this instance runs under mix mode
     bool no_more_insert = false;

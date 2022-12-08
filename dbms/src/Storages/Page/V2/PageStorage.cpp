@@ -161,14 +161,14 @@ PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
                          const PageStorageConfig & config_,
                          const FileProviderPtr & file_provider_,
-                         Context & global_ctx,
+                         BackgroundProcessingPool & ver_compact_pool_,
                          bool no_more_insert_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , write_files(std::max(1UL, config_.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
-    , compact_pool(global_ctx.getPSBackgroundPool())
+    , ver_compact_pool(ver_compact_pool_)
     , no_more_insert(no_more_insert_)
 {
     // at least 1 write slots
@@ -189,7 +189,7 @@ PageStorage::PageStorage(String name,
 
     // If there is no snapshot released, check with default interval (10s) and exit quickly
     // If snapshot released, wakeup this handle to compact the version list
-    compact_handle = compact_pool.addTask([this] { return compactInMemVersions(); }, /*multi*/ false);
+    ver_compact_handle = ver_compact_pool.addTask([this] { return compactInMemVersions(); }, /*multi*/ false);
 }
 
 
@@ -367,7 +367,7 @@ void PageStorage::restore()
 PageId PageStorage::getMaxId()
 {
     std::lock_guard write_lock(write_mutex);
-    return versioned_page_entries.getSnapshot("", compact_handle)->version()->maxId();
+    return versioned_page_entries.getSnapshot("", ver_compact_handle)->version()->maxId();
 }
 
 PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
@@ -594,13 +594,13 @@ void PageStorage::writeImpl(DB::WriteBatch && wb, const WriteLimiterPtr & write_
 
 DB::PageStorage::SnapshotPtr PageStorage::getSnapshot(const String & tracing_id)
 {
-    return versioned_page_entries.getSnapshot(tracing_id, compact_handle);
+    return versioned_page_entries.getSnapshot(tracing_id, ver_compact_handle);
 }
 
 PageStorage::VersionedPageEntries::SnapshotPtr
 PageStorage::getConcreteSnapshot()
 {
-    return versioned_page_entries.getSnapshot(/*tracing_id*/ "", compact_handle);
+    return versioned_page_entries.getSnapshot(/*tracing_id*/ "", ver_compact_handle);
 }
 
 SnapshotsStatistics PageStorage::getSnapshotsStat() const
@@ -950,10 +950,10 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
 
 void PageStorage::shutdown()
 {
-    if (compact_handle)
+    if (ver_compact_handle)
     {
-        compact_pool.removeTask(compact_handle);
-        compact_handle = nullptr;
+        ver_compact_pool.removeTask(ver_compact_handle);
+        ver_compact_handle = nullptr;
     }
 }
 
