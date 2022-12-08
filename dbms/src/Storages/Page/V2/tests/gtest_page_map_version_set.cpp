@@ -13,39 +13,43 @@
 // limitations under the License.
 
 #include <Poco/AutoPtr.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <ext/scope_guard.h>
 #include <type_traits>
 
 namespace DB::PS::V2::tests
 {
 template <typename T>
-class PageMapVersionSet_test : public ::testing::Test
+class PageMapVersionSetTest : public ::testing::Test
 {
 public:
-    PageMapVersionSet_test()
-        : log(&Poco::Logger::get("PageMapVersionSet_test"))
+    PageMapVersionSetTest()
+        : log(&Poco::Logger::get("PageMapVersionSetTest"))
     {}
 
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        config_.compact_hint_delta_entries = 1;
-        config_.compact_hint_delta_deletions = 1;
+        config.compact_hint_delta_entries = 1;
+        config.compact_hint_delta_deletions = 1;
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
     }
 
 protected:
-    DB::MVCC::VersionSetConfig config_;
+    DB::MVCC::VersionSetConfig config;
+    std::shared_ptr<BackgroundProcessingPool> bkg_pool;
     Poco::Logger * log;
 };
 
-TYPED_TEST_CASE_P(PageMapVersionSet_test);
+TYPED_TEST_CASE_P(PageMapVersionSetTest);
 
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEdit)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     LOG_TRACE(&Poco::Logger::root(), "init      :" + versions.toDebugString());
     {
         PageEntriesEdit edit;
@@ -81,10 +85,15 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 
 /// Generate two different snapshot(s1, s2) with apply new edits.
 /// s2 released first, then release s1
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
-    auto s1 = versions.getSnapshot("", nullptr);
+    TypeParam versions("vset_test", this->config, this->log);
+    auto ver_compact_handle
+        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({
+        this->bkg_pool->removeTask(ver_compact_handle);
+    });
+    auto s1 = versions.getSnapshot("", ver_compact_handle);
     EXPECT_EQ(versions.size(), 1UL);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
@@ -98,7 +107,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
 
     // Get snapshot for checking edit is success
-    auto s2 = versions.getSnapshot("", nullptr);
+    auto s2 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 2:" + versions.toDebugString());
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
@@ -107,18 +116,20 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
 
-    /// For VersionDeltaSet, size is 1 since we do a compaction on delta
-    EXPECT_EQ(versions.size(), 1UL);
+    /// For VersionDeltaSet, size is 1 since we always do compact with latest tail
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
 
     // VersionSet, old version removed from version set
     // VersionSetWithDelta, delta version merged
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 
     // Ensure that after old snapshot released, new snapshot get the same content
-    auto s3 = versions.getSnapshot("", nullptr);
+    auto s3 = versions.getSnapshot("", ver_compact_handle);
     entry = s3->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
     s3.reset();
@@ -133,7 +144,8 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     LOG_TRACE(&Poco::Logger::root(), "apply    C:" + versions.toDebugString());
     // VersionSet, new version gen and old version remove at the same time
     // VersionSetWithDelta, C merge to delta
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
     auto s4 = versions.getSnapshot("", nullptr);
     entry = s4->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x456UL);
@@ -141,10 +153,15 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
 
 /// Generate two different snapshot(s1, s2) with apply new edits.
 /// s1 released first, then release s2
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock2)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
-    auto s1 = versions.getSnapshot("", nullptr);
+    TypeParam versions("vset_test", this->config, this->log);
+    auto ver_compact_handle
+        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({
+        this->bkg_pool->removeTask(ver_compact_handle);
+    });
+    auto s1 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     PageEntriesEdit edit;
     PageEntry e;
@@ -152,27 +169,34 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
     edit.put(0, e);
     versions.apply(edit);
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
-    auto s2 = versions.getSnapshot("", nullptr);
+    auto s2 = versions.getSnapshot("", ver_compact_handle);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
 
-    // VersionSetWithDelta, size is 2 since we can not do a compaction on delta
-    EXPECT_EQ(versions.size(), 2UL);
+    // VersionSetWithDelta, size is 1 since we always do compact with latest tail
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 }
 
 /// Generate two different snapshot(s1, s2) with apply new edits.
 /// s1 released first, then release s2
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock3)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
-    auto s1 = versions.getSnapshot("", nullptr);
+    TypeParam versions("vset_test", this->config, this->log);
+    auto ver_compact_handle
+        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({
+        this->bkg_pool->removeTask(ver_compact_handle);
+    });
+    auto s1 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
         PageEntriesEdit edit;
@@ -182,7 +206,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         versions.apply(edit);
     }
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
-    auto s2 = versions.getSnapshot("", nullptr);
+    auto s2 = versions.getSnapshot("", ver_compact_handle);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
@@ -194,23 +218,26 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         versions.apply(edit);
     }
     LOG_TRACE(&Poco::Logger::root(), "apply    C:" + versions.toDebugString());
-    auto s3 = versions.getSnapshot("", nullptr);
+    auto s3 = versions.getSnapshot("", ver_compact_handle);
     entry = s3->version()->at(1);
     ASSERT_EQ(entry.checksum, 0xFFUL);
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
 
-    // VersionSetWithDelta, size is 3 since we can not do a compaction on delta
-    EXPECT_EQ(versions.size(), 3UL);
+    // VersionSetWithDelta, size is 1 since we always do compact with latest tail
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
-    EXPECT_EQ(versions.size(), 2UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 
     s3.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 3:" + versions.toDebugString());
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 }
 
 namespace
@@ -227,9 +254,9 @@ std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::Snapshot
 
 } // namespace
 
-TYPED_TEST_P(PageMapVersionSet_test, Restore)
+TYPED_TEST_P(PageMapVersionSetTest, Restore)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     // For PageEntriesVersionSetWithDelta, we directly apply edit to versions
     {
         PageEntriesEdit edit;
@@ -264,9 +291,9 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     ASSERT_TRUE(valid_normal_page_ids.count(3) > 0);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
+TYPED_TEST_P(PageMapVersionSetTest, PutOrDelRefPage)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -368,9 +395,9 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
     ensure_snapshot4_status();
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
+TYPED_TEST_P(PageMapVersionSetTest, IdempotentDel)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -415,10 +442,10 @@ TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
     }
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
+TYPED_TEST_P(PageMapVersionSetTest, GcConcurrencyDelPage)
 {
     PageId pid = 0;
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     // Page0 is in PageFile{2, 0} at first
     {
         PageEntriesEdit init_edit;
@@ -460,14 +487,14 @@ static void EXPECT_PagePos_LT(PageFileIdAndLevel p0, PageFileIdAndLevel p1)
 }
 #pragma clang diagnostic pop
 
-TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
+TYPED_TEST_P(PageMapVersionSetTest, GcPageMove)
 {
     EXPECT_PagePos_LT({4, 0}, {5, 1});
     EXPECT_PagePos_LT({5, 0}, {5, 1});
     EXPECT_PagePos_LT({5, 1}, {6, 1});
     EXPECT_PagePos_LT({5, 2}, {6, 1});
 
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
 
     const PageId pid = 0;
     const PageId ref_pid = 1;
@@ -508,10 +535,10 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     ASSERT_EQ(entry.ref, 2u);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
+TYPED_TEST_P(PageMapVersionSetTest, GcConcurrencySetPage)
 {
     const PageId pid = 0;
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
 
 
     // gc move Page0 -> PageFile{5,1}
@@ -544,9 +571,9 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
     ASSERT_EQ(entry.level, 0U);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
+TYPED_TEST_P(PageMapVersionSetTest, UpdateOnRefPage)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -596,9 +623,9 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
     ASSERT_EQ(s5->version()->at(3).checksum, 0xffUL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
+TYPED_TEST_P(PageMapVersionSetTest, UpdateOnRefPage2)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -625,9 +652,9 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
     ASSERT_EQ(s2->version()->at(3).checksum, 0x9UL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
+TYPED_TEST_P(PageMapVersionSetTest, IsRefId)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -653,9 +680,9 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
     ASSERT_FALSE(is_ref);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
+TYPED_TEST_P(PageMapVersionSetTest, Snapshot)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     ASSERT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit init_edit;
@@ -731,9 +758,9 @@ String livePagesToString(const std::set<PageId> & ids)
 
 } // namespace
 
-TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
+TYPED_TEST_P(PageMapVersionSetTest, LiveFiles)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
 
     {
         PageEntriesEdit edit;
@@ -801,7 +828,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
     EXPECT_GT(live_normal_pages.count(2), 0UL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
+TYPED_TEST_P(PageMapVersionSetTest, PutOnTombstonePageEntry)
 {
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSetWithDelta>)
     {
@@ -852,7 +879,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
     }
 }
 
-REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
+REGISTER_TYPED_TEST_CASE_P(PageMapVersionSetTest,
                            ApplyEdit,
                            ApplyEditWithReadLock,
                            ApplyEditWithReadLock2,
@@ -871,6 +898,6 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            PutOnTombstonePageEntry);
 
 using VersionSetTypes = ::testing::Types<PageEntriesVersionSetWithDelta>;
-INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
+INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSetTest, VersionSetTypes);
 
 } // namespace DB::PS::V2::tests

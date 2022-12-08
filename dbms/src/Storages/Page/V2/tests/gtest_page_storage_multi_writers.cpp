@@ -81,7 +81,7 @@ protected:
 
 struct TestContext
 {
-    const PageId MAX_PAGE_ID = 2000;
+    static constexpr PageId MAX_PAGE_ID = 2000;
 
     std::atomic<bool> running_without_exception = true;
     std::atomic<bool> running_without_timeout = true;
