@@ -321,7 +321,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = std::make_shared<DM::ScanContext>();
+        auto scan_context = std::make_shared<DM::ScanContext>();
+        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+        mvcc_query_info->scan_context = scan_context;
         buildLocalStreams(pipeline, settings.max_block_size);
     }
 
@@ -634,7 +636,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
         {
             SelectQueryInfo query_info = create_query_info(physical_table_id);
-            query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso);
+            query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso, mvcc_query_info->scan_context);
             ret.emplace(physical_table_id, std::move(query_info));
         }
         for (auto & r : mvcc_query_info->regions_query_info)
@@ -736,14 +738,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         try
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-            const auto & scan_context = dag_context.scan_context_map.at(table_scan.getTableScanExecutorID());
-
-            // We want to collect performance metrics in storage level, thus we need read with scan_context here.
-            // while IStorage::read() can't support it, and only StorageDeltaMerge support to read with scan_context to collect the information.
-            // Thus, storage must cast to StorageDeltaMergePtr here to call the corresponding read() function.
-            StorageDeltaMergePtr delta_merge_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            RUNTIME_CHECK_MSG(delta_merge_storage != nullptr, "delta_merge_storage which cast from storage is null");
-            pipeline.streams = delta_merge_storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
 
             injectFailPointForLocalRead(query_info);
 
