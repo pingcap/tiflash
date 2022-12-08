@@ -156,7 +156,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     sender_dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
     sender_dag_req.set_force_encode_type(true);
     const auto & column_infos = table_scan.getColumns();
-    for (auto off = 0; off < column_infos.size(); ++off)
+    for (size_t off = 0; off < column_infos.size(); ++off)
     {
         sender_dag_req.add_output_offsets(off);
     }
@@ -177,8 +177,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     for (const auto & column_info : column_infos)
     {
         auto * field_type = sender->add_all_field_types();
-        auto tidb_column_info = TiDB::toTiDBColumnInfo(column_info);
-        *field_type = columnInfoToFieldType(tidb_column_info);
+        *field_type = columnInfoToFieldType(column_info);
     }
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
@@ -226,8 +225,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     for (const auto & column_info : column_infos)
     {
         auto * field_type = receiver.add_field_types();
-        auto tidb_column_info = TiDB::toTiDBColumnInfo(column_info);
-        *field_type = columnInfoToFieldType(tidb_column_info);
+        *field_type = columnInfoToFieldType(column_info);
     }
 
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.

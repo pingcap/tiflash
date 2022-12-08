@@ -45,7 +45,7 @@ NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_sc
     names_and_types.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        auto column_info = TiDB::toTiDBColumnInfo(table_scan.getColumns()[i]);
+        const auto & column_info = table_scan.getColumns()[i];
         names_and_types.emplace_back(genNameForExchangeReceiver(i), getDataTypeByColumnInfoForComputingLayer(column_info));
     }
     return names_and_types;
