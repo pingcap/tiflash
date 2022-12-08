@@ -40,6 +40,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
+#include "Common/Exception.h"
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
@@ -631,6 +633,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.is_fast_scan = table_scan.isFastScan();
         return query_info;
     };
+    RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
     if (table_scan.isPartitionTableScan())
     {
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())

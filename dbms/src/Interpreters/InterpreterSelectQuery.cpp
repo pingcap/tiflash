@@ -51,6 +51,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/RegionQueryInfo.h>
@@ -805,7 +806,8 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
-        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso);
+        auto scan_context = std::make_shared<DM::ScanContext>();
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso, scan_context);
 
         const String & request_str = settings.regions;
 
