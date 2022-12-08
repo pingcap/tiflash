@@ -179,7 +179,7 @@ bool PageEntriesVersionSetWithDelta::isValidVersion(VersionPtr tail) const
     return false;
 }
 
-void PageEntriesVersionSetWithDelta::compactOnDeltaRelease(VersionPtr tail)
+void PageEntriesVersionSetWithDelta::compactUntil(VersionPtr tail)
 {
     if (tail == nullptr || tail->isBase())
         return;
