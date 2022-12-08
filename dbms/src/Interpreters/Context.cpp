@@ -280,6 +280,7 @@ Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime
     res.shared = std::make_shared<ContextShared>(runtime_components_factory);
     res.quota = std::make_shared<QuotaForIntervals>();
     res.timezone_info.init();
+    res.disaggregated_mode = DisaggregatedMode::None;
     return res;
 }
 

@@ -28,18 +28,7 @@ RemoteRequest RemoteRequest::build(
     const PushDownFilter & push_down_filter,
     const LoggerPtr & log)
 {
-    auto print_retry_regions = [&retry_regions, &table_info] {
-        FmtBuffer buffer;
-        buffer.fmtAppend("Start to build remote request for {} regions (", retry_regions.size());
-        buffer.joinStr(
-            retry_regions.cbegin(),
-            retry_regions.cend(),
-            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
-            ",");
-        buffer.fmtAppend(") for table {}", table_info.id);
-        return buffer.toString();
-    };
-    LOG_INFO(log, "{}", print_retry_regions());
+    LOG_INFO(log, "{}", printRetryRegions(retry_regions, table_info.id));
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
@@ -94,6 +83,13 @@ RemoteRequest RemoteRequest::build(
         dag_req.set_time_zone_name(original_dag_req.time_zone_name());
     if (original_dag_req.has_time_zone_offset())
         dag_req.set_time_zone_offset(original_dag_req.time_zone_offset());
+
+    std::vector<pingcap::coprocessor::KeyRange> key_ranges = buildKeyRanges(retry_regions);
+    return {std::move(dag_req), std::move(schema), std::move(key_ranges)};
+}
+
+std::vector<pingcap::coprocessor::KeyRange> RemoteRequest::buildKeyRanges(const RegionRetryList & retry_regions)
+{
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
     for (const auto & region : retry_regions)
     {
@@ -101,6 +97,20 @@ RemoteRequest RemoteRequest::build(
             key_ranges.emplace_back(*range.first, *range.second);
     }
     sort(key_ranges.begin(), key_ranges.end());
-    return {std::move(dag_req), std::move(schema), std::move(key_ranges)};
+    return key_ranges;
 }
+
+std::string RemoteRequest::printRetryRegions(const RegionRetryList & retry_regions, TableID table_id)
+{
+    FmtBuffer buffer;
+    buffer.fmtAppend("Start to build remote request for {} regions (", retry_regions.size());
+    buffer.joinStr(
+        retry_regions.cbegin(),
+        retry_regions.cend(),
+        [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
+        ",");
+    buffer.fmtAppend(") for table {}", table_id);
+    return buffer.toString();
+}
+
 } // namespace DB

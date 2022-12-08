@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
 #include <Debug/MockStorage.h>
@@ -484,6 +485,19 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
+    void setDisaggregatedMode(DisaggregatedMode mode)
+    {
+        disaggregated_mode = mode;
+    }
+    bool isDisaggregatedComputeMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Compute;
+    }
+    bool isDisaggregatedStorageMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Storage;
+    }
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
@@ -501,6 +515,7 @@ private:
     void checkIsConfigLoaded() const;
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
+    DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
 };
 
 using ContextPtr = std::shared_ptr<Context>;
