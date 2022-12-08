@@ -143,7 +143,7 @@ ExchangeReceiverResult ExchangeReceiverBase::nextResult(
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
-        
+
         recv_msg->switchMemTracker();
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }

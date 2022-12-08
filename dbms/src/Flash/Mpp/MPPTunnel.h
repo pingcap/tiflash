@@ -302,13 +302,13 @@ private:
         LOG_INFO(logg, "TLocal: closeLocalTunnel checks is_done {}, {}", is_done, tid);
         if (!is_done)
         {
-            is_done = true;
             LOG_INFO(logg, "TLocal: closeLocalTunnel is ready to call connectionLocalDone {}", tid);
+            is_done = true;
+            consumer_state.setMsg(local_err_msg);
             recv_base->connectionLocalDone(meet_error, local_err_msg, log);
         }
     }
 
-    bool cancel_reason_sent = false;
     size_t source_index;
     String req_info;
     ExchangeReceiverBase * recv_base;

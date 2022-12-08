@@ -288,9 +288,7 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
     {
         std::unique_lock lock(mu);
         if (status == TunnelStatus::Finished)
-        {
             return;
-        }
         status = TunnelStatus::WaitingForSenderFinish;
     }
     String err_msg = tunnel_sender->getConsumerFinishMsg(); // may blocking
