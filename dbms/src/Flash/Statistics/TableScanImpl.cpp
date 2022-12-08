@@ -44,7 +44,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
         for (const auto & io_stream : it->second)
         {
             auto * cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(io_stream.get());
-            // In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
+            /// In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
             auto * exchange_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get());
             if (cop_stream || exchange_stream)
             {
@@ -67,7 +67,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             }
             else
             {
-                RUNTIME_ASSERT(false, "unexpected type of BlockInputStream, got {}", io_stream->getName());
+                /// Streams like: NullBlockInputStream.
             }
         }
     }
