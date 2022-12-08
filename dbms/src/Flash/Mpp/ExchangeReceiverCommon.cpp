@@ -129,22 +129,17 @@ ExchangeReceiverResult ExchangeReceiverBase::nextResult(
     ss << myid;
     std::string tid = ss.str();
 
-    auto * logg = &Poco::Logger::get("LRUCache");
-    LOG_INFO(logg, "EXCHANGE: before pop, id {}, addr {}, {}", stream_id, long(msg_channels[stream_id].get()), tid);
     std::shared_ptr<ReceivedMessage> recv_msg;
     if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
     {
-        LOG_INFO(logg, "EXCHANGE: after pop, id {}, addr {}, {}", stream_id, long(msg_channels[stream_id].get()), tid);
         return handleUnnormalChannel(block_queue, decoder_ptr);
     }
     else
     {
-        LOG_INFO(logg, "EXCHANGE: after pop, {}", tid);
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
 
-        recv_msg->switchMemTracker();
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
 }

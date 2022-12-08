@@ -224,27 +224,10 @@ public:
       , source_index(source_index_)
       , req_info(req_info_)
       , recv_base(recv_base_)
-      , is_done(false){
-        auto myid = std::this_thread::get_id();
-        std::stringstream ss;
-        ss << myid;
-        std::string tid = ss.str();
-
-        auto * logg = &Poco::Logger::get("LRUCache");
-        auto & msg_channels = recv_base->getMsgChannels();
-        for (auto & channel : msg_channels)
-            LOG_INFO(logg, "TunnelS: addr {}", long(channel.get()));
-      }
+      , is_done(false) {}
 
     ~LocalTunnelSender() override
     {
-        auto myid = std::this_thread::get_id();
-        std::stringstream ss;
-        ss << myid;
-        std::string tid = ss.str();
-
-        auto * logg = &Poco::Logger::get("LRUCache");
-        LOG_INFO(logg, "TLocal: local tunnel is destructed, {}", tid);
         closeLocalTunnel(false, "");
     }
 
@@ -258,10 +241,14 @@ public:
         if (unlikely(checkPacketErr(data)))
             return false;
 
-        auto * logg = &Poco::Logger::get("LRUCache");
-        LOG_INFO(logg, "ESender, before push, {}", tid);
+        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
+        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
+        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
+        MemoryTracker * receiver_mem_tracker = recv_base->getMemoryTracker();
+        data->switchMemTracker(receiver_mem_tracker);
+
         auto res = pushPacket<enable_fine_grained_shuffle, false, true>(source_index, req_info, data, recv_base->getMsgChannels(), log);
-        LOG_INFO(logg, "ESender, after push, {}", tid);
+
         if (unlikely(!res))
             closeLocalTunnel(true, "Push mpp packet failed at local tunnel");
         return res;

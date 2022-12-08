@@ -29,7 +29,7 @@ extern const char exception_before_mpp_root_task_run[];
 
 namespace
 {
-inline void addRetryRegion(const ContextPtr & context, mpp::DispatchTaskResponse * response)
+static void addRetryRegion(const ContextPtr & context, mpp::DispatchTaskResponse * response)
 {
     for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
     {
@@ -43,7 +43,7 @@ inline void addRetryRegion(const ContextPtr & context, mpp::DispatchTaskResponse
     }
 }
 
-inline void RandomFailPointTestBeforeRunningMPPTask(bool is_root_task)
+static void RandomFailPointTestBeforeRunningMPPTask(bool is_root_task)
 {
     if (is_root_task)
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);

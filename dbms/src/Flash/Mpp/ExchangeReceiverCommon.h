@@ -25,6 +25,7 @@
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
+#include <Common/MemoryTracker.h>
 
 namespace DB
 {
@@ -227,7 +228,6 @@ bool pushPacket(size_t source_index,
                 is_local_tunnel_data);
 
             push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-
             RandomFailPointTestReceiverPushFail<is_sync>(push_succeed);
         }
     }
@@ -257,7 +257,8 @@ public:
         , state(ExchangeReceiverState::NORMAL)
         , exc_log(Logger::get(req_id, executor_id))
         , local_conn_num(0)
-        , collected(false) {}
+        , collected(false)
+        , memory_tracker(current_memory_tracker) {}
 
     ~ExchangeReceiverBase();
 
@@ -284,6 +285,8 @@ public:
         bool meet_error,
         const String & local_err_msg,
         const LoggerPtr & log);
+    
+    MemoryTracker * getMemoryTracker() const { return memory_tracker; }
 
 protected:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -346,5 +349,6 @@ protected:
 
     bool collected = false;
     int thread_count = 0;
+    MemoryTracker * memory_tracker;
 };
 } // namespace DB
