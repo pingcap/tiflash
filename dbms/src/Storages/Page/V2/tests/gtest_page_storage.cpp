@@ -22,6 +22,7 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -52,15 +53,17 @@ class PageStorage_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorage_test()
-        : storage()
-        , file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
     {}
 
 protected:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase()
+    {
+    }
 
     void SetUp() override
     {
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
         TiFlashStorageTestBasic::SetUp();
         // drop dir if exists
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
@@ -74,13 +77,18 @@ protected:
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
         auto delegator = path_pool->getPSDiskDelegatorSingle("log");
-        auto storage = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
+        auto storage = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, *bkg_pool);
         storage->restore();
         return storage;
     }
 
 protected:
+<<<<<<< HEAD
     PageStorage::Config config;
+=======
+    PageStorageConfig config;
+    std::shared_ptr<BackgroundProcessingPool> bkg_pool;
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     std::shared_ptr<PageStorage> storage;
     std::unique_ptr<StoragePathPool> path_pool;
     const FileProviderPtr file_provider;

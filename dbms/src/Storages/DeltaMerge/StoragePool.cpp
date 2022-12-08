@@ -23,6 +23,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <common/defines.h>
 #include <fmt/format.h>
 
 
@@ -90,16 +91,19 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
                                       path_pool.getPSDiskDelegatorGlobalMulti("log"),
                                       extractConfig(settings, StorageType::Log),
                                       global_ctx.getFileProvider(),
+                                      global_ctx,
                                       true))
     , data_storage(PageStorage::create("__global__.data",
                                        path_pool.getPSDiskDelegatorGlobalMulti("data"),
                                        extractConfig(settings, StorageType::Data),
                                        global_ctx.getFileProvider(),
+                                       global_ctx,
                                        true))
     , meta_storage(PageStorage::create("__global__.meta",
                                        path_pool.getPSDiskDelegatorGlobalMulti("meta"),
                                        extractConfig(settings, StorageType::Meta),
                                        global_ctx.getFileProvider(),
+                                       global_ctx,
                                        true))
     , global_context(global_ctx)
 {
@@ -183,15 +187,18 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
-                                             global_context.getFileProvider());
+                                             global_context.getFileProvider(),
+                                             global_context);
         data_storage_v2 = PageStorage::create(name + ".data",
                                               storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         meta_storage_v2 = PageStorage::create(name + ".meta",
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, /*storage_v3_*/ nullptr, nullptr);
@@ -224,6 +231,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         data_storage_v3 = global_storage_pool->data_storage;
         meta_storage_v3 = global_storage_pool->meta_storage;
 
+<<<<<<< HEAD
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
@@ -236,6 +244,47 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
                                               global_ctx.getFileProvider());
+=======
+        if (storage_path_pool.isPSV2Deleted())
+        {
+            LOG_INFO(logger, "PageStorage V2 is already mark deleted. Current pagestorage change from {} to {} [ns_id={}]", //
+                     static_cast<UInt8>(PageStorageRunMode::MIX_MODE), //
+                     static_cast<UInt8>(PageStorageRunMode::ONLY_V3), //
+                     ns_id);
+            log_storage_v2 = nullptr;
+            data_storage_v2 = nullptr;
+            meta_storage_v2 = nullptr;
+            run_mode = PageStorageRunMode::ONLY_V3;
+            storage_path_pool.clearPSV2ObsoleteData();
+        }
+        else
+        {
+            // Although there is no more write to ps v2 in mixed mode, the ps instances will keep running if there is some data in log storage when restart,
+            // so we keep its original config here.
+            // And we rely on the mechanism that writing file will be rotated if no valid pages in non writing files to reduce the disk space usage of these ps instances.
+            log_storage_v2 = PageStorage::create(name + ".log",
+                                                 storage_path_pool.getPSDiskDelegatorMulti("log"),
+                                                 extractConfig(global_context.getSettingsRef(), StorageType::Log),
+                                                 global_context.getFileProvider(),
+                                                 global_context,
+                                                 /* use_v3 */ false,
+                                                 /* no_more_write_to_v2 */ true);
+            data_storage_v2 = PageStorage::create(name + ".data",
+                                                  storage_path_pool.getPSDiskDelegatorMulti("data"),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Data),
+                                                  global_context.getFileProvider(),
+                                                  global_context,
+                                                  /* use_v3 */ false,
+                                                  /* no_more_write_to_v2 */ true);
+            meta_storage_v2 = PageStorage::create(name + ".meta",
+                                                  storage_path_pool.getPSDiskDelegatorMulti("meta"),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Meta),
+                                                  global_context.getFileProvider(),
+                                                  global_context,
+                                                  /* use_v3 */ false,
+                                                  /* no_more_write_to_v2 */ true);
+        }
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, log_storage_v3, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, data_storage_v3, nullptr);
@@ -602,6 +651,12 @@ void StoragePool::shutdown()
     {
         global_context.getBackgroundPool().removeTask(gc_handle);
         gc_handle = nullptr;
+    }
+    if (run_mode != PageStorageRunMode::ONLY_V3)
+    {
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
     }
 }
 

@@ -219,7 +219,13 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider,
+<<<<<<< HEAD
         bool use_v3 = false);
+=======
+        Context & global_ctx,
+        bool use_v3 = false,
+        bool no_more_insert_to_v2 = false);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
     PageStorage(
         String name,
@@ -325,6 +331,8 @@ public:
     {
         return gcImpl(not_skip, write_limiter, read_limiter);
     }
+
+    virtual void shutdown() {}
 
     // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;

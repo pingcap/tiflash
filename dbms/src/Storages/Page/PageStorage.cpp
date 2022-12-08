@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
@@ -23,12 +24,22 @@ PageStoragePtr PageStorage::create(
     PSDiskDelegatorPtr delegator,
     const PageStorage::Config & config,
     const FileProviderPtr & file_provider,
+<<<<<<< HEAD
     bool use_v3)
+=======
+    Context & global_ctx,
+    bool use_v3,
+    bool no_more_insert_to_v2)
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 {
     if (use_v3)
         return std::make_shared<PS::V3::PageStorageImpl>(name, delegator, config, file_provider);
     else
+<<<<<<< HEAD
         return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider);
+=======
+        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider, global_ctx.getPSBackgroundPool(), no_more_insert_to_v2);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 }
 
 /***************************
