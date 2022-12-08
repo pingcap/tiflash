@@ -232,6 +232,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const String executor_id = table_scan.getTableScanExecutorID();
+
     exchange_receiver = std::make_shared<ExchangeReceiver>(
         std::make_shared<GRPCReceiverContext>(
             receiver,
@@ -239,14 +240,13 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             context.getTMTContext().getKVCluster(),
             context.getTMTContext().getMPPTaskManager(),
             context.getSettingsRef().enable_local_tunnel,
-            context.getSettingsRef().enable_async_grpc_client,
-            dispatch_reqs),
+            context.getSettingsRef().enable_async_grpc_client),
         receiver.encoded_task_meta_size(),
         num_streams,
         log->identifier(),
         executor_id,
         /*fine_grained_shuffle_stream_count=*/0,
-        /*is_receiver_for_tiflash_storage=*/true);
+        dispatch_reqs);
 
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);

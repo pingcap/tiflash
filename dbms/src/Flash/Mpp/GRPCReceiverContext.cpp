@@ -196,15 +196,13 @@ GRPCReceiverContext::GRPCReceiverContext(
     pingcap::kv::Cluster * cluster_,
     std::shared_ptr<MPPTaskManager> task_manager_,
     bool enable_local_tunnel_,
-    bool enable_async_grpc_,
-    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
+    bool enable_async_grpc_)
     : exchange_receiver_meta(exchange_receiver_meta_)
     , task_meta(task_meta_)
     , cluster(cluster_)
     , task_manager(std::move(task_manager_))
     , enable_local_tunnel(enable_local_tunnel_)
     , enable_async_grpc(enable_async_grpc_)
-    , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {}
 
 ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
@@ -225,7 +223,9 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     return req;
 }
 
-void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(LoggerPtr log)
+void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
+    LoggerPtr log,
+    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs)
 {
     if (disaggregated_dispatch_reqs.empty())
         throw Exception("unexpected disaggregated_dispatch_reqs, it's empty.");

@@ -131,7 +131,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        bool is_receiver_for_tiflash_storage);
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
 
@@ -190,6 +190,12 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
+    bool isReceiverForTiFlashStorage()
+    {
+        // If not empty, need to send MPPTask to tiflash_storage.
+        return !disaggregated_dispatch_reqs.empty();
+    }
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -215,11 +221,8 @@ private:
     bool collected = false;
     int thread_count = 0;
 
-    /// True when:
-    ///   1. we are in disaggregated tiflash mode
-    ///   2. and this receiver is receiving data from tiflash_storage node.
-    /// If it's true, when this ExchangeReciever is canceled, need to cancel MPPTasks in tiflash_storage node.
-    bool is_receiver_for_tiflash_storage;
+    // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
+    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

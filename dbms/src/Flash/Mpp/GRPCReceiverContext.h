@@ -78,8 +78,7 @@ public:
         pingcap::kv::Cluster * cluster_,
         std::shared_ptr<MPPTaskManager> task_manager_,
         bool enable_local_tunnel_,
-        bool enable_async_grpc_,
-        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
+        bool enable_async_grpc_);
 
     ExchangeRecvRequest makeRequest(int index) const;
 
@@ -101,7 +100,9 @@ public:
     void fillSchema(DAGSchema & schema) const;
 
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
-    void sendMPPTaskToTiFlashStorageNode(LoggerPtr log);
+    void sendMPPTaskToTiFlashStorageNode(
+        LoggerPtr log,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs);
 
     // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
     // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),
@@ -119,7 +120,6 @@ private:
     bool enable_local_tunnel;
     bool enable_async_grpc;
 
-    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
     std::mutex dispatch_mpp_task_err_msg_mu;
     String dispatch_mpp_task_err_msg;
 };

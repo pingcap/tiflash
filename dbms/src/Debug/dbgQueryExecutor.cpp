@@ -59,8 +59,7 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
             10,
             /*req_id=*/"",
             /*executor_id=*/"",
-            /*fine_grained_shuffle_stream_count=*/0,
-            /*is_receiver_for_tiflash_storage=*/false);
+            /*fine_grained_shuffle_stream_count=*/0);
     BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
     return ret;
 }
