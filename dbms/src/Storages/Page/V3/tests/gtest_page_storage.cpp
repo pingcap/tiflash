@@ -426,6 +426,28 @@ try
         ASSERT_GT(page_maps.count(5), 0);
         ASSERT_EQ(page_maps[5].isValid(), false);
     }
+    {
+        // Read with id can also fetch the fieldOffsets
+        auto page_4 = page_storage->readImpl(TEST_NAMESPACE_ID, 4, nullptr, nullptr, false);
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+    }
+    {
+        // Read with ids can also fetch the fieldOffsets
+        PageIds page_ids{4};
+        auto pages = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
+        ASSERT_EQ(pages.size(), 1);
+        ASSERT_GT(pages.count(4), 0);
+        auto page_4 = pages[4];
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+    }
 }
 CATCH
 
