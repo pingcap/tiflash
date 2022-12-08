@@ -281,18 +281,9 @@ private:
 
     void closeLocalTunnel(bool meet_error, const String & local_err_msg)
     {
-        auto myid = std::this_thread::get_id();
-        std::stringstream ss;
-        ss << myid;
-        std::string tid = ss.str();
-
-        auto * logg = &Poco::Logger::get("LRUCache");
-        LOG_INFO(logg, "TLocal: closeLocalTunnel is called {}", tid);
         std::lock_guard lock(mu);
-        LOG_INFO(logg, "TLocal: closeLocalTunnel checks is_done {}, {}", is_done, tid);
         if (!is_done)
         {
-            LOG_INFO(logg, "TLocal: closeLocalTunnel is ready to call connectionLocalDone {}", tid);
             is_done = true;
             consumer_state.setMsg(local_err_msg);
             recv_base->connectionLocalDone(meet_error, local_err_msg, log);

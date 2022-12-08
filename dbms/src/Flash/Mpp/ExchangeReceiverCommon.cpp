@@ -37,19 +37,9 @@ ExchangeReceiverBase::~ExchangeReceiverBase()
 {
     try
     {
-        auto myid = std::this_thread::get_id();
-        std::stringstream ss;
-        ss << myid;
-        std::string tid = ss.str();
-
-        auto * logg = &Poco::Logger::get("LRUCache");
-        LOG_INFO(logg, "ExchangeRecvBase begins to destruct 1, {}", tid);
         close();
-        LOG_INFO(logg, "ExchangeRecvBase begins to destruct 2, {}", tid);
         waitAllLocalConnDone();
-        LOG_INFO(logg, "ExchangeRecvBase begins to destruct 3, {}", tid);
         thread_manager->wait();
-        LOG_INFO(logg, "ExchangeRecvBase is completely destructed, {}", tid);
     }
     catch (...)
     {
@@ -240,12 +230,6 @@ void ExchangeReceiverBase::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    auto myid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << myid;
-    std::string tid = ss.str();
-
-    auto * logg = &Poco::Logger::get("LRUCache");
     Int32 copy_live_conn = -1;
     {
         std::unique_lock lock(mu);
@@ -257,7 +241,6 @@ void ExchangeReceiverBase::connectionDone(
                 err_msg = local_err_msg;
         }
         copy_live_conn = --live_connections;
-        LOG_INFO(logg, "TLocal: connectionLocalDone, local_conn_num {}, meet_error {}, copy_live_conn {}, {}", local_conn_num, meet_error, copy_live_conn, tid);
     }
     LOG_DEBUG(
         log,
@@ -280,13 +263,6 @@ void ExchangeReceiverBase::connectionLocalDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    auto myid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << myid;
-    std::string tid = ss.str();
-
-    auto * logg = &Poco::Logger::get("LRUCache");
-    LOG_INFO(logg, "TLocal: connectionLocalDone, {}", tid);
     Int32 copy_live_conn = -1;
     {
         std::unique_lock lock(mu);
@@ -299,7 +275,6 @@ void ExchangeReceiverBase::connectionLocalDone(
         }
         copy_live_conn = --live_connections;
         --local_conn_num;
-        LOG_INFO(logg, "TLocal: connectionLocalDone, local_conn_num {}, meet_error {}, copy_live_conn {}, {}", local_conn_num, meet_error, copy_live_conn, tid);
         local_conn_cv.notify_all();
     }
 

@@ -157,19 +157,10 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
         waitUntilConnectedOrFinished(lk);
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel which is already closed.");
     }
-    auto myid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << myid;
-    std::string tid = ss.str();
 
-    auto * logg = &Poco::Logger::get("LRUCache");
-    LOG_INFO(logg, "ESender: before push, {}", tid);
-    ;
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
-        LOG_INFO(logg, "ESender: after push, {}", tid);
-        ;
         updateMetric(pushed_data_size, mode);
         updateConnProfileInfo(pushed_data_size);
         return;
@@ -180,13 +171,6 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 /// done normally and being called exactly once after writing all packets
 void MPPTunnel::writeDone()
 {
-    auto myid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << myid;
-    std::string tid = ss.str();
-
-    auto * logg = &Poco::Logger::get("LRUCache");
-    LOG_INFO(logg, "ESender: writeDone 1, {}", tid);
     LOG_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     {
         std::unique_lock lk(mu);
@@ -195,11 +179,8 @@ void MPPTunnel::writeDone()
         if (tunnel_sender == nullptr)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
-    LOG_INFO(logg, "ESender: writeDone 2, {}", tid);
     tunnel_sender->finish();
-    LOG_INFO(logg, "ESender: writeDone 3, {}", tid);
     waitForSenderFinish(/*allow_throw=*/true);
-    LOG_INFO(logg, "ESender: writeDone 4, {}", tid);
 }
 
 void MPPTunnel::connect(PacketWriter * writer)
