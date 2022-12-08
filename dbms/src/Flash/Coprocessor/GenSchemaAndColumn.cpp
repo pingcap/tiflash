@@ -62,7 +62,7 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
     names_and_types.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        auto column_info = TiDB::toTiDBColumnInfo(table_scan.getColumns()[i]);
+        const auto column_info = table_scan.getColumns()[i];
         switch (column_info.id)
         {
         case TiDBPkColumnID:
