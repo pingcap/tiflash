@@ -304,7 +304,7 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
         auto sender_task = std::make_unique<mpp::TaskMeta>();
         if (unlikely(!sender_task->ParseFromString(exchange_receiver_meta.encoded_task_meta(i))))
         {
-            LOG_INFO(log, "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, will ignore this error");
+            LOG_WARNING(log, "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, will ignore this error");
             return;
         }
         auto cancel_req = std::make_shared<mpp::CancelTaskRequest>();
@@ -323,7 +323,7 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
             catch (...)
             {
                 String cancel_err_msg = getCurrentExceptionMessage(true);
-                LOG_INFO(log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+                LOG_WARNING(log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
             }
         });
     }
