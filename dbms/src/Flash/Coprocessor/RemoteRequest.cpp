@@ -59,7 +59,7 @@ RemoteRequest RemoteRequest::build(
         for (int i = 0; i < table_scan.getColumnSize(); ++i)
         {
             const auto & col = table_scan.getColumns()[i];
-            auto col_id = col.column_id();
+            auto col_id = col.id;
 
             if (col_id == DB::TiDBPkColumnID)
             {
