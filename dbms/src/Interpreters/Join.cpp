@@ -1167,11 +1167,11 @@ void NO_INLINE joinBlockImplTypeCase(
     const auto & shuffle_hash_data = shuffle_hash.getData();
     assert(probe_process_info.start_row < rows);
     size_t i;
+    probe_process_info.block_full = false;
     for (i = probe_process_info.start_row; i < rows; ++i)
     {
         if (probe_process_info.block_full)
         {
-            probe_process_info.block_full = false;
             break;
         }
         if (has_null_map && (*null_map)[i])
@@ -1996,8 +1996,6 @@ Block Join::joinBlock(size_t stream_index) const
 
 void Join::joinBlock(Block & block, size_t stream_index) const
 {
-    RUNTIME_CHECK(probe_initialized);
-
     // ck will use this function to generate header, that's why here is a check.
     {
         std::unique_lock lk(build_table_mutex);
@@ -2008,6 +2006,8 @@ void Join::joinBlock(Block & block, size_t stream_index) const
     }
 
     std::shared_lock lock(rwlock);
+
+    RUNTIME_CHECK(probe_initialized);
 
     /// TODO: after we bumping to C++20, use `using enum` to simplify code here.
     /// using enum ASTTableJoin::Strictness;
