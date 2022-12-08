@@ -343,6 +343,7 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     return true;
 }
 
+<<<<<<< HEAD
 bool DeltaValueSpace::appendRegionSnapshot(DMContext & /*context*/,
                                            const RowKeyRange & range,
                                            const DeltaPacks &  packs,
@@ -351,6 +352,15 @@ bool DeltaValueSpace::appendRegionSnapshot(DMContext & /*context*/,
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
         return false;
+=======
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
+    {
+        // do compaction task
+        const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
+        compaction_task->prepare(context, wbs, reader);
+        log_storage_snap.reset(); // release the snapshot ASAP
+    }
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
     if (clear_data_in_range)
     {
