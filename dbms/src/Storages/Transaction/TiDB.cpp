@@ -1133,6 +1133,7 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
 ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
 {
     ColumnInfo tidb_column_info;
+    tidb_column_info.id = tipb_column_info.column_id();
     tidb_column_info.tp = static_cast<TiDB::TP>(tipb_column_info.tp());
     tidb_column_info.id = tipb_column_info.column_id();
     tidb_column_info.flag = tipb_column_info.flag();

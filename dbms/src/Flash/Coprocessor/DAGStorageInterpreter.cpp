@@ -250,7 +250,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : regions_info)
         {
-            if (random() % 100 > 50)
+            if (arc4random() % 100 > 50)
                 region_ids.insert(info.region_id);
         }
         throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
@@ -1041,7 +1041,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
-        ColumnID cid = ci.id;
+        const ColumnID cid = ci.id;
 
         // Column ID -1 return the handle column
         String name;

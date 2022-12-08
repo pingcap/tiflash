@@ -23,7 +23,6 @@
 #include <tipb/schema.pb.h>
 
 #include <optional>
-#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
