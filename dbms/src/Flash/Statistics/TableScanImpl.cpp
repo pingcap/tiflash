@@ -43,29 +43,31 @@ void TableScanStatistics::collectExtraRuntimeDetail()
     {
         for (const auto & io_stream : it->second)
         {
-            if (auto * local_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); local_stream)
+            auto * cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(io_stream.get());
+            // In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
+            auto * exchange_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get());
+            if (cop_stream || exchange_stream)
             {
-                /// local read input stream also is IProfilingBlockInputStream
-                local_table_scan_detail.bytes += local_stream->getProfileInfo().bytes;
-            }
-            else
-            {
-                auto * cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(io_stream.get());
-                // In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
-                auto * exchange_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get());
                 const std::vector<ConnectionProfileInfo> * connection_profile_infos = nullptr;
                 if (cop_stream)
                     connection_profile_infos = &cop_stream->getConnectionProfileInfos();
                 else if (exchange_stream)
                     connection_profile_infos = &exchange_stream->getConnectionProfileInfos();
-                else
-                    RUNTIME_ASSERT(false, "unexpected type of BlockInputStream, got {}", io_stream->getName());
 
                 for (const auto & connection_profile_info : *connection_profile_infos)
                 {
                     remote_table_scan_detail.packets += connection_profile_info.packets;
                     remote_table_scan_detail.bytes += connection_profile_info.bytes;
                 }
+            }
+            else if (auto * local_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); local_stream)
+            {
+                /// local read input stream also is IProfilingBlockInputStream
+                local_table_scan_detail.bytes += local_stream->getProfileInfo().bytes;
+            }
+            else
+            {
+                RUNTIME_ASSERT(false, "unexpected type of BlockInputStream, got {}", io_stream->getName());
             }
         }
     }
