@@ -166,7 +166,7 @@ public:
         }
 
         // Releasing a snapshot object may do compaction on vset's versions.
-        ~Snapshot()
+        ~Snapshot() override
         {
             if (auto handle = compact_handle.lock(); handle)
             {
