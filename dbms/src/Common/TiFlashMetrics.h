@@ -87,10 +87,24 @@ namespace DB
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
         F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}))                                               \
+<<<<<<< HEAD
     M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter, F(type_delta_merge, {"type", "delta_merge"}),         \
         F(type_delta_merge_fg, {"type", "delta_merge_fg"}), F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                     \
         F(type_delta_compact, {"type", "delta_compact"}), F(type_delta_flush, {"type", "delta_flush"}),                                   \
         F(type_seg_split, {"type", "seg_split"}), F(type_seg_merge, {"type", "seg_merge"}),                                               \
+=======
+    M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter,                                                       \
+        F(type_delta_merge_bg, {"type", "delta_merge_bg"}),                                                                               \
+        F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                                                                         \
+        F(type_delta_merge_fg, {"type", "delta_merge_fg"}),                                                                               \
+        F(type_delta_merge_manual, {"type", "delta_merge_manual"}),                                                                       \
+        F(type_delta_compact, {"type", "delta_compact"}),                                                                                 \
+        F(type_delta_flush, {"type", "delta_flush"}),                                                                                     \
+        F(type_seg_split_bg, {"type", "seg_split_bg"}),                                                                                   \
+        F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                   \
+        F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                           \
+        F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                             \
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
         F(type_delta_merge, {{"type", "delta_merge"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
@@ -119,9 +133,43 @@ namespace DB
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter, F(type_exec, {"type", "exec"}),                     \
         F(type_low_write, {"type", "low_write"}))                                                                                         \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
+<<<<<<< HEAD
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
     M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
+=======
+        F(type_v2, {{"type", "v2"}}, ExpBuckets{0.0005, 2, 20}),                                                                          \
+        F(type_v2_data_compact, {{"type", "v2_data_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                \
+        F(type_v2_ver_compact, {{"type", "v2_ver_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
+        /* Below are metrics for PageStorage V3 */                                                                                        \
+        F(type_compact_wal, {{"type", "compact_wal"}},             ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_compact_spacemap, {{"type", "compact_spacemap"}},   ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_fullgc_rewrite, {{"type", "fullgc_rewrite"}},       ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_fullgc_commit, {{"type", "fullgc_commit"}},         ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
+    M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                          \
+        F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                        \
+    M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                         \
+        F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
+        /* the bucket range for apply in memory is 50us ~ 120s */                                                                         \
+        F(type_choose_stat, {{"type", "choose_stat"}}, ExpBuckets{0.00005, 1.8, 26}),                                                     \
+        F(type_search_pos,  {{"type", "search_pos"}},  ExpBuckets{0.00005, 1.8, 26}),                                                     \
+        F(type_blob_write,  {{"type", "blob_write"}},  ExpBuckets{0.00005, 1.8, 26}),                                                     \
+        F(type_latch,       {{"type", "latch"}},       ExpBuckets{0.00005, 1.8, 26}),                                                     \
+        F(type_wal,         {{"type", "wal"}},         ExpBuckets{0.00005, 1.8, 26}),                                                     \
+        F(type_commit,      {{"type", "commit"}},      ExpBuckets{0.00005, 1.8, 26}))                                                     \
+    M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
+        F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
+    M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
+        F(type_fg_read_alloc_bytes, {"type", "fg_read_alloc_bytes"}), F(type_bg_read_req_bytes, {"type", "bg_read_req_bytes"}),           \
+        F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
+        F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
+        F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                   \
+    M(tiflash_storage_rough_set_filter_rate, "Bucketed histogram of rough set filter rate", Histogram,                                    \
+        F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20}))                                                      \
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
