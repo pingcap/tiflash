@@ -71,7 +71,11 @@ LegacyCompactor::tryCompact(
     }
 
     // Build a version_set with snapshot
+<<<<<<< HEAD
     auto snapshot = version_set.getSnapshot();
+=======
+    auto snapshot = version_set.getSnapshot(/*tracing_id*/ "", nullptr);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     auto wb = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
 
     {

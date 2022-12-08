@@ -126,8 +126,16 @@ public:
     create(
         String name,
         PSDiskDelegatorPtr delegator,
+<<<<<<< HEAD
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider);
+=======
+        const PageStorageConfig & config,
+        const FileProviderPtr & file_provider,
+        Context & global_ctx,
+        bool use_v3 = false,
+        bool no_more_insert_to_v2 = false);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
     PageStorage(
         String name,
@@ -180,10 +188,19 @@ public:
     // We may skip the GC to reduce useless reading by default.
     virtual bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) = 0;
 
+<<<<<<< HEAD
     // Register two callback:
     // `scanner` for scanning avaliable external page ids.
     // `remover` will be called with living normal page ids after gc run a round.
     virtual void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) = 0;
+=======
+    virtual void shutdown() {}
+
+    // Register and unregister external pages GC callbacks
+    // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
+    virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
+    virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:

@@ -5,6 +5,7 @@
 #include <PSRunnable.h>
 #include <PSStressEnv.h>
 #include <Poco/ThreadPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <fmt/format.h>
@@ -87,6 +88,7 @@ protected:
     StressEnv options;
     Poco::ThreadPool pool;
 
+    std::shared_ptr<DB::BackgroundProcessingPool> bkg_pool;
     PSPtr ps;
     DB::PSDiskDelegatorPtr delegator;
 

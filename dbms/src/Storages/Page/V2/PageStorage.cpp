@@ -143,13 +143,25 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
 
 PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
+<<<<<<< HEAD
                          const Config & config_,
                          const FileProviderPtr & file_provider_)
+=======
+                         const PageStorageConfig & config_,
+                         const FileProviderPtr & file_provider_,
+                         BackgroundProcessingPool & ver_compact_pool_,
+                         bool no_more_insert_)
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , write_files(std::max(1UL, config_.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
+<<<<<<< HEAD
+=======
+    , ver_compact_pool(ver_compact_pool_)
+    , no_more_insert(no_more_insert_)
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots.get());
@@ -166,6 +178,10 @@ PageStorage::PageStorage(String name,
         config.num_write_slots = num_paths * 2;
     }
     write_files.resize(config.num_write_slots);
+
+    // If there is no snapshot released, check with default interval (10s) and exit quickly
+    // If snapshot released, wakeup this handle to compact the version list
+    ver_compact_handle = ver_compact_pool.addTask([this] { return compactInMemVersions(); }, /*multi*/ false);
 }
 
 
@@ -344,8 +360,13 @@ void PageStorage::restore()
 
 PageId PageStorage::getMaxId()
 {
+<<<<<<< HEAD
     std::lock_guard<std::mutex> write_lock(write_mutex);
     return versioned_page_entries.getSnapshot()->version()->maxId();
+=======
+    std::lock_guard write_lock(write_mutex);
+    return versioned_page_entries.getSnapshot("", ver_compact_handle)->version()->maxId();
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 }
 
 PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
@@ -564,13 +585,21 @@ void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limi
 
 DB::PageStorage::SnapshotPtr PageStorage::getSnapshot()
 {
+<<<<<<< HEAD
     return versioned_page_entries.getSnapshot();
+=======
+    return versioned_page_entries.getSnapshot(tracing_id, ver_compact_handle);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 }
 
 PageStorage::VersionedPageEntries::SnapshotPtr
 PageStorage::getConcreteSnapshot()
 {
+<<<<<<< HEAD
     return versioned_page_entries.getSnapshot();
+=======
+    return versioned_page_entries.getSnapshot(/*tracing_id*/ "", ver_compact_handle);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 }
 
 std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
@@ -903,7 +932,33 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
+<<<<<<< HEAD
 bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) // NOLINT(google-default-arguments)
+=======
+void PageStorage::shutdown()
+{
+    if (ver_compact_handle)
+    {
+        ver_compact_pool.removeTask(ver_compact_handle);
+        ver_compact_handle = nullptr;
+    }
+}
+
+bool PageStorage::compactInMemVersions()
+{
+    Stopwatch watch;
+    // try compact the in-mem version list
+    bool done_anything = versioned_page_entries.tryCompact();
+    if (done_anything)
+    {
+        auto elapsed_sec = watch.elapsedSeconds();
+        GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2_ver_compact).Observe(elapsed_sec);
+    }
+    return done_anything;
+}
+
+bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -914,7 +969,6 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         bool is_running = true;
         gc_is_running.compare_exchange_strong(is_running, false);
     });
-
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -1100,7 +1154,11 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction)
         {
+<<<<<<< HEAD
             GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_migrate).Observe(watch_migrate.elapsedSeconds());
+=======
+            GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2_data_compact).Observe(watch_migrate.elapsedSeconds());
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
         }
     }
 

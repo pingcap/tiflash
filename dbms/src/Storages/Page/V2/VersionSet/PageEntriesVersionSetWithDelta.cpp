@@ -1,5 +1,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
+#include <Common/ProfileEvents.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
@@ -16,6 +17,7 @@ namespace ProfileEvents
 extern const Event PSMVCCCompactOnDelta;
 extern const Event PSMVCCCompactOnDeltaRebaseRejected;
 extern const Event PSMVCCCompactOnBase;
+extern const Event PSMVCCCompactOnBaseCommit;
 extern const Event PSMVCCApplyOnCurrentBase;
 extern const Event PSMVCCApplyOnCurrentDelta;
 extern const Event PSMVCCApplyOnNewDelta;
@@ -92,12 +94,20 @@ std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::getSnapshot
 }
 
 
+<<<<<<< HEAD
 PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot()
+=======
+PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id, BackgroundProcessingPool::TaskHandle handle)
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 {
     // acquire for unique_lock since we need to add all snapshots to link list
     std::unique_lock<std::shared_mutex> lock(read_write_mutex);
 
+<<<<<<< HEAD
     auto s = std::make_shared<Snapshot>(this, current);
+=======
+    auto s = std::make_shared<Snapshot>(this, current, tracing_id, handle);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     // Register a weak_ptr to snapshot into VersionSet so that we can get all living PageFiles
     // by `PageEntriesVersionSetWithDelta::listAllLiveFiles`, and it remove useless weak_ptr of snapshots.
     // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
@@ -149,7 +159,7 @@ std::unique_lock<std::shared_mutex> PageEntriesVersionSetWithDelta::acquireForLo
     return std::unique_lock<std::shared_mutex>(read_write_mutex);
 }
 
-bool PageEntriesVersionSetWithDelta::isValidVersion(const VersionPtr tail) const
+bool PageEntriesVersionSetWithDelta::isValidVersion(VersionPtr tail) const
 {
     for (auto node = current; node != nullptr; node = std::atomic_load(&node->prev))
     {
@@ -161,7 +171,7 @@ bool PageEntriesVersionSetWithDelta::isValidVersion(const VersionPtr tail) const
     return false;
 }
 
-void PageEntriesVersionSetWithDelta::compactOnDeltaRelease(VersionPtr tail)
+void PageEntriesVersionSetWithDelta::compactUntil(VersionPtr tail)
 {
     if (tail == nullptr || tail->isBase())
         return;
@@ -189,20 +199,27 @@ void PageEntriesVersionSetWithDelta::compactOnDeltaRelease(VersionPtr tail)
         tail = tmp;
         tmp.reset();
     }
-    // do compact on base
-    if (tail->shouldCompactToBase(config))
+
+    if (!tail->shouldCompactToBase(config))
     {
-        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
-        auto old_base = std::atomic_load(&tail->prev);
-        assert(old_base != nullptr);
-        VersionPtr new_base = PageEntriesForDelta::compactDeltaAndBase(old_base, tail);
-        // replace nodes [head, tail] -> new_base
-        if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
-        {
-            // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
-            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
-            return;
-        }
+        return;
+    }
+
+    // do compact on base
+    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
+    auto old_base = std::atomic_load(&tail->prev);
+    assert(old_base != nullptr);
+    // create a new_base and copy the entries from `old_base` and `tail`
+    VersionPtr new_base = PageEntriesForDelta::compactDeltaAndBase(old_base, tail);
+    // replace nodes [head, tail] by new_base
+    if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
+    {
+        // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
+        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
+    }
+    else
+    {
+        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBaseCommit);
     }
 }
 
@@ -316,7 +333,12 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         }
     }
     // Create a temporary latest snapshot by using `current`
+<<<<<<< HEAD
     valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current));
+=======
+    // release this temporary snapshot won't cause version-list compact
+    valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current, "", nullptr));
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
     lock.unlock(); // Notice: unlock and we should free those valid snapshots without locking
 

@@ -49,8 +49,13 @@ try
     const auto file_provider = ctx.getFileProvider();
     PSDiskDelegatorPtr delegate = std::make_shared<DB::tests::MockDiskDelegatorMulti>(test_paths);
 
+<<<<<<< HEAD
     PageStorage storage("data_compact_test", delegate, config, file_provider);
 
+=======
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+    PageStorage storage("data_compact_test", delegate, config, file_provider, *bkg_pool);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 #ifdef GENERATE_TEST_DATA
     // Codes to generate a directory of test data
     storage.restore();
@@ -161,7 +166,8 @@ try
 
     {
         // Try to recover from disk, check whether page 1, 2, 3, 4, 5, 6 is valid or not.
-        PageStorage ps("data_compact_test", delegate, config, file_provider);
+        auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+        PageStorage ps("data_compact_test", delegate, config, file_provider, *bkg_pool);
         ps.restore();
         // Page 1, 2 have been migrated to PageFile_2_1
         PageEntry entry = ps.getEntry(1);
