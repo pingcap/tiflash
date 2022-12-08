@@ -160,7 +160,6 @@ public:
 LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID logical_table_id,
     MvccQueryInfo & mvcc_query_info_,
-    size_t num_streams,
     bool for_batch_cop,
     Context & context,
     const LoggerPtr & log)
@@ -173,7 +172,7 @@ LearnerReadSnapshot doLearnerRead(
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
     // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
-    size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info->concurrent), regions_info.size()));
+    size_t concurrent_num = std::max(1, regions_info.size());
 
     // use single thread to do replica read by default because there is some overhead from thread pool itself.
     concurrent_num = std::min(tmt.replicaReadMaxThread(), concurrent_num);

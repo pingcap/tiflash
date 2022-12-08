@@ -147,7 +147,6 @@ MakeRegionQueryInfos(
             mvcc_info.regions_query_info.emplace_back(std::move(info));
         }
     }
-    mvcc_info.concurrent = mvcc_info.regions_query_info.size() > 1 ? 1.0 : 0.0;
 
     if (region_need_retry.empty())
         return std::make_tuple(std::nullopt, RegionException::RegionReadStatus::OK);
@@ -556,7 +555,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(logical_table_id, *mvcc_query_info, max_streams, /*for_batch_cop=*/false, context, log);
+    return doLearnerRead(logical_table_id, *mvcc_query_info, /*for_batch_cop=*/false, context, log);
 }
 
 /// Will assign region_retry_from_local_region
@@ -592,7 +591,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(logical_table_id, *mvcc_query_info, max_streams, /*for_batch_cop=*/true, context, log);
+            return doLearnerRead(logical_table_id, *mvcc_query_info, /*for_batch_cop=*/true, context, log);
         }
         catch (const LockException & e)
         {
@@ -645,11 +644,6 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         for (auto & r : mvcc_query_info->regions_query_info)
         {
             ret[r.physical_table_id].mvcc_query_info->regions_query_info.push_back(r);
-        }
-        for (auto & p : ret)
-        {
-            // todo mvcc_query_info->concurrent is not used anymore, should remove it later
-            p.second.mvcc_query_info->concurrent = p.second.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
         }
     }
     else

@@ -172,7 +172,6 @@ public:
     // for test
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)
-        , dummy_query_string("")
         , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(false)
         , is_mpp_task(false)

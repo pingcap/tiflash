@@ -60,8 +60,6 @@ struct MvccQueryInfo
 
     const bool resolve_locks;
 
-    Float32 concurrent = 1.0;
-
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
