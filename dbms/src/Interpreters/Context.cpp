@@ -113,6 +113,7 @@ struct ContextShared
     /// Separate mutex for access of dictionaries. Separate mutex to avoid locks when server doing request to itself.
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
+<<<<<<< HEAD
     mutable std::mutex external_models_mutex;
 
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
@@ -162,6 +163,42 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
+=======
+
+    String path; /// Path to the primary data directory, with a slash at the end.
+    String tmp_path; /// The path to the temporary files that occur when processing the request.
+    String flags_path; /// Path to the directory with some control flags for server maintenance.
+    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
+    PathPool path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
+    ConfigurationPtr config; /// Global configuration settings.
+
+    Databases databases; /// List of databases and tables in them.
+    FormatFactory format_factory; /// Formats.
+    String default_profile_name; /// Default profile name used for default values.
+    String system_profile_name; /// Profile used by system processes
+    std::shared_ptr<ISecurityManager> security_manager; /// Known users.
+    Quotas quotas; /// Known quotas for resource use.
+    mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
+    mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
+    mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
+    mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
+    mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
+    ProcessList process_list; /// Executing queries at the moment.
+    ViewDependencies view_dependencies; /// Current dependencies
+    ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
+    BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
+    BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
+    BackgroundProcessingPoolPtr ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
+    mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
+    MultiVersion<Macros> macros; /// Substitutions extracted from config.
+    size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
+    String format_schema_path; /// Path to a directory that contains schema files used by input formats.
+
+    SharedQueriesPtr shared_queries; /// The cache of shared queries.
+    SchemaSyncServicePtr schema_sync_service; /// Schema sync service instance.
+    PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
+    FileProviderPtr file_provider; /// File provider.
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     IORateLimiter io_rate_limiter;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1466,6 +1503,15 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     if (!shared->blockable_background_pool)
         shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
     return *shared->blockable_background_pool;
+}
+
+BackgroundProcessingPool & Context::getPSBackgroundPool()
+{
+    auto lock = getLock();
+    // use the same size as `background_pool_size`
+    if (!shared->ps_compact_background_pool)
+        shared->ps_compact_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-page-");
+    return *shared->ps_compact_background_pool;
 }
 
 void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
