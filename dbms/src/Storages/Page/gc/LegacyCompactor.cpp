@@ -71,7 +71,11 @@ LegacyCompactor::tryCompact( //
     }
 
     // Build a version_set with snapshot
+<<<<<<< HEAD:dbms/src/Storages/Page/gc/LegacyCompactor.cpp
     auto snapshot = version_set.getSnapshot();
+=======
+    auto snapshot = version_set.getSnapshot(/*tracing_id*/ "", nullptr);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/gc/LegacyCompactor.cpp
     auto wb = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
 
     {

@@ -33,8 +33,7 @@ class PageStorageMultiWriters_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorageMultiWriters_test()
-        : storage()
-        , file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
     {}
 
 protected:
@@ -43,6 +42,7 @@ protected:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
         // default test config
         config.file_roll_size = 4 * MB;
         config.gc_max_valid_rate = 0.5;
@@ -55,20 +55,29 @@ protected:
     {
         auto spool = db_context->getPathPool().withTable("test", "t", false);
         auto delegator = spool.getPSDiskDelegatorSingle("log");
-        auto storage = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
+        auto storage = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, *bkg_pool);
         storage->restore();
         return storage;
     }
 
 protected:
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_storage_multi_writers.cpp
     PageStorage::Config config;
+=======
+    PageStorageConfig config;
+    std::shared_ptr<BackgroundProcessingPool> bkg_pool;
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_storage_multi_writers.cpp
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr file_provider;
 };
 
 struct TestContext
 {
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_storage_multi_writers.cpp
     const DB::PageId MAX_PAGE_ID = 2000;
+=======
+    static constexpr PageId MAX_PAGE_ID = 2000;
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_storage_multi_writers.cpp
 
     std::atomic<bool> running_without_exception = true;
     std::atomic<bool> running_without_timeout = true;
@@ -101,7 +110,6 @@ public:
     PSWriter(const PSPtr & storage_, DB::UInt32 idx, TestContext & ctx_)
         : index(idx)
         , storage(storage_)
-        , gen()
         , bytes_written(0)
         , pages_written(0)
         , ctx(ctx_)
@@ -129,6 +137,7 @@ public:
 
     static void fillAllPages(const PSPtr & storage, TestContext & ctx)
     {
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_storage_multi_writers.cpp
         for (DB::PageId pageId = 0; pageId < ctx.MAX_PAGE_ID; ++pageId)
         {
             DB::MemHolder holder;
@@ -136,9 +145,18 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
+=======
+        for (PageId page_id = 0; page_id < ctx.MAX_PAGE_ID; ++page_id)
+        {
+            MemHolder holder;
+            DB::ReadBufferPtr buff = genRandomData(page_id, holder);
+
+            WriteBatch wb;
+            wb.putPage(page_id, 0, buff, buff->buffer().size());
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_storage_multi_writers.cpp
             storage->write(std::move(wb));
-            if (pageId % 100 == 0)
-                LOG_INFO(&Poco::Logger::get("root"), "writer wrote page" + DB::toString(pageId));
+            if (page_id % 100 == 0)
+                LOG_INFO(&Poco::Logger::get("root"), "writer wrote page" + DB::toString(page_id));
         }
     }
 
@@ -148,6 +166,7 @@ public:
         {
             assert(storage != nullptr);
             std::normal_distribution<> d{ctx.MAX_PAGE_ID / 2.0, 150};
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_storage_multi_writers.cpp
             const DB::PageId pageId = static_cast<DB::PageId>(std::round(d(gen))) % ctx.MAX_PAGE_ID;
 
             DB::MemHolder holder;
@@ -155,6 +174,15 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
+=======
+            const PageId page_id = static_cast<PageId>(std::round(d(gen))) % ctx.MAX_PAGE_ID;
+
+            MemHolder holder;
+            DB::ReadBufferPtr buff = genRandomData(page_id, holder);
+
+            WriteBatch wb;
+            wb.putPage(page_id, 0, buff, buff->buffer().size());
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_storage_multi_writers.cpp
             storage->write(std::move(wb));
             ++pages_written;
             bytes_written += buff->buffer().size();
@@ -272,7 +300,7 @@ public:
 struct StressTimeout
 {
     TestContext & ctx;
-    StressTimeout(TestContext & ctx_)
+    explicit StressTimeout(TestContext & ctx_)
         : ctx(ctx_)
     {}
     void onTime(Poco::Timer & /* t */)

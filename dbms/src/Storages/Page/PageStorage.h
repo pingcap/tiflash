@@ -44,9 +44,34 @@ public:
 
         SettingBool sync_on_write = true;
 
+<<<<<<< HEAD
         SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
         SettingUInt64 file_max_size = PAGE_FILE_MAX_SIZE;
         SettingUInt64 file_small_size = PAGE_FILE_SMALL_SIZE;
+=======
+public:
+    static PageStoragePtr
+    create(
+        String name,
+        PSDiskDelegatorPtr delegator,
+        const PageStorageConfig & config,
+        const FileProviderPtr & file_provider,
+        Context & global_ctx,
+        bool use_v3 = false,
+        bool no_more_insert_to_v2 = false);
+
+    PageStorage(
+        String name,
+        PSDiskDelegatorPtr delegator_,
+        const PageStorageConfig & config_,
+        const FileProviderPtr & file_provider_)
+        : storage_name(std::move(name))
+        , delegator(std::move(delegator_))
+        , config(config_)
+        , file_provider(file_provider_)
+    {
+    }
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
         SettingUInt64 file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
@@ -190,12 +215,21 @@ public:
         PageFileIdAndLevel minFileIDLevel() const;
         WriteBatch::SequenceID minPersistedSequence() const;
 
+<<<<<<< HEAD
         const_iterator find(const PageFileIdAndLevel & id) const { return states.find(id); }
         const_iterator end() const { return states.end(); }
         bool contains(const PageFileIdAndLevel & id) const { return states.count(id) > 0; }
 
         std::map<PageFileIdAndLevel, PersistState> states;
     };
+=======
+    virtual void shutdown() {}
+
+    // Register and unregister external pages GC callbacks
+    // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
+    virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
+    virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

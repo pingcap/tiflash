@@ -153,7 +153,38 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { run_in_compatible_mode = true; });
         fiu_do_on(FailPoints::force_disable_region_persister_compatible_mode, { run_in_compatible_mode = false; });
 
+<<<<<<< HEAD
         if (!run_in_compatible_mode)
+=======
+            if (!use_v1_format)
+            {
+                mergeConfigFromSettings(global_context.getSettingsRef(), config);
+                config.num_write_slots = 4; // extend write slots to 4 at least
+
+                auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
+                    "RegionPersister",
+                    delegator,
+                    config,
+                    provider,
+                    global_context.getPSBackgroundPool());
+                page_storage_v2->restore();
+                page_writer = std::make_shared<PageWriter>(global_run_mode, page_storage_v2, /*storage_v3_*/ nullptr);
+                page_reader = std::make_shared<PageReader>(global_run_mode, ns_id, page_storage_v2, /*storage_v3_*/ nullptr, /*readlimiter*/ global_context.getReadLimiter());
+            }
+            else
+            {
+                LOG_INFO(log, "RegionPersister running in v1 mode");
+                auto c = getV1PSConfig(config);
+                stable_page_storage = std::make_unique<PS::V1::PageStorage>(
+                    "RegionPersister",
+                    delegator->defaultPath(),
+                    c,
+                    provider);
+            }
+            break;
+        }
+        case PageStorageRunMode::ONLY_V3:
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
         {
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
             config.num_write_slots = 4; // extend write slots to 4 at least
@@ -168,9 +199,23 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         else
         {
+<<<<<<< HEAD
             LOG_INFO(log, "RegionPersister running in compatible mode");
             auto c = getStablePSConfig(config);
             stable_page_storage = std::make_unique<DB::stable::PageStorage>( //
+=======
+            // The ps v2 instance will be destroyed soon after transform its data to v3,
+            // so we can safely use some aggressive gc config for it.
+            auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
+                "RegionPersister",
+                delegator,
+                PageStorage::getEasyGCConfig(),
+                provider,
+                global_context.getPSBackgroundPool());
+            // V3 should not used getPSDiskDelegatorRaft
+            // Because V2 will delete all invalid(unrecognized) file when it restore
+            auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
                 "RegionPersister",
                 delegator->defaultPath(),
                 c,

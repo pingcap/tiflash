@@ -5,6 +5,7 @@
 #undef protected
 
 #include <Poco/AutoPtr.h>
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -12,33 +13,49 @@
 namespace DB
 {
 namespace tests
+=======
+#include <Storages/BackgroundProcessingPool.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <TestUtils/TiFlashTestBasic.h>
+
+#include <ext/scope_guard.h>
+#include <type_traits>
+
+namespace DB::PS::V2::tests
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
 {
 template <typename T>
-class PageMapVersionSet_test : public ::testing::Test
+class PageMapVersionSetTest : public ::testing::Test
 {
 public:
-    PageMapVersionSet_test()
-        : log(&Poco::Logger::get("PageMapVersionSet_test"))
+    PageMapVersionSetTest()
+        : log(&Poco::Logger::get("PageMapVersionSetTest"))
     {}
 
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        config_.compact_hint_delta_entries = 1;
-        config_.compact_hint_delta_deletions = 1;
+        config.compact_hint_delta_entries = 1;
+        config.compact_hint_delta_deletions = 1;
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
     }
 
 protected:
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
     ::DB::MVCC::VersionSetConfig config_;
+=======
+    DB::MVCC::VersionSetConfig config;
+    std::shared_ptr<BackgroundProcessingPool> bkg_pool;
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
     Poco::Logger * log;
 };
 
-TYPED_TEST_CASE_P(PageMapVersionSet_test);
+TYPED_TEST_CASE_P(PageMapVersionSetTest);
 
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEdit)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     LOG_TRACE(&Poco::Logger::root(), "init      :" + versions.toDebugString());
     {
         PageEntriesEdit edit;
@@ -60,7 +77,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
         versions.apply(edit);
     }
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     EXPECT_EQ(versions.size(), 1UL);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
@@ -74,10 +91,15 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 
 /// Generate two different snapshot(s1, s2) with apply new edits.
 /// s2 released first, then release s1
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
-    auto s1 = versions.getSnapshot();
+    TypeParam versions("vset_test", this->config, this->log);
+    auto ver_compact_handle
+        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({
+        this->bkg_pool->removeTask(ver_compact_handle);
+    });
+    auto s1 = versions.getSnapshot("", ver_compact_handle);
     EXPECT_EQ(versions.size(), 1UL);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
@@ -91,7 +113,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
 
     // Get snapshot for checking edit is success
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 2:" + versions.toDebugString());
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
@@ -99,21 +121,29 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     // Release snapshot2
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
     /// For VersionSet, size is 2 since A is still hold by s1
     /// For VersionDeltaSet, size is 1 since we do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 2UL);
     else
         EXPECT_EQ(versions.size(), 1UL);
+=======
+
+    /// For VersionDeltaSet, size is 1 since we always do compact with latest tail
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
     // VersionSet, old version removed from version set
     // VersionSetWithDelta, delta version merged
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 
     // Ensure that after old snapshot released, new snapshot get the same content
-    auto s3 = versions.getSnapshot();
+    auto s3 = versions.getSnapshot("", ver_compact_handle);
     entry = s3->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
     s3.reset();
@@ -128,18 +158,24 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     LOG_TRACE(&Poco::Logger::root(), "apply    C:" + versions.toDebugString());
     // VersionSet, new version gen and old version remove at the same time
     // VersionSetWithDelta, C merge to delta
-    EXPECT_EQ(versions.size(), 1UL);
-    auto s4 = versions.getSnapshot();
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
+    auto s4 = versions.getSnapshot("", nullptr);
     entry = s4->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x456UL);
 }
 
 /// Generate two different snapshot(s1, s2) with apply new edits.
 /// s1 released first, then release s2
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock2)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
-    auto s1 = versions.getSnapshot();
+    TypeParam versions("vset_test", this->config, this->log);
+    auto ver_compact_handle
+        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({
+        this->bkg_pool->removeTask(ver_compact_handle);
+    });
+    auto s1 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     PageEntriesEdit edit;
     PageEntry e;
@@ -147,30 +183,43 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
     edit.put(0, e);
     versions.apply(edit);
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", ver_compact_handle);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
     // VersionSet, size decrease to 1 when s1 release
     // VersionSetWithDelta, size is 2 since we can not do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 1UL);
     else
         EXPECT_EQ(versions.size(), 2UL);
+=======
+
+    // VersionSetWithDelta, size is 1 since we always do compact with latest tail
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
 
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 }
 
 /// Generate two different snapshot(s1, s2) with apply new edits.
 /// s1 released first, then release s2
-TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
+TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock3)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
-    auto s1 = versions.getSnapshot();
+    TypeParam versions("vset_test", this->config, this->log);
+    auto ver_compact_handle
+        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({
+        this->bkg_pool->removeTask(ver_compact_handle);
+    });
+    auto s1 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
         PageEntriesEdit edit;
@@ -180,7 +229,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         versions.apply(edit);
     }
     LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", ver_compact_handle);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
@@ -192,12 +241,13 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         versions.apply(edit);
     }
     LOG_TRACE(&Poco::Logger::root(), "apply    C:" + versions.toDebugString());
-    auto s3 = versions.getSnapshot();
+    auto s3 = versions.getSnapshot("", ver_compact_handle);
     entry = s3->version()->at(1);
     ASSERT_EQ(entry.checksum, 0xFFUL);
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
     // VersionSet, size decrease to 2 when s1 release
     // VersionSetWithDelta, size is 3 since we can not do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
@@ -211,10 +261,22 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         EXPECT_EQ(versions.size(), 1UL);
     else
         EXPECT_EQ(versions.size(), 2UL);
+=======
+
+    // VersionSetWithDelta, size is 1 since we always do compact with latest tail
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
+
+    s2.reset();
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
 
     s3.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 3:" + versions.toDebugString());
-    EXPECT_EQ(versions.size(), 1UL);
+    versions.tryCompact();
+    EXPECT_EQ(versions.size(), 1);
 }
 
 namespace
@@ -239,10 +301,15 @@ std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::Snapshot
 
 } // namespace
 
-TYPED_TEST_P(PageMapVersionSet_test, Restore)
+TYPED_TEST_P(PageMapVersionSetTest, Restore)
 {
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
     TypeParam versions("vset_test", this->config_, this->log);
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
+=======
+    TypeParam versions("vset_test", this->config, this->log);
+    // For PageEntriesVersionSetWithDelta, we directly apply edit to versions
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
     {
         // For PageEntriesVersionSet, we need a builder
         auto s1 = versions.getSnapshot();
@@ -289,7 +356,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
         }
     }
 
-    auto s = versions.getSnapshot();
+    auto s = versions.getSnapshot("", nullptr);
     auto entry = s->version()->find(1);
     ASSERT_EQ(entry, std::nullopt);
     auto entry2 = s->version()->find(2);
@@ -304,9 +371,9 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     ASSERT_TRUE(valid_normal_page_ids.count(3) > 0);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
+TYPED_TEST_P(PageMapVersionSetTest, PutOrDelRefPage)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -314,7 +381,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
         edit.put(2, e);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s1->version()->at(2).checksum, 0xfUL);
 
     //  Put RefPage3 -> Page2
@@ -323,7 +390,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
         edit.ref(3, 2);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     auto ensure_snapshot2_status = [&s2]() {
         // Check the ref-count
         auto entry3 = s2->version()->at(3);
@@ -351,7 +418,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s3 = versions.getSnapshot();
+    auto s3 = versions.getSnapshot("", nullptr);
     auto ensure_snapshot3_status = [&s3]() {
         // Check that NormalPage2's ref-count is decreased.
         auto entry3 = s3->version()->at(3);
@@ -378,7 +445,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
         edit.del(3);
         versions.apply(edit);
     }
-    auto s4 = versions.getSnapshot();
+    auto s4 = versions.getSnapshot("", nullptr);
     auto ensure_snapshot4_status = [&s4]() {
         auto entry3 = s4->version()->find(3);
         ASSERT_FALSE(entry3);
@@ -416,9 +483,9 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
     ensure_snapshot4_status();
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
+TYPED_TEST_P(PageMapVersionSetTest, IdempotentDel)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -427,7 +494,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
         edit.ref(3, 2);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s1->version()->at(2).checksum, 0xfUL);
 
     // Del Page2
@@ -436,7 +503,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     {
         auto ref_entry = s2->version()->at(3);
         ASSERT_EQ(ref_entry.checksum, 0xfUL);
@@ -452,7 +519,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s3 = versions.getSnapshot();
+    auto s3 = versions.getSnapshot("", nullptr);
     {
         auto ref_entry = s3->version()->at(3);
         ASSERT_EQ(ref_entry.checksum, 0xfUL);
@@ -463,10 +530,10 @@ TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
     }
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
+TYPED_TEST_P(PageMapVersionSetTest, GcConcurrencyDelPage)
 {
     PageId pid = 0;
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     // Page0 is in PageFile{2, 0} at first
     {
         PageEntriesEdit init_edit;
@@ -495,7 +562,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
     versions.gcApply(gc_edit);
 
     // Page0 don't update to page_map
-    auto snapshot = versions.getSnapshot();
+    auto snapshot = versions.getSnapshot("", nullptr);
     auto entry = snapshot->version()->find(pid);
     ASSERT_EQ(entry, std::nullopt);
 }
@@ -508,14 +575,14 @@ static void EXPECT_PagePos_LT(PageFileIdAndLevel p0, PageFileIdAndLevel p1)
 }
 #pragma clang diagnostic pop
 
-TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
+TYPED_TEST_P(PageMapVersionSetTest, GcPageMove)
 {
     EXPECT_PagePos_LT({4, 0}, {5, 1});
     EXPECT_PagePos_LT({5, 0}, {5, 1});
     EXPECT_PagePos_LT({5, 1}, {6, 1});
     EXPECT_PagePos_LT({5, 2}, {6, 1});
 
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
 
     const PageId pid = 0;
     const PageId ref_pid = 1;
@@ -541,7 +608,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     }
 
     // Page get updated
-    auto snapshot = versions.getSnapshot();
+    auto snapshot = versions.getSnapshot("", nullptr);
     PageEntry entry = snapshot->version()->at(pid);
     ASSERT_TRUE(entry.isValid());
     ASSERT_EQ(entry.file_id, 5ULL);
@@ -556,10 +623,10 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     ASSERT_EQ(entry.ref, 2u);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
+TYPED_TEST_P(PageMapVersionSetTest, GcConcurrencySetPage)
 {
     const PageId pid = 0;
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
 
 
     // gc move Page0 -> PageFile{5,1}
@@ -585,16 +652,16 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
     versions.gcApply(gc_edit);
 
     // read
-    auto snapshot = versions.getSnapshot();
+    auto snapshot = versions.getSnapshot("", nullptr);
     const PageEntry entry = snapshot->version()->at(pid);
     ASSERT_TRUE(entry.isValid());
     ASSERT_EQ(entry.file_id, 6ULL);
     ASSERT_EQ(entry.level, 0U);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
+TYPED_TEST_P(PageMapVersionSetTest, UpdateOnRefPage)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -603,7 +670,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
         edit.ref(3, 2);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s1->version()->at(2).checksum, 0xfUL);
     ASSERT_EQ(s1->version()->at(3).checksum, 0xfUL);
 
@@ -615,12 +682,12 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
         edit.put(3, e);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s2->version()->at(3).checksum, 0xffUL);
     ASSERT_EQ(s2->version()->at(2).checksum, 0xffUL);
     s2.reset();
     s1.reset();
-    auto s3 = versions.getSnapshot();
+    auto s3 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s3->version()->at(3).checksum, 0xffUL);
     ASSERT_EQ(s3->version()->at(2).checksum, 0xffUL);
     //s3.reset();
@@ -631,7 +698,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s4 = versions.getSnapshot();
+    auto s4 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s4->version()->find(2), std::nullopt);
     ASSERT_EQ(s4->version()->at(3).checksum, 0xffUL);
     s4.reset();
@@ -639,14 +706,14 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
     ASSERT_EQ(s3->version()->at(3).checksum, 0xffUL);
     s3.reset();
 
-    auto s5 = versions.getSnapshot();
+    auto s5 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s5->version()->find(2), std::nullopt);
     ASSERT_EQ(s5->version()->at(3).checksum, 0xffUL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
+TYPED_TEST_P(PageMapVersionSetTest, UpdateOnRefPage2)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -656,7 +723,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s1->version()->find(2), std::nullopt);
     ASSERT_EQ(s1->version()->at(3).checksum, 0xfUL);
 
@@ -668,14 +735,14 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     ASSERT_EQ(s2->version()->find(2), std::nullopt);
     ASSERT_EQ(s2->version()->at(3).checksum, 0x9UL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
+TYPED_TEST_P(PageMapVersionSetTest, IsRefId)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     {
         PageEntriesEdit edit;
         PageEntry e;
@@ -684,7 +751,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
         edit.ref(2, 1);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
     bool is_ref;
     PageId normal_page_id;
     std::tie(is_ref, normal_page_id) = s1->version()->isRefId(2);
@@ -696,14 +763,14 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     std::tie(is_ref, normal_page_id) = s2->version()->isRefId(2);
     ASSERT_FALSE(is_ref);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
+TYPED_TEST_P(PageMapVersionSetTest, Snapshot)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
     ASSERT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit init_edit;
@@ -716,7 +783,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
         ASSERT_EQ(versions.size(), 1UL);
     }
 
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
 
     // Apply edit that
     // * update Page 0 with checksum = 0x456
@@ -735,7 +802,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     ASSERT_EQ(s1->version()->at(0).checksum, 0x123UL);
     ASSERT_EQ(s1->version()->at(1).checksum, 0x1234UL);
 
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     auto p0 = s2->version()->find(0);
     ASSERT_NE(p0, std::nullopt);
     ASSERT_EQ(p0->checksum, 0x456UL); // entry is updated in snapshot 2
@@ -779,9 +846,9 @@ String livePagesToString(const std::set<PageId> & ids)
 
 } // namespace
 
-TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
+TYPED_TEST_P(PageMapVersionSetTest, LiveFiles)
 {
-    TypeParam versions("vset_test", this->config_, this->log);
+    TypeParam versions("vset_test", this->config, this->log);
 
     {
         PageEntriesEdit edit;
@@ -795,7 +862,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
         edit.put(2, e);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
+    auto s1 = versions.getSnapshot("", nullptr);
     {
         PageEntriesEdit edit;
         edit.del(0);
@@ -805,13 +872,13 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
         edit.put(3, e);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2 = versions.getSnapshot("", nullptr);
     {
         PageEntriesEdit edit;
         edit.del(3);
         versions.apply(edit);
     }
-    auto s3 = versions.getSnapshot();
+    auto s3 = versions.getSnapshot("", nullptr);
     s3.reset(); // do compact on version-list, and
     //std::cerr << "s3 reseted." << std::endl;
     auto [livefiles, live_normal_pages] = versions.listAllLiveFiles(versions.acquireForLock());
@@ -849,7 +916,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
     EXPECT_GT(live_normal_pages.count(2), 0UL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
+TYPED_TEST_P(PageMapVersionSetTest, PutOnTombstonePageEntry)
 {
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSetWithDelta>)
     {
@@ -865,7 +932,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
             edit.put(page_id, e);
             versions.apply(edit);
         }
-        auto s1 = versions.getSnapshot();
+        auto s1 = versions.getSnapshot("", nullptr);
 
         {
             // Then delete that page, because there is read lock on previouse version,
@@ -874,7 +941,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
             edit.del(page_id);
             versions.apply(edit);
             // Now there is a tombstone on current version.
-            auto s2 = versions.getSnapshot();
+            auto s2 = versions.getSnapshot("", nullptr);
             auto entry = s2->version()->find(page_id);
             ASSERT_FALSE(entry); // Get tombstone by find return nullopt
             auto normal_entry = s2->version()->findNormalPageEntry(page_id);
@@ -890,7 +957,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
             e.checksum = 0x6;
             edit.put(page_id, e);
             versions.apply(edit);
-            auto s3 = versions.getSnapshot();
+            auto s3 = versions.getSnapshot("", nullptr);
             auto entry = s3->version()->find(page_id);
             ASSERT_TRUE(entry);
             ASSERT_EQ(entry->ref, 1UL);
@@ -900,7 +967,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
     }
 }
 
-REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
+REGISTER_TYPED_TEST_CASE_P(PageMapVersionSetTest,
                            ApplyEdit,
                            ApplyEditWithReadLock,
                            ApplyEditWithReadLock2,
@@ -918,8 +985,13 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            LiveFiles,
                            PutOnTombstonePageEntry);
 
+<<<<<<< HEAD:dbms/src/Storages/Page/tests/gtest_page_map_version_set.cpp
 using VersionSetTypes = ::testing::Types<PageEntriesVersionSet, PageEntriesVersionSetWithDelta>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
+=======
+using VersionSetTypes = ::testing::Types<PageEntriesVersionSetWithDelta>;
+INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSetTest, VersionSetTypes);
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446)):dbms/src/Storages/Page/V2/tests/gtest_page_map_version_set.cpp
 
 
 } // namespace tests
