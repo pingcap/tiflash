@@ -31,7 +31,7 @@ PageStoragePtr PageStorage::create(
     if (use_v3)
         return std::make_shared<PS::V3::PageStorageImpl>(name, delegator, config, file_provider);
     else
-        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider, global_ctx, no_more_insert_to_v2);
+        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider, global_ctx.getPSBackgroundPool(), no_more_insert_to_v2);
 }
 
 /***************************
