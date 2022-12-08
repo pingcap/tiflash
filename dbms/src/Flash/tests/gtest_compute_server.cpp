@@ -513,17 +513,17 @@ try
     constexpr uint64_t enable = 8;
     constexpr uint64_t disable = 0;
 
-    for (size_t i = 0; i < join_type_num; ++i)
+    for (auto join_type : join_types)
     {
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto request = context
                            .scan("test_db", "l_table_2")
-                           .join(context.scan("test_db", "r_table_2"), join_types[i], {col("s1"), col("s2")}, disable);
+                           .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, disable);
         const auto expected_cols = buildAndExecuteMPPTasks(request);
 
         auto request2 = context
                             .scan("test_db", "l_table_2")
-                            .join(context.scan("test_db", "r_table_2"), join_types[i], {col("s1"), col("s2")}, enable);
+                            .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, enable);
         auto tasks = request2.buildMPPTasks(context, properties);
         for (auto & task : tasks)
         {
