@@ -46,7 +46,7 @@ The following diagram shows a simple correspondence between records and bitmaps.
 
 1. We can directly use `Segment::getInputStream` to iterate through the three columns of handle, version, tag to generate an ordered stream of data.
 2. However, the current input stream does not contain the position of the record on the array, so a "virtual column" needs to be added to indicate the record position. This "virtual column" will be called `SegmentRowIdCol` later.
-3. In order to generate the `SegmentRowIdCol`, some changes need to be made to the read interface of Delta and Stable
+3. In order to generate the `SegmentRowIdCol`, some changes need to be made to the read interface of Delta and Stable.
 4. After the `SegmentRowIdCol` is generated, set the corresponding position on the bitmap to 1.
 
 ### Read Columns with Bitmap Filter
