@@ -65,19 +65,19 @@ DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
 
 DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
 {
-    if (const ASTFunction * func = typeid_cast<const ASTFunction *>(ast.get()))
+    if (const auto * func = typeid_cast<const ASTFunction *>(ast.get()))
     {
         if (func->parameters)
             throw Exception("Data type cannot have multiple parenthesed parameters.", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
         return get(func->name, func->arguments);
     }
 
-    if (const ASTIdentifier * ident = typeid_cast<const ASTIdentifier *>(ast.get()))
+    if (const auto * ident = typeid_cast<const ASTIdentifier *>(ast.get()))
     {
         return get(ident->name, {});
     }
 
-    if (const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(ast.get()))
+    if (const auto * lit = typeid_cast<const ASTLiteral *>(ast.get()))
     {
         if (lit->value.isNull())
             return get("Null", {});
@@ -89,14 +89,14 @@ DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
 DataTypePtr DataTypeFactory::get(const String & family_name, const ASTPtr & parameters) const
 {
     {
-        DataTypesDictionary::const_iterator it = data_types.find(family_name);
+        auto it = data_types.find(family_name);
         if (data_types.end() != it)
             return it->second(parameters);
     }
 
     {
         String family_name_lowercase = Poco::toLower(family_name);
-        DataTypesDictionary::const_iterator it = case_insensitive_data_types.find(family_name_lowercase);
+        auto it = case_insensitive_data_types.find(family_name_lowercase);
         if (case_insensitive_data_types.end() != it)
             return it->second(parameters);
     }
