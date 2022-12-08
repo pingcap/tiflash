@@ -245,7 +245,12 @@ void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
                     pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
                     this->cluster->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
                     need_retry = false;
-                    auto resp = rpc_call.getResp();
+                    const auto & resp = rpc_call.getResp();
+                    if (resp->has_error())
+                    {
+                        this->setDispatchMPPTaskErrMsg(resp->error().msg());
+                        return;
+                    }
                     for (const auto & retry_region : resp->retry_regions())
                     {
                         auto region_id = pingcap::kv::RegionVerID(
@@ -297,8 +302,11 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
     for (auto i = 0; i < sender_task_size; ++i)
     {
         auto sender_task = std::make_unique<mpp::TaskMeta>();
-        if (!sender_task->ParseFromString(exchange_receiver_meta.encoded_task_meta(i)))
-            throw Exception("parse task meta error!");
+        if (unlikely(!sender_task->ParseFromString(exchange_receiver_meta.encoded_task_meta(i))))
+        {
+            LOG_INFO(log, "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, will ignore this error");
+            return;
+        }
         auto cancel_req = std::make_shared<mpp::CancelTaskRequest>();
         cancel_req->set_allocated_meta(sender_task.release());
         auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::CancelTaskRequest>>(cancel_req);
@@ -308,6 +316,9 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
                 auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
                 // No need to retry.
                 this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
+                const auto & resp = rpc_call.getResp();
+                if (resp->has_error())
+                    throw Exception(resp->error().msg());
             }
             catch (...)
             {
