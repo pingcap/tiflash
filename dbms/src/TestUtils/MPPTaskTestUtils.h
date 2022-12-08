@@ -23,7 +23,6 @@
 
 namespace DB::tests
 {
-
 DAGProperties getDAGPropertiesForTest(int server_num);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
@@ -83,6 +82,7 @@ public:
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
+    ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
