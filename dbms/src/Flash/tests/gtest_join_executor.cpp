@@ -537,6 +537,30 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, JoinWithNullTable)
+try
+{
+    context.addMockTable("null_test", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+    context.addMockTable("null_test", "null_table", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toVec<Int32>("c", {})});
+
+    auto request = context
+                       .scan("null_test", "null_table")
+                       .join(context.scan("null_test", "t"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+    {
+        executeAndAssertColumnsEqual(request, {});
+    }
+
+    request = context
+                  .scan("null_test", "t")
+                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                  .build(context);
+    {
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+    }
+}
+CATCH
+
 
 // Currently only support join with `using`
 TEST_F(JoinExecutorTestRunner, RawQuery)

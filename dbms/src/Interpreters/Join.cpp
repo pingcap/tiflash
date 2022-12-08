@@ -1704,7 +1704,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
             }
         }
 
-        updateStartRow(probe_process_info);
+        probe_process_info.updateStartRow();
     }
 
     /// handle other conditions
@@ -1987,11 +1987,6 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
     }
 }
 
-void Join::getHeader(Block & block, size_t stream_index) const
-{
-    joinBlock(block, stream_index);
-}
-
 Block Join::joinBlock(size_t stream_index) const
 {
     Block block = probe_process_infos[stream_index]->block;
@@ -2001,7 +1996,7 @@ Block Join::joinBlock(size_t stream_index) const
 
 void Join::joinBlock(Block & block, size_t stream_index) const
 {
-    //    std::cerr << "joinBlock: " << block.dumpStructure() << "\n";
+    RUNTIME_CHECK(probe_initialized);
 
     // ck will use this function to generate header, that's why here is a check.
     {
@@ -2013,12 +2008,6 @@ void Join::joinBlock(Block & block, size_t stream_index) const
     }
 
     std::shared_lock lock(rwlock);
-
-    // one block only need check one time.
-    if (probe_process_infos[stream_index]->all_rows_joined_finish)
-    {
-        checkTypesOfKeys(block, sample_block_with_keys);
-    }
 
     /// TODO: after we bumping to C++20, use `using enum` to simplify code here.
     /// using enum ASTTableJoin::Strictness;
@@ -2120,6 +2109,7 @@ void Join::joinTotals(Block & block) const
 
 void Join::setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 max_block_size)
 {
+    RUNTIME_CHECK(max_block_size > 0);
     if (unlikely(probe_concurrency))
         throw Exception("Logical error: `setProbeConcurrencyAndMaxBlockSize` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
     probe_concurrency = std::max(1, probe_concurrency_);
@@ -2404,11 +2394,6 @@ BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sampl
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
-void Join::updateStartRow(ProbeProcessInfo & probe_process_info)
-{
-    probe_process_info.start_row = probe_process_info.end_row;
-}
-
 bool Join::needGetNewBlock(size_t stream_index)
 {
     return probe_process_infos[stream_index]->all_rows_joined_finish;
@@ -2416,6 +2401,7 @@ bool Join::needGetNewBlock(size_t stream_index)
 
 void Join::updateProcessBlock(Block && block, size_t stream_index)
 {
+    checkTypesOfKeys(block, sample_block_with_keys);
     probe_process_infos[stream_index]->setAndInit(std::move(block));
 }
 
@@ -2426,6 +2412,12 @@ void Join::ProbeProcessInfo::setAndInit(Block && block_)
     end_row = 0;
     all_rows_joined_finish = true;
     block_full = false;
+}
+
+void Join::ProbeProcessInfo::updateStartRow()
+{
+    assert(start_row <= end_row);
+    start_row = end_row;
 }
 
 

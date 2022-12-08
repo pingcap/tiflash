@@ -60,7 +60,7 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
-    join->getHeader(res, concurrency_probe_index);
+    join->joinBlock(res, concurrency_probe_index);
     return res;
 }
 

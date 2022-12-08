@@ -126,8 +126,6 @@ public:
 
     Block joinBlock(size_t stream_index = 0) const;
 
-    void getHeader(Block & block, size_t stream_index = 0) const;
-
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
     void setTotals(const Block & block) { totals = block; }
@@ -219,6 +217,7 @@ public:
             : max_block_size(max_block_size_){};
 
         void setAndInit(Block && block_);
+        void updateStartRow();
     };
 
     using ProbeProcessInfoPtr = std::unique_ptr<ProbeProcessInfo>;
@@ -439,8 +438,6 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
-
-    static void updateStartRow(ProbeProcessInfo & probe_process_info);
 };
 
 using JoinPtr = std::shared_ptr<Join>;
