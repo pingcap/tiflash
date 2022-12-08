@@ -415,7 +415,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -430,6 +430,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,
+                               scan_context_,
                                tracing_id);
     return DMContextPtr(ctx);
 }
@@ -560,7 +561,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
             if (unlikely(cur_offset != offset))
-                throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("cur_offset does not equal to offset. is_common_handle {} start_key {} cur_offset {} cur_limit {} rows {} offset {} rowkey_range {}", is_common_handle, start_key.toRowKeyValue().toString(), cur_offset, cur_limit, rows, offset, rowkey_range.toDebugString()), ErrorCodes::LOGICAL_ERROR);
 
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
@@ -901,11 +902,10 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
+    size_t final_num_stream = std::min(num_streams, tasks.size());
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
-    // We can use num_streams as parallelism when read thread is enabled.
-    size_t final_num_stream = enable_read_thread ? num_streams : std::min(num_streams, tasks.size());
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -920,23 +920,21 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         enable_read_thread);
 
     BlockInputStreams res;
-    if (enable_read_thread)
+    for (size_t i = 0; i < final_num_stream; ++i)
     {
-        for (size_t i = 0; i < final_num_stream; ++i)
+        BlockInputStreamPtr stream;
+        if (enable_read_thread)
         {
-            res.emplace_back(std::make_shared<UnorderedInputStream>(
+            stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                req_info));
+                req_info);
         }
-    }
-    else
-    {
-        for (size_t i = 0; i < final_num_stream; ++i)
+        else
         {
-            res.emplace_back(std::make_shared<DMSegmentThreadInputStream>(
+            stream = std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -947,8 +945,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 /* read_mode */ ReadMode::Raw,
                 extra_table_id_index,
                 physical_table_id,
-                req_info));
+                req_info);
         }
+        res.push_back(stream);
     }
     return res;
 }
@@ -965,10 +964,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index)
+                                        size_t extra_table_id_index,
+                                        const ScanContextPtr & scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
-    auto dm_context = newDMContext(db_context, db_settings, tracing_id);
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+
     // If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
@@ -989,8 +990,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    // We can use num_streams as parallelism when read thread is enabled.
-    size_t final_num_stream = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
+    size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1005,23 +1005,21 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         enable_read_thread);
 
     BlockInputStreams res;
-    if (enable_read_thread)
+    for (size_t i = 0; i < final_num_stream; ++i)
     {
-        for (size_t i = 0; i < final_num_stream; ++i)
+        BlockInputStreamPtr stream;
+        if (enable_read_thread)
         {
-            res.emplace_back(std::make_shared<UnorderedInputStream>(
+            stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                log_tracing_id));
+                log_tracing_id);
         }
-    }
-    else
-    {
-        for (size_t i = 0; i < final_num_stream; ++i)
+        else
         {
-            res.emplace_back(std::make_shared<DMSegmentThreadInputStream>(
+            stream = std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -1032,8 +1030,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
                 extra_table_id_index,
                 physical_table_id,
-                log_tracing_id));
+                log_tracing_id);
         }
+        res.push_back(stream);
     }
     LOG_DEBUG(tracing_logger, "Read create stream done");
 

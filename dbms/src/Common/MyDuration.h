@@ -41,6 +41,12 @@ private:
     static constexpr Int64 NANOS_PER_MINUTE = 60 * NANOS_PER_SECOND;
     static constexpr Int64 NANOS_PER_HOUR = 60 * NANOS_PER_MINUTE;
 
+    static const int8_t DefaultFsp = 6;
+
+    Int64 nanos;
+    UInt8 fsp;
+
+public:
     static constexpr Int64 MAX_HOUR_PART = 838;
     static constexpr Int64 MAX_MINUTE_PART = 59;
     static constexpr Int64 MAX_SECOND_PART = 59;
@@ -48,12 +54,6 @@ private:
     static constexpr Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
     static_assert(MAX_NANOS > 0);
 
-    static const int8_t DefaultFsp = 6;
-
-    Int64 nanos;
-    UInt8 fsp;
-
-public:
     MyDuration() = default;
     explicit MyDuration(Int64 nanos_)
         : nanos(nanos_)

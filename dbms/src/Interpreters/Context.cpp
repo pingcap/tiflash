@@ -1285,7 +1285,7 @@ void Context::setMarkCache(size_t cache_size_in_bytes)
     if (shared->mark_cache)
         throw Exception("Mark cache has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->mark_cache = std::make_shared<MarkCache>(cache_size_in_bytes, std::chrono::seconds(settings.mark_cache_min_lifetime));
+    shared->mark_cache = std::make_shared<MarkCache>(cache_size_in_bytes);
 }
 
 
@@ -1311,7 +1311,7 @@ void Context::setMinMaxIndexCache(size_t cache_size_in_bytes)
     if (shared->minmax_index_cache)
         throw Exception("Minmax index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->minmax_index_cache = std::make_shared<DM::MinMaxIndexCache>(cache_size_in_bytes, std::chrono::seconds(settings.mark_cache_min_lifetime));
+    shared->minmax_index_cache = std::make_shared<DM::MinMaxIndexCache>(cache_size_in_bytes);
 }
 
 DM::MinMaxIndexCachePtr Context::getMinMaxIndexCache() const
