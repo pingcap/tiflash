@@ -19,7 +19,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -136,7 +136,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
         pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
 
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDagContext()->final_concurrency, log);
     }
     else
     {

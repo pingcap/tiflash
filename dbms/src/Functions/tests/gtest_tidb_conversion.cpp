@@ -920,7 +920,7 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({-999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}));
 
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
     dag_context->clearWarnings();
@@ -1167,7 +1167,7 @@ try
     // in default mode
     // for round test, tidb throw warnings: Truncated incorrect DECIMAL value: xxx
     // tiflash is same as mysql, don't throw warnings.
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     dag_context->clearWarnings();
@@ -1750,7 +1750,7 @@ try
     ASSERT_FALSE(FunctionTiDBCast<>::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
 
     // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so CastInternalType should be **Int64**.
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
     dag_context->clearWarnings();
@@ -1942,7 +1942,7 @@ CATCH
 TEST_F(TestTidbConversion, castStringAsDateTime3595)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     auto to_datetime_column = createConstColumn<String>(1, "Nullable(MyDateTime(6))");
     ColumnWithTypeAndName expect_datetime_column(

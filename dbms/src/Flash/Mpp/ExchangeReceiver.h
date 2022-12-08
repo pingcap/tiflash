@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>

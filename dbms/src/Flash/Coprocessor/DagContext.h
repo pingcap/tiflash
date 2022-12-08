@@ -123,11 +123,11 @@ constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
 /// A context used to track the information that needs to be passed around during DAG planning.
-class DAGContext
+class DagContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    explicit DAGContext(const tipb::DAGRequest & dag_request_)
+    explicit DagContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
@@ -147,7 +147,7 @@ public:
     }
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
+    DagContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
@@ -170,7 +170,7 @@ public:
     }
 
     // for test
-    explicit DAGContext(UInt64 max_error_count_)
+    explicit DagContext(UInt64 max_error_count_)
         : dag_request(nullptr)
         , dummy_query_string("")
         , dummy_ast(makeDummyQuery())
@@ -185,7 +185,7 @@ public:
     {}
 
     // for tests need to run query tasks.
-    explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
+    explicit DagContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/Planner.h>
@@ -40,9 +40,9 @@ BlockIO Planner::execute()
     return res;
 }
 
-DAGContext & Planner::dagContext() const
+DagContext & Planner::dagContext() const
 {
-    return *context.getDAGContext();
+    return *context.getDagContext();
 }
 
 void Planner::executeImpl(DAGPipeline & pipeline)

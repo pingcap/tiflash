@@ -63,7 +63,7 @@ void JoinStatistics::collectExtraRuntimeDetail()
     }
 }
 
-JoinStatistics::JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+JoinStatistics::JoinStatistics(const tipb::Executor * executor, DagContext & dag_context_)
     : JoinStatisticsBase(executor, dag_context_)
 {}
 } // namespace DB

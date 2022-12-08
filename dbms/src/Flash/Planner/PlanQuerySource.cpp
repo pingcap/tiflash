@@ -27,12 +27,12 @@ std::tuple<std::string, ASTPtr> PlanQuerySource::parse(size_t)
     // this is a way to avoid NPE when the MergeTreeDataSelectExecutor trying
     // to extract key range of the query.
     // todo find a way to enable key range extraction for dag query
-    return {getDAGContext().dummy_query_string, getDAGContext().dummy_ast};
+    return {getDagContext().dummy_query_string, getDagContext().dummy_ast};
 }
 
 String PlanQuerySource::str(size_t)
 {
-    return getDAGContext().dummy_query_string;
+    return getDagContext().dummy_query_string;
 }
 
 std::unique_ptr<IInterpreter> PlanQuerySource::interpreter(Context &, QueryProcessingStage::Enum)

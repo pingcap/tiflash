@@ -19,7 +19,7 @@
 #include <Common/hex.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsRound.h>
@@ -5239,7 +5239,7 @@ private:
             {
                 const auto & msg = genWarningMsg("NULL");
                 for (size_t i = 0; i != column_size; ++i)
-                    context.getDAGContext()->appendWarning(msg);
+                    context.getDagContext()->appendWarning(msg);
             }
             else
             {
@@ -5248,7 +5248,7 @@ private:
                 {
                     const auto & msg = genWarningMsg(value);
                     for (size_t i = 0; i != column_size; ++i)
-                        context.getDAGContext()->appendWarning(msg);
+                        context.getDagContext()->appendWarning(msg);
                 }
             }
         }
@@ -5259,12 +5259,12 @@ private:
             {
                 locale_raw->get(i, locale_field);
                 if (locale_field.isNull())
-                    context.getDAGContext()->appendWarning(genWarningMsg("NULL"));
+                    context.getDagContext()->appendWarning(genWarningMsg("NULL"));
                 else
                 {
                     String value = locale_field.get<String>();
                     if (!boost::iequals(value, supported_locale))
-                        context.getDAGContext()->appendWarning(genWarningMsg(value));
+                        context.getDagContext()->appendWarning(genWarningMsg(value));
                 }
             }
         }
@@ -5277,8 +5277,8 @@ private:
 
     static const Context & checkDagContextIsValid(const Context & context_)
     {
-        if (!context_.getDAGContext())
-            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        if (!context_.getDagContext())
+            throw Exception("DagContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
         return context_;
     }
 };

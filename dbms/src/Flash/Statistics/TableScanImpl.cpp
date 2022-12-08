@@ -60,7 +60,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
     }
 }
 
-TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, DagContext & dag_context_)
     : TableScanStatisticsBase(executor, dag_context_)
 {}
 } // namespace DB

@@ -87,7 +87,7 @@ private:
 
     std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
-    DAGContext & dagContext() const;
+    DagContext & dagContext() const;
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 

@@ -34,7 +34,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
-    DAGContext & dag_context_)
+    DagContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , writer(writer_)

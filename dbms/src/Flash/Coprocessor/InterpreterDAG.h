@@ -21,7 +21,7 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/IInterpreter.h>
 
@@ -45,7 +45,7 @@ public:
 private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block);
 
-    DAGContext & dagContext() const;
+    DagContext & dagContext() const;
 
     Context & context;
     const DAGQuerySource & dag;

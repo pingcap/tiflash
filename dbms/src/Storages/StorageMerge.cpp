@@ -24,7 +24,7 @@
 #include <DataStreams/narrowBlockInputStreams.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/IDatabase.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -307,7 +307,7 @@ BlockInputStreams StorageMerge::read(
                     BlockInputStreamPtr stream = streams.size() > 1
                         ? std::make_shared<ConcatBlockInputStream>(
                             streams,
-                            context.getDAGContext() ? context.getDAGContext()->log->identifier() : /*req_id=*/"")
+                            context.getDagContext() ? context.getDagContext()->log->identifier() : /*req_id=*/"")
                         : streams[0];
 
                     if (has_table_virtual_column)

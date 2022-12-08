@@ -255,7 +255,7 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
         };
 
     // we will not prune column in executor test
-    // since it doesn't call initOutputInfo in DAGContext
+    // since it doesn't call initOutputInfo in DagContext
     if (!context.isExecutorTest())
     {
         /// finalize

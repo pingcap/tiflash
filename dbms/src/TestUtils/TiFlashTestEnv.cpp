@@ -14,7 +14,7 @@
 
 #include <Common/UnifiedLogFormatter.h>
 #include <Encryption/MockKeyManager.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>

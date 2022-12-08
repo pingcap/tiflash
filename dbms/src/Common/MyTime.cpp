@@ -645,7 +645,7 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result)
 }
 
 // Convert a integer number to DateTime and return true if the result is NULL.
-// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DagContext.
 // This function may throw exception.
 inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate)
 {

@@ -61,7 +61,7 @@ public:
 
     void initializeClientInfo();
 
-    DAGContext & getDAGContext();
+    DagContext & getDagContext();
 
     void enablePlanner(bool is_enable);
 
@@ -105,7 +105,7 @@ private:
 
 protected:
     MockDAGRequestContext context;
-    std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DagContext> dag_context_ptr;
 };
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));

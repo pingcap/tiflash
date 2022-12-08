@@ -71,7 +71,7 @@ public:
         }
     }
 
-    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DAGContext *)
+    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DagContext *)
     {
         if (expect_error)
         {

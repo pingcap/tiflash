@@ -21,7 +21,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
 #include <DataStreams/copyData.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <IO/ConcatReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/IQuerySource.h>
@@ -79,7 +79,7 @@ String joinLines(const String & query)
 
 LoggerPtr getLogger(const Context & context)
 {
-    auto * dag_context = context.getDAGContext();
+    auto * dag_context = context.getDagContext();
     return (dag_context && dag_context->log)
         ? dag_context->log
         : Logger::get();

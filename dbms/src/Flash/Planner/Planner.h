@@ -22,7 +22,7 @@
 namespace DB
 {
 class Context;
-class DAGContext;
+class DagContext;
 
 class Planner : public IInterpreter
 {
@@ -36,7 +36,7 @@ public:
     BlockIO execute() override;
 
 private:
-    DAGContext & dagContext() const;
+    DagContext & dagContext() const;
 
     void executeImpl(DAGPipeline & pipeline);
 

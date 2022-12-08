@@ -52,7 +52,7 @@ private:
 
     void pushBack(const PhysicalPlanNodePtr & plan);
 
-    DAGContext & dagContext() const;
+    DagContext & dagContext() const;
 
     void buildTableScan(const String & executor_id, const tipb::Executor * executor);
 

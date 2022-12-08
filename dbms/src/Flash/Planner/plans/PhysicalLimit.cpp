@@ -14,7 +14,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/LimitBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>

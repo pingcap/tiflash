@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
@@ -121,7 +121,7 @@ private:
 
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
-    std::unique_ptr<DAGContext> dag_context;
+    std::unique_ptr<DagContext> dag_context;
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
 

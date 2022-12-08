@@ -15,7 +15,7 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
@@ -432,7 +432,7 @@ LearnerReadSnapshot doLearnerRead(
         num_regions,
         concurrent_num);
 
-    if (auto * dag_context = context.getDAGContext())
+    if (auto * dag_context = context.getDagContext())
     {
         dag_context->has_read_wait_index = true;
         dag_context->read_wait_index_start_timestamp = start_time;

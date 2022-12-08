@@ -22,7 +22,7 @@ namespace DB
 {
 RemoteRequest RemoteRequest::build(
     const RegionRetryList & retry_regions,
-    DAGContext & dag_context,
+    DagContext & dag_context,
     const TiDBTableScan & table_scan,
     const TiDB::TableInfo & table_info,
     const PushDownFilter & push_down_filter,

@@ -54,7 +54,7 @@ using ExchangeSenderStatisticsBase = ExecutorStatistics<ExchangeSenderImpl>;
 class ExchangeSenderStatistics : public ExchangeSenderStatisticsBase
 {
 public:
-    ExchangeSenderStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
+    ExchangeSenderStatistics(const tipb::Executor * executor, DagContext & dag_context_);
 
 private:
     UInt16 partition_num;

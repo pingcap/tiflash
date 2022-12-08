@@ -17,7 +17,7 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgNaturalDag.h>
 #include <Debug/dbgTools.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Interpreters/Context.h>

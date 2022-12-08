@@ -52,7 +52,7 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type)
     }
 }
 
-DAGContext & ExecutorTest::getDAGContext()
+DagContext & ExecutorTest::getDagContext()
 {
     assert(dag_context_ptr != nullptr);
     return *dag_context_ptr;
@@ -60,7 +60,7 @@ DAGContext & ExecutorTest::getDAGContext()
 
 void ExecutorTest::initializeContext()
 {
-    dag_context_ptr = std::make_unique<DAGContext>(1024);
+    dag_context_ptr = std::make_unique<DagContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
     dag_context_ptr->log = Logger::get("executorTest");
     TiFlashTestEnv::getGlobalContext().setExecutorTest();
@@ -94,8 +94,8 @@ void ExecutorTest::initializeClientInfo()
 
 void ExecutorTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    DAGContext dag_context(*request, "interpreter_test", concurrency);
-    context.context.setDAGContext(&dag_context);
+    DagContext dag_context(*request, "interpreter_test", concurrency);
+    context.context.setDagContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
@@ -224,10 +224,10 @@ void ExecutorTest::enablePlanner(bool is_enable)
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    DAGContext dag_context(*request, "executor_test", concurrency);
+    DagContext dag_context(*request, "executor_test", concurrency);
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());
-    context.context.setDAGContext(&dag_context);
+    context.context.setDagContext(&dag_context);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
     queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();

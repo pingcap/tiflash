@@ -47,7 +47,7 @@ using TableScanStatisticsBase = ExecutorStatistics<TableScanImpl>;
 class TableScanStatistics : public TableScanStatisticsBase
 {
 public:
-    TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
+    TableScanStatistics(const tipb::Executor * executor, DagContext & dag_context_);
 
 private:
     TableScanDetail local_table_scan_detail{true};

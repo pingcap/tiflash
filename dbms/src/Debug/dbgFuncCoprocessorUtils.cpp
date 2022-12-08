@@ -34,7 +34,7 @@ std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
 DAGSchema getSelectSchema(Context & context)
 {
     DAGSchema schema;
-    auto * dag_context = context.getDAGContext();
+    auto * dag_context = context.getDagContext();
     auto result_field_types = dag_context->result_field_types;
     for (size_t i = 0; i < result_field_types.size(); ++i)
     {

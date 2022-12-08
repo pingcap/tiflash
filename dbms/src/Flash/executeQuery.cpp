@@ -14,7 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 #include <Flash/Planner/PlanQuerySource.h>
@@ -47,7 +47,7 @@ void prepareForExecute(Context & context)
     quota.checkExceeded(time(nullptr));
 }
 
-ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_context)
+ProcessList::EntryPtr getProcessListEntry(Context & context, DagContext & dag_context)
 {
     if (dag_context.is_mpp_task)
     {
@@ -69,8 +69,8 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
 
 BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
 {
-    RUNTIME_ASSERT(context.getDAGContext());
-    auto & dag_context = *context.getDAGContext();
+    RUNTIME_ASSERT(context.getDagContext());
+    auto & dag_context = *context.getDagContext();
     const auto & logger = dag_context.log;
     RUNTIME_ASSERT(logger);
 

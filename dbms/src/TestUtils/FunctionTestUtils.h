@@ -30,7 +30,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -766,7 +766,7 @@ class FunctionTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        initializeDAGContext();
+        initializeDagContext();
     }
 
 public:
@@ -784,10 +784,10 @@ public:
     FunctionTest()
         : context(TiFlashTestEnv::getContext())
     {}
-    virtual void initializeDAGContext()
+    virtual void initializeDagContext()
     {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context.setDAGContext(dag_context_ptr.get());
+        dag_context_ptr = std::make_unique<DagContext>(1024);
+        context.setDagContext(dag_context_ptr.get());
     }
 
     ColumnWithTypeAndName executeFunction(
@@ -823,7 +823,7 @@ public:
         return executeFunction(func_name, argument_column_numbers, vec);
     }
 
-    DAGContext & getDAGContext()
+    DagContext & getDagContext()
     {
         RUNTIME_ASSERT(dag_context_ptr != nullptr);
         return *dag_context_ptr;
@@ -831,7 +831,7 @@ public:
 
 protected:
     Context context;
-    std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DagContext> dag_context_ptr;
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))

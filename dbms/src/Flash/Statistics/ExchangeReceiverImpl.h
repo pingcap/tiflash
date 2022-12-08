@@ -48,7 +48,7 @@ using ExchangeReceiverStatisticsBase = ExecutorStatistics<ExchangeReceiverImpl>;
 class ExchangeReceiverStatistics : public ExchangeReceiverStatisticsBase
 {
 public:
-    ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
+    ExchangeReceiverStatistics(const tipb::Executor * executor, DagContext & dag_context_);
 
 private:
     std::vector<Int64> receiver_source_task_ids;

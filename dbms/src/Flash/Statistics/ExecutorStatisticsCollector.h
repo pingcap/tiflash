@@ -21,12 +21,12 @@
 
 namespace DB
 {
-class DAGContext;
+class DagContext;
 
 class ExecutorStatisticsCollector
 {
 public:
-    void initialize(DAGContext * dag_context_);
+    void initialize(DagContext * dag_context_);
 
     void collectRuntimeDetails();
 
@@ -34,10 +34,10 @@ public:
 
     String resToJson() const;
 
-    DAGContext & getDAGContext() const;
+    DagContext & getDagContext() const;
 
 private:
-    DAGContext * dag_context = nullptr;
+    DagContext * dag_context = nullptr;
 
     std::map<String, ExecutorStatisticsPtr> res;
 

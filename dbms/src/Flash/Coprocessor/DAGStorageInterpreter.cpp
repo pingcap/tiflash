@@ -24,7 +24,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -153,7 +153,7 @@ MakeRegionQueryInfos(
         return std::make_tuple(std::move(region_need_retry), status_res);
 }
 
-bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table_scan)
+bool hasRegionToRead(const DagContext & dag_context, const TiDBTableScan & table_scan)
 {
     bool has_region_to_read = false;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
@@ -293,7 +293,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , table_scan(table_scan_)
     , push_down_filter(push_down_filter_)
     , max_streams(max_streams_)
-    , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
+    , log(Logger::get(context.getDagContext()->log ? context.getDagContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
@@ -403,7 +403,7 @@ void DAGStorageInterpreter::prepare()
     // and `TiDB::TableInfo`) we may get this process more simplified. (tiflash/issues/1853)
 
     // Do learner read
-    const DAGContext & dag_context = *context.getDAGContext();
+    const DagContext & dag_context = *context.getDagContext();
     if (dag_context.isBatchCop() || dag_context.isMPPTask())
         learner_read_snapshot = doBatchCopLearnerRead();
     else
@@ -557,16 +557,16 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+        context.getDagContext()->addCoprocessorReader(coprocessor_reader);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
         pipeline.streams.push_back(input);
         task_start = task_end;
     }
 }
 
-DAGContext & DAGStorageInterpreter::dagContext() const
+DagContext & DAGStorageInterpreter::dagContext() const
 {
-    return *context.getDAGContext();
+    return *context.getDagContext();
 }
 
 void DAGStorageInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
@@ -585,7 +585,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     TablesRegionInfoMap regions_for_local_read;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
-        regions_for_local_read.emplace(physical_table_id, std::cref(context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id).local_regions));
+        regions_for_local_read.emplace(physical_table_id, std::cref(context.getDagContext()->getTableRegionsInfoByTableID(physical_table_id).local_regions));
     }
     auto [info_retry, status] = MakeRegionQueryInfos(
         regions_for_local_read,
@@ -606,7 +606,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
     TablesRegionInfoMap regions_for_local_read;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
-        const auto & local_regions = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id).local_regions;
+        const auto & local_regions = context.getDagContext()->getTableRegionsInfoByTableID(physical_table_id).local_regions;
         regions_for_local_read.emplace(physical_table_id, std::cref(local_regions));
     }
     if (regions_for_local_read.empty())
@@ -708,7 +708,7 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
     const RegionException & e,
     int num_allow_retry)
 {
-    const DAGContext & dag_context = *context.getDAGContext();
+    const DagContext & dag_context = *context.getDagContext();
     assert((dag_context.isBatchCop() || dag_context.isMPPTask()));
     const auto & dag_regions = dag_context.getTableRegionsInfoByTableID(table_id).local_regions;
     FmtBuffer buffer;
@@ -775,7 +775,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
     auto & storage = storages_with_structure_lock[table_id].storage;
 
-    const DAGContext & dag_context = *context.getDAGContext();
+    const DagContext & dag_context = *context.getDagContext();
     for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
     {
         try
@@ -828,7 +828,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
 
 void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size)
 {
-    const DAGContext & dag_context = *context.getDAGContext();
+    const DagContext & dag_context = *context.getDagContext();
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
@@ -1081,7 +1081,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
     std::unordered_map<Int64, RegionRetryList> retry_regions_map;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
-        const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
+        const auto & table_regions_info = context.getDagContext()->getTableRegionsInfoByTableID(physical_table_id);
         for (const auto & e : table_regions_info.local_regions)
             region_id_to_table_id_map[e.first] = physical_table_id;
         for (const auto & r : table_regions_info.remote_regions)
@@ -1099,14 +1099,14 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         if (retry_regions.empty())
             continue;
 
-        // Append the region into DAGContext to return them to the upper layer.
+        // Append the region into DagContext to return them to the upper layer.
         // The upper layer should refresh its cache about these regions.
         for (const auto & r : retry_regions)
-            context.getDAGContext()->retry_regions.push_back(r.get());
+            context.getDagContext()->retry_regions.push_back(r.get());
 
         remote_requests.push_back(RemoteRequest::build(
             retry_regions,
-            *context.getDAGContext(),
+            *context.getDagContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             push_down_filter,

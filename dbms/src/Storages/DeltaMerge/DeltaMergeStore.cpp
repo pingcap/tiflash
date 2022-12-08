@@ -904,7 +904,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
     String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+    if (db_context.getDagContext() != nullptr && db_context.getDagContext()->isMPPTask())
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,

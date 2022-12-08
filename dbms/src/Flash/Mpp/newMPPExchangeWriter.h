@@ -29,7 +29,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     const tipb::ExchangeType & exchange_type,
     Int64 records_per_chunk,
     Int64 batch_send_min_limit,
-    DAGContext & dag_context,
+    DagContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
     UInt64 fine_grained_shuffle_batch_size)

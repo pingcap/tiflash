@@ -299,12 +299,12 @@ public:
     {                                                                 \
         const String func_name = "tidb_cast";                         \
         auto context = DB::tests::TiFlashTestEnv::getContext();       \
-        auto dag_context_ptr = std::make_unique<DAGContext>(1024);    \
+        auto dag_context_ptr = std::make_unique<DagContext>(1024);    \
         UInt64 ori_flags = dag_context_ptr->getFlags();               \
         dag_context_ptr->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);  \
         dag_context_ptr->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);  \
         dag_context_ptr->clearWarnings();                             \
-        context.setDAGContext(dag_context_ptr.get());                 \
+        context.setDagContext(dag_context_ptr.get());                 \
         for (auto _ : state)                                          \
         {                                                             \
             executeFunction(context, func_name, FROM_COL, DEST_TYPE); \

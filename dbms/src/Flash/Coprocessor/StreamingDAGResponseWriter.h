@@ -18,7 +18,7 @@
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/logger_useful.h>
@@ -34,7 +34,7 @@ public:
         StreamWriterPtr writer_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
-        DAGContext & dag_context_);
+        DagContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
 

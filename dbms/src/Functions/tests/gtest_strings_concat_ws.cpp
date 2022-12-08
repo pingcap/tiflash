@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeNullable.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>

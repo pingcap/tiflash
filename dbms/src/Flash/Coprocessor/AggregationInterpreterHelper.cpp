@@ -15,7 +15,7 @@
 #include <Common/TiFlashException.h>
 #include <Core/ColumnNumbers.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Interpreters/Context.h>
 
 namespace DB::AggregationInterpreterHelper
@@ -69,7 +69,7 @@ bool isGroupByCollationSensitive(const Context & context)
     //  maybe we can do collation insensitive aggregation if the stage is partial
 
     /// collation sensitive group by is slower than normal group by, use normal group by by default
-    return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
+    return context.getSettingsRef().group_by_collation_sensitive || context.getDagContext()->isMPPTask();
 }
 
 Aggregator::Params buildParams(

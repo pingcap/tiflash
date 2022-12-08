@@ -277,12 +277,12 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         }
         is_root_mpp_task = task_meta.task_id() == -1;
     }
-    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
+    dag_context = std::make_unique<DagContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
-    context->setDAGContext(dag_context.get());
+    context->setDagContext(dag_context.get());
     process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
     dag_context->setProcessListEntry(process_list_entry);
 

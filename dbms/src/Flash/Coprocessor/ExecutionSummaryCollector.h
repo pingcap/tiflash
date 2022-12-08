@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 
 namespace DB
@@ -23,7 +23,7 @@ class ExecutionSummaryCollector
 {
 public:
     explicit ExecutionSummaryCollector(
-        DAGContext & dag_context_)
+        DagContext & dag_context_)
         : dag_context(dag_context_)
     {
         for (auto & p : dag_context.getProfileStreamsMap())
@@ -43,7 +43,7 @@ private:
         const String & executor_id) const;
 
 private:
-    DAGContext & dag_context;
+    DagContext & dag_context;
     std::unordered_set<String> local_executors;
 };
 } // namespace DB

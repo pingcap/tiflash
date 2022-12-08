@@ -14,7 +14,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DagContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -54,7 +54,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
 {
     child->transform(pipeline, context, max_streams);
 
-    auto & dag_context = *context.getDAGContext();
+    auto & dag_context = *context.getDagContext();
     restoreConcurrency(pipeline, dag_context.final_concurrency, log);
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");

@@ -34,11 +34,11 @@ class TestStreamingWriter : public testing::Test
 protected:
     void SetUp() override
     {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
+        dag_context_ptr = std::make_unique<DagContext>(1024);
         dag_context_ptr->is_mpp_task = true;
         dag_context_ptr->is_root_mpp_task = true;
         dag_context_ptr->result_field_types = makeFields();
-        context.setDAGContext(dag_context_ptr.get());
+        context.setDagContext(dag_context_ptr.get());
     }
 
 public:
@@ -88,7 +88,7 @@ public:
 
     Context context;
 
-    std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DagContext> dag_context_ptr;
 };
 
 using MockStreamWriterChecker = std::function<void(tipb::SelectResponse &)>;

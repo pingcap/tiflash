@@ -37,7 +37,7 @@ try
     const String func_name = TiDBLastDayTransformerImpl<DataTypeMyDate::FieldType>::name;
 
     // Ignore invalid month error
-    DAGContext * dag_context = context.getDAGContext();
+    DagContext * dag_context = context.getDagContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     dag_context->clearWarnings();
