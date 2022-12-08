@@ -72,7 +72,8 @@ cert_allowed_cn="tidb"
 cert_allowed_cn="tidb"
         )";
     new_config = loadConfigFromString(test);
-    auto new_tiflash_config = TiFlashSecurityConfig(*new_config, log);
+    auto new_tiflash_config = TiFlashSecurityConfig(log);
+    new_tiflash_config.init(*new_config);
     ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
 }
 
@@ -87,7 +88,8 @@ cert_allowed_cn="tidb"
     auto config = loadConfigFromString(test);
     const auto log = Logger::get();
 
-    TiFlashSecurityConfig tiflash_config(*config, log); // no TLS config is set
+    TiFlashSecurityConfig tiflash_config(log); // no TLS config is set
+    tiflash_config.init(*config);
     test =
         R"(
 [security]
@@ -100,7 +102,8 @@ cert_allowed_cn="tidb"
     ASSERT_FALSE(tiflash_config.update(*config)); // can't add tls config online
     ASSERT_FALSE(tiflash_config.hasTlsConfig());
     config = loadConfigFromString(test);
-    TiFlashSecurityConfig tiflash_config_1(*config, log);
+    TiFlashSecurityConfig tiflash_config_1(log);
+    tiflash_config_1.init(*config);
     test =
         R"(
         )";
@@ -149,7 +152,8 @@ cert_allowed_cn="[tidb, tiflash]"
         R"(
         )";
     config = loadConfigFromString(test);
-    TiFlashSecurityConfig tiflash_config_2(*config, log);
+    TiFlashSecurityConfig tiflash_config_2(log);
+    tiflash_config_2.init(*config);
 
     test =
         R"(

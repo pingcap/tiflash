@@ -576,7 +576,8 @@ void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, cons
 {
     LOG_INFO(log, "Setting secuirty config.");
     auto lock = getLock();
-    shared->security_config = std::make_shared<TiFlashSecurityConfig>(config, log);
+    shared->security_config = std::make_shared<TiFlashSecurityConfig>(log);
+    shared->security_config->init(config);
 }
 
 TiFlashSecurityConfigPtr Context::getSecurityConfig()

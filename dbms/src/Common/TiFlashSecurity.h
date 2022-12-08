@@ -41,11 +41,18 @@ class TiFlashSecurityConfig : public ConfigObject
 public:
     TiFlashSecurityConfig() = default;
 
-    TiFlashSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log_)
+    explicit TiFlashSecurityConfig(const LoggerPtr & log_)
         : log(log_)
     {
-        update(config);
-        inited = true;
+    }
+
+    void init(Poco::Util::AbstractConfiguration & config)
+    {
+        if (!inited)
+        {
+            update(config);
+            inited = true;
+        }
     }
 
     void setLog(const LoggerPtr & log_)
@@ -92,8 +99,8 @@ public:
         {
             if (inited && !has_security)
             {
-                 LOG_WARNING(log, "Can't add security config online");
-                 return false;
+                LOG_WARNING(log, "Can't add security config online");
+                return false;
             }
             has_security = true;
 
