@@ -1,10 +1,10 @@
-# Support MVCC bitmap filter
+# Support MVCC Bitmap Filter
 - Author: [Jinhe Lin](https://github.com/JinheLin)
 ## Table of Contents
 - [Motivation and Background](#Motivation-and-Background)
 - [Design](#Design)
 	- [Decouple MVCC Filtering by Bitmap](#Decouple-MVCC-Filtering-by-Bitmap)
-	- [Generation of Bitmap Filter](#Generation-of-Bitmap-Filter)
+	- [Generation of MVCC Bitmap Filter](#Generation-of-MVCC-Bitmap-Filter)
 - [Work with Other Optimizations](#Work-with-Other-Optimizations)
 
 ## Motivation and Background
@@ -42,15 +42,17 @@ The following diagram shows a simple correspondence between records and bitmaps.
 
 ![](./images/2022-12-08-mvcc-bitmap-filter.png)
 
-### Generation of Bitmap Filter
+### Generation of MVCC Bitmap Filter
 
 1. We can directly use `Segment::getInputStream` to iterate through the three columns of handle, version, tag to generate an ordered stream of data.
 2. However, the current input stream does not contain the position of the record on the array, so a "virtual column" needs to be added to indicate the record position. This "virtual column" will be called `SegmentRowIdCol` later.
 3. In order to generate the `SegmentRowIdCol`, some changes need to be made to the read interface of Delta and Stable
 4. After the `SegmentRowIdCol` is generated, set the corresponding position on the bitmap to 1.
+
 ### Read Columns with Bitmap Filter
 
 Since the computing layer does not require the returned data from storage to be ordered. We can read the required columns from Delta and Stable independently and filter data by the bitmap filter.
+
 ## Work with Other Optimizations
 
 For other table scanning optimizations, such as index filtering and late materialization, can also generate a bitmap based on their filtering results. The final bitmap result is obtained by executing AND operation between bitmaps.
