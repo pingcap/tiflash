@@ -40,9 +40,10 @@ const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
 const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
-static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_node_)
+static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
 {
-    if (disaggregated_compute_node_)
+    // Doesn't need SchemaSyncer for tiflash_compute mode.
+    if (disaggregated_compute_mode)
         return nullptr;
     if (exist_pd_addr)
     {
