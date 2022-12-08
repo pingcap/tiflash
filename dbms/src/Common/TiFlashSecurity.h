@@ -90,6 +90,11 @@ public:
         std::unique_lock lock(mu);
         if (config.has("security"))
         {
+            if (inited && !has_security)
+            {
+                 LOG_WARNING(log, "Can't add security config online");
+                 return false;
+            }
             has_security = true;
 
             bool cert_file_updated = updateCertPath(config);

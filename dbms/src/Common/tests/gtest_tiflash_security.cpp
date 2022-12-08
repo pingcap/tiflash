@@ -97,16 +97,16 @@ key_path="security/key.pem"
 cert_allowed_cn="tidb"
         )";
     config = loadConfigFromString(test);
-    ASSERT_EQ(tiflash_config.update(*config), false); // can't add tls config online
-    ASSERT_EQ(tiflash_config.hasTlsConfig(), false);
+    ASSERT_FALSE(tiflash_config.update(*config)); // can't add tls config online
+    ASSERT_FALSE(tiflash_config.hasTlsConfig());
     config = loadConfigFromString(test);
-    TiFlashSecurityConfig tiflash_config_new(*config, log);
+    TiFlashSecurityConfig tiflash_config_1(*config, log);
     test =
         R"(
         )";
     config = loadConfigFromString(test);
-    ASSERT_EQ(tiflash_config_new.update(*config), false); // can't remove security config online
-    ASSERT_EQ(tiflash_config_new.hasTlsConfig(), true);
+    ASSERT_FALSE(tiflash_config_1.update(*config)); // can't remove security config online
+    ASSERT_TRUE(tiflash_config_1.hasTlsConfig());
 
 
     test =
@@ -118,13 +118,13 @@ key_path="security/key_new.pem"
 cert_allowed_cn="tidb"
         )";
     config = loadConfigFromString(test);
-    tiflash_config_new.update(*config);
-    auto paths = tiflash_config_new.getPaths();
+    ASSERT_TRUE(tiflash_config_1.update(*config));
+    auto paths = tiflash_config_1.getPaths();
     ASSERT_EQ(std::get<0>(paths), "security/ca_new.pem");
     ASSERT_EQ(std::get<1>(paths), "security/cert_new.pem");
     ASSERT_EQ(std::get<2>(paths), "security/key_new.pem");
-    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tidb"), 1);
-    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tiflash"), 0);
+    ASSERT_EQ((int)tiflash_config_1.allowedCommonNames().count("tidb"), 1);
+    ASSERT_EQ((int)tiflash_config_1.allowedCommonNames().count("tiflash"), 0);
 
     // add cert allowed cn
     test =
@@ -136,13 +136,45 @@ key_path="security/key_new.pem"
 cert_allowed_cn="[tidb, tiflash]"
         )";
     config = loadConfigFromString(test);
-    ASSERT_EQ(tiflash_config_new.update(*config), false);
-    paths = tiflash_config_new.getPaths();
+    ASSERT_FALSE(tiflash_config_1.update(*config));
+    paths = tiflash_config_1.getPaths();
     ASSERT_EQ(std::get<0>(paths), "security/ca_new.pem");
     ASSERT_EQ(std::get<1>(paths), "security/cert_new.pem");
     ASSERT_EQ(std::get<2>(paths), "security/key_new.pem");
-    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tidb"), 1);
-    ASSERT_EQ((int)tiflash_config_new.allowedCommonNames().count("tiflash"), 1);
+    ASSERT_EQ((int)tiflash_config_1.allowedCommonNames().count("tidb"), 1);
+    ASSERT_EQ((int)tiflash_config_1.allowedCommonNames().count("tiflash"), 1);
+
+    // Without security config
+    test =
+        R"(
+        )";
+    config = loadConfigFromString(test);
+    TiFlashSecurityConfig tiflash_config_2(*config, log);
+
+    test =
+        R"(
+[security]
+cert_allowed_cn="[tidb, tiflash]"
+        )";
+
+    config = loadConfigFromString(test);
+    ASSERT_FALSE(tiflash_config_2.update(*config)); //Can't add security config online
+    ASSERT_TRUE(tiflash_config_2.allowedCommonNames().empty());
+    ASSERT_FALSE(tiflash_config_2.hasTlsConfig());
+
+    test =
+        R"(
+[security]
+ca_path="security/ca_new.pem"
+cert_path="security/cert_new.pem"
+key_path="security/key_new.pem"
+cert_allowed_cn="[tidb, tiflash]"
+redact_info_log=false
+        )";
+    config = loadConfigFromString(test);
+    ASSERT_FALSE(tiflash_config_2.update(*config)); // Can't add security config online
+    ASSERT_TRUE(tiflash_config_2.allowedCommonNames().empty());
+    ASSERT_FALSE(tiflash_config_2.hasTlsConfig());
 }
 } // namespace tests
 } // namespace DB
