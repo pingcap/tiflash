@@ -54,7 +54,7 @@ extern const char force_no_local_region_for_mpp_task[];
 
 namespace
 {
-inline void RandomFailPointTestBeforeRegisteringTunnels(bool is_root_task)
+static void RandomFailPointTestBeforeRegisteringTunnels(bool is_root_task)
 {
     if (is_root_task)
     {
@@ -66,7 +66,7 @@ inline void RandomFailPointTestBeforeRegisteringTunnels(bool is_root_task)
     }
 }
 
-inline void RandomFailPointTestBeforeRegisteringMPPTask(bool is_root_task)
+static void RandomFailPointTestBeforeRegisteringMPPTask(bool is_root_task)
 {
     if (is_root_task)
     {
@@ -78,12 +78,12 @@ inline void RandomFailPointTestBeforeRegisteringMPPTask(bool is_root_task)
     }
 }
 
-inline void RandomFailPointTestDuringRegisterTunnelForNonRootMppTask(bool is_root_task)
+static void RandomFailPointTestDuringRegisterTunnelForNonRootMppTask(bool is_root_task)
 {
     if (!is_root_task)
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
 }
-}
+} // namespace
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)

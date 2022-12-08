@@ -69,7 +69,6 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
     if (!limit_exceeded_need_break)
     {
-
         if (return_filter)
             res = readImpl(res_filter, return_filter);
         else

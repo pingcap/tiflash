@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 
 #include <magic_enum.hpp>
 #include <mutex>
+
 #include "common/defines.h"
 
 namespace DB
@@ -30,7 +31,7 @@ String constructStatusString(ExchangeReceiverState state, const String & error_m
         return fmt::format("Receiver state: {}", magic_enum::enum_name(state));
     return fmt::format("Receiver state: {}, error message: {}", magic_enum::enum_name(state), error_message);
 }
-}
+} // namespace
 
 ExchangeReceiverBase::~ExchangeReceiverBase()
 {
@@ -59,7 +60,9 @@ ExchangeReceiverBase::~ExchangeReceiverBase()
 void ExchangeReceiverBase::waitAllLocalConnDone()
 {
     std::unique_lock lock(mu);
-    auto pred = [&] { return local_conn_num == 0; };
+    auto pred = [&] {
+        return local_conn_num == 0;
+    };
     local_conn_cv.wait(lock, pred);
 }
 

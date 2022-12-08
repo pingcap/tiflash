@@ -130,15 +130,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         while (true)
         {
-            auto myid = std::this_thread::get_id();
-            std::stringstream ss;
-            ss << myid;
-            std::string tid = ss.str();
-
-            auto * logg = &Poco::Logger::get("LRUCache");
-            LOG_INFO(logg, "TIR: before nextResult, {}", tid);
             auto result = remote_reader->nextResult(block_queue, sample_block, stream_id, decoder_ptr);
-            LOG_INFO(logg, "TIR: after nextResult, {}", tid);
             if (result.meet_error)
             {
                 LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);

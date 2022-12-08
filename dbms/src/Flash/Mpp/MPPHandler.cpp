@@ -50,7 +50,7 @@ static void RandomFailPointTestBeforeRunningMPPTask(bool is_root_task)
     else
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
 }
-}
+} // namespace
 
 void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {

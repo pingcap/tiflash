@@ -19,6 +19,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
+
 #include "Flash/Mpp/ExchangeReceiverCommon.h"
 
 namespace DB
@@ -162,11 +163,13 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     std::string tid = ss.str();
 
     auto * logg = &Poco::Logger::get("LRUCache");
-    LOG_INFO(logg, "ESender: before push, {}", tid);;
+    LOG_INFO(logg, "ESender: before push, {}", tid);
+    ;
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
-        LOG_INFO(logg, "ESender: after push, {}", tid);;
+        LOG_INFO(logg, "ESender: after push, {}", tid);
+        ;
         updateMetric(pushed_data_size, mode);
         updateConnProfileInfo(pushed_data_size);
         return;

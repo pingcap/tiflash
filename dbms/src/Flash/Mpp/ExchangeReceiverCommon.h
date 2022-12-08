@@ -14,8 +14,9 @@
 
 #pragma once
 
-#include <Common/MPMCQueue.h>
 #include <Common/FailPoint.h>
+#include <Common/MPMCQueue.h>
+#include <Common/MemoryTracker.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -25,7 +26,6 @@
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
-#include <Common/MemoryTracker.h>
 
 namespace DB
 {
@@ -145,10 +145,10 @@ static void RandomFailPointTestReceiverPushFail(bool & push_succeed)
 // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
 template <bool enable_fine_grained_shuffle, bool is_sync, bool is_local_tunnel_data>
 bool pushPacket(size_t source_index,
-                    const String & req_info,
-                    const TrackedMppDataPacketPtr & tracked_packet,
-                    const std::vector<MsgChannelPtr> & msg_channels,
-                    const LoggerPtr & log)
+                const String & req_info,
+                const TrackedMppDataPacketPtr & tracked_packet,
+                const std::vector<MsgChannelPtr> & msg_channels,
+                const LoggerPtr & log)
 {
     bool push_succeed = true;
 
@@ -258,7 +258,8 @@ public:
         , exc_log(Logger::get(req_id, executor_id))
         , local_conn_num(0)
         , collected(false)
-        , memory_tracker(current_memory_tracker) {}
+        , memory_tracker(current_memory_tracker)
+    {}
 
     ~ExchangeReceiverBase();
 
@@ -285,7 +286,7 @@ public:
         bool meet_error,
         const String & local_err_msg,
         const LoggerPtr & log);
-    
+
     MemoryTracker * getMemoryTracker() const { return memory_tracker; }
 
 protected:

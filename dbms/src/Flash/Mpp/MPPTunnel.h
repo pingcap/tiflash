@@ -18,14 +18,16 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+
 #include <atomic>
+
 #include "common/defines.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -220,11 +222,12 @@ public:
         size_t queue_size,
         MemoryTrackerPtr & memory_tracker_,
         const String & tunnel_id_)
-    : TunnelSender(queue_size, memory_tracker_, log_, tunnel_id_)
-      , source_index(source_index_)
-      , req_info(req_info_)
-      , recv_base(recv_base_)
-      , is_done(false) {}
+        : TunnelSender(queue_size, memory_tracker_, log_, tunnel_id_)
+        , source_index(source_index_)
+        , req_info(req_info_)
+        , recv_base(recv_base_)
+        , is_done(false)
+    {}
 
     ~LocalTunnelSender() override
     {

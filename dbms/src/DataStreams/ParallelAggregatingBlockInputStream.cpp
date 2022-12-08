@@ -67,13 +67,6 @@ void ParallelAggregatingBlockInputStream::cancel(bool kill)
 
 Block ParallelAggregatingBlockInputStream::readImpl()
 {
-    auto myid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << myid;
-    std::string tid = ss.str();
-
-    auto * logg = &Poco::Logger::get("LRUCache");
-    LOG_INFO(logg, "TAGG: first {}", tid);
     if (!executed)
     {
         Aggregator::CancellationHook hook = [&]() {
@@ -81,9 +74,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         };
         aggregator.setCancellationHook(hook);
 
-        LOG_INFO(logg, "TAGG: before execute {}", tid);
         execute();
-        LOG_INFO(logg, "TAGG: after execute {}", tid);
 
         if (isCancelledOrThrowIfKilled())
             return {};
@@ -131,9 +122,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
     if (isCancelledOrThrowIfKilled() || !impl)
         return res;
 
-    LOG_INFO(logg, "TAGG: before read {}", tid);
     auto ress = impl->read();
-    LOG_INFO(logg, "TAGG: after read {}", tid);
 
     return ress;
 }

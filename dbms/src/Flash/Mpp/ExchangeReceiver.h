@@ -14,13 +14,14 @@
 
 #pragma once
 
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Interpreters/Context.h>
+
 #include <future>
 #include <mutex>
 #include <thread>
@@ -51,7 +52,7 @@ private:
     void reactor(const std::vector<Request> & async_requests);
     void setUpConnection();
 
-private: 
+private:
     std::shared_ptr<RPCContext> rpc_context;
 };
 
