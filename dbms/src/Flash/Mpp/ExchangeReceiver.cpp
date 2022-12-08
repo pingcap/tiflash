@@ -438,6 +438,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         {
             msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
+        if (is_receiver_for_tiflash_storage)
+            rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log);
         rpc_context->fillSchema(schema);
         setUpConnection();
     }

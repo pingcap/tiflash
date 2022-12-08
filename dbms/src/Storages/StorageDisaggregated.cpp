@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -29,7 +30,13 @@ BlockInputStreams StorageDisaggregated::read(
     unsigned num_streams)
 {
     auto remote_table_ranges = buildRemoteTableRanges();
-    auto dispatch_reqs = buildAndDispatchMPPTaskRequests(remote_table_ranges);
+
+    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+
+    std::vector<RequestAndRegionIDs> dispatch_reqs;
+    dispatch_reqs.reserve(batch_cop_tasks.size());
+    for (const auto & batch_cop_task : batch_cop_tasks)
+        dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
@@ -205,77 +212,6 @@ tipb::Executor StorageDisaggregated::buildTableScanTiPB()
     return ts_exec;
 }
 
-std::vector<StorageDisaggregated::RequestAndRegionIDs>
-StorageDisaggregated::buildAndDispatchMPPTaskRequests(const std::vector<RemoteTableRange> & remote_table_ranges)
-{
-    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
-    std::vector<RequestAndRegionIDs> dispatch_reqs;
-    dispatch_reqs.reserve(batch_cop_tasks.size());
-    for (const auto & batch_cop_task : batch_cop_tasks)
-        dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
-
-    std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
-    for (const RequestAndRegionIDs & dispatch_req : dispatch_reqs)
-    {
-        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
-        thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [dispatch_req, this] {
-            // When send req succeed or backoff timeout, need_retry is false.
-            bool need_retry = true;
-            pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
-            while (need_retry)
-            {
-                pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-                try
-                {
-                    pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
-                    cluster->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
-                    need_retry = false;
-                    auto resp = rpc_call.getResp();
-                    for (const auto & retry_region : resp->retry_regions())
-                    {
-                        auto region_id = pingcap::kv::RegionVerID(
-                            retry_region.id(),
-                            retry_region.region_epoch().conf_ver(),
-                            retry_region.region_epoch().version());
-                        cluster->region_cache->dropRegion(region_id);
-                    }
-                }
-                catch (...)
-                {
-                    std::string local_err_msg = getCurrentExceptionMessage(true);
-                    try
-                    {
-                        bo.backoff(pingcap::kv::boTiFlashRPC, pingcap::Exception(local_err_msg));
-                    }
-                    catch (...)
-                    {
-                        need_retry = false;
-                        this->setGRPCErrorMsg(local_err_msg);
-                        cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
-                    }
-                }
-            }
-        });
-    }
-
-    thread_manager->wait();
-
-    // No need to lock, because all concurrent threads are done.
-    if (!err_msg.empty())
-        throw Exception(err_msg);
-    return dispatch_reqs;
-}
-
-void StorageDisaggregated::setGRPCErrorMsg(const std::string & err)
-{
-    std::lock_guard<std::mutex> lock(err_msg_mu);
-    // Only record first err_msg.
-    if (err_msg.empty())
-    {
-        err_msg = err;
-    }
-}
-
 void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
 {
     tipb::ExchangeReceiver receiver;
@@ -303,7 +239,8 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             context.getTMTContext().getKVCluster(),
             context.getTMTContext().getMPPTaskManager(),
             context.getSettingsRef().enable_local_tunnel,
-            context.getSettingsRef().enable_async_grpc_client),
+            context.getSettingsRef().enable_async_grpc_client,
+            dispatch_reqs),
         receiver.encoded_task_meta_size(),
         num_streams,
         log->identifier(),

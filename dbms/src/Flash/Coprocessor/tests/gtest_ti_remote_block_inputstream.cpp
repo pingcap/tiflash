@@ -215,6 +215,11 @@ struct MockReceiverContext
         throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
     }
 
+    void sendMPPTaskToTiFlashStorageNode(LoggerPtr)
+    {
+        throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
     static Status getStatusOK()
     {
         return ::grpc::Status();

@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -81,10 +80,8 @@ private:
     using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
-    std::vector<RequestAndRegionIDs> buildAndDispatchMPPTaskRequests(const std::vector<RemoteTableRange> & remote_table_ranges);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
     void pushDownFilter(DAGPipeline & pipeline);
-    void setGRPCErrorMsg(const std::string & err);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;
@@ -95,7 +92,5 @@ private:
     const PushDownFilter & push_down_filter;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
-    std::mutex err_msg_mu;
-    std::string err_msg;
 };
 } // namespace DB

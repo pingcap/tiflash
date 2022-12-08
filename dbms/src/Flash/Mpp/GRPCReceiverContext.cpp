@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -195,13 +196,15 @@ GRPCReceiverContext::GRPCReceiverContext(
     pingcap::kv::Cluster * cluster_,
     std::shared_ptr<MPPTaskManager> task_manager_,
     bool enable_local_tunnel_,
-    bool enable_async_grpc_)
+    bool enable_async_grpc_,
+    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : exchange_receiver_meta(exchange_receiver_meta_)
     , task_meta(task_meta_)
     , cluster(cluster_)
     , task_manager(std::move(task_manager_))
     , enable_local_tunnel(enable_local_tunnel_)
     , enable_async_grpc(enable_async_grpc_)
+    , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {}
 
 ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
@@ -220,6 +223,71 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta)); // NOLINT
     req.req->set_allocated_sender_meta(sender_task.release()); // NOLINT
     return req;
+}
+
+void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(LoggerPtr log)
+{
+    if (disaggregated_dispatch_reqs.empty())
+        throw Exception("unexpected disaggregated_dispatch_reqs, it's empty.");
+
+    std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
+    for (const StorageDisaggregated::RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
+    {
+        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
+        thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [&dispatch_req, this] {
+            // When send req succeed or backoff timeout, need_retry is false.
+            bool need_retry = true;
+            pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
+            while (need_retry)
+            {
+                try
+                {
+                    pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
+                    this->cluster->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
+                    need_retry = false;
+                    auto resp = rpc_call.getResp();
+                    for (const auto & retry_region : resp->retry_regions())
+                    {
+                        auto region_id = pingcap::kv::RegionVerID(
+                            retry_region.id(),
+                            retry_region.region_epoch().conf_ver(),
+                            retry_region.region_epoch().version());
+                        this->cluster->region_cache->dropRegion(region_id);
+                    }
+                }
+                catch (...)
+                {
+                    std::string local_err_msg = getCurrentExceptionMessage(true);
+                    try
+                    {
+                        bo.backoff(pingcap::kv::boTiFlashRPC, pingcap::Exception(local_err_msg));
+                    }
+                    catch (...)
+                    {
+                        need_retry = false;
+                        this->setDispatchMPPTaskErrMsg(local_err_msg);
+                        this->cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
+                    }
+                }
+            }
+        });
+    }
+
+    thread_manager->wait();
+
+    // No need to lock, because all concurrent threads are done.
+    if (!dispatch_mpp_task_err_msg.empty())
+        throw Exception(dispatch_mpp_task_err_msg);
+}
+
+void GRPCReceiverContext::setDispatchMPPTaskErrMsg(const std::string & err)
+{
+    std::lock_guard<std::mutex> lock(dispatch_mpp_task_err_msg_mu);
+    // Only record first dispatch_mpp_task_err_msg.
+    if (dispatch_mpp_task_err_msg.empty())
+    {
+        dispatch_mpp_task_err_msg = err;
+    }
 }
 
 void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
