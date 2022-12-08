@@ -1041,7 +1041,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
-        ColumnID cid = ci.column_id();
+        ColumnID cid = ci.id;
 
         // Column ID -1 return the handle column
         String name;
@@ -1062,9 +1062,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
             source_columns_tmp.emplace_back(std::move(pair));
         }
         required_columns_tmp.emplace_back(std::move(name));
-        if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
+        if (cid != -1 && ci.tp == TiDB::TypeTimestamp)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-        else if (cid != -1 && ci.tp() == TiDB::TypeTime)
+        else if (cid != -1 && ci.tp == TiDB::TypeTime)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
         else
             need_cast_column.push_back(ExtraCastAfterTSMode::None);

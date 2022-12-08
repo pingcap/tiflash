@@ -281,7 +281,7 @@ private:
     bool buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+        const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,

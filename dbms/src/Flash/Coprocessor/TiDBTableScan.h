@@ -18,6 +18,9 @@
 
 namespace DB
 {
+
+using ColumnInfos = std::vector<TiDB::ColumnInfo>;
+
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`
 class TiDBTableScan
 {
@@ -34,7 +37,7 @@ public:
     {
         return columns.size();
     }
-    const google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & getColumns() const
+    const ColumnInfos & getColumns() const
     {
         return columns;
     }
@@ -65,7 +68,7 @@ private:
     const tipb::Executor * table_scan;
     String executor_id;
     bool is_partition_table_scan;
-    const google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & columns;
+    const ColumnInfos & columns;
     /// logical_table_id is the table id for a TiDB' table, while if the
     /// TiDB table is partition, each partition is a physical table, and
     /// the partition's table id is the physical table id.

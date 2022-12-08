@@ -23,6 +23,7 @@
 #include <tipb/schema.pb.h>
 
 #include <optional>
+#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -423,5 +424,6 @@ String genJsonNull();
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
+std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
 
 } // namespace TiDB
