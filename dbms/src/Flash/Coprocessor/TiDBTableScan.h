@@ -68,7 +68,7 @@ private:
     const tipb::Executor * table_scan;
     String executor_id;
     bool is_partition_table_scan;
-    const ColumnInfos & columns;
+    const ColumnInfos columns;
     /// logical_table_id is the table id for a TiDB' table, while if the
     /// TiDB table is partition, each partition is a physical table, and
     /// the partition's table id is the physical table id.
