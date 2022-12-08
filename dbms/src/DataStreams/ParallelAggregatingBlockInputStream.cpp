@@ -122,9 +122,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
     if (isCancelledOrThrowIfKilled() || !impl)
         return res;
 
-    auto ress = impl->read();
-
-    return ress;
+    return impl->read();
 }
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
