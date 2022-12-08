@@ -62,7 +62,10 @@ struct TiDBDivideFloatingImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) / b;
+        if constexpr (std::is_integral_v<Result>)
+            return (static_cast<Result>(a) + b / 2) / b;
+        else
+            return static_cast<Result>(a) / b;
     }
     template <typename Result = ResultType>
     static Result apply(A a, B b, UInt8 & res_null)
@@ -75,7 +78,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
             res_null = 1;
             return static_cast<Result>(0);
         }
-        return static_cast<Result>(a) / b;
+        return apply<Result>(a, b);
     }
 };
 
@@ -102,7 +105,7 @@ struct TiDBDivideFloatingImpl<A, B, true>
             res_null = 1;
             return static_cast<Result>(0);
         }
-        return static_cast<Result>(a) / static_cast<Result>(b);
+        return apply<Result>(a, b);
     }
 };
 
