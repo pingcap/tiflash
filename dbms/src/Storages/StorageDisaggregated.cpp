@@ -32,6 +32,7 @@ BlockInputStreams StorageDisaggregated::read(
     auto remote_table_ranges = buildRemoteTableRanges();
 
     auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+    RUNTIME_CHECK(!batch_cop_tasks.empty());
 
     std::vector<RequestAndRegionIDs> dispatch_reqs;
     dispatch_reqs.reserve(batch_cop_tasks.size());
