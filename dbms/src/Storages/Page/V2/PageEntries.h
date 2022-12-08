@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <Common/nocopyable.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Config.h>
