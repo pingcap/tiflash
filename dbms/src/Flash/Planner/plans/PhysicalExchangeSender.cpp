@@ -69,7 +69,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+        std::unique_ptr<DAGResponseWriter> response_writer = NewMPPExchangeWriter(
             dag_context.tunnel_set,
             partition_col_ids,
             partition_col_collators,

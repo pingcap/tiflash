@@ -116,15 +116,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
-    // Stopwatch watch{};
-    // auto cost = watch.elapsedSeconds();
-    // SCOPE_EXIT({
-    //     if (cost > 0.5)
-    //     {
-    //         LOG_DEBUG(&Poco::Logger::get("tzg"), "time cost {:.3f}s", cost);
-    //     }
-    // });
-
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
     for (size_t part_id = 0; part_id < partition_num; ++part_id)

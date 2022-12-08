@@ -39,3 +39,32 @@ void trimStackTrace(String & message)
 }
 
 } // namespace DB
+
+namespace TiDB
+{
+
+constexpr int64_t MPP_VERSION = 1;
+static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.5.0";
+constexpr int64_t MIN_MPP_VERSION = 0;
+
+bool CheckMppVersion(int64_t mpp_version)
+{
+    return mpp_version >= MIN_MPP_VERSION && mpp_version <= MPP_VERSION;
+}
+
+std::string GenMppVersionErrorMessage(int64_t mpp_version)
+{
+    auto err_msg = fmt::format("Invalid mpp version `{}`, expect version: min `{}`, max `{}` release version `{}`",
+                               mpp_version,
+                               TiDB::MIN_MPP_VERSION,
+                               TiDB::MPP_VERSION,
+                               MPP_TIFLASH_RELEASE_VERSION);
+    return err_msg;
+}
+
+int64_t GetMppVersion()
+{
+    return MPP_VERSION;
+}
+
+} // namespace TiDB

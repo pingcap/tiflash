@@ -24,6 +24,7 @@
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
@@ -31,6 +32,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status_code_enum.h>
 
 #include <ext/scope_guard.h>
 
@@ -269,6 +271,18 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext 
 
 grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer)
 {
+    {
+        const auto & sender_mpp_version = request->sender_meta().mpp_version();
+        const auto & receiver_mpp_version = request->receiver_meta().mpp_version();
+        if (!TiDB::CheckMppVersion(sender_mpp_version) || !TiDB::CheckMppVersion(receiver_mpp_version))
+        {
+            auto && err_msg = fmt::format("Failed to establish MPP connection, sender: {}, receiver: {}",
+                                          TiDB::GenMppVersionErrorMessage(sender_mpp_version),
+                                          TiDB::GenMppVersionErrorMessage(receiver_mpp_version));
+            return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+        }
+    }
+
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.

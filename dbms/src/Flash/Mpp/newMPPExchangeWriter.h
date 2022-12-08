@@ -24,7 +24,7 @@
 namespace DB
 {
 template <class StreamWriterPtr>
-std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
+std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     const StreamWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
@@ -35,23 +35,27 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
-    UInt64 fine_grained_shuffle_batch_size,
-    mpp::CompressMethod compress_method = mpp::CompressMethod::LZ4)
+    UInt64 fine_grained_shuffle_batch_size)
 {
-    auto mm = tzg::SnappyStatistic::globalInstance().getMethod();
-    switch (mm)
+    auto compress_method = dag_context.getMPPTaskMeta().exchange_sender_meta().compress();
+    if (true) // nolint
     {
-    case tzg::SnappyStatistic::Method::LZ4:
-        compress_method = mpp::CompressMethod::LZ4;
-        break;
-    case tzg::SnappyStatistic::Method::ZSTD:
-        compress_method = mpp::CompressMethod::ZSTD;
-        break;
-    default:
-        compress_method = mpp::CompressMethod::NONE;
-        break;
+        auto mm = tzg::SnappyStatistic::globalInstance().getMethod();
+        switch (mm)
+        {
+        case tzg::SnappyStatistic::Method::LZ4:
+            compress_method = mpp::CompressMethod::LZ4;
+            break;
+        case tzg::SnappyStatistic::Method::ZSTD:
+            compress_method = mpp::CompressMethod::ZSTD;
+            break;
+        default:
+            compress_method = mpp::CompressMethod::NONE;
+            break;
+        }
     }
-    // compress_method = ;
+    RUNTIME_CHECK(!enable_fine_grained_shuffle);
+
     RUNTIME_CHECK(dag_context.isMPPTask());
     should_send_exec_summary_at_last = dag_context.collect_execution_summaries && should_send_exec_summary_at_last;
     if (dag_context.isRootMPPTask())

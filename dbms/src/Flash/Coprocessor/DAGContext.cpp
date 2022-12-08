@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
 
