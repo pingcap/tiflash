@@ -1,5 +1,11 @@
 #pragma once
 
+<<<<<<< HEAD
+=======
+#include <Common/Checksum.h>
+#include <Common/FieldVisitors.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
+>>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
 #include <Core/Field.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Timespan.h>
@@ -11,7 +17,6 @@
 
 #include <IO/CompressedStream.h>
 #include <IO/ReadHelpers.h>
-
 
 namespace DB
 {
@@ -148,17 +153,27 @@ struct SettingMaxThreads
         is_auto = true;
     }
 
-    UInt64 getAutoValue() const
+    static UInt64 getAutoValue()
     {
-        static auto res = getAutoValueImpl();
+        static auto res = getNumberOfLogicalCPUCores();
         return res;
     }
 
+<<<<<<< HEAD
     /// Executed once for all time. Executed from one thread.
     UInt64 getAutoValueImpl() const
     {
         return getNumberOfPhysicalCPUCores();
     }
+=======
+    UInt64 get() const
+    {
+        return value;
+    }
+
+private:
+    UInt64 value;
+>>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
 };
 
 

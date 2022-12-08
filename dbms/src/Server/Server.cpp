@@ -15,7 +15,7 @@
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
@@ -421,7 +421,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
+<<<<<<< HEAD
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
+=======
+    /// get CPU/memory/disk info of this server
+    if (tiflash_instance_wrap.proxy_helper)
+    {
+        diagnosticspb::ServerInfoRequest request;
+        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        diagnosticspb::ServerInfoResponse response;
+        std::string req = request.SerializeAsString();
+        auto * helper = tiflash_instance_wrap.proxy_helper;
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
+        server_info.parseSysInfo(response);
+        setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
+        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+    }
+    else
+    {
+        setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
+        LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+    }
+>>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
 
     // print necessary grpc log.
     grpc_log = &Logger::get("grpc");
