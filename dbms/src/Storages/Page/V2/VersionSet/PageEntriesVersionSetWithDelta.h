@@ -95,7 +95,7 @@ public:
         // do NOT increase the index by this snapshot or it will
         // cause inf loop
         auto snap = getSnapshot("ps-mem-compact", nullptr);
-        compactOnDeltaRelease(snap->view.getSharedTailVersion());
+        compactUntil(snap->view.getSharedTailVersion());
 
         // try compact again
         return true;
@@ -173,7 +173,7 @@ public:
                 // increase the index so that upper level know it should try
                 // the version compact.
                 vset->last_released_snapshot_index.fetch_add(1);
-                // Do vset->compactOnDeltaRelease on background pool
+                // Do vset->compactUntil on background pool
                 handle->wake();
             }
             // else if the handle is nullptr (handle is not set or task has been removed from bkg pool),
@@ -243,8 +243,9 @@ private:
     bool isValidVersion(VersionPtr tail) const;
 
     // If `tail` is in the latest versions-list, do compaction on version-list [head, tail].
-    // If there some versions after tail, use vset's `rebase` to concat them.
-    void compactOnDeltaRelease(VersionPtr tail);
+    // If there some versions after tail, use vset's `rebase` to concat those version to the
+    // new compacted version-list.
+    void compactUntil(VersionPtr tail);
 
     // Scan over all `snapshots`, remove the invalid snapshots and get some statistics
     // of all living snapshots and the oldest living snapshot.
