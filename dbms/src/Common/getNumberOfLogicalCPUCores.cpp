@@ -12,7 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Common/getNumberOfLogicalCPUCores.h>
 
-/// Get number of CPU cores without hyper-threading.
-unsigned getNumberOfPhysicalCPUCores();
+namespace CPUCores
+{
+UInt16 number_of_logical_cpu_cores = std::thread::hardware_concurrency();
+} // namespace CPUCores
+
+
+UInt16 getNumberOfLogicalCPUCores()
+{
+    return CPUCores::number_of_logical_cpu_cores;
+}
+
+// We should call this function before Context has been created,
+// which will call `getNumberOfLogicalCPUCores`, or we can not
+// set cpu cores any more.
+void setNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores)
+{
+    CPUCores::number_of_logical_cpu_cores = max_logical_cpu_cores;
+}

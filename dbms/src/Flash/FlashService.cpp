@@ -16,6 +16,11 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
+<<<<<<< HEAD
+=======
+#include <Common/VariantOp.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
+>>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
 #include <Flash/BatchCoprocessorHandler.h>
@@ -55,7 +60,7 @@ FlashService::FlashService(IServer & server_)
     auto settings = server_.context().getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
-    const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
+    const size_t default_size = getNumberOfLogicalCPUCores();
 
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
