@@ -250,7 +250,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : regions_info)
         {
-            if (arc4random() % 100 > 50)
+            if (random() % 100 > 50)
                 region_ids.insert(info.region_id);
         }
         throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
