@@ -55,9 +55,9 @@ DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
     DataTypePtr datatype_ptr = get(ast);
     // avoid big hashmap in rare cases.
+    std::unique_lock lock(rw_lock);
     if (fullname_types.size() < MAX_FULLNAME_TYPES)
     {
-        std::unique_lock lock(rw_lock);
         fullname_types.emplace(full_name, datatype_ptr);
     }
     return datatype_ptr;
