@@ -47,7 +47,6 @@ Field ColumnInfo::defaultValueToField() const
     }
     switch (tp)
     {
-<<<<<<< HEAD
         // TODO: Consider unsigned?
         // Integer Type.
         case TypeTiny:
@@ -55,43 +54,23 @@ Field ColumnInfo::defaultValueToField() const
         case TypeLong:
         case TypeLongLong:
         case TypeInt24:
-            return value.convert<Int64>();
+        {
+            // In c++, cast a unsigned integer to signed integer will not change the value.
+            // like 9223372036854775808 which is larger than the maximum value of Int64,
+            // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
+            // so we don't need consider unsigned here.
+            try
+            {
+                return value.convert<Int64>();
+            }
+            catch (...)
+            {
+                // due to https://github.com/pingcap/tidb/issues/34881
+                // we do this to avoid exception in older version of TiDB.
+                return static_cast<Int64>(std::llround(value.convert<double>()));
+            }
+        }
         case TypeBit:
-=======
-    // Integer Type.
-    case TypeTiny:
-    case TypeShort:
-    case TypeLong:
-    case TypeLongLong:
-    case TypeInt24:
-    {
-        // In c++, cast a unsigned integer to signed integer will not change the value.
-        // like 9223372036854775808 which is larger than the maximum value of Int64,
-        // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
-        // so we don't need consider unsigned here.
-        try
-        {
-            return value.convert<Int64>();
-        }
-        catch (...)
-        {
-            // due to https://github.com/pingcap/tidb/issues/34881
-            // we do this to avoid exception in older version of TiDB.
-            return static_cast<Int64>(std::llround(value.convert<double>()));
-        }
-    }
-    case TypeBit:
-    {
-        // TODO: We shall use something like `orig_default_bit`, which will never change once created,
-        //  rather than `default_bit`, which could be altered.
-        //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
-        const auto & bit_value = default_bit_value;
-        // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
-        //  i.e. bit column added with an default value but later modified to another.
-        //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
-        //  This is a bug anyway, we choose to make it simple, i.e. use `default_bit`.
-        if (bit_value.isEmpty())
->>>>>>> ca3e1c6be8 (Fix an invalid default value cause bootstrap failed (#4916))
         {
             // TODO: We shall use something like `orig_default_bit`, which will never change once created,
             //  rather than `default_bit`, which could be altered.
@@ -572,16 +551,7 @@ catch (const Poco::Exception & e)
 /// IndexColumnInfo ///
 ///////////////////////
 
-<<<<<<< HEAD
 IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
-=======
-IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json)
-    : offset()
-    , length()
-{
-    deserialize(json);
-}
->>>>>>> ca3e1c6be8 (Fix an invalid default value cause bootstrap failed (#4916))
 
 Poco::JSON::Object::Ptr IndexColumnInfo::getJSONObject() const
 try
@@ -625,21 +595,7 @@ catch (const Poco::Exception & e)
 ////// IndexInfo //////
 ///////////////////////
 
-<<<<<<< HEAD
 IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
-=======
-IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json)
-    : id()
-    , state()
-    , index_type()
-    , is_unique()
-    , is_primary()
-    , is_invisible()
-    , is_global()
-{
-    deserialize(json);
-}
->>>>>>> ca3e1c6be8 (Fix an invalid default value cause bootstrap failed (#4916))
 Poco::JSON::Object::Ptr IndexInfo::getJSONObject() const
 try
 {
