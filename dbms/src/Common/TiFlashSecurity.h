@@ -247,7 +247,7 @@ private:
         {
             if (inited && has_tls_config)
             {
-                LOG_WARNING(log, "When TLS config is set, we can't remove it");
+                LOG_WARNING(log, "Can't remove tls config online");
             }
             else
             {

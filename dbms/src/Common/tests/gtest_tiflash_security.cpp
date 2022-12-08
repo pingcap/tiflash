@@ -99,7 +99,7 @@ key_path="security/key.pem"
 cert_allowed_cn="tidb"
         )";
     config = loadConfigFromString(test);
-    ASSERT_FALSE(tiflash_config.update(*config)); // can't add tls config online
+    ASSERT_FALSE(tiflash_config.update(*config)); // Can't add tls config online
     ASSERT_FALSE(tiflash_config.hasTlsConfig());
     config = loadConfigFromString(test);
     TiFlashSecurityConfig tiflash_config_1(log);
@@ -108,9 +108,17 @@ cert_allowed_cn="tidb"
         R"(
         )";
     config = loadConfigFromString(test);
-    ASSERT_FALSE(tiflash_config_1.update(*config)); // can't remove security config online
+    ASSERT_FALSE(tiflash_config_1.update(*config)); // Can't remove security config online
     ASSERT_TRUE(tiflash_config_1.hasTlsConfig());
 
+    test =
+        R"(
+[security]
+cert_allowed_cn="tidb"
+        )";
+    config = loadConfigFromString(test);
+    ASSERT_FALSE(tiflash_config_1.update(*config)); // Can't remove tls config online
+    ASSERT_TRUE(tiflash_config_1.hasTlsConfig());
 
     test =
         R"(
