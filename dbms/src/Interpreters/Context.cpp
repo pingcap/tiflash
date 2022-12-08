@@ -145,6 +145,7 @@ struct ContextShared
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
+    BackgroundProcessingPoolPtr ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
@@ -1372,6 +1373,15 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     // TODO: maybe a better name for the pool
     auto lock = getLock();
     return *shared->blockable_background_pool;
+}
+
+BackgroundProcessingPool & Context::getPSBackgroundPool()
+{
+    auto lock = getLock();
+    // use the same size as `background_pool_size`
+    if (!shared->ps_compact_background_pool)
+        shared->ps_compact_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-page-");
+    return *shared->ps_compact_background_pool;
 }
 
 void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
