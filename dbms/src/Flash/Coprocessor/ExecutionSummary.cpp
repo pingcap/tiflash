@@ -31,10 +31,7 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows += other.num_produced_rows();
     num_iterations += other.num_iterations();
     concurrency += other.concurrency();
-
-    DM::ScanContext tmp_scan_context;
-    tmp_scan_context.deserialize(other.tiflash_scan_context());
-    scan_context->merge(tmp_scan_context);
+    scan_context->merge(other.tiflash_scan_context());
 }
 
 void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
