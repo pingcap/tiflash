@@ -219,13 +219,8 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider,
-<<<<<<< HEAD
-        bool use_v3 = false);
-=======
         Context & global_ctx,
-        bool use_v3 = false,
-        bool no_more_insert_to_v2 = false);
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
+        bool use_v3 = false);
 
     PageStorage(
         String name,

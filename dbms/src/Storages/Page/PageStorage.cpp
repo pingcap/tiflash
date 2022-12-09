@@ -24,22 +24,13 @@ PageStoragePtr PageStorage::create(
     PSDiskDelegatorPtr delegator,
     const PageStorage::Config & config,
     const FileProviderPtr & file_provider,
-<<<<<<< HEAD
-    bool use_v3)
-=======
     Context & global_ctx,
-    bool use_v3,
-    bool no_more_insert_to_v2)
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
+    bool use_v3)
 {
     if (use_v3)
         return std::make_shared<PS::V3::PageStorageImpl>(name, delegator, config, file_provider);
     else
-<<<<<<< HEAD
-        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider);
-=======
-        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider, global_ctx.getPSBackgroundPool(), no_more_insert_to_v2);
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
+        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider, global_ctx.getPSBackgroundPool());
 }
 
 /***************************

@@ -159,25 +159,15 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
 
 PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
-<<<<<<< HEAD
                          const Config & config_,
-                         const FileProviderPtr & file_provider_)
-=======
-                         const PageStorageConfig & config_,
                          const FileProviderPtr & file_provider_,
-                         BackgroundProcessingPool & ver_compact_pool_,
-                         bool no_more_insert_)
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
+                         BackgroundProcessingPool & ver_compact_pool_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , write_files(std::max(1UL, config_.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
-<<<<<<< HEAD
-=======
     , ver_compact_pool(ver_compact_pool_)
-    , no_more_insert(no_more_insert_)
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots.get());
@@ -1162,10 +1152,10 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
 
     Stopwatch watch;
     if (gc_type == GCType::LowWrite)
-        GET_METRIC(tiflash_storage_page_gc_count, type_low_write).Increment();
+        GET_METRIC(tiflash_storage_page_gc_count, type_v2_low).Increment();
     else
-        GET_METRIC(tiflash_storage_page_gc_count, type_exec).Increment();
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_exec).Observe(watch.elapsedSeconds()); });
+        GET_METRIC(tiflash_storage_page_gc_count, type_v2).Increment();
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2).Observe(watch.elapsedSeconds()); });
 
 
 #if !defined(NDEBUG)
@@ -1219,11 +1209,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction)
         {
-<<<<<<< HEAD
-            GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_migrate).Observe(watch_migrate.elapsedSeconds());
-=======
             GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2_data_compact).Observe(watch_migrate.elapsedSeconds());
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
         }
     }
 

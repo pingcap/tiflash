@@ -88,17 +88,10 @@ public:
 public:
     PageStorage(String name,
                 PSDiskDelegatorPtr delegator, //
-<<<<<<< HEAD
                 const Config & config_,
-                const FileProviderPtr & file_provider_);
-    ~PageStorage() = default;
-=======
-                const PageStorageConfig & config_,
                 const FileProviderPtr & file_provider_,
-                BackgroundProcessingPool & ver_compact_pool_,
-                bool no_more_insert_ = false);
-    ~PageStorage() override = default;
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
+                BackgroundProcessingPool & ver_compact_pool_);
+    ~PageStorage() override { shutdown(); }
 
     void restore() override;
 
@@ -287,16 +280,10 @@ private:
 
     StatisticsInfo last_gc_statistics;
 
-<<<<<<< HEAD
-=======
     // background pool for running compact on `versioned_page_entries`
     BackgroundProcessingPool & ver_compact_pool;
     BackgroundProcessingPool::TaskHandle ver_compact_handle = nullptr;
 
-    // true means this instance runs under mix mode
-    bool no_more_insert = false;
-
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 private:
     WriterPtr checkAndRenewWriter(
         WritingPageFile & writing_file,
