@@ -44,7 +44,7 @@ tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
     return response;
 }
 
-// exchange, remote read
+// exchange/remote read
 std::pair<RemoteExecutionSummary, RemoteExecutionSummary> ExecutionSummaryCollector::getRemoteExecutionSummaries() const
 {
     /// get executionSummary info from remote input streams

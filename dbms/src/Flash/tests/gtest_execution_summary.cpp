@@ -61,6 +61,7 @@ public:
             if (it->second.first != not_check_rows)
                 ASSERT_EQ(summary.num_produced_rows(), it->second.first) << fmt::format("executor_id: {}", summary.executor_id());
             ASSERT_EQ(summary.concurrency(), it->second.second) << fmt::format("executor_id: {}", summary.executor_id());
+            // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
         }
     }
 };
