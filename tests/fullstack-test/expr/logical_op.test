@@ -1,19 +1,24 @@
 mysql> drop table if exists test.t1;
 mysql> drop table if exists test.t2;
 mysql> drop table if exists test.t3;
+mysql> drop table if exists test.t4;
 mysql> create table test.t1(a char(20),b double);
 mysql> create table test.t2(a char(20));
 mysql> create table test.t3(a int);
+mysql> create table test.t4(a tinyint(45) unsigned NOT NULL, b bigint(20) NOT NULL);
 mysql> insert into test.t1 values(1,null),('j',0),(1,12.991),(0,0),(0,0),('they',1.009),('can',-99),(0,12.991),(1,-9.183),(null,1);
 mysql> insert into test.t2 values(0),(0),(0),(0),(0),(0),(1),('with'),('see'),(null);
 mysql> insert into test.t3 values(0),(1);
+mysql> insert into test.t4 values(65, 1),(66, 2), (67, 3), (0, 0);
 mysql> alter table test.t1 set tiflash replica 1;
 mysql> alter table test.t2 set tiflash replica 1;
 mysql> alter table test.t3 set tiflash replica 1;
+mysql> alter table test.t4 set tiflash replica 1;
 
 func> wait_table test t1
 func> wait_table test t2
 func> wait_table test t3
+func> wait_table test t4
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t1 where (b between null and 100) is null;
 +----------+
@@ -67,6 +72,18 @@ mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 group by a having ifnull(null,count(*)) and min(null);
 # empty
 
+# issue 5849
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a or b from test.t4;
++--------+
+| a or b |
++--------+
+|      1 |
+|      1 |
+|      1 |
+|      0 |
++--------+
+
 #mysql> drop table if exists test.t1;
 #mysql> drop table if exists test.t2;
 #mysql> drop table if exists test.t3;
+#mysql> drop table if exists test.t4;
