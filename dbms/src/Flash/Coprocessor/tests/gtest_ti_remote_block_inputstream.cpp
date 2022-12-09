@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -208,6 +209,16 @@ struct MockReceiverContext
     std::shared_ptr<Reader> makeReader(const Request &)
     {
         return std::make_shared<Reader>(queue);
+    }
+
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
+    {
+        throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
+    void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
+    {
+        throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
     }
 
     static Status getStatusOK()

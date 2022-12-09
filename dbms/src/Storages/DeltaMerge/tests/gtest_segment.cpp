@@ -196,7 +196,7 @@ try
 
         // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_merge_delta_apply.next();
         th_seg_merge_delta.get();
 
@@ -255,7 +255,7 @@ try
 
         // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_split_apply.next();
         th_seg_split.get();
 
@@ -316,7 +316,7 @@ try
 
         // non-flushed column files
         writeSegment(new_seg_id, 100);
-        ingestDTFileIntoSegment(new_seg_id, 100);
+        ingestDTFileIntoDelta(new_seg_id, 100);
         sp_seg_merge_apply.next();
         th_seg_merge.get();
 
@@ -379,7 +379,7 @@ try
     }
 
     {
-        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     }
     ASSERT_EQ(segments.size(), 1);

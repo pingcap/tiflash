@@ -76,3 +76,20 @@ void Redact::keyToDebugString(const char * key, const size_t size, std::ostream 
     }
     oss.flags(flags); // restore flags
 }
+
+std::string Redact::hexStringToKey(const char * start, size_t len)
+{
+    std::string s;
+    if (len & 1)
+        throw DB::Exception("Invalid length: " + std::string(start, len), DB::ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = 0; i < len; i += 2)
+    {
+        int x;
+        std::stringstream ss;
+        ss << std::hex << std::string(start + i, start + i + 2);
+        ss >> x;
+        s.push_back(x);
+    }
+    return s;
+}

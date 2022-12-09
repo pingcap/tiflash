@@ -73,6 +73,8 @@ extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
 extern const Event DMSegmentIsEmptyFastPath;
 extern const Event DMSegmentIsEmptySlowPath;
+extern const Event DMSegmentIngestDataByReplace;
+extern const Event DMSegmentIngestDataIntoDelta;
 
 } // namespace ProfileEvents
 
@@ -87,6 +89,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfSegmentIngest;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -447,12 +450,112 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
     return true;
 }
 
-bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
+bool Segment::ingestDataToDelta(
+    DMContext & dm_context,
+    const RowKeyRange & range,
+    const DMFiles & data_files,
+    bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
-    LOG_TRACE(log, "Segment write region snapshot, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
+    LOG_TRACE(log, "Segment ingest data to delta, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
 
+    ColumnFiles column_files;
+    column_files.reserve(data_files.size());
+    for (const auto & data_file : data_files)
+    {
+        auto column_file = std::make_shared<ColumnFileBig>(dm_context, data_file, rowkey_range);
+        if (column_file->getRows() != 0)
+            column_files.emplace_back(std::move(column_file));
+    }
     return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+Segment::IngestDataInfo Segment::prepareIngestDataWithClearData() const
+{
+    return IngestDataInfo{
+        .option_clear_data = true,
+        .is_snapshot_empty = true,
+        .snapshot = nullptr,
+    };
+}
+
+Segment::IngestDataInfo Segment::prepareIngestDataWithPreserveData(
+    DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap) const
+{
+    auto is_empty = isDefinitelyEmpty(dm_context, segment_snap);
+    return IngestDataInfo{
+        .option_clear_data = false,
+        .is_snapshot_empty = is_empty,
+        .snapshot = segment_snap,
+    };
+}
+
+SegmentPtr Segment::applyIngestData(
+    const Segment::Lock & lock,
+    DMContext & dm_context,
+    const DMFilePtr & data_file,
+    const IngestDataInfo & prepared_info)
+{
+    if (hasAbandoned())
+    {
+        return nullptr;
+    }
+
+    // Fast path: if we don't want to preserve data in the segment, or the segment is empty,
+    // we could just replace the segment with the specified data file.
+    if (prepared_info.option_clear_data || prepared_info.is_snapshot_empty)
+    {
+        ProfileEvents::increment(ProfileEvents::DMSegmentIngestDataByReplace);
+        auto new_seg = replaceData(lock, dm_context, data_file, prepared_info.snapshot);
+        RUNTIME_CHECK(new_seg != nullptr); // replaceData never returns nullptr.
+        return new_seg;
+    }
+
+    ProfileEvents::increment(ProfileEvents::DMSegmentIngestDataIntoDelta);
+    // Slow path: the destination is not empty, and we want to preserve the destination data,
+    // so we have to ingest the data into the delta layer and trigger a delta merge later.
+    auto success = ingestDataToDelta(dm_context, rowkey_range, {data_file}, /* clear_data_in_range */ false);
+    // ingest to delta should always success as long as segment is not abandoned.
+    RUNTIME_CHECK(success);
+
+    // Current segment is still valid.
+    return shared_from_this();
+}
+
+SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
+                                      const DMFilePtr & data_file,
+                                      bool clear_data)
+{
+    IngestDataInfo ii;
+    if (clear_data)
+    {
+        ii = prepareIngestDataWithClearData();
+    }
+    else
+    {
+        auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
+        if (!segment_snap)
+            return nullptr;
+        ii = prepareIngestDataWithPreserveData(dm_context, segment_snap);
+    }
+
+    auto segment_lock = mustGetUpdateLock();
+    auto new_segment = applyIngestData(segment_lock, dm_context, data_file, ii);
+    if (new_segment.get() != this)
+    {
+        RUNTIME_CHECK(
+            compare(getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
+            info(),
+            new_segment->info());
+        RUNTIME_CHECK(
+            segmentId() == new_segment->segmentId(),
+            info(),
+            new_segment->info());
+    }
+
+    return new_segment;
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
@@ -873,49 +976,39 @@ SegmentPtr Segment::applyMergeDelta(const Segment::Lock & lock, //
     return new_me;
 }
 
-SegmentPtr Segment::dangerouslyReplaceDataForTest(DMContext & dm_context, //
-                                                  const DMFilePtr & data_file) const
+SegmentPtr Segment::replaceData(const Segment::Lock & lock, //
+                                DMContext & context,
+                                const DMFilePtr & data_file,
+                                SegmentSnapshotPtr segment_snap_opt) const
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    LOG_DEBUG(log, "ReplaceData - Begin, snapshot_rows={} data_file={}", segment_snap_opt == nullptr ? "<none>" : std::to_string(segment_snap_opt->getRows()), data_file->path());
 
-    auto lock = mustGetUpdateLock();
-    auto new_segment = dangerouslyReplaceData(lock, dm_context, data_file, wbs);
+    ColumnFiles in_memory_files{};
+    ColumnFilePersisteds persisted_files{};
 
-    wbs.writeAll();
-    return new_segment;
-}
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
-SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
-                                           DMContext & dm_context,
-                                           const DMFilePtr & data_file,
-                                           WriteBatches & wbs) const
-{
-    LOG_DEBUG(log, "ReplaceData - Begin, data_file={}", data_file->path());
+    // If a snapshot is specified, we retain newly written data since the snapshot.
+    // Otherwise, we just discard everything in the delta layer.
+    if (segment_snap_opt != nullptr)
+    {
+        std::tie(in_memory_files, persisted_files) = delta->cloneNewlyAppendedColumnFiles(
+            lock,
+            context,
+            rowkey_range,
+            *segment_snap_opt->delta,
+            wbs);
+    }
 
-    auto & storage_pool = dm_context.storage_pool;
-    auto delegate = dm_context.path_pool.getStableDiskDelegator();
-
-    RUNTIME_CHECK(delegate.getDTFilePath(data_file->fileId()) == data_file->parentPath());
-
-    // Always create a ref to the file to allow `data_file` being shared.
-    auto new_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-    // TODO: We could allow assigning multiple DMFiles in future.
-    auto ref_file = DMFile::restore(
-        dm_context.db_context.getFileProvider(),
-        data_file->fileId(),
-        new_page_id,
-        data_file->parentPath(),
-        DMFile::ReadMetaMode::all());
-    wbs.data.putRefPage(new_page_id, data_file->pageId());
+    auto new_delta = std::make_shared<DeltaValueSpace>(
+        delta->getId(),
+        persisted_files,
+        in_memory_files);
+    new_delta->saveMeta(wbs);
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
-    new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
+    new_stable->setFiles({data_file}, rowkey_range, &context);
     new_stable->saveMeta(wbs.meta);
-
-    // Empty new delta
-    auto new_delta = std::make_shared<DeltaValueSpace>(
-        delta->getId());
-    new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>( //
         parent_log,
@@ -929,6 +1022,8 @@ SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
 
     delta->recordRemoveColumnFilesPages(wbs);
     stable->recordRemovePacksPages(wbs);
+
+    wbs.writeAll();
 
     LOG_DEBUG(log, "ReplaceData - Finish, old_me={} new_me={}", info(), new_me->info());
 

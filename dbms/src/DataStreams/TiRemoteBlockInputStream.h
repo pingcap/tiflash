@@ -74,7 +74,10 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 throw Exception(result.error_msg);
             }
             if (result.eof)
+            {
+                LOG_DEBUG(log, "remote reader meets eof");
                 return false;
+            }
             if (result.resp != nullptr && result.resp->has_error())
             {
                 LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());

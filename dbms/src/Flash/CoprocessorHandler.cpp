@@ -73,6 +73,8 @@ grpc::Status CoprocessorHandler::execute()
 
     try
     {
+        RUNTIME_CHECK_MSG(!cop_context.db_context.isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+
         switch (cop_request->tp())
         {
         case COP_REQ_TYPE_DAG:
