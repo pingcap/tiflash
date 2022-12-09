@@ -648,7 +648,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
         bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
         {
-            res_data.resize(res_data.size() + subject_size);
+            res_data.resize(res_data.size() + subject_size + 1);
             memcpy(&res_data[res_offset], subject, subject_size);
             res_offset += subject_size;
             res_data[res_offset++] = 0;
@@ -688,7 +688,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceImpl(const char * subje
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
-    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);;
+    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
+    ;
     FunctionsRegexp::checkArgsInstr(utf8_total_len, subject_size, pos, ret_op);
     FunctionsRegexp::makeOccurValid(occur);
 
@@ -723,7 +724,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replace(
     Int64 pos,
     Int64 occur)
 {
-    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);;
+    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
+    ;
     FunctionsRegexp::checkArgsReplace(utf8_total_len, subject_size, pos);
     FunctionsRegexp::makeReplaceOccurValid(occur);
 

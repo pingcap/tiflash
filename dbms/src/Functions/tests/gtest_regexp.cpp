@@ -3201,7 +3201,7 @@ struct RegexpReplaceCase
         , position(pos)
         , occurrence(occur)
         , match_type(mt)
-        {}
+    {}
 
     RegexpReplaceCase(const String & res, const std::vector<UInt8> & null_map_, const String & expr, const String & pat, const String & repl, Int64 pos = 1, Int64 occur = 1, const String & mt = "")
         : result(res)
@@ -3212,7 +3212,7 @@ struct RegexpReplaceCase
         , position(pos)
         , occurrence(occur)
         , match_type(mt)
-        {}
+    {}
 
     static void setVecsWithoutNullMap(
         int param_num,
@@ -3494,17 +3494,15 @@ TEST_F(Regexp, RegexpReplace)
     {
         // test empty expr
         ASSERT_COLUMN_EQ(createColumn<String>({"aa", "aa", "aa", "", ""}),
-                    executeFunction(
-                        "regexp_replace",
-                        {
-                            createColumn<String>({"", "", "", "", ""}),
-                            createColumn<String>({"^$", "^$", "^$", "^$", "12"}),
-                            createColumn<String>({"aa", "aa", "aa", "aa", "aa"}),
-                            createColumn<Int64>({1, 1, 1, 1, 1}),
-                            createColumn<Int64>({-1, 0, 1, 2, 3})
-                        },
-                        nullptr,
-                        true));
+                         executeFunction(
+                             "regexp_replace",
+                             {createColumn<String>({"", "", "", "", ""}),
+                              createColumn<String>({"^$", "^$", "^$", "^$", "12"}),
+                              createColumn<String>({"aa", "aa", "aa", "aa", "aa"}),
+                              createColumn<Int64>({1, 1, 1, 1, 1}),
+                              createColumn<Int64>({-1, 0, 1, 2, 3})},
+                             nullptr,
+                             true));
     }
 }
 } // namespace tests

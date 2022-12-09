@@ -177,14 +177,14 @@ struct RegexpReplaceImpl
     }
 
     static void executeReplace(const StringRef & expr,
-                                re2_st::RE2 & re2,
-                                const StringRef & repl,
-                                Int64 pos,
-                                Int64 occur,
-                                ColumnString::Chars_t & res_data,
-                                ColumnString::Offsets & res_offsets,
-                                size_t index,
-                                ColumnString::Offset & res_offset)
+                               re2_st::RE2 & re2,
+                               const StringRef & repl,
+                               Int64 pos,
+                               Int64 occur,
+                               ColumnString::Chars_t & res_data,
+                               ColumnString::Offsets & res_offsets,
+                               size_t index,
+                               ColumnString::Offset & res_offset)
     {
         int num_captures = std::min(re2.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
         Instructions instructions = createInstructions(String(repl.data, repl.size), num_captures);

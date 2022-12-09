@@ -14,11 +14,10 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <Common/config.h>
 #include <common/StringRef.h>
 #include <common/types.h>
-#include <Columns/ColumnString.h>
-#include <common/StringRef.h>
 #include <re2/re2.h>
 
 #include <memory>

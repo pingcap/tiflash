@@ -1876,63 +1876,63 @@ private:
 #undef GET_MATCH_TYPE_ACTUAL_PARAM
 #undef EXECUTE_REGEXP_SUBSTR
 
-#define EXECUTE_REGEXP_REPLACE() \
-    do \
-    { \
+#define EXECUTE_REGEXP_REPLACE()                                                                                                                                                                                                        \
+    do                                                                                                                                                                                                                                  \
+    {                                                                                                                                                                                                                                   \
         REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(REPL_PARAM_PTR_VAR_NAME), *(POS_PARAM_PTR_VAR_NAME), *(OCCUR_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
 // Method to get actual match type param
-#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                                          \
-    do                                                                                                                             \
-    { \
+#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                                \
+    do                                                                                                               \
+    {                                                                                                                \
         GET_ACTUAL_STRING_PARAM(MATCH_TYPE_PV_VAR_NAME, MATCH_TYPE_PARAM_PTR_VAR_NAME, ({EXECUTE_REGEXP_REPLACE()})) \
     } while (0);
 
 // Method to get actual occur param
-#define GET_OCCUR_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_OCCUR_ACTUAL_PARAM()                                                                             \
+    do                                                                                                       \
+    {                                                                                                        \
         GET_ACTUAL_INT_PARAM(OCCUR_PV_VAR_NAME, OCCUR_PARAM_PTR_VAR_NAME, ({GET_MATCH_TYPE_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual position param
-#define GET_POS_ACTUAL_PARAM() \
-    do \
-    { \
+#define GET_POS_ACTUAL_PARAM()                                                                      \
+    do                                                                                              \
+    {                                                                                               \
         GET_ACTUAL_INT_PARAM(POS_PV_VAR_NAME, POS_PARAM_PTR_VAR_NAME, ({GET_OCCUR_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual repl param
-#define GET_REPL_ACTUAL_PARAM()                                                                                           \
-    do                                                                                                                       \
-    {                                                                                                                        \
+#define GET_REPL_ACTUAL_PARAM()                                                                        \
+    do                                                                                                 \
+    {                                                                                                  \
         GET_ACTUAL_STRING_PARAM(REPL_PV_VAR_NAME, REPL_PARAM_PTR_VAR_NAME, ({GET_POS_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual pattern param
-#define GET_PAT_ACTUAL_PARAM()                                                                                           \
-    do                                                                                                                       \
-    {                                                                                                                        \
+#define GET_PAT_ACTUAL_PARAM()                                                                        \
+    do                                                                                                \
+    {                                                                                                 \
         GET_ACTUAL_STRING_PARAM(PAT_PV_VAR_NAME, PAT_PARAM_PTR_VAR_NAME, ({GET_REPL_ACTUAL_PARAM()})) \
     } while (0);
 
 // Method to get actual expression param
-#define GET_EXPR_ACTUAL_PARAM()                                                                                 \
-    do                                                                                                              \
-    {                                                                                                               \
+#define GET_EXPR_ACTUAL_PARAM()                                                                        \
+    do                                                                                                 \
+    {                                                                                                  \
         GET_ACTUAL_STRING_PARAM(EXPR_PV_VAR_NAME, EXPR_PARAM_PTR_VAR_NAME, ({GET_PAT_ACTUAL_PARAM()})) \
     } while (0);
 
 // The entry to get actual params and execute regexp functions
 #define GET_ACTUAL_PARAMS_AND_EXECUTE() \
-    do                                       \
-    {                                        \
-        GET_EXPR_ACTUAL_PARAM()          \
+    do                                  \
+    {                                   \
+        GET_EXPR_ACTUAL_PARAM()         \
     } while (0);
 
 // Implementation of regexp_replace function
-template <typename Impl, typename Name>
+template <typename Name>
 class FunctionStringRegexpReplace : public FunctionStringRegexpBase
     , public IFunction
 {
@@ -1986,8 +1986,8 @@ public:
         GetIntFuncPointerType get_occur_func = FunctionsRegexp::getGetIntFuncPointer(occur_param.getIntType());
 
         // Container will not be used when parm is const
-        const void * pos_container =  pos_param.getContainer();
-        const void * occur_container =  occur_param.getContainer();
+        const void * pos_container = pos_param.getContainer();
+        const void * occur_container = occur_param.getContainer();
 
         // Const value will not be used when param is not const
         Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
@@ -2034,21 +2034,21 @@ public:
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || ReplT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
 
-#define GET_POS_VALUE(idx) \
-    do \
-    { \
-        if constexpr (PosT::isConst()) \
-            pos = pos_const_val; \
-        else \
+#define GET_POS_VALUE(idx)                          \
+    do                                              \
+    {                                               \
+        if constexpr (PosT::isConst())              \
+            pos = pos_const_val;                    \
+        else                                        \
             pos = get_pos_func(pos_container, idx); \
     } while (0);
 
-#define GET_OCCUR_VALUE(idx) \
-    do \
-    { \
-        if constexpr (OccurT::isConst()) \
-            occur = occur_const_val; \
-        else \
+#define GET_OCCUR_VALUE(idx)                              \
+    do                                                    \
+    {                                                     \
+        if constexpr (OccurT::isConst())                  \
+            occur = occur_const_val;                      \
+        else                                              \
             occur = get_occur_func(occur_container, idx); \
     } while (0);
 
@@ -2213,7 +2213,7 @@ public:
         ColumnPtr col_match_type;
 
         // Go through cases to get arguments
-        switch(arg_num)
+        switch (arg_num)
         {
         case REGEXP_REPLACE_MAX_PARAM_NUM:
             col_match_type = block.getByPosition(arguments[5]).column;
@@ -2234,6 +2234,7 @@ public:
 
         GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
+
 private:
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
