@@ -24,6 +24,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsDateTime.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
@@ -86,98 +87,6 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
-};
-
-struct ExtractMyDurationImpl
-{
-    static Int64 signMultiplier(const MyDuration & duration)
-    {
-        return duration.isNeg() ? -1 : 1;
-    }
-
-    static Int64 extractHour(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * duration.hours();
-    }
-
-    static Int64 extractMinute(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * duration.minutes();
-    }
-
-    static Int64 extractSecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * duration.seconds();
-    }
-
-    static Int64 extractMicrosecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * duration.microSecond();
-    }
-
-    static Int64 extractSecondMicrosecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.seconds() * 1000000LL + duration.microSecond());
-    }
-
-    static Int64 extractMinuteMicrosecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * ((duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
-    }
-
-    static Int64 extractMinuteSecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.minutes() * 100LL + duration.seconds());
-    }
-
-    static Int64 extractHourMicrosecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
-    }
-
-    static Int64 extractHourSecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
-    }
-
-    static Int64 extractHourMinute(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
-    }
-
-    static Int64 extractDayMicrosecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * ((duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds()) * 1000000LL + duration.microSecond());
-    }
-
-    static Int64 extractDaySecond(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
-    }
-
-    static Int64 extractDayMinute(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
-    }
-
-    static Int64 extractDayHour(Int64 nano)
-    {
-        MyDuration duration(nano);
-        return signMultiplier(duration) * duration.hours();
-    }
 };
 
 class FunctionExtractMyDuration : public IFunction

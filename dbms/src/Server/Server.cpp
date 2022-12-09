@@ -32,8 +32,9 @@
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -242,7 +243,6 @@ struct TiFlashProxyConfig
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
-    const String engine_label_value = "tiflash";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -265,7 +265,9 @@ struct TiFlashProxyConfig
                 args_map[engine_store_address] = config.getString("flash.service_addr");
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
-            args_map[engine_label] = engine_label_value;
+
+            auto disaggregated_mode = getDisaggregatedMode(config);
+            args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
 
             for (auto && [k, v] : args_map)
             {
@@ -835,6 +837,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
+
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
@@ -882,10 +885,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto * helper = tiflash_instance_wrap.proxy_helper;
         helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
         server_info.parseSysInfo(response);
+        setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
         LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else
     {
+        setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
         LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
@@ -899,6 +904,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context = std::make_unique<Context>(Context::createGlobal());
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1187,34 +1193,37 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Load metadata done.");
 
-    /// Then, sync schemas with TiDB, and initialize schema sync service.
-    for (int i = 0; i < 60; i++) // retry for 3 mins
+    if (!global_context->isDisaggregatedComputeMode())
     {
-        try
+        /// Then, sync schemas with TiDB, and initialize schema sync service.
+        for (int i = 0; i < 60; i++) // retry for 3 mins
         {
-            global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
-            break;
+            try
+            {
+                global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+                break;
+            }
+            catch (Poco::Exception & e)
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
         }
-        catch (Poco::Exception & e)
-        {
-            const int wait_seconds = 3;
-            LOG_ERROR(
-                log,
-                "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
-                " seconds and try again.",
-                e.displayText(),
-                wait_seconds);
-            ::sleep(wait_seconds);
-        }
+        LOG_DEBUG(log, "Sync schemas done.");
+
+        initStores(*global_context, log, storage_config.lazily_init_store);
+
+        // After schema synced, set current database.
+        global_context->setCurrentDatabase(default_database);
+
+        global_context->initializeSchemaSyncService();
     }
-    LOG_DEBUG(log, "Sync schemas done.");
-
-    initStores(*global_context, log, storage_config.lazily_init_store);
-
-    // After schema synced, set current database.
-    global_context->setCurrentDatabase(default_database);
-
-    global_context->initializeSchemaSyncService();
     CPUAffinityManager::initCPUAffinityManager(config());
     LOG_INFO(log, "CPUAffinity: {}", CPUAffinityManager::getInstance().toString());
     SCOPE_EXIT({

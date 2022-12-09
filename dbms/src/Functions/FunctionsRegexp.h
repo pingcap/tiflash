@@ -87,6 +87,22 @@ struct NameRegexpReplace
 
 static constexpr std::string_view regexp_like_name(NameRegexpLike::name);
 
+enum class IntType
+{
+    UInt8 = 0,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64
+};
+
+using GetIntFuncPointerType = Int64 (*)(const void *, size_t);
+
+namespace FunctionsRegexp
+{
 inline int getDefaultFlags()
 {
     int flags = 0;
@@ -116,7 +132,7 @@ inline constexpr bool check_int_type()
     return std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>;
 }
 
-Int64 getIntFromField(Field & field)
+inline Int64 getIntFromField(Field & field)
 {
     switch (field.getType())
     {
@@ -129,28 +145,14 @@ Int64 getIntFromField(Field & field)
     }
 }
 
-enum class IntType
-{
-    UInt8 = 0,
-    UInt16,
-    UInt32,
-    UInt64,
-    Int8,
-    Int16,
-    Int32,
-    Int64
-};
-
 template <typename T>
-Int64 getInt(const void * container, size_t idx)
+inline Int64 getInt(const void * container, size_t idx)
 {
     const auto * tmp = reinterpret_cast<const typename ColumnVector<T>::Container *>(container);
     return static_cast<Int64>((*tmp)[idx]);
 }
 
-using GetIntFuncPointerType = Int64 (*)(const void *, size_t);
-
-GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
+inline GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
 {
     switch (int_type)
     {
@@ -190,6 +192,7 @@ inline void fillColumnStringWhenAllNull(decltype(ColumnString::create()) & col_r
         col_res_offsets[i] = offset;
     }
 }
+} // namespace FunctionsRegexp
 
 template <bool is_const>
 class ParamString
@@ -345,7 +348,7 @@ public:
             return const_int_val;
         else
         {
-            const auto * tmp = reinterpret_cast<const typename ColumnVector<std::enable_if_t<check_int_type<T>(), T>>::Container *>(int_container);
+            const auto * tmp = reinterpret_cast<const typename ColumnVector<std::enable_if_t<FunctionsRegexp::check_int_type<T>(), T>>::Container *>(int_container);
             return static_cast<Int64>((*tmp)[idx]);
         }
     }
@@ -477,7 +480,7 @@ public:
 
 private:
     // When this is a nullable param, we should ensure the null_map is not nullptr
-    inline void checkNullableLogic()
+    void checkNullableLogic()
     {
         if (is_nullable && (null_map == nullptr))
             throw Exception("Nullable Param with nullptr null_map");
@@ -652,7 +655,7 @@ private:
     {
         Field field;
         col_const->get(0, field);
-        auto data_int64 = field.isNull() ? -1 : getIntFromField(field);
+        auto data_int64 = field.isNull() ? -1 : FunctionsRegexp::getIntFromField(field);
         const auto & col_const_data = col_const->getDataColumnPtr();
         if (col_const_data->isColumnNullable())
         {
@@ -826,9 +829,9 @@ public:
             final_pattern = fmt::format("({})", final_pattern);
 
         String match_type = match_type_param.getString(0);
-        final_pattern = addMatchTypeForPattern(final_pattern, match_type, collator);
+        final_pattern = FunctionsRegexp::addMatchTypeForPattern(final_pattern, match_type, collator);
 
-        int flags = getDefaultFlags();
+        int flags = FunctionsRegexp::getDefaultFlags();
         return std::make_unique<Regexps::Regexp>(final_pattern, flags);
     }
 
@@ -997,7 +1000,7 @@ public:
                 return;
             }
 
-            int flags = getDefaultFlags();
+            int flags = FunctionsRegexp::getDefaultFlags();
             String expr = expr_param.getString(0);
             String pat = pat_param.getString(0);
             if (unlikely(pat.empty()))
@@ -1005,7 +1008,7 @@ public:
 
             String match_type = match_type_param.getString(0);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), flags);
             ResultType res{regexp.match(expr)};
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1100,7 +1103,7 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.match(expr_ref.data, expr_ref.size); // match
                 }
 
@@ -1120,7 +1123,7 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.match(expr_ref.data, expr_ref.size); // match
                 }
 
@@ -1157,7 +1160,7 @@ public:
         ParamVariant PAT_PV_VAR_NAME(col_pat, col_size, StringRef("", 0));
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        // GET_ACTUAL_PARAMS_AND_EXECUTE()
+        GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1276,9 +1279,9 @@ public:
         size_t col_size = expr_param.getDataNum();
 
         // Get function pointers to process the specific int type
-        GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
-        GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
-        GetIntFuncPointerType get_ret_op_func = getGetIntFuncPointer(ret_op_param.getIntType());
+        GetIntFuncPointerType get_pos_func = FunctionsRegexp::getGetIntFuncPointer(pos_param.getIntType());
+        GetIntFuncPointerType get_occur_func = FunctionsRegexp::getGetIntFuncPointer(occur_param.getIntType());
+        GetIntFuncPointerType get_ret_op_func = FunctionsRegexp::getGetIntFuncPointer(ret_op_param.getIntType());
 
         // Container will not be used when parm is const
         const void * pos_container = pos_param.getContainer();
@@ -1299,7 +1302,7 @@ public:
                 return;
             }
 
-            int flags = getDefaultFlags();
+            int flags = FunctionsRegexp::getDefaultFlags();
             String expr = expr_param.getString(0);
             String match_type = match_type_param.getString(0);
             String pat = pat_param.getString(0);
@@ -1307,7 +1310,7 @@ public:
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
             pat = fmt::format("({})", pat);
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), flags);
             ResultType res = regexp.instr(expr.c_str(), expr.size(), pos_const_val, occur_const_val, ret_op_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1438,7 +1441,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
@@ -1458,7 +1461,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp.instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
@@ -1515,7 +1518,7 @@ public:
         ParamVariant RET_OP_PV_VAR_NAME(col_return_option, col_size, 0);
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        // GET_ACTUAL_PARAMS_AND_EXECUTE()
+        GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1627,8 +1630,8 @@ public:
         size_t col_size = expr_param.getDataNum();
 
         // Get function pointers to process the specific int type
-        GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
-        GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
+        GetIntFuncPointerType get_pos_func = FunctionsRegexp::getGetIntFuncPointer(pos_param.getIntType());
+        GetIntFuncPointerType get_occur_func = FunctionsRegexp::getGetIntFuncPointer(occur_param.getIntType());
 
         // Container will not be used when parm is const
         const void * pos_container = pos_param.getContainer();
@@ -1651,12 +1654,12 @@ public:
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            int flags = getDefaultFlags();
+            int flags = FunctionsRegexp::getDefaultFlags();
             String expr = expr_param.getString(0);
             String match_type = match_type_param.getString(0);
             pat = fmt::format("({})", pat);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), flags);
             auto res = regexp.substr(expr.c_str(), expr.size(), pos_const_val, occur_const_val);
             if (res)
                 res_arg.column = res_arg.type->createColumnConst(col_size, toField(res.value().toString()));
@@ -1708,7 +1711,7 @@ public:
                 regexp = memorize<true>(pat_param, match_type_param, collator);
                 if (regexp == nullptr)
                 {
-                    fillColumnStringWhenAllNull(col_res, col_size);
+                    FunctionsRegexp::fillColumnStringWhenAllNull(col_res, col_size);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
                     return;
                 }
@@ -1720,7 +1723,7 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
                     {
-                        // null_map has been set to 1 in the previous 
+                        // null_map has been set to 1 in the previous
                         col_res->insertData("", 0);
                         continue;
                     }
@@ -1752,7 +1755,7 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
-                        // null_map has been set to 1 in the previous 
+                        // null_map has been set to 1 in the previous
                         col_res->insertData("", 0);
                         continue;
                     }
@@ -1767,7 +1770,7 @@ public:
                     match_type = match_type_param.getString(i);
                     pat = fmt::format("({})", pat);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, pos, occur);
                 }
             }
@@ -1785,7 +1788,7 @@ public:
                     match_type = match_type_param.getString(i);
                     pat = fmt::format("({})", pat);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     executeAndSetResult(regexp, col_res, null_map, i, expr_ref.data, expr_ref.size, pos, occur);
                 }
             }
@@ -1835,7 +1838,7 @@ public:
         ParamVariant OCCUR_PV_VAR_NAME(col_occur, col_size, 1);
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
-        // GET_ACTUAL_PARAMS_AND_EXECUTE()
+        GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1979,8 +1982,8 @@ public:
         size_t col_size = expr_param.getDataNum();
 
         // Get function pointers to process the specific int type
-        GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
-        GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
+        GetIntFuncPointerType get_pos_func = FunctionsRegexp::getGetIntFuncPointer(pos_param.getIntType());
+        GetIntFuncPointerType get_occur_func = FunctionsRegexp::getGetIntFuncPointer(occur_param.getIntType());
 
         // Container will not be used when parm is const
         const void * pos_container =  pos_param.getContainer();
@@ -2013,7 +2016,7 @@ public:
             ColumnString::Chars_t res_data;
             IColumn::Offset offset = 0;
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), getDefaultFlags());
+            Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), FunctionsRegexp::getDefaultFlags());
             regexp.replace(expr_ref.data, expr_ref.size, res_data, offset, repl_ref, pos_const_val, occur_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(reinterpret_cast<const char *>(&res_data[0]), offset - 1)));
             return;
@@ -2061,7 +2064,7 @@ public:
                     auto null_map_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & null_map = null_map_col->getData();
                     null_map.resize(col_size, 1);
-                    fillColumnStringWhenAllNull(col_res, col_size);
+                    FunctionsRegexp::fillColumnStringWhenAllNull(col_res, col_size);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
                     return;
                 }
@@ -2155,7 +2158,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
                     res_offsets[i] = res_offset;
                 }
@@ -2176,7 +2179,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
                     res_offsets[i] = res_offset;
                 }
@@ -2247,8 +2250,6 @@ private:
 #undef GET_ACTUAL_INT_PARAM
 #undef GET_ACTUAL_STRING_PARAM
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
-#undef RES_ARG_VAR_NAME
-
 #undef REPL_PARAM_PTR_VAR_NAME
 #undef MATCH_TYPE_PARAM_PTR_VAR_NAME
 #undef RET_OP_PARAM_PTR_VAR_NAME

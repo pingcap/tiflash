@@ -102,11 +102,6 @@ public:
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
-    void appendJoin(
-        ExpressionActionsChain & chain,
-        SubqueryForSet & join_query,
-        const NamesAndTypesList & columns_added_by_join) const;
-
     // Generate a project action for non-root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same, and
     // guarantee that left/right block of join don't have duplicated column names.
@@ -286,7 +281,7 @@ private:
     bool buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+        const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,

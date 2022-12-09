@@ -380,7 +380,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// handle pushed down filter for local and remote table scan.
     if (push_down_filter.hasValue())
     {
-        executePushedDownFilter(remote_read_streams_start_index, pipeline);
+        ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
         recordProfileStreams(pipeline, push_down_filter.executor_id);
     }
 }
@@ -419,51 +419,6 @@ void DAGStorageInterpreter::prepare()
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGStorageInterpreter::buildPushDownFilter()
-{
-    assert(push_down_filter.hasValue());
-
-    ExpressionActionsChain chain;
-    analyzer->initChain(chain, analyzer->getCurrentInputColumns());
-    String filter_column_name = analyzer->appendWhere(chain, push_down_filter.conditions);
-    ExpressionActionsPtr before_where = chain.getLastActions();
-    chain.addStep();
-
-    // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    NamesWithAliases project_cols;
-    for (const auto & col : analyzer->getCurrentInputColumns())
-    {
-        chain.getLastStep().required_output.push_back(col.name);
-        project_cols.emplace_back(col.name, col.name);
-    }
-    chain.getLastActions()->add(ExpressionAction::project(project_cols));
-    ExpressionActionsPtr project_after_where = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    return {before_where, filter_column_name, project_after_where};
-}
-
-void DAGStorageInterpreter::executePushedDownFilter(
-    size_t remote_read_streams_start_index,
-    DAGPipeline & pipeline)
-{
-    auto [before_where, filter_column_name, project_after_where] = buildPushDownFilter();
-
-    assert(pipeline.streams_with_non_joined_data.empty());
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
-    {
-        auto & stream = pipeline.streams[i];
-        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
-        stream->setExtraInfo("push down filter");
-        // after filter, do project action to keep the schema of local streams and remote streams the same.
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
-        stream->setExtraInfo("projection after push down filter");
-    }
-}
-
 void DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
@@ -492,7 +447,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     }
 }
 
-std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(const std::vector<RemoteRequest> & remote_requests)
+std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(const std::vector<RemoteRequest> & remote_requests)
 {
     assert(!remote_requests.empty());
 #ifndef NDEBUG
@@ -514,7 +469,7 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
     }
 #endif
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
+    std::vector<pingcap::coprocessor::CopTask> all_tasks;
     for (const auto & remote_request : remote_requests)
     {
         pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
@@ -539,7 +494,7 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
 
 void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)
 {
-    std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
+    std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
 
     const DAGSchema & schema = remote_requests[0].schema;
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
@@ -554,7 +509,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
             task_end++;
         if (task_end == task_start)
             continue;
-        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+        std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
         context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
@@ -1041,7 +996,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
-        ColumnID cid = ci.column_id();
+        const ColumnID cid = ci.id;
 
         // Column ID -1 return the handle column
         String name;
@@ -1062,9 +1017,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
             source_columns_tmp.emplace_back(std::move(pair));
         }
         required_columns_tmp.emplace_back(std::move(name));
-        if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
+        if (cid != -1 && ci.tp == TiDB::TypeTimestamp)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-        else if (cid != -1 && ci.tp() == TiDB::TypeTime)
+        else if (cid != -1 && ci.tp == TiDB::TypeTime)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
         else
             need_cast_column.push_back(ExtraCastAfterTSMode::None);

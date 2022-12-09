@@ -313,5 +313,4 @@ void registerFunctionsRegexp(FunctionFactory & factory)
     factory.registerFunction<FunctionRegexpSubstr>();
     factory.registerFunction<FunctionRegexpReplace>();
 }
-
 } // namespace DB

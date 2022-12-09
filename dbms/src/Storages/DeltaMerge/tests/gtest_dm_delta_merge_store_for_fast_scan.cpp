@@ -620,13 +620,11 @@ try
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            store->ingestFiles(dm_context, range2, {file_ids2}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            auto range = range1.merge(range2).merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         case TestMode::V2_Mix:
@@ -635,11 +633,9 @@ try
 
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            auto range = range1.merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         }
@@ -1004,13 +1000,11 @@ try
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            store->ingestFiles(dm_context, range2, {file_ids2}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            auto range = range1.merge(range2).merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         case TestMode::V2_Mix:
@@ -1019,11 +1013,9 @@ try
 
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            auto range = range1.merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         }

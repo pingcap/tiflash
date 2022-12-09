@@ -249,6 +249,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTiDBTimestampDiff>();
     factory.registerFunction<FunctionExtractMyDateTime>();
+    factory.registerFunction<FunctionExtractMyDateTimeFromString>();
     factory.registerFunction<FunctionTiDBDateDiff>();
     factory.registerFunction<FunctionToTiDBDayOfWeek>();
     factory.registerFunction<FunctionToTiDBDayOfYear>();

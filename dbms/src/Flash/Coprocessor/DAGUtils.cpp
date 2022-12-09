@@ -122,7 +122,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     //{tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsReal, "cast"},
-    //{tipb::ScalarFuncSig::CastJsonAsString, "cast"},
+    {tipb::ScalarFuncSig::CastJsonAsString, "cast_json_as_string"},
     //{tipb::ScalarFuncSig::CastJsonAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
@@ -438,8 +438,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::RegexpReplaceSig, "regexp_replace"},
     {tipb::ScalarFuncSig::RegexpSubstrSig, "regexp_substr"},
 
-    //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
+    {tipb::ScalarFuncSig::JsonExtractSig, "json_extract"},
+    {tipb::ScalarFuncSig::JsonUnquoteSig, "json_unquote"},
     //{tipb::ScalarFuncSig::JsonTypeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonSetSig, "cast"},
     //{tipb::ScalarFuncSig::JsonInsertSig, "cast"},
@@ -584,6 +584,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
+    {tipb::ScalarFuncSig::ExtractDatetimeFromString, "extractMyDateTimeFromString"},
     {tipb::ScalarFuncSig::ExtractDuration, "extractMyDuration"},
 
     //{tipb::ScalarFuncSig::AddDateStringString, "cast"},

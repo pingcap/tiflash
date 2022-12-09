@@ -23,7 +23,6 @@
 
 #include <cstring>
 #include <iostream>
-#include <tuple>
 #include <optional>
 
 #define MIN_LENGTH_FOR_STRSTR 3
@@ -528,36 +527,39 @@ void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(
     res_data[res_offset++] = '\0';
 }
 
-static inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
+namespace FunctionsRegexp
+{
+inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+{
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+}
+
+inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
     RUNTIME_CHECK_MSG(!(ret_op != 0 && ret_op != 1), "Incorrect argument to regexp function: return_option must be 1 or 0");
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+    checkArgPos(utf8_total_len, subject_size, pos);
 }
 
-static inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
-{
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
-}
-
-static inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
     checkArgPos(utf8_total_len, subject_size, pos);
 }
 
-static inline void checkArgsReplace(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+inline void checkArgsReplace(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
     checkArgPos(utf8_total_len, subject_size, pos);
 }
 
-static inline void makeOccurValid(Int64 & occur)
+inline void makeOccurValid(Int64 & occur)
 {
     occur = occur < 1 ? 1 : occur;
 }
 
-static inline void makeReplaceOccurValid(Int64 & occur)
+inline void makeReplaceOccurValid(Int64 & occur)
 {
     occur = occur < 0 ? 1 : occur;
 }
+} // namespace FunctionsRegexp
 
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
@@ -687,8 +689,8 @@ template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);;
-    checkArgsInstr(utf8_total_len, subject_size, pos, ret_op);
-    makeOccurValid(occur);
+    FunctionsRegexp::checkArgsInstr(utf8_total_len, subject_size, pos, ret_op);
+    FunctionsRegexp::makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
         return processInstrEmptyStringExpr(subject, subject_size, pos, occur);
@@ -701,8 +703,8 @@ template <bool thread_safe>
 std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
-    checkArgsSubstr(utf8_total_len, subject_size, pos);
-    makeOccurValid(occur);
+    FunctionsRegexp::checkArgsSubstr(utf8_total_len, subject_size, pos);
+    FunctionsRegexp::makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
         return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
@@ -722,8 +724,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replace(
     Int64 occur)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);;
-    checkArgsReplace(utf8_total_len, subject_size, pos);
-    makeReplaceOccurValid(occur);
+    FunctionsRegexp::checkArgsReplace(utf8_total_len, subject_size, pos);
+    FunctionsRegexp::makeReplaceOccurValid(occur);
 
     if (unlikely(subject_size == 0))
     {

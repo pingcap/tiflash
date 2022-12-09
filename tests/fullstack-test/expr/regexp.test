@@ -124,14 +124,14 @@ func> wait_table test t
 mysql> set tidb_enforce_mpp=1; select regexp_substr(_utf8mb4'1', _utf8mb4'1', pos, occur, match_type) as res from test.t;
 mysql> set tidb_enforce_mpp=1; select regexp_substr(_utf8mb4'1', _utf8mb4'', pos, occur, match_type) as res from test.t;
 
-mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', 1, 1, 0, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', 1, 1, _utf8mb4'i'), (_utf8mb4'ab\nabc', _utf8mb4'^abc$', 1, 1, _utf8mb4'm');
+mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', 1, 1, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', 1, 1, _utf8mb4'i'), (_utf8mb4'ab\nabc', _utf8mb4'^abc$', 1, 1, _utf8mb4'm');
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
-mysql> set tidb_enforce_mpp=1; select regexp_instr(expr, pattern, 1, 1, 0, match_type) as res from test.t;
+mysql> set tidb_enforce_mpp=1; select regexp_substr(expr, pattern, 1, 1, match_type) as res from test.t;
 +------+
 | res  |
 +------+
-|    1 |
-|    2 |
-|    4 |
+| 123  |
+| Bb   |
+| abc  |
 +------+

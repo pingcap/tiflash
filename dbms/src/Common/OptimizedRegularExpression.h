@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/config.h>
+#include <common/StringRef.h>
 #include <common/types.h>
 #include <Columns/ColumnString.h>
 #include <common/StringRef.h>
