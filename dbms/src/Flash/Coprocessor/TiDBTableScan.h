@@ -64,6 +64,11 @@ public:
         return is_fast_scan;
     }
 
+    const tipb::Executor * getTableScanPB() const
+    {
+        return table_scan;
+    }
+
 private:
     const tipb::Executor * table_scan;
     String executor_id;

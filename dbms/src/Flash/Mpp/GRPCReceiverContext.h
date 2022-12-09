@@ -18,6 +18,7 @@
 #include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
@@ -100,12 +101,28 @@ public:
 
     std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(const ExchangeRecvRequest & request, size_t source_index, const String & req_info, ExchangeReceiverBase * recv_base, bool is_fine_grained);
 
+    // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
+    void sendMPPTaskToTiFlashStorageNode(
+        LoggerPtr log,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs);
+
+    // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
+    // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),
+    // and ExchangeSender+TableScan(executed in tiflash_storage node).
+    // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log);
+
 private:
+    void setDispatchMPPTaskErrMsg(const std::string & err);
+
     tipb::ExchangeReceiver exchange_receiver_meta;
     mpp::TaskMeta task_meta;
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
     bool enable_local_tunnel;
     bool enable_async_grpc;
+
+    std::mutex dispatch_mpp_task_err_msg_mu;
+    String dispatch_mpp_task_err_msg;
 };
 } // namespace DB

@@ -38,7 +38,8 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count);
+        uint64_t fine_grained_shuffle_stream_count,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverWithRPCContext() = default;
 
@@ -53,6 +54,12 @@ private:
     void setUpConnection();
 
 private:
+    bool isReceiverForTiFlashStorage()
+    {
+        // If not empty, need to send MPPTask to tiflash_storage.
+        return !disaggregated_dispatch_reqs.empty();
+    }
+
     std::shared_ptr<RPCContext> rpc_context;
 };
 

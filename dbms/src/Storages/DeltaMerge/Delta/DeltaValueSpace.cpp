@@ -379,10 +379,13 @@ bool DeltaValueSpace::compact(DMContext & context)
         log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
-    // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
-    compaction_task->prepare(context, wbs, reader);
+    {
+        // do compaction task
+        const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
+        compaction_task->prepare(context, wbs, reader);
+        log_storage_snap.reset(); // release the snapshot ASAP
+    }
 
     {
         std::scoped_lock lock(mutex);
