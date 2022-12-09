@@ -1288,6 +1288,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(DAGPipeline & pipeline,
     dag_req.SerializeToString(&(req->data));
     req->tp = pingcap::coprocessor::ReqType::DAG;
     req->start_ts = context.getSettingsRef().read_tso;
+    req->schema_version = context.getSettingsRef().schema_version;
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
