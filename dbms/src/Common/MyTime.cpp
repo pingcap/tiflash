@@ -65,7 +65,8 @@ bool isValidSeperator(char c, int previous_parts)
     if (isPunctuation(c))
         return true;
 
-    return previous_parts == 2 && (c == ' ' || c == 'T');
+    // for https://github.com/pingcap/tics/issues/4036
+    return previous_parts == 2 && (c == 'T' || isWhitespaceASCII(c));
 }
 
 std::vector<String> parseDateFormat(String format)
@@ -508,8 +509,8 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     bool truncated_or_incorrect = false;
 
-    // noAbsorb tests if can absorb FSP or TZ
-    auto noAbsorb = [](const std::vector<String> & seps) {
+    // no_absorb tests if can absorb FSP or TZ
+    auto no_absorb = [](const std::vector<String> & seps) {
         // if we have more than 5 parts (i.e. 6), the tailing part can't be absorbed
         // or if we only have 1 part, but its length is longer than 4, then it is at least YYMMD, in this case, FSP can
         // not be absorbed, and it will be handled later, and the leading sign prevents TZ from being absorbed, because
@@ -519,7 +520,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     if (!frac_str.empty())
     {
-        if (!noAbsorb(seps))
+        if (!no_absorb(seps))
         {
             seps.push_back(frac_str);
             frac_str = "";
@@ -530,7 +531,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-        if (!noAbsorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
+        if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
@@ -555,51 +556,51 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             {
                 case 14: // YYYYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     hhmmss = true;
                     break;
                 }
                 case 12: // YYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 11: // YYMMDDHHMMS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 10: // YYMMDDHHMM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 9: // YYMMDDHHM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 8: // YYYYMMDD
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
                     break;
                 }
                 case 7: // YYMMDDH
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 6: // YYMMDD
                 case 5: // YYMMD
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
@@ -623,18 +624,18 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                     case 1:
                     case 2:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour);
+                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
                         break;
                     }
                     case 3:
                     case 4:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
                         break;
                     }
                     default:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
                         break;
                     }
                 }
@@ -648,7 +649,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                 }
                 else
                 {
-                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0);
+                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
                 }
             }
             if (truncated_or_incorrect)
@@ -943,7 +944,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) { return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0); };
-        max_day = max_days_in_month[month - 1];
+        max_day = max_days_in_month[month - 1]; // NOLINT
         if (month == 2 && is_leap_year(year))
         {
             max_day = 29;
@@ -1275,13 +1276,13 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-    auto skipWhitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
+    auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
         return check_if_end();
     };
-    auto parse_sep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
-        if (skipWhitespaces() == ParseState::END_OF_FILE)
+    auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
+        if (skip_whitespaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1298,7 +1299,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 12 || hour == 0)
@@ -1314,7 +1315,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t minute = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1326,7 +1327,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t second = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
@@ -1335,7 +1336,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += step; // move forward
 
         int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         // "AM"/"PM" must be parsed as a single element
         // "11:13:56a" is an invalid input for "%r".
@@ -1379,13 +1380,13 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-    auto skipWhitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
+    auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
         return check_if_end();
     };
-    auto parse_sep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
-        if (skipWhitespaces() == ParseState::END_OF_FILE)
+    auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
+        if (skip_whitespaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1402,7 +1403,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 23)
@@ -1414,7 +1415,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t minute = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1426,7 +1427,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t second = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)

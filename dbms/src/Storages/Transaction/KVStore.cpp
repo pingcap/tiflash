@@ -240,9 +240,10 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
     return res;
 }
 
-void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
+void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt) { handleDestroy(region_id, tmt, genTaskLock()); }
+
+void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
 {
-    auto task_lock = genTaskLock();
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
@@ -546,7 +547,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
             }
         }
         auto read_index_res = tmt.getKVStore()->getProxyHelper()->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
-        for (auto && [resp, region_id] : *read_index_res)
+        for (auto && [resp, region_id] : read_index_res)
         {
             bool need_retry = resp.read_index() == 0;
             if (resp.has_region_error())
@@ -558,6 +559,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
             if (!need_retry)
             {
                 // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
+                assert(resp.read_index() != 0);
                 regions_to_check.emplace(region_id, resp.read_index());
                 remain_regions.erase(region_id);
             }

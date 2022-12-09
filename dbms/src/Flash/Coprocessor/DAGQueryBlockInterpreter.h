@@ -69,6 +69,7 @@ struct AnalysisResult
     bool need_aggregate = false;
     bool has_having = false;
     bool has_order_by = false;
+    bool is_final_agg = true;
 
     ExpressionActionsPtr timezone_cast;
     ExpressionActionsPtr before_where;
@@ -117,8 +118,12 @@ private:
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
-    void executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
-        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
+    void executeAggregation(DAGPipeline & pipeline,
+        const ExpressionActionsPtr & expression_actions_ptr,
+        Names & key_names,
+        TiDB::TiDBCollators & collators,
+        AggregateDescriptions & aggregate_descriptions,
+        bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     void readFromLocalStorage(            //

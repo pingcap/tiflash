@@ -8,6 +8,7 @@
 #include <boost/noncopyable.hpp>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
 
@@ -43,7 +44,8 @@ public:
         const ::mpp::EstablishMPPConnectionRequest * request,
         ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
-    ::grpc::Status CancelMPPTask(::grpc::ServerContext* context, const ::mpp::CancelTaskRequest* request, ::mpp::CancelTaskResponse* response) override;
+    ::grpc::Status CancelMPPTask(
+        ::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;

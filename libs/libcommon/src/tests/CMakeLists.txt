@@ -1,4 +1,4 @@
-include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
 
 add_executable (date_lut_init date_lut_init.cpp)
 add_executable (date_lut2 date_lut2.cpp)
@@ -17,7 +17,8 @@ target_link_libraries (date_lut_default_timezone common ${PLATFORM_LIBS})
 target_link_libraries (multi_version common)
 add_check(multi_version)
 
-add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp)
+add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp gtest_arithmetic_overflow.cpp)
+
 target_link_libraries (gtests_libcommon gtest_main common)
 add_check(gtests_libcommon)
 

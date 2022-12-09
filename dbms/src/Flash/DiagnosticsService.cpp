@@ -345,7 +345,7 @@ static void getCacheSizeLinux(const uint & level, size_t & size, size_t & line_s
 }
 #endif
 
-static void getCacheSize(const uint & level, size_t & size, size_t & line_size)
+static void getCacheSize([[maybe_unused]] const uint & level, size_t & size, size_t & line_size)
 {
 #ifdef __linux__
     getCacheSizeLinux(level, size, line_size);

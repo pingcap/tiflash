@@ -494,8 +494,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
-        .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
-        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
+        .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
     };
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);

@@ -164,7 +164,7 @@ private:
             after_filter += u;
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
-        Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
+        Float64 filter_rate = static_cast<Float64>(after_read_packs - after_filter) * 100 / after_read_packs;
         LOG_DEBUG(log,
                   "RSFilter exclude rate: " << ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2))
                                             << ", after_pk: " << after_pk << ", after_read_packs: " << after_read_packs

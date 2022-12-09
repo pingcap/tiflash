@@ -201,9 +201,10 @@ public:
      * @param ts_beg    `timestamp`'s value begin
      * @param ts_end    `timestamp`'s value end (not included)
      * @param reversed  increasing/decreasing insert `timestamp`'s value
+     * @param deleted   if deleted is false, set `tag` to 0; otherwise set `tag` to 1
      * @return
      */
-    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false)
+    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false, bool deleted = false)
     {
         Block        block;
         const size_t num_rows = (ts_end - ts_beg);
@@ -240,7 +241,7 @@ public:
                 column_data.resize(num_rows);
                 for (size_t i = 0; i < num_rows; ++i)
                 {
-                    column_data[i] = 0;
+                    column_data[i] = deleted ? 1 : 0;
                 }
                 tag_col.column = std::move(m_col);
             }

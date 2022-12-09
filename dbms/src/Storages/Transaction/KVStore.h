@@ -145,6 +145,7 @@ private:
         raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
+    void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
 private:
     RegionManager region_manager;

@@ -259,10 +259,11 @@ private:
     TiFlashMetricsPtr metrics;
 
 private:
-    WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
-                                  const String &    parent_path_hint,
-                                  WriterPtr &&      old_writer  = nullptr,
-                                  const String &    logging_msg = "");
+    WriterPtr checkAndRenewWriter(WritingPageFile &  page_file,
+                                  PageFileIdAndLevel max_page_file_id_lvl_hint,
+                                  const String &     parent_path_hint,
+                                  WriterPtr &&       old_writer  = nullptr,
+                                  const String &     logging_msg = "");
 };
 
 class PageReader : private boost::noncopyable

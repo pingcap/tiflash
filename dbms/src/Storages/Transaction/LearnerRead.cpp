@@ -230,7 +230,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             if (auto proxy_helper = kvstore->getProxyHelper(); proxy_helper)
             {
                 auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
-                for (auto && [resp, region_id] : *res)
+                for (auto && [resp, region_id] : res)
                 {
                     batch_read_index_result.emplace(region_id, std::move(resp));
                 }

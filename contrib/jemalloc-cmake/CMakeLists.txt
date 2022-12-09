@@ -1,4 +1,8 @@
-set(JEMALLOC_SOURCE_DIR ${ClickHouse_SOURCE_DIR}/contrib/jemalloc)
+if (NOT CMAKE_SYSTEM_NAME MATCHES "Linux")
+    message (WARNING "jemalloc support on non-linux is EXPERIMENTAL")
+endif()
+
+set(JEMALLOC_SOURCE_DIR ${TiFlash_SOURCE_DIR}/contrib/jemalloc)
 
 set(SRCS
 ${JEMALLOC_SOURCE_DIR}/src/arena.c
