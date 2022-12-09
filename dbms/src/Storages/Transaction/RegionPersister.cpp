@@ -280,14 +280,9 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
                 "RegionPersister",
                 delegator,
-<<<<<<< HEAD
                 config,
-                provider);
-=======
-                PageStorage::getEasyGCConfig(),
                 provider,
                 global_context.getPSBackgroundPool());
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
             // V3 should not used getPSDiskDelegatorRaft
             // Because V2 will delete all invalid(unrecognized) file when it restore
             auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //

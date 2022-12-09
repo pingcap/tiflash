@@ -73,12 +73,8 @@ protected:
     }
 
 protected:
-<<<<<<< HEAD
     PageStorage::Config config;
-=======
-    PageStorageConfig config;
     std::shared_ptr<BackgroundProcessingPool> bkg_pool;
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr file_provider;
 };

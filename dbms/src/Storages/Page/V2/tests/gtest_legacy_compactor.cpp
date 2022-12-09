@@ -100,17 +100,10 @@ try
 
     // Compare the two versions above
     {
-<<<<<<< HEAD
-        auto original_snapshot = original_version.getSnapshot();
-        auto original = original_snapshot->version();
-        auto restored_snapshot = version_restored_with_snapshot.getSnapshot();
-        auto restored = restored_snapshot->version();
-=======
         auto original_snapshot = original_version.getSnapshot("", nullptr);
         const auto * original = original_snapshot->version();
         auto restored_snapshot = version_restored_with_snapshot.getSnapshot("", nullptr);
         const auto * restored = restored_snapshot->version();
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
         auto original_normal_page_ids = original->validNormalPageIds();
         auto restored_normal_page_ids = restored->validNormalPageIds();
@@ -180,12 +173,8 @@ try
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool spool = ctx.getPathPool().withTable("test", "t", false);
     auto delegator = spool.getPSDiskDelegatorSingle("meta");
-<<<<<<< HEAD
-    PageStorage storage("compact_test", delegator, PageStorage::Config{}, file_provider);
-=======
     auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
-    PageStorage storage("compact_test", delegator, PageStorageConfig{}, file_provider, *bkg_pool);
->>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
+    PageStorage storage("compact_test", delegator, PageStorage::Config{}, file_provider, *bkg_pool);
 
     PageStorage::ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
