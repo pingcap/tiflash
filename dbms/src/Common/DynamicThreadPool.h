@@ -40,11 +40,11 @@ private:
 
 public:
     template <typename Duration>
-    DynamicThreadPool(size_t initial_size, Duration auto_shrink_cooldown)
+    DynamicThreadPool(size_t, Duration auto_shrink_cooldown)
         : dynamic_auto_shrink_cooldown(std::chrono::duration_cast<std::chrono::nanoseconds>(auto_shrink_cooldown))
-        , idle_fixed_queues(initial_size)
+        , idle_fixed_queues(100)
     {
-        init(initial_size);
+        init(100);
     }
 
     ~DynamicThreadPool();
