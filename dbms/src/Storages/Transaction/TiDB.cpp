@@ -10,6 +10,8 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 
+#include <cmath>
+
 namespace DB
 {
 extern const UInt8 TYPE_CODE_LITERAL;
@@ -52,7 +54,22 @@ Field ColumnInfo::defaultValueToField() const
         case TypeLong:
         case TypeLongLong:
         case TypeInt24:
-            return value.convert<Int64>();
+        {
+            // In c++, cast a unsigned integer to signed integer will not change the value.
+            // like 9223372036854775808 which is larger than the maximum value of Int64,
+            // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
+            // so we don't need consider unsigned here.
+            try
+            {
+                return value.convert<Int64>();
+            }
+            catch (...)
+            {
+                // due to https://github.com/pingcap/tidb/issues/34881
+                // we do this to avoid exception in older version of TiDB.
+                return static_cast<Int64>(std::llround(value.convert<double>()));
+            }
+        }
         case TypeBit:
         {
             // TODO: We shall use something like `orig_default_bit`, which will never change once created,
@@ -90,10 +107,13 @@ Field ColumnInfo::defaultValueToField() const
             auto v = value.convert<String>();
             if (hasBinaryFlag())
             {
-                // For binary column, we have to pad trailing zeros according to the specified type length.
+                // For some binary column(like varchar(20)), we have to pad trailing zeros according to the specified type length.
                 // User may define default value `0x1234` for a `BINARY(4)` column, TiDB stores it in a string "\u12\u34" (sized 2).
                 // But it actually means `0x12340000`.
-                v.append(flen - v.length(), '\0');
+                // And for some binary column(like longblob), we do not need to pad trailing zeros.
+                // And the `Flen` is set to -1, therefore we need to check `Flen >= 0` here.
+                if (Int32 vlen = v.length(); flen >= 0 && vlen < flen)
+                    v.append(flen - vlen, '\0');
             }
             return v;
         }
