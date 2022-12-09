@@ -411,7 +411,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint64_t fine_grained_shuffle_stream_count_)
+    uint64_t fine_grained_shuffle_stream_count_,
+    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
@@ -422,6 +423,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
+    , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
     try
     {
@@ -436,6 +438,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         {
             msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
+        if (isReceiverForTiFlashStorage())
+            rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log, disaggregated_dispatch_reqs);
         rpc_context->fillSchema(schema);
         setUpConnection();
     }
@@ -471,7 +475,11 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    setEndState(ExchangeReceiverState::CANCELED);
+    if (setEndState(ExchangeReceiverState::CANCELED))
+    {
+        if (isReceiverForTiFlashStorage())
+            rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
+    }
     cancelAllMsgChannels();
 }
 
