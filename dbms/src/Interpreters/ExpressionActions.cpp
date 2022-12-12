@@ -306,12 +306,6 @@ void ExpressionAction::execute(Block & block) const
         break;
     }
 
-    case JOIN:
-    {
-        join->joinBlock(block);
-        break;
-    }
-
     case PROJECT:
     {
         Block new_block;
