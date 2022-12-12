@@ -10,11 +10,18 @@ namespace tzg
 {
 struct SnappyStatistic
 {
+    enum CompressMethod : int
+    {
+        NONE = 0,
+        LZ4 = 1,
+        ZSTD = 2,
+    };
+
     mutable std::atomic_uint64_t compressed_size{};
     mutable std::atomic_uint64_t uncompressed_size{};
     mutable std::atomic_uint64_t package{};
     mutable std::atomic_int64_t chunck_stream_cnt{}, max_chunck_stream_cnt{};
-    mutable mpp::CompressMethod method{};
+    mutable CompressMethod method{};
     mutable std::atomic<std::chrono::steady_clock::duration> durations{}, has_write_dur{};
     mutable std::atomic_uint64_t encode_bytes{}, has_write_rows{};
 
@@ -36,11 +43,11 @@ struct SnappyStatistic
         return uncompressed_size;
     }
 
-    mpp::CompressMethod getMethod() const
+    CompressMethod getMethod() const
     {
         return method;
     }
-    void setMethod(mpp::CompressMethod m)
+    void setMethod(CompressMethod m)
     {
         method = m;
     }
@@ -65,7 +72,7 @@ struct SnappyStatistic
         ++package;
     }
 
-    void load(uint64_t & compressed_size_, uint64_t & uncompressed_size_, uint64_t & package_, mpp::CompressMethod & m) const
+    void load(uint64_t & compressed_size_, uint64_t & uncompressed_size_, uint64_t & package_, CompressMethod & m) const
     {
         compressed_size_ = getCompressedSize();
         uncompressed_size_ = getUncompressedSize();

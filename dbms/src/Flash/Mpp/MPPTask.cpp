@@ -40,6 +40,7 @@
 #include <map>
 
 #include "Flash/Coprocessor/tzg-metrics.h"
+#include "mpp.pb.h"
 
 namespace DB
 {
@@ -283,7 +284,21 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     if (true) // nolint
     {
         auto exchange_sender_meta = task_request.exchange_sender_meta();
-        exchange_sender_meta.set_compress(tzg::SnappyStatistic::globalInstance().getMethod());
+        mpp::CompressMethod compress_method{};
+        switch (tzg::SnappyStatistic::globalInstance().getMethod())
+        {
+        case tzg::SnappyStatistic::CompressMethod::LZ4:
+            compress_method = mpp::CompressMethod::LZ4;
+            break;
+        case tzg::SnappyStatistic::CompressMethod::ZSTD:
+            compress_method = mpp::CompressMethod::ZSTD;
+            break;
+        default:
+            compress_method = mpp::CompressMethod::NONE;
+            break;
+        }
+        auto m = reinterpret_cast<mpp::CompressMethod>(compress_method);
+        exchange_sender_meta.set_compress(m);
         dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), exchange_sender_meta, is_root_mpp_task);
     }
     else
