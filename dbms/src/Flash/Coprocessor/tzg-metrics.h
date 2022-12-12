@@ -4,8 +4,6 @@
 #include <atomic>
 #include <cstdint>
 
-#include "mpp.pb.h"
-
 namespace tzg
 {
 struct SnappyStatistic
