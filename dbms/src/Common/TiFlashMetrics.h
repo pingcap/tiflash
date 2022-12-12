@@ -90,6 +90,9 @@ namespace DB
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                             \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                 \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                           \
+    M(tiflash_coprocessor_queue_status, "Total bytes of data contained in the receiver and sender queue", Counter,                                                        \
+        F(type_send, {{"type", "send_queue"}}),                                                                                                   \
+        F(type_receive, {{"type", "receive_queue"}}))                                                                           \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \

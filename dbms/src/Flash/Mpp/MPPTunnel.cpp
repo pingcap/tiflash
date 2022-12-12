@@ -47,6 +47,7 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
 // Update metric for tunnel's response bytes
 inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
 {
+    GET_METRIC(tiflash_coprocessor_queue_status, type_send).Increment(pushed_data_size);
     switch (mode)
     {
     case TunnelSenderMode::LOCAL:
@@ -345,6 +346,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
         TrackedMppDataPacketPtr res;
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
+            GET_METRIC(tiflash_coprocessor_queue_status, type_send).Increment(static_cast<Int64>(-(res->getPacket().ByteSizeLong())));
             if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
@@ -391,6 +393,7 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
     {
         // switch tunnel's memory tracker into receiver's
         res->switchMemTracker(current_memory_tracker);
+        GET_METRIC(tiflash_coprocessor_queue_status, type_send).Increment(static_cast<Int64>(-(res->getPacket().ByteSizeLong())));
         return res;
     }
     else if (result == MPMCQueueResult::CANCELLED)

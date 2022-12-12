@@ -106,6 +106,8 @@ bool pushPacket(size_t source_index,
                 error_ptr,
                 resp_ptr,
                 std::move(chunks[i]));
+
+            GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Increment(recv_msg->packet->getPacket().ByteSizeLong());
             push_succeed = msg_channels[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
             if constexpr (is_sync)
                 fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
@@ -120,9 +122,7 @@ bool pushPacket(size_t source_index,
     {
         std::vector<const String *> chunks(packet.chunks_size());
         for (int i = 0; i < packet.chunks_size(); ++i)
-        {
             chunks[i] = &packet.chunks(i);
-        }
 
         if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
         {
@@ -134,6 +134,7 @@ bool pushPacket(size_t source_index,
                 resp_ptr,
                 std::move(chunks));
 
+            GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Increment(recv_msg->packet->getPacket().ByteSizeLong());
             push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
             if constexpr (is_sync)
                 fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
@@ -713,6 +714,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+
+        GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Increment(static_cast<Int64>(-(recv_msg->packet->getPacket().ByteSizeLong())));
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
 }

@@ -23,6 +23,8 @@
 #include <Flash/Mpp/Utils.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include "common/types.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -191,6 +193,7 @@ void EstablishCallData::tryConnectTunnel()
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
+    GET_METRIC(tiflash_coprocessor_queue_status, type_send).Increment(static_cast<Int64>(-(packet.ByteSizeLong())));
     responder.Write(packet, this);
 }
 
