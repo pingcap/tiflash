@@ -297,8 +297,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
             compress_method = mpp::CompressMethod::NONE;
             break;
         }
-        auto m = reinterpret_cast<mpp::CompressMethod>(compress_method);
-        exchange_sender_meta.set_compress(m);
+        exchange_sender_meta.set_compress(compress_method);
+        LOG_DEBUG(log, "DAGContext use compress method {}", mpp::CompressMethod_Name(compress_method));
         dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), exchange_sender_meta, is_root_mpp_task);
     }
     else
