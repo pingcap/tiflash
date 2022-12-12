@@ -750,11 +750,22 @@ try
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        ASSERT_EQ(page0.fieldSize(), page0_fields.size());
+        for (const auto & [idx, sz] : page0_fields)
+        {
+            ASSERT_EQ(page0.getFieldData(idx).size(), sz);
+        }
+
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+        ASSERT_EQ(page1.fieldSize(), page1_fields.size());
+        for (const auto & [idx, sz] : page1_fields)
+        {
+            ASSERT_EQ(page1.getFieldData(idx).size(), sz);
+        }
     }
 }
 CATCH
