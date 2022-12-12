@@ -126,7 +126,7 @@ ExpressionAction ExpressionAction::project(const Names & projected_columns_)
     return a;
 }
 
-ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<Join> join_, const NamesAndTypesList & columns_added_by_join_)
+ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_)
 {
     ExpressionAction a;
     a.type = JOIN;
@@ -303,12 +303,6 @@ void ExpressionAction::execute(Block & block) const
 
         function->execute(block, arguments, num_columns_without_result);
 
-        break;
-    }
-
-    case JOIN:
-    {
-        join->joinBlock(block);
         break;
     }
 

@@ -85,7 +85,7 @@ public:
     TiDB::TiDBCollatorPtr collator = nullptr;
 
     /// For JOIN
-    std::shared_ptr<Join> join;
+    std::shared_ptr<const Join> join;
     NamesAndTypesList columns_added_by_join;
 
     /// For PROJECT.
@@ -103,7 +103,7 @@ public:
     static ExpressionAction copyColumn(const std::string & from_name, const std::string & to_name);
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
-    static ExpressionAction ordinaryJoin(std::shared_ptr<Join> join_, const NamesAndTypesList & columns_added_by_join_);
+    static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;
