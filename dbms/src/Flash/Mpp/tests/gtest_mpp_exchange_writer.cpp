@@ -136,6 +136,23 @@ private:
     uint16_t part_num;
 };
 
+TEST_F(TestMPPExchangeWriter, testQueryId)
+try
+{
+    constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
+    constexpr UInt64 MAX_INT64 = std::numeric_limits<Int64>::max();
+    Int64 test = std::stoull("7FFFFFFFFFFFFFFF", 0, 16);
+    EXPECT_EQ(test, MAX_INT64);
+
+    String query_id = MPPTaskId::generateQueryID(MAX_INT64, 1, MAX_UINT64, MAX_UINT64);
+    EXPECT_EQ(query_id, "7fffffffffffffff0000000000000001ffffffffffffffff");
+    auto [query_ts, local_query_id, server_id] = MPPTaskId::decodeQueryID(query_id);
+    EXPECT_EQ(query_ts, MAX_INT64);
+    EXPECT_EQ(server_id, MAX_UINT64);
+    EXPECT_EQ(double(local_query_id), 1);
+}
+CATCH
+
 // Input block data is distributed uniform.
 // partition_num: 4
 // fine_grained_shuffle_stream_count: 8
