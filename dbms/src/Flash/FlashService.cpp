@@ -17,7 +17,7 @@
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
-#include <Common/getNumberOfLogicalCPUCores.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/EstablishCall.h>
