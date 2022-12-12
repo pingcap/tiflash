@@ -103,6 +103,29 @@ protected:
     }
 };
 
+TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRound)
+try
+{
+    const String func_name = "tidbDivide";
+
+    // int and decimal
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+        executeFunction(
+            func_name,
+            createColumn<Int32>({1, 1, 1, 1, 1}),
+            createColumn<Decimal64>(std::make_tuple(20, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+
+    // decimal and decimal
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+        executeFunction(
+            func_name,
+            createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4)}),
+            createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+}
+CATCH
+
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimal)
 try
 {
