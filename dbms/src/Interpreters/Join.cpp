@@ -1614,7 +1614,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(rows);
+        filter = std::make_unique<IColumn::Filter>(rows, 0);
 
     /// Used with ALL ... JOIN
     IColumn::Offset current_offset = 0;
