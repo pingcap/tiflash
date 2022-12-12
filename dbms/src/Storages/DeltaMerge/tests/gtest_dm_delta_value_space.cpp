@@ -22,11 +22,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-<<<<<<< HEAD
-=======
-#include <future>
 #include <limits>
->>>>>>> caef4c48e9 (Optimize delta compact strategy to reduce iops and write amplification (#6461))
 #include <memory>
 
 #include "dm_basic_include.h"

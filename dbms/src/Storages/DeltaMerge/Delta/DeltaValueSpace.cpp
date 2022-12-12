@@ -266,15 +266,10 @@ bool DeltaValueSpace::compact(DMContext & context)
         // Reset to the index of first file that can be compacted if the minor compaction succeed,
         // and it may trigger another minor compaction if there is still too many column files.
         // This process will stop when there is no more minor compaction to be done.
-<<<<<<< HEAD
-        last_try_compact_column_files.store(0);
-        LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
-=======
         auto first_compact_index = compaction_task->getFirsCompactIndex();
-        RUNTIME_ASSERT(first_compact_index != std::numeric_limits<size_t>::max());
+        RUNTIME_ASSERT(first_compact_index != std::numeric_limits<size_t>::max(), log, "first_compact_index is invalid");
         last_try_compact_column_files.store(first_compact_index);
-        LOG_DEBUG(log, "{} delta={}", compaction_task->info(), info());
->>>>>>> caef4c48e9 (Optimize delta compact strategy to reduce iops and write amplification (#6461))
+        LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
     }
     wbs.writeRemoves();
 
