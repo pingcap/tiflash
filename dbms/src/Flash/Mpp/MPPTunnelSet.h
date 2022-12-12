@@ -49,6 +49,8 @@ public:
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
     void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet);
+    // this is a broadcast or pass through writing. `local_packet` will only be sent by local tunnel, `not_local_packet` is on the contrary.
+    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & local_packet, const TrackedMppDataPacketPtr & not_local_packet);
     // this is a partition writing.
     void partitionWrite(const TrackedMppDataPacketPtr & packet, int16_t partition_id);
     // this is a execution summary writing.

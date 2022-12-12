@@ -15,7 +15,6 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/ReadBufferFromString.h>
 
-#include "Flash/Coprocessor/tzg-metrics.h"
 #include "Flash/Mpp/HashPartitionWriter.h"
 #include "IO/CompressedReadBuffer.h"
 #include "IO/CompressedStream.h"
@@ -42,7 +41,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
     }
     std::unique_ptr<ReadBuffer> compress_buffer{};
     ReadBuffer * istr_ptr = &istr;
-    if (ToCompressionMethod(compress_method) != CompressionMethod::NONE)
+    if (ToInternalCompressionMethod(compress_method) != CompressionMethod::NONE)
     {
         compress_buffer = std::make_unique<CompressedReadBuffer<false>>(istr);
         istr_ptr = compress_buffer.get();

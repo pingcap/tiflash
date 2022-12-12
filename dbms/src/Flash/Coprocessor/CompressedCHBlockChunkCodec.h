@@ -18,6 +18,11 @@
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedStream.h>
 
+namespace mpp
+{
+enum CompressMethod : int;
+}
+
 namespace DB
 {
 class CompressedCHBlockChunkCodec final
@@ -41,5 +46,7 @@ private:
 
     CHBlockChunkCodec chunk_codec;
 };
+
+CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method);
 
 } // namespace DB

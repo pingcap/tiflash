@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
@@ -38,12 +39,17 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
     , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
     , hash(0)
+    , compress_method(dag_context.getExchangeSenderMeta().compress())
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+    if (auto method = ToInternalCompressionMethod(compress_method); method != CompressionMethod::NONE)
+    {
+        compress_chunk_codec_stream = CompressedCHBlockChunkCodec::newCodecStream(dag_context.result_field_types, method);
+    }
 }
 
 template <class ExchangeWriterPtr>
@@ -128,6 +134,16 @@ template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
+    for (size_t part_id = 0; part_id < partition_num; ++part_id)
+    {
+        auto method = compress_method;
+        if (writer->getTunnels()[part_id]->isLocal())
+        {
+            method = mpp::CompressMethod::NONE;
+        }
+        tracked_packets[part_id]->getPacket().set_compress(method);
+    }
+
     if (likely(!blocks.empty()))
     {
         assert(rows_in_blocks > 0);
@@ -153,13 +169,20 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
                 for (size_t col_id = 0; col_id < num_columns; ++col_id)
                     columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
                 auto block = header.cloneWithColumns(std::move(columns));
-
-                // encode into packet
-                chunk_codec_stream->encode(block, 0, block.rows());
-                tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
-                tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
-                chunk_codec_stream->clear();
-
+                {
+                    ChunkCodecStream * codec_stream = chunk_codec_stream.get();
+                    if (tracked_packets[part_id]->getPacket().compress() != mpp::CompressMethod::NONE)
+                    {
+                        assert(compress_chunk_codec_stream);
+                        // no need compress
+                        codec_stream = compress_chunk_codec_stream.get();
+                    }
+                    // encode into packet
+                    codec_stream->encode(block, 0, block.rows());
+                    tracked_packets[part_id]->addChunk(codec_stream->getString());
+                    tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
+                    codec_stream->clear();
+                }
                 // disassemble the block back to scatter columns
                 columns = block.mutateColumns();
                 for (size_t col_id = 0; col_id < num_columns; ++col_id)

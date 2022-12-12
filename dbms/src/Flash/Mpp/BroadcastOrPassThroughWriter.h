@@ -46,7 +46,9 @@ private:
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
+    mpp::CompressMethod compress_method{};
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+    std::unique_ptr<ChunkCodecStream> compress_chunk_codec_stream;
 };
 
 } // namespace DB

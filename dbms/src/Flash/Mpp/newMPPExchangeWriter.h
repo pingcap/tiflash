@@ -19,8 +19,6 @@
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 
-#include "Flash/Coprocessor/tzg-metrics.h"
-
 namespace DB
 {
 template <class StreamWriterPtr>
@@ -37,23 +35,6 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     UInt64 fine_grained_shuffle_stream_count,
     UInt64 fine_grained_shuffle_batch_size)
 {
-    auto compress_method = dag_context.getMPPTaskMeta().exchange_sender_meta().compress();
-    if (true) // nolint
-    {
-        auto mm = tzg::SnappyStatistic::globalInstance().getMethod();
-        switch (mm)
-        {
-        case tzg::SnappyStatistic::Method::LZ4:
-            compress_method = mpp::CompressMethod::LZ4;
-            break;
-        case tzg::SnappyStatistic::Method::ZSTD:
-            compress_method = mpp::CompressMethod::ZSTD;
-            break;
-        default:
-            compress_method = mpp::CompressMethod::NONE;
-            break;
-        }
-    }
     RUNTIME_CHECK(!enable_fine_grained_shuffle);
 
     RUNTIME_CHECK(dag_context.isMPPTask());
@@ -92,8 +73,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
                     partition_col_collators,
                     batch_send_min_limit,
                     should_send_exec_summary_at_last,
-                    dag_context,
-                    compress_method);
+                    dag_context);
             }
         }
         else

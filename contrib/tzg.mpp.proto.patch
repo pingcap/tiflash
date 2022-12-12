@@ -1,8 +1,8 @@
 diff --git a/proto/mpp.proto b/proto/mpp.proto
-index f8af03b..bea4ae9 100644
+index f8af03b..1582074 100644
 --- a/proto/mpp.proto
 +++ b/proto/mpp.proto
-@@ -11,12 +11,25 @@ option (gogoproto.unmarshaler_all) = true;
+@@ -11,12 +11,24 @@ option (gogoproto.unmarshaler_all) = true;
  
  option java_package = "org.tikv.kvproto";
  
@@ -24,11 +24,10 @@ index f8af03b..bea4ae9 100644
  	int64 partition_id = 3; // Only used for hash partition
  	string address = 4; // target address of this task.
 +	int64 mpp_version = 5; // mpp version
-+    optional ExchangeSenderMeta exchange_sender_meta = 6;
  }
  
  message IsAliveRequest {
-@@ -24,6 +37,7 @@ message IsAliveRequest {
+@@ -24,6 +36,7 @@ message IsAliveRequest {
  
  message IsAliveResponse {
      bool available = 1;
@@ -36,6 +35,14 @@ index f8af03b..bea4ae9 100644
  }
  
  // Dipsatch the task request to different tiflash servers.
+@@ -36,6 +49,7 @@ message DispatchTaskRequest {
+ 	int64 schema_ver = 5;
+ 	// Used for partition table scan
+ 	repeated coprocessor.TableRegions table_regions = 6;
++    optional ExchangeSenderMeta exchange_sender_meta = 7;
+ }
+ 
+ // Get response of DispatchTaskRequest.
 @@ -67,6 +81,7 @@ message MPPDataPacket {
  	Error error = 2;
  	repeated bytes chunks = 3;

@@ -26,6 +26,7 @@
 
 #include "Flash/Coprocessor/tzg-metrics.h"
 #include "magic_enum.hpp"
+#include "mpp.pb.h"
 
 namespace DB
 {
@@ -130,7 +131,7 @@ HttpRequestRes HandleHttpRequestCompressStatus(
     uint64_t compressed_size;
     uint64_t uncompressed_size;
     uint64_t package;
-    tzg::SnappyStatistic::Method method;
+    mpp::CompressMethod method;
     tzg::SnappyStatistic::globalInstance().load(compressed_size, uncompressed_size, package, method);
 
     // double f_compressed_size_mb = compressed_size * 1.0 / 1024 / 1024;
@@ -223,7 +224,7 @@ HttpRequestRes HandleHttpRequestSetCompressMethod(
     std::string_view)
 {
     auto method_str(path.substr(api_name.size()));
-    auto method = magic_enum::enum_cast<tzg::SnappyStatistic::Method>(method_str);
+    auto method = magic_enum::enum_cast<mpp::CompressMethod>(method_str);
     if (method)
     {
         if (tzg::SnappyStatistic::globalInstance().getMethod() != *method)

@@ -4,22 +4,17 @@
 #include <atomic>
 #include <cstdint>
 
+#include "mpp.pb.h"
+
 namespace tzg
 {
 struct SnappyStatistic
 {
-    enum class Method : int
-    {
-        LZ4 = 1,
-        ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
-        NONE = 4, /// No compression
-    };
-
     mutable std::atomic_uint64_t compressed_size{};
     mutable std::atomic_uint64_t uncompressed_size{};
     mutable std::atomic_uint64_t package{};
     mutable std::atomic_int64_t chunck_stream_cnt{}, max_chunck_stream_cnt{};
-    mutable Method method = Method::NONE;
+    mutable mpp::CompressMethod method{};
     mutable std::atomic<std::chrono::steady_clock::duration> durations{}, has_write_dur{};
     mutable std::atomic_uint64_t encode_bytes{}, has_write_rows{};
 
@@ -41,11 +36,11 @@ struct SnappyStatistic
         return uncompressed_size;
     }
 
-    Method getMethod() const
+    mpp::CompressMethod getMethod() const
     {
         return method;
     }
-    void setMethod(Method m)
+    void setMethod(mpp::CompressMethod m)
     {
         method = m;
     }
@@ -70,7 +65,7 @@ struct SnappyStatistic
         ++package;
     }
 
-    void load(uint64_t & compressed_size_, uint64_t & uncompressed_size_, uint64_t & package_, Method & m) const
+    void load(uint64_t & compressed_size_, uint64_t & uncompressed_size_, uint64_t & package_, mpp::CompressMethod & m) const
     {
         compressed_size_ = getCompressedSize();
         uncompressed_size_ = getUncompressedSize();

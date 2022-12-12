@@ -21,7 +21,6 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
-#include "mpp.pb.h"
 
 namespace DB
 {
@@ -35,8 +34,7 @@ public:
         TiDB::TiDBCollators collators_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
-        DAGContext & dag_context_,
-        mpp::CompressMethod compress_method_);
+        DAGContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
     void finishWrite() override;
@@ -57,25 +55,10 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
-    mpp::CompressMethod compress_method;
 
+    mpp::CompressMethod compress_method{};
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     std::unique_ptr<ChunkCodecStream> compress_chunk_codec_stream;
 };
-
-inline CompressionMethod ToCompressionMethod(mpp::CompressMethod compress_method)
-{
-    switch (compress_method)
-    {
-    case mpp::NONE:
-        return CompressionMethod::NONE;
-    case mpp::LZ4:
-        return CompressionMethod::LZ4;
-    case mpp::ZSTD:
-        return CompressionMethod::ZSTD;
-    default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compress method {}", mpp::CompressMethod_Name(compress_method));
-    }
-}
 
 } // namespace DB

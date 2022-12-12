@@ -24,7 +24,6 @@
 #include "Common/Exception.h"
 #include "Common/Stopwatch.h"
 #include "Flash/Coprocessor/CompressedCHBlockChunkCodec.h"
-#include "Flash/Coprocessor/tzg-metrics.h"
 #include "IO/CompressedStream.h"
 #include "common/logger_useful.h"
 #include "ext/scope_guard.h"
@@ -39,26 +38,26 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     TiDB::TiDBCollators collators_,
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
-    DAGContext & dag_context_,
-    mpp::CompressMethod compress_method_)
+    DAGContext & dag_context_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
-    , compress_method(compress_method_)
+    , compress_method(dag_context.getExchangeSenderMeta().compress())
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-    auto method = ToCompressionMethod(compress_method);
-    if (method != CompressionMethod::NONE)
+
+    if (auto method = ToInternalCompressionMethod(compress_method); method != CompressionMethod::NONE)
     {
         compress_chunk_codec_stream = CompressedCHBlockChunkCodec::newCodecStream(dag_context.result_field_types, method);
     }
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+
     // LOG_TRACE(&Poco::Logger::get("tzg"), "using mpp CompressMethod {}, partition_num {}", mpp::CompressMethod_Name(compress_method), partition_num);
     // {
     //     size_t local_cnt = 0;
@@ -116,6 +115,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
+    assert(chunk_codec_stream);
+
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -192,4 +193,18 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
 
 template class HashPartitionWriter<MPPTunnelSetPtr>;
 
+CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method)
+{
+    switch (compress_method)
+    {
+    case mpp::NONE:
+        return CompressionMethod::NONE;
+    case mpp::LZ4:
+        return CompressionMethod::LZ4;
+    case mpp::ZSTD:
+        return CompressionMethod::ZSTD;
+    default:
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compress method {}", mpp::CompressMethod_Name(compress_method));
+    }
+}
 } // namespace DB

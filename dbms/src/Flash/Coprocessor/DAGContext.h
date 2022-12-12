@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <memory>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -144,7 +145,7 @@ public:
     }
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
+    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, const mpp::ExchangeSenderMeta & exchange_sender_meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
@@ -155,6 +156,7 @@ public:
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , mpp_task_meta(meta_)
+        , exchange_sender_meta(exchange_sender_meta_)
         , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
@@ -169,7 +171,6 @@ public:
     // for test
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)
-        , dummy_query_string("")
         , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(false)
         , is_mpp_task(false)
@@ -245,6 +246,7 @@ public:
     }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
+    const mpp::ExchangeSenderMeta & getExchangeSenderMeta() const { return exchange_sender_meta; }
     bool isBatchCop() const { return is_batch_cop; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
@@ -382,6 +384,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+    mpp::ExchangeSenderMeta exchange_sender_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;

@@ -67,6 +67,27 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(const TrackedMppDataP
         tunnel->write(tunnel->isLocal() && tunnels.size() > 1 ? packet->copy() : packet);
     }
 }
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & local_packet, const TrackedMppDataPacketPtr & not_local_packet)
+{
+    checkPacketSize(local_packet->getPacket().ByteSizeLong());
+    checkPacketSize(not_local_packet->getPacket().ByteSizeLong());
+
+    RUNTIME_CHECK(!tunnels.empty());
+    for (auto & tunnel : tunnels)
+    {
+        if (tunnel->isLocal())
+        {
+            // We should copy the tracked packet for local tunnel.
+            // Because `switchMemoryTracker` will be called later in `readForLocal`.
+            tunnel->write(tunnels.size() > 1 ? local_packet->copy() : local_packet);
+        }
+        else
+        {
+            tunnel->write(not_local_packet);
+        }
+    }
+}
 
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::partitionWrite(const TrackedMppDataPacketPtr & packet, int16_t partition_id)
