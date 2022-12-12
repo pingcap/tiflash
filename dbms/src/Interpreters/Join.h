@@ -29,9 +29,9 @@
 
 #include <shared_mutex>
 
-
 namespace DB
 {
+struct ProbeProcessInfo;
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -113,8 +113,6 @@ public:
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
-    void initProbeSide(size_t probe_concurrency_ = 1, UInt64 max_block_size_ = DEFAULT_BLOCK_SIZE);
-
     void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
@@ -122,7 +120,11 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    void joinBlock(Block & block, size_t stream_index = 0) const;
+    void joinBlock(Block & block, ProbeProcessInfo & probe_process_info) const;
+
+    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
+
+    void checkTypesOfKeysWithSampleBlock(const Block & block) const;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
@@ -130,10 +132,6 @@ public:
     bool hasTotals() const { return static_cast<bool>(totals); };
 
     void joinTotals(Block & block) const;
-
-    void setProbeConcurrencyAndMaxBlockSize(size_t probe_concurrency_, UInt64 max_block_size);
-
-    void setBlockAndInitProbeProcessInfo(Block block, size_t probe_index);
 
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
@@ -153,12 +151,6 @@ public:
 
     bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
-
-    /// judge if need get new block in probe
-    bool needGetNewBlock(size_t stream_index);
-
-    /// update block if prev block has been join finish
-    void updateProcessBlock(Block block, size_t stream_index);
 
     size_t getBuildConcurrency() const
     {
@@ -202,29 +194,6 @@ public:
             : RowRef(block_, row_num_)
         {}
     };
-
-
-    struct ProbeProcessInfo
-    {
-        Block block;
-        UInt64 max_block_size;
-        size_t start_row;
-        size_t end_row;
-        bool all_rows_joined_finish;
-        bool block_full;
-
-        ProbeProcessInfo(Block block_, UInt64 max_block_size_, size_t start_row_, size_t end_row_, bool all_rows_joined_finish_, bool block_full_)
-            : block(block_)
-            , max_block_size(max_block_size_)
-            , start_row(start_row_)
-            , end_row(end_row_)
-            , all_rows_joined_finish(all_rows_joined_finish_)
-            , block_full(block_full_)
-        {}
-    };
-
-    using ProbeProcessInfoPtr = std::shared_ptr<ProbeProcessInfo>;
-    using ProbeProcessInfoPtrs = std::vector<ProbeProcessInfoPtr>;
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
       * For implementation of RIGHT and FULL JOINs.
@@ -324,12 +293,6 @@ private:
 
     size_t build_concurrency;
 
-    size_t probe_concurrency;
-
-    UInt64 max_block_size_for_hash_join;
-
-    ProbeProcessInfoPtrs probe_process_infos;
-
 private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
@@ -394,8 +357,6 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
-    bool probe_initialized = false;
-
     size_t getBuildConcurrencyInternal() const
     {
         if (unlikely(build_concurrency == 0))
@@ -429,7 +390,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfoPtr probe_process_info_ptr) const;
+    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & probe_process_info) const;
 
     /** Handle non-equal join conditions
       *
@@ -439,16 +400,32 @@ private:
 
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    void joinBlockImplCross(Block & block, ProbeProcessInfoPtr probe_process_info_ptr) const;
+    void joinBlockImplCross(Block & block, ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, ProbeProcessInfoPtr probe_process_info_ptr) const;
-
-    static void updateStartRow(ProbeProcessInfoPtr probe_process_info_ptr);
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, ProbeProcessInfo & probe_process_info) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
 using Joins = std::vector<JoinPtr>;
+
+struct ProbeProcessInfo
+{
+    Block block;
+    UInt64 max_block_size;
+    size_t start_row;
+    size_t end_row;
+    bool all_rows_joined_finish = true;
+    bool block_full = false;
+
+    ProbeProcessInfo(UInt64 max_block_size_)
+        : max_block_size(max_block_size_){};
+
+    void setAndInit(Block && block_);
+    void updateStartRow();
+};
+
+using ProbeProcessInfoPtr = std::unique_ptr<ProbeProcessInfo>;
 
 
 } // namespace DB

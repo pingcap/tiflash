@@ -318,12 +318,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
             join_execute_info.non_joined_streams.push_back(non_joined_stream);
         }
     }
-    size_t join_probe_concurrency = probe_pipeline.streams.size();
-    join_ptr->initProbeSide(join_probe_concurrency, settings.max_block_size.get());
-    size_t probe_stream_index = 0;
     for (auto & stream : pipeline.streams)
     {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, log->identifier(), probe_stream_index++);
+        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, log->identifier(), settings.max_block_size.get());
         stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}", query_block.source_name));
     }
 
@@ -743,11 +740,11 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
         limit = query_block.limit_or_topn->limit().limit();
     else
         limit = query_block.limit_or_topn->topn().limit();
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline, max_streams, log, false, "for partial limit");
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
     }
 }
 
