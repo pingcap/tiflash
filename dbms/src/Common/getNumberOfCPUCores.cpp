@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/getNumberOfCPUCores.h>
-#include "common/types.h"
+#include <common/types.h>
 
 namespace CPUCores
 {
