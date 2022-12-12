@@ -1,16 +1,34 @@
 diff --git a/proto/mpp.proto b/proto/mpp.proto
-index f8af03b..213caf3 100644
+index f8af03b..bea4ae9 100644
 --- a/proto/mpp.proto
 +++ b/proto/mpp.proto
-@@ -17,6 +17,7 @@ message TaskMeta {
+@@ -11,12 +11,25 @@ option (gogoproto.unmarshaler_all) = true;
+ 
+ option java_package = "org.tikv.kvproto";
+ 
++// Data compression method
++enum CompressMethod {
++  NONE = 0;
++  LZ4 = 1;
++  ZSTD = 2;
++}
++
++message  ExchangeSenderMeta {
++	CompressMethod compress = 1;
++}
++
+ // TaskMeta contains meta of a mpp plan, including query's ts and task address.
+ message TaskMeta {
+ 	uint64 start_ts = 1; // start ts of a query
  	int64 task_id = 2; // if task id is -1 , it indicates a tidb task.
  	int64 partition_id = 3; // Only used for hash partition
  	string address = 4; // target address of this task.
-+	int64 mpp_version = 5;
++	int64 mpp_version = 5; // mpp version
++    optional ExchangeSenderMeta exchange_sender_meta = 6;
  }
  
  message IsAliveRequest {
-@@ -24,6 +25,7 @@ message IsAliveRequest {
+@@ -24,6 +37,7 @@ message IsAliveRequest {
  
  message IsAliveResponse {
      bool available = 1;
@@ -18,20 +36,7 @@ index f8af03b..213caf3 100644
  }
  
  // Dipsatch the task request to different tiflash servers.
-@@ -60,6 +62,12 @@ message EstablishMPPConnectionRequest {
- 	TaskMeta receiver_meta = 2; // node closer to the tidb mpp gather.
- }
- 
-+enum CompressMethod {
-+  NONE = 0;
-+  LZ4 = 1;
-+  ZSTD = 2;
-+}
-+
- // when TiFlash sends data to TiDB, Data packets wrap tipb.SelectResponse, i.e., serialize tipb.SelectResponse into data;
- // when TiFlash sends data to TiFlash, data blocks are serialized into chunks, and the execution_summaries in tipb.SelectResponse are serialized into data only for the last packet.
- message MPPDataPacket {
-@@ -67,6 +75,7 @@ message MPPDataPacket {
+@@ -67,6 +81,7 @@ message MPPDataPacket {
  	Error error = 2;
  	repeated bytes chunks = 3;
  	repeated uint64 stream_ids = 4;
