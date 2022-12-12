@@ -327,28 +327,7 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_
 template <typename T>
 ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets & offsets) const
 {
-    size_t size = data.size();
-    if (size != offsets.size())
-        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-
-    auto res = this->create(0, scale);
-    if (0 == size)
-        return res;
-
-    typename Self::Container & res_data = res->getData();
-    res_data.reserve(offsets.back());
-
-    IColumn::Offset prev_offset = 0;
-    for (size_t i = 0; i < size; ++i)
-    {
-        size_t size_to_replicate = offsets[i] - prev_offset;
-        prev_offset = offsets[i];
-
-        for (size_t j = 0; j < size_to_replicate; ++j)
-            res_data.push_back(data[i]);
-    }
-
-    return res;
+    return replicate(0, offsets.size(), offsets);
 }
 
 template <typename T>

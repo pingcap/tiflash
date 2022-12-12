@@ -526,9 +526,7 @@ void ColumnNullable::getExtremes(Field & min, Field & max) const
 
 ColumnPtr ColumnNullable::replicate(const Offsets & offsets) const
 {
-    ColumnPtr replicated_data = getNestedColumn().replicate(offsets);
-    ColumnPtr replicated_null_map = getNullMapColumn().replicate(offsets);
-    return ColumnNullable::create(replicated_data, replicated_null_map);
+    return replicate(0, offsets.size(), offsets);
 }
 
 ColumnPtr ColumnNullable::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const

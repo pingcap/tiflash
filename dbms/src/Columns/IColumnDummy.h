@@ -122,15 +122,15 @@ public:
 
     ColumnPtr replicate(const Offsets & offsets) const override
     {
-        if (s != offsets.size())
-            throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-
-        return cloneDummy(s == 0 ? 0 : offsets.back());
+        return replicate(0, offsets.size(), offsets);
     }
 
-    ColumnPtr replicate(size_t /*start_row*/, size_t /*end_row*/, const IColumn::Offsets & /*offsets*/) const override
+    ColumnPtr replicate(size_t /*start_row*/, size_t end_row, const IColumn::Offsets & offsets) const override
     {
-        throw Exception("not implement.", ErrorCodes::NOT_IMPLEMENTED);
+        if (s != offsets.size())
+            throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK(end_row <= s);
+        return cloneDummy(s == 0 ? 0 : offsets[end_row - 1]);
     }
 
 
