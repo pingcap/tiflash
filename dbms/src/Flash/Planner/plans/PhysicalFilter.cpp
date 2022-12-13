@@ -20,6 +20,8 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Interpreters/Context.h>
+#include <Operators/FilterTransform.h>
+#include <Operators/OperatorBuilder.h>
 
 namespace DB
 {
@@ -56,6 +58,14 @@ void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, si
     child->transform(pipeline, context, max_streams);
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
+}
+
+void PhysicalFilter::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+{
+    auto input_header = op_builder.getHeader();
+    op_builder.transform([&](auto & builder) {
+        builder.appendTransform(std::make_unique<FilterTransform>(input_header, before_filter_actions, filter_column, log->identifier()));
+    });
 }
 
 void PhysicalFilter::finalize(const Names & parent_require)

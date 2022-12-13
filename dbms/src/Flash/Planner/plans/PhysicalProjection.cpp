@@ -22,6 +22,8 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExpressionTransform.h>
+#include <Operators/OperatorBuilder.h>
 
 namespace DB
 {
@@ -139,6 +141,16 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, Context & context
     child->transform(pipeline, context, max_streams);
 
     executeExpression(pipeline, project_actions, log, extra_info);
+}
+
+void PhysicalProjection::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+{
+    if (project_actions && !project_actions->getActions().empty())
+    {
+        op_builder.transform([&](auto & builder) {
+            builder.appendTransform(std::make_unique<ExpressionTransform>(project_actions, log->identifier()));
+        });
+    }
 }
 
 void PhysicalProjection::finalize(const Names & parent_require)

@@ -15,6 +15,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -240,7 +241,7 @@ void PhysicalPlan::addRootFinalProjectionIfNeed()
     }
 }
 
-void PhysicalPlan::outputAndOptimize()
+PhysicalPlanNodePtr PhysicalPlan::outputAndOptimize()
 {
     RUNTIME_ASSERT(!root_node, log, "root_node should be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
@@ -262,6 +263,8 @@ void PhysicalPlan::outputAndOptimize()
 
     if (!dagContext().return_executor_id)
         fillOrderForListBasedExecutors(dagContext(), root_node);
+
+    return root_node;
 }
 
 String PhysicalPlan::toString() const
@@ -274,5 +277,28 @@ void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t m
 {
     assert(root_node);
     root_node->transform(pipeline, context, max_streams);
+}
+
+Pipelines PhysicalPlan::toPipelines()
+{
+    assert(root_node);
+    PipelineBuilder builder;
+    auto root_pipeline = builder.addPipeline();
+    root_node->buildPipeline(builder, root_pipeline);
+    root_node.reset();
+    auto result = builder.build();
+    auto to_string = [&]() -> String {
+        if (result.empty())
+            return "";
+        FmtBuffer buffer;
+        // just call the root pipeline.
+        result[0]->toTreeString(buffer);
+        return buffer.toString();
+    };
+    LOG_DEBUG(
+        log,
+        "build pipeline dag: \n{}",
+        to_string());
+    return result;
 }
 } // namespace DB

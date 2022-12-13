@@ -28,10 +28,16 @@ struct DAGPipeline;
 class Context;
 class DAGContext;
 
+struct OperatorsBuilder;
+
+class Pipeline;
+using PipelinePtr = std::shared_ptr<Pipeline>;
+class PipelineBuilder;
+
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
-class PhysicalPlanNode
+class PhysicalPlanNode : public std::enable_shared_from_this<PhysicalPlanNode>
 {
 public:
     PhysicalPlanNode(
@@ -56,6 +62,10 @@ public:
 
     virtual void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
+    virtual void transform(OperatorsBuilder & /*op_builder*/, Context & /*context*/, size_t /*concurrency*/);
+
+    virtual void buildPipeline(PipelineBuilder & pipeline_builder, const PipelinePtr & pipeline);
+
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
 
@@ -71,7 +81,7 @@ public:
     String toString();
 
 protected:
-    virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
+    virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*concurrency*/){};
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

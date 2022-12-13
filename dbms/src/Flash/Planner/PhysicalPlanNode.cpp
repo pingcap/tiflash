@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
@@ -79,5 +80,18 @@ void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
     }
+}
+
+void PhysicalPlanNode::transform(OperatorsBuilder & /*op_builder*/, Context & /*context*/, size_t /*concurrency*/)
+{
+    throw Exception("Unsupport");
+}
+
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & pipeline_builder, const PipelinePtr & pipeline)
+{
+    pipeline->addPlan(shared_from_this());
+    assert(childrenSize() <= 1);
+    if (childrenSize() == 1)
+        children(0)->buildPipeline(pipeline_builder, pipeline);
 }
 } // namespace DB

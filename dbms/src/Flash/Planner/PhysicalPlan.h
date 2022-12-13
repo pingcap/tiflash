@@ -24,6 +24,10 @@
 
 namespace DB
 {
+class Pipeline;
+using PipelinePtr = std::shared_ptr<Pipeline>;
+using Pipelines = std::vector<PipelinePtr>;
+
 class PhysicalPlan
 {
 public:
@@ -35,11 +39,13 @@ public:
     void build(const tipb::DAGRequest * dag_request);
 
     // after outputAndOptimize, the physical plan node tree is done.
-    void outputAndOptimize();
+    PhysicalPlanNodePtr outputAndOptimize();
 
     String toString() const;
 
     void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
+
+    Pipelines toPipelines();
 
 private:
     void addRootFinalProjectionIfNeed();
