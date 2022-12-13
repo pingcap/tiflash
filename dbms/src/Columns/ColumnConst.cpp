@@ -55,12 +55,7 @@ ColumnPtr ColumnConst::filter(const Filter & filt, ssize_t /*result_size_hint*/)
     return ColumnConst::create(data, countBytesInFilter(filt));
 }
 
-ColumnPtr ColumnConst::replicate(const Offsets & offsets) const
-{
-    return replicate(0, offsets.size(), offsets);
-}
-
-ColumnPtr ColumnConst::replicate(size_t /*start_row*/, size_t end_row, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnConst::replicateRange(size_t /*start_row*/, size_t end_row, const IColumn::Offsets & offsets) const
 {
     if (s != offsets.size())
         throw Exception(

@@ -107,10 +107,10 @@ void ExecutorTest::executeExecutor(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-    std::vector<size_t> concurrencies{1, 2, 10};
+    std::vector<size_t> concurrencies{1};
     for (auto concurrency : concurrencies)
     {
-        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        std::vector<size_t> block_sizes{2};
         for (auto block_size : block_sizes)
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
@@ -232,6 +232,18 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     Blocks blocks;
     queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return mergeBlocks(blocks).getColumnsWithTypeAndName();
+}
+
+size_t ExecutorTest::getExecuteStreamsReturnBlockCount(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+{
+    DAGContext dag_context(*request, "executor_test", concurrency);
+    context.context.setExecutorTest();
+    context.context.setMockStorage(context.mockStorage());
+    context.context.setDAGContext(&dag_context);
+    // Currently, don't care about regions information in tests.
+    Blocks blocks;
+    queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    return blocks.size();
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)

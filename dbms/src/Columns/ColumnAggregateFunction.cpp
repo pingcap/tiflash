@@ -372,12 +372,7 @@ void ColumnAggregateFunction::popBack(size_t n)
     data.resize_assume_reserved(new_size);
 }
 
-ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) const
-{
-    return replicate(0, offsets.size(), offsets);
-}
-
-ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())

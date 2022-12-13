@@ -310,7 +310,8 @@ void ExpressionAction::execute(Block & block) const
     case JOIN:
     {
         ProbeProcessInfo probe_process_info(0);
-        join->joinBlock(block, probe_process_info);
+        probe_process_info.block = block;
+        join->joinBlock(probe_process_info);
         break;
     }
 

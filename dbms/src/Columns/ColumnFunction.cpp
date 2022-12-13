@@ -44,12 +44,7 @@ MutableColumnPtr ColumnFunction::cloneResized(size_t size) const
     return ColumnFunction::create(size, function, capture);
 }
 
-ColumnPtr ColumnFunction::replicate(const Offsets & offsets) const
-{
-    return replicate(0, offsets.size(), offsets);
-}
-
-ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnFunction::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     if (column_size != offsets.size())
         throw Exception(
@@ -57,11 +52,11 @@ ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, const ICol
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     assert(start_row < end_row);
-    RUNTIME_CHECK(end_row <= column_size, end_row, column_size);
+    assert(end_row <= column_size);
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
-        column.column = column.column->replicate(start_row, end_row, offsets);
+        column.column = column.column->replicateRange(start_row, end_row, offsets);
 
     size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row - 1]);
     return ColumnFunction::create(replicated_size, function, capture);

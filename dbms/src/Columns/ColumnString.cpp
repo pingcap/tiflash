@@ -230,20 +230,14 @@ void ColumnString::getPermutation(bool reverse, size_t limit, int /*nan_directio
     }
 }
 
-
-ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
-{
-    return replicate(0, replicate_offsets.size(), replicate_offsets);
-}
-
-ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const
+ColumnPtr ColumnString::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const
 {
     size_t col_rows = size();
     if (col_rows != replicate_offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     assert(start_row < end_row);
-    RUNTIME_CHECK(end_row <= col_rows, end_row, col_rows);
+    assert(end_row <= col_rows);
 
     auto res = ColumnString::create();
 

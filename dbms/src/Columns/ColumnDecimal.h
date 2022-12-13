@@ -167,9 +167,7 @@ public:
     template <typename Type>
     ColumnPtr indexImpl(const PaddedPODArray<Type> & indexes, size_t limit) const;
 
-    ColumnPtr replicate(const IColumn::Offsets & offsets) const override;
-
-    ColumnPtr replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     void getExtremes(Field & min, Field & max) const override;
 
