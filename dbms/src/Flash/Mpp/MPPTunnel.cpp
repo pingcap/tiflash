@@ -47,7 +47,7 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
 }
 
 // Update metric for tunnel's response bytes
-inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+static void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
 {
     switch (mode)
     {
