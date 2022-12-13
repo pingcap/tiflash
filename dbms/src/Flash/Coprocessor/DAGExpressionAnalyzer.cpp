@@ -889,11 +889,11 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const TiDBTableScan & table_scan)
+    const ColumnInfos & table_scan_columns)
 {
     auto & step = initAndGetLastStep(chain);
 
-    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan.getColumns());
+    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan_columns);
 
     for (auto & col : source_columns)
         step.required_output.push_back(col.name);

@@ -454,12 +454,12 @@ Names Block::getNames() const
 
 void Block::fillSegmentRowId(UInt64 start, UInt64 limit)
 {
-    MutableColumnPtr new_seg_row_id_col = ColumnUInt32::create();
-    new_seg_row_id_col->reserve(limit);
-    for (UInt32 i = 0; i < limit; ++i)
+    auto new_seg_row_id_col = ColumnUInt32::create();
+    ColumnUInt32::Container & res = new_seg_row_id_col->getData();
+    res.resize(limit);
+    for (UInt64 i = 0; i < limit; ++i)
     {
-        auto row_id = start + i;
-        new_seg_row_id_col->insert(row_id);
+        res[i] = i + start;
     }
     segment_row_id_col = std::move(new_seg_row_id_col);
 }

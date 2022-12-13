@@ -200,16 +200,16 @@ bool SegmentReadTaskScheduler::schedule()
     while (count < sche_count)
     {
         count++;
-        Stopwatch sw_sche_once;
+        // Stopwatch sw_sche_once;
         MergedTaskPtr merged_task;
         std::tie(merged_task, run_sche) = scheduleMergedTask();
         if (merged_task != nullptr)
         {
-            auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
-            if (elapsed_ms >= 5)
-            {
-                LOG_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
-            }
+            // auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
+            // if (elapsed_ms >= 5)
+            // {
+            //     LOG_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
+            // }
             SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
         }
         if (!run_sche)

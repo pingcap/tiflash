@@ -597,10 +597,10 @@ private:
         bool relevant_place) const;
 
     static bool useBitmapFilter(const DMContext & dm_context,
-                                 const SegmentSnapshotPtr & segment_snap,
-                                 const ColumnDefines & columns_to_read);
+                                const SegmentSnapshotPtr & segment_snap,
+                                const ColumnDefines & columns_to_read);
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap,
-                              const ColumnDefines & columns_to_read);
+                             const ColumnDefines & columns_to_read);
     BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context,
                                       const SegmentSnapshotPtr & segment_snap,
                                       const RowKeyRanges & read_ranges,

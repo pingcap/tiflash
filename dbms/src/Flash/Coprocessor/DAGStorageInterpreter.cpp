@@ -216,7 +216,7 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     ExpressionActionsChain chain;
     analyzer.initChain(chain, original_source_columns);
     // execute timezone cast or duration cast if needed for local table scan
-    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan.getColumns()))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         assert(extra_cast);
@@ -376,12 +376,12 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
+    bool has_cast = executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle pushed down filter for local and remote table scan.
     /// When late materialization is enable, pushed down filters are executed in tablescan operator, so skip it here.
-    if (push_down_filter.hasValue() && !settings.dt_enable_late_materialization.get())
+    if ((push_down_filter.hasValue() && !settings.dt_enable_late_materialization.get()) || has_cast)
     {
         ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
         recordProfileStreams(pipeline, push_down_filter.executor_id);
@@ -422,7 +422,7 @@ void DAGStorageInterpreter::prepare()
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-void DAGStorageInterpreter::executeCastAfterTableScan(
+bool DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
 {
@@ -448,6 +448,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             stream->setExtraInfo("cast after remote tableScan");
         }
     }
+    return has_cast;
 }
 
 std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(const std::vector<RemoteRequest> & remote_requests)

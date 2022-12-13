@@ -94,7 +94,7 @@ private:
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
-    void executeCastAfterTableScan(
+    bool executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
 

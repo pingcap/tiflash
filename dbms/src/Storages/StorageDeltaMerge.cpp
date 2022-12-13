@@ -766,10 +766,17 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
                 filter_columns.push_back(*iter);
         }
 
-        NamesAndTypes columns_to_read_name_and_type;
-        for (const auto & column : columns_to_read)
+        for (const auto & col : filter_columns)
         {
-            columns_to_read_name_and_type.emplace_back(column.name, column.type);
+            // do not support push down filter on datetime and time
+            if (col.id != -1 && (col.type->getTypeId() == TypeIndex::MyDateTime || col.type->getTypeId() == TypeIndex::MyTime))
+                return std::make_shared<DM::PushDownFilter>(rs_operator);
+        }
+
+        NamesAndTypes columns_to_read_name_and_type;
+        for (const auto & col : columns_to_read)
+        {
+            columns_to_read_name_and_type.emplace_back(col.name, col.type);
         }
 
         std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, context);
@@ -788,6 +795,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         }
         chain.getLastActions()->add(ExpressionAction::project(project_cols));
         project_after_where = chain.getLastActions();
+
         chain.finalize();
         chain.clear();
     }

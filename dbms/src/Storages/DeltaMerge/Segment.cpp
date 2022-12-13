@@ -50,7 +50,6 @@
 #include <memory>
 #include <numeric>
 
-#include "Storages/DeltaMerge/Filter/RSOperator.h"
 
 namespace ProfileEvents
 {
@@ -2259,29 +2258,29 @@ bool Segment::placeDelete(const DMContext & dm_context,
 }
 
 bool Segment::useCleanRead(const SegmentSnapshotPtr & segment_snap,
-                            const ColumnDefines & columns_to_read)
- {
-     return segment_snap->delta->getRows() == 0 //
-         && segment_snap->delta->getDeletes() == 0 //
-         && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
-         && !hasColumn(columns_to_read, VERSION_COLUMN_ID) //
-         && !hasColumn(columns_to_read, TAG_COLUMN_ID);
- }
+                           const ColumnDefines & columns_to_read)
+{
+    return segment_snap->delta->getRows() == 0 //
+        && segment_snap->delta->getDeletes() == 0 //
+        && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
+        && !hasColumn(columns_to_read, VERSION_COLUMN_ID) //
+        && !hasColumn(columns_to_read, TAG_COLUMN_ID);
+}
 
- bool Segment::useBitmapFilter(const DMContext & dm_context,
-                               const SegmentSnapshotPtr & segment_snap,
-                               const ColumnDefines & columns_to_read)
- {
-     if (!dm_context.db_context.getSettingsRef().dt_enable_bitmap_filter)
-     {
-         return false;
-     }
-     if (dm_context.read_delta_only || dm_context.read_stable_only)
-     {
-         return false;
-     }
-     return !useCleanRead(segment_snap, columns_to_read);
- }
+bool Segment::useBitmapFilter(const DMContext & dm_context,
+                              const SegmentSnapshotPtr & segment_snap,
+                              const ColumnDefines & columns_to_read)
+{
+    if (!dm_context.db_context.getSettingsRef().dt_enable_bitmap_filter)
+    {
+        return false;
+    }
+    if (dm_context.read_delta_only || dm_context.read_stable_only)
+    {
+        return false;
+    }
+    return !useCleanRead(segment_snap, columns_to_read);
+}
 
 BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
                                            const SegmentSnapshotPtr & segment_snap,
@@ -2508,7 +2507,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
             max_version,
             expected_block_size);
     }
-    else 
+    else
     {
         bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows(), segment_snap, true);
     }
