@@ -124,7 +124,7 @@ public:
 
     Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
-    void checkTypesOfKeysWithSampleBlock(const Block & block) const;
+    void checkTypes(const Block & block) const;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */

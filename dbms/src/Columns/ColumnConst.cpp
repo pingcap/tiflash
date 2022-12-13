@@ -57,13 +57,7 @@ ColumnPtr ColumnConst::filter(const Filter & filt, ssize_t /*result_size_hint*/)
 
 ColumnPtr ColumnConst::replicate(const Offsets & offsets) const
 {
-    if (s != offsets.size())
-        throw Exception(
-            fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), s),
-            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-
-    size_t replicated_size = 0 == s ? 0 : offsets.back();
-    return ColumnConst::create(data, replicated_size);
+    return replicate(0, offsets.size(), offsets);
 }
 
 ColumnPtr ColumnConst::replicate(size_t /*start_row*/, size_t end_row, const IColumn::Offsets & offsets) const
@@ -73,8 +67,7 @@ ColumnPtr ColumnConst::replicate(size_t /*start_row*/, size_t end_row, const ICo
             fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), s),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(end_row <= s);
-
+    assert(end_row <= s);
     size_t replicated_size = 0 == s ? 0 : (offsets[end_row - 1]);
     return ColumnConst::create(data, replicated_size);
 }

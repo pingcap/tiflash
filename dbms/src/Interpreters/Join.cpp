@@ -1078,9 +1078,8 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         }
 
         current_offset += rows_joined;
-        if (current_offset >= probe_process_info.max_block_size)
+        if (current_offset > probe_process_info.max_block_size)
         {
-            probe_process_info.all_rows_joined_finish = false;
             probe_process_info.block_full = true;
         }
         (*offsets)[i] = current_offset;
@@ -1606,15 +1605,12 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     size_t rows = block.rows();
 
-    // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
-    probe_process_info.max_block_size = std::max(probe_process_info.max_block_size, rows);
-
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter;
 
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(rows, 0);
+        filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
     IColumn::Offset current_offset = 0;
@@ -1659,18 +1655,15 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     size_t process_rows = probe_process_info.end_row - probe_process_info.start_row;
 
     // if rows equal 0 means that it call getHeader, we could ignore filter and offsets_to_replicate, and do not need to update start row.
-    if (rows != 0)
+    if (likely(rows != 0))
     {
         /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
         if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
         {
+            // If ANY INNER | RIGHT JOIN, the result will not be spilt, so the block rows must equal process_rows.
+            RUNTIME_CHECK(rows == process_rows);
             for (size_t i = 0; i < existing_columns; ++i)
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
-
-            if (rows != process_rows)
-            {
-                filter->assign(filter->begin() + probe_process_info.start_row, filter->begin() + probe_process_info.end_row);
-            }
         }
 
 
@@ -1986,7 +1979,7 @@ void Join::joinBlockImplCross(Block & block, ProbeProcessInfo & probe_process_in
     }
 }
 
-void Join::checkTypesOfKeysWithSampleBlock(const Block & block) const
+void Join::checkTypes(const Block & block) const
 {
     checkTypesOfKeys(block, sample_block_with_keys);
 }
@@ -2409,6 +2402,8 @@ void ProbeProcessInfo::setAndInit(Block && block_)
     end_row = 0;
     all_rows_joined_finish = true;
     block_full = false;
+    // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
+    max_block_size = std::max(max_block_size, block.rows());
 }
 
 void ProbeProcessInfo::updateStartRow()
