@@ -31,4 +31,9 @@ Block RepeatSourceBlockInputStream::getHeader() const
     return res;
 }
 
+void RepeatSourceBlockInputStream::appendInfo(FmtBuffer & buffer) const {
+    buffer.fmtAppend(": grouping set ");
+    repeat_source_actions.get()->getActions()[0].repeat->getGroupingSetsDes(buffer);
+}
+
 } // namespace DB

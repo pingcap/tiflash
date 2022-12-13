@@ -447,7 +447,7 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
     *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
     expr->mutable_field_type()->set_collate(collator_id);
     WriteBufferFromOwnString ss;
-    encodeDAGInt64(ft - input.begin(), ss);
+    encodeDAGInt64(ft - input.begin(), ss);   // 这个地方使用下面的 child input schema 的 offset,替换当前算子使用的 column ref
     expr->set_val(ss.releaseStr());
 }
 

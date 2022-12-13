@@ -24,6 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
+#include <Flash/Planner/plans/PhysicalExpand.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -36,7 +37,6 @@
 #include <Flash/Planner/Plans/PhysicalWindow.h>
 #include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Flash/Planner/optimize.h>
-#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -195,6 +195,11 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         auto left = popBack();
 
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), FineGrainedShuffle(executor), left, right));
+        break;
+    }
+    case tipb::ExecType::TypeRepeatSource:
+    {
+        pushBack(PhysicalRepeat::build(context, executor_id, log, executor->repeat_source(), popBack()));
         break;
     }
     default:

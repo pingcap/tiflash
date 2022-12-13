@@ -129,6 +129,8 @@ public:
 
     static std::shared_ptr<Repeat> sharedRepeat(const GroupingSets & groupingSets);
 
+    void getGroupingSetsDes(FmtBuffer & buffer) const;
+
     static const String grouping_identifier_column_name;
 
     static const DataTypePtr grouping_identifier_column_type;
