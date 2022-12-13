@@ -811,6 +811,7 @@ std::shared_ptr<Repeat> DAGExpressionAnalyzer::buildRepeatGroupingColumns(
     const tipb::RepeatSource & repeatSource, const ExpressionActionsPtr & actions)
 {
     GroupingSets group_sets_columns;
+    std::map<String, bool> map_grouping_col;
     group_sets_columns.reserve(repeatSource.grouping_sets().size());
     for (const auto& group_set : repeatSource.grouping_sets()){
         GroupingSet group_set_columns;
@@ -825,13 +826,22 @@ std::shared_ptr<Repeat> DAGExpressionAnalyzer::buildRepeatGroupingColumns(
                 String cp_name = getActions(group_expr, actions);
                 // tidb expression computation is based on column index offset child's chunk schema, change to ck block column name here.
                 group_exprs_columns.emplace_back(cp_name);
+                map_grouping_col.insert(std::pair<String, bool>(cp_name, true));
             }
             // move here, cause basic string is copied from input cols.
             group_set_columns.emplace_back(std::move(group_exprs_columns));
         }
         group_sets_columns.emplace_back(std::move(group_set_columns));
     }
-    return Repeat::sharedRepeat(group_sets_columns);
+    // change the original source column to be nullable, and add a new column for groupingID.
+    for (auto & mutable_one: source_columns)
+    {
+        if (map_grouping_col[mutable_one.name])
+            mutable_one.type = makeNullable(mutable_one.type);
+    }
+    source_columns.emplace_back(Repeat::grouping_identifier_column_name, Repeat::grouping_identifier_column_type);
+    auto shared_repeat = Repeat::sharedRepeat(group_sets_columns);
+    return shared_repeat;
 }
 
 ExpressionActionsPtr DAGExpressionAnalyzer::appendRepeatSource(
@@ -844,8 +854,7 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendRepeatSource(
     }
     auto shared_repeat = buildRepeatGroupingColumns(repeatSource, last_step.actions);
     last_step.actions->add(ExpressionAction::repeatSource(shared_repeat));
-    // an added column from REPEAT action.
-    source_columns.emplace_back(Repeat::grouping_identifier_column_name, Repeat::grouping_identifier_column_type);
+
     auto before_repeat_source = chain.getLastActions();
     chain.finalize();
     chain.clear();

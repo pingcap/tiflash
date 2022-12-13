@@ -36,6 +36,7 @@ struct PlanType
         TableScan = 11,
         MockTableScan = 12,
         Join = 13,
+        Repeat = 14,
     };
     PlanTypeEnum enum_value;
 

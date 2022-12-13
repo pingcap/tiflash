@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <common/types.h>
@@ -108,11 +109,20 @@ bool collectForRepeat(std::vector<tipb::FieldType> &out_field_types, const tipb:
         traverseExecutorTree(child, [&out_child_fields](const tipb::Executor & e) { return collectForExecutor(out_child_fields, e); });
     });
 
-//    executor.repeat_source().grouping_sets().Get(1).grouping_exprs().Get(1).grouping_expr().Get(1).
-//    /// the type of grouping set column is always nullable
-//    auto updated_field_type = field_type;
-//    updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
-//    output_field_types.push_back(updated_field_type);
+    // 对孩子的节点需要根据 grouping sets 的对应关系，给予 nullable 的处理
+    for (const auto & grouping_set : executor.repeat_source().grouping_sets()){
+        for (const auto & grouping_exprs : grouping_set.grouping_exprs()){
+            for (const auto & grouping_col : grouping_exprs.grouping_expr()){
+                // assert that: grouping_col must be the column ref guaranteed by tidb.
+                auto column_index = decodeDAGInt64(grouping_col.val());
+                if (column_index < 0 || column_index >= static_cast<Int64>(out_child_fields.size()))
+                {
+                    throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+                }
+                out_child_fields[column_index].set_flag(out_child_fields[column_index].flag() & (~TiDB::ColumnFlagNotNull));
+            }
+        }
+    }
 
     {
         // for additional groupingID column.

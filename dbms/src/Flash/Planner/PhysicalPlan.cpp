@@ -24,6 +24,7 @@
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
+#include <Flash/Planner/plans/PhysicalRepeat.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
@@ -181,6 +182,11 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         auto left = popBack();
 
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), FineGrainedShuffle(executor), left, right));
+        break;
+    }
+    case tipb::ExecType::TypeRepeatSource:
+    {
+        pushBack(PhysicalRepeat::build(context, executor_id, log, executor->repeat_source(), popBack()));
         break;
     }
     default:

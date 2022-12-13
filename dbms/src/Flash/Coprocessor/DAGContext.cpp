@@ -37,10 +37,10 @@ bool strictSqlMode(UInt64 sql_mode)
 
 void DAGContext::initOutputInfo()
 {
-    output_field_types = collectOutputFieldTypes(*dag_request);
+    output_field_types = collectOutputFieldTypes(*dag_request);   //那么 field types 对应的就是一个 fragment DAG 的 output schema's field types.
     output_offsets.clear();
     result_field_types.clear();
-    for (UInt32 i : dag_request->output_offsets())
+    for (UInt32 i : dag_request->output_offsets())    // 这个地方应该是 fragment dag request 自带的 output offsets
     {
         output_offsets.push_back(i);
         if (unlikely(i >= output_field_types.size()))

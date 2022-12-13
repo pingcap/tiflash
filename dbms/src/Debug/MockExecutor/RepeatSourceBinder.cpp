@@ -55,7 +55,7 @@ ExecutorBinderPtr compileRepeat(ExecutorBinderPtr input, size_t & executor_index
         field_type.set_tp(TiDB::TypeLongLong);
         field_type.set_charset("binary");
         field_type.set_collate(TiDB::ITiDBCollator::BINARY);
-        field_type.set_flag(0);
+        field_type.set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);  // should have NOT NULL FLAG
         field_type.set_flen(-1);
         field_type.set_decimal(-1);
         output_schema.push_back(std::make_pair("groupingID", TiDB::fieldTypeToColumnInfo(field_type)));

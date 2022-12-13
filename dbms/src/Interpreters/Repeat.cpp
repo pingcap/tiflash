@@ -35,7 +35,28 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
 Repeat::Repeat(const DB::GroupingSets & gss)
     : group_sets_names(gss){}
 
-
+void Repeat::getGroupingSetsDes(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend("[");
+    for (const auto & grouping_set: group_sets_names)
+    {
+        buffer.fmtAppend("<");
+        for (const auto  & grouping_exprs: grouping_set)
+        {
+            buffer.fmtAppend("{{");
+            for ( size_t i = 0; i < grouping_exprs.size(); i++)
+            {
+                if (i != 0) {
+                    buffer.fmtAppend(",");
+                }
+                buffer.fmtAppend(grouping_exprs.at(i));
+            }
+            buffer.fmtAppend("}}");
+        }
+        buffer.fmtAppend(">");
+    }
+    buffer.fmtAppend("]");
+}
 
 /// for cases like: select count(distinct a), count(distinct b) from t;
 /// it will generate 2 group set with <a> and <b>, over which we should

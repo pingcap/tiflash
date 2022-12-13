@@ -157,7 +157,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     else if (current->tp() == tipb::ExecType::TypeProjection)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(source->projection().child(), id_generator));
+        children.push_back(std::make_shared<DAGQueryBlock>(source->projection().child(), id_generator)); // 将之后的算子重新算作 children
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
