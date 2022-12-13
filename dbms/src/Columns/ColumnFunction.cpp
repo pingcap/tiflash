@@ -56,7 +56,7 @@ ColumnPtr ColumnFunction::replicate(size_t start_row, size_t end_row, const ICol
             fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), column_size),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(start_row < end_row, start_row, end_row);
+    assert(start_row < end_row);
     RUNTIME_CHECK(end_row <= column_size, end_row, column_size);
 
     ColumnsWithTypeAndName capture = captured_columns;

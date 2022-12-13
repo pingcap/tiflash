@@ -383,8 +383,8 @@ ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, c
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(start_row < end_row, start_row, end_row);
-    RUNTIME_CHECK(end_row <= size, end_row, size);
+    assert(start_row < end_row);
+    assert(end_row <= size);
 
     if (size == 0)
         return cloneEmpty();
@@ -393,7 +393,7 @@ ColumnPtr ColumnAggregateFunction::replicate(size_t start_row, size_t end_row, c
     auto & res_data = res->getData();
     res_data.reserve(offsets[end_row - 1]);
 
-    size_t prev_offset = 0;
+    IColumn::Offset prev_offset = 0;
     for (size_t i = start_row; i < end_row; ++i)
     {
         size_t size_to_replicate = offsets[i] - prev_offset;

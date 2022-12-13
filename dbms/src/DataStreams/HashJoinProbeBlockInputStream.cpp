@@ -71,7 +71,7 @@ Block HashJoinProbeBlockInputStream::readImpl()
         Block block = children.back()->read();
         if (!block)
             return block;
-        join->checkTypesOfKeysWithSampleBlock(block);
+        join->checkTypes(block);
         probe_process_info_ptr->setAndInit(std::move(block));
     }
 

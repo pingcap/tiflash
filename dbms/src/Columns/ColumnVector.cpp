@@ -300,8 +300,8 @@ ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, const ICo
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(start_row < end_row, start_row, end_row);
-    RUNTIME_CHECK(end_row <= size, end_row, size);
+    assert(start_row < end_row);
+    assert(end_row <= size);
 
     if (0 == size)
         return this->create();
@@ -311,7 +311,7 @@ ColumnPtr ColumnVector<T>::replicate(size_t start_row, size_t end_row, const ICo
 
     res_data.reserve(offsets[end_row - 1]);
 
-    size_t prev_offset = 0;
+    IColumn::Offset prev_offset = 0;
 
     for (size_t i = start_row; i < end_row; ++i)
     {

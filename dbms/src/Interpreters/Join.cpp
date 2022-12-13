@@ -1605,9 +1605,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     size_t rows = block.rows();
 
-    // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
-    probe_process_info.max_block_size = std::max(probe_process_info.max_block_size, rows);
-
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter;
 
@@ -1658,7 +1655,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     size_t process_rows = probe_process_info.end_row - probe_process_info.start_row;
 
     // if rows equal 0 means that it call getHeader, we could ignore filter and offsets_to_replicate, and do not need to update start row.
-    if (rows != 0)
+    if (likely(rows != 0))
     {
         /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
         if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
@@ -1952,7 +1949,7 @@ void Join::joinBlockImplCross(Block & block) const
         joinBlockImplCrossInternal<KIND, STRICTNESS, false>(block, nullptr);
 }
 
-void Join::checkTypesOfKeysWithSampleBlock(const Block & block) const
+void Join::checkTypes(const Block & block) const
 {
     checkTypesOfKeys(block, sample_block_with_keys);
 }
@@ -2375,6 +2372,8 @@ void ProbeProcessInfo::setAndInit(Block && block_)
     end_row = 0;
     all_rows_joined_finish = true;
     block_full = false;
+    // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
+    max_block_size = std::max(max_block_size, block.rows());
 }
 
 void ProbeProcessInfo::updateStartRow()
