@@ -66,16 +66,6 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    /// use scan_context to record the performance metrics during read.
-    BlockInputStreams read(
-        const Names & column_names,
-        const SelectQueryInfo & query_info,
-        const Context & context,
-        QueryProcessingStage::Enum & processed_stage,
-        size_t max_block_size,
-        unsigned num_streams,
-        const DM::ScanContextPtr & scan_context);
-
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     /// Write from raft layer.

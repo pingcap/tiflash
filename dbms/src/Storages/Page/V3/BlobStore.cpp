@@ -720,7 +720,15 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(page_id_v3.low, page);
+
+        // Calculate the field_offsets from page entry
+        for (size_t index = 0; index < entry.field_offsets.size(); index++)
+        {
+            const auto offset = entry.field_offsets[index].first;
+            page.field_offsets.emplace(index, offset);
+        }
+
+        page_map.emplace(page_id_v3.low, std::move(page));
 
         pos += entry.size;
     }
@@ -736,14 +744,14 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    if (!id_entry.second.isValid())
+    const auto & [page_id_v3, entry] = id_entry;
+    const size_t buf_size = entry.size;
+
+    if (!entry.isValid())
     {
         Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
         return page_not_found;
     }
-
-    const auto & [page_id_v3, entry] = id_entry;
-    const size_t buf_size = entry.size;
 
     // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
@@ -781,6 +789,13 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     Page page(page_id_v3);
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
+
+    // Calculate the field_offsets from page entry
+    for (size_t index = 0; index < entry.field_offsets.size(); index++)
+    {
+        const auto offset = entry.field_offsets[index].first;
+        page.field_offsets.emplace(index, offset);
+    }
 
     return page;
 }

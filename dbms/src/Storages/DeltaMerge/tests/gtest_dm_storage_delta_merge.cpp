@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -115,10 +116,11 @@ try
     }
 
     // get read stream from DeltaMergeStorage
+    auto scan_context = std::make_shared<DM::ScanContext>();
     QueryProcessingStage::Enum stage2;
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
-    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
     BlockInputStreams ins = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
@@ -290,7 +292,7 @@ try
     auto sort_desc = storage->getPrimarySortDescription();
     ASSERT_FALSE(storage->storeInited());
 
-    auto & store = storage->getStore();
+    const auto & store = storage->getStore();
     ASSERT_TRUE(storage->storeInited());
     auto pk_type2 = store->getPKDataType();
     auto sort_desc2 = store->getPrimarySortDescription();
@@ -619,7 +621,7 @@ try
             column_names.push_back(name_type.name);
         }
 
-        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_ReadWriteCase1");
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_ReadExtraPhysicalTableID");
         if (Poco::File path(path_name); path.exists())
             path.remove(true);
 
@@ -652,10 +654,11 @@ try
     }
 
     // get read stream from DeltaMergeStorage
+    auto scan_context = std::make_shared<DM::ScanContext>();
     QueryProcessingStage::Enum stage2;
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
-    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
     Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
     BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
@@ -755,10 +758,11 @@ try
         output->writeSuffix();
     };
     auto read_data = [&]() {
+        auto scan_context = std::make_shared<DM::ScanContext>();
         QueryProcessingStage::Enum stage2;
         SelectQueryInfo query_info;
         query_info.query = std::make_shared<ASTSelectQuery>();
-        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
         Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
         BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
         return getInputStreamNRows(ins[0]);
