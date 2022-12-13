@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -145,7 +146,6 @@ MakeRegionQueryInfos(
             mvcc_info.regions_query_info.emplace_back(std::move(info));
         }
     }
-    mvcc_info.concurrent = mvcc_info.regions_query_info.size() > 1 ? 1.0 : 0.0;
 
     if (region_need_retry.empty())
         return std::make_tuple(std::nullopt, RegionException::RegionReadStatus::OK);
@@ -321,7 +321,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = std::make_shared<DM::ScanContext>();
+        auto scan_context = std::make_shared<DM::ScanContext>();
+        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+        mvcc_query_info->scan_context = scan_context;
         buildLocalStreams(pipeline, settings.max_block_size);
     }
 
@@ -553,7 +555,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(logical_table_id, *mvcc_query_info, max_streams, /*for_batch_cop=*/false, context, log);
+    return doLearnerRead(logical_table_id, *mvcc_query_info, /*for_batch_cop=*/false, context, log);
 }
 
 /// Will assign region_retry_from_local_region
@@ -589,7 +591,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(logical_table_id, *mvcc_query_info, max_streams, /*for_batch_cop=*/true, context, log);
+            return doLearnerRead(logical_table_id, *mvcc_query_info, /*for_batch_cop=*/true, context, log);
         }
         catch (const LockException & e)
         {
@@ -630,22 +632,18 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.is_fast_scan = table_scan.isFastScan();
         return query_info;
     };
+    RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
     if (table_scan.isPartitionTableScan())
     {
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
         {
             SelectQueryInfo query_info = create_query_info(physical_table_id);
-            query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso);
+            query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso, mvcc_query_info->scan_context);
             ret.emplace(physical_table_id, std::move(query_info));
         }
         for (auto & r : mvcc_query_info->regions_query_info)
         {
             ret[r.physical_table_id].mvcc_query_info->regions_query_info.push_back(r);
-        }
-        for (auto & p : ret)
-        {
-            // todo mvcc_query_info->concurrent is not used anymore, should remove it later
-            p.second.mvcc_query_info->concurrent = p.second.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
         }
     }
     else
@@ -737,14 +735,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         try
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-            const auto & scan_context = dag_context.scan_context_map.at(table_scan.getTableScanExecutorID());
-
-            // We want to collect performance metrics in storage level, thus we need read with scan_context here.
-            // while IStorage::read() can't support it, and only StorageDeltaMerge support to read with scan_context to collect the information.
-            // Thus, storage must cast to StorageDeltaMergePtr here to call the corresponding read() function.
-            StorageDeltaMergePtr delta_merge_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            RUNTIME_CHECK_MSG(delta_merge_storage != nullptr, "delta_merge_storage which cast from storage is null");
-            pipeline.streams = delta_merge_storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams, scan_context);
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
 
             injectFailPointForLocalRead(query_info);
 

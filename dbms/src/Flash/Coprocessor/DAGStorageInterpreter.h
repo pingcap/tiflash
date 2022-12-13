@@ -112,12 +112,12 @@ private:
     Context & context;
     const TiDBTableScan & table_scan;
     const PushDownFilter & push_down_filter;
-    size_t max_streams;
+    const size_t max_streams;
     LoggerPtr log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
-    TableID logical_table_id;
+    const TableID logical_table_id;
     const Settings & settings;
     TMTContext & tmt;
 
