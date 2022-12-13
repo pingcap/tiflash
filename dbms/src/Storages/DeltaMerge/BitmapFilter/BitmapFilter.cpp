@@ -26,6 +26,12 @@ BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_)
     , all_match(false)
 {}
 
+BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, bool all_match_)
+    : filter(size_, all_match_)
+    , snap(snapshot_)
+    , all_match(all_match_)
+{}
+
 void BitmapFilter::set(const UInt32 * data, UInt32 size)
 {
     for (UInt32 i = 0; i < size; ++i)
@@ -53,10 +59,6 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     else
     {
         std::transform(filter.begin() + start, filter.begin() + start + limit, f.begin(), [](bool v) { return v; });
-        // for (UInt32 i = 0; i < limit; ++i)
-        // {
-        //     f[i] = filter[i + start];
-        // }
     }
 }
 
@@ -68,6 +70,10 @@ bool BitmapFilter::checkPack(UInt32 start, UInt32 limit) const
 
 void BitmapFilter::andWith(const BitmapFilterPtr & other)
 {
+    if (other->all_match)
+    {
+        return;
+    }
     RUNTIME_CHECK(filter.size() == other->filter.size(), filter.size(), other->filter.size());
     std::transform(filter.begin(), filter.end(), other->filter.begin(), filter.begin(), std::logical_and<bool>());
 }

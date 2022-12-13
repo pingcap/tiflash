@@ -47,6 +47,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
 #include <numeric>
 
 #include "Storages/DeltaMerge/Filter/RSOperator.h"
@@ -2257,6 +2258,31 @@ bool Segment::placeDelete(const DMContext & dm_context,
     return fully_indexed;
 }
 
+bool Segment::useCleanRead(const SegmentSnapshotPtr & segment_snap,
+                            const ColumnDefines & columns_to_read)
+ {
+     return segment_snap->delta->getRows() == 0 //
+         && segment_snap->delta->getDeletes() == 0 //
+         && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
+         && !hasColumn(columns_to_read, VERSION_COLUMN_ID) //
+         && !hasColumn(columns_to_read, TAG_COLUMN_ID);
+ }
+
+ bool Segment::useBitmapFilter(const DMContext & dm_context,
+                               const SegmentSnapshotPtr & segment_snap,
+                               const ColumnDefines & columns_to_read)
+ {
+     if (!dm_context.db_context.getSettingsRef().dt_enable_bitmap_filter)
+     {
+         return false;
+     }
+     if (dm_context.read_delta_only || dm_context.read_stable_only)
+     {
+         return false;
+     }
+     return !useCleanRead(segment_snap, columns_to_read);
+ }
+
 BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
                                            const SegmentSnapshotPtr & segment_snap,
                                            const RowKeyRanges & read_ranges,
@@ -2347,7 +2373,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
 
     Stopwatch sw_total;
 
-    //TODO: maybe we can remove handle column from columns_to_read.
+    // TODO: maybe we can remove handle column from columns_to_read.
     // to avoid redundantly read handle/version/delmark column.
 
     /// phase 1: read columns of filters
@@ -2471,13 +2497,21 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
-    auto bitmap_filter = buildBitmapFilter(
-        dm_context,
-        segment_snap,
-        data_ranges,
-        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        max_version,
-        expected_block_size);
+    BitmapFilterPtr bitmap_filter;
+    if (useBitmapFilter(dm_context, segment_snap, columns_to_read))
+    {
+        bitmap_filter = buildBitmapFilter(
+            dm_context,
+            segment_snap,
+            data_ranges,
+            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+            max_version,
+            expected_block_size);
+    }
+    else 
+    {
+        bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows(), segment_snap, true);
+    }
 
     return getBitmapFilterInputStream(
         std::move(bitmap_filter),

@@ -274,8 +274,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 void StorageDisaggregated::pushDownFilter(DAGPipeline & pipeline)
 {
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    assert(receiver_dag_schema.size() == source_columns.size());
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 

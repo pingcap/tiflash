@@ -456,7 +456,7 @@ void Block::fillSegmentRowId(UInt64 start, UInt64 limit)
 {
     MutableColumnPtr new_seg_row_id_col = ColumnUInt32::create();
     new_seg_row_id_col->reserve(limit);
-    for (UInt64 i = 0; i < limit; ++i)
+    for (UInt32 i = 0; i < limit; ++i)
     {
         auto row_id = start + i;
         new_seg_row_id_col->insert(row_id);

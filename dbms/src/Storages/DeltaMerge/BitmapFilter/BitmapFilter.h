@@ -29,6 +29,8 @@ class BitmapFilter
 public:
     BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_);
 
+    BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, bool all_match_);
+
     void set(const UInt32 * data, UInt32 size);
 
     void set(const ColumnPtr & col);
