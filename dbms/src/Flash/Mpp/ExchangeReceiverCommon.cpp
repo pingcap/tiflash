@@ -15,11 +15,11 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiverCommon.h>
+#include <common/defines.h>
 
 #include <magic_enum.hpp>
 #include <mutex>
 
-#include "common/defines.h"
 
 namespace DB
 {
@@ -63,12 +63,6 @@ void ExchangeReceiverBase::prepareMsgChannels()
             msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
     else
         msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
-}
-
-void ExchangeReceiverBase::cancel()
-{
-    setEndState(ExchangeReceiverState::CANCELED);
-    cancelAllMsgChannels();
 }
 
 void ExchangeReceiverBase::close()

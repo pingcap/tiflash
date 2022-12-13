@@ -43,6 +43,8 @@ public:
 
     ~ExchangeReceiverWithRPCContext() = default;
 
+    void cancel();
+
 private:
     using Request = typename RPCContext::Request;
 
@@ -54,12 +56,6 @@ private:
     void setUpConnection();
 
 private:
-    bool isReceiverForTiFlashStorage()
-    {
-        // If not empty, need to send MPPTask to tiflash_storage.
-        return !disaggregated_dispatch_reqs.empty();
-    }
-
     std::shared_ptr<RPCContext> rpc_context;
 };
 

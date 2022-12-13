@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Storages/StorageDisaggregated.h>
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
@@ -247,7 +248,8 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count_)
+        uint64_t fine_grained_shuffle_stream_count_,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {})
         : source_num(source_num_)
         , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
         , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
@@ -259,11 +261,10 @@ public:
         , local_conn_num(0)
         , collected(false)
         , memory_tracker(current_memory_tracker)
+        , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
     {}
 
     ~ExchangeReceiverBase();
-
-    void cancel();
 
     void close();
 
@@ -325,6 +326,12 @@ protected:
 protected:
     void prepareMsgChannels();
 
+    bool isReceiverForTiFlashStorage()
+    {
+        // If not empty, need to send MPPTask to tiflash_storage.
+        return !disaggregated_dispatch_reqs.empty();
+    }
+
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
@@ -351,5 +358,8 @@ protected:
     bool collected = false;
     int thread_count = 0;
     MemoryTracker * memory_tracker;
+
+    // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
+    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 } // namespace DB
