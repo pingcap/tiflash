@@ -68,8 +68,7 @@ struct ReceivedMessage
 
     void switchMemTracker()
     {
-        if (is_local_tunnel_msg)
-            packet->switchMemTracker(current_memory_tracker);
+        packet->switchMemTracker(current_memory_tracker);
     }
 };
 

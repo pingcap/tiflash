@@ -342,13 +342,6 @@ void ExchangeReceiverWithRPCContext<RPCContext>::setUpConnection()
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
 
-    auto myid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << myid;
-    std::string tid = ss.str();
-
-    auto * logg = &Poco::Logger::get("LRUCache");
-
     for (size_t index = 0; index < source_num; ++index)
     {
         auto req = rpc_context->makeRequest(index);
@@ -359,7 +352,6 @@ void ExchangeReceiverWithRPCContext<RPCContext>::setUpConnection()
             String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
             rpc_context->establishMPPConnectionLocal(req, req.source_index, req_info, this, enable_fine_grained_shuffle_flag);
             ++local_conn_num;
-            LOG_INFO(logg, "TLocal: local_conn_num {}, {}", local_conn_num, tid);
         }
         else
         {

@@ -18,9 +18,9 @@
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <fmt/core.h>
 
-#include "Flash/Mpp/ExchangeReceiverCommon.h"
 
 namespace DB
 {
@@ -47,7 +47,7 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
 }
 
 // Update metric for tunnel's response bytes
-static void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
 {
     switch (mode)
     {

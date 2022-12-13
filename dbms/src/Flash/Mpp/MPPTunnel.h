@@ -236,11 +236,6 @@ public:
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        auto myid = std::this_thread::get_id();
-        std::stringstream ss;
-        ss << myid;
-        std::string tid = ss.str();
-
         if (unlikely(checkPacketErr(data)))
             return false;
 

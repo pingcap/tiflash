@@ -54,7 +54,7 @@ extern const char force_no_local_region_for_mpp_task[];
 
 namespace
 {
-static void RandomFailPointTestBeforeRegisteringTunnels(bool is_root_task)
+void injectFailPointBeforeRegisterTunnel(bool is_root_task)
 {
     if (is_root_task)
     {
@@ -66,7 +66,7 @@ static void RandomFailPointTestBeforeRegisteringTunnels(bool is_root_task)
     }
 }
 
-static void RandomFailPointTestBeforeRegisteringMPPTask(bool is_root_task)
+void injectFailPointBeforeRegisterMPPTask(bool is_root_task)
 {
     if (is_root_task)
     {
@@ -78,7 +78,7 @@ static void RandomFailPointTestBeforeRegisteringMPPTask(bool is_root_task)
     }
 }
 
-static void RandomFailPointTestDuringRegisterTunnelForNonRootMppTask(bool is_root_task)
+void injectFailPointDuringRegisterTunnel(bool is_root_task)
 {
     if (!is_root_task)
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
@@ -177,7 +177,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
         tunnel_set_local->registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
 
-        RandomFailPointTestDuringRegisterTunnelForNonRootMppTask(dag_context->isRootMPPTask());
+        injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
@@ -320,13 +320,13 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
     dag_context->setProcessListEntry(process_list_entry);
 
-    RandomFailPointTestBeforeRegisteringTunnels(dag_context->isRootMPPTask());
+    injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
-    RandomFailPointTestBeforeRegisteringMPPTask(dag_context->isRootMPPTask());
+    injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
     auto [result, reason] = task_manager->registerTask(shared_from_this());
     if (!result)
     {
@@ -400,7 +400,6 @@ void MPPTask::runImpl()
         }
         mpp_task_statistics.start();
 
-        LOG_INFO(log, "is root mpptask: {}", isRootMPPTask());
         auto result = query_executor_holder->execute();
         if (likely(result.is_success))
         {
