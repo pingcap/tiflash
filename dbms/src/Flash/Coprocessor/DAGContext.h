@@ -328,6 +328,8 @@ public:
     void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
 
+    void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
+
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -406,6 +408,10 @@ private:
     // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
+
+    /// We don't want the table to be dropped during the lifetime of this query,
+    /// and sometimes if there is no local region, we will hold the table lock.
+    TableLockHolders table_locks;
 };
 
 } // namespace DB

@@ -94,14 +94,12 @@ void MPPTask::abortReceivers()
     receiver_set->cancel();
 }
 
-void MPPTask::abortDataStreams(AbortType abort_type)
+void MPPTask::abortDataStreams()
 {
-    /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
-    bool is_kill = abort_type == AbortType::ONCANCELLATION;
     if (auto query_executor = query_executor_holder.tryGet(); query_executor)
     {
         assert(query_executor.value());
-        (*query_executor)->cancel(is_kill);
+        (*query_executor)->cancel();
     }
 }
 
@@ -496,7 +494,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// the original error
             err_string = message;
             abortTunnels(message, false);
-            abortDataStreams(abort_type);
+            abortDataStreams();
             abortReceivers();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl

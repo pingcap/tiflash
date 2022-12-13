@@ -32,7 +32,7 @@ public:
 
     String dump() const override;
 
-    void cancel(bool is_kill) override;
+    void cancel() override;
 
     int estimateNewThreadCount() override;
 
