@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Common/TiFlashMetrics.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -52,23 +52,23 @@ class TestMPPTunnel;
 
 namespace MPPTunnelMetric
 {
-inline void addDataSizeMetric(std::atomic<size_t> & data_size_in_queue, size_t size)
+inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_add(size);
     GET_METRIC(tiflash_coprocessor_queue_status, type_send).Increment(size);
 }
 
-inline void subDataSizeMetric(std::atomic<size_t> & data_size_in_queue, size_t size)
+inline void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_sub(size);
     GET_METRIC(tiflash_coprocessor_queue_status, type_send).Decrement(size);
 }
 
-inline void clearDataSizeMetric(std::atomic<size_t> & data_size_in_queue)
+inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
 {
     GET_METRIC(tiflash_coprocessor_queue_status, type_send).Decrement(data_size_in_queue.load());
 }
-} // MPPTunnelMetric
+} // namespace MPPTunnelMetric
 
 class IAsyncCallData;
 
@@ -85,7 +85,7 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<size_t> * data_size_in_queue_)
+    TunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : memory_tracker(memory_tracker_)
         , log(log_)
         , tunnel_id(tunnel_id_)
@@ -164,8 +164,8 @@ protected:
     ConsumerState consumer_state;
     const LoggerPtr log;
     const String tunnel_id;
-    
-    std::atomic<size_t> * data_size_in_queue; // From MppTunnel
+
+    std::atomic<Int64> * data_size_in_queue; // From MppTunnel
     MPMCQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
@@ -377,7 +377,7 @@ private:
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderPtr local_tunnel_sender;
-    std::atomic<size_t> data_size_in_queue;
+    std::atomic<Int64> data_size_in_queue;
 };
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 

@@ -45,7 +45,7 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
 }
 
 // Update metric for tunnel's response bytes
-void updateMetric(std::atomic<size_t> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode)
+void updateMetric(std::atomic<Int64> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode)
 {
     switch (mode)
     {
@@ -394,7 +394,7 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
     if (result == MPMCQueueResult::OK)
     {
         MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
-        
+
         // switch tunnel's memory tracker into receiver's
         res->switchMemTracker(current_memory_tracker);
         return res;

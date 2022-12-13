@@ -157,19 +157,19 @@ enum class AsyncRequestStage
 
 namespace ExchangeReceiverMetric
 {
-void addDataSizeMetric(std::atomic<size_t> & data_size_in_queue, size_t size)
+void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_add(size);
     GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Increment(size);
 }
 
-void subDataSizeMetric(std::atomic<size_t> & data_size_in_queue, size_t size)
+void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_sub(size);
     GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Decrement(size);
 }
 
-void clearDataSizeMetric(std::atomic<size_t> & data_size_in_queue)
+void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
 {
     GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Decrement(data_size_in_queue.load());
 }
@@ -412,7 +412,7 @@ private:
     const Request * request; // won't be null
     MPMCQueue<Self *> * notify_queue; // won't be null
     std::vector<MsgChannelPtr> * msg_channels; // won't be null
-    std::atomic<size_t> * data_size_in_queue; // won't be null
+    std::atomic<Int64> * data_size_in_queue; // won't be null
 
     String req_info;
     bool meet_error = false;
@@ -741,7 +741,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
-        
+
         ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }

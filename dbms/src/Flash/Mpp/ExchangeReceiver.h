@@ -221,7 +221,7 @@ private:
     bool collected = false;
     int thread_count = 0;
 
-    std::atomic<size_t> data_size_in_queue;
+    std::atomic<Int64> data_size_in_queue;
 
     // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
     std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
