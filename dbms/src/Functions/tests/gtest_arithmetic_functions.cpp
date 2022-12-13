@@ -108,21 +108,81 @@ try
 {
     const String func_name = "tidbDivide";
 
-    // int and decimal
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
-        executeFunction(
-            func_name,
-            createColumn<Int32>({1, 1, 1, 1, 1}),
-            createColumn<Decimal64>(std::make_tuple(20, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+    // decimal32
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal32>(std::make_tuple(20, 4), {DecimalField32(100000000, 4), DecimalField32(100010000, 4), DecimalField32(199990000, 4), DecimalField32(200000000, 4), DecimalField32(200010000, 4)})));
 
-    // decimal and decimal
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
-        executeFunction(
-            func_name,
-            createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4)}),
-            createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal32>(std::make_tuple(18, 4), {DecimalField32(10000, 4), DecimalField32(10000, 4), DecimalField32(10000, 4), DecimalField32(10000, 4), DecimalField32(10000, 4)}),
+                createColumn<Decimal32>(std::make_tuple(18, 4), {DecimalField32(100000000, 4), DecimalField32(100010000, 4), DecimalField32(199990000, 4), DecimalField32(200000000, 4), DecimalField32(200010000, 4)})));
+    }
+
+    // decimal64
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal64>(std::make_tuple(20, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4)}),
+                createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+    }
+
+    // decimal128
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal128>(std::make_tuple(20, 4), {DecimalField128(100000000, 4), DecimalField128(100010000, 4), DecimalField128(199990000, 4), DecimalField128(200000000, 4), DecimalField128(200010000, 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal128>(std::make_tuple(18, 4), {DecimalField128(10000, 4), DecimalField128(10000, 4), DecimalField128(10000, 4), DecimalField128(10000, 4), DecimalField128(10000, 4)}),
+                createColumn<Decimal128>(std::make_tuple(18, 4), {DecimalField128(100000000, 4), DecimalField128(100010000, 4), DecimalField128(199990000, 4), DecimalField128(200000000, 4), DecimalField128(200010000, 4)})));
+    }
+
+    // decimal256
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal256>(std::make_tuple(20, 4), {DecimalField256(Int256(100000000), 4), DecimalField256(Int256(100010000), 4), DecimalField256(Int256(199990000), 4), DecimalField256(Int256(200000000), 4), DecimalField256(Int256(200010000), 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal256>(std::make_tuple(18, 4), {DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4)}),
+                createColumn<Decimal256>(std::make_tuple(18, 4), {DecimalField256(Int256(100000000), 4), DecimalField256(Int256(100010000), 4), DecimalField256(Int256(199990000), 4), DecimalField256(Int256(200000000), 4), DecimalField256(Int256(200010000), 4)})));
+    }
 }
 CATCH
 

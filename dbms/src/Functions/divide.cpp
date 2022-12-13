@@ -62,7 +62,8 @@ struct TiDBDivideFloatingImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        if constexpr (std::is_integral_v<Result>)
+        // round for decimal floating number dividing
+        if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256>)
             return (static_cast<Result>(a) + b / 2) / b;
         else
             return static_cast<Result>(a) / b;
