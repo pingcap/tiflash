@@ -262,6 +262,9 @@ namespace DB
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+    M(tiflash_coprocessor_queue_status, "Total bytes of data contained in the queue", Gauge,                                              \
+        F(type_send, {{"type", "send_queue"}}),                                                                                           \
+        F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

@@ -155,6 +155,26 @@ enum class AsyncRequestStage
     FINISHED,
 };
 
+namespace ExchangeReceiverMetric
+{
+void addDataSizeMetric(std::atomic<size_t> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_add(size);
+    GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Increment(size);
+}
+
+void subDataSizeMetric(std::atomic<size_t> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_sub(size);
+    GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Decrement(size);
+}
+
+void clearDataSizeMetric(std::atomic<size_t> & data_size_in_queue)
+{
+    GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Decrement(data_size_in_queue.load());
+}
+} // namespace ExchangeReceiverMetric
+
 using Clock = std::chrono::system_clock;
 using TimePoint = Clock::time_point;
 
@@ -176,12 +196,14 @@ public:
         std::vector<MsgChannelPtr> * msg_channels_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const String & req_id)
+        const String & req_id,
+        std::atomic<size_t> * data_size_in_queue_)
         : rpc_context(context)
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(&req)
         , notify_queue(queue)
         , msg_channels(msg_channels_)
+        , data_size_in_queue(data_size_in_queue_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
     {
@@ -369,6 +391,9 @@ private:
                     *msg_channels,
                     log))
                 return false;
+
+            ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, packet->getPacket().ByteSizeLong());
+
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<TrackedMppDataPacket>();
         }
@@ -387,6 +412,7 @@ private:
     const Request * request; // won't be null
     MPMCQueue<Self *> * notify_queue; // won't be null
     std::vector<MsgChannelPtr> * msg_channels; // won't be null
+    std::atomic<size_t> * data_size_in_queue; // won't be null
 
     String req_info;
     bool meet_error = false;
@@ -423,6 +449,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
+    , data_size_in_queue(0)
     , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
     try
@@ -430,9 +457,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         if (enable_fine_grained_shuffle_flag)
         {
             for (size_t i = 0; i < output_stream_count; ++i)
-            {
                 msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
-            }
         }
         else
         {
@@ -465,6 +490,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     {
         close();
         thread_manager->wait();
+        ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
     {
@@ -545,7 +571,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channels, rpc_context, req, exc_log->identifier()));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channels, rpc_context, req, exc_log->identifier(), &data_size_in_queue));
 
     while (alive_async_connections > 0)
     {
@@ -617,6 +643,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
                     break;
                 }
+
+                ExchangeReceiverMetric::addDataSizeMetric(data_size_in_queue, packet->getPacket().ByteSizeLong());
             }
             // if meet error, such as decode packet fails, it will not retry.
             if (meet_error)
@@ -713,6 +741,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+        
+        ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
 }

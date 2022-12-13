@@ -45,7 +45,7 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
 }
 
 // Update metric for tunnel's response bytes
-inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+void updateMetric(std::atomic<size_t> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode)
 {
     switch (mode)
     {
@@ -59,6 +59,7 @@ inline void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
     default:
         throw DB::Exception("Illegal TunnelSenderMode");
     }
+    MPPTunnelMetric::addDataSizeMetric(data_size_in_queue, pushed_data_size);
 }
 } // namespace
 
@@ -86,6 +87,7 @@ MPPTunnel::MPPTunnel(
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get(req_id, tunnel_id))
+    , data_size_in_queue(0)
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -105,6 +107,7 @@ MPPTunnel::~MPPTunnel()
     try
     {
         close("", true);
+        MPPTunnelMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
     {
@@ -160,7 +163,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
-        updateMetric(pushed_data_size, mode);
+        updateMetric(data_size_in_queue, pushed_data_size, mode);
         connection_profile_info.bytes += pushed_data_size;
         connection_profile_info.packets += 1;
         return;
@@ -196,14 +199,14 @@ void MPPTunnel::connect(PacketWriter * writer)
         case TunnelSenderMode::LOCAL:
         {
             RUNTIME_ASSERT(writer == nullptr, log);
-            local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, mem_tracker, log, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
             tunnel_sender = local_tunnel_sender;
             break;
         }
         case TunnelSenderMode::SYNC_GRPC:
         {
             RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
-            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id);
+            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
             sync_tunnel_sender->startSendThread(writer);
             tunnel_sender = sync_tunnel_sender;
             break;
@@ -231,11 +234,11 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         auto kick_func_for_test = call_data->getKickFuncForTest();
         if (unlikely(kick_func_for_test.has_value()))
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value());
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value(), &data_size_in_queue);
         }
         else
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, call_data->grpcCall());
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, call_data->grpcCall(), &data_size_in_queue);
         }
         call_data->attachAsyncTunnelSender(async_tunnel_sender);
         tunnel_sender = async_tunnel_sender;
@@ -345,6 +348,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
         TrackedMppDataPacketPtr res;
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
+            MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
             if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
@@ -389,6 +393,8 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
     auto result = send_queue.pop(res);
     if (result == MPMCQueueResult::OK)
     {
+        MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
+        
         // switch tunnel's memory tracker into receiver's
         res->switchMemTracker(current_memory_tracker);
         return res;
