@@ -409,8 +409,8 @@ private:
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
 
-    /// We don't want the table to be dropped during the lifetime of this query,
-    /// and sometimes if there is no local region, we will hold the table lock.
+    /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query,
+    /// even if there are no local regions.
     TableLockHolders table_locks;
 };
 
