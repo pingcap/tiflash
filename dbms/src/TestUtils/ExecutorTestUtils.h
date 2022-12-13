@@ -98,6 +98,10 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
 
+    size_t getExecuteStreamsReturnBlockCount(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        size_t concurrency = 1);
+
 private:
     void executeExecutor(
         const std::shared_ptr<tipb::DAGRequest> & request,

@@ -1070,18 +1070,21 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         // and it means the rows in this block are not joined finish.
 
         for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
+            ++rows_joined;
+
+        if (current_offset && current_offset + rows_joined > probe_process_info.max_block_size)
+        {
+            probe_process_info.block_full = true;
+            return;
+        }
+
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 added_columns[j]->insertFrom(*current->block->getByPosition(right_indexes[j]).column.get(), current->row_num);
-
-            ++rows_joined;
         }
 
         current_offset += rows_joined;
-        if (current_offset > probe_process_info.max_block_size)
-        {
-            probe_process_info.block_full = true;
-        }
         (*offsets)[i] = current_offset;
         if (KIND == ASTTableJoin::Kind::Anti)
             /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
@@ -1158,10 +1161,6 @@ void NO_INLINE joinBlockImplTypeCase(
     probe_process_info.block_full = false;
     for (i = probe_process_info.start_row; i < rows; ++i)
     {
-        if (probe_process_info.block_full)
-        {
-            break;
-        }
         if (has_null_map && (*null_map)[i])
         {
             Adder<KIND, STRICTNESS, Map>::addNotFound(
@@ -1233,7 +1232,12 @@ void NO_INLINE joinBlockImplTypeCase(
                     probe_process_info);
             keyHolderDiscardKey(key_holder);
         }
-        probe_process_info.end_row = i + 1;
+        probe_process_info.end_row = probe_process_info.block_full ? i : i + 1;
+
+        if (probe_process_info.block_full)
+        {
+            break;
+        }
     }
 
     // if i == rows, it means that all probe rows have been joined finish.
@@ -1617,7 +1621,11 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate;
 
     if (strictness == ASTTableJoin::Strictness::All)
+    {
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);
+        std::cout << "before rows : " << rows << " offsets size : " << offsets_to_replicate->size() << std::endl;
+    }
+
 
     switch (type)
     {
@@ -1672,7 +1680,8 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
         {
             for (size_t i = 0; i < existing_columns; ++i)
             {
-                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(probe_process_info.start_row, probe_process_info.end_row, *offsets_to_replicate);
+                std::cout << "block rows : " << block.safeGetByPosition(i).column->size() << " start : " << probe_process_info.start_row << " end : " << probe_process_info.end_row << "offset rows : " << offsets_to_replicate->size() << std::endl;
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicateRange(probe_process_info.start_row, probe_process_info.end_row, *offsets_to_replicate);
             }
 
             if (rows != process_rows)
@@ -2005,13 +2014,6 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
-    Block block = probe_process_info.block;
-    joinBlock(block, probe_process_info);
-    return block;
-}
-
-void Join::joinBlock(Block & block, ProbeProcessInfo & probe_process_info) const
-{
     // ck will use this function to generate header, that's why here is a check.
     {
         std::unique_lock lk(build_table_mutex);
@@ -2022,6 +2024,8 @@ void Join::joinBlock(Block & block, ProbeProcessInfo & probe_process_info) const
     }
 
     std::shared_lock lock(rwlock);
+
+    Block block = probe_process_info.block;
 
     /// TODO: after we bumping to C++20, use `using enum` to simplify code here.
     /// using enum ASTTableJoin::Strictness;
@@ -2092,6 +2096,7 @@ void Join::joinBlock(Block & block, ProbeProcessInfo & probe_process_info) const
 
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
+    return block;
 }
 
 void Join::joinTotals(Block & block) const
@@ -2395,7 +2400,7 @@ BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sampl
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
-void ProbeProcessInfo::setAndInit(Block && block_)
+void ProbeProcessInfo::resetBlock(Block && block_)
 {
     block = std::move(block_);
     start_row = 0;

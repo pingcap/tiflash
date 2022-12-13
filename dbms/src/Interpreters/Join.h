@@ -120,8 +120,6 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    void joinBlock(Block & block, ProbeProcessInfo & probe_process_info) const;
-
     Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
     void checkTypes(const Block & block) const;
@@ -421,11 +419,8 @@ struct ProbeProcessInfo
     ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_){};
 
-    void setAndInit(Block && block_);
+    void resetBlock(Block && block_);
     void updateStartRow();
 };
-
-using ProbeProcessInfoPtr = std::unique_ptr<ProbeProcessInfo>;
-
 
 } // namespace DB

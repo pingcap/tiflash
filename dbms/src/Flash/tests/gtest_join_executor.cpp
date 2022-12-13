@@ -572,5 +572,26 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, SplitJoinResult)
+try
+{
+    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
+    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
+
+    auto request = context
+                       .scan("split_test", "t1")
+                       .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> expect{10, 10, 10, 2, 2, 1, 1, 1};
+    for (size_t i = 0; i < block_sizes.size(); ++i)
+    {
+        context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        ASSERT_EQ(expect[i], getExecuteStreamsReturnBlockCount(request));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

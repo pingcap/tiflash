@@ -24,7 +24,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     UInt64 max_block_size)
     : log(Logger::get(req_id))
     , join(join_)
-    , probe_process_info_ptr(std::make_unique<ProbeProcessInfo>(max_block_size))
+    , probe_process_info(max_block_size)
 {
     children.push_back(input);
 
@@ -60,22 +60,24 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
-    join->joinBlock(res, *probe_process_info_ptr);
-    return res;
+    ProbeProcessInfo header_probe_process_info(0);
+    header_probe_process_info.block = res;
+    return join->joinBlock(header_probe_process_info);
+    ;
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    if (probe_process_info_ptr->all_rows_joined_finish)
+    if (probe_process_info.all_rows_joined_finish)
     {
         Block block = children.back()->read();
         if (!block)
             return block;
         join->checkTypes(block);
-        probe_process_info_ptr->setAndInit(std::move(block));
+        probe_process_info.resetBlock(std::move(block));
     }
 
-    return join->joinBlock(*probe_process_info_ptr);
+    return join->joinBlock(probe_process_info);
 }
 
 

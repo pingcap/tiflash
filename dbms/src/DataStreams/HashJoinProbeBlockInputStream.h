@@ -51,7 +51,7 @@ protected:
 private:
     const LoggerPtr log;
     JoinPtr join;
-    ProbeProcessInfoPtr probe_process_info_ptr;
+    ProbeProcessInfo probe_process_info;
 };
 
 } // namespace DB

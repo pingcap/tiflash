@@ -325,13 +325,7 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_
 }
 
 template <typename T>
-ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets & offsets) const
-{
-    return replicate(0, offsets.size(), offsets);
-}
-
-template <typename T>
-ColumnPtr ColumnDecimal<T>::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnDecimal<T>::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())
