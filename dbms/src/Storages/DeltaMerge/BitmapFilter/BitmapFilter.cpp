@@ -55,10 +55,9 @@ void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     }
     else
     {
-        for (UInt32 i = 0; i < limit; i++)
-        {
-            f[i] = filter[i + start];
-        }
+        std::copy(filter.cbegin() + start,
+                  filter.cbegin() + start + limit,
+                  f.begin());
     }
 }
 

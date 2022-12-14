@@ -117,10 +117,9 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
 
     if (row_ids != nullptr)
     {
-        for (size_t i = persisted_read_rows; i < row_ids->size(); ++i)
-        {
-            (*row_ids)[i] += mem_table_rows_offset;
-        }
+        std::transform(row_ids->cbegin() + persisted_read_rows, row_ids->cend(),
+                       row_ids->begin() + persisted_read_rows, // write to the same location
+                       [mem_table_rows_offset](UInt32 id) { return id + mem_table_rows_offset; });
     }
 
     return actual_read;

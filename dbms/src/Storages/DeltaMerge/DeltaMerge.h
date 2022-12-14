@@ -284,16 +284,17 @@ private:
     {
         for (UInt64 i = 0; i < limit; i++)
         {
-            auto row_id = start + i;
-            seg_row_id_col->insert(row_id);
+            UInt32 row_id = start + i;
+            seg_row_id_col->insertData(reinterpret_cast<const char *>(&row_id), sizeof(row_id));
         }
     }
 
     inline void fillSegmentRowId(const std::vector<UInt32> & row_ids)
     {
-        for (auto row_id : row_ids)
+        for (UInt32 row_id : row_ids)
         {
-            seg_row_id_col->insert(row_id + stable_rows);
+            row_id += stable_rows;
+            seg_row_id_col->insertData(reinterpret_cast<const char *>(&row_id), sizeof(row_id));
         }
     }
     template <bool c_stable_done, bool c_delta_done>
