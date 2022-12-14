@@ -61,7 +61,7 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
     ProbeProcessInfo header_probe_process_info(0);
-    header_probe_process_info.block = res;
+    header_probe_process_info.resetBlock(std::move(res));
     return join->joinBlock(header_probe_process_info);
 }
 

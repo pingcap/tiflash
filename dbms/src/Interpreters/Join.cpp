@@ -1710,8 +1710,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
                 offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info.start_row, offsets_to_replicate->begin() + probe_process_info.end_row);
             }
         }
-
-        probe_process_info.updateStartRow();
     }
 
     /// handle other conditions
@@ -2011,6 +2009,8 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 
     std::shared_lock lock(rwlock);
 
+    probe_process_info.updateStartRow();
+
     Block block = probe_process_info.block;
 
     /// TODO: after we bumping to C++20, use `using enum` to simplify code here.
@@ -2082,6 +2082,12 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
+
+    if (isCrossJoin(kind))
+    {
+        probe_process_info.all_rows_joined_finish = true;
+    }
+
     return block;
 }
 
@@ -2391,6 +2397,7 @@ void ProbeProcessInfo::resetBlock(Block && block_)
     block = std::move(block_);
     start_row = 0;
     end_row = 0;
+    all_rows_joined_finish = false;
     // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
     max_block_size = std::max(max_block_size, block.rows());
 }
