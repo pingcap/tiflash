@@ -19,7 +19,7 @@
 
 namespace DB
 {
-class ExpressionActions;
+
 
 /** Executes a certain expression over the block.
   * Basically the same as ExpressionBlockInputStream,
@@ -39,7 +39,7 @@ public:
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
         const String & req_id,
-        size_t concurrency_probe_index_);
+        UInt64 max_block_size);
 
     String getName() const override { return name; }
     Block getTotals() override;
@@ -51,7 +51,7 @@ protected:
 private:
     const LoggerPtr log;
     JoinPtr join;
-    size_t concurrency_probe_index;
+    ProbeProcessInfo probe_process_info;
 };
 
 } // namespace DB

@@ -41,8 +41,7 @@ public:
     size_t size() const override { return column_size; }
 
     ColumnPtr cut(size_t start, size_t length) const override;
-    ColumnPtr replicate(const Offsets & offsets) const override;
-    ColumnPtr replicate(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
     ColumnPtr filter(const Filter & filter, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void insertDefault() override;

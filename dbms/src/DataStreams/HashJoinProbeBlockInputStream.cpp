@@ -21,10 +21,10 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
     const String & req_id,
-    size_t concurrency_probe_index_)
+    UInt64 max_block_size)
     : log(Logger::get(req_id))
     , join(join_)
-    , concurrency_probe_index(concurrency_probe_index_)
+    , probe_process_info(max_block_size)
 {
     children.push_back(input);
 
@@ -60,21 +60,24 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
-    join->joinBlock(res, concurrency_probe_index);
-    return res;
+    ProbeProcessInfo header_probe_process_info(0);
+    header_probe_process_info.block = res;
+    return join->joinBlock(header_probe_process_info);
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    if (join->needGetNewBlock(concurrency_probe_index))
+    if (probe_process_info.all_rows_joined_finish)
     {
         Block block = children.back()->read();
         if (!block)
             return block;
-        join->updateProcessBlock(std::move(block), concurrency_probe_index);
+        join->checkTypes(block);
+        probe_process_info.resetBlock(std::move(block));
     }
 
-    return join->joinBlock(concurrency_probe_index);
+    return join->joinBlock(probe_process_info);
 }
+
 
 } // namespace DB

@@ -230,59 +230,14 @@ void ColumnString::getPermutation(bool reverse, size_t limit, int /*nan_directio
     }
 }
 
-
-ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
-{
-    size_t col_size = size();
-    if (col_size != replicate_offsets.size())
-        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-
-    auto res = ColumnString::create();
-
-    if (0 == col_size)
-        return res;
-
-    Chars_t & res_chars = res->chars;
-    Offsets & res_offsets = res->offsets;
-    res_chars.reserve(chars.size() / col_size * replicate_offsets.back());
-    res_offsets.reserve(replicate_offsets.back());
-
-    Offset prev_replicate_offset = 0;
-    Offset prev_string_offset = 0;
-    Offset current_new_offset = 0;
-
-    for (size_t i = 0; i < col_size; ++i)
-    {
-        size_t size_to_replicate = replicate_offsets[i] - prev_replicate_offset;
-        size_t string_size = offsets[i] - prev_string_offset;
-
-        for (size_t j = 0; j < size_to_replicate; ++j)
-        {
-            current_new_offset += string_size;
-            res_offsets.push_back(current_new_offset);
-
-            res_chars.resize(res_chars.size() + string_size);
-            memcpySmallAllowReadWriteOverflow15(
-                &res_chars[res_chars.size() - string_size],
-                &chars[prev_string_offset],
-                string_size);
-        }
-
-        prev_replicate_offset = replicate_offsets[i];
-        prev_string_offset = offsets[i];
-    }
-
-    return res;
-}
-
-ColumnPtr ColumnString::replicate(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const
+ColumnPtr ColumnString::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const
 {
     size_t col_rows = size();
     if (col_rows != replicate_offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    RUNTIME_CHECK(start_row < end_row, start_row, end_row);
-    RUNTIME_CHECK(end_row <= col_rows, end_row, col_rows);
+    assert(start_row < end_row);
+    assert(end_row <= col_rows);
 
     auto res = ColumnString::create();
 
