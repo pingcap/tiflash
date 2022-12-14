@@ -27,7 +27,7 @@ UInt16 getNumberOfLogicalCPUCores()
     return CPUCores::number_of_logical_cpu_cores;
 }
 
-UInt16 getNumberOfPhysicalCPUCores()
+UInt16 computeAndSetNumberOfPhysicalCPUCores()
 {
     return CPUCores::number_of_physical_cpu_cores;
 }
@@ -40,8 +40,23 @@ void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_)
     CPUCores::number_of_logical_cpu_cores = number_of_logical_cpu_cores_;
 }
 
-void setNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores_, UInt16 number_of_hardware_physical_cores)
+void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores_, UInt16 number_of_hardware_physical_cores)
 {
+    // First of all, we need to take consideration of two situation:
+    //   1. tiflash on physical machine. 
+    //      In old codes, tiflash needs to set max_threads which is equal to
+    //      physical cpu cores, so we need to ensure this behavior is not broken.
+    //   2. tiflash on virtual environment.
+    //      In virtual environment, when setting max_threads, we can't directly
+    //      get physical cpu cores to set this variable because only host machine's
+    //      physical cpu core can be reached. So, number of physical cpus cores can
+    //      only be assigned by calculated with logical cpu cores.
+    //
+    // - `number_of_logical_cpu_cores_` which represents how many logical cpu cores a tiflash could use(no matter in physical or virtual environment) is assigned from ServerInfo.
+    // - `hardware_logical_cpu_cores` represents how many logical cpu cores the host physical machine has.
+    // - `number_of_hardware_physical_cores` represents how many physical cpu cores the host physical machine has.
+    // - `(hardware_logical_cpu_cores / number_of_hardware_physical_cores)` means how many logical cpu core a physical cpu core has.
+    // - `number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores)` means how many physical cpu cores the tiflash process could use. (Actually, it's needless to get physical cpu cores in virtual environment, but we must ensure the behavior `1` is not broken)
     auto hardware_logical_cpu_cores = std::thread::hardware_concurrency();
     CPUCores::number_of_physical_cpu_cores = number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores);
 }
