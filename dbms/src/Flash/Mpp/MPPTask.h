@@ -92,7 +92,7 @@ private:
 
     void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
-    void abortDataStreams();
+    void abortQueryExecutor();
 
     void finishWrite();
 

@@ -380,6 +380,9 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query,
+    /// even if there are no local regions.
+    TableLockHolders table_locks;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
@@ -408,10 +411,6 @@ private:
     // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
-
-    /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query,
-    /// even if there are no local regions.
-    TableLockHolders table_locks;
 };
 
 } // namespace DB

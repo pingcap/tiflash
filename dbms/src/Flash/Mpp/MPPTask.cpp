@@ -94,7 +94,7 @@ void MPPTask::abortReceivers()
     receiver_set->cancel();
 }
 
-void MPPTask::abortDataStreams()
+void MPPTask::abortQueryExecutor()
 {
     if (auto query_executor = query_executor_holder.tryGet(); query_executor)
     {
@@ -494,7 +494,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// the original error
             err_string = message;
             abortTunnels(message, false);
-            abortDataStreams();
+            abortQueryExecutor();
             abortReceivers();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
