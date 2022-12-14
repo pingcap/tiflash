@@ -43,22 +43,22 @@ public:
 
     /// delete this to-be cancelled/finished query from scheduler and update min_query_id if needed, so that there aren't cancelled/finished queries in the scheduler.
     /// NOTE: call deleteQuery under the lock protection of MPPTaskManager
-    void deleteQuery(const String query_id, MPPTaskManager & task_manager, const bool is_cancelled);
+    void deleteQuery(const MPPQueryId & query_id, MPPTaskManager & task_manager, const bool is_cancelled);
 
     /// all scheduled tasks should finally call this function to release threads and schedule new tasks
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
-    bool scheduleImp(const String query_id, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
-    bool updateMinQueryId(const String query_id, const bool retired, const String & msg);
+    bool scheduleImp(const MPPQueryId & query_id, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
+    bool updateMinQueryId(const MPPQueryId & query_id, const bool retired, const String & msg);
     void scheduleWaitingQueries(MPPTaskManager & task_manager);
     bool isDisabled()
     {
         return thread_hard_limit == 0 && thread_soft_limit == 0;
     }
-    std::set<String> waiting_set;
-    std::set<String> active_set;
-    String min_query_id;
+    std::set<MPPQueryId> waiting_set;
+    std::set<MPPQueryId> active_set;
+    MPPQueryId min_query_id;
     UInt64 thread_soft_limit;
     UInt64 thread_hard_limit;
     UInt64 estimated_thread_usage;

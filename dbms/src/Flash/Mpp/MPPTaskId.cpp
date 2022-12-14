@@ -13,38 +13,49 @@
 // limitations under the License.
 
 #include <Flash/Mpp/MPPTaskId.h>
-#include <IO/WriteHelpers.h>
 #include <fmt/core.h>
 
 namespace DB
 {
+bool MPPQueryId::operator<(const MPPQueryId & mpp_query_id) const
+{
+    if (query_ts == 0 && local_query_id == 0 && server_id == 0)
+    {
+        return start_ts < mpp_query_id.start_ts;
+    }
+    return (query_ts < mpp_query_id.query_ts) || (local_query_id < mpp_query_id.local_query_id) || (server_id < mpp_query_id.server_id);
+}
+bool MPPQueryId::operator==(const MPPQueryId & rid) const
+{
+    return query_ts == rid.query_ts && local_query_id == rid.local_query_id && server_id == rid.server_id && start_ts == rid.start_ts;
+}
+bool MPPQueryId::operator!=(const MPPQueryId & rid) const
+{
+    return !(*this == rid);
+}
+bool MPPQueryId::operator<=(const MPPQueryId & rid) const
+{
+    return *this < rid || *this == rid;
+}
+
+size_t MPPQueryIdHash::operator()(MPPQueryId const & mpp_query_id) const noexcept
+{
+    if (mpp_query_id.query_ts == 0 && mpp_query_id.local_query_id == 0 && mpp_query_id.server_id == 0)
+    {
+        return std::hash<UInt64>()(mpp_query_id.start_ts);
+    }
+    return std::hash<UInt64>()(mpp_query_id.query_ts) ^ std::hash<UInt64>()(mpp_query_id.local_query_id) ^ std::hash<UInt64>()(mpp_query_id.server_id);
+}
+
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP<query_id:N/A,start_ts:N/A,query_ts:N/A,task_id:N/A,server_id:N/A>" : fmt::format("MPP<query:{},start_ts:{},query_ts:{},task_id:{},server_id:{},local_query_id:{}>", query_id, start_ts, query_ts, task_id, server_id, local_query_id);
+    return isUnknown() ? "MPP<query_id:N/A,start_ts:N/A,task_id:N/A>" : fmt::format("MPP<query:{},start_ts:{},task_id:{}>", query_id.toDebugString(), start_ts, task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
 
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
-const String MPPTaskId::Max_Query_Id = generateQueryID(MAX_UINT64, MAX_UINT64, MAX_UINT64, MAX_UINT64);
-
-String MPPTaskId::generateQueryID(UInt64 query_ts_, UInt64 local_query_id_, UInt64 server_id_, UInt64 start_ts_)
-{
-    if (local_query_id_ == 0)
-    {
-        return intToHex(0) + intToHex(0) + intToHex(start_ts_);
-    }
-    return intToHex(query_ts_) + intToHex(local_query_id_) + intToHex(server_id_);
-}
-
-std::tuple<UInt64, UInt64, UInt64> MPPTaskId::decodeQueryID(String query_id_str)
-{
-    UInt64 decode_query_ts = std::stoull(query_id_str.substr(0, sizeof(Int64) * 2), 0, 16);
-    UInt64 decode_local_query_id = std::stoull(query_id_str.substr(sizeof(Int64) * 2, sizeof(Int64) * 2), 0, 16);
-    UInt64 decode_server_id = std::stoull(query_id_str.substr(sizeof(Int64) * 2 * 2, sizeof(UInt64) * 2), 0, 16);
-    LOG_DEBUG(Logger::get(__FUNCTION__), "query_ts_={}, local_query_id_={}, server_id_={}", decode_query_ts, decode_local_query_id, decode_server_id);
-    return {decode_query_ts, decode_local_query_id, decode_server_id};
-}
+const MPPQueryId MPPTaskId::Max_Query_Id = MPPQueryId(MAX_UINT64, MAX_UINT64, MAX_UINT64, MAX_UINT64);
 
 bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
 {

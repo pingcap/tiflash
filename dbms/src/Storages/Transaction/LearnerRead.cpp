@@ -237,7 +237,7 @@ LearnerReadSnapshot doLearnerRead(
                 else
                 {
                     batch_read_index_result.emplace(region_id, kvrpcpb::ReadIndexResponse());
-                    stale_read_count++;
+                    ++stale_read_count;
                 }
             }
         }

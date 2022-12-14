@@ -69,7 +69,7 @@ size_t MPPTaskTestUtils::serverNum()
     return server_num;
 }
 
-std::tuple<String, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
+std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
@@ -77,7 +77,7 @@ std::tuple<String, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMP
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
-    return {MPPTaskId::generateQueryID(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
+    return {MPPQueryId(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
@@ -134,7 +134,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     return buf.toString();
 }
 
-::testing::AssertionResult MPPTaskTestUtils::assertQueryCancelled(String query_id)
+::testing::AssertionResult MPPTaskTestUtils::assertQueryCancelled(const MPPQueryId & query_id)
 {
     auto seconds = std::chrono::seconds(1);
     auto retry_times = 0;
@@ -155,13 +155,13 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     return ::testing::AssertionSuccess();
 }
 
-::testing::AssertionResult MPPTaskTestUtils::assertQueryActive(String query_id)
+::testing::AssertionResult MPPTaskTestUtils::assertQueryActive(const MPPQueryId & query_id)
 {
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id) == nullptr)
         {
-            return ::testing::AssertionFailure() << "Query " << query_id << "not active" << std::endl;
+            return ::testing::AssertionFailure() << "Query " << query_id.toDebugString() << "not active" << std::endl;
         }
     }
     return ::testing::AssertionSuccess();

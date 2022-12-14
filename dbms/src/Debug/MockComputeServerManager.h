@@ -48,7 +48,7 @@ public:
 
     void resetMockMPPServerInfo(size_t partition_num);
 
-    void cancelQuery(String query_id);
+    void cancelQuery(const MPPQueryId & query_id);
 
     static String queryInfo();
 

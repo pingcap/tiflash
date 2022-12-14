@@ -80,14 +80,14 @@ public:
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
-    std::tuple<String, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
+    std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
-    static ::testing::AssertionResult assertQueryCancelled(String query_id);
-    static ::testing::AssertionResult assertQueryActive(String query_id);
+    static ::testing::AssertionResult assertQueryCancelled(const MPPQueryId & query_id);
+    static ::testing::AssertionResult assertQueryActive(const MPPQueryId & query_id);
     static String queryInfo(size_t server_id);
 
 protected:

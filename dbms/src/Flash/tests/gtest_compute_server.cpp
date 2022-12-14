@@ -363,7 +363,7 @@ try
 
     // start 10 queries
     {
-        std::vector<std::tuple<String, std::vector<BlockInputStreamPtr>>> queries;
+        std::vector<std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>>> queries;
         for (size_t i = 0; i < 10; ++i)
         {
             queries.push_back(prepareMPPStreams(context
