@@ -197,7 +197,7 @@ public:
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
         const String & req_id,
-        std::atomic<size_t> * data_size_in_queue_)
+        std::atomic<Int64> * data_size_in_queue_)
         : rpc_context(context)
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(&req)
