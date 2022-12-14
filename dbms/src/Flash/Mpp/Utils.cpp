@@ -14,6 +14,7 @@
 
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
+#include <fmt/format.h>
 
 #include <memory>
 
