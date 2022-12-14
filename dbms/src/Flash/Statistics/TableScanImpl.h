@@ -51,7 +51,7 @@ public:
 
 private:
     TableScanDetail local_table_scan_detail{true};
-    TableScanDetail cop_table_scan_detail{false};
+    TableScanDetail remote_table_scan_detail{false};
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;
