@@ -1146,10 +1146,13 @@ void NO_INLINE joinBlockImplTypeCase(
     size_t fine_grained_shuffle_count,
     ProbeProcessInfo & probe_process_info)
 {
-    if (rows == 0 || probe_process_info.start_row == rows)
+    if (rows == 0)
     {
+        probe_process_info.all_rows_joined_finish = true;
         return;
     }
+
+    assert(probe_process_info.start_row < rows);
 
     size_t num_columns_to_add = right_indexes.size();
 
@@ -1250,19 +1253,14 @@ void NO_INLINE joinBlockImplTypeCase(
             keyHolderDiscardKey(key_holder);
         }
 
+        // if block_full is true means that the current offset is greater than max_block_size, we need break the loop.
         if (block_full)
         {
-            // if block_full is true means that the current offset is greater than max_block_size and current row i is not handled, so set end_row to i.
-            probe_process_info.end_row = i;
             break;
-        }
-        else
-        {
-            // if block_full is false means that all rows are handled and current row i is also handled, so set end_row to i+1;
-            probe_process_info.end_row = i + 1;
         }
     }
 
+    probe_process_info.end_row = i;
     // if i == rows, it means that all probe rows have been joined finish.
     probe_process_info.all_rows_joined_finish = (i == rows);
 }
@@ -1712,8 +1710,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
                 offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info.start_row, offsets_to_replicate->begin() + probe_process_info.end_row);
             }
         }
-
-        probe_process_info.updateStartRow();
     }
 
     /// handle other conditions
@@ -2042,6 +2038,8 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
     }
 
     std::shared_lock lock(rwlock);
+
+    probe_process_info.updateStartRow();
 
     Block block = probe_process_info.block;
 
@@ -2423,7 +2421,7 @@ void ProbeProcessInfo::resetBlock(Block && block_)
     block = std::move(block_);
     start_row = 0;
     end_row = 0;
-    all_rows_joined_finish = true;
+    all_rows_joined_finish = false;
     // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
     max_block_size = std::max(max_block_size, block.rows());
 }

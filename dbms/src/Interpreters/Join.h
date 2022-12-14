@@ -413,10 +413,11 @@ struct ProbeProcessInfo
     UInt64 max_block_size;
     size_t start_row;
     size_t end_row;
-    bool all_rows_joined_finish = true;
+    bool all_rows_joined_finish;
 
     ProbeProcessInfo(UInt64 max_block_size_)
-        : max_block_size(max_block_size_){};
+        : max_block_size(max_block_size_)
+        , all_rows_joined_finish(true){};
 
     void resetBlock(Block && block_);
     void updateStartRow();
