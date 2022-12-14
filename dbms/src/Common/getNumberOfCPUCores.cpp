@@ -43,7 +43,7 @@ void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_)
 void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores_, UInt16 number_of_hardware_physical_cores)
 {
     // First of all, we need to take consideration of two situation:
-    //   1. tiflash on physical machine. 
+    //   1. tiflash on physical machine.
     //      In old codes, tiflash needs to set max_threads which is equal to
     //      physical cpu cores, so we need to ensure this behavior is not broken.
     //   2. tiflash on virtual environment.
