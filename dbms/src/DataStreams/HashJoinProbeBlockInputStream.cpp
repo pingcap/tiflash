@@ -63,7 +63,6 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     ProbeProcessInfo header_probe_process_info(0);
     header_probe_process_info.block = res;
     return join->joinBlock(header_probe_process_info);
-    ;
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()

@@ -1621,11 +1621,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate;
 
     if (strictness == ASTTableJoin::Strictness::All)
-    {
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);
-        std::cout << "before rows : " << rows << " offsets size : " << offsets_to_replicate->size() << std::endl;
-    }
-
 
     switch (type)
     {
@@ -1680,7 +1676,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
         {
             for (size_t i = 0; i < existing_columns; ++i)
             {
-                std::cout << "block rows : " << block.safeGetByPosition(i).column->size() << " start : " << probe_process_info.start_row << " end : " << probe_process_info.end_row << "offset rows : " << offsets_to_replicate->size() << std::endl;
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicateRange(probe_process_info.start_row, probe_process_info.end_row, *offsets_to_replicate);
             }
 
