@@ -122,6 +122,12 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     }
 };
 
+void checkLocalTunnel(const MPPTunnelPtr & tunnel)
+{
+    RUNTIME_CHECK_MSG(tunnel != nullptr, "Can't find tunnel when establishing local connection!");
+    RUNTIME_CHECK_MSG(tunnel->isLocal(), "EstablishMPPConnectionLocal into a remote channel!");
+}
+
 } // namespace
 
 GRPCReceiverContext::GRPCReceiverContext(
@@ -269,7 +275,7 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
     return enable_async_grpc && !request.is_local;
 }
 
-std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocal(
+void GRPCReceiverContext::establishMPPConnectionLocal(
     const ExchangeRecvRequest & request,
     size_t source_index,
     const String & req_info,
@@ -280,13 +286,8 @@ std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnecti
 
     std::chrono::seconds timeout(10);
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), timeout);
-    if (tunnel == nullptr)
-        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
-    if (!tunnel->isLocal())
-        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
-
+    checkLocalTunnel(tunnel);
     tunnel->connectLocal(source_index, req_info, recv_base, is_fine_grained);
-    return std::make_tuple(tunnel, grpc::Status::OK);
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const

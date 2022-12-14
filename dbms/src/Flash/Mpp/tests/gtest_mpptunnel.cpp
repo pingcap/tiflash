@@ -57,85 +57,6 @@ class MockFailedWriter : public PacketWriter
     }
 };
 
-struct MockLocalReader
-{
-    LocalTunnelSenderPtr local_sender;
-    std::vector<String> write_packet_vec;
-    std::shared_ptr<ThreadManager> thread_manager;
-
-    explicit MockLocalReader(const LocalTunnelSenderPtr & local_sender_)
-        : local_sender(local_sender_)
-        , thread_manager(newThreadManager())
-    {
-        thread_manager->schedule(true, "LocalReader", [this] {
-            this->read();
-        });
-    }
-
-    ~MockLocalReader()
-    {
-        if (local_sender)
-        {
-            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            LOG_TRACE(local_sender->getLogger(), "before mocklocalreader invoking consumerFinish!");
-            local_sender->consumerFinish("Receiver closed");
-            LOG_TRACE(local_sender->getLogger(), "after mocklocalreader invoking consumerFinish!");
-        }
-        thread_manager->wait();
-    }
-
-    void read()
-    {
-        while (true)
-        {
-            TrackedMppDataPacketPtr tmp_packet = local_sender->readForLocal();
-            bool success = tmp_packet != nullptr;
-            if (success)
-            {
-                write_packet_vec.push_back(tmp_packet->packet.data().empty() ? tmp_packet->packet.error().msg() : tmp_packet->packet.data());
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-};
-using MockLocalReaderPtr = std::shared_ptr<MockLocalReader>;
-
-struct MockTerminateLocalReader
-{
-    LocalTunnelSenderPtr local_sender;
-    std::shared_ptr<ThreadManager> thread_manager;
-
-    explicit MockTerminateLocalReader(const LocalTunnelSenderPtr & local_sender_)
-        : local_sender(local_sender_)
-        , thread_manager(newThreadManager())
-    {
-        thread_manager->schedule(true, "LocalReader", [this] {
-            this->read();
-        });
-    }
-
-    ~MockTerminateLocalReader()
-    {
-        if (local_sender)
-        {
-            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            local_sender->consumerFinish("Receiver closed");
-        }
-        thread_manager->wait();
-    }
-
-    void read() const
-    {
-        TrackedMppDataPacketPtr tmp_packet = local_sender->readForLocal();
-        local_sender->consumerFinish("Receiver closed");
-    }
-};
-using MockTerminateLocalReaderPtr = std::shared_ptr<MockTerminateLocalReader>;
-
-
 class MockAsyncCallData : public IAsyncCallData
 {
 public:
@@ -217,9 +138,9 @@ public:
 class TestMPPTunnel : public testing::Test
 {
 protected:
-    virtual void SetUp() override { timeout = std::chrono::seconds(10); }
-    virtual void TearDown() override {}
-    std::chrono::seconds timeout;
+    void SetUp() override { timeout = std::chrono::seconds(10); }
+    void TearDown() override {}
+    std::chrono::seconds timeout{};
 
 public:
     MPPTunnelPtr constructRemoteSyncTunnel()
@@ -228,46 +149,33 @@ public:
         return tunnel;
     }
 
-    MPPTunnelPtr constructLocalSyncTunnel()
-    {
-        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, true, false, String("0"));
-        return tunnel;
-    }
-
-    static MockLocalReaderPtr connectLocalSyncTunnel(MPPTunnelPtr mpp_tunnel_ptr)
-    {
-        mpp_tunnel_ptr->connect(nullptr);
-        MockLocalReaderPtr local_reader_ptr = std::make_shared<MockLocalReader>(mpp_tunnel_ptr->getLocalTunnelSender());
-        return local_reader_ptr;
-    }
-
     MPPTunnelPtr constructRemoteAsyncTunnel()
     {
         auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, false, true, String("0"));
         return tunnel;
     }
 
-    void waitSyncTunnelSenderThread(SyncTunnelSenderPtr sync_tunnel_sender)
+    static void waitSyncTunnelSenderThread(SyncTunnelSenderPtr sync_tunnel_sender)
     {
         sync_tunnel_sender->thread_manager->wait();
     }
 
-    void setTunnelFinished(MPPTunnelPtr tunnel)
+    static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
     }
 
-    bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
+    static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
     {
         return tunnel->status != MPPTunnel::TunnelStatus::Unconnected && tunnel->status != MPPTunnel::TunnelStatus::Finished;
     }
 
-    bool getTunnelFinishedFlag(MPPTunnelPtr tunnel)
+    static bool getTunnelFinishedFlag(MPPTunnelPtr tunnel)
     {
         return tunnel->status == MPPTunnel::TunnelStatus::Finished;
     }
 
-    bool getTunnelSenderConsumerFinishedFlag(TunnelSenderPtr sender)
+    static bool getTunnelSenderConsumerFinishedFlag(TunnelSenderPtr sender)
     {
         return sender->isConsumerFinished();
     }
@@ -442,143 +350,6 @@ TEST_F(TestMPPTunnel, WriteAfterFinished)
     }
     if (mpp_tunnel_ptr != nullptr)
         mpp_tunnel_ptr->waitForFinish();
-}
-
-/// Test Local MPPTunnel
-TEST_F(TestMPPTunnel, LocalConnectWhenFinished)
-try
-{
-    auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    setTunnelFinished(mpp_tunnel_ptr);
-    mpp_tunnel_ptr->connect(nullptr);
-    GTEST_FAIL();
-}
-catch (Exception & e)
-{
-    GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected or finished: Finished");
-}
-
-TEST_F(TestMPPTunnel, LocalConnectWhenConnected)
-{
-    try
-    {
-        auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-        auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
-        GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        mpp_tunnel_ptr->connect(nullptr);
-        GTEST_FAIL();
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected or finished: Connected");
-    }
-}
-
-TEST_F(TestMPPTunnel, LocalCloseBeforeConnect)
-try
-{
-    auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    mpp_tunnel_ptr->close("Canceled", false);
-    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), false);
-}
-CATCH
-
-TEST_F(TestMPPTunnel, LocalCloseAfterClose)
-try
-{
-    auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    mpp_tunnel_ptr->close("Canceled", false);
-    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    mpp_tunnel_ptr->close("Canceled", false);
-    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-}
-CATCH
-
-TEST_F(TestMPPTunnel, LocalConnectWriteCancel)
-try
-{
-    auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
-    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-
-    mpp_tunnel_ptr->write(newDataPacket("First"));
-    mpp_tunnel_ptr->close("Cancel", false);
-    local_reader_ptr->thread_manager->wait(); // Join local read thread
-    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(mpp_tunnel_ptr->getTunnelSender()), true);
-    auto result_size = local_reader_ptr->write_packet_vec.size();
-    GTEST_ASSERT_EQ(result_size == 1 || result_size == 2, true); //Second for err msg
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[result_size - 1], "Cancel");
-}
-CATCH
-
-TEST_F(TestMPPTunnel, LocalConnectWriteWriteDone)
-try
-{
-    auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
-    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-
-    mpp_tunnel_ptr->write(newDataPacket("First"));
-    mpp_tunnel_ptr->writeDone();
-    local_reader_ptr->thread_manager->wait(); // Join local read thread
-    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(mpp_tunnel_ptr->getTunnelSender()), true);
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
-    LOG_TRACE(mpp_tunnel_ptr->getLogger(), "basic logic done!");
-}
-CATCH
-
-TEST_F(TestMPPTunnel, LocalConsumerFinish)
-try
-{
-    auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
-    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-
-    mpp_tunnel_ptr->write(newDataPacket("First"));
-    mpp_tunnel_ptr->getTunnelSender()->consumerFinish("");
-    local_reader_ptr->thread_manager->wait(); // Join local read thread
-    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(mpp_tunnel_ptr->getTunnelSender()), true);
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
-}
-CATCH
-
-TEST_F(TestMPPTunnel, LocalReadTerminate)
-{
-    try
-    {
-        auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-        mpp_tunnel_ptr->connect(nullptr);
-        MockTerminateLocalReaderPtr local_reader_ptr = std::make_shared<MockTerminateLocalReader>(mpp_tunnel_ptr->getLocalTunnelSender());
-        GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        mpp_tunnel_ptr->write(newDataPacket("First"));
-        mpp_tunnel_ptr->waitForFinish();
-        GTEST_FAIL();
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, Receiver closed");
-    }
-}
-
-TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
-{
-    try
-    {
-        auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-        auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
-        GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        mpp_tunnel_ptr->close("", false);
-        mpp_tunnel_ptr->write(newDataPacket("First"));
-        mpp_tunnel_ptr->waitForFinish();
-        GTEST_FAIL();
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
-    }
 }
 
 /// Test Async MPPTunnel

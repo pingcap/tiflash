@@ -137,6 +137,7 @@ struct MockReceiverContext
         int source_index = 0;
         int send_task_id = 0;
         int recv_task_id = -1;
+        bool is_local = false;
     };
 
     struct Reader
@@ -201,7 +202,7 @@ struct MockReceiverContext
         }
     }
 
-    Request makeRequest(int index) const
+    static Request makeRequest(int index)
     {
         return {index, index, -1};
     }
@@ -211,12 +212,12 @@ struct MockReceiverContext
         return std::make_shared<Reader>(queue);
     }
 
-    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
+    static void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
     {
         throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
     }
 
-    void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
+    static void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
     {
         throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
     }
@@ -233,10 +234,12 @@ struct MockReceiverContext
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
+    void establishMPPConnectionLocal(const Request &, size_t, const String &, ExchangeReceiverBase *, bool) {}
+
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
 };
-using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
+using MockExchangeReceiver = ExchangeReceiverWithRPCContext<MockReceiverContext>;
 using MockWriterPtr = std::shared_ptr<MockWriter>;
 using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
 
