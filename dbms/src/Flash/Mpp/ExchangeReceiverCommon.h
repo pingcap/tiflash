@@ -28,6 +28,10 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <cerrno>
+
+#include "common/defines.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -47,7 +51,6 @@ struct ReceivedMessage
     const mpp::Error * error_ptr;
     const String * resp_ptr;
     std::vector<const String *> chunks;
-    bool is_local_tunnel_msg;
 
     // Constructor that move chunks.
     ReceivedMessage(size_t source_index_,
@@ -55,15 +58,13 @@ struct ReceivedMessage
                     const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
                     const mpp::Error * error_ptr_,
                     const String * resp_ptr_,
-                    std::vector<const String *> && chunks_,
-                    bool is_local_tunnel_msg_ = false)
+                    std::vector<const String *> && chunks_)
         : source_index(source_index_)
         , req_info(req_info_)
         , packet(packet_)
         , error_ptr(error_ptr_)
         , resp_ptr(resp_ptr_)
         , chunks(chunks_)
-        , is_local_tunnel_msg(is_local_tunnel_msg_)
     {}
 
     void switchMemTracker()
@@ -129,7 +130,7 @@ enum class ExchangeReceiverState
 using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
 
 template <bool is_sync>
-static void RandomFailPointTestReceiverPushFail(bool & push_succeed)
+inline void injectFailPointReceiverPushFail(bool & push_succeed)
 {
     if constexpr (is_sync)
         fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
@@ -137,33 +138,60 @@ static void RandomFailPointTestReceiverPushFail(bool & push_succeed)
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
 }
 
-// If enable_fine_grained_shuffle:
-//      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
-// If fine grained_shuffle is disabled:
-//      Push all chunks to msg_channels[0].
-// Return true if all push succeed, otherwise return false.
-// NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
-template <bool enable_fine_grained_shuffle, bool is_sync, bool is_local_tunnel_data>
-bool pushPacket(size_t source_index,
-                const String & req_info,
-                const TrackedMppDataPacketPtr & tracked_packet,
-                const std::vector<MsgChannelPtr> & msg_channels,
-                const LoggerPtr & log)
+class ReceiverChannelWriter
 {
-    bool push_succeed = true;
+public:
+    ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_)
+        : msg_channels(msg_channels_)
+        , req_info(req_info_)
+        , log(log_)
+    {}
 
-    const mpp::Error * error_ptr = nullptr;
-    auto & packet = tracked_packet->packet;
-    if (packet.has_error())
-        error_ptr = &packet.error();
-
-    const String * resp_ptr = nullptr;
-    if (!packet.data().empty())
-        resp_ptr = &packet.data();
-
-    if constexpr (enable_fine_grained_shuffle)
+    // "write" means writing the packet to the channel which is a MPMCQueue.
+    //
+    // If enable_fine_grained_shuffle:
+    //      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
+    // If fine grained_shuffle is disabled:
+    //      Push all chunks to msg_channels[0].
+    // Return true if all push succeed, otherwise return false.
+    // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
+    template <bool enable_fine_grained_shuffle, bool is_sync>
+    bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
     {
-        std::vector<std::vector<const String *>> chunks(msg_channels.size());
+        const mpp::Error * error_ptr = getErrorPtr(tracked_packet->packet);
+        const String * resp_ptr = getRespPtr(tracked_packet->packet);
+
+        bool success;
+        if constexpr (enable_fine_grained_shuffle)
+            success = writeFineGrain<is_sync>(source_index, tracked_packet, error_ptr, resp_ptr);
+        else
+            success = writeNonFineGrain<is_sync>(source_index, tracked_packet, error_ptr, resp_ptr);
+
+        LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels->size(), success, enable_fine_grained_shuffle);
+        return success;
+    }
+
+private:
+    static const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
+    {
+        if (unlikely(packet.has_error()))
+            return &packet.error();
+        return nullptr;
+    }
+
+    static const String * getRespPtr(const mpp::MPPDataPacket & packet)
+    {
+        if (unlikely(!packet.data().empty()))
+            return &packet.data();
+        return nullptr;
+    }
+
+    template <bool is_sync>
+    bool writeFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
+    {
+        bool success = true;
+        auto & packet = tracked_packet->packet;
+        std::vector<std::vector<const String *>> chunks(msg_channels->size());
         if (!packet.chunks().empty())
         {
             // Packet not empty.
@@ -177,19 +205,20 @@ bool pushPacket(size_t source_index,
                           source_index);
                 return false;
             }
+
             // packet.stream_ids[i] is corresponding to packet.chunks[i],
             // indicating which stream_id this chunk belongs to.
             assert(packet.chunks_size() == packet.stream_ids_size());
 
             for (int i = 0; i < packet.stream_ids_size(); ++i)
             {
-                UInt64 stream_id = packet.stream_ids(i) % msg_channels.size();
+                UInt64 stream_id = packet.stream_ids(i) % msg_channels->size();
                 chunks[stream_id].push_back(&packet.chunks(i));
             }
         }
 
         // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
-        for (size_t i = 0; i < msg_channels.size() && push_succeed; ++i)
+        for (size_t i = 0; i < msg_channels->size() && success; ++i)
         {
             if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
                 continue;
@@ -200,19 +229,24 @@ bool pushPacket(size_t source_index,
                 tracked_packet,
                 error_ptr,
                 resp_ptr,
-                std::move(chunks[i]),
-                is_local_tunnel_data);
-            push_succeed = msg_channels[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
+                std::move(chunks[i]));
+            success = (*msg_channels)[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
 
-            RandomFailPointTestReceiverPushFail<is_sync>(push_succeed);
+            injectFailPointReceiverPushFail<is_sync>(success);
 
             // Only the first ExchangeReceiverInputStream need to handle resp.
             resp_ptr = nullptr;
         }
+        return success;
     }
-    else
+
+    template <bool is_sync>
+    bool writeNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
     {
+        bool success = true;
+        auto & packet = tracked_packet->packet;
         std::vector<const String *> chunks(packet.chunks_size());
+
         for (int i = 0; i < packet.chunks_size(); ++i)
             chunks[i] = &packet.chunks(i);
 
@@ -224,16 +258,18 @@ bool pushPacket(size_t source_index,
                 tracked_packet,
                 error_ptr,
                 resp_ptr,
-                std::move(chunks),
-                is_local_tunnel_data);
+                std::move(chunks));
 
-            push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-            RandomFailPointTestReceiverPushFail<is_sync>(push_succeed);
+            success = (*msg_channels)[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
+            injectFailPointReceiverPushFail<is_sync>(success);
         }
+        return success;
     }
-    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
-    return push_succeed;
-}
+
+    std::vector<MsgChannelPtr> * msg_channels;
+    String req_info;
+    const LoggerPtr log;
+};
 
 class ExchangeReceiverBase
 {

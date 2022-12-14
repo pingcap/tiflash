@@ -226,6 +226,7 @@ public:
         , source_index(source_index_)
         , req_info(req_info_)
         , recv_base(recv_base_)
+        , channel_writer(&(recv_base->getMsgChannels()), req_info, log_)
         , is_done(false)
     {}
 
@@ -245,7 +246,7 @@ public:
         MemoryTracker * receiver_mem_tracker = recv_base->getMemoryTracker();
         data->switchMemTracker(receiver_mem_tracker);
 
-        auto res = pushPacket<enable_fine_grained_shuffle, false, true>(source_index, req_info, data, recv_base->getMsgChannels(), log);
+        auto res = channel_writer.write<enable_fine_grained_shuffle, false>(source_index, data);
 
         if (unlikely(!res))
             closeLocalTunnel(true, "Push mpp packet failed at local tunnel");
@@ -288,6 +289,7 @@ private:
     size_t source_index;
     String req_info;
     ExchangeReceiverBase * recv_base;
+    ReceiverChannelWriter channel_writer;
 
     std::mutex mu;
     bool is_done;

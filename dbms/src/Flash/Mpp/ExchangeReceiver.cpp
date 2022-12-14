@@ -29,6 +29,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 
+#include "Flash/Mpp/ExchangeReceiverCommon.h"
+
 
 namespace DB
 {
@@ -72,6 +74,7 @@ public:
         , msg_channels(msg_channels_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
+        , channel_writer(msg_channels_, req_info, log)
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -250,13 +253,9 @@ private:
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            if (!pushPacket<enable_fine_grained_shuffle, false, false>(
-                    request->source_index,
-                    req_info,
-                    packet,
-                    *msg_channels,
-                    log))
+            if (!channel_writer.write<enable_fine_grained_shuffle, false>(request->source_index, packet))
                 return false;
+
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<TrackedMppDataPacket>();
         }
@@ -288,6 +287,7 @@ private:
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
+    ReceiverChannelWriter channel_writer;
     std::mutex mu;
 };
 } // namespace
@@ -439,6 +439,7 @@ void ExchangeReceiverWithRPCContext<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
+        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
@@ -458,12 +459,7 @@ void ExchangeReceiverWithRPCContext<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!pushPacket<enable_fine_grained_shuffle, true, false>(
-                        req.source_index,
-                        req_info,
-                        packet,
-                        msg_channels,
-                        log))
+                if (!channel_writer.write<enable_fine_grained_shuffle, true>(req.source_index, packet))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());

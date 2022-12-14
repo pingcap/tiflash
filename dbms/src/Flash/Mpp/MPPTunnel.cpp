@@ -16,9 +16,9 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
+#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
 #include <fmt/core.h>
 
 
