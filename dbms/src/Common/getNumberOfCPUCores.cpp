@@ -27,7 +27,7 @@ UInt16 getNumberOfLogicalCPUCores()
     return CPUCores::number_of_logical_cpu_cores;
 }
 
-UInt16 computeAndSetNumberOfPhysicalCPUCores()
+UInt16 getNumberOfPhysicalCPUCores()
 {
     return CPUCores::number_of_physical_cpu_cores;
 }
