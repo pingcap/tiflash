@@ -55,18 +55,18 @@ namespace MPPTunnelMetric
 inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_add(size);
-    GET_METRIC(tiflash_coprocessor_queue_status, type_send).Increment(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_send).Increment(size);
 }
 
 inline void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_sub(size);
-    GET_METRIC(tiflash_coprocessor_queue_status, type_send).Decrement(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_send).Decrement(size);
 }
 
 inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
 {
-    GET_METRIC(tiflash_coprocessor_queue_status, type_send).Decrement(data_size_in_queue.load());
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_send).Decrement(data_size_in_queue.load());
 }
 } // namespace MPPTunnelMetric
 

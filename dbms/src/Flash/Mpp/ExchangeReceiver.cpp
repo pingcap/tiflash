@@ -160,18 +160,18 @@ namespace ExchangeReceiverMetric
 void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_add(size);
-    GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Increment(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Increment(size);
 }
 
 void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
 {
     data_size_in_queue.fetch_sub(size);
-    GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Decrement(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(size);
 }
 
 void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
 {
-    GET_METRIC(tiflash_coprocessor_queue_status, type_receive).Decrement(data_size_in_queue.load());
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(data_size_in_queue.load());
 }
 } // namespace ExchangeReceiverMetric
 
