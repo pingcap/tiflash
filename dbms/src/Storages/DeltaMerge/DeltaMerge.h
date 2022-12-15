@@ -92,8 +92,7 @@ private:
     size_t last_handle_read_num = 0;
 
     // Use for calculating MVCC-bitmap-filter when `need_row_id` is true.
-    inline static DataTypeUInt32 seg_row_id_col_type{};
-    MutableColumnPtr seg_row_id_col;
+    ColumnUInt32::MutablePtr seg_row_id_col;
     // `stable_rows` is the total rows of the underlying DMFiles, includes not valid rows.
     UInt64 stable_rows;
     std::vector<UInt32> delta_row_ids;
@@ -282,19 +281,23 @@ private:
 
     inline void fillSegmentRowId(UInt64 start, UInt64 limit)
     {
+        ColumnUInt32::Container & v = seg_row_id_col->getData();
+        auto offset = v.size();
+        v.resize(v.size() + limit);
         for (UInt64 i = 0; i < limit; i++)
         {
-            UInt32 row_id = start + i;
-            seg_row_id_col->insertData(reinterpret_cast<const char *>(&row_id), sizeof(row_id));
+            v[offset + i] = start + i;
         }
     }
 
     inline void fillSegmentRowId(const std::vector<UInt32> & row_ids)
     {
-        for (UInt32 row_id : row_ids)
+        ColumnUInt32::Container & v = seg_row_id_col->getData();
+        auto offset = v.size();
+        v.resize(v.size() + row_ids.size());
+        for (UInt32 i = 0; i < row_ids.size(); i++)
         {
-            row_id += stable_rows;
-            seg_row_id_col->insertData(reinterpret_cast<const char *>(&row_id), sizeof(row_id));
+            v[offset + i] = row_ids[i] + stable_rows;
         }
     }
     template <bool c_stable_done, bool c_delta_done>
@@ -358,7 +361,7 @@ private:
         }
         if constexpr (need_row_id)
         {
-            seg_row_id_col = seg_row_id_col_type.createColumn();
+            seg_row_id_col = ColumnUInt32::create();
             seg_row_id_col->reserve(max_block_size);
         }
     }
