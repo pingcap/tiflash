@@ -14,13 +14,24 @@
 
 #pragma once
 
-#include <common/types.h>
+#include <Poco/Util/LayeredConfiguration.h>
 
-#include <thread>
+#include <string>
 
-UInt16 getNumberOfLogicalCPUCores();
+#define DEF_PROXY_LABEL "tiflash"
+#define DISAGGREGATED_MODE_COMPUTE_PROXY_LABEL DISAGGREGATED_MODE_COMPUTE
+#define DISAGGREGATED_MODE_STORAGE "tiflash_storage"
+#define DISAGGREGATED_MODE_COMPUTE "tiflash_compute"
 
-// We should call this function before Context has been created,
-// which will call `getNumberOfLogicalCPUCores`, or we can not
-// set cpu cores any more.
-void setNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores);
+namespace DB
+{
+enum class DisaggregatedMode
+{
+    None,
+    Compute,
+    Storage,
+};
+
+DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & config);
+std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode);
+} // namespace DB
