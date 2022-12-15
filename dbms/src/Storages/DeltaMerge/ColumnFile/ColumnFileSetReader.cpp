@@ -163,9 +163,11 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
         {
             auto rows_before_cur_file = file_index == 0 ? 0 : column_file_rows_end[file_index - 1];
             auto start_row_id = read_offset + rows_before_cur_file;
+            auto row_ids_offset = row_ids->size();
+            row_ids->resize(row_ids->size() + read_rows);
             for (size_t i = 0; i < read_rows; ++i)
             {
-                row_ids->push_back(start_row_id + i);
+                (*row_ids)[row_ids_offset + i] =start_row_id + i;
             }
         }
     }
