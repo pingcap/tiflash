@@ -44,21 +44,23 @@ void trimStackTrace(String & message)
 namespace TiDB
 {
 
-constexpr int64_t MPP_VERSION = 1 << 10;
-static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.5.0";
-constexpr int64_t MIN_MPP_VERSION = 0;
+constexpr int64_t MPP_VERSION_V0 = 0;
+constexpr int64_t MPP_VERSION_V1 = 1 << 10;
+// constexpr int64_t MPP_VERSION_V2 = MPP_VERSION_V1 * 2;
+constexpr int64_t MPP_VERSION = MPP_VERSION_V1;
+static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.6.0";
 
 bool CheckMppVersion(int64_t mpp_version)
 {
-    return mpp_version >= MIN_MPP_VERSION && mpp_version <= MPP_VERSION;
+    return mpp_version >= MPP_VERSION_V0 && mpp_version <= MPP_VERSION_V1;
 }
 
 std::string GenMppVersionErrorMessage(int64_t mpp_version)
 {
     auto err_msg = fmt::format("Invalid mpp version `{}`, expect version: min `{}`, max `{}` release version `{}`",
                                mpp_version,
-                               TiDB::MIN_MPP_VERSION,
-                               TiDB::MPP_VERSION,
+                               TiDB::MPP_VERSION_V0,
+                               TiDB::MPP_VERSION_V1,
                                MPP_TIFLASH_RELEASE_VERSION);
     return err_msg;
 }

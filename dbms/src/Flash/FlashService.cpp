@@ -245,6 +245,7 @@ grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_un
 
     auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
+    response->set_mpp_version(TiDB::GetMppVersion());
     return grpc::Status::OK;
 }
 
