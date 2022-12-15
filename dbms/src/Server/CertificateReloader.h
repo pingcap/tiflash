@@ -14,31 +14,32 @@
 
 #pragma once
 
+#include <Common/config.h>
+
+#if Poco_NetSSL_FOUND
+
+#include <Common/Logger.h>
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
-#include <Poco/Logger.h>
-#include <Poco/Util/LayeredConfiguration.h>
+#include <Poco/Crypto/X509Certificate.h>
+#include <Poco/Net/Context.h>
+#include <openssl/ssl.h>
 
+#include <ext/singleton.h>
 
 namespace DB
 {
 
-class IServer
+class CertificateReloader : public ext::Singleton<CertificateReloader>
 {
 public:
-    /// Returns the application's configuration.
-    virtual Poco::Util::LayeredConfiguration & config() const = 0;
+    static void initSSLCallback(Poco::Net::Context::Ptr context, Context * global_context);
+    /// A callback for OpenSSL
+    int setCertificate(SSL * ssl, void * arg);
 
-    /// Returns the application's logger.
-    virtual Poco::Logger & logger() const = 0;
-
-    /// Returns global application's context.
-    virtual Context & context() const = 0;
-
-    /// Returns true if shutdown signaled.
-    virtual bool isCancelled() const = 0;
-
-    virtual ~IServer() {}
+private:
+    LoggerPtr log = Logger::get("CertificateReloader");
 };
-
 } // namespace DB
+
+#endif
