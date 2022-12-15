@@ -1178,8 +1178,8 @@ void NO_INLINE joinBlockImplTypeCase(
     const auto & shuffle_hash_data = shuffle_hash.getData();
     assert(probe_process_info.start_row < rows);
     size_t i;
-    bool block_full;
-    for (i = probe_process_info.start_row; i < rows; ++i)
+    bool block_full = false;
+    for (i = probe_process_info.start_row; i < rows && !block_full; ++i)
     {
         if (has_null_map && (*null_map)[i])
         {
@@ -1679,7 +1679,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     size_t process_rows = probe_process_info.end_row - probe_process_info.start_row;
 
-    // if rows equal 0 means that it call getHeader, we could ignore filter and offsets_to_replicate, and do not need to update start row.
+    // if rows equal 0, we could ignore filter and offsets_to_replicate, and do not need to update start row.
     if (likely(rows != 0))
     {
         /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.

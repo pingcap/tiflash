@@ -709,11 +709,16 @@ try
                        .build(context);
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
-    std::vector<size_t> expect{10, 10, 10, 2, 2, 1, 1, 1};
+    std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        ASSERT_EQ(expect[i], getExecuteStreamsReturnBlockCount(request));
+        auto blocks = getExecuteStreamsReturnBlocks(request);
+        ASSERT_EQ(expect[i].size(), blocks.size());
+        for (size_t j = 0; j < blocks.size(); ++j)
+        {
+            ASSERT_EQ(expect[i][j], blocks[j].rows());
+        }
     }
 }
 CATCH
