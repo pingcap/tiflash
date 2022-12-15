@@ -16,6 +16,7 @@
 
 #include <common/types.h>
 #include <fmt/core.h>
+#include <kvproto/mpp.pb.h>
 
 namespace DB
 {
@@ -32,11 +33,17 @@ struct MPPQueryId
         , server_id(server_id)
         , start_ts(start_ts)
     {}
+    MPPQueryId(const mpp::TaskMeta & task_meta)
+        : query_ts(task_meta.query_ts())
+        , local_query_id(task_meta.local_query_id())
+        , server_id(task_meta.server_id())
+        , start_ts(task_meta.start_ts())
+    {}
     bool operator<(const MPPQueryId & mpp_query_id) const;
     bool operator==(const MPPQueryId & rid) const;
     bool operator!=(const MPPQueryId & rid) const;
     bool operator<=(const MPPQueryId & rid) const;
-    String toDebugString() const
+    String toString() const
     {
         return fmt::format("query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}", query_ts, local_query_id, server_id, start_ts);
     }
@@ -51,17 +58,19 @@ struct MPPQueryIdHash
 struct MPPTaskId
 {
     MPPTaskId()
-        : start_ts(0)
-        , task_id(unknown_task_id)
+        : task_id(unknown_task_id)
         , query_id({0, 0, 0, 0}){};
 
-    MPPTaskId(UInt64 start_ts_, Int64 task_id_, UInt64 server_id, UInt64 query_ts, UInt64 local_query_id)
-        : start_ts(start_ts_)
-        , task_id(task_id_)
-        , query_id(query_ts, local_query_id, server_id, start_ts_)
+    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, UInt64 query_ts, UInt64 local_query_id)
+        : task_id(task_id_)
+        , query_id(query_ts, local_query_id, server_id, start_ts)
     {}
 
-    UInt64 start_ts;
+    MPPTaskId(const mpp::TaskMeta & task_meta)
+        : task_id(task_meta.task_id())
+        , query_id(task_meta)
+    {}
+
     Int64 task_id;
     MPPQueryId query_id;
 

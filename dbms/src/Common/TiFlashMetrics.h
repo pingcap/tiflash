@@ -234,7 +234,7 @@ namespace DB
         F(type_active_rpc_async_worker, {"type", "rpc_async_worker_active"}),                                                             \
         F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))                                                               \
     M(tiflash_task_scheduler, "Min-tso task scheduler", Gauge,                                                                            \
-        F(type_min_query_ts, {"type", "min_query_ts"}),                                                                                   \
+        F(type_min_tso, {"type", "min_tso"}),                                                                                             \
         F(type_waiting_queries_count, {"type", "waiting_queries_count"}),                                                                 \
         F(type_active_queries_count, {"type", "active_queries_count"}),                                                                   \
         F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                     \

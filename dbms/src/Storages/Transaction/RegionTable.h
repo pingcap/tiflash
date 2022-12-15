@@ -59,9 +59,15 @@ using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 using SafeTS = UInt64;
 enum : SafeTS
 {
-    TsoPhysicalShiftBits = 18,
     InvalidSafeTS = std::numeric_limits<UInt64>::max(),
 };
+
+using TsoShiftBits = UInt64;
+enum : TsoShiftBits
+{
+    TsoPhysicalShiftBits = 18,
+};
+
 class RegionTable : private boost::noncopyable
 {
 public:

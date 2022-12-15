@@ -161,7 +161,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     {
         if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id) == nullptr)
         {
-            return ::testing::AssertionFailure() << "Query " << query_id.toDebugString() << "not active" << std::endl;
+            return ::testing::AssertionFailure() << "Query " << query_id.toString() << "not active" << std::endl;
         }
     }
     return ::testing::AssertionSuccess();
