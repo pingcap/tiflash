@@ -70,6 +70,7 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
             {
                 auto new_col = block.segmentRowIdCol()->cloneEmpty();
                 new_col->insertRangeFrom(*block.segmentRowIdCol(), offset, limit);
+                block.setSegmentRowIdCol(std::move(new_col));
             }
         }
         return std::move(block);
@@ -176,7 +177,7 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
     }
     if (block.segmentRowIdCol() != nullptr)
     {
-        block.segmentRowIdCol()->filter(filter, passed_count);
+        block.setSegmentRowIdCol(block.segmentRowIdCol()->filter(filter, passed_count));
     }
     return std::move(block);
 }
