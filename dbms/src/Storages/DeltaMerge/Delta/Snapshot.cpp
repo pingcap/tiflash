@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
@@ -128,7 +129,8 @@ DeltaValueReader::DeltaValueReader(
     , segment_range(segment_range_)
 {}
 
-DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+DeltaValueReaderPtr
+DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     auto * new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;

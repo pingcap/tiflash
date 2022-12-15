@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/Exception.h>
+#include <Flash/DisaggreatedTaskHandler.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
@@ -32,8 +34,10 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
 
 #include <ext/scope_guard.h>
+#include "Flash/DisaggreatedTaskHandler.h"
 
 namespace DB
 {
@@ -488,6 +492,31 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
         return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
+}
+grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response)
+{
+    UNUSED(context, request, response);
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling disaggregated establish request: {}", request->DebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); check_result.ok())
+        return check_result;
+    // TODO metrics
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
+
+    DisaggregatedTaskHandler handler(request, response);
+    grpc::Status ret = handler.execute(db_context);
+    LOG_DEBUG(log, "Handle disaggregated establish request done: {}, {}", ret.error_code(), ret.error_message());
+    return grpc::Status::OK;
+}
+
+grpc::Status FlashService::FetchDisaggregatedPages(grpc::ServerContext * context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * writer)
+{
+    UNUSED(context, request, writer);
+    RUNTIME_CHECK(false);
 }
 
 void FlashService::setMockStorage(MockStorage & mock_storage_)

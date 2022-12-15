@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -62,6 +63,8 @@ struct SegmentSnapshot : private boost::noncopyable
     UInt64 getRows() const { return delta->getRows() + stable->getRows(); }
 
     bool isForUpdate() const { return delta->isForUpdate(); }
+
+    dtpb::DisaggregatedSegment toRemote(UInt64 seg_id) const;
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.

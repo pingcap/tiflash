@@ -15,12 +15,14 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -69,6 +71,15 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
+    std::shared_ptr<::mpp::EstablishDisaggregatedTaskRequest>
+    buildDisaggregatedTaskForNode(
+        const Context & db_context,
+        const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+    std::vector<DM::RemoteReadTaskPtr> buildDisaggregatedTask(
+        const Context & db_context,
+        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+
+private:
     using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
@@ -83,5 +94,7 @@ private:
     const PushDownFilter & push_down_filter;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
+
+    bool s3_read = false;
 };
 } // namespace DB

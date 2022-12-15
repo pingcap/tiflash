@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
+#include <grpcpp/server_context.h>
 
 #include <boost/noncopyable.hpp>
 #pragma GCC diagnostic push
@@ -78,6 +79,11 @@ public:
     grpc::Status cancelMPPTaskForTest(const mpp::CancelTaskRequest * request, mpp::CancelTaskResponse * response);
 
     grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
+
+    // Build the disaggregated task
+    grpc::Status EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response) override;
+    // Exchange page data
+    grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * writer) override;
 
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);

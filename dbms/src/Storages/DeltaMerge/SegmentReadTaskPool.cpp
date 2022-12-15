@@ -14,10 +14,14 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
+#include <google/protobuf/repeated_ptr_field.h>
+
+#include <memory>
 
 namespace CurrentMetrics
 {
@@ -325,8 +329,7 @@ RemoteReadTaskPtr RemoteReadTask::buildFrom(const DMContext & context, SegmentRe
 {
     RUNTIME_CHECK(context.table_id > 0);
 
-    auto read_tasks = std::make_shared<RemoteReadTask>();
-    read_tasks->table_id = context.table_id;
+    auto read_tasks = std::make_shared<RemoteReadTask>(context.table_id);
     for (const auto & task : tasks)
     {
         auto seg_task = std::make_shared<RemoteSegmentReadTask>();
@@ -342,9 +345,24 @@ RemoteReadTaskPtr RemoteReadTask::buildFrom(const DMContext & context, SegmentRe
 
         seg_task->segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 
+        // TODO: build remote delta snapshot
+        // const auto &delta = task->read_snapshot->delta;
+        // column files in memtable are not persisted, read from write node
+
+
         read_tasks->tasks.emplace_back(std::move(seg_task));
     }
+
     return read_tasks;
+}
+
+RemoteReadTaskPtr RemoteReadTask::buildFrom(
+    const Context & db_context,
+    UInt64 store_id,
+    const dtpb::DisaggregatedPhysicalTable & table)
+{
+    UNUSED(db_context, store_id, table);
+    return std::make_shared<RemoteReadTask>(table.table_id());
 }
 
 } // namespace DB::DM

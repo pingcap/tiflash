@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -102,6 +103,50 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 namespace DM
 {
+
+dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id) const
+{
+    dtpb::DisaggregatedSegment remote;
+    remote.set_segment_id(seg_id);
+    for (const auto & dt_file : stable->getDMFiles())
+    {
+        auto * remote_file = remote.add_stable_pages();
+        remote_file->set_page_id(dt_file->pageId());
+        remote_file->set_file_id(dt_file->fileId());
+    }
+    auto persisted_cfs = delta->getPersistedFileSetSnapshot();
+    for (const auto & cf : persisted_cfs->getColumnFiles())
+    {
+        auto * remote_cf = remote.add_column_files();
+        if (auto * big = cf->tryToBigFile(); big)
+        {
+            auto * remote_big = remote_cf->mutable_big();
+            remote_big->set_page_id(big->getDataPageId());
+            remote_big->set_file_id(big->getFile()->fileId());
+        }
+        else if (auto * tiny = cf->tryToTinyFile(); tiny)
+        {
+            auto * remote_tiny = remote_cf->mutable_tiny();
+            remote_tiny->set_page_id(tiny->getDataPageId());
+            if (auto schema = tiny->getSchema(); schema)
+            {
+                // TODO set schema
+            }
+        }
+        else if (auto * range = cf->tryToDeleteRange(); range)
+        {
+            auto * remote_del = remote_cf->mutable_delete_range();
+            WriteBufferFromOwnString wb;
+            range->getDeleteRange().start.serialize(wb);
+            remote_del->mutable_key_range()->set_start(wb.releaseStr());
+            wb.restart();
+            range->getDeleteRange().end.serialize(wb);
+            remote_del->mutable_key_range()->set_end(wb.releaseStr());
+        }
+    }
+    return remote;
+}
+
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
 DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //

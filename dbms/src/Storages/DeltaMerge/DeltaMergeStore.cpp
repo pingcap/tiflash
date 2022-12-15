@@ -39,6 +39,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -1071,6 +1072,59 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     return streams;
 }
+
+SegmentReadTasks DeltaMergeStore::establishRemoteReadTask(
+    const Context & db_context,
+    const DB::Settings & db_settings,
+    const RowKeyRanges & sorted_ranges,
+    size_t num_streams,
+    const String & tracing_id,
+    const SegmentIdSet & read_segments,
+    const ScanContextPtr & scan_context)
+{
+    // Use the id from MPP/Coprocessor level as tracing_id
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = log->getChild(log_tracing_id);
+
+    // In order to keep this function return quickly, we only create and hold
+    // the snapshot. The mem-table data will be returned in another RPC call.
+
+    // TODO: add comments
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/false);
+    // GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
+    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+
+    return tasks;
+}
+
+PageMap DeltaMergeStore::readPages(
+    const SegmentReadTasks & tasks,
+    const std::unordered_map<UInt64, PageIds> & read_segments,
+    const String & tracing_id,
+    const ScanContextPtr & scan_context)
+{
+    UNUSED(tasks, read_segments, tracing_id, scan_context);
+    // TODO: Make `tasks` a map so that we can access it quickly
+    // TODO: Return mem-table data and persisted pages that RN need,
+    // maybe we need a better return type.
+
+    // For DeltaVS,
+    //   * CFTiny
+    // for (auto seg_id: read_segments)
+    // {
+    //     for (const auto & task: tasks)
+    //     {
+    //         if (task->segment->segmentId() != seg_id)
+    //             continue;
+
+    //         storage_pool->newLogReader(nullptr, task->read_snapshot);
+    //     }
+    // }
+    return {};
+}
+
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)
 {
