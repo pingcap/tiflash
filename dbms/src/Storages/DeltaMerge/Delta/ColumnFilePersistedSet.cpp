@@ -263,6 +263,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
             is_all_trivial_move = is_all_trivial_move && is_trivial_move;
             cur_task = {};
         };
+        size_t index = 0;
         for (auto & file : persisted_files)
         {
             if (auto * t_file = file->tryToTinyFile(); t_file)
@@ -280,13 +281,15 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                 if (cur_task_full || !small_column_file || !schema_ok)
                     pack_up_cur_task();
 
-                cur_task.addColumnFile(file);
+                cur_task.addColumnFile(file, index);
             }
             else
             {
                 pack_up_cur_task();
-                cur_task.addColumnFile(file);
+                cur_task.addColumnFile(file, index);
             }
+
+            ++index;
         }
         pack_up_cur_task();
 
