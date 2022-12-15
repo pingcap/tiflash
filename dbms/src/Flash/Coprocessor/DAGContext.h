@@ -380,8 +380,8 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
-    /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query,
-    /// even if there are no local regions.
+    /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
+    /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
