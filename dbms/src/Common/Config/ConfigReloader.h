@@ -14,17 +14,19 @@
 
 #pragma once
 
+#include <Common/Config/ConfigObject.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/FileChangesTracker.h>
 #include <time.h>
 
 #include <condition_variable>
 #include <functional>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
 #include <thread>
-
-#include "ConfigProcessor.h"
 
 
 namespace Poco
@@ -58,22 +60,15 @@ public:
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
     void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
+    /// Add ConfigObject to keep tracker of files that will be changed in config
+    void addConfigObject(std::shared_ptr<ConfigObject> object) { config_objects.push_back(object); }
+
 protected:
     void reloadIfNewer(bool force, bool throw_on_error);
     Updater & getUpdater() { return updater; }
 
 private:
     void run();
-
-    struct FileWithTimestamp;
-
-    struct FilesChangesTracker
-    {
-        std::set<FileWithTimestamp> files;
-
-        void addIfExists(const std::string & path);
-        bool isDifferOrNewerThan(const FilesChangesTracker & rhs) const;
-    };
 
     FilesChangesTracker getNewFileList() const;
 
@@ -87,8 +82,12 @@ private:
 
     std::string path;
     FilesChangesTracker files;
-
     Updater updater;
+
+    // ConfigObject contains a set of files that are used in config file.
+    // We can check if the files in ConfigObject are updated.
+    // If they are updated, the reloadIfNewer will be called.
+    std::vector<std::shared_ptr<ConfigObject>> config_objects;
 
     std::atomic<bool> quit{false};
     std::thread thread;

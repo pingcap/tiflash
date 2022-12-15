@@ -306,9 +306,12 @@ void ExpressionAction::execute(Block & block) const
         break;
     }
 
+    //TODO: Clean up all Join logic in ExpressionAction
     case JOIN:
     {
-        join->joinBlock(block);
+        ProbeProcessInfo probe_process_info(0);
+        probe_process_info.block = block;
+        join->joinBlock(probe_process_info);
         break;
     }
 

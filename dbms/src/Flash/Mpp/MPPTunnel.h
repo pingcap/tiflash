@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -49,6 +50,26 @@ namespace tests
 class TestMPPTunnel;
 } // namespace tests
 
+namespace MPPTunnelMetric
+{
+inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_add(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_send).Increment(size);
+}
+
+inline void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_sub(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_send).Decrement(size);
+}
+
+inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
+{
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_send).Decrement(data_size_in_queue.load());
+}
+} // namespace MPPTunnelMetric
+
 class IAsyncCallData;
 
 enum class TunnelSenderMode
@@ -64,11 +85,12 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_)
+    TunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : memory_tracker(memory_tracker_)
-        , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
+        , data_size_in_queue(data_size_in_queue_)
+        , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
     {
     }
 
@@ -137,11 +159,14 @@ protected:
         std::shared_future<String> future;
         std::atomic<bool> msg_has_set{false};
     };
+
     MemoryTrackerPtr memory_tracker;
-    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
     ConsumerState consumer_state;
     const LoggerPtr log;
     const String tunnel_id;
+
+    std::atomic<Int64> * data_size_in_queue; // From MppTunnel
+    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 /// SyncTunnelSender maintains a new thread itself to consume and send data
@@ -163,14 +188,14 @@ private:
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_)
-        : TunnelSender(0, memory_tracker, log_, tunnel_id_)
+    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
+        : TunnelSender(0, memory_tracker, log_, tunnel_id_, data_size_in_queue)
         , queue(queue_size, call_, log_)
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func)
-        : TunnelSender(0, memoryTracker, log_, tunnel_id_)
+    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func, std::atomic<Int64> * data_size_in_queue)
+        : TunnelSender(0, memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(queue_size, func)
     {}
 
@@ -197,6 +222,11 @@ public:
     GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
     {
         return queue.pop(data, new_tag);
+    }
+
+    void subDataSizeMetric(size_t size)
+    {
+        ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size);
     }
 
 private:
@@ -347,6 +377,7 @@ private:
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderPtr local_tunnel_sender;
+    std::atomic<Int64> data_size_in_queue;
 };
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 
