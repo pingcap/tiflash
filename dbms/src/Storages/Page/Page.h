@@ -49,34 +49,23 @@ struct FieldOffsetInsidePage
     bool operator<(const FieldOffsetInsidePage & rhs) const { return index < rhs.index; }
 };
 
-struct Page
+class OwningPageData
 {
 public:
-    // only take the low u64, ignoring the high u64(NamespaceId)
-    explicit Page(const PageIdV3Internal & page_id_v3_)
-        : page_id(page_id_v3_.low)
-    {
-    }
-
-    Page()
-        : page_id(INVALID_PAGE_ID)
-    {}
-
-    PageId page_id;
     ByteBuffer data;
     MemHolder mem_holder;
     // Field offsets inside this page.
     std::set<FieldOffsetInsidePage> field_offsets;
 
-public:
-    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
+    virtual ~OwningPageData() = default;
 
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
-        if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
-                            ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(
+            iter != field_offsets.end(),
+            "Try to getFieldData with invalid field index, field_index={}",
+            index);
 
         PageFieldOffset beg = iter->offset;
         ++iter;
@@ -104,6 +93,24 @@ public:
     {
         return field_offsets.size();
     }
+};
+
+class Page : public OwningPageData
+{
+public:
+    // only take the low u64, ignoring the high u64(NamespaceId)
+    explicit Page(const PageIdV3Internal & page_id_v3_)
+        : page_id(page_id_v3_.low)
+    {
+    }
+
+    Page()
+        : page_id(INVALID_PAGE_ID)
+    {}
+
+    PageId page_id;
+
+    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
 };
 
 using Pages = std::vector<Page>;

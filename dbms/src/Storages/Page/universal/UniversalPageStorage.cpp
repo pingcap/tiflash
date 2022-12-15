@@ -18,6 +18,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 
 namespace DB
@@ -177,4 +178,10 @@ UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLim
     statistics.total_cost_ms = gc_watch.elapsedMilliseconds();
     return statistics;
 }
+
+UniversalPageReaderPtr UniversalPageStorage::getReader(SnapshotPtr snapshot)
+{
+    return std::make_shared<UniversalPageReader>(shared_from_this(), snapshot);
+}
+
 } // namespace DB

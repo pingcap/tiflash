@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/Page/UniversalWriteBatch.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -213,7 +214,7 @@ void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         uni_ps->write(std::move(*wb));
         // TODO: verify that clear is allowed after std::move and the wb is reusable
@@ -230,7 +231,7 @@ PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView p
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId id{page_id.data, page_id.len};
         auto * page = new UniversalPage(reader.read(id));
@@ -255,7 +256,7 @@ PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffVie
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId start_id{start_page_id.data, start_page_id.len};
         UniversalPageId end_id{end_page_id.data, end_page_id.len};
@@ -282,7 +283,7 @@ PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffVie
             }
         }
         //        LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle scan page {}", pages.size());
-        return PageWithViewVec{.inner = reinterpret_cast<PageWithView *>(data), .len = pages.size() };
+        return PageWithViewVec{.inner = reinterpret_cast<PageWithView *>(data), .len = pages.size()};
     }
     catch (...)
     {
@@ -304,7 +305,7 @@ void PurgePageStorage(const EngineStoreServerWrap * server)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         uni_ps->gc();
     }
     catch (...)
@@ -318,7 +319,7 @@ CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId page_id{raw_page_id.data, raw_page_id.len};
         auto page_ids = reader.getLowerBound(page_id);
@@ -343,7 +344,7 @@ uint8_t IsPSEmpty(const EngineStoreServerWrap * server)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         return uni_ps->isEmpty();
     }
     catch (...)

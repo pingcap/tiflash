@@ -13,20 +13,22 @@
 // limitations under the License.
 
 #pragma once
+
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 
 namespace DB
 {
 namespace DM
 {
-class ColumnFileRemote;
-using ColumnFileRemotePtr = std::shared_ptr<ColumnFileRemote>;
+class ColumnFileTiny2;
+using ColumnFileTiny2Ptr = std::shared_ptr<ColumnFileTiny2>;
 
-/// A column file which is stored in remote store service like S3.
-class ColumnFileRemote : public ColumnFile
+/// This class is used for reading from a universal page storage.
+/// Once we use universal page storage by default, this class may not be used any more.
+class ColumnFileTiny2 : public ColumnFile
 {
-    friend class ColumnFileRemoteReader;
+    friend class ColumnFileTiny2Reader;
 
 private:
     BlockPtr schema;
@@ -35,14 +37,25 @@ private:
     UInt64 bytes = 0;
 
     /// The id of data page which stores the data of this column file.
-    PageId remote_data_page_id;
+    UniversalPageId data_page_id;
 
-    // Used to map column id to column instance in a Block.
+
+    /// Used to map column id to column instance in a Block.
     // TODO: save it in `schema`?
     ColIdToOffset colid_to_offset;
 
 private:
-    void fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
+    Columns readFromDisk(
+        const IColumnFileSetStorageReaderPtr & storage_reader,
+        const ColumnDefines & column_defines,
+        size_t col_start,
+        size_t col_end) const;
+
+    void fillColumns(
+        const IColumnFileSetStorageReaderPtr & storage_reader,
+        const ColumnDefines & col_defs,
+        size_t col_count,
+        Columns & result) const;
 
     const DataTypePtr & getDataType(ColId column_id) const
     {
@@ -52,52 +65,43 @@ private:
     }
 
 public:
-    explicit ColumnFileRemote(const BlockPtr & schema_)
+    ColumnFileTiny2(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, UniversalPageId data_page_id_)
         : schema(schema_)
-        , remote_data_page_id(0)
+        , rows(rows_)
+        , bytes(bytes_)
+        , data_page_id(data_page_id_)
     {
-        colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
             colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
     }
 
-    Type getType() const override { return Type::INMEMORY_FILE; }
+    Type getType() const override { return Type::TINY2_FILE; }
 
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; };
 
-    /// The schema of this pack.
+    /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
     BlockPtr getSchema() const { return schema; }
-    /// Replace the schema with a new schema, and the new schema instance should be exactly the same as the previous one.
-    void resetIdenticalSchema(BlockPtr schema_) { schema = schema_; }
-
-    ColumnFileRemotePtr clone()
-    {
-        return std::make_shared<ColumnFileRemote>(*this);
-    }
 
     ColumnFileReaderPtr getReader(
         const DMContext & /*context*/,
         const IColumnFileSetStorageReaderPtr & reader,
         const ColumnDefinesPtr & col_defs) const override;
 
-    bool mayBeFlushedFrom(ColumnFile *) const override { return false; }
-
     String toString() const override
     {
-        return fmt::format("{{remote_file,rows:{}"
-                           ",bytes:{},schema:{}}",
-                           rows,
-                           bytes,
-                           schema ? schema->dumpJsonStructure() : "none");
+        String s = "{tiny_file_2,rows:" + DB::toString(rows) //
+            + ",bytes:" + DB::toString(bytes) //
+            + ",data_page_id:" + DB::toString(data_page_id) //
+            + ",schema:" + (schema ? schema->dumpStructure() : "none") + "}";
+        return s;
     }
 };
 
-
-class ColumnFileRemoteReader : public ColumnFileReader
+class ColumnFileTiny2Reader : public ColumnFileReader
 {
 private:
-    const ColumnFileRemote & memory_file;
+    const ColumnFileTiny2 & tiny_file;
     const IColumnFileSetStorageReaderPtr storage_reader;
     const ColumnDefinesPtr col_defs;
 
@@ -105,12 +109,14 @@ private:
     bool read_done = false;
 
 public:
-    ColumnFileRemoteReader(const ColumnFileRemote & memory_file_,
-                           const IColumnFileSetStorageReaderPtr & storage_reader_,
-                           const ColumnDefinesPtr & col_defs_)
-        : memory_file(memory_file_)
+    ColumnFileTiny2Reader(const ColumnFileTiny2 & tiny_file_,
+                          const IColumnFileSetStorageReaderPtr & storage_reader_,
+                          const ColumnDefinesPtr & col_defs_,
+                          const Columns & cols_data_cache_ = {})
+        : tiny_file(tiny_file_)
         , storage_reader(storage_reader_)
         , col_defs(col_defs_)
+        , cols_data_cache(cols_data_cache_)
     {
     }
 

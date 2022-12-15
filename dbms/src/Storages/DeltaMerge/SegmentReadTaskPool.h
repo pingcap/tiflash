@@ -313,7 +313,7 @@ using RemoteReadTaskPtr = std::shared_ptr<RemoteReadTask>;
 class RemoteReadTask
 {
 public:
-    static RemoteReadTaskPtr buildFrom(const Context & db_context, TableID physical_table_id, SegmentReadTasks & tasks);
+    static RemoteReadTaskPtr buildFrom(const DMContext & context, SegmentReadTasks & tasks);
 
     RemoteSegmentReadTaskPtr nextTask()
     {

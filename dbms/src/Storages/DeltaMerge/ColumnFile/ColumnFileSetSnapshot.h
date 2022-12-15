@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 
 namespace DB
 {
@@ -50,6 +51,71 @@ public:
 
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
+class IColumnFileSetStorageReader
+{
+public:
+    virtual ~IColumnFileSetStorageReader() = default;
+
+    virtual OwningPageData readForColumnFileTiny(const PageStorage::PageReadFields &) const = 0;
+};
+
+using IColumnFileSetStorageReaderPtr = std::shared_ptr<IColumnFileSetStorageReader>;
+
+class LocalColumnFileSetStorage : public IColumnFileSetStorageReader
+{
+private:
+    /// Although we only use its log_reader member, we still want to keep the whole
+    /// storage snapshot valid, because some Column Files like Column File Big relies
+    /// on specific DMFile to be valid, whose lifecycle is maintained by other reader members.
+    StorageSnapshotPtr storage_snap;
+
+public:
+    explicit LocalColumnFileSetStorage(StorageSnapshotPtr storage_snap_)
+        : storage_snap(storage_snap_)
+    {}
+
+    OwningPageData readForColumnFileTiny(
+        const PageStorage::PageReadFields & fields) const override
+    {
+        auto page_map = storage_snap->log_reader.read({fields});
+        return page_map[fields.first];
+    }
+};
+
+class RemoteColumnFileSetStorage : public IColumnFileSetStorageReader
+{
+private:
+    Remote::LocalPageCachePtr page_cache;
+    // TODO: Keep a snapshot of page_cache here.
+
+    UInt64 write_node_id;
+    Int64 table_id;
+
+public:
+    explicit RemoteColumnFileSetStorage(
+        Remote::ManagerPtr remote_manager,
+        UInt64 write_node_id_,
+        Int64 table_id_)
+        : page_cache(remote_manager->getPageCache())
+        , write_node_id(write_node_id_)
+        , table_id(table_id_)
+    {}
+
+    OwningPageData readForColumnFileTiny(
+        const PageStorage::PageReadFields & fields) const override
+    {
+        auto oid = Remote::PageOID{
+            .write_node_id = write_node_id,
+            .table_id = table_id,
+            .page_id = fields.first,
+        };
+        return page_cache->getPage(oid, fields.second);
+    }
+};
+
+/**
+ * An immutable list of Column Files.
+ */
 class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetSnapshot>
     , private boost::noncopyable
 {
@@ -57,25 +123,24 @@ class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetS
     friend class ColumnFilePersistedSet;
 
 private:
-    StorageSnapshotPtr storage_snap;
+    IColumnFileSetStorageReaderPtr storage;
 
     ColumnFiles column_files;
-    size_t rows;
-    size_t bytes;
-    size_t deletes;
+    size_t rows = 0;
+    size_t bytes = 0;
+    size_t deletes = 0;
 
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    bool is_common_handle = false;
+    size_t rowkey_column_size = 1;
 
 public:
-    explicit ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)
-        : storage_snap{storage_snap_}
+    explicit ColumnFileSetSnapshot(const IColumnFileSetStorageReaderPtr & storage_)
+        : storage{storage_}
     {}
 
     ColumnFileSetSnapshotPtr clone()
     {
-        auto c = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
-        c->storage_snap = storage_snap;
+        auto c = std::make_shared<ColumnFileSetSnapshot>(storage);
         c->column_files = column_files;
         c->rows = rows;
         c->bytes = bytes;
@@ -95,8 +160,26 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return storage_snap; }
+    const auto & getStorage() const { return storage; }
+
+    std::vector<RemoteProtocol::ColumnFile> serializeToRemoteProtocol() const
+    {
+        std::vector<RemoteProtocol::ColumnFile> ret;
+        ret.reserve(column_files.size());
+
+        for (const auto & file : column_files)
+            ret.push_back(file->serializeToRemoteProtocol());
+
+        return ret;
+    }
+
+    static ColumnFileSetSnapshotPtr deserializeFromRemoteProtocol(
+        const std::vector<RemoteProtocol::ColumnFile> & proto,
+        UInt64 remote_write_node_id,
+        const DMContext & context,
+        const RowKeyRange & segment_range);
 };
+
 
 } // namespace DM
 } // namespace DB

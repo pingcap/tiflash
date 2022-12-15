@@ -981,18 +981,20 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
+    // TODO: We need to refine the SegmentReadTasks when enable_remote_read == true.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     const size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
 
     if (enable_remote_read)
     {
-        // Transfrom `SegmentReadTasks` into `RemoteReadTask`
-        RemoteReadTaskPtr read_tasks = RemoteReadTask::buildFrom(dm_context->db_context, physical_table_id, tasks);
+        // Transform `SegmentReadTasks` into `RemoteReadTask`
+        RUNTIME_CHECK(physical_table_id == dm_context->table_id);
+        RemoteReadTaskPtr read_tasks = RemoteReadTask::buildFrom(*dm_context, tasks);
         BlockInputStreams streams;
         for (size_t i = 0; i < final_num_stream; ++i)
         {
-            BlockInputStreamPtr stream = std::make_shared<RemoteSegmentThreadInpuStream>(
+            BlockInputStreamPtr stream = std::make_shared<RemoteSegmentThreadInputStream>(
                 dm_context,
                 read_tasks,
                 columns_to_read,

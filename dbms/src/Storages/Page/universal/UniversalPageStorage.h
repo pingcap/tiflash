@@ -45,9 +45,10 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
-class KVStoreReader;
+class UniversalPageReader;
+using UniversalPageReaderPtr = std::shared_ptr<UniversalPageReader>;
 
-class UniversalPageStorage final
+class UniversalPageStorage final : public std::enable_shared_from_this<UniversalPageStorage>
 {
 public:
     using SnapshotPtr = PageStorageSnapshotPtr;
@@ -132,6 +133,8 @@ public:
 
     void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
 
+    UniversalPageReaderPtr getReader(SnapshotPtr snapshot);
+
     UniversalPageMap read(const UniversalPageId & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
         UNUSED(page_ids, read_limiter, snapshot);
@@ -143,14 +146,68 @@ public:
 
     UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
-        UNUSED(page_fields, read_limiter, snapshot);
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+        if (!snapshot)
+            snapshot = this->getSnapshot("");
+
+        // get the entries from directory, keep track
+        // for not found page_ids
+        UniversalPageIds page_ids_not_found;
+        PS::V3::universal::BlobStoreTrait::FieldReadInfos read_infos;
+        for (const auto & [page_id, field_indices] : page_fields)
+        {
+            const auto & [id, entry] = page_directory->getByIDOrNull(page_id, snapshot);
+
+            if (entry.isValid())
+            {
+                auto info = PS::V3::universal::BlobStoreTrait::FieldReadInfo(page_id, entry, field_indices);
+                read_infos.emplace_back(info);
+            }
+            else
+            {
+                page_ids_not_found.emplace_back(id);
+            }
+        }
+
+        // read page data from blob_store
+        UniversalPageMap page_map = blob_store->read(read_infos, read_limiter);
+        for (const auto & page_id_not_found : page_ids_not_found)
+        {
+            UniversalPage page_not_found("");
+            page_map[page_id_not_found] = page_not_found;
+        }
+        return page_map;
     }
 
     UniversalPage read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
         UNUSED(page_field, read_limiter, snapshot);
         throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    PageEntry getPageEntry(UniversalPageId page_id, SnapshotPtr snapshot = {}) const
+    {
+        if (!snapshot)
+            snapshot = this->getSnapshot("");
+
+        try
+        {
+            const auto & [id, entry] = page_directory->getByIDOrNull(page_id, snapshot);
+            UNUSED(id);
+            PageEntry entry_ret;
+            entry_ret.file_id = entry.file_id;
+            entry_ret.offset = entry.offset;
+            entry_ret.tag = entry.tag;
+            entry_ret.size = entry.size;
+            entry_ret.field_offsets = entry.field_offsets;
+            entry_ret.checksum = entry.checksum;
+
+            return entry_ret;
+        }
+        catch (DB::Exception & e)
+        {
+            LOG_WARNING(log, "{}", e.message());
+            return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
+        }
     }
 
     // We may skip the GC to reduce useless reading by default.
@@ -192,118 +249,6 @@ public:
     std::atomic<bool> gc_is_running = false;
 
     LoggerPtr log;
-};
-
-class KVStoreReader final
-{
-public:
-    explicit KVStoreReader(UniversalPageStorage & storage)
-        : uni_storage(storage)
-    {}
-
-    static UniversalPageId toFullPageId(PageId page_id)
-    {
-        // TODO: Does it need to be mem comparable?
-        return fmt::format("k_{}", page_id);
-    }
-
-    bool isAppliedIndexExceed(PageId page_id, UInt64 applied_index)
-    {
-        // assume use this format
-        UniversalPageId uni_page_id = toFullPageId(page_id);
-        auto snap = uni_storage.getSnapshot("");
-        const auto & [id, entry] = uni_storage.page_directory->getByIDOrNull(uni_page_id, snap);
-        return (entry.isValid() && entry.tag > applied_index);
-    }
-
-    void read(const PageIds & /*page_ids*/, std::function<void(const PageId &, const UniversalPage &)> /*handler*/) const
-    {
-        // UniversalPageIds uni_page_ids;
-        // uni_page_ids.reserve(page_ids.size());
-        // for (const auto & pid : page_ids)
-        //     uni_page_ids.emplace_back(toFullPageId(pid));
-        // auto snap = uni_storage.getSnapshot("");
-        // auto page_entries = uni_storage.page_directory->getByIDs(uni_page_ids, snap);
-        // uni_storage.blob_store->read(page_entries, handler, nullptr);
-        throw Exception("Not implemented");
-    }
-
-    void traverse(const std::function<void(const DB::UniversalPage & page)> & /*acceptor*/)
-    {
-        // Only traverse pages with id prefix
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-private:
-    UniversalPageStorage & uni_storage;
-};
-
-class RaftLogReader final
-{
-public:
-    explicit RaftLogReader(UniversalPageStorage & storage)
-        : uni_storage(storage)
-    {}
-
-    static UniversalPageId toFullPageId(NamespaceId ns_id, PageId page_id)
-    {
-        // TODO: Does it need to be mem comparable?
-        WriteBufferFromOwnString buff;
-        writeString("r_", buff);
-        RecordKVFormat::encodeUInt64(ns_id, buff);
-        writeString("_", buff);
-        RecordKVFormat::encodeUInt64(page_id, buff);
-        return buff.releaseStr();
-        // return fmt::format("r_{}_{}", ns_id, page_id);
-    }
-
-    // scan the pages between [start, end)
-    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const DB::UniversalPage & page)> & acceptor)
-    {
-        // always traverse with the latest snapshot
-        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
-        const auto page_ids = uni_storage.page_directory->getRangePageIds(start, end);
-        for (const auto & page_id : page_ids)
-        {
-            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
-        }
-    }
-
-    void traverse2(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::UniversalPage page)> & acceptor)
-    {
-        // always traverse with the latest snapshot
-        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
-        const auto page_ids = uni_storage.page_directory->getRangePageIds(start, end);
-        for (const auto & page_id : page_ids)
-        {
-            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
-        }
-    }
-
-    UniversalPage read(const UniversalPageId & page_id)
-    {
-        // always traverse with the latest snapshot
-        auto snapshot = uni_storage.getSnapshot(fmt::format("read_{}", page_id));
-        const auto page_id_and_entry = uni_storage.page_directory->getByIDOrNull(page_id, snapshot);
-        if (page_id_and_entry.second.isValid())
-        {
-            return uni_storage.blob_store->read(page_id_and_entry);
-        }
-        else
-        {
-            return UniversalPage({});
-        }
-    }
-
-    UniversalPageIds getLowerBound(const UniversalPageId & page_id)
-    {
-        return uni_storage.page_directory->getLowerBound(page_id);
-    }
-
-private:
-    UniversalPageStorage & uni_storage;
 };
 
 } // namespace DB

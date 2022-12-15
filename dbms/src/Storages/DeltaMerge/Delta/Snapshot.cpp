@@ -19,11 +19,70 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfRead;
+} // namespace CurrentMetrics
+
 namespace DB::DM
 {
+//
+//
+//DeltaSnapshotPtr prepareDeltaSnapshotFromRemote(
+
+
 // ================================================
 // DeltaValueSpace
 // ================================================
+
+class NopColumnFileSetStorageReader : public IColumnFileSetStorageReader
+{
+public:
+    OwningPageData readForColumnFileTiny(const PageStorage::PageReadFields &) const override
+    {
+        RUNTIME_CHECK_MSG(false, "Must not read from NopColumnFileSetStorageReader");
+    }
+};
+
+// FIXME: This function doesn't make sense. It simply builds a "remote" snapshot, based on
+//        own data. In real world, read node doesn't know anything about the delta, so we
+//        need to reassemble this function to something else.
+DeltaSnapshotPtr DeltaValueSpace::createSnapshotFromRemote(
+    const DMContext & context,
+    const RowKeyRange & segment_range)
+{
+    std::scoped_lock lock(mutex);
+    if (abandoned.load(std::memory_order_relaxed))
+        return {};
+
+    // The following should be placed in Write Node ============
+    // We will never read from the snapshot, so we just pass a nop reader.
+    IColumnFileSetStorageReaderPtr nop_reader = std::make_shared<NopColumnFileSetStorageReader>();
+    auto mem_snap = mem_table_set->createSnapshot(nop_reader, /* for_update */ false);
+    auto persisted_snap = persisted_file_set->createSnapshot(nop_reader);
+
+    auto mem_proto = mem_snap->serializeToRemoteProtocol();
+    auto persisted_proto = persisted_snap->serializeToRemoteProtocol();
+    // ============================================================
+
+    // The following should be placed in Read Node ============
+    const auto write_node_id = 0;
+    auto snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
+    snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+        mem_proto,
+        write_node_id,
+        context,
+        segment_range);
+    snap->persisted_files_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+        persisted_proto,
+        write_node_id,
+        context,
+        segment_range);
+    snap->shared_delta_index = delta_index; // FIXME
+    // ============================================================
+
+    return snap;
+}
 
 DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type)
 {
@@ -34,13 +93,17 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap = std::make_shared<DeltaValueSnapshot>(type, for_update);
-    snap->_delta = this->shared_from_this();
+    DeltaSnapshotPtr snap;
+    if (for_update)
+        snap = DeltaValueSnapshot::createSnapshotForUpdate(type, this->shared_from_this());
+    else
+        snap = DeltaValueSnapshot::createSnapshotForRead(type);
 
     auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
+    IColumnFileSetStorageReaderPtr storage_reader = std::make_shared<LocalColumnFileSetStorage>(storage_snap);
+    snap->mem_table_snap = mem_table_set->createSnapshot(storage_reader, for_update);
+    snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_reader);
     snap->shared_delta_index = delta_index;
-    snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap, for_update);
 
     return snap;
 }

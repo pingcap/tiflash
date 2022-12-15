@@ -176,7 +176,7 @@ struct BlobStoreTrait
     using PageIdAndEntries = std::vector<PageIdAndEntry>;
     using Page = UniversalPage;
     // TODO: universal pagemap/handler may should not filter by prefix
-    using PageMap = std::map<DB::PageId, UniversalPage>;
+    using PageMap = std::map<PageId, UniversalPage>;
     using PageHandler = std::function<void(DB::PageId page_id, const UniversalPage &)>;
 
     using ExternalIdTrait = ExternalIdTrait;

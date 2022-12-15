@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/PathPool.h>
@@ -48,8 +49,10 @@ void ColumnFileBig::calculateStat(const DMContext & context)
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
 
-ColumnFileReaderPtr
-ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileReaderPtr ColumnFileBig::getReader(
+    const DMContext & context,
+    const IColumnFileSetStorageReaderPtr &,
+    const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
 }
@@ -79,6 +82,21 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
 
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
+}
+
+std::shared_ptr<ColumnFileBig> ColumnFileBig::deserializeFromRemoteProtocol(
+    const RemoteProtocol::ColumnFileBig & proto,
+    const Remote::DMFileOID & oid,
+    const DMContext & context, // MinMaxIndex, ReadLimiter, DMRemoteManager is used.
+    const RowKeyRange & segment_range)
+{
+    RUNTIME_CHECK(proto.file_id == oid.file_id);
+    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, dmf_oid={}", oid.info());
+
+    auto data_store = context.db_context.getDMRemoteManager()->getDataStore();
+    auto prepared = data_store->prepareDMFile(oid);
+    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+    return std::make_shared<ColumnFileBig>(context, dmfile, segment_range);
 }
 
 void ColumnFileBigReader::initStream()

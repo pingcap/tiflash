@@ -627,7 +627,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
-        page_map.emplace(ExternalIdTrait::getU64ID(page_id_v3), std::move(page));
+        page_map.emplace(page_id_v3, std::move(page));
 
         pos = write_offset;
     }
@@ -672,7 +672,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
             typename Trait::Page page(page_id_v3);
-            page_map.emplace(ExternalIdTrait::getU64ID(page_id_v3), page);
+            page_map.emplace(page_id_v3, page);
         }
         return page_map;
     }
@@ -709,7 +709,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
         typename Trait::Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(ExternalIdTrait::getU64ID(page_id_v3), page);
+        page_map.emplace(page_id_v3, page);
 
         pos += entry.size;
     }

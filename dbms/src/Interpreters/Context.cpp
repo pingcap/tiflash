@@ -51,6 +51,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
@@ -191,7 +192,15 @@ struct ContextShared
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
-    UniversalPageStorageWrapperPtr uni_page_storage_wrapper;
+
+    /// The PS instance available on Write Node.
+    UniversalPageStorageWrapperPtr ps_write;
+
+    /// The PS instance available on Read Node. The data could be volatile.
+    UniversalPageStorageWrapperPtr ps_read;
+
+    DM::Remote::ManagerPtr dm_remote_manager;
+
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1645,22 +1654,60 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
     return shared->global_storage_pool;
 }
 
-void Context::initializeGlobalUniversalPageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider)
+void Context::initializeWriteNodePageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider)
 {
     auto lock = getLock();
-    if (shared->uni_page_storage_wrapper)
-        throw Exception("UniversalPageStorage has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(shared->ps_write == nullptr, "UniversalPageStorage(WriteNode) has already been initialized");
 
-    shared->uni_page_storage_wrapper = std::make_shared<UniversalPageStorageWrapper>();
-    shared->uni_page_storage_wrapper->uni_page_storage = UniversalPageStorage::create("global", path_pool.getPSDiskDelegatorGlobalMulti("global"), {}, file_provider);
-    shared->uni_page_storage_wrapper->restore(*this);
-    LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage");
+    shared->ps_write = std::make_shared<UniversalPageStorageWrapper>();
+    shared->ps_write->uni_page_storage = UniversalPageStorage::create("write", path_pool.getPSDiskDelegatorGlobalMulti("write"), {}, file_provider);
+    shared->ps_write->restore(*this);
+    LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
 }
 
-UniversalPageStoragePtr Context::getGlobalUniversalPageStorage() const
+void Context::initializeReadNodePageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider)
 {
     auto lock = getLock();
-    return shared->uni_page_storage_wrapper->uni_page_storage;
+    RUNTIME_CHECK_MSG(shared->ps_read == nullptr, "UniversalPageStorage(ReadNode) has already been initialized");
+
+    shared->ps_read = std::make_shared<UniversalPageStorageWrapper>();
+    shared->ps_read->uni_page_storage = UniversalPageStorage::create("read", path_pool.getPSDiskDelegatorGlobalMulti("read"), {}, file_provider);
+    shared->ps_read->restore(*this);
+    LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(ReadNode)");
+}
+
+void Context::initializeDeltaMergeRemoteManager()
+{
+    auto lock = getLock();
+
+    if (remoteDataServiceSource().empty())
+    {
+        LOG_INFO(shared->log, "DeltaMerge Remote feature is not initialized because NFS directory is empty");
+        return;
+    }
+
+    RUNTIME_CHECK_MSG(shared->ps_read != nullptr, "UniversalPageStorage(ReadNode) must be initialized first");
+    RUNTIME_CHECK_MSG(shared->dm_remote_manager == nullptr, "DMRemoteManager has already been initialized");
+
+    shared->dm_remote_manager = std::make_shared<DM::Remote::Manager>(*this, remoteDataServiceSource());
+}
+
+DM::Remote::ManagerPtr Context::getDMRemoteManager() const
+{
+    auto lock = getLock();
+    return shared->dm_remote_manager;
+}
+
+UniversalPageStoragePtr Context::getWriteNodePageStorage() const
+{
+    auto lock = getLock();
+    return shared->ps_write->uni_page_storage;
+}
+
+UniversalPageStoragePtr Context::getReadNodePageStorage() const
+{
+    auto lock = getLock();
+    return shared->ps_read->uni_page_storage;
 }
 
 UInt16 Context::getTCPPort() const

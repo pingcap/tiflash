@@ -1095,7 +1095,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     ///
-    global_context->initializeGlobalUniversalPageStorage(global_context->getPathPool(), global_context->getFileProvider());
+    global_context->initializeWriteNodePageStorage(global_context->getPathPool(), global_context->getFileProvider());
+
+    global_context->initializeReadNodePageStorage(global_context->getPathPool(), global_context->getFileProvider());
+
+    global_context->initializeDeltaMergeRemoteManager();
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);

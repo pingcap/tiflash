@@ -253,6 +253,11 @@ public:
     /// Snapshot read.
     PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr snap_, ReadLimiterPtr read_limiter_);
 
+    static PageReader CreateInvalidReader()
+    {
+        return {};
+    }
+
     ~PageReader();
 
     DB::Page read(PageId page_id) const;
@@ -275,8 +280,10 @@ public:
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
-private:
     std::unique_ptr<PageReaderImpl> impl;
+
+private:
+    PageReader();
 };
 using PageReaderPtr = std::shared_ptr<PageReader>;
 

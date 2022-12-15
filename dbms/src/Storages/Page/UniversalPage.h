@@ -28,56 +28,21 @@
 namespace DB
 {
 
-struct UniversalPage
+class UniversalPage : public OwningPageData
 {
 public:
+    explicit UniversalPage()
+        : UniversalPage("")
+    {}
+
     explicit UniversalPage(const UniversalPageId & page_id_)
         : page_id(page_id_)
     {
     }
 
     UniversalPageId page_id;
-    ByteBuffer data;
-    MemHolder mem_holder;
-    // Field offsets inside this page.
-    std::set<FieldOffsetInsidePage> field_offsets;
 
-public:
     inline bool isValid() const { return !page_id.empty(); }
-
-    ByteBuffer getFieldData(size_t index) const
-    {
-        auto iter = field_offsets.find(FieldOffsetInsidePage(index));
-        if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
-                            ErrorCodes::LOGICAL_ERROR);
-
-        PageFieldOffset beg = iter->offset;
-        ++iter;
-        PageFieldOffset end = (iter == field_offsets.end() ? data.size() : iter->offset);
-        assert(beg <= data.size());
-        assert(end <= data.size());
-        return ByteBuffer(data.begin() + beg, data.begin() + end);
-    }
-
-    inline static PageFieldSizes fieldOffsetsToSizes(const PageFieldOffsetChecksums & field_offsets, size_t data_size)
-    {
-        PageFieldSizes field_size = {};
-
-        auto it = field_offsets.begin();
-        while (it != field_offsets.end())
-        {
-            PageFieldOffset beg = it->first;
-            ++it;
-            field_size.emplace_back(it == field_offsets.end() ? data_size - beg : it->first - beg);
-        }
-        return field_size;
-    }
-
-    size_t fieldSize() const
-    {
-        return field_offsets.size();
-    }
 };
 
 using UniversalPages = std::vector<UniversalPageId>;
