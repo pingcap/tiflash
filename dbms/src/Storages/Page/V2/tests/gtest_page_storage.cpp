@@ -22,6 +22,7 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -52,15 +53,17 @@ class PageStorage_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorage_test()
-        : storage()
-        , file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
     {}
 
 protected:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase()
+    {
+    }
 
     void SetUp() override
     {
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
         TiFlashStorageTestBasic::SetUp();
         // drop dir if exists
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
@@ -74,13 +77,14 @@ protected:
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorageConfig & config_)
     {
         auto delegator = path_pool->getPSDiskDelegatorSingle("log");
-        auto storage = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
+        auto storage = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, *bkg_pool);
         storage->restore();
         return storage;
     }
 
 protected:
     PageStorageConfig config;
+    std::shared_ptr<BackgroundProcessingPool> bkg_pool;
     std::shared_ptr<PageStorage> storage;
     std::unique_ptr<StoragePathPool> path_pool;
     const FileProviderPtr file_provider;
@@ -750,11 +754,22 @@ try
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        ASSERT_EQ(page0.fieldSize(), page0_fields.size());
+        for (const auto & [idx, sz] : page0_fields)
+        {
+            ASSERT_EQ(page0.getFieldData(idx).size(), sz);
+        }
+
         DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+        ASSERT_EQ(page1.fieldSize(), page1_fields.size());
+        for (const auto & [idx, sz] : page1_fields)
+        {
+            ASSERT_EQ(page1.getFieldData(idx).size(), sz);
+        }
     }
 }
 CATCH

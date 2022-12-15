@@ -34,13 +34,35 @@ DataTypePtr getPkType(const ColumnInfo & column_info)
 }
 } // namespace
 
+NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan)
+{
+    return genNamesAndTypes(table_scan, "table_scan");
+}
+
+NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_scan)
+{
+    NamesAndTypes names_and_types;
+    names_and_types.reserve(table_scan.getColumnSize());
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        const auto & column_info = table_scan.getColumns()[i];
+        names_and_types.emplace_back(genNameForExchangeReceiver(i), getDataTypeByColumnInfoForComputingLayer(column_info));
+    }
+    return names_and_types;
+}
+
+String genNameForExchangeReceiver(Int32 col_index)
+{
+    return "exchange_receiver_" + std::to_string(col_index);
+}
+
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        auto column_info = TiDB::toTiDBColumnInfo(table_scan.getColumns()[i]);
+        const auto column_info = table_scan.getColumns()[i];
         switch (column_info.id)
         {
         case TiDBPkColumnID:
