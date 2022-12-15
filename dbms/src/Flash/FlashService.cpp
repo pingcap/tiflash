@@ -63,9 +63,8 @@ constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService() = default;
 
-void FlashService::init(const TiFlashSecurityConfig & security_config_, Context & context_)
+void FlashService::init(Context & context_)
 {
-    security_config = &security_config_;
     context = &context_;
     log = &Poco::Logger::get("FlashService");
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
@@ -417,7 +416,7 @@ grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_con
     // For coprocessor/mpp test, we don't care about security config.
     if likely (!context->isMPPTest() && !context->isCopTest())
     {
-        if (!security_config->checkGrpcContext(grpc_context))
+        if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
         {
             return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
         }

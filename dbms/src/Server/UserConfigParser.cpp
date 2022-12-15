@@ -71,9 +71,9 @@ ConfigReloaderPtr parseSettings(
 
     return std::make_unique<ConfigReloader>(
         users_config_path, //
-        /*updater=*/[&global_context](ConfigurationPtr cfg) { global_context->setUsersConfig(cfg); },
-        /*already_loaded=*/false,
-        /*name=*/"UserCfgReloader");
+        /* updater = */ [&global_context](ConfigurationPtr cfg) { global_context->setUsersConfig(cfg); },
+        /* already_loaded = */ false,
+        /* name = */ "UserCfgReloader");
 }
 
 } // namespace UserConfig
