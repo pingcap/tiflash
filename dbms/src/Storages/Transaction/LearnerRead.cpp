@@ -318,7 +318,11 @@ LearnerReadSnapshot doLearnerRead(
             else
             {
                 // cache read-index to avoid useless overhead about retry.
-                mvcc_query_info.addReadIndexRes(region_id, resp.read_index());
+                // resp.read_index() is 0 when stale read, skip it to avoid overwriting read_index res in last retry.
+                if (resp.read_index() != 0)
+                {
+                    mvcc_query_info.addReadIndexRes(region_id, resp.read_index());
+                }
             }
         }
 

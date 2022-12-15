@@ -54,7 +54,7 @@ extern const char force_no_local_region_for_mpp_task[];
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
-    , id(meta.start_ts(), meta.task_id(), meta.server_id(), meta.query_ts(), meta.local_query_id())
+    , id(meta)
     , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
     , schedule_entry(manager, id)

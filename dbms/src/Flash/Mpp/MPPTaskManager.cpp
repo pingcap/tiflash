@@ -100,7 +100,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
                     cv.notify_all();
                 }
             }
-            return {nullptr, fmt::format("Can't find task [{},{}] within 10 s.", id.query_id.toString(), id.task_id)};
+            return {nullptr, fmt::format("Can't find task [{}] within 10 s.", id.toString())};
         }
     }
     /// don't need to delete the alarm here because registerMPPTask will delete all the related alarm

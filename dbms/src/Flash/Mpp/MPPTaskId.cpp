@@ -79,7 +79,7 @@ bool MPPQueryId::operator<=(const MPPQueryId & rid) const
 
 size_t MPPQueryIdHash::operator()(MPPQueryId const & mpp_query_id) const noexcept
 {
-    if (isOldVersion(mpp_query_id))
+    if (unlikely(isOldVersion(mpp_query_id)))
     {
         return std::hash<UInt64>()(mpp_query_id.start_ts);
     }

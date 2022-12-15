@@ -33,7 +33,7 @@ struct MPPQueryId
         , server_id(server_id)
         , start_ts(start_ts)
     {}
-    MPPQueryId(const mpp::TaskMeta & task_meta)
+    explicit MPPQueryId(const mpp::TaskMeta & task_meta)
         : query_ts(task_meta.query_ts())
         , local_query_id(task_meta.local_query_id())
         , server_id(task_meta.server_id())
@@ -45,7 +45,7 @@ struct MPPQueryId
     bool operator<=(const MPPQueryId & rid) const;
     String toString() const
     {
-        return fmt::format("query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}", query_ts, local_query_id, server_id, start_ts);
+        return fmt::format("<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>", query_ts, local_query_id, server_id, start_ts);
     }
 };
 
@@ -66,7 +66,7 @@ struct MPPTaskId
         , query_id(query_ts, local_query_id, server_id, start_ts)
     {}
 
-    MPPTaskId(const mpp::TaskMeta & task_meta)
+    explicit MPPTaskId(const mpp::TaskMeta & task_meta)
         : task_id(task_meta.task_id())
         , query_id(task_meta)
     {}

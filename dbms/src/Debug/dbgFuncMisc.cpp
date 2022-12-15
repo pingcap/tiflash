@@ -29,7 +29,7 @@ inline size_t getReadTSOForLog(const String & line)
     {
         std::regex rx(R"((0|[1-9][0-9]*))");
         std::smatch m;
-        // Rely on that MPP task prefix "MPP<query:query_ts:1671076528883980489, local_query_id:42356295, server_id:3340035, start_ts:438062669858603008,start_ts:438062669858603008,task_id:42356296>"
+        // Rely on that MPP task prefix "MPP<query:<query_ts:1671124209981679458, local_query_id:42578432, server_id:3340035, start_ts:438075169172357120>,task_id:42578433>"
         auto pos = line.find(", start_ts:");
         if (pos != std::string::npos && regex_search(line.cbegin() + pos, line.cend(), m, rx))
         {
