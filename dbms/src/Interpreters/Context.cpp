@@ -110,15 +110,21 @@ extern const char force_context_path[];
 
 struct UniversalPageStorageWrapper
 {
+    explicit UniversalPageStorageWrapper(Context & global_context_)
+        :global_context(global_context_)
+    {
+
+    }
+    Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
-    void restore(Context & global_context)
+    void restore()
     {
         uni_page_storage->restore();
         gc_handle = global_context.getBackgroundPool().addTask(
-            [this, global_context] {
+            [this] {
                 return this->gc();
             },
             false);
@@ -133,6 +139,15 @@ struct UniversalPageStorageWrapper
 
         last_try_gc_time = now;
         return this->uni_page_storage->gc();
+    }
+
+    ~UniversalPageStorageWrapper()
+    {
+        if (gc_handle)
+        {
+            global_context.getBackgroundPool().removeTask(gc_handle);
+            gc_handle = nullptr;
+        }
     }
 };
 using UniversalPageStorageWrapperPtr = std::shared_ptr<UniversalPageStorageWrapper>;
@@ -190,7 +205,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
-    PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
+    PageStorageRunMode storage_run_mode = PageStorageRunMode::UNI_PS;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
     /// The PS instance available on Write Node.
@@ -1600,6 +1615,11 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
         shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
         return;
     }
+    case PageFormat::V4:
+    {
+        shared->storage_run_mode = PageStorageRunMode::UNI_PS;
+        return;
+    }
     default:
         throw Exception(fmt::format("Can't detect the format version of Page [page_version={}]", storage_page_format_version),
                         ErrorCodes::LOGICAL_ERROR);
@@ -1657,11 +1677,15 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 void Context::initializeWriteNodePageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider)
 {
     auto lock = getLock();
-    RUNTIME_CHECK_MSG(shared->ps_write == nullptr, "UniversalPageStorage(WriteNode) has already been initialized");
+    if (shared->ps_write)
+    {
+        // GlobalStoragePool may be initialized many times in some test cases for restore.
+        LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
+    }
 
-    shared->ps_write = std::make_shared<UniversalPageStorageWrapper>();
+    shared->ps_write = std::make_shared<UniversalPageStorageWrapper>(*this);
     shared->ps_write->uni_page_storage = UniversalPageStorage::create("write", path_pool.getPSDiskDelegatorGlobalMulti("write"), {}, file_provider);
-    shared->ps_write->restore(*this);
+    shared->ps_write->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
 }
 
@@ -1672,7 +1696,7 @@ void Context::initializeReadNodePageStorage(const PathPool & path_pool, const Fi
 
     shared->ps_read = std::make_shared<UniversalPageStorageWrapper>();
     shared->ps_read->uni_page_storage = UniversalPageStorage::create("read", path_pool.getPSDiskDelegatorGlobalMulti("read"), {}, file_provider);
-    shared->ps_read->restore(*this);
+    shared->ps_read->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(ReadNode)");
 }
 

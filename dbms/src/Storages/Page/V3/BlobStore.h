@@ -20,7 +20,6 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/UniversalPage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
@@ -72,7 +71,7 @@ public:
 
     typename Trait::PageMap read(typename Trait::PageIdAndEntries & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
-    typename Trait::Page read(const typename Trait::PageIdAndEntry & entry, const ReadLimiterPtr & read_limiter = nullptr);
+    Page read(const typename Trait::PageIdAndEntry & entry, const ReadLimiterPtr & read_limiter = nullptr);
 
     typename Trait::PageMap read(typename Trait::FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
@@ -140,7 +139,6 @@ struct BlobStoreTrait
     using GcEntriesMap = std::map<BlobFileId, GcEntries>;
     using PageIdAndEntry = PageIDAndEntryV3;
     using PageIdAndEntries = PageIDAndEntriesV3;
-    using Page = Page;
     using PageMap = PageMap;
 
     using ExternalIdTrait = ExternalIdTrait;
@@ -174,10 +172,9 @@ struct BlobStoreTrait
     using GcEntriesMap = std::map<BlobFileId, GcEntries>;
     using PageIdAndEntry = std::pair<PageId, PageEntryV3>;
     using PageIdAndEntries = std::vector<PageIdAndEntry>;
-    using Page = UniversalPage;
     // TODO: universal pagemap/handler may should not filter by prefix
-    using PageMap = std::map<PageId, UniversalPage>;
-    using PageHandler = std::function<void(DB::PageId page_id, const UniversalPage &)>;
+    using PageMap = std::map<PageId, DB::Page>;
+    using PageHandler = std::function<void(PageId page_id, const DB::Page &)>;
 
     using ExternalIdTrait = ExternalIdTrait;
     using WriteBatch = UniversalWriteBatch;

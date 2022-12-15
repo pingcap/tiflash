@@ -51,6 +51,8 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 class RegionPersister;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 namespace ErrorCodes
 {
@@ -63,6 +65,7 @@ enum class PageStorageRunMode : UInt8
     ONLY_V2 = 1,
     ONLY_V3 = 2,
     MIX_MODE = 3,
+    UNI_PS = 4,
 };
 
 /**
@@ -182,7 +185,7 @@ public:
         return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
+    void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
     {
         traverseImpl(acceptor, snapshot);
     }
@@ -225,7 +228,7 @@ protected:
 
     virtual Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
+    virtual void traverseImpl(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
 
     virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
@@ -243,15 +246,59 @@ protected:
 
 // An impl class to hide the details for PageReaderImplMixed
 class PageReaderImpl;
+
+enum class TableStorageTag : UInt8
+{
+    Log = 1,
+    Data = 2,
+    Meta = 3,
+};
+
+inline String getStoragePrefix(TableStorageTag tag_)
+{
+    switch (tag_)
+    {
+    case TableStorageTag::Log:
+    {
+        return "t_l_";
+    }
+    case TableStorageTag::Data:
+    {
+        return "t_d_";
+    }
+    case TableStorageTag::Meta:
+    {
+        return "t_m_";
+    }
+    default:
+        throw Exception(fmt::format("Unknown TableStorageTag {}", static_cast<UInt8>(tag_)), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 // A class to wrap read with a specify snapshot
 class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_);
+    explicit PageReader(
+        const PageStorageRunMode & run_mode_,
+        TableStorageTag tag_,
+        NamespaceId ns_id_,
+        PageStoragePtr storage_v2_,
+        PageStoragePtr storage_v3_,
+        UniversalPageStoragePtr uni_ps_,
+        ReadLimiterPtr read_limiter_);
 
     /// Snapshot read.
-    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr snap_, ReadLimiterPtr read_limiter_);
+    PageReader(
+        const PageStorageRunMode & run_mode_,
+        TableStorageTag tag_,
+        NamespaceId ns_id_,
+        PageStoragePtr storage_v2_,
+        PageStoragePtr storage_v3_,
+        UniversalPageStoragePtr uni_ps_,
+        PageStorage::SnapshotPtr snap_,
+        ReadLimiterPtr read_limiter_);
 
     static PageReader CreateInvalidReader()
     {
@@ -278,7 +325,7 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
+    void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
     std::unique_ptr<PageReaderImpl> impl;
 
@@ -290,10 +337,12 @@ using PageReaderPtr = std::shared_ptr<PageReader>;
 class PageWriter : private boost::noncopyable
 {
 public:
-    PageWriter(PageStorageRunMode run_mode_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_)
+    PageWriter(PageStorageRunMode run_mode_, TableStorageTag tag_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, UniversalPageStoragePtr uni_ps_)
         : run_mode(run_mode_)
+        , tag(tag_)
         , storage_v2(storage_v2_)
         , storage_v3(storage_v3_)
+        , uni_ps(uni_ps_)
     {
     }
 
@@ -306,6 +355,8 @@ public:
 
     // Only used for DATA transform data
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+
+    void writeIntoUni(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -323,8 +374,10 @@ private:
 
 private:
     PageStorageRunMode run_mode;
+    TableStorageTag tag;
     PageStoragePtr storage_v2;
     PageStoragePtr storage_v3;
+    UniversalPageStoragePtr uni_ps;
 };
 using PageWriterPtr = std::shared_ptr<PageWriter>;
 

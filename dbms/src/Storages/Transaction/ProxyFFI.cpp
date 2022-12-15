@@ -234,7 +234,7 @@ PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView p
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId id{page_id.data, page_id.len};
-        auto * page = new UniversalPage(reader.read(id));
+        auto * page = new Page(reader.read(id));
         if (page->isValid())
         {
             //            LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle read page");
@@ -260,11 +260,12 @@ PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffVie
         RaftLogReader reader(*uni_ps);
         UniversalPageId start_id{start_page_id.data, start_page_id.len};
         UniversalPageId end_id{end_page_id.data, end_page_id.len};
-        std::vector<UniversalPage *> pages;
-        auto checker = [&](DB::UniversalPage page) {
-            pages.push_back(new UniversalPage(std::move(page)));
+        std::vector<DB::Page *> pages;
+        auto checker = [&](PageId page_id, const DB::Page & page) {
+            UNUSED(page_id);
+            pages.push_back(new Page(page));
         };
-        reader.traverse2(start_id, end_id, checker);
+        reader.traverse(start_id, end_id, checker);
         auto * data = static_cast<char *>(malloc(pages.size() * sizeof(PageWithView)));
         for (size_t i = 0; i < pages.size(); i++)
         {
@@ -652,7 +653,7 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
             delete reinterpret_cast<UniversalWriteBatch *>(ptr);
             break;
         case RawCppPtrTypeImpl::UniversalPage:
-            delete reinterpret_cast<UniversalPage *>(ptr);
+            delete reinterpret_cast<Page *>(ptr);
             break;
         default:
             LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);

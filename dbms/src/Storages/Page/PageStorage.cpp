@@ -15,6 +15,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 
 namespace DB
 {
@@ -41,9 +42,11 @@ class PageReaderImpl : private boost::noncopyable
 public:
     static std::unique_ptr<PageReaderImpl> create(
         PageStorageRunMode run_mode_,
+        TableStorageTag tag_,
         NamespaceId ns_id_,
         PageStoragePtr storage_v2_,
         PageStoragePtr storage_v3_,
+        UniversalPageStoragePtr uni_ps_,
         const PageStorage::SnapshotPtr & snap_,
         ReadLimiterPtr read_limiter_);
 
@@ -67,7 +70,7 @@ public:
 
     virtual FileUsageStatistics getFileUsageStatistics() const = 0;
 
-    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const = 0;
+    virtual void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const = 0;
 };
 
 
@@ -128,7 +131,7 @@ public:
         return storage->getSnapshotsStat();
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
+    void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
         storage->traverse(acceptor, nullptr);
     }
@@ -294,7 +297,7 @@ public:
         return storage_v3->getFileUsageStatistics();
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const override
+    void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const override
     {
         // Used by RegionPersister::restore
         // Must traverse storage_v3 before storage_v2
@@ -339,11 +342,102 @@ private:
     ReadLimiterPtr read_limiter;
 };
 
+class PageReaderImplUniversal : public PageReaderImpl
+{
+public:
+    /// Not snapshot read.
+    explicit PageReaderImplUniversal(TableStorageTag tag_, NamespaceId ns_id_, UniversalPageStoragePtr storage_, ReadLimiterPtr read_limiter_)
+        : storage(storage_)
+        , storage_reader(*storage_, getStoragePrefix(tag_), ns_id_)
+        , read_limiter(read_limiter_)
+    {
+    }
+
+    /// Snapshot read.
+    PageReaderImplUniversal(TableStorageTag tag_, NamespaceId ns_id_, UniversalPageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+        : storage(storage_)
+        , storage_reader(*storage_, getStoragePrefix(tag_), ns_id_)
+        , snap(snap_)
+        , read_limiter(read_limiter_)
+    {
+    }
+
+    DB::Page read(PageId page_id) const override
+    {
+        return storage->read(storage_reader.toFullPageId(page_id), read_limiter, snap);
+    }
+
+    static inline PageMap toPageMap(UniversalPageMap && us_page_map)
+    {
+        PageMap page_map;
+        for (auto iter = us_page_map.begin(); iter != us_page_map.end(); iter++)
+        {
+            page_map.emplace(StorageReader::parsePageId(iter->first), std::move(iter->second));
+        }
+        return page_map;
+    }
+
+    PageMap read(const PageIds & page_ids) const override
+    {
+        return PageReaderImplUniversal::toPageMap(storage->read(storage_reader.toFullPageIds(page_ids), read_limiter, snap));
+    }
+
+    using PageReadFields = PageStorage::PageReadFields;
+    PageMap read(const std::vector<PageReadFields> & page_fields) const override
+    {
+        std::vector<UniversalPageStorage::PageReadFields> us_page_fields;
+        for (const auto & f : page_fields)
+        {
+            us_page_fields.emplace_back(storage_reader.toFullPageId(f.first), f.second);
+        }
+        return PageReaderImplUniversal::toPageMap(storage->read(us_page_fields, read_limiter, snap));
+    }
+
+    PageId getNormalPageId(PageId page_id) const override
+    {
+        return StorageReader::parsePageId(storage->getNormalPageId(storage_reader.toFullPageId(page_id), snap));
+    }
+
+    PageEntry getPageEntry(PageId page_id) const override
+    {
+        return storage->getEntry(storage_reader.toFullPageId(page_id), snap);
+    }
+
+    PageStorageSnapshotPtr getSnapshot(const String & tracing_id) const override
+    {
+        return storage->getSnapshot(tracing_id);
+    }
+
+    // Get some statistics of all living snapshots and the oldest living snapshot.
+    SnapshotsStatistics getSnapshotsStat() const override
+    {
+        return storage->getSnapshotsStat();
+    }
+
+    void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
+    {
+        storage_reader.traverse(acceptor);
+    }
+
+    FileUsageStatistics getFileUsageStatistics() const override
+    {
+        return storage->getFileUsageStatistics();
+    }
+
+private:
+    UniversalPageStoragePtr storage;
+    StorageReader storage_reader;
+    PageStorageSnapshotPtr snap;
+    ReadLimiterPtr read_limiter;
+};
+
 std::unique_ptr<PageReaderImpl> PageReaderImpl::create(
     PageStorageRunMode run_mode_,
+    TableStorageTag tag_,
     NamespaceId ns_id_,
     PageStoragePtr storage_v2_,
     PageStoragePtr storage_v3_,
+    UniversalPageStoragePtr uni_ps_,
     const PageStorage::SnapshotPtr & snap_,
     ReadLimiterPtr read_limiter_)
 {
@@ -361,6 +455,10 @@ std::unique_ptr<PageReaderImpl> PageReaderImpl::create(
     {
         return std::make_unique<PageReaderImplMixed>(ns_id_, storage_v2_, storage_v3_, snap_, read_limiter_);
     }
+    case PageStorageRunMode::UNI_PS:
+    {
+        return std::make_unique<PageReaderImplUniversal>(tag_, ns_id_, uni_ps_, snap_, read_limiter_);
+    }
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode_)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -370,14 +468,29 @@ std::unique_ptr<PageReaderImpl> PageReaderImpl::create(
   * PageReader methods *
   **********************/
 /// Not snapshot read.
-PageReader::PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_)
-    : impl(PageReaderImpl::create(run_mode_, ns_id_, storage_v2_, storage_v3_, /*snap_=*/nullptr, read_limiter_))
+PageReader::PageReader(
+    const PageStorageRunMode & run_mode_,
+    TableStorageTag tag_,
+    NamespaceId ns_id_,
+    PageStoragePtr storage_v2_,
+    PageStoragePtr storage_v3_,
+    UniversalPageStoragePtr uni_ps_,
+    ReadLimiterPtr read_limiter_)
+    : impl(PageReaderImpl::create(run_mode_, tag_, ns_id_, storage_v2_, storage_v3_, uni_ps_, /*snap_=*/nullptr, read_limiter_))
 {
 }
 
 /// Snapshot read.
-PageReader::PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr snap_, ReadLimiterPtr read_limiter_)
-    : impl(PageReaderImpl::create(run_mode_, ns_id_, storage_v2_, storage_v3_, std::move(snap_), read_limiter_))
+PageReader::PageReader(
+    const PageStorageRunMode & run_mode_,
+    TableStorageTag tag_,
+    NamespaceId ns_id_,
+    PageStoragePtr storage_v2_,
+    PageStoragePtr storage_v3_,
+    UniversalPageStoragePtr uni_ps_,
+    PageStorage::SnapshotPtr snap_,
+    ReadLimiterPtr read_limiter_)
+    : impl(PageReaderImpl::create(run_mode_, tag_, ns_id_, storage_v2_, storage_v3_, uni_ps_, std::move(snap_), read_limiter_))
 {
 }
 
@@ -430,7 +543,7 @@ FileUsageStatistics PageReader::getFileUsageStatistics() const
     return impl->getFileUsageStatistics();
 }
 
-void PageReader::traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
+void PageReader::traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
 {
     impl->traverse(acceptor, only_v2, only_v3);
 }
@@ -456,6 +569,11 @@ void PageWriter::write(WriteBatch && write_batch, WriteLimiterPtr write_limiter)
     case PageStorageRunMode::MIX_MODE:
     {
         writeIntoMixMode(std::move(write_batch), write_limiter);
+        break;
+    }
+    case PageStorageRunMode::UNI_PS:
+    {
+        writeIntoUni(std::move(write_batch), write_limiter);
         break;
     }
     }
@@ -606,6 +724,10 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
     }
 }
 
+void PageWriter::writeIntoUni(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const
+{
+    uni_ps->write(UniversalWriteBatch::fromWriteBatch(getStoragePrefix(tag), std::move(write_batch)), write_limiter);
+}
 
 PageStorageConfig PageWriter::getSettings() const
 {
@@ -620,6 +742,7 @@ PageStorageConfig PageWriter::getSettings() const
         return storage_v3->getSettings();
     }
     case PageStorageRunMode::MIX_MODE:
+    case PageStorageRunMode::UNI_PS:
     {
         throw Exception("Not support.", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -670,6 +793,10 @@ bool PageWriter::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const 
         bool ok = storage_v2->gc(not_skip, write_limiter, read_limiter);
         ok |= storage_v3->gc(not_skip, write_limiter, read_limiter);
         return ok;
+    }
+    case PageStorageRunMode::UNI_PS:
+    {
+        return uni_ps->gc(not_skip, write_limiter, read_limiter);
     }
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);

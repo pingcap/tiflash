@@ -121,11 +121,11 @@ inline ::testing::AssertionResult getPageCompare(
     const char * /*buff_cmp_expr*/,
     const char * buf_size_expr,
     const char * /*page_cmp_expr*/,
-    const char * page_id_expr,
+    const char * /*page_id_expr*/,
     char * buff_cmp,
     const size_t buf_size,
     const Page & page_cmp,
-    const PageId & page_id)
+    const PageId & /*page_id*/)
 {
     if (page_cmp.data.size() != buf_size)
     {
@@ -134,16 +134,6 @@ inline ::testing::AssertionResult getPageCompare(
             DB::toString(page_cmp.data.size()).c_str(),
             buf_size_expr,
             "page.data.size()",
-            false);
-    }
-
-    if (page_cmp.page_id != page_id)
-    {
-        return testing::internal::EqFailure(
-            DB::toString(page_id).c_str(),
-            DB::toString(page_cmp.page_id).c_str(),
-            page_id_expr,
-            "page.page_id",
             false);
     }
 
@@ -280,11 +270,8 @@ try
         read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(7, {0, 1, 2}));
         PageMap page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 3);
-        ASSERT_EQ(page_maps[2].page_id, 2);
         ASSERT_EQ(page_maps[2].field_offsets.size(), 3);
-        ASSERT_EQ(page_maps[4].page_id, 4);
         ASSERT_EQ(page_maps[4].field_offsets.size(), 5);
-        ASSERT_EQ(page_maps[7].page_id, 7);
         ASSERT_EQ(page_maps[7].field_offsets.size(), 3);
     }
 
@@ -466,7 +453,6 @@ try
 
         PageMap page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 1);
-        ASSERT_EQ(page_maps[10].page_id, 10);
         ASSERT_EQ(page_maps[10].field_offsets.size(), 4);
         ASSERT_EQ(page_maps[10].data.size(), 710);
 

@@ -332,6 +332,8 @@ public:
 
     typename Trait::PageIdSet getRangePageIds(const typename Trait::PageId & start, const typename Trait::PageId & end);
 
+    typename Trait::PageIdSet getPageIdsWithPrefix(const typename Trait::PageId & prefix);
+
     typename Trait::PageIds getLowerBound(const typename Trait::PageId & start);
 
     void apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);

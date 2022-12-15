@@ -622,12 +622,12 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
             write_offset += size_to_read;
         }
 
-        typename Trait::Page page(page_id_v3);
+        Page page;
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
-        page_map.emplace(page_id_v3, std::move(page));
+        page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), std::move(page));
 
         pos = write_offset;
     }
@@ -671,8 +671,8 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
         {
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            typename Trait::Page page(page_id_v3);
-            page_map.emplace(page_id_v3, page);
+            Page page;
+            page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), page);
         }
         return page_map;
     }
@@ -706,10 +706,10 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
             }
         }
 
-        typename Trait::Page page(page_id_v3);
+        Page page;
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(page_id_v3, page);
+        page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), page);
 
         pos += entry.size;
     }
@@ -724,12 +724,11 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
 }
 
 template <typename Trait>
-typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry & id_entry, const ReadLimiterPtr & read_limiter)
+Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry & id_entry, const ReadLimiterPtr & read_limiter)
 {
     if (!id_entry.second.isValid())
     {
-        typename Trait::Page page_not_found(ExternalIdTrait::getInvalidID());
-        return page_not_found;
+        return Page::invalidPage();
     }
 
     const auto & [page_id_v3, entry] = id_entry;
@@ -740,8 +739,7 @@ typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry
     if (buf_size == 0)
     {
         LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-        typename Trait::Page page(page_id_v3);
-        return page;
+        return Page{};
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
@@ -768,7 +766,7 @@ typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry
         }
     }
 
-    typename Trait::Page page(page_id_v3);
+    Page page;
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 

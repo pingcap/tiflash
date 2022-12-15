@@ -98,19 +98,18 @@ public:
 class Page : public OwningPageData
 {
 public:
-    // only take the low u64, ignoring the high u64(NamespaceId)
-    explicit Page(const PageIdV3Internal & page_id_v3_)
-        : page_id(page_id_v3_.low)
+    static Page invalidPage()
     {
+        Page page;
+        page.is_valid = false;
+        return page;
     }
 
-    Page()
-        : page_id(INVALID_PAGE_ID)
-    {}
+private:
+    bool is_valid = true;
 
-    PageId page_id;
-
-    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
+public:
+    inline bool isValid() const { return is_valid; }
 };
 
 using Pages = std::vector<Page>;

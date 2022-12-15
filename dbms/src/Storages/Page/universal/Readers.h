@@ -19,6 +19,7 @@
 namespace DB
 {
 
+
 class KVStoreReader final
 {
 public:
@@ -29,7 +30,15 @@ public:
     static UniversalPageId toFullPageId(PageId page_id)
     {
         // TODO: Does it need to be mem comparable?
-        return fmt::format("k_{}", page_id);
+        WriteBufferFromOwnString buff;
+        writeString("k_", buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
+        return buff.releaseStr();
+    }
+
+    static PageId parseRegionId(const UniversalPageId & u_id)
+    {
+        return UniversalPageIdFormat::decodeUInt64(u_id.data() + u_id.size() - sizeof(PageId));
     }
 
     bool isAppliedIndexExceed(PageId page_id, UInt64 applied_index)
@@ -41,7 +50,7 @@ public:
         return (entry.isValid() && entry.tag > applied_index);
     }
 
-    void read(const PageIds & /*page_ids*/, std::function<void(const PageId &, const UniversalPage &)> /*handler*/) const
+    void read(const PageIds & /*page_ids*/, std::function<void(const PageId &, const Page &)> /*handler*/) const
     {
         // UniversalPageIds uni_page_ids;
         // uni_page_ids.reserve(page_ids.size());
@@ -53,15 +62,23 @@ public:
         throw Exception("Not implemented");
     }
 
-    void traverse(const std::function<void(const DB::UniversalPage & page)> & /*acceptor*/)
+    void traverse(const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor)
     {
         // Only traverse pages with id prefix
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+        auto snapshot = uni_storage.getSnapshot("scan_region_persister");
+        // FIXME: use a better end
+        const auto page_ids = uni_storage.page_directory->getRangePageIds("k_", "l_");
+        for (const auto & page_id : page_ids)
+        {
+            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
+            acceptor(parseRegionId(page_id), uni_storage.blob_store->read(page_id_and_entry));
+        }
     }
 
 private:
     UniversalPageStorage & uni_storage;
 };
+using KVStoreReaderPtr = std::shared_ptr<KVStoreReader>;
 
 class RaftLogReader final
 {
@@ -75,15 +92,15 @@ public:
         // TODO: Does it need to be mem comparable?
         WriteBufferFromOwnString buff;
         writeString("r_", buff);
-        RecordKVFormat::encodeUInt64(ns_id, buff);
+        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
         writeString("_", buff);
-        RecordKVFormat::encodeUInt64(page_id, buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
         return buff.releaseStr();
         // return fmt::format("r_{}_{}", ns_id, page_id);
     }
 
     // scan the pages between [start, end)
-    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const DB::UniversalPage & page)> & acceptor)
+    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor)
     {
         // always traverse with the latest snapshot
         auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
@@ -91,23 +108,11 @@ public:
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
+            acceptor(DB::PS::V3::universal::ExternalIdTrait::getU64ID(page_id), uni_storage.blob_store->read(page_id_and_entry));
         }
     }
 
-    void traverse2(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::UniversalPage page)> & acceptor)
-    {
-        // always traverse with the latest snapshot
-        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
-        const auto page_ids = uni_storage.page_directory->getRangePageIds(start, end);
-        for (const auto & page_id : page_ids)
-        {
-            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(uni_storage.blob_store->read(page_id_and_entry));
-        }
-    }
-
-    UniversalPage read(const UniversalPageId & page_id)
+    Page read(const UniversalPageId & page_id)
     {
         // always traverse with the latest snapshot
         auto snapshot = uni_storage.getSnapshot(fmt::format("read_{}", page_id));
@@ -118,7 +123,7 @@ public:
         }
         else
         {
-            return UniversalPage({});
+            return DB::Page::invalidPage();
         }
     }
 
@@ -129,6 +134,63 @@ public:
 
 private:
     UniversalPageStorage & uni_storage;
+};
+
+class StorageReader final
+{
+public:
+    explicit StorageReader(UniversalPageStorage & storage, const String & prefix_, NamespaceId ns_id_)
+        : uni_storage(storage)
+        , prefix(prefix_)
+        , ns_id(ns_id_)
+    {
+    }
+
+    UniversalPageId toPrefix() const
+    {
+        WriteBufferFromOwnString buff;
+        writeString(prefix, buff);
+        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        writeString("_", buff);
+        return buff.releaseStr();
+    }
+
+    UniversalPageId toFullPageId(PageId page_id) const
+    {
+        return buildTableUniversalPageId(prefix, ns_id, page_id);
+    }
+
+    UniversalPageIds toFullPageIds(PageIds page_ids) const
+    {
+        UniversalPageIds us_page_ids;
+        for (const auto page_id : page_ids)
+        {
+            us_page_ids.push_back(toFullPageId(page_id));
+        }
+        return us_page_ids;
+    }
+
+    static PageId parsePageId(const UniversalPageId & u_id)
+    {
+        return DB::PS::V3::universal::ExternalIdTrait::getU64ID(u_id);
+    }
+
+    void traverse(const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor) const
+    {
+        // always traverse with the latest snapshot
+        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_{}_{}", prefix, ns_id));
+        const auto page_ids = uni_storage.page_directory->getPageIdsWithPrefix(toPrefix());
+        for (const auto & page_id : page_ids)
+        {
+            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
+            acceptor(parsePageId(page_id_and_entry.first), uni_storage.blob_store->read(page_id_and_entry));
+        }
+    }
+
+private:
+    UniversalPageStorage & uni_storage;
+    String prefix;
+    NamespaceId ns_id;
 };
 
 class UniversalPageReader final

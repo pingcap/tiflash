@@ -544,13 +544,11 @@ try
     {
         if (pageid == page_id1)
         {
-            ASSERT_EQ(page.page_id, page_id1);
             ASSERT_EQ(page.data.size(), buff_size);
             ASSERT_EQ(strncmp(page.data.begin(), c_buff, buff_size), 0);
         }
         else if (pageid == page_id2)
         {
-            ASSERT_EQ(page.page_id, page_id2);
             // the buffer size read is equal to the fields size we read
             // field {2, 4}
             ASSERT_EQ(page.data.size(), 40);
@@ -559,7 +557,6 @@ try
         }
         else if (pageid == page_id3)
         {
-            ASSERT_EQ(page.page_id, page_id3);
             // the buffer size read is equal to the fields size we read
             // field {1, 3}
             ASSERT_EQ(page.data.size(), 25);

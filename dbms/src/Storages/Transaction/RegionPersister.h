@@ -18,6 +18,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Transaction/Types.h>
 
@@ -75,12 +76,10 @@ private:
 #endif
 
     Context & global_context;
-    PageWriterPtr page_writer;
-    PageReaderPtr page_reader;
+    UniversalPageStoragePtr global_uni_page_storage;
+    KVStoreReaderPtr page_reader;
 
-    std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
-
-    NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
+//    NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
     const RegionManager & region_manager;
     std::mutex mutex;
     LoggerPtr log;
