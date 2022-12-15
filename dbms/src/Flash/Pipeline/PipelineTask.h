@@ -26,13 +26,22 @@ class PipelineTask : public Task
 {
 public:
     PipelineTask(
+        MemoryTrackerPtr mem_tracker_,
         const EventPtr & event_,
         OperatorExecutorPtr && op_executor_)
-        : event(event_)
+        : Task(mem_tracker_)
+        , event(event_)
         , op_executor(std::move(op_executor_))
     {}
 
-    ExecTaskStatus execute() override;
+    ~PipelineTask();
+
+protected:
+    ExecTaskStatus executeImpl() override;
+
+    ExecTaskStatus awaitImpl() override;
+
+    ExecTaskStatus spillImpl() override;
 
 private:
     EventPtr event;

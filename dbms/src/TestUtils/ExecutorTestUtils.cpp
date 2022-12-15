@@ -16,6 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Pipeline/TaskScheduler.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
@@ -49,6 +50,24 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type)
         return TiDB::TP::TypeDouble;
     default:
         throw Exception("Unsupport type");
+    }
+}
+
+void ExecutorTest::SetUp()
+{
+    initializeContext();
+    initializeClientInfo();
+    TaskSchedulerConfig config{5, 5};
+    if (!TaskScheduler::instance)
+        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+}
+
+void ExecutorTest::TearDown()
+{
+    if (TaskScheduler::instance)
+    {
+        TaskScheduler::instance->close();
+        TaskScheduler::instance.reset();
     }
 }
 
@@ -220,6 +239,11 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 void ExecutorTest::enablePlanner(bool is_enable)
 {
     context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+}
+
+void ExecutorTest::enablePipeline(bool is_enable)
+{
+    context.context.setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)

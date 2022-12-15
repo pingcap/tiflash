@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/TaskExecutor.h>
@@ -25,7 +26,7 @@ namespace DB
 TaskExecutor::TaskExecutor(TaskScheduler & scheduler_, size_t thread_num)
     : scheduler(scheduler_)
 {
-    assert(thread_num > 0);
+    RUNTIME_CHECK(thread_num > 0);
     threads.reserve(thread_num);
     for (size_t i = 0; i < thread_num; ++i)
         threads.emplace_back(&TaskExecutor::loop, this);
@@ -52,6 +53,7 @@ void TaskExecutor::loop()
 
 void TaskExecutor::handleTask(TaskPtr & task)
 {
+    auto setter = task->setMemoryTracker();
     int64_t time_spent = 0;
     while (true)
     {
@@ -70,6 +72,12 @@ void TaskExecutor::handleTask(TaskPtr & task)
             }
             break;
         }
+        case ExecTaskStatus::WAITING:
+            scheduler.io_reactor.submit(std::move(task));
+            return;
+        case ExecTaskStatus::SPILLING:
+            scheduler.spill_executor.submit(std::move(task));
+            return;
         case ExecTaskStatus::FINISHED:
         case ExecTaskStatus::ERROR:
         case ExecTaskStatus::CANCELLED:
@@ -83,7 +91,7 @@ void TaskExecutor::handleTask(TaskPtr & task)
 bool TaskExecutor::popTask(TaskPtr & task)
 {
     {
-        std::unique_lock<std::mutex> lock(mu);
+        std::unique_lock lock(mu);
         while (true)
         {
             if (unlikely(is_closed))
@@ -120,7 +128,7 @@ void TaskExecutor::submit(TaskPtr && task)
 
 void TaskExecutor::submit(std::vector<TaskPtr> & tasks)
 {
-    if (unlikely(tasks.empty()))
+    if (tasks.empty())
         return;
 
     std::lock_guard lock(mu);

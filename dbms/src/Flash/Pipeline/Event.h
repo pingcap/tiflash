@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MemoryTracker.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Pipeline/Task.h>
 
@@ -37,8 +38,9 @@ using Events = std::vector<EventPtr>;
 class Event : public std::enable_shared_from_this<Event>
 {
 public:
-    explicit Event(PipelineExecStatus & exec_status_)
+    Event(PipelineExecStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
         : exec_status(exec_status_)
+        , mem_tracker(std::move(mem_tracker_))
     {}
     virtual ~Event() = default;
 
@@ -46,13 +48,14 @@ public:
 
     void schedule();
 
-    void finish();
-
     void finishTask();
 
     bool isNonDependent();
 
-    bool isCancelled();
+    bool isCancelled()
+    {
+        return exec_status.isCancelled();
+    }
 
     void toError(std::string && err_msg);
 
@@ -70,20 +73,26 @@ protected:
     void scheduleTask(std::vector<TaskPtr> & tasks);
 
 private:
+    void finish();
+
     void addNext(const EventPtr & next);
 
     void completeDependency();
 
     void switchStatus(EventStatus from, EventStatus to);
 
+    MemoryTrackerSetter setMemoryTracker()
+    {
+        return MemoryTrackerSetter{true, mem_tracker ? mem_tracker.get() : nullptr};
+    }
+
 protected:
     PipelineExecStatus & exec_status;
 
+    MemoryTrackerPtr mem_tracker;
+
 private:
     std::vector<EventPtr> next_events;
-
-    // use weak_ptr to avoid circular references.
-    std::vector<std::weak_ptr<Event>> dependencies;
 
     std::atomic_int64_t unfinished_dependencies{0};
 

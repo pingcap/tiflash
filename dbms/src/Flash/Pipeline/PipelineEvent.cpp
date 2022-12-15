@@ -28,7 +28,7 @@ bool PipelineEvent::scheduleImpl()
         return true;
     std::vector<TaskPtr> tasks;
     for (auto & op_executor : group)
-        tasks.push_back(std::make_unique<PipelineTask>(shared_from_this(), std::move(op_executor)));
+        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, shared_from_this(), std::move(op_executor)));
     scheduleTask(tasks);
     return false;
 }

@@ -33,22 +33,28 @@ ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 Block mergeBlocks(Blocks blocks);
 
 
-#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
-    std::vector<bool> bools{false, true}; \
-    for (auto enable_planner : bools)     \
-    {                                     \
-        enablePlanner(enable_planner);
+#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN  \
+    std::vector<bool> bools{false, true};  \
+    for (auto enable_planner : bools)      \
+    {                                      \
+        enablePlanner(enable_planner);     \
+        std::vector<bool> bools{false};    \
+        if (enable_planner)                \
+            bools.push_back(true);         \
+        for (auto enable_pipeline : bools) \
+        {                                  \
+            enablePipeline(enable_pipeline);
 
-#define WRAP_FOR_DIS_ENABLE_PLANNER_END }
+#define WRAP_FOR_DIS_ENABLE_PLANNER_END \
+    }                                   \
+    }
 
 class ExecutorTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        initializeContext();
-        initializeClientInfo();
-    }
+    void SetUp() override;
+
+    void TearDown() override;
 
 public:
     ExecutorTest()
@@ -64,6 +70,8 @@ public:
     DAGContext & getDAGContext();
 
     void enablePlanner(bool is_enable);
+
+    void enablePipeline(bool is_enable);
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 

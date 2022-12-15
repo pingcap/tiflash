@@ -21,8 +21,8 @@ namespace DB
 class FinalizePipelineEvent : public Event
 {
 public:
-    explicit FinalizePipelineEvent(PipelineExecStatus & exec_status_)
-        : Event(exec_status_)
+    FinalizePipelineEvent(PipelineExecStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
+        : Event(exec_status_, mem_tracker_)
     {}
 
 protected:

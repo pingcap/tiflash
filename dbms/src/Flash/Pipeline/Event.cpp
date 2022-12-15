@@ -17,20 +17,21 @@
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <assert.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 void Event::addDependency(const EventPtr & dependency)
 {
     assert(status != EventStatus::FINISHED);
-    ++unfinished_dependencies;
     dependency->addNext(shared_from_this());
-    dependencies.emplace_back(dependency);
+    ++unfinished_dependencies;
 }
 
 bool Event::isNonDependent()
 {
     assert(status == EventStatus::INIT);
-    return dependencies.empty();
+    return 0 == unfinished_dependencies;
 }
 
 void Event::addNext(const EventPtr & next)
@@ -41,7 +42,7 @@ void Event::addNext(const EventPtr & next)
 
 void Event::insertEvent(const EventPtr & replacement)
 {
-    assert(replacement);
+    assert(replacement && replacement->status == EventStatus::INIT);
     assert(status != EventStatus::FINISHED);
     std::swap(replacement->next_events, next_events);
     replacement->addDependency(shared_from_this());
@@ -49,7 +50,6 @@ void Event::insertEvent(const EventPtr & replacement)
 
 void Event::completeDependency()
 {
-    assert(!isNonDependent());
     auto cur_value = unfinished_dependencies.fetch_sub(1);
     if (cur_value <= 1)
         schedule();
@@ -57,6 +57,7 @@ void Event::completeDependency()
 
 void Event::schedule()
 {
+    setMemoryTracker();
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
     if (scheduleImpl())
         finish();
@@ -64,6 +65,7 @@ void Event::schedule()
 
 void Event::finish()
 {
+    setMemoryTracker();
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
     if (finishImpl())
     {
@@ -88,11 +90,6 @@ void Event::finishTask()
     auto cur_value = unfinished_tasks.fetch_sub(1);
     if (cur_value <= 1)
         finish();
-}
-
-bool Event::isCancelled()
-{
-    return exec_status.isCancelled();
 }
 
 void Event::toError(std::string && err_msg)

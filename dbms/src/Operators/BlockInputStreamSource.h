@@ -30,18 +30,18 @@ public:
         impl->readPrefix();
     }
 
-    Block read() override
+    OperatorStatus read(Block & block) override
     {
         if (unlikely(finished))
-            return {};
+            return OperatorStatus::PASS;
 
-        Block block = impl->read();
+        block = impl->read();
         if (unlikely(!block))
         {
             impl->readSuffix();
             finished = true;
         }
-        return block;
+        return OperatorStatus::PASS;
     }
 
     Block readHeader() override

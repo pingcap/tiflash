@@ -25,10 +25,9 @@ std::string PipelineExecStatus::getErrMsg()
 
 void PipelineExecStatus::toError(std::string && err_msg_)
 {
-    RUNTIME_CHECK(!err_msg_.empty());
     {
         std::lock_guard lock(mu);
-        err_msg = std::move(err_msg_);
+        err_msg = err_msg_.empty() ? "error without err msg" : std::move(err_msg_);
     }
     cancel();
 }
@@ -57,10 +56,5 @@ void PipelineExecStatus::completePipeline()
 void PipelineExecStatus::cancel()
 {
     is_cancelled = true;
-}
-
-bool PipelineExecStatus::isCancelled()
-{
-    return is_cancelled;
 }
 } // namespace DB

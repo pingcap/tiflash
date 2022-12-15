@@ -19,7 +19,7 @@ namespace DB
 {
 namespace tests
 {
-class PlannerInterpreterExecuteTest : public DB::tests::ExecutorTest
+class PipelineInterpreterExecuteTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
@@ -27,7 +27,7 @@ public:
         ExecutorTest::initializeContext();
 
         enablePlanner(true);
-        enablePipeline(false);
+        enablePipeline(true);
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -39,7 +39,7 @@ public:
     }
 };
 
-TEST_F(PlannerInterpreterExecuteTest, StrangeQuery)
+TEST_F(PipelineInterpreterExecuteTest, StrangeQuery)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -48,13 +48,11 @@ try
                        .filter(eq(col("s1"), col("s2")))
                        .build(context);
     {
-        String expected = R"(
-Union: <for test>
- Expression x 10: <final projection>
-  Filter
-   Filter
-    Filter
-     MockTableScan)";
+        String expected = "[<Projection, selection_3> | is_tidb_operator: false, schema: <selection_3_mock_table_scan_0, Nullable(String)>, <selection_3_mock_table_scan_1, Nullable(String)>, <selection_3_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Filter, selection_3> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Filter, selection_2> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Filter, selection_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -64,22 +62,11 @@ Union: <for test>
                   .limit(8)
                   .build(context);
     {
-        String expected = R"(
-Union: <for test>
- Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   Limit, limit = 8
-    Union: <for partial limit>
-     Limit x 10, limit = 8
-      SharedQuery: <restore concurrency>
-       Limit, limit = 9
-        Union: <for partial limit>
-         Limit x 10, limit = 9
-          SharedQuery: <restore concurrency>
-           Limit, limit = 10
-            Union: <for partial limit>
-             Limit x 10, limit = 10
-              MockTableScan)";
+        String expected = "[<Projection, limit_3> | is_tidb_operator: false, schema: <limit_3_mock_table_scan_0, Nullable(String)>, <limit_3_mock_table_scan_1, Nullable(String)>, <limit_3_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Limit, limit_3> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Limit, limit_2> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Limit, limit_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -110,7 +97,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, SingleQueryBlock)
+TEST_F(PipelineInterpreterExecuteTest, SingleQueryBlock)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -165,7 +152,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, ParallelQuery)
+TEST_F(PipelineInterpreterExecuteTest, ParallelQuery)
 try
 {
     /// executor with table scan
@@ -173,20 +160,10 @@ try
                        .limit(10)
                        .build(context);
     {
-        String expected = R"(
-Expression: <final projection>
- Limit, limit = 10
-  MockTableScan)";
+        String expected = "[<Projection, limit_1> | is_tidb_operator: false, schema: <limit_1_mock_table_scan_0, Nullable(String)>, <limit_1_mock_table_scan_1, Nullable(String)>, <limit_1_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Limit, limit_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
-
-        expected = R"(
-Union: <for test>
- Expression x 5: <final projection>
-  SharedQuery: <restore concurrency>
-   Limit, limit = 10
-    Union: <for partial limit>
-     Limit x 5, limit = 10
-      MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
 
@@ -194,15 +171,10 @@ Union: <for test>
                   .project({"s1", "s2", "s3"})
                   .build(context);
     {
-        String expected = R"(
-Expression: <final projection>
- MockTableScan)";
+        String expected = "[<Projection, project_1> | is_tidb_operator: false, schema: <project_1_mock_table_scan_0, Nullable(String)>, <project_1_mock_table_scan_1, Nullable(String)>, <project_1_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Projection, project_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
-
-        expected = R"(
-Union: <for test>
- Expression x 5: <final projection>
-  MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
 
@@ -254,17 +226,10 @@ Union: <for test>
                   .filter(eq(col("s2"), col("s3")))
                   .build(context);
     {
-        String expected = R"(
-Expression: <final projection>
- Filter
-  MockTableScan)";
+        String expected = "[<Projection, selection_1> | is_tidb_operator: false, schema: <selection_1_mock_table_scan_0, Nullable(String)>, <selection_1_mock_table_scan_1, Nullable(String)>, <selection_1_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Filter, selection_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
-
-        expected = R"(
-Union: <for test>
- Expression x 5: <final projection>
-  Filter
-   MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
 
@@ -415,22 +380,11 @@ MockExchangeSender
                   .exchangeSender(tipb::PassThrough)
                   .build(context);
     {
-        String expected = R"(
-Union: <for test>
- MockExchangeSender x 10
-  Expression: <final projection>
-   SharedQuery: <restore concurrency>
-    Limit, limit = 10
-     Union: <for partial limit>
-      Limit x 10, limit = 10
-       MockTableScan)";
+        String expected = "[<MockExchangeSender, exchange_sender_2> | is_tidb_operator: true, schema: <exchange_sender_2_mock_table_scan_0, Nullable(String)>, <exchange_sender_2_mock_table_scan_1, Nullable(String)>, <exchange_sender_2_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Projection, limit_1> | is_tidb_operator: false, schema: <exchange_sender_2_mock_table_scan_0, Nullable(String)>, <exchange_sender_2_mock_table_scan_1, Nullable(String)>, <exchange_sender_2_mock_table_scan_2, Nullable(String)>] <== "
+                          "[<Limit, limit_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-
-        expected = R"(
-MockExchangeSender
- Expression: <final projection>
-  Limit, limit = 10
-   MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -460,7 +414,7 @@ CreatingSets
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, MultipleQueryBlockWithSource)
+TEST_F(PipelineInterpreterExecuteTest, MultipleQueryBlockWithSource)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -469,13 +423,11 @@ try
                        .project({"s1"})
                        .build(context);
     {
-        String expected = R"(
-Union: <for test>
- Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <projection>
-    Expression: <projection>
-     MockTableScan)";
+        String expected = "[<Projection, project_3> | is_tidb_operator: false, schema: <project_3_mock_table_scan_0, Nullable(String)>] <== "
+                          "[<Projection, project_3> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>] <== "
+                          "[<Projection, project_2> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>] <== "
+                          "[<Projection, project_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>] <== "
+                          "[<MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -561,13 +513,11 @@ Union: <for test>
                   .project({"s1"})
                   .build(context);
     {
-        String expected = R"(
-Union: <for test>
- Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <projection>
-    Expression: <projection>
-     MockExchangeReceiver)";
+        String expected = "[<Projection, project_3> | is_tidb_operator: false, schema: <project_3_exchange_receiver_0, Nullable(String)>] <== "
+                          "[<Projection, project_3> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>] <== "
+                          "[<Projection, project_2> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>] <== "
+                          "[<Projection, project_1> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>] <== "
+                          "[<MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -578,20 +528,18 @@ Union: <for test>
                   .exchangeSender(tipb::Broadcast)
                   .build(context);
     {
-        String expected = R"(
-Union: <for test>
- MockExchangeSender x 10
-  Expression: <final projection>
-   Expression: <projection>
-    Expression: <projection>
-     Expression: <projection>
-      MockExchangeReceiver)";
+        String expected = "[<MockExchangeSender, exchange_sender_4> | is_tidb_operator: true, schema: <exchange_sender_4_exchange_receiver_0, Nullable(String)>] <== "
+                          "[<Projection, project_3> | is_tidb_operator: false, schema: <exchange_sender_4_exchange_receiver_0, Nullable(String)>] <== "
+                          "[<Projection, project_3> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>] <== "
+                          "[<Projection, project_2> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>] <== "
+                          "[<Projection, project_1> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>] <== "
+                          "[<MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>]";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, Window)
+TEST_F(PipelineInterpreterExecuteTest, Window)
 try
 {
     auto request = context
@@ -656,7 +604,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, FineGrainedShuffle)
+TEST_F(PipelineInterpreterExecuteTest, FineGrainedShuffle)
 try
 {
     // fine-grained shuffle is enabled.
@@ -724,7 +672,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, Join)
+TEST_F(PipelineInterpreterExecuteTest, Join)
 try
 {
     // TODO: Find a way to write the request easier.
@@ -858,7 +806,7 @@ CreatingSets
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, JoinThenAgg)
+TEST_F(PipelineInterpreterExecuteTest, JoinThenAgg)
 try
 {
     {
@@ -971,7 +919,7 @@ CreatingSets
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, ListBase)
+TEST_F(PipelineInterpreterExecuteTest, ListBase)
 try
 {
     {

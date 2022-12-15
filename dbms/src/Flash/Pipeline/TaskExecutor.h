@@ -47,7 +47,7 @@ private:
     bool popTask(TaskPtr & task);
 
 private:
-    [[maybe_unused]] TaskScheduler & scheduler;
+    TaskScheduler & scheduler;
 
     std::vector<std::thread> threads;
 

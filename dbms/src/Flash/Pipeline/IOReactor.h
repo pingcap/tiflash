@@ -15,41 +15,44 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/IOReactor.h>
-#include <Flash/Pipeline/SpillExecutor.h>
 #include <Flash/Pipeline/Task.h>
-#include <Flash/Pipeline/TaskExecutor.h>
+
+#include <list>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 namespace DB
 {
-struct TaskSchedulerConfig
-{
-    size_t task_executor_thread_num;
-    size_t spill_executor_thread_num;
-};
+class TaskScheduler;
 
-class TaskScheduler
+class IOReactor
 {
 public:
-    explicit TaskScheduler(const TaskSchedulerConfig & config);
+    explicit IOReactor(TaskScheduler & scheduler_);
+    ~IOReactor();
 
-    void submit(std::vector<TaskPtr> & tasks);
+    void submit(TaskPtr && task);
+
+    void submit(std::list<TaskPtr> & tasks);
 
     void close();
 
-    static std::unique_ptr<TaskScheduler> instance;
+private:
+    void loop();
+    bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task);
 
 private:
-    TaskExecutor task_executor;
+    TaskScheduler & scheduler;
 
-    IOReactor io_reactor;
+    std::thread thread;
 
-    SpillExecutor spill_executor;
+    mutable std::mutex mutex;
+    std::condition_variable cond;
+    std::list<TaskPtr> waiting_tasks;
 
-    LoggerPtr logger = Logger::get("TaskScheduler");
+    std::atomic<bool> is_shutdown{false};
 
-    friend class TaskExecutor;
-    friend class SpillExecutor;
-    friend class IOReactor;
+    LoggerPtr logger = Logger::get("IOReactor");
 };
 } // namespace DB

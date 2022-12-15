@@ -19,12 +19,13 @@ namespace DB
 {
 namespace tests
 {
-
 class ExecutorLimitTestRunner : public DB::tests::ExecutorTest
 {
 public:
     using ColDataType = std::optional<typename TypeTraits<String>::FieldType>;
     using ColumnWithData = std::vector<ColDataType>;
+
+    static constexpr size_t big_table_rows = 100;
 
     void initializeContext() override
     {
@@ -33,6 +34,13 @@ public:
         context.addMockTable({db_name, table_name},
                              {{col_name, TiDB::TP::TypeString}},
                              {toNullableVec<String>(col_name, col0)});
+
+        ColumnWithData col;
+        for (size_t i = 0; i < big_table_rows; ++i)
+            col.emplace_back("a");
+        context.addMockTable({"test", "bigtable"},
+                             {{"col", TiDB::TP::TypeString}},
+                             {toNullableVec<String>("col", col)});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(size_t limit_num)
@@ -83,6 +91,17 @@ try
     String query = "select * from test_db.projection_test_table limit 1";
     auto cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + 1))};
     ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
+}
+CATCH
+
+TEST_F(ExecutorLimitTestRunner, BigTable)
+try
+{
+    for (size_t limit = 1; limit < 2 * big_table_rows; limit += 7)
+    {
+        auto request = context.scan("test", "bigtable").limit(limit).build(context);
+        executeAndAssertRowsEqual(request, std::min(limit, big_table_rows));
+    }
 }
 CATCH
 

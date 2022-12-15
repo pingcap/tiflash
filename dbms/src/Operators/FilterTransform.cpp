@@ -18,7 +18,7 @@ namespace DB
 {
 OperatorStatus FilterTransform::transform(Block & block)
 {
-    if (filter_transform_action.alwaysFalse())
+    if (unlikely(filter_transform_action.alwaysFalse()))
     {
         block = {};
         return OperatorStatus::PASS;
@@ -27,7 +27,7 @@ OperatorStatus FilterTransform::transform(Block & block)
     if (likely(block))
         return filter_transform_action.transform(block)
             ? OperatorStatus::PASS
-            : OperatorStatus::NEED_MORE;
+            : OperatorStatus::MORE_INPUT;
 
     return OperatorStatus::PASS;
 }

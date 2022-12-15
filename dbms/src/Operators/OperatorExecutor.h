@@ -34,16 +34,31 @@ public:
 
     OperatorStatus execute();
 
+    OperatorStatus await();
+
+    OperatorStatus spill();
+
 private:
-    // Block, next_transform_index
-    std::tuple<Block, size_t> fetchBlock();
+    // status, next_transform_index
+    std::tuple<OperatorStatus, int64_t> fetchBlock(Block & block);
+
+    template <typename Op>
+    OperatorStatus pushSpiller(OperatorStatus status, const Op & op)
+    {
+        if (status == OperatorStatus::SPILLING)
+        {
+            assert(!spiller);
+            spiller.emplace(op.get());
+        }
+        return status;
+    }
 
 private:
     SourcePtr source;
     std::vector<TransformPtr> transforms;
     SinkPtr sink;
 
-    std::vector<size_t> fetch_transform_stack;
+    std::optional<Spiller *> spiller;
 };
 using OperatorExecutorPtr = std::unique_ptr<OperatorExecutor>;
 using OperatorExecutorGroup = std::vector<OperatorExecutorPtr>;

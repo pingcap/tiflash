@@ -367,7 +367,9 @@ struct Settings
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
-    M(SettingBool, enable_pipeline, false, "Enable pipeline")
+    M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
+    M(SettingInt64, pipeline_task_executor_threads, -1, "The thread num of task executor. -1 means using hardware_concurrency.")                                                                                                        \
+    M(SettingInt64, pipeline_spill_executor_threads, -1, "The thread num of spill executor. -1 means using hardware_concurrency.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

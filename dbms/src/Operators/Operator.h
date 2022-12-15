@@ -23,48 +23,65 @@ namespace DB
 {
 enum class OperatorStatus
 {
-    NEED_MORE,
-    MORE_OUTPUT,
+    // spilling status
+    SPILLING,
+    // waiting status
+    WAITING,
+    SKIP,
+    // running status
     PASS,
+    NO_OUTPUT,
+    MORE_INPUT,
+    // finish status
     FINISHED,
 };
 
-class Source
+class Spiller
+{
+public:
+    virtual ~Spiller() = default;
+
+    virtual OperatorStatus spill() { throw Exception("Unsupport"); }
+};
+
+class Source : public Spiller
 {
 public:
     virtual ~Source() = default;
 
-    virtual Block read() = 0;
+    virtual OperatorStatus read(Block & block) = 0;
 
     virtual Block readHeader() = 0;
+
+    virtual OperatorStatus await() { return OperatorStatus::PASS; }
 };
 using SourcePtr = std::unique_ptr<Source>;
 
-class Transform
+class Transform : public Spiller
 {
 public:
     virtual ~Transform() = default;
 
+    // call fetchBlock first, and then call transform.
+    virtual OperatorStatus fetchBlock(Block &) { return OperatorStatus::NO_OUTPUT; }
     virtual OperatorStatus transform(Block & /*block*/) = 0;
 
-    virtual void transformHeader(Block & header)
-    {
-        transform(header);
-    }
+    virtual void transformHeader(Block & header) { transform(header); }
 
-    virtual Block fetchBlock()
-    {
-        throw Exception("Unsupport");
-    }
+    virtual OperatorStatus await() { return OperatorStatus::SKIP; }
 };
 using TransformPtr = std::unique_ptr<Transform>;
 
-class Sink
+class Sink : public Spiller
 {
 public:
     virtual ~Sink() = default;
 
+    // call prepare first, and then call write.
+    virtual OperatorStatus prepare() { return OperatorStatus::PASS; }
     virtual OperatorStatus write(Block && /*block*/) = 0;
+
+    virtual OperatorStatus await() { return OperatorStatus::PASS; }
 };
 using SinkPtr = std::unique_ptr<Sink>;
 } // namespace DB

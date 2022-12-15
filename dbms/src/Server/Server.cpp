@@ -42,6 +42,7 @@
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Flash/Pipeline/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
@@ -1265,6 +1266,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+
+    if (settings.enable_pipeline)
+    {
+        size_t task_executor_thread_num = settings.pipeline_task_executor_threads < 0
+            ? std::thread::hardware_concurrency()
+            : static_cast<size_t>(settings.pipeline_task_executor_threads);
+        size_t spill_executor_thread_num = settings.pipeline_spill_executor_threads < 0
+            ? std::thread::hardware_concurrency()
+            : static_cast<size_t>(settings.pipeline_spill_executor_threads);
+        TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};
+        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+    }
+    SCOPE_EXIT({
+        if (TaskScheduler::instance)
+        {
+            TaskScheduler::instance->close();
+            TaskScheduler::instance.reset();
+        }
+    });
 
     if (settings.enable_async_grpc_client)
     {

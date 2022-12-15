@@ -13,36 +13,106 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/PipelineTask.h>
 
 namespace DB
 {
-ExecTaskStatus PipelineTask::execute()
-{
-    if (unlikely(event->isCancelled()))
-    {
-        event->finishTask();
-        return ExecTaskStatus::CANCELLED;
+#define HANDLE_CANCELLED                  \
+    if (unlikely(event->isCancelled()))   \
+    {                                     \
+        event->finishTask();              \
+        return ExecTaskStatus::CANCELLED; \
     }
+
+#define HANDLE_ERROR                                            \
+    catch (...)                                                 \
+    {                                                           \
+        event->toError(getCurrentExceptionMessage(true, true)); \
+        event->finishTask();                                    \
+        return ExecTaskStatus::ERROR;                           \
+    }
+
+#define HANDLE_FINISHED                  \
+    case OperatorStatus::FINISHED:       \
+    {                                    \
+        event->finishTask();             \
+        return ExecTaskStatus::FINISHED; \
+    }
+
+ExecTaskStatus PipelineTask::executeImpl()
+{
+    HANDLE_CANCELLED
     try
     {
         auto op_status = op_executor->execute();
         switch (op_status)
         {
-        case OperatorStatus::FINISHED:
-        {
-            event->finishTask();
-            return ExecTaskStatus::FINISHED;
-        }
-        default:
+            HANDLE_FINISHED
+        case OperatorStatus::WAITING:
+            return ExecTaskStatus::WAITING;
+        case OperatorStatus::SPILLING:
+            return ExecTaskStatus::SPILLING;
+        case OperatorStatus::PASS:
+        case OperatorStatus::MORE_INPUT:
             return ExecTaskStatus::RUNNING;
+        default:
+            __builtin_unreachable();
         }
     }
-    catch (...)
-    {
-        event->toError(getCurrentExceptionMessage(true, true));
-        return ExecTaskStatus::ERROR;
-    }
+    HANDLE_ERROR
 }
+
+ExecTaskStatus PipelineTask::awaitImpl()
+{
+    HANDLE_CANCELLED
+    try
+    {
+        auto op_status = op_executor->await();
+        switch (op_status)
+        {
+            HANDLE_FINISHED
+        case OperatorStatus::WAITING:
+            return ExecTaskStatus::WAITING;
+        case OperatorStatus::PASS:
+            return ExecTaskStatus::RUNNING;
+        default:
+            __builtin_unreachable();
+        }
+    }
+    HANDLE_ERROR
+}
+
+ExecTaskStatus PipelineTask::spillImpl()
+{
+    HANDLE_CANCELLED
+    try
+    {
+        auto op_status = op_executor->spill();
+        switch (op_status)
+        {
+            HANDLE_FINISHED
+        case OperatorStatus::SPILLING:
+            return ExecTaskStatus::SPILLING;
+        case OperatorStatus::PASS:
+            return ExecTaskStatus::RUNNING;
+        default:
+            __builtin_unreachable();
+        }
+    }
+    HANDLE_ERROR
+}
+
+#undef HANDLE_CANCELLED
+#undef HANDLE_ERROR
+#undef HANDLE_FINISHED
+
+PipelineTask::~PipelineTask()
+{
+    auto setter = setMemoryTracker();
+    op_executor.reset();
+    event.reset();
+}
+
 } // namespace DB

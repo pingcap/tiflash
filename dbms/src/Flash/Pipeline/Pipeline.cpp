@@ -87,8 +87,23 @@ OperatorExecutorGroups Pipeline::transform(Context & context, size_t concurrency
 
 Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t concurrency)
 {
+    // TODO
+    // - support fetching unmatched rows from join hash table (non-joined)
+    //     - create a new event `NonJoinedEvent `to execute non-joined data flow.
+    //     - event flow will be `FinalizePipelineEvent <-- NonJoinedEvent <-- PipelineEvent`
+    // - support fine grained partition by
+    //     - a partition maps to an event
+    //     - event flow will be
+    //     ```
+    //     enable fine grained partition pipeline        disable fine grained partition pipeline
+    //                                                  ┌──FinalizePipelineEvent <-- PipelineEvent
+    //     FinalizePipelineEvent <-- PipelineEvent──────┼──FinalizePipelineEvent <-- PipelineEvent
+    //                                                  ├──FinalizePipelineEvent <-- PipelineEvent
+    //                                                  └──FinalizePipelineEvent <-- PipelineEvent
+    //     ```
     Events events;
-    auto pipeline_event = std::make_shared<PipelineEvent>(status, context, concurrency, shared_from_this());
+    auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+    auto pipeline_event = std::make_shared<PipelineEvent>(status, memory_tracker, context, concurrency, shared_from_this());
     for (const auto & dependency : dependencies)
     {
         auto dependency_ptr = dependency.lock();
@@ -101,7 +116,7 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
         }
     }
     events.push_back(pipeline_event);
-    auto finalize_event = std::make_shared<FinalizePipelineEvent>(status);
+    auto finalize_event = std::make_shared<FinalizePipelineEvent>(status, memory_tracker);
     finalize_event->addDependency(pipeline_event);
     events.push_back(finalize_event);
     return events;
@@ -120,6 +135,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeProjection:
+            case tipb::ExecType::TypeLimit:
                 return true;
             default:
                 is_supported = false;

@@ -26,11 +26,14 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
 
     {
         auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
+        Events non_dependent_events;
         for (const auto & event : events)
         {
             if (event->isNonDependent())
-                event->schedule();
+                non_dependent_events.push_back(event);
         }
+        for (const auto & event : non_dependent_events)
+            event->schedule();
     }
     status.wait();
 
@@ -40,7 +43,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
         : ExecutionResult::fail(err_msg);
 }
 
-void PipelineExecutor::cancel(bool /*is_kill*/)
+void PipelineExecutor::cancel()
 {
     status.cancel();
 }

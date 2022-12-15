@@ -14,12 +14,26 @@
 
 #pragma once
 
+#include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <memory.h>
 
 namespace DB
 {
+
+/**
+ *              CANCELLED/ERROR/FINISHED
+ *                       │  ▲
+ *                       │  │
+ *                       ▼  │
+ *  ┌──────────────────────────────────────────────┐
+ *  │  WAITING ◄──────► RUNNING ◄──────► SPILLING  │
+ *  └──────────────────────────────────────────────┘
+ */
 enum class ExecTaskStatus
 {
+    WAITING,
+    SPILLING,
     RUNNING,
     FINISHED,
     ERROR,
@@ -29,9 +43,47 @@ enum class ExecTaskStatus
 class Task
 {
 public:
+    explicit Task(MemoryTrackerPtr mem_tracker_)
+        : mem_tracker(std::move(mem_tracker_))
+    {}
+
     virtual ~Task() = default;
 
-    virtual ExecTaskStatus execute() = 0;
+    MemoryTrackerSetter setMemoryTracker()
+    {
+        return MemoryTrackerSetter{true, getMemTracker()};
+    }
+
+    ExecTaskStatus execute()
+    {
+        assert(getMemTracker() == current_memory_tracker);
+        return executeImpl();
+    }
+    ExecTaskStatus spill()
+    {
+        assert(getMemTracker() == current_memory_tracker);
+        return spillImpl();
+    }
+    // We do not set the current memory tracker for `await`,
+    // so please avoid allocating memory here.
+    ExecTaskStatus await()
+    {
+        assert(nullptr == current_memory_tracker);
+        return awaitImpl();
+    }
+
+protected:
+    virtual ExecTaskStatus executeImpl() = 0;
+    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus spillImpl() { return ExecTaskStatus::RUNNING; }
+
+    MemoryTracker * getMemTracker()
+    {
+        return mem_tracker ? mem_tracker.get() : nullptr;
+    }
+
+private:
+    MemoryTrackerPtr mem_tracker;
 };
 using TaskPtr = std::unique_ptr<Task>;
 } // namespace DB

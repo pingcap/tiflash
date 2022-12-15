@@ -26,10 +26,11 @@ class PipelineEvent : public Event
 public:
     PipelineEvent(
         PipelineExecStatus & exec_status_,
+        MemoryTrackerPtr mem_tracker_,
         Context & context_,
         size_t concurrency_,
         const PipelinePtr & pipeline_)
-        : Event(exec_status_)
+        : Event(exec_status_, mem_tracker_)
         , context(context_)
         , concurrency(concurrency_)
         , pipeline(pipeline_)

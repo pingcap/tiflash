@@ -17,6 +17,8 @@
 
 namespace DB::tests
 {
+namespace
+{
 class Waiter
 {
 public:
@@ -50,10 +52,11 @@ class SimpleTask : public Task
 {
 public:
     SimpleTask(Waiter & waiter_)
-        : waiter(waiter_)
+        : Task(nullptr)
+        , waiter(waiter_)
     {}
 
-    ExecTaskStatus execute()
+    ExecTaskStatus executeImpl() override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -66,20 +69,101 @@ private:
     int loop_count = 5;
 };
 
+class SimpleWaitingTask : public Task
+{
+public:
+    SimpleWaitingTask(Waiter & waiter_)
+        : Task(nullptr)
+        , waiter(waiter_)
+    {}
+
+    ExecTaskStatus executeImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+                return ExecTaskStatus::WAITING;
+            else
+            {
+                --loop_count;
+                return ExecTaskStatus::RUNNING;
+            }
+        }
+        waiter.notify();
+        return ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus awaitImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+            {
+                --loop_count;
+                return ExecTaskStatus::WAITING;
+            }
+            else
+                return ExecTaskStatus::RUNNING;
+        }
+        waiter.notify();
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    int loop_count = 10 + random() % 10;
+    Waiter & waiter;
+};
+
+class SimpleSpillingTask : public Task
+{
+public:
+    SimpleSpillingTask(Waiter & waiter_)
+        : Task(nullptr)
+        , waiter(waiter_)
+    {}
+
+    ExecTaskStatus executeImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+                return ExecTaskStatus::SPILLING;
+            else
+            {
+                --loop_count;
+                return ExecTaskStatus::RUNNING;
+            }
+        }
+        waiter.notify();
+        return ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus spillImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+            {
+                --loop_count;
+                return ExecTaskStatus::SPILLING;
+            }
+            else
+                return ExecTaskStatus::RUNNING;
+        }
+        waiter.notify();
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    int loop_count = 10 + random() % 10;
+    Waiter & waiter;
+};
+} // namespace
+
 class TaskSchedulerTestRunner : public ::testing::Test
 {
 public:
     static constexpr size_t thread_num = 5;
-
-protected:
-    void TearDown() override
-    {
-        task_scheduler.close();
-    }
-
-protected:
-    TaskSchedulerConfig config{thread_num, 1, 1};
-    TaskScheduler task_scheduler{config};
 };
 
 TEST_F(TaskSchedulerTestRunner, simple_task)
@@ -89,8 +173,43 @@ TEST_F(TaskSchedulerTestRunner, simple_task)
     std::vector<TaskPtr> tasks;
     for (size_t i = 0; i < task_num; ++i)
         tasks.push_back(std::make_unique<SimpleTask>(waiter));
+    TaskSchedulerConfig config{thread_num, 0};
+    TaskScheduler task_scheduler{config};
     task_scheduler.submit(tasks);
     waiter.wait();
+    task_scheduler.close();
+}
+
+TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
+{
+    size_t task_num = 10;
+    Waiter waiter(task_num);
+    std::vector<TaskPtr> tasks;
+    for (size_t i = 0; i < task_num; ++i)
+        tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
+    TaskSchedulerConfig config{thread_num, 0};
+    TaskScheduler task_scheduler{config};
+    task_scheduler.submit(tasks);
+    waiter.wait();
+    task_scheduler.close();
+}
+
+TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
+{
+    auto test = [](size_t spiller_executor_thread_num) {
+        size_t task_num = 10;
+        Waiter waiter(task_num);
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<SimpleSpillingTask>(waiter));
+        TaskSchedulerConfig config{thread_num, spiller_executor_thread_num};
+        TaskScheduler task_scheduler{config};
+        task_scheduler.submit(tasks);
+        waiter.wait();
+        task_scheduler.close();
+    };
+    test(0);
+    test(thread_num);
 }
 
 } // namespace DB::tests

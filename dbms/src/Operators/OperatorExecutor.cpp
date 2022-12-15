@@ -18,36 +18,55 @@ namespace DB
 {
 OperatorStatus OperatorExecutor::execute()
 {
-    auto [block, transform_index] = fetchBlock();
-    for (; transform_index < transforms.size(); ++transform_index)
+    Block block;
+    auto [status, transform_index] = fetchBlock(block);
+    if (status != OperatorStatus::PASS)
+        return status;
+
+    assert(transform_index >= 0);
+    for (size_t i = transform_index; i < transforms.size(); ++i)
     {
-        auto status = transforms[transform_index]->transform(block);
-        switch (status)
-        {
-        case OperatorStatus::NEED_MORE:
-        case OperatorStatus::FINISHED:
-            return status;
-        case OperatorStatus::MORE_OUTPUT:
-            fetch_transform_stack.push_back(transform_index);
-        case OperatorStatus::PASS:
-            break;
-        default:
-            __builtin_unreachable();
-        }
+        auto status = transforms[i]->transform(block);
+        if (status != OperatorStatus::PASS)
+            return pushSpiller(status, transforms[i]);
     }
-    return sink->write(std::move(block));
+    return pushSpiller(sink->write(std::move(block)), sink);
 }
 
-std::tuple<Block, size_t> OperatorExecutor::fetchBlock()
+std::tuple<OperatorStatus, int64_t> OperatorExecutor::fetchBlock(Block & block)
 {
-    while (!fetch_transform_stack.empty())
+    auto status = sink->prepare();
+    if (status != OperatorStatus::PASS)
+        return {pushSpiller(status, sink), -1};
+    for (int64_t index = transforms.size() - 1; index >= 0; --index)
     {
-        auto index = fetch_transform_stack.back();
-        Block block = transforms[index]->fetchBlock();
-        if (block)
-            return {std::move(block), index + 1};
-        fetch_transform_stack.pop_back();
+        auto status = transforms[index]->fetchBlock(block);
+        if (status != OperatorStatus::NO_OUTPUT)
+            return {pushSpiller(status, transforms[index]), index + 1};
     }
-    return {source->read(), 0};
+    return {pushSpiller(source->read(block), source), 0};
+}
+
+OperatorStatus OperatorExecutor::await()
+{
+    auto status = sink->await();
+    if (status != OperatorStatus::PASS)
+        return status;
+    for (auto it = transforms.rbegin(); it != transforms.rend(); ++it)
+    {
+        auto status = (*it)->await();
+        if (status != OperatorStatus::SKIP)
+            return status;
+    }
+    return source->await();
+}
+
+OperatorStatus OperatorExecutor::spill()
+{
+    assert(spiller);
+    auto status = (*spiller)->spill();
+    if (status != OperatorStatus::SPILLING)
+        spiller.reset();
+    return status;
 }
 } // namespace DB

@@ -15,41 +15,49 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/IOReactor.h>
-#include <Flash/Pipeline/SpillExecutor.h>
 #include <Flash/Pipeline/Task.h>
-#include <Flash/Pipeline/TaskExecutor.h>
+
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
 
 namespace DB
 {
-struct TaskSchedulerConfig
-{
-    size_t task_executor_thread_num;
-    size_t spill_executor_thread_num;
-};
+class TaskScheduler;
 
-class TaskScheduler
+class SpillExecutor
 {
 public:
-    explicit TaskScheduler(const TaskSchedulerConfig & config);
+    SpillExecutor(TaskScheduler & scheduler_, size_t thread_num);
+    ~SpillExecutor();
 
-    void submit(std::vector<TaskPtr> & tasks);
+    void submit(TaskPtr && task);
 
     void close();
 
-    static std::unique_ptr<TaskScheduler> instance;
+private:
+    bool popTask(TaskPtr & task);
+
+    void loop();
+
+    void handleTask(TaskPtr && task);
+
+    void submitToThreadSharedQueue(TaskPtr && task);
 
 private:
-    TaskExecutor task_executor;
+    TaskScheduler & scheduler;
 
-    IOReactor io_reactor;
+    std::vector<std::thread> threads;
 
-    SpillExecutor spill_executor;
+    mutable std::mutex mu;
+    std::condition_variable cv;
+    bool is_closed = false;
+    std::deque<TaskPtr> task_queue;
 
-    LoggerPtr logger = Logger::get("TaskScheduler");
+    std::function<void(TaskPtr && task)> submit_func;
 
-    friend class TaskExecutor;
-    friend class SpillExecutor;
-    friend class IOReactor;
+    LoggerPtr logger = Logger::get("SpillExecutor");
 };
 } // namespace DB

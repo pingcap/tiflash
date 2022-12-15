@@ -18,9 +18,9 @@
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
+namespace
 {
 class GetResultSink : public Sink
 {
@@ -39,6 +39,7 @@ public:
 
     std::vector<Block> & blocks;
 };
+} // namespace
 
 class SimpleOperatorTestRunner : public DB::tests::ExecutorTest
 {
@@ -109,6 +110,20 @@ try
 }
 CATCH
 
+TEST_F(SimpleOperatorTestRunner, Limit)
+try
+{
+    auto request = context.receive("exchange1")
+                       .limit(1)
+                       .build(context);
+
+    executeAndAssert(
+        request,
+        {toNullableVec<String>({"banana"}),
+         toNullableVec<String>({"apple"})});
+}
+CATCH
+
 TEST_F(SimpleOperatorTestRunner, Projection)
 try
 {
@@ -159,5 +174,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

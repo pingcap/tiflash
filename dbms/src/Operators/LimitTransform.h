@@ -14,26 +14,50 @@
 
 #pragma once
 
-#include <DataStreams/WindowBlockInputStream.h>
 #include <Operators/Operator.h>
+
+#include <memory>
+#include <atomic>
 
 namespace DB
 {
-class WindowTransform : public Transform
+class GlobalLimitTransformAction
 {
 public:
-    explicit WindowTransform(
-        const Block & input_header,
-        const WindowDescription & window_description,
+    GlobalLimitTransformAction(
+        const Block & header_,
+        size_t limit_)
+        : header(header_)
+        , limit(limit_)
+    {}
+
+    void transform(Block & block);
+    Block getHeader() const { return header; }
+    size_t getLimit() const { return limit; }
+
+private:
+    const Block header;
+    const size_t limit;
+    std::atomic_size_t pos = 0;
+};
+using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
+
+class LimitTransform : public Transform
+{
+public:
+    explicit LimitTransform(
+        const GlobalLimitPtr & action_,
         const String & req_id)
-        : action(input_header, window_description, req_id)
+        : action(action_)
+        , log(Logger::get(req_id))
     {}
 
     OperatorStatus transform(Block & block) override;
 
-    Block fetchBlock() override;
+    void transformHeader(Block & header) override;
 
 private:
-    WindowTransformAction action;
+    GlobalLimitPtr action;
+    const LoggerPtr log;
 };
 } // namespace DB

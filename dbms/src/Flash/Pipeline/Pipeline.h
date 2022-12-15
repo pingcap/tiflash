@@ -55,7 +55,7 @@ public:
     static bool isSupported(const tipb::DAGRequest & dag_request);
 
 private:
-    // data flow: plan[0] <-- plans.back()
+    // data flow: plans.begin() <-- plans.end()
     std::deque<PhysicalPlanNodePtr> plans;
 
     // use weak_ptr to avoid circular references.

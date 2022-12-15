@@ -39,6 +39,9 @@ struct PipelineExecStatus
 
     void cancel();
 
-    bool isCancelled();
+    bool isCancelled()
+    {
+        return is_cancelled;
+    }
 };
 } // namespace DB

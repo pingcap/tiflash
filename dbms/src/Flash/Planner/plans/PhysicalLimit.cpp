@@ -19,6 +19,8 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
+#include <Operators/LimitTransform.h>
+#include <Operators/OperatorBuilder.h>
 
 namespace DB
 {
@@ -48,6 +50,15 @@ void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, siz
         executeUnion(pipeline, max_streams, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
     }
+}
+
+void PhysicalLimit::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+{
+    auto input_header = op_builder.getHeader();
+    auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
+    op_builder.transform([&](auto & builder) {
+        builder.appendTransform(std::make_unique<LimitTransform>(global_limit, log->identifier()));
+    });
 }
 
 void PhysicalLimit::finalize(const Names & parent_require)
