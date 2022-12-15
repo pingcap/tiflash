@@ -89,12 +89,7 @@ SegmentSnapshotPtr & BitmapFilter::snapshot()
 
 void BitmapFilter::runOptimize()
 {
-    bool temp = true;
-    for (bool i : filter)
-    {
-        temp = (temp && i);
-    }
-    all_match = temp;
+    all_match = std::find(filter.begin(), filter.end(), false) == filter.end();
 }
 
 String BitmapFilter::toDebugString() const
