@@ -2280,8 +2280,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
     Stopwatch sw_total;
     static ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
-        getVersionColumnDefine(),
-        getTagColumnDefine()};
+    };
     auto stream = getInputStreamModeNormal(
         dm_context,
         columns_to_read,
