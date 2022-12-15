@@ -44,7 +44,7 @@ void trimStackTrace(String & message)
 namespace TiDB
 {
 
-constexpr int64_t MPP_VERSION = 1;
+constexpr int64_t MPP_VERSION = 1 << 10;
 static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.5.0";
 constexpr int64_t MIN_MPP_VERSION = 0;
 

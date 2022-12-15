@@ -41,6 +41,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     should_send_exec_summary_at_last = dag_context.collect_execution_summaries && should_send_exec_summary_at_last;
     if (dag_context.isRootMPPTask())
     {
+        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
         return std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
@@ -52,6 +53,8 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     }
     else
     {
+        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() != mpp::CompressMethod::NONE);
+
         if (exchange_type == tipb::ExchangeType::Hash)
         {
             if (enable_fine_grained_shuffle)
