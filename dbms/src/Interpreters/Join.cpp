@@ -1179,7 +1179,7 @@ void NO_INLINE joinBlockImplTypeCase(
     assert(probe_process_info.start_row < rows);
     size_t i;
     bool block_full = false;
-    for (i = probe_process_info.start_row; i < rows && !block_full; ++i)
+    for (i = probe_process_info.start_row; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
         {
