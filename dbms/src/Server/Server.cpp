@@ -32,7 +32,7 @@
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/getNumberOfLogicalCPUCores.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Encryption/DataKeyManager.h>
@@ -886,11 +886,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
         server_info.parseSysInfo(response);
         setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
+        computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
         LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else
     {
         setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
+        computeAndSetNumberOfPhysicalCPUCores(std::thread::hardware_concurrency(), std::thread::hardware_concurrency() / 2);
         LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
