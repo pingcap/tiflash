@@ -124,9 +124,8 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
     for (int64_t i = 0; i < pool_count; i++)
     {
         auto pool = read_pools.next();
-        // If pool->getFreeBlockSlots() > 0, schedule it for read blocks.
         // If !pool->valid(), schedule it for clean MergedTaskPool.
-        if (pool != nullptr && (pool->getFreeBlockSlots() > 0 || !pool->valid()))
+        if (pool != nullptr && (pool->needScheduleToRead() || !pool->valid()))
         {
             return pool;
         }
