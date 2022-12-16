@@ -233,8 +233,13 @@ public:
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
 
+<<<<<<< HEAD
     Int64 increaseUnorderedInputStreamRefCount();
     Int64 decreaseUnorderedInputStreamRefCount();
+=======
+    int64_t increaseUnorderedInputStreamRefCount();
+    int64_t decreaseUnorderedInputStreamRefCount();
+>>>>>>> Fix scheduling.
     Int64 getFreeBlockSlots() const;
     Int64 getFreeActiveSegments() const;
     bool valid() const;
