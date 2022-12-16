@@ -243,6 +243,7 @@ public:
     }
 
     bool needScheduleToRead() const;
+
 private:
     Int64 getFreeActiveSegments() const;
     Int64 getFreeActiveSegmentsUnlock() const;
