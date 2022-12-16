@@ -566,6 +566,7 @@ try
 }
 CATCH
 
+
 TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithoutCache)
 try
 {
@@ -3457,6 +3458,7 @@ try
     th_merge_delta.get();
 }
 CATCH
+
 
 } // namespace tests
 } // namespace DM
