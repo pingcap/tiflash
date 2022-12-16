@@ -59,10 +59,6 @@ private:
     BitmapFilterPtr bitmap_filter;
     const LoggerPtr log;
     IColumn::Filter filter{};
-    Stopwatch sw;
-    UInt64 read_ns = 0;
-    UInt64 get_filter_ns = 0;
-    UInt64 filter_ns = 0;
 };
 
 } // namespace DB::DM

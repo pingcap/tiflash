@@ -37,12 +37,9 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
 
 Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
-    sw.restart();
     auto [block, from_delta] = readBlock();
-    read_ns += sw.elapsed();
     if (block)
     {
-        sw.restart();
         if (from_delta)
         {
             block.setStartOffset(block.startOffset() + stable_rows);
@@ -50,19 +47,16 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
 
         filter.resize(block.rows());
         bitmap_filter->get(filter, block.startOffset(), block.rows());
-        get_filter_ns += sw.elapsed();
         if (return_filter)
         {
             res_filter = &filter;
         }
         else
         {
-            sw.restart();
             for (auto & col : block)
             {
                 col.column = col.column->filter(filter, block.rows());
             }
-            filter_ns += sw.elapsed();
         }
     }
     return block;
