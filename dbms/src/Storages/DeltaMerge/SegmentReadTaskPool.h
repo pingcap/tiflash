@@ -168,7 +168,8 @@ public:
         SegmentReadTasks && tasks_,
         AfterSegmentRead after_segment_read_,
         const String & tracing_id,
-        bool enable_read_thread_)
+        bool enable_read_thread_,
+        Int64 num_streams_)
         : pool_id(nextPoolId())
         , table_id(table_id_)
         , dm_context(dm_context_)
@@ -183,6 +184,8 @@ public:
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
+        , block_slot_limit(std::max(num_streams_, 3))
+        , active_segment_limit(std::max(num_streams_, 2))
     {}
 
     ~SegmentReadTaskPool()
@@ -225,7 +228,7 @@ public:
 
     int64_t increaseUnorderedInputStreamRefCount();
     int64_t decreaseUnorderedInputStreamRefCount();
-    int64_t getFreeBlockSlots() const;
+    Int64 getFreeBlockSlots() const;
     bool valid() const;
     void setException(const DB::Exception & e);
 
@@ -239,8 +242,10 @@ public:
         return mem_tracker;
     }
 
+    bool needScheduleToRead() const;
 private:
-    int64_t getFreeActiveSegmentCountUnlock();
+    Int64 getFreeActiveSegments() const;
+    Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
@@ -255,7 +260,7 @@ private:
     const ReadMode read_mode;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
-    std::mutex mutex;
+    mutable std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
@@ -274,6 +279,9 @@ private:
     // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
+
+    const Int64 block_slot_limit;
+    const Int64 active_segment_limit;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;

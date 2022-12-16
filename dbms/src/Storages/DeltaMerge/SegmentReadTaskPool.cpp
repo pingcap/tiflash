@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include "common/types.h"
 
 namespace CurrentMetrics
 {
@@ -205,7 +206,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 {
     auto target = segments.end();
     std::lock_guard lock(mutex);
-    if (getFreeActiveSegmentCountUnlock() <= 0)
+    if (getFreeActiveSegmentsUnlock() <= 0)
     {
         return target;
     }
@@ -278,24 +279,25 @@ int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
     return unordered_input_stream_ref_count.fetch_sub(1, std::memory_order_relaxed);
 }
 
-int64_t SegmentReadTaskPool::getFreeBlockSlots() const
+bool SegmentReadTaskPool::needScheduleToRead() const
 {
-    auto block_slots = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
-    if (block_slots < 3)
-    {
-        block_slots = 3;
-    }
-    return block_slots - blk_stat.pendingCount();
+    return getFreeBlockSlots() > 0 && getFreeActiveSegments() > 0;
 }
 
-int64_t SegmentReadTaskPool::getFreeActiveSegmentCountUnlock()
+Int64 SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    auto active_segment_limit = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
-    if (active_segment_limit < 2)
-    {
-        active_segment_limit = 2;
-    }
-    return active_segment_limit - static_cast<int64_t>(active_segment_ids.size());
+    return block_slot_limit - blk_stat.pendingCount();
+}
+
+Int64 SegmentReadTaskPool::getFreeActiveSegments() const
+{
+    std::lock_guard lock(mutex);
+    return getFreeActiveSegmentsUnlock();
+}
+
+Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
+{
+    return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
 }
 
 bool SegmentReadTaskPool::exceptionHappened() const
