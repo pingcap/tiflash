@@ -164,12 +164,6 @@ public:
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);
 
     ColumnFileSetSnapshotPtr createSnapshot(const IColumnFileSetStorageReaderPtr & storage_reader);
-
-    //    ColumnFileSetSnapshotPtr createSnapshotFromRemote(
-    //        const DMContext & context,
-    //        TableID physical_table_id,
-    //        const RowKeyRange & segment_range,
-    //        const StorageSnapshotPtr & storage_snap);
 };
 
 } // namespace DM

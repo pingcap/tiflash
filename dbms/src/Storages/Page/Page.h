@@ -49,23 +49,33 @@ struct FieldOffsetInsidePage
     bool operator<(const FieldOffsetInsidePage & rhs) const { return index < rhs.index; }
 };
 
-class OwningPageData
+struct Page
 {
 public:
+    static Page invalidPage()
+    {
+        Page page;
+        page.is_valid = false;
+        return page;
+    }
+
     ByteBuffer data;
     MemHolder mem_holder;
     // Field offsets inside this page.
     std::set<FieldOffsetInsidePage> field_offsets;
 
-    virtual ~OwningPageData() = default;
+private:
+    bool is_valid = true;
+
+public:
+    inline bool isValid() const { return is_valid; }
 
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
-        RUNTIME_CHECK_MSG(
-            iter != field_offsets.end(),
-            "Try to getFieldData with invalid field index, field_index={}",
-            index);
+        if (unlikely(iter == field_offsets.end()))
+            throw Exception(fmt::format("Try to getFieldData with invalid field index [field_index={}] is_valid={} field_offsets.size()={}", index, is_valid, field_offsets.size()),
+                            ErrorCodes::LOGICAL_ERROR);
 
         PageFieldOffset beg = iter->offset;
         ++iter;
@@ -93,23 +103,6 @@ public:
     {
         return field_offsets.size();
     }
-};
-
-class Page : public OwningPageData
-{
-public:
-    static Page invalidPage()
-    {
-        Page page;
-        page.is_valid = false;
-        return page;
-    }
-
-private:
-    bool is_valid = true;
-
-public:
-    inline bool isValid() const { return is_valid; }
 };
 
 using Pages = std::vector<Page>;

@@ -193,39 +193,4 @@ private:
     NamespaceId ns_id;
 };
 
-class UniversalPageReader final
-{
-public:
-    explicit UniversalPageReader(UniversalPageStoragePtr storage_, PageStorageSnapshotPtr snap_)
-        : storage(storage_)
-        , snap(snap_)
-    {}
-
-    UniversalPage read(const UniversalPageId & page_id) const
-    {
-        // TODO: Move primitive read functions into UniversalPageStorage.
-        const auto page_id_and_entry = storage->page_directory->getByIDOrNull(page_id, snap);
-        if (page_id_and_entry.second.isValid())
-        {
-            return storage->blob_store->read(page_id_and_entry);
-        }
-        else
-        {
-            return UniversalPage({});
-        }
-    }
-
-    using PageReadFields = UniversalPageStorage::PageReadFields;
-    UniversalPageMap read(const std::vector<PageReadFields> & page_fields) const
-    {
-        return storage->read(page_fields, nullptr, snap);
-    }
-
-private:
-    UniversalPageStoragePtr storage;
-    PageStorageSnapshotPtr snap;
-};
-
-using UniversalPageReaderPtr = std::shared_ptr<UniversalPageReader>;
-
 } // namespace DB

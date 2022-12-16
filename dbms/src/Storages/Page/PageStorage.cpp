@@ -15,6 +15,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 
 namespace DB

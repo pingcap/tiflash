@@ -52,14 +52,24 @@ public:
         using LocalCachePreparedDMFileToken::LocalCachePreparedDMFileToken;
     };
 
-    void putDMFile(DMFilePtr local_dm_file, const DMFileOID & oid) override
+    void putDMFile(DMFilePtr local_dmf, const DMFileOID & oid) override
     {
-        RUNTIME_CHECK(local_dm_file->fileId() == oid.file_id);
+        RUNTIME_CHECK(local_dmf->fileId() == oid.file_id);
 
-        Poco::File dtfile_dir(local_dm_file->path());
-        const auto remote_path = DMFile::getPathByStatus(buildDMFileParentPathInNFS(oid), local_dm_file->fileId(), DMFile::READABLE);
-        LOG_DEBUG(log, "Upload DMFile, oid={} local={} remote={}", oid.info(), local_dm_file->path(), remote_path);
-        dtfile_dir.copyTo(remote_path);
+        const auto src_dmf_dir_poco = Poco::File(local_dmf->path());
+        const auto dist_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(oid), local_dmf->fileId(), DMFile::READABLE);
+        LOG_DEBUG(log, "Upload DMFile, oid={} local={} remote={}", oid.info(), local_dmf->path(), dist_dmf_dir);
+
+        // TODO: Make this process atomic? Or may be we should reject this case.
+        auto dist_dmf_dir_poco = Poco::File(dist_dmf_dir);
+        if (dist_dmf_dir_poco.exists())
+        {
+            LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} local={} remote={}", oid.info(), local_dmf->path(), dist_dmf_dir);
+            dist_dmf_dir_poco.remove(true);
+        }
+
+        src_dmf_dir_poco.copyTo(dist_dmf_dir);
+        LOG_DEBUG(log, "Upload DMFile finished, oid={}", oid.info());
     }
 
     IPreparedDMFileTokenPtr prepareDMFile(const DMFileOID & oid) override
@@ -76,7 +86,15 @@ public:
             // OS will also cache metadata for us if this is the first access, so that
             // later DMFile restore (via token->restore) will be fast.
             auto file = token->restore(DMFile::ReadMetaMode::all());
-            RUNTIME_CHECK(file != nullptr);
+            if (file == nullptr)
+            {
+                throw DB::Exception(fmt::format(
+                    "Cannot find DMFile in the NFS directory, oid={} remote_parent={}",
+                    oid.info(),
+                    remote_parent_path));
+            }
+
+            LOG_DEBUG(log, "DMFile download finished, oid={} rows={}", oid.info(), file->getRows());
         }
 
         return std::shared_ptr<PreparedDMFileToken>(token);

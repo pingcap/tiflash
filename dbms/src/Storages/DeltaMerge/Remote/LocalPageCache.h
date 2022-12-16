@@ -55,7 +55,7 @@ public:
         for (const auto & page : pages)
         {
             auto cache_id = buildCacheId(page);
-            if (const auto & page_entry = cache_storage->getPageEntry(cache_id, snapshot); page_entry.isValid())
+            if (const auto & page_entry = cache_storage->getEntry(cache_id, snapshot); page_entry.isValid())
                 continue;
 
             LOG_DEBUG(log, "Download page from remote, page_oid={}", page.info());
@@ -79,7 +79,7 @@ public:
         }
     }
 
-    UniversalPage getPage(const PageOID & oid, const PageStorage::FieldIndices & indices)
+    Page getPage(const PageOID & oid, const PageStorage::FieldIndices & indices)
     {
         // TODO
         auto snapshot = cache_storage->getSnapshot("LocalPageCache.ensurePages");

@@ -111,9 +111,8 @@ extern const char force_context_path[];
 struct UniversalPageStorageWrapper
 {
     explicit UniversalPageStorageWrapper(Context & global_context_)
-        :global_context(global_context_)
+        : global_context(global_context_)
     {
-
     }
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
@@ -1694,7 +1693,7 @@ void Context::initializeReadNodePageStorage(const PathPool & path_pool, const Fi
     auto lock = getLock();
     RUNTIME_CHECK_MSG(shared->ps_read == nullptr, "UniversalPageStorage(ReadNode) has already been initialized");
 
-    shared->ps_read = std::make_shared<UniversalPageStorageWrapper>();
+    shared->ps_read = std::make_shared<UniversalPageStorageWrapper>(*this);
     shared->ps_read->uni_page_storage = UniversalPageStorage::create("read", path_pool.getPSDiskDelegatorGlobalMulti("read"), {}, file_provider);
     shared->ps_read->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(ReadNode)");

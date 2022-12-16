@@ -26,9 +26,6 @@ extern const Metric DT_SnapshotOfRead;
 
 namespace DB::DM
 {
-//
-//
-//DeltaSnapshotPtr prepareDeltaSnapshotFromRemote(
 
 
 // ================================================
@@ -38,7 +35,7 @@ namespace DB::DM
 class NopColumnFileSetStorageReader : public IColumnFileSetStorageReader
 {
 public:
-    OwningPageData readForColumnFileTiny(const PageStorage::PageReadFields &) const override
+    Page readForColumnFileTiny(const PageStorage::PageReadFields &) const override
     {
         RUNTIME_CHECK_MSG(false, "Must not read from NopColumnFileSetStorageReader");
     }

@@ -56,7 +56,7 @@ class IColumnFileSetStorageReader
 public:
     virtual ~IColumnFileSetStorageReader() = default;
 
-    virtual OwningPageData readForColumnFileTiny(const PageStorage::PageReadFields &) const = 0;
+    virtual Page readForColumnFileTiny(const PageStorage::PageReadFields &) const = 0;
 };
 
 using IColumnFileSetStorageReaderPtr = std::shared_ptr<IColumnFileSetStorageReader>;
@@ -74,7 +74,7 @@ public:
         : storage_snap(storage_snap_)
     {}
 
-    OwningPageData readForColumnFileTiny(
+    Page readForColumnFileTiny(
         const PageStorage::PageReadFields & fields) const override
     {
         auto page_map = storage_snap->log_reader.read({fields});
@@ -101,7 +101,7 @@ public:
         , table_id(table_id_)
     {}
 
-    OwningPageData readForColumnFileTiny(
+    Page readForColumnFileTiny(
         const PageStorage::PageReadFields & fields) const override
     {
         auto oid = Remote::PageOID{

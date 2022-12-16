@@ -95,7 +95,7 @@ public:
     RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override
     {
         return RemoteProtocol::ColumnFileBig{
-            .file_id = file->pageId(),
+            .file_id = file->fileId(),
         };
     }
 
