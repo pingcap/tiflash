@@ -283,7 +283,7 @@ PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffVie
             }
         }
         //        LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle scan page {}", pages.size());
-        return PageWithViewVec{.inner = reinterpret_cast<PageWithView *>(data), .len = pages.size() };
+        return PageWithViewVec{.inner = reinterpret_cast<PageWithView *>(data), .len = pages.size()};
     }
     catch (...)
     {
@@ -769,6 +769,25 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
 }
 
+FastAddPeerRes failedFastAddPeerRes(FastAddPeerStatus status)
+{
+    auto * apply = RawCppString::New("");
+    auto * region = RawCppString::New("");
+    return FastAddPeerRes{
+        .status = status,
+        .apply_state = CppStrWithView{.inner = GenRawCppPtr(apply, RawCppPtrTypeImpl::String), .view = BaseBuffView{apply->data(), apply->size()}},
+        .region = CppStrWithView{.inner = GenRawCppPtr(region, RawCppPtrTypeImpl::String), .view = BaseBuffView{region->data(), region->size()}},
+    };
+}
+
+FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
+{
+    UNUSED(server);
+    UNUSED(region_id);
+    UNUSED(new_peer_id);
+
+    return failedFastAddPeerRes(FastAddPeerStatus::OtherError);
+}
 
 std::string_view buffToStrView(const BaseBuffView & buf)
 {
