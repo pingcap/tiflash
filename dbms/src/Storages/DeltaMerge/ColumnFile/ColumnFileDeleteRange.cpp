@@ -20,15 +20,17 @@ namespace DB
 namespace DM
 {
 ColumnFileReaderPtr ColumnFileDeleteRange::getReader(
-    const DMContext & /*context*/,
-    const StorageSnapshotPtr & /*storage_snap*/,
-    const ColumnDefinesPtr & /*col_defs*/) const
+    const DMContext &,
+    const IColumnFileSetStorageReaderPtr &,
+    const ColumnDefinesPtr &) const
 {
     return std::make_shared<ColumnFileEmptyReader>();
 }
 
 void ColumnFileDeleteRange::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
 {
+    // FIXME: The serialization is not wire safe. For example, when passing between x86 and ARM machines
+    //        the serialization will break!
     delete_range.serialize(buf);
 }
 

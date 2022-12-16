@@ -239,6 +239,8 @@ public:
 
     SnapshotPtr createSnapshot();
 
+    SnapshotPtr createSnapshotFromRemote(const DMContext & context, const RowKeyRange & seg_range);
+
     void drop(const FileProviderPtr & file_provider);
 
 private:

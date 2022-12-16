@@ -60,6 +60,9 @@ public:
         colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
             colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
+
+        rows = cache->block.rows();
+        bytes = cache->block.bytes();
     }
 
     Type getType() const override { return Type::INMEMORY_FILE; }
@@ -79,8 +82,10 @@ public:
         return std::make_shared<ColumnFileInMemory>(*this);
     }
 
-    ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext &,
+        const IColumnFileSetStorageReaderPtr &,
+        const ColumnDefinesPtr & col_defs) const override;
 
     bool isAppendable() const override
     {
@@ -105,6 +110,11 @@ public:
             + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
         return s;
     }
+
+    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override;
+
+    static std::shared_ptr<ColumnFileInMemory> deserializeFromRemoteProtocol(
+        const RemoteProtocol::ColumnFileInMemory & proto);
 };
 
 

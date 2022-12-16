@@ -291,6 +291,8 @@ public:
      * @returns empty if `for_update == true` is specified and there is another alive for_update snapshot.
      */
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
+
+    DeltaSnapshotPtr createSnapshotFromRemote(const DMContext & context, const RowKeyRange & segment_range);
 };
 
 class DeltaValueSnapshot
@@ -302,37 +304,35 @@ class DeltaValueSnapshot
 private:
     const bool is_update;
 
-    // The delta index of cached.
-    DeltaIndexPtr shared_delta_index;
-
-    ColumnFileSetSnapshotPtr mem_table_snap;
-
-    ColumnFileSetSnapshotPtr persisted_files_snap;
+    const CurrentMetrics::Metric type;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta; // NOLINT(readability-identifier-naming)
 
-    const CurrentMetrics::Metric type;
-
 public:
+    // The delta index of cached.
+    DeltaIndexPtr shared_delta_index;
+
+    ColumnFileSetSnapshotPtr mem_table_snap;
+    ColumnFileSetSnapshotPtr persisted_files_snap;
+
     DeltaSnapshotPtr clone()
     {
         // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
-        auto c = std::make_shared<DeltaValueSnapshot>(type, is_update);
+        auto c = std::make_shared<DeltaValueSnapshot>(type, is_update, _delta);
         c->shared_delta_index = shared_delta_index;
         c->mem_table_snap = mem_table_snap->clone();
         c->persisted_files_snap = persisted_files_snap->clone();
 
-        c->_delta = _delta;
-
         return c;
     }
 
-    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_, bool is_update_)
+    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_, bool is_update_, DeltaValueSpacePtr delta)
         : is_update(is_update_)
         , type(type_)
+        , _delta(delta)
     {
         CurrentMetrics::add(type);
     }
@@ -342,6 +342,16 @@ public:
         if (is_update)
             _delta->releaseUpdating();
         CurrentMetrics::sub(type);
+    }
+
+    static DeltaSnapshotPtr createSnapshotForRead(CurrentMetrics::Metric type)
+    {
+        return std::make_shared<DeltaValueSnapshot>(type, /* is_update */ false, nullptr);
+    }
+
+    static DeltaSnapshotPtr createSnapshotForUpdate(CurrentMetrics::Metric type, DeltaValueSpacePtr delta)
+    {
+        return std::make_shared<DeltaValueSnapshot>(type, /* is_update */ true, delta);
     }
 
     ColumnFileSetSnapshotPtr getMemTableSetSnapshot() const { return mem_table_snap; }
@@ -375,8 +385,6 @@ private:
     ColumnFileSetReaderPtr mem_table_reader;
 
     ColumnFileSetReaderPtr persisted_files_reader;
-
-    ColumnFileSetReaderPtr remote_files_reader;
 
     // The columns expected to read. Note that we will do reading exactly in this column order.
     ColumnDefinesPtr col_defs;

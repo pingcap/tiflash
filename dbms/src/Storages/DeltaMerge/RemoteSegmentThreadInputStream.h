@@ -28,12 +28,12 @@
 namespace DB::DM
 {
 
-class RemoteSegmentThreadInpuStream : public IProfilingBlockInputStream
+class RemoteSegmentThreadInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "RemoteSegmentThread";
 
 public:
-    RemoteSegmentThreadInpuStream(
+    RemoteSegmentThreadInputStream(
         const DMContextPtr & dm_context_,
         const RemoteReadTaskPtr read_tasks_,
         const ColumnDefines & columns_to_read_,

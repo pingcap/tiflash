@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetStorageReader.h>
 
 namespace DB
 {
@@ -50,6 +51,9 @@ public:
 
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
+/**
+ * An immutable list of Column Files.
+ */
 class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetSnapshot>
     , private boost::noncopyable
 {
@@ -57,25 +61,24 @@ class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetS
     friend class ColumnFilePersistedSet;
 
 private:
-    StorageSnapshotPtr storage_snap;
+    IColumnFileSetStorageReaderPtr storage;
 
     ColumnFiles column_files;
-    size_t rows;
-    size_t bytes;
-    size_t deletes;
+    size_t rows = 0;
+    size_t bytes = 0;
+    size_t deletes = 0;
 
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    bool is_common_handle = false;
+    size_t rowkey_column_size = 1;
 
 public:
-    explicit ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)
-        : storage_snap{storage_snap_}
+    explicit ColumnFileSetSnapshot(const IColumnFileSetStorageReaderPtr & storage_)
+        : storage{storage_}
     {}
 
     ColumnFileSetSnapshotPtr clone()
     {
-        auto c = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
-        c->storage_snap = storage_snap;
+        auto c = std::make_shared<ColumnFileSetSnapshot>(storage);
         c->column_files = column_files;
         c->rows = rows;
         c->bytes = bytes;
@@ -95,8 +98,26 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return storage_snap; }
+    const auto & getStorage() const { return storage; }
+
+    std::vector<RemoteProtocol::ColumnFile> serializeToRemoteProtocol() const
+    {
+        std::vector<RemoteProtocol::ColumnFile> ret;
+        ret.reserve(column_files.size());
+
+        for (const auto & file : column_files)
+            ret.push_back(file->serializeToRemoteProtocol());
+
+        return ret;
+    }
+
+    static ColumnFileSetSnapshotPtr deserializeFromRemoteProtocol(
+        const std::vector<RemoteProtocol::ColumnFile> & proto,
+        UInt64 remote_write_node_id,
+        const DMContext & context,
+        const RowKeyRange & segment_range);
 };
+
 
 } // namespace DM
 } // namespace DB

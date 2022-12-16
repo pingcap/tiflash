@@ -22,6 +22,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/UniversalWriteBatch.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSStressEnv.h>

@@ -151,8 +151,17 @@ struct StoreStats
     UInt64 background_tasks_length = 0;
 };
 
+namespace Remote
+{
+// TODO: Remove this.
+class LocalPageCache;
+} // namespace Remote
+
 class DeltaMergeStore : private boost::noncopyable
 {
+    // TODO: Remove this friend.
+    friend Remote::LocalPageCache;
+
 public:
     struct Settings
     {

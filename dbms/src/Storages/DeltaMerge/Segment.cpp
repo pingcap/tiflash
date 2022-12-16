@@ -165,9 +165,7 @@ StableValueSpacePtr createNewStable( //
     const ColumnDefinesPtr & schema_snap,
     const BlockInputStreamPtr & input_stream,
     PageId stable_id,
-    WriteBatches & wbs,
-    TableID table_id,
-    const LoggerPtr & log)
+    WriteBatches & wbs)
 {
     auto delegator = context.path_pool.getStableDiskDelegator();
     auto store_path = delegator.choosePath();
@@ -186,16 +184,14 @@ StableValueSpacePtr createNewStable( //
     wbs.data.putExternal(dtfile_id, 0);
     delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
 
-    const auto & remote_source = db_context.remoteDataServiceSource();
-    if (!remote_source.empty())
+    if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
     {
-        // Copy the dtfile into remote storage service
-        Poco::File dtfile_dir(dtfile->path());
-        // TODO: should add host-ip-table_id to the remote path
-        const auto remote_table_dir = fmt::format("{}/t_{}", remote_source, table_id);
-        const auto remote_dest_path = DMFile::getPathByStatus(remote_table_dir, dtfile->fileId(), DMFile::READABLE);
-        LOG_DEBUG(log, "Uploading dtfile to {}", remote_dest_path);
-        dtfile_dir.copyTo(remote_dest_path);
+        auto oid = Remote::DMFileOID{
+            .write_node_id = 0,
+            .table_id = context.table_id,
+            .file_id = dtfile->fileId(),
+        };
+        remote_manager->getDataStore()->putDMFile(dtfile, oid);
 
         // TODO: now we still rely on local dmfile for restoring segment
         // after restart. So we can not remove the local dmfile after uploaded.
@@ -251,7 +247,7 @@ SegmentPtr Segment::newSegment( //
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
-    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs, context.table_id, parent_log);
+    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
 
     auto segment = std::make_shared<Segment>(parent_log, INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
 
@@ -839,7 +835,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
         dm_context.stable_pack_rows,
         /*reorginize_block*/ true);
 
-    auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs, dm_context.table_id, log);
+    auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
     LOG_DEBUG(log, "MergeDelta - Finish prepare, segment={}", info());
 
@@ -1390,7 +1386,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             dm_context.min_version,
             is_common_handle);
         auto my_stable_id = segment_snap->stable->getId();
-        my_new_stable = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs, dm_context.table_id, log);
+        my_new_stable = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
     }
 
     LOG_DEBUG(log, "Split - SplitPhysical - Finish prepare my_new_stable");
@@ -1419,7 +1415,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             dm_context.min_version,
             is_common_handle);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
-        other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs, dm_context.table_id, log);
+        other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
 
     LOG_DEBUG(log, "Split - SplitPhysical - Finish prepare other_stable");
@@ -1615,7 +1611,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
         dm_context.is_common_handle);
 
     auto merged_stable_id = ordered_segments[0]->stable->getId();
-    auto merged_stable = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs, dm_context.table_id, log);
+    auto merged_stable = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
     LOG_DEBUG(log, "Merge - Finish prepare, segments_to_merge={}", info(ordered_segments));
 
