@@ -365,7 +365,7 @@ grpc::Status FlashService::CancelMPPTask(
 
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -407,7 +407,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 

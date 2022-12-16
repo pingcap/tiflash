@@ -15,28 +15,70 @@
 #pragma once
 
 #include <common/types.h>
+#include <fmt/core.h>
+#include <kvproto/mpp.pb.h>
 
 namespace DB
 {
+// global unique MPP query id.
+struct MPPQueryId
+{
+    UInt64 query_ts;
+    UInt64 local_query_id;
+    UInt64 server_id;
+    UInt64 start_ts;
+    MPPQueryId(UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts)
+        : query_ts(query_ts)
+        , local_query_id(local_query_id)
+        , server_id(server_id)
+        , start_ts(start_ts)
+    {}
+    explicit MPPQueryId(const mpp::TaskMeta & task_meta)
+        : query_ts(task_meta.query_ts())
+        , local_query_id(task_meta.local_query_id())
+        , server_id(task_meta.server_id())
+        , start_ts(task_meta.start_ts())
+    {}
+    bool operator<(const MPPQueryId & mpp_query_id) const;
+    bool operator==(const MPPQueryId & rid) const;
+    bool operator!=(const MPPQueryId & rid) const;
+    bool operator<=(const MPPQueryId & rid) const;
+    String toString() const
+    {
+        return fmt::format("<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>", query_ts, local_query_id, server_id, start_ts);
+    }
+};
+
+struct MPPQueryIdHash
+{
+    size_t operator()(MPPQueryId const & mpp_query_id) const noexcept;
+};
+
 // Identify a mpp task.
 struct MPPTaskId
 {
     MPPTaskId()
-        : start_ts(0)
-        , task_id(unknown_task_id){};
+        : task_id(unknown_task_id)
+        , query_id({0, 0, 0, 0}){};
 
-    MPPTaskId(UInt64 start_ts_, Int64 task_id_)
-        : start_ts(start_ts_)
-        , task_id(task_id_){};
+    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, UInt64 query_ts, UInt64 local_query_id)
+        : task_id(task_id_)
+        , query_id(query_ts, local_query_id, server_id, start_ts)
+    {}
 
-    UInt64 start_ts;
+    explicit MPPTaskId(const mpp::TaskMeta & task_meta)
+        : task_id(task_meta.task_id())
+        , query_id(task_meta)
+    {}
+
     Int64 task_id;
+    MPPQueryId query_id;
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 
     String toString() const;
-
     static const MPPTaskId unknown_mpp_task_id;
+    static const MPPQueryId Max_Query_Id;
 
 private:
     static constexpr Int64 unknown_task_id = -1;
@@ -53,7 +95,7 @@ class hash<DB::MPPTaskId>
 public:
     size_t operator()(const DB::MPPTaskId & id) const
     {
-        return hash<UInt64>()(id.start_ts) ^ hash<Int64>()(id.task_id);
+        return DB::MPPQueryIdHash()(id.query_id) ^ hash<Int64>()(id.task_id);
     }
 };
 } // namespace std
