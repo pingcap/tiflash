@@ -538,11 +538,7 @@ public:
                                 const SegmentSnapshotPtr & segment_snap,
                                 const ColumnDefines & columns_to_read);
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     ReadInfo getReadInfo(
         const DMContext & dm_context,
         const ColumnDefines & read_columns,

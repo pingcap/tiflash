@@ -207,6 +207,8 @@ private:
         }
         else
         {
+            // `DMVersionFilterBlockInputStream` is the last stage for generating segment row id.
+            // In the way we use it, the other columns are not used subsequently.
             Block res;
             res.setSegmentRowIdCol(block.segmentRowIdCol());
             return res;

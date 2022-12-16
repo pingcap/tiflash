@@ -413,9 +413,6 @@ public:
                      UInt64 max_version);
 };
 
-// `DeltaValueInputStream` will read ALL data in delta.
-// Blocks are not filtered.
-// `segment_range_` is unsued.
 class DeltaValueInputStream : public IBlockInputStream
 {
 private:

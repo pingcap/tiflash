@@ -144,8 +144,8 @@ std::pair<size_t, size_t> ColumnFileBigReader::readRowsRepeatedly(MutableColumns
         if (actual_read == 0 && rows > 0)
         {
             // First successful read of data, update `actual_offset`.
-            auto offset_before_block_index = block_index == 0 ? 0 : cached_block_rows_end[block_index - 1];
-            actual_offset = offset_before_block_index + offset;
+            auto rows_before_block_index = block_index == 0 ? 0 : cached_block_rows_end[block_index - 1];
+            actual_offset = rows_before_block_index + offset;
         }
         actual_read += rows;
     }
