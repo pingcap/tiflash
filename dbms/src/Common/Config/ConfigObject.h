@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/getNumberOfLogicalCPUCores.h>
+#pragma once
 
-namespace CPUCores
+namespace DB
 {
-UInt16 number_of_logical_cpu_cores = std::thread::hardware_concurrency();
-} // namespace CPUCores
-
-
-UInt16 getNumberOfLogicalCPUCores()
+/** Base class for Configuration component that keep track of a set of files
+  *
+  *  If the set of files are changed, the ConfigReloader will call reloadIfNewer
+  *  to reload all the config.
+  */
+class ConfigObject
 {
-    return CPUCores::number_of_logical_cpu_cores;
-}
-
-// We should call this function before Context has been created,
-// which will call `getNumberOfLogicalCPUCores`, or we can not
-// set cpu cores any more.
-void setNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores)
-{
-    CPUCores::number_of_logical_cpu_cores = max_logical_cpu_cores;
-}
+public:
+    virtual bool fileUpdated() = 0;
+    virtual ~ConfigObject() = default;
+};
+} // namespace DB

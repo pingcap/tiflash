@@ -50,7 +50,7 @@ class FlashService : public tikvpb::Tikv::Service
 {
 public:
     FlashService();
-    void init(const TiFlashSecurityConfig & security_config_, Context & context_);
+    void init(Context & context_);
 
     ~FlashService() override;
 
@@ -89,7 +89,6 @@ protected:
     std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
     grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
-    const TiFlashSecurityConfig * security_config = nullptr;
     Context * context = nullptr;
     Poco::Logger * log = nullptr;
     bool is_async = false;
