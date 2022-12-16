@@ -16,25 +16,22 @@
 
 #include <Common/Stopwatch.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 
 namespace DB::DM
 {
-class BitmapFilterBlockInputStream : public IProfilingBlockInputStream
+class NormalBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "BitmapFilterBlockInputStream";
+    static constexpr auto NAME = "NormalBlockInputStream";
 
 public:
-    BitmapFilterBlockInputStream(
+    NormalBlockInputStream(
         const ColumnDefines & columns_to_read,
         BlockInputStreamPtr stable_,
         BlockInputStreamPtr delta_,
-        const std::optional<Block> & intput_block_,
         size_t stable_rows_,
         size_t delta_rows_,
-        const BitmapFilterPtr & bitmap_filter_,
         const String & req_id_);
 
     String getName() const override { return NAME; }
@@ -56,17 +53,9 @@ private:
     Block header;
     BlockInputStreamPtr stable;
     BlockInputStreamPtr delta;
-    std::optional<Block> input_block;
-    size_t cur_read_rows = 0;
     size_t stable_rows;
     [[maybe_unused]] size_t delta_rows;
-    BitmapFilterPtr bitmap_filter;
     const LoggerPtr log;
-    IColumn::Filter filter{};
-    Stopwatch sw;
-    UInt64 read_ns = 0;
-    UInt64 get_filter_ns = 0;
-    UInt64 filter_ns = 0;
 };
 
 } // namespace DB::DM

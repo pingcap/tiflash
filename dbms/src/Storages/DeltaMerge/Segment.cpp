@@ -37,6 +37,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/NormalBlockInputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -2364,16 +2365,12 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
             segment_snap->stable->getDMFilesRows(),
             segment_snap->delta->getRows(),
             bitmap_filter,
-            /* need_segment_col_id */ false,
             dm_context.tracing_id);
     }
 
     /*+----------------------- late materialization -----------------------+*/
 
     Stopwatch sw_total;
-
-    // TODO: maybe we can remove handle column from columns_to_read.
-    // to avoid redundantly read handle/version/delmark column.
 
     /// phase 1: read columns of filters
     auto & segment_snap = bitmap_filter->snapshot();
@@ -2398,15 +2395,12 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         filter_columns_to_read_ptr,
         this->rowkey_range);
 
-    BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
+    BlockInputStreamPtr stream = std::make_shared<NormalBlockInputStream>(
         filter_columns,
         stable_stream,
         delta_stream,
-        std::nullopt,
         segment_snap->stable->getDMFilesRows(),
         segment_snap->delta->getRows(),
-        bitmap_filter,
-        /* need_segment_col_id */ true,
         dm_context.tracing_id);
 
     /// phase 2: execute filter
@@ -2431,7 +2425,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         auto blk = stream->read();
         if (likely(blk && blk.segmentRowIdCol()))
         {
-            filtering_bitmap->set(blk.segmentRowIdCol());
+            filtering_bitmap->set(blk.segmentRowIdCol(), blk.startOffset());
+            // remove segmentRowIdCol to save memory
+            blk.setSegmentRowIdCol(nullptr);
             blocks.emplace_back(std::move(blk));
         }
         else
@@ -2484,7 +2480,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         segment_snap->stable->getDMFilesRows(),
         segment_snap->delta->getRows(),
         bitmap_filter,
-        /* need_segment_col_id */ false,
         dm_context.tracing_id);
 }
 

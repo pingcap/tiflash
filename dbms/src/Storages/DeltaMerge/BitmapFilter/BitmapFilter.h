@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/IColumn.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB::DM
 {
@@ -34,6 +35,8 @@ public:
     void set(const UInt32 * data, UInt32 size);
 
     void set(const ColumnPtr & col);
+
+    void set(const ColumnPtr & f, UInt32 start);
 
     void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 

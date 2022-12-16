@@ -12,81 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/NormalBlockInputStream.h>
 
 
 namespace DB::DM
 {
-BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
+
+NormalBlockInputStream::NormalBlockInputStream(
     const ColumnDefines & columns_to_read,
     BlockInputStreamPtr stable_,
     BlockInputStreamPtr delta_,
-    const std::optional<Block> & intput_block_,
     size_t stable_rows_,
     size_t delta_rows_,
-    const BitmapFilterPtr & bitmap_filter_,
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
     , stable(stable_)
     , delta(delta_)
-    , input_block(intput_block_)
     , stable_rows(stable_rows_)
     , delta_rows(delta_rows_)
-    , bitmap_filter(bitmap_filter_)
     , log(Logger::get(NAME, req_id_))
 {}
 
-Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
+Block NormalBlockInputStream::readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/)
 {
-    sw.restart();
     auto [block, from_delta] = readBlock();
-    read_ns += sw.elapsed();
     if (block)
     {
-        sw.restart();
         if (from_delta)
         {
             block.setStartOffset(block.startOffset() + stable_rows);
         }
-
-        filter.resize(block.rows());
-        bitmap_filter->get(filter, block.startOffset(), block.rows());
-        get_filter_ns += sw.elapsed();
-        if (return_filter)
-        {
-            res_filter = &filter;
-        }
-        else
-        {
-            sw.restart();
-            for (auto & col : block)
-            {
-                col.column = col.column->filter(filter, block.rows());
-            }
-            filter_ns += sw.elapsed();
-        }
-        if (input_block.has_value())
-        {
-            // copy range [cur_read_rows, cur_read_rows + block.rows()) from input_block to filter_block
-            Columns filter_columns(input_block->columns());
-            for (size_t i = 0; i < input_block->columns(); ++i)
-            {
-                filter_columns[i] = input_block->safeGetByPosition(i).column->cut(cur_read_rows, block.rows());
-            }
-            Block filter_block = input_block->cloneWithColumns(std::move(filter_columns));
-            cur_read_rows += block.rows();
-
-            // hstack filter_block and block
-            block = hstackBlocks({block, filter_block}, header);
-        }
+        // block.fillSegmentRowId(block.startOffset(), block.rows());
     }
     return block;
 }
 
 // <Block, from_delta>
-std::pair<Block, bool> BitmapFilterBlockInputStream::readBlock()
+std::pair<Block, bool> NormalBlockInputStream::readBlock()
 {
     if (stable == nullptr && delta == nullptr)
     {

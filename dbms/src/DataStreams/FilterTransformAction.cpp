@@ -19,6 +19,8 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
 
+#include "Columns/IColumn.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -141,6 +143,10 @@ bool FilterTransformAction::transform(Block & block)
     if (filtered_rows == 0)
         return false;
 
+    /// fill segment_row_id_col with column_of_filter
+    ColumnPtr segment_row_id_col = column_of_filter->cloneResized(rows);
+    block.setSegmentRowIdCol(std::move(segment_row_id_col));
+
     /// If all the rows pass through the filter.
     if (filtered_rows == rows)
     {
@@ -174,12 +180,6 @@ bool FilterTransformAction::transform(Block & block)
             current_column.column = current_column.column->cut(0, filtered_rows);
         else
             current_column.column = current_column.column->filter(*filter, filtered_rows);
-    }
-
-    /// Filter segment_row_id_col if it exists.
-    if (block.segmentRowIdCol())
-    {
-        block.setSegmentRowIdCol(block.segmentRowIdCol()->filter(*filter, filtered_rows));
     }
 
     return true;

@@ -48,6 +48,13 @@ void BitmapFilter::set(const ColumnPtr & col)
     set(v->data(), v->size());
 }
 
+void BitmapFilter::set(const ColumnPtr & f, UInt32 start)
+{
+    RUNTIME_CHECK(start + f->size() <= filter.size(), start, f->size(), filter.size());
+    const auto * v = toColumnVectorDataPtr<UInt8>(f);
+    std::transform(v->begin(), v->end(), filter.begin() + start, [](UInt8 v) { return v; });
+}
+
 void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 {
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
