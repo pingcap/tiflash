@@ -51,7 +51,6 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 1,
-
   "iteration": 1670904884485,
   "links": [],
   "panels": [
@@ -4128,7 +4127,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"min_tso\"}) by (instance)",
               "interval": "",
               "legendFormat": "{{instance}}",
               "queryType": "randomWalk",
