@@ -416,6 +416,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             }
             else
             {
+                // `DMVersionFilterBlockInputStream` is the last stage for generating segment row id.
+                // In the way we use it, the other columns are not used subsequently.
                 res.setSegmentRowIdCol(cur_raw_block.segmentRowIdCol()->filter(filter, passed_count));
             }
             return res;

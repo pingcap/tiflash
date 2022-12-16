@@ -95,6 +95,7 @@ private:
     ColumnUInt32::MutablePtr seg_row_id_col;
     // `stable_rows` is the total rows of the underlying DMFiles, includes not valid rows.
     UInt64 stable_rows;
+    // `delta_row_ids` is used to return the row id of delta.
     std::vector<UInt32> delta_row_ids;
 
 public:
@@ -166,7 +167,6 @@ public:
 
     Block read() override
     {
-        // TODO(jinhelin):???
         if constexpr (skippable_place)
         {
             if (sk_call_status == 0)
@@ -227,11 +227,10 @@ private:
 
             if constexpr (need_row_id)
             {
-                if (block.rows() != block.segmentRowIdCol()->size())
-                {
-                    auto s = fmt::format("Build bitmap error: block.rows {} != segmentRowId.size() {}", block.rows(), block.segmentRowIdCol()->size());
-                    throw Exception(s);
-                }
+                RUNTIME_CHECK_MSG(block.rows() == block.segmentRowIdCol()->size(),
+                                  "Build bitmap error: block.rows {} != segmentRowId.size() {}",
+                                  block.rows(),
+                                  block.segmentRowIdCol()->size());
             }
         }
     }
