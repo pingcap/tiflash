@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/Remote/Manager.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetStorageReader.h>
 
 namespace DB
 {
@@ -50,68 +50,6 @@ public:
 };
 
 using BlockOrDeletes = std::vector<BlockOrDelete>;
-
-class IColumnFileSetStorageReader
-{
-public:
-    virtual ~IColumnFileSetStorageReader() = default;
-
-    virtual Page readForColumnFileTiny(const PageStorage::PageReadFields &) const = 0;
-};
-
-using IColumnFileSetStorageReaderPtr = std::shared_ptr<IColumnFileSetStorageReader>;
-
-class LocalColumnFileSetStorage : public IColumnFileSetStorageReader
-{
-private:
-    /// Although we only use its log_reader member, we still want to keep the whole
-    /// storage snapshot valid, because some Column Files like Column File Big relies
-    /// on specific DMFile to be valid, whose lifecycle is maintained by other reader members.
-    StorageSnapshotPtr storage_snap;
-
-public:
-    explicit LocalColumnFileSetStorage(StorageSnapshotPtr storage_snap_)
-        : storage_snap(storage_snap_)
-    {}
-
-    Page readForColumnFileTiny(
-        const PageStorage::PageReadFields & fields) const override
-    {
-        auto page_map = storage_snap->log_reader.read({fields});
-        return page_map[fields.first];
-    }
-};
-
-class RemoteColumnFileSetStorage : public IColumnFileSetStorageReader
-{
-private:
-    Remote::LocalPageCachePtr page_cache;
-    // TODO: Keep a snapshot of page_cache here.
-
-    UInt64 write_node_id;
-    Int64 table_id;
-
-public:
-    explicit RemoteColumnFileSetStorage(
-        Remote::ManagerPtr remote_manager,
-        UInt64 write_node_id_,
-        Int64 table_id_)
-        : page_cache(remote_manager->getPageCache())
-        , write_node_id(write_node_id_)
-        , table_id(table_id_)
-    {}
-
-    Page readForColumnFileTiny(
-        const PageStorage::PageReadFields & fields) const override
-    {
-        auto oid = Remote::PageOID{
-            .write_node_id = write_node_id,
-            .table_id = table_id,
-            .page_id = fields.first,
-        };
-        return page_cache->getPage(oid, fields.second);
-    }
-};
 
 /**
  * An immutable list of Column Files.

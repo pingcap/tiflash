@@ -381,9 +381,6 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         }
     }
 
-    // TODO
-    storage_config.remote_source = "/tmp/tiflash_remote/";
-
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 

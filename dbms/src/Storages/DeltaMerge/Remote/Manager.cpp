@@ -12,37 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
-#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
-
-#include <boost/noncopyable.hpp>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreNFS.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 
 namespace DB::DM::Remote
 {
 
-class Manager;
-using ManagerPtr = std::shared_ptr<Manager>;
-
-class Manager : private boost::noncopyable
-{
-public:
-    explicit Manager(const Context & global_context, String nfs_directory);
-
-    LocalPageCachePtr getPageCache() const
-    {
-        return page_cache;
-    }
-
-    IDataStorePtr getDataStore() const
-    {
-        return data_store;
-    }
-
-private:
-    LocalPageCachePtr page_cache;
-    IDataStorePtr data_store;
-};
+Manager::Manager(const Context & global_context, String nfs_directory)
+    : page_cache(std::make_shared<LocalPageCache>(global_context)) // TODO: Write Node does not need this. We need to refine the interface..
+    , data_store(std::make_shared<DataStoreNFS>(
+          DataStoreNFS::Config{
+              .base_directory = nfs_directory,
+          },
+          global_context.getFileProvider()))
+{}
 
 } // namespace DB::DM::Remote
