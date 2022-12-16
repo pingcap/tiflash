@@ -1015,7 +1015,7 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize(col_size, 0);
+        vec_res.resize_fill(col_size, 0);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1030,7 +1030,7 @@ public:
                 {
                     auto nullmap_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize(col_size, 1);
+                    nullmap.resize_fill(col_size, 1);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
                     return;
                 }
@@ -1317,7 +1317,7 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize(col_size, 0);
+        vec_res.resize_fill(col_size, 0);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1366,7 +1366,7 @@ public:
                 {
                     auto nullmap_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize(col_size, 1);
+                    nullmap.resize_fill(col_size, 1);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
                     return;
                 }
@@ -1698,7 +1698,7 @@ public:
 
         auto null_map_col = ColumnUInt8::create();
         typename ColumnUInt8::Container & null_map = null_map_col->getData();
-        null_map.resize(col_size, 1);
+        null_map.resize_fill(col_size, 1);
 
         // Start to execute substr
         if (canMemorize<PatT, MatchTypeT>())
