@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <common/types.h>
 
 #include <mutex>
 
@@ -292,65 +293,6 @@ private:
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
-
-struct RemoteSegmentReadTask
-{
-    UInt64 segment_id;
-    RowKeyRanges ranges;
-
-    // The snapshot of reading ids acquired from write node
-    std::vector<UInt64> delta_page_ids;
-    std::vector<UInt64> stable_files;
-
-    // FIXME: These should be only stored in write node
-    SegmentPtr segment;
-    SegmentSnapshotPtr segment_snap;
-
-    StableSnapshotPtr buildRemoteStableSnap(
-        const Context & db_context,
-        TableID table_id,
-        UInt64 stable_id,
-        const RowKeyRange & seg_range);
-};
-using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
-
-class RemoteReadTask;
-using RemoteReadTaskPtr = std::shared_ptr<RemoteReadTask>;
-class RemoteReadTask
-{
-public:
-    explicit RemoteReadTask(UInt64 table_id_)
-        : table_id(table_id_)
-    {}
-
-    static RemoteReadTaskPtr buildFrom(const DMContext & context, SegmentReadTasks & tasks);
-
-    static RemoteReadTaskPtr buildFrom(
-        const Context & db_context,
-        UInt64 store_id,
-        TableID physical_table_id,
-        const SegmentReadTasks & tasks);
-
-    static RemoteReadTaskPtr buildFrom(
-        const Context & db_context,
-        UInt64 store_id,
-        const dtpb::DisaggregatedPhysicalTable & segs);
-
-    RemoteSegmentReadTaskPtr nextTask()
-    {
-        std::lock_guard gurad(mtx_tasks);
-        if (tasks.empty())
-            return nullptr;
-        auto task = tasks.front();
-        tasks.pop_front();
-        return task;
-    }
-
-private:
-    const UInt64 table_id;
-    mutable std::mutex mtx_tasks;
-    std::list<RemoteSegmentReadTaskPtr> tasks;
-};
 
 } // namespace DM
 } // namespace DB

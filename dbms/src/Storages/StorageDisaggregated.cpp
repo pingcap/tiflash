@@ -13,12 +13,14 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
+#include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
@@ -127,7 +129,7 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
     return establish_req;
 }
 
-std::vector<DM::RemoteReadTaskPtr> StorageDisaggregated::buildDisaggregatedTask(
+DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     const Context & db_context,
     const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
 {
@@ -139,9 +141,8 @@ std::vector<DM::RemoteReadTaskPtr> StorageDisaggregated::buildDisaggregatedTask(
             db_context,
             batch_cop_task));
 
-
     // Collect the response from write nodes and build the remote tasks
-    std::vector<DM::RemoteReadTaskPtr> remote_tasks;
+    std::vector<DM::RemoteTableReadTaskPtr> remote_tasks;
     remote_tasks.reserve(establish_reqs.size());
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
@@ -151,14 +152,17 @@ std::vector<DM::RemoteReadTaskPtr> StorageDisaggregated::buildDisaggregatedTask(
         auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
         cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
         const auto & resp = call.getResp();
+        // TODO: handle error
         if (resp->has_error())
             throw Exception(resp->error().msg());
+        // Parse the resp and gen tasks on read node
+        // The number of tasks is equal to number of write nodes
         for (const auto & physical_table : resp->segments())
         {
             dtpb::DisaggregatedPhysicalTable table;
             auto parse_ok = table.ParseFromString(physical_table);
             RUNTIME_CHECK(parse_ok);
-            remote_tasks.emplace_back(DM::RemoteReadTask::buildFrom(
+            remote_tasks.emplace_back(DM::RemoteTableReadTask::buildFrom(
                 db_context,
                 resp->store_id(),
                 table));
@@ -166,16 +170,34 @@ std::vector<DM::RemoteReadTaskPtr> StorageDisaggregated::buildDisaggregatedTask(
         // TODO: update region cache by `resp->retry_regions`
     }
 
-    return remote_tasks;
+    return std::make_shared<DM::RemoteReadTask>(std::move(remote_tasks));
 }
 
-void buildS3InputStreams(
+void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
-    const std::vector<DM::RemoteReadTaskPtr> & remote_read_tasks,
+    const DM::RemoteReadTaskPtr & remote_read_tasks,
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    UNUSED(db_context, remote_read_tasks, num_streams, pipeline);
+    const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
+    constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
+    pipeline.streams.reserve(num_streams);
+    auto streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
+        db_context,
+        remote_read_tasks,
+        read_tso,
+        num_streams,
+        -1,
+        extra_info,
+        /*tracing_id*/ "");
+    pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
+
+    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
+    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[table_scan.getTableScanExecutorID()];
+    pipeline.transform([&](auto & stream) {
+        table_scan_io_input_streams.push_back(stream);
+        profile_streams.push_back(stream);
+    });
 }
 
 BlockInputStreams StorageDisaggregated::read(
@@ -194,11 +216,11 @@ BlockInputStreams StorageDisaggregated::read(
     if (s3_read)
     {
         // Fetch the remote segment read tasks from write nodes
-        std::vector<DM::RemoteReadTaskPtr> remote_read_tasks = buildDisaggregatedTask(db_context, batch_cop_tasks);
+        auto remote_read_tasks = buildDisaggregatedTask(db_context, batch_cop_tasks);
         // Build InputStream according to the remote segment read tasks
         // TODO: build rough set filter
         DAGPipeline pipeline;
-        buildS3InputStreams(db_context, remote_read_tasks, num_streams, pipeline);
+        buildRemoteSegmentInputStreams(db_context, remote_read_tasks, num_streams, pipeline);
         return pipeline.streams;
     }
 

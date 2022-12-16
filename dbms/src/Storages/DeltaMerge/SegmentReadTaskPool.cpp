@@ -325,44 +325,4 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     }
 }
 
-RemoteReadTaskPtr RemoteReadTask::buildFrom(const DMContext & context, SegmentReadTasks & tasks)
-{
-    RUNTIME_CHECK(context.table_id > 0);
-
-    auto read_tasks = std::make_shared<RemoteReadTask>(context.table_id);
-    for (const auto & task : tasks)
-    {
-        auto seg_task = std::make_shared<RemoteSegmentReadTask>();
-        seg_task->segment = task->segment;
-        seg_task->ranges = task->ranges;
-
-        auto delta_snap = task->segment->getDelta()->createSnapshotFromRemote(
-            context,
-            task->segment->getRowKeyRange());
-        auto stable_snap = task->segment->getStable()->createSnapshotFromRemote(
-            context,
-            task->segment->getRowKeyRange());
-
-        seg_task->segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
-
-        // TODO: build remote delta snapshot
-        // const auto &delta = task->read_snapshot->delta;
-        // column files in memtable are not persisted, read from write node
-
-
-        read_tasks->tasks.emplace_back(std::move(seg_task));
-    }
-
-    return read_tasks;
-}
-
-RemoteReadTaskPtr RemoteReadTask::buildFrom(
-    const Context & db_context,
-    UInt64 store_id,
-    const dtpb::DisaggregatedPhysicalTable & table)
-{
-    UNUSED(db_context, store_id, table);
-    return std::make_shared<RemoteReadTask>(table.table_id());
-}
-
 } // namespace DB::DM

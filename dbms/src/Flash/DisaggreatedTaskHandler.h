@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Executor/QueryExecutorHolder.h>
 #include <grpcpp/support/status.h>
 #include <kvproto/mpp.pb.h>
-#include <Flash/Executor/QueryExecutorHolder.h>
 
 namespace DB
 {

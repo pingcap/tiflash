@@ -50,6 +50,7 @@ message DisaggregatedSegment {
 }
 
 message DisaggregatedPhysicalTable {
-    uint64 table_id = 1;
-    repeated DisaggregatedSegment segments = 2;
+    uint64 snapshot_id = 1;
+    uint64 table_id = 2;
+    repeated DisaggregatedSegment segments = 3;
 }

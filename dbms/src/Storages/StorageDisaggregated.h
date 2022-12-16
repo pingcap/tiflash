@@ -20,7 +20,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 
@@ -75,9 +75,14 @@ private:
     buildDisaggregatedTaskForNode(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    std::vector<DM::RemoteReadTaskPtr> buildDisaggregatedTask(
+    DM::RemoteReadTaskPtr buildDisaggregatedTask(
         const Context & db_context,
         const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+    void buildRemoteSegmentInputStreams(
+        const Context & db_context,
+        const DM::RemoteReadTaskPtr & remote_read_tasks,
+        size_t num_streams,
+        DAGPipeline & pipeline);
 
 private:
     using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;

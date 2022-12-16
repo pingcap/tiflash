@@ -14,7 +14,6 @@
 
 #include <Common/CPUAffinityManager.h>
 #include <Common/Exception.h>
-#include <Flash/DisaggreatedTaskHandler.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
@@ -22,6 +21,7 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/DisaggreatedTaskHandler.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -37,7 +37,6 @@
 #include <grpcpp/support/status.h>
 
 #include <ext/scope_guard.h>
-#include "Flash/DisaggreatedTaskHandler.h"
 
 namespace DB
 {

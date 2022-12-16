@@ -31,7 +31,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
-#include <Storages/DeltaMerge/RemoteSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -997,22 +997,22 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     {
         // Transform `SegmentReadTasks` into `RemoteReadTask`
         RUNTIME_CHECK(physical_table_id == dm_context->table_id);
-        RemoteReadTaskPtr read_tasks = RemoteReadTask::buildFrom(*dm_context, tasks);
+        // auto read_tasks = RemoteTableReadTask::buildFrom(*dm_context, tasks);
         BlockInputStreams streams;
         for (size_t i = 0; i < final_num_stream; ++i)
         {
-            BlockInputStreamPtr stream = std::make_shared<RemoteSegmentThreadInputStream>(
-                dm_context,
-                read_tasks,
-                columns_to_read,
-                filter,
-                max_version,
-                expected_block_size,
-                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                extra_table_id_index,
-                physical_table_id,
-                log_tracing_id);
-            streams.push_back(stream);
+            // BlockInputStreamPtr stream = std::make_shared<RemoteSegmentThreadInputStream>(
+            //     dm_context,
+            //     read_tasks,
+            //     columns_to_read,
+            //     filter,
+            //     max_version,
+            //     expected_block_size,
+            //     /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+            //     extra_table_id_index,
+            //     physical_table_id,
+            //     log_tracing_id);
+            // streams.push_back(stream);
         }
         LOG_DEBUG(tracing_logger, "Read create remote stream done, size={}", streams.size());
 

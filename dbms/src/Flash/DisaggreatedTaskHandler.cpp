@@ -1,9 +1,9 @@
 #include <Common/Exception.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/DisaggreatedTaskHandler.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <grpcpp/support/status.h>
-#include <Flash/executeQuery.h>
 
 namespace DB
 {

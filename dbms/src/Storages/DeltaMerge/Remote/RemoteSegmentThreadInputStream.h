@@ -14,10 +14,12 @@
 
 #pragma once
 
+#include <Core/Defines.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
@@ -33,8 +35,18 @@ class RemoteSegmentThreadInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "RemoteSegmentThread";
 
 public:
+    static BlockInputStreams buildInputStreams(
+        const Context & db_context,
+        const RemoteReadTaskPtr & remote_read_tasks,
+        UInt64 read_tso,
+        size_t num_streams,
+        size_t extra_table_id_index,
+        std::string_view extra_info,
+        std::string_view tracing_id,
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
+
     RemoteSegmentThreadInputStream(
-        const DMContextPtr & dm_context_,
+        const Context & db_context_,
         const RemoteReadTaskPtr read_tasks_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
@@ -43,19 +55,19 @@ public:
         ReadMode read_mode_,
         const int extra_table_id_index_,
         const TableID physical_table_id_,
-        const String & req_id)
-        : dm_context(dm_context_)
+        std::string_view req_id)
+        : db_context(db_context_)
         , read_tasks(read_tasks_)
         , columns_to_read(columns_to_read_)
         , filter(filter_)
         , header(toEmptyBlock(columns_to_read))
         , max_version(max_version_)
-        , expected_block_size(std::max(expected_block_size_, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)))
+        , expected_block_size(std::max(expected_block_size_, static_cast<size_t>(db_context.getSettingsRef().dt_segment_stable_pack_rows)))
         , read_mode(read_mode_)
         , extra_table_id_index(extra_table_id_index_)
         , physical_table_id(physical_table_id_)
         , cur_segment_id(0)
-        , log(Logger::get(req_id))
+        , log(Logger::get(String(req_id)))
     {
         // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
         if (extra_table_id_index != InvalidColumnID)
@@ -88,21 +100,24 @@ protected:
                 auto task = read_tasks->nextTask();
                 if (!task)
                 {
+                    // There is no task left
                     done = true;
                     LOG_DEBUG(log, "Read from remote done");
                     return {};
                 }
-                cur_segment_id = task->segment->segmentId();
+                cur_segment_id = task->segment_id;
+                physical_table_id = task->table_id;
+                UNUSED(max_version, read_mode);
                 // TODO:
-                cur_stream = task->segment->getInputStream(
-                    read_mode,
-                    *dm_context,
-                    columns_to_read,
-                    task->segment_snap,
-                    task->ranges,
-                    filter,
-                    max_version,
-                    expected_block_size);
+                // cur_stream = task->segment->getInputStream(
+                //     read_mode,
+                //     *dm_context,
+                //     columns_to_read,
+                //     task->segment_snap,
+                //     task->ranges,
+                //     filter,
+                //     max_version,
+                //     expected_block_size);
                 LOG_TRACE(log, "Start to read segment, segment={}", cur_segment_id);
             }
 
@@ -141,7 +156,7 @@ protected:
     }
 
 private:
-    DMContextPtr dm_context;
+    const Context & db_context;
     RemoteReadTaskPtr read_tasks;
     ColumnDefines columns_to_read;
     RSOperatorPtr filter;
@@ -150,7 +165,7 @@ private:
     const size_t expected_block_size;
     const ReadMode read_mode;
     const int extra_table_id_index;
-    const TableID physical_table_id;
+    TableID physical_table_id;
 
     size_t total_rows = 0;
     bool done = false;
