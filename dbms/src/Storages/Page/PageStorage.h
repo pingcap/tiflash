@@ -300,11 +300,6 @@ public:
         PageStorage::SnapshotPtr snap_,
         ReadLimiterPtr read_limiter_);
 
-    static PageReader CreateInvalidReader()
-    {
-        return {};
-    }
-
     ~PageReader();
 
     DB::Page read(PageId page_id) const;
@@ -327,10 +322,8 @@ public:
 
     void traverse(const std::function<void(PageId page_id, const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
-    std::unique_ptr<PageReaderImpl> impl;
-
 private:
-    PageReader();
+    std::unique_ptr<PageReaderImpl> impl;
 };
 using PageReaderPtr = std::shared_ptr<PageReader>;
 

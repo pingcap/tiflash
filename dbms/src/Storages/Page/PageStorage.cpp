@@ -495,11 +495,6 @@ PageReader::PageReader(
 {
 }
 
-PageReader::PageReader()
-    : impl()
-{
-}
-
 PageReader::~PageReader() = default;
 
 DB::Page PageReader::read(PageId page_id) const
