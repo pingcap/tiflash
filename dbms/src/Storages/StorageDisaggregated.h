@@ -71,6 +71,7 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
+    // helper functions for building the task read from S3
     std::shared_ptr<::mpp::EstablishDisaggregatedTaskRequest>
     buildDisaggregatedTaskForNode(
         const Context & db_context,

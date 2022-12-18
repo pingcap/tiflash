@@ -3,10 +3,15 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Transaction/Types.h>
+#include <common/defines.h>
+#include <common/types.h>
 
 #include <memory>
 #include <mutex>
@@ -83,17 +88,21 @@ void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, 
         for (auto task_iter = state_iter->second.begin(); task_iter != state_iter->second.end(); task_iter++)
         {
             auto & task = *task_iter;
-            if (task->store_id == seg_task->store_id
-                && task->table_id == seg_task->table_id
-                && task->segment_id == seg_task->segment_id)
+            if (!(task->store_id == seg_task->store_id
+                  && task->table_id == seg_task->table_id
+                  && task->segment_id == seg_task->segment_id))
             {
-                task->state = meet_error ? SegmentReadTaskState::Error : SegmentReadTaskState::AllReady;
-                found = true;
-                // Move it into the right ready state
-                state_iter->second.erase(task_iter);
-                insertReadyTask(task, ready_lock);
-                break;
+                continue;
             }
+            seg_task->state = meet_error ? SegmentReadTaskState::Error : SegmentReadTaskState::AllReady;
+            found = true;
+            // Move it into the right ready state, note `task`/`task_iter` is invalid
+            state_iter->second.erase(task_iter);
+            if (state_iter->second.empty())
+                ready_segment_tasks.erase(state_iter);
+
+            insertReadyTask(seg_task, ready_lock);
+            break;
         }
         RUNTIME_CHECK(found);
     }
@@ -116,7 +125,7 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
     RemoteSegmentReadTaskPtr seg_task = nullptr;
     cv_ready_tasks.wait(ready_lock, [this, &seg_task] {
         // All segment task are processed, return a nullptr
-        if (ready_segment_tasks.empty())
+        if (doneOrErrorHappen())
             return true;
 
         // Check whether there are segment task ready for reading
@@ -126,6 +135,10 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
                 return false;
             seg_task = iter->second.front();
             iter->second.pop_front();
+            if (iter->second.empty())
+            {
+                ready_segment_tasks.erase(iter);
+            }
             return true;
         }
         return false;
@@ -134,44 +147,122 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
     return seg_task;
 }
 
-#if 0
-RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(const DMContext & context, SegmentReadTasks & tasks)
+bool RemoteReadTask::doneOrErrorHappen() const
 {
-    RUNTIME_CHECK(context.table_id > 0);
+    // All finished
+    if (ready_segment_tasks.empty())
+        return true;
+    auto iter = ready_segment_tasks.find(SegmentReadTaskState::Error);
+    if (iter != ready_segment_tasks.end() && !iter->second.empty())
+    {
+        // some tasks run into error when fetching pages
+        return true; // NOLINT(readability-simplify-boolean-expr)
+    }
+    return false;
+}
 
-    // FIXME store_id
-    auto read_tasks = std::make_shared<RemoteTableReadTask>(-1, context.table_id);
+dtpb::DisaggregatedPhysicalTable RemoteTableReadTask::getSerializeTask(
+    const TableID table_id,
+    SegmentReadTasks & tasks)
+{
+    RUNTIME_CHECK(table_id > 0);
+
+    dtpb::DisaggregatedPhysicalTable serialized;
+    serialized.set_table_id(table_id);
+
     for (const auto & task : tasks)
     {
-        auto seg_task = std::make_shared<RemoteSegmentReadTask>();
-        seg_task->segment = task->segment;
-        seg_task->ranges = task->ranges;
-
+#if 0
         auto delta_snap = task->segment->getDelta()->createSnapshotFromRemote(
             context,
             task->segment->getRowKeyRange());
         auto stable_snap = task->segment->getStable()->createSnapshotFromRemote(
             context,
             task->segment->getRowKeyRange());
+        auto segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
+#endif
 
-        seg_task->segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
-
-        read_tasks->tasks.emplace_back(std::move(seg_task));
+        auto ser_seg = task->read_snapshot->toRemote(
+            task->segment->segmentId(),
+            task->segment->getRowKeyRange());
+        serialized.add_segments()->Swap(&ser_seg);
     }
 
-    return read_tasks;
+    return serialized;
 }
-#endif
 
 RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
     const Context & db_context,
-    UInt64 store_id,
-    const dtpb::DisaggregatedPhysicalTable & table)
+    const UInt64 store_id,
+    const String & address,
+    const dtpb::DisaggregatedPhysicalTable & remote_table)
 {
-    UNUSED(db_context, store_id, table);
     // Deserialize from `DisaggregatedPhysicalTable`, this should also
     // ensure the local cache pages.
-    return std::make_shared<RemoteTableReadTask>(store_id, table.table_id());
+    auto table_task = std::make_shared<RemoteTableReadTask>(
+        store_id,
+        remote_table.table_id(),
+        remote_table.snapshot_id(),
+        address);
+    for (const auto & remote_seg : remote_table.segments())
+    {
+        auto seg_task = RemoteSegmentReadTask::buildFrom(
+            db_context,
+            remote_seg,
+            table_task->snapshot_id,
+            table_task->store_id,
+            table_task->table_id,
+            table_task->address);
+        table_task->tasks.emplace_back(std::move(seg_task));
+    }
+    return table_task;
+}
+
+/**
+ * Remote segment
+ */
+RemoteSegmentReadTask::RemoteSegmentReadTask(
+    UInt64 snapshot_id_,
+    UInt64 store_id_,
+    TableID table_id_,
+    UInt64 segment_id_,
+    RowKeyRanges ranges_,
+    String address_)
+    : snapshot_id(snapshot_id_)
+    , store_id(store_id_)
+    , table_id(table_id_)
+    , segment_id(segment_id_)
+    , ranges(std::move(ranges_))
+    , address(std::move(address_))
+{
+}
+
+RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
+    const Context & db_context,
+    const dtpb::DisaggregatedSegment & serialized,
+    UInt64 snapshot_id,
+    UInt64 store_id,
+    TableID table_id,
+    const String & address)
+{
+    // TODO set by serialized.key_range()
+    RowKeyRanges key_ranges;
+    auto task = std::make_shared<RemoteSegmentReadTask>(
+        snapshot_id,
+        store_id,
+        table_id,
+        serialized.segment_id(),
+        key_ranges,
+        address);
+
+    UNUSED(db_context);
+    // TODO set by serialized.stable_pages()
+    // TODO set by serialized.column_files()
+    // TODO set by serialized.has_mem_table()
+
+    // TODO build the page ids need to fetch from write nodes
+
+    return task;
 }
 
 BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
@@ -183,6 +274,9 @@ BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
 {
     UNUSED(this, rs_filter, key_ranges, read_tso, expected_block_size);
     auto block = toEmptyBlock(columns_to_read);
+    // 1. restore dmfiles and build input stream for stable
+    // 2. build a temp delta vs and generate input stream for delta
+    // 3. get the mem table from block_queue
     return std::make_shared<NullBlockInputStream>(block);
 }
 

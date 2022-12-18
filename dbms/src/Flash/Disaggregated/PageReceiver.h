@@ -11,7 +11,7 @@ namespace DB
 {
 namespace DM
 {
-struct RemoteSegmentReadTask;
+class RemoteSegmentReadTask;
 using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
 } // namespace DM
 
@@ -107,7 +107,7 @@ private:
 
     void readLoop();
 
-    std::tuple<bool, String> taskReadLoop(Request && req);
+    std::tuple<bool, String> taskReadLoop(const Request & req);
 
     void setUpConnection();
 

@@ -64,7 +64,7 @@ struct SegmentSnapshot : private boost::noncopyable
 
     bool isForUpdate() const { return delta->isForUpdate(); }
 
-    dtpb::DisaggregatedSegment toRemote(UInt64 seg_id) const;
+    dtpb::DisaggregatedSegment toRemote(UInt64 seg_id, const RowKeyRange & key_range) const;
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.

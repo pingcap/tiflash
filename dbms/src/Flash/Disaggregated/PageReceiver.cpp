@@ -263,20 +263,20 @@ void PageReceiverBase<RPCContext>::readLoop()
             break;
         try
         {
-            std::tie(meet_error, local_err_msg) = taskReadLoop(std::move(req));
+            std::tie(meet_error, local_err_msg) = taskReadLoop(req);
         }
         catch (...)
         {
             meet_error = true;
             local_err_msg = getCurrentExceptionMessage(false);
         }
-        rpc_context->updateTaskState(req, meet_error);
+        rpc_context->finishTask(req, meet_error);
     }
     connectionDone(meet_error, local_err_msg, exc_log);
 }
 
 template <typename RPCContext>
-std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(Request && req)
+std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Request & req)
 {
     auto status = RPCContext::getStatusOK();
     bool meet_error = false;

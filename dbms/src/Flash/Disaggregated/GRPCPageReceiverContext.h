@@ -60,6 +60,8 @@ struct FetchPagesRequest
     DM::RemoteSegmentReadTaskPtr seg_task;
     std::shared_ptr<mpp::FetchDisaggregatedPagesRequest> req;
 
+    explicit FetchPagesRequest(DM::RemoteSegmentReadTaskPtr seg_task_);
+
     bool isValid() const { return seg_task != nullptr; }
 
     String identifier() const
@@ -109,16 +111,11 @@ public:
     // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
     void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log);
 
-    void updateTaskState(const Request & req, bool meet_error);
+    void finishTask(const Request & req, bool meet_error);
 
 private:
-    void setDispatchMPPTaskErrMsg(const std::string & err);
-
     DM::RemoteReadTaskPtr remote_read_tasks;
     pingcap::kv::Cluster * cluster;
     bool enable_async_grpc;
-
-    std::mutex dispatch_mpp_task_err_msg_mu;
-    String dispatch_mpp_task_err_msg;
 };
 } // namespace DB

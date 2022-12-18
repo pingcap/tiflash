@@ -17,18 +17,22 @@ namespace DB
 class Context;
 namespace DM
 {
+namespace tests
+{
+class RemoteReadTaskTest;
+}
+
 class RemoteReadTask;
 using RemoteReadTaskPtr = std::shared_ptr<RemoteReadTask>;
 class RemoteTableReadTask;
 using RemoteTableReadTaskPtr = std::shared_ptr<RemoteTableReadTask>;
-struct RemoteSegmentReadTask;
+class RemoteSegmentReadTask;
 using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
 
 enum class SegmentReadTaskState
 {
     Init,
     Error,
-    PersistedDataReady,
     AllReady,
 };
 
@@ -52,8 +56,12 @@ public:
     // Return a segment read task that is ready for reading.
     RemoteSegmentReadTaskPtr nextReadyTask();
 
+    friend class tests::RemoteReadTaskTest;
+
 private:
     void insertReadyTask(const RemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &);
+
+    bool doneOrErrorHappen() const;
 
 private:
     // The original number of segment tasks
@@ -76,20 +84,29 @@ private:
 class RemoteTableReadTask
 {
 public:
-    explicit RemoteTableReadTask(UInt64 store_id_, UInt64 table_id_)
+    RemoteTableReadTask(
+        UInt64 store_id_,
+        TableID table_id_,
+        UInt64 snap_id_,
+        const String & address_)
         : store_id(store_id_)
         , table_id(table_id_)
+        , snapshot_id(snap_id_)
+        , address(address_)
     {}
 
     UInt64 storeID() const { return store_id; }
 
-    UInt64 tableID() const { return table_id; }
+    TableID tableID() const { return table_id; }
 
-    // static RemoteTableReadTaskPtr buildFrom(const DMContext & context, SegmentReadTasks & tasks);
+    static dtpb::DisaggregatedPhysicalTable getSerializeTask(
+        TableID table_id,
+        SegmentReadTasks & tasks);
 
     static RemoteTableReadTaskPtr buildFrom(
         const Context & db_context,
         UInt64 store_id,
+        const String & address,
         const dtpb::DisaggregatedPhysicalTable & table);
 
     size_t size() const
@@ -113,29 +130,32 @@ public:
         return tasks;
     }
 
+    friend class tests::RemoteReadTaskTest;
+
 private:
     const UInt64 store_id;
-    const UInt64 table_id;
+    const TableID table_id;
+    const UInt64 snapshot_id;
+    const String address;
+
     mutable std::mutex mtx_tasks;
     // The remote segment tasks
     std::list<RemoteSegmentReadTaskPtr> tasks;
 };
 
-struct RemoteSegmentReadTask
+class RemoteSegmentReadTask
 {
-    SegmentReadTaskState state = SegmentReadTaskState::Init;
-    UInt64 store_id;
-    TableID table_id;
-    UInt64 segment_id;
-    RowKeyRanges ranges;
+public:
+    static RemoteSegmentReadTaskPtr buildFrom(
+        const Context & db_context,
+        const dtpb::DisaggregatedSegment & serialized,
+        UInt64 snapshot_id,
+        UInt64 store_id,
+        TableID table_id,
+        const String & address);
 
-    // The snapshot of reading ids acquired from write node
-    std::vector<UInt64> delta_page_ids;
-    std::vector<UInt64> stable_files;
-
-    // FIXME: These should be only stored in write node
-    SegmentPtr segment;
-    SegmentSnapshotPtr segment_snap;
+    // The page ids that is absent from local cache
+    const std::vector<UInt64> & pendingPageIds() const { return pending_page_ids; }
 
     BlockInputStreamPtr getInputStream(
         const ColumnDefines & columns_to_read,
@@ -158,7 +178,36 @@ struct RemoteSegmentReadTask
         mem_table_blocks.push(std::move(block));
     }
 
+    friend class tests::RemoteReadTaskTest;
+
+    // Only used by buildFrom
+    RemoteSegmentReadTask(
+        UInt64 snapshot_id_,
+        UInt64 store_id_,
+        TableID table_id_,
+        UInt64 segment_id_,
+        RowKeyRanges ranges_,
+        String address_);
+
+public:
+    SegmentReadTaskState state = SegmentReadTaskState::Init;
+    const UInt64 snapshot_id;
+    const UInt64 store_id;
+    const TableID table_id;
+    const UInt64 segment_id;
+    const RowKeyRanges ranges;
+    const String address;
+
 private:
+    // The snapshot of reading ids acquired from write node
+    std::vector<UInt64> delta_page_ids;
+    std::vector<UInt64> stable_files;
+    // FIXME: These should be only stored in write node
+    SegmentSnapshotPtr segment_snap;
+
+    // The page ids need to fetch from write node
+    std::vector<UInt64> pending_page_ids;
+
     std::mutex mtx_queue;
     // FIXME: this should be directly persisted to local cache? Or it will consume
     // too many memory

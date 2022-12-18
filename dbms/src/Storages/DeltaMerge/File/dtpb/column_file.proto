@@ -44,9 +44,11 @@ message ColumnFileRemote {
 
 message DisaggregatedSegment {
     uint64 segment_id = 1;
-    repeated ColumnFileBig stable_pages = 2;
+    KeyRange key_range = 2;
+    repeated ColumnFileBig stable_pages = 3;
     // serialized array of ColumnFileRemote
-    repeated ColumnFileRemote column_files = 3;
+    repeated ColumnFileRemote column_files = 4;
+    bool has_mem_table = 5;
 }
 
 message DisaggregatedPhysicalTable {

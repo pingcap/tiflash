@@ -134,28 +134,28 @@ GRPCPagesReceiverContext::GRPCPagesReceiverContext(
     , enable_async_grpc(enable_async_grpc_)
 {}
 
+FetchPagesRequest::FetchPagesRequest(DM::RemoteSegmentReadTaskPtr seg_task_)
+    : seg_task(std::move(seg_task_))
+    , req(std::make_shared<mpp::FetchDisaggregatedPagesRequest>())
+{
+    req->set_snapshot_id(seg_task->snapshot_id);
+    req->set_lease(60); // 60 seconds
+    for (auto page_id : seg_task->pendingPageIds())
+    {
+        req->add_pages(page_id);
+    }
+    req->set_address(seg_task->address);
+}
+
 GRPCPagesReceiverContext::Request GRPCPagesReceiverContext::popRequest() const
 {
-    Request req;
-    req.seg_task = remote_read_tasks->nextFetchTask();
-    req.req = std::make_shared<mpp::FetchDisaggregatedPagesRequest>();
-    // TODO: build req.req from req.seg_task
-    return req;
+    auto seg_task = remote_read_tasks->nextFetchTask();
+    return Request(std::move(seg_task));
 }
 
-void GRPCPagesReceiverContext::updateTaskState(const Request & req, bool meet_error)
+void GRPCPagesReceiverContext::finishTask(const Request & req, bool meet_error)
 {
     remote_read_tasks->updateTaskState(req.seg_task, meet_error);
-}
-
-void GRPCPagesReceiverContext::setDispatchMPPTaskErrMsg(const std::string & err)
-{
-    std::lock_guard<std::mutex> lock(dispatch_mpp_task_err_msg_mu);
-    // Only record first dispatch_mpp_task_err_msg.
-    if (dispatch_mpp_task_err_msg.empty())
-    {
-        dispatch_mpp_task_err_msg = err;
-    }
 }
 
 void GRPCPagesReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr /*log*/)
