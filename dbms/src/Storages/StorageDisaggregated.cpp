@@ -29,6 +29,25 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+namespace pingcap::kv
+{
+// The rpc trait
+template <>
+struct RpcTypeTraits<::mpp::EstablishDisaggregatedTaskRequest>
+{
+    using RequestType = ::mpp::EstablishDisaggregatedTaskRequest;
+    using ResultType = ::mpp::EstablishDisaggregatedTaskResponse;
+    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; }
+    static ::grpc::Status doRPCCall(
+        grpc::ClientContext * context,
+        std::shared_ptr<KvConnClient> client,
+        const RequestType & req,
+        ResultType * res)
+    {
+        return client->stub->EstablishDisaggregatedTask(context, req, res);
+    }
+};
+} // namespace pingcap::kv
 
 namespace DB
 {
