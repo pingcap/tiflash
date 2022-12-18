@@ -27,7 +27,11 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
-namespace DB::DM
+namespace DB
+{
+class PageReceiver;
+using PageReceiverPtr = std::shared_ptr<PageReceiver>;
+namespace DM
 {
 
 class RemoteSegmentThreadInputStream : public IProfilingBlockInputStream
@@ -38,6 +42,7 @@ public:
     static BlockInputStreams buildInputStreams(
         const Context & db_context,
         const RemoteReadTaskPtr & remote_read_tasks,
+        const PageReceiverPtr & page_receiver,
         UInt64 read_tso,
         size_t num_streams,
         size_t extra_table_id_index,
@@ -47,36 +52,15 @@ public:
 
     RemoteSegmentThreadInputStream(
         const Context & db_context_,
-        const RemoteReadTaskPtr read_tasks_,
+        RemoteReadTaskPtr read_tasks_,
+        PageReceiverPtr page_receiver_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
         UInt64 max_version_,
         size_t expected_block_size_,
         ReadMode read_mode_,
-        const int extra_table_id_index_,
-        const TableID physical_table_id_,
-        std::string_view req_id)
-        : db_context(db_context_)
-        , read_tasks(read_tasks_)
-        , columns_to_read(columns_to_read_)
-        , filter(filter_)
-        , header(toEmptyBlock(columns_to_read))
-        , max_version(max_version_)
-        , expected_block_size(std::max(expected_block_size_, static_cast<size_t>(db_context.getSettingsRef().dt_segment_stable_pack_rows)))
-        , read_mode(read_mode_)
-        , extra_table_id_index(extra_table_id_index_)
-        , physical_table_id(physical_table_id_)
-        , cur_segment_id(0)
-        , log(Logger::get(String(req_id)))
-    {
-        // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
-        if (extra_table_id_index != InvalidColumnID)
-        {
-            ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
-            ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
-            header.insert(extra_table_id_index, col);
-        }
-    }
+        int extra_table_id_index_,
+        std::string_view req_id);
 
     String getName() const override { return NAME; }
 
@@ -89,75 +73,12 @@ protected:
         return readImpl(filter_ignored, false);
     }
 
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override
-    {
-        if (done)
-            return {};
-        while (true)
-        {
-            while (!cur_stream)
-            {
-                auto task = read_tasks->nextTask();
-                if (!task)
-                {
-                    // There is no task left
-                    done = true;
-                    LOG_DEBUG(log, "Read from remote done");
-                    return {};
-                }
-                cur_segment_id = task->segment_id;
-                physical_table_id = task->table_id;
-                UNUSED(max_version, read_mode);
-                // TODO:
-                // cur_stream = task->segment->getInputStream(
-                //     read_mode,
-                //     *dm_context,
-                //     columns_to_read,
-                //     task->segment_snap,
-                //     task->ranges,
-                //     filter,
-                //     max_version,
-                //     expected_block_size);
-                LOG_TRACE(log, "Start to read segment, segment={}", cur_segment_id);
-            }
-
-            Block res = cur_stream->read(res_filter, return_filter);
-            if (!res)
-            {
-                LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment_id);
-                cur_segment_id = 0;
-                cur_stream = {};
-                // try read from next task
-                continue;
-            }
-
-            // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
-            if (extra_table_id_index != InvalidColumnID)
-            {
-                ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
-                ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
-                size_t row_number = res.rows();
-                auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
-                col.column = std::move(col_data);
-                res.insert(extra_table_id_index, std::move(col));
-            }
-
-            if (!res.rows())
-            {
-                // try read from next task
-                continue;
-            }
-            else
-            {
-                total_rows += res.rows();
-                return res;
-            }
-        }
-    }
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 private:
     const Context & db_context;
     RemoteReadTaskPtr read_tasks;
+    PageReceiverPtr page_receiver;
     ColumnDefines columns_to_read;
     RSOperatorPtr filter;
     Block header;
@@ -176,4 +97,5 @@ private:
     LoggerPtr log;
 };
 
-} // namespace DB::DM
+} // namespace DM
+} // namespace DB

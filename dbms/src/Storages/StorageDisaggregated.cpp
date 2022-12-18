@@ -18,6 +18,8 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Disaggregated/GRPCPageReceiverContext.h>
+#include <Flash/Disaggregated/PageReceiver.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
@@ -164,7 +166,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     std::vector<DM::RemoteTableReadTaskPtr> remote_tasks;
     remote_tasks.reserve(establish_reqs.size());
 
-    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+    auto * cluster = context.getTMTContext().getKVCluster();
     for (const auto & req : establish_reqs)
     {
         // TODO: make call by threadManager
@@ -198,12 +200,24 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
+    const auto & executor_id = table_scan.getTableScanExecutorID();
+    // Build a PageReceiver to fetch the pages from all write nodes
+    auto * kv_cluster = db_context.getTMTContext().getKVCluster();
+    auto receiver_ctx = std::make_unique<GRPCPagesReceiverContext>(remote_read_tasks, kv_cluster, /*enable_async=*/false);
+    auto page_receiver = std::make_shared<PageReceiver>(
+        std::move(receiver_ctx),
+        /*source_num_=*/remote_read_tasks->numSegments(),
+        num_streams,
+        log->identifier(),
+        executor_id);
+
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
     auto streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
         db_context,
         remote_read_tasks,
+        page_receiver,
         read_tso,
         num_streams,
         -1,
@@ -211,8 +225,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         /*tracing_id*/ "");
     pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
 
-    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
-    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[table_scan.getTableScanExecutorID()];
+    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
+    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
     pipeline.transform([&](auto & stream) {
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
@@ -243,6 +257,7 @@ BlockInputStreams StorageDisaggregated::read(
         return pipeline.streams;
     }
 
+    // Fetch all data from write node through MPP exchange sender/receiver
     std::vector<RequestAndRegionIDs> dispatch_reqs;
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
@@ -418,7 +433,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             context.getTMTContext().getMPPTaskManager(),
             context.getSettingsRef().enable_local_tunnel,
             context.getSettingsRef().enable_async_grpc_client),
-        receiver.encoded_task_meta_size(),
+        /*source_num=*/receiver.encoded_task_meta_size(),
         num_streams,
         log->identifier(),
         executor_id,

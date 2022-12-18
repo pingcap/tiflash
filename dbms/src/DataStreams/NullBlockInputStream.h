@@ -25,7 +25,9 @@ namespace DB
 class NullBlockInputStream : public IBlockInputStream
 {
 public:
-    NullBlockInputStream(const Block & header) : header(header) {}
+    explicit NullBlockInputStream(const Block & header)
+        : header(header)
+    {}
 
     Block read() override { return {}; }
     Block getHeader() const override { return header; }
@@ -35,4 +37,4 @@ private:
     Block header;
 };
 
-}
+} // namespace DB
