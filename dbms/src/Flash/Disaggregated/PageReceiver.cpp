@@ -9,6 +9,11 @@
 #include <memory>
 #include <mutex>
 
+#include "Common/Logger.h"
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
+#include "Storages/DeltaMerge/DeltaMergeHelpers.h"
+#include "common/logger_useful.h"
+
 namespace DB
 {
 namespace details
@@ -67,17 +72,23 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_buffer_size(std::max<size_t>(16, max_streams_ * 2))
+    , persist_threads_num(max_streams_)
     , thread_manager(newThreadManager())
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , collected(false)
     , thread_count(0)
     , exc_log(Logger::get(req_id, executor_id))
+    , total_rows(0)
+    , total_pages(0)
 {
     try
     {
         msg_channels.push_back(std::make_unique<MPMCQueue<PageReceivedMessagePtr>>(max_buffer_size));
+        // setup fetch threads to fetch pages/blocks from write nodes
         setUpConnection();
+        // setup persist threads to pop msg (pages/blocks) and write down
+        setUpPersist();
     }
     catch (...)
     {
@@ -136,6 +147,59 @@ void PageReceiverBase<RPCContext>::setUpConnection()
         });
         ++thread_count;
     }
+}
+
+template <typename RPCContext>
+void PageReceiverBase<RPCContext>::setUpPersist()
+{
+    for (size_t index = 0; index < persist_threads_num; ++index)
+    {
+        thread_manager->schedule(true, "Persister", [this, index] {
+            persistLoop(index);
+        });
+        ++thread_count;
+    }
+}
+
+template <typename RPCContext>
+void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
+{
+    LoggerPtr log = exc_log->getChild(fmt::format("persist{}", idx));
+
+    while (true)
+    {
+        // no more results
+        if(!consumeOneResult(log))
+            break;
+    }
+}
+
+template <typename RPCContext>
+bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
+{
+    DM::ColumnDefines columns_to_read;
+    Block sample_block = DM::toEmptyBlock(columns_to_read);
+
+    static constexpr size_t squash_rows_limit = 8192;
+    auto decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, squash_rows_limit);
+
+    auto result = nextResult(sample_block, 0, decoder_ptr);
+    if (result.eof)
+    {
+        LOG_DEBUG(log, "fetch reader meets eof");
+        return false;
+    }
+    if (result.meet_error)
+    {
+        LOG_WARNING(log, "fetch reader meets error: {}", result.error_msg);
+        throw Exception(result.error_msg);
+    }
+
+    const auto decode_detail = result.decode_detail;
+    total_rows += decode_detail.rows;
+    total_pages += decode_detail.pages;
+    
+    return true;
 }
 
 template <typename RPCContext>
@@ -209,12 +273,12 @@ PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
 }
 
 template <typename RPCContext>
-DecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
+PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
     const std::shared_ptr<PageReceivedMessage> & recv_msg,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
-    DecodeDetail detail;
+    PageDecodeDetail detail;
 
     if (recv_msg->chunks.empty())
         return detail;

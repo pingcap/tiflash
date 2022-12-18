@@ -23,14 +23,6 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
 
     Block sample_block = toEmptyBlock(columns_to_read);
 
-    while (true)
-    {
-        // TODO: do it with multi threads
-        static constexpr size_t squash_rows_limit = 8192;
-        auto decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, squash_rows_limit);
-        page_receiver->nextResult(sample_block, /*stream_id=*/0, decoder_ptr);
-    }
-
     BlockInputStreams streams;
     for (size_t i = 0; i < num_streams; ++i)
     {

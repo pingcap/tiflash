@@ -40,6 +40,22 @@ struct PageReceivedMessage
 };
 using PageReceivedMessagePtr = std::shared_ptr<PageReceivedMessage>;
 
+
+/// Detail of the packet that decoding in PageReceiverBase.decodeChunks
+struct PageDecodeDetail
+{
+    // Responding packets count, usually be 1, be 0 when flush data before eof
+    Int64 packets = 1;
+
+    // The row number of all blocks of the original packet
+    Int64 rows = 0;
+
+    // Total byte size of the origin packet
+    Int64 packet_bytes = 0;
+
+    // The pages of the original packet
+    Int64 pages = 0;
+};
 struct PageReceiverResult
 {
     String req_info;
@@ -47,7 +63,7 @@ struct PageReceiverResult
     String error_msg;
     bool eof;
     // details to collect execution summary
-    DecodeDetail decode_detail;
+    PageDecodeDetail decode_detail;
 
     static PageReceiverResult newOk(const String & req_info_)
     {
@@ -105,11 +121,9 @@ public:
 private:
     using Request = typename RPCContext::Request;
 
-    void readLoop();
-
-    std::tuple<bool, String> taskReadLoop(const Request & req);
-
     void setUpConnection();
+    void readLoop();
+    std::tuple<bool, String> taskReadLoop(const Request & req);
 
     bool setEndState(ExchangeReceiverState new_state);
     String getStatusString();
@@ -118,6 +132,11 @@ private:
         bool meet_error,
         const String & local_err_msg,
         const LoggerPtr & log);
+
+    // TODO the persist logic may belong to another class
+    void setUpPersist();
+    void persistLoop(size_t idx);
+    bool consumeOneResult(const LoggerPtr & log);
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
@@ -130,7 +149,7 @@ private:
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    DecodeDetail decodeChunks(
+    PageDecodeDetail decodeChunks(
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
@@ -138,6 +157,7 @@ private:
     std::unique_ptr<RPCContext> rpc_context;
     const size_t source_num;
     const size_t max_buffer_size;
+    const size_t persist_threads_num;
 
     std::shared_ptr<ThreadManager> thread_manager;
     std::vector<std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>>> msg_channels;
@@ -152,6 +172,10 @@ private:
     int thread_count;
 
     LoggerPtr exc_log;
+
+    // below members are for persist threads
+    std::atomic<size_t> total_rows;
+    std::atomic<size_t> total_pages;
 };
 
 class PageReceiver : public PageReceiverBase<GRPCPagesReceiverContext>
