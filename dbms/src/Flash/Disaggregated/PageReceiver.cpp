@@ -177,11 +177,12 @@ void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
 template <typename RPCContext>
 bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
 {
+    // TODO: this does not make sense. maybe we need another class for
+    // saving the pages/block
     DM::ColumnDefines columns_to_read;
     Block sample_block = DM::toEmptyBlock(columns_to_read);
 
-    static constexpr size_t squash_rows_limit = 8192;
-    auto decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, squash_rows_limit);
+    auto decoder_ptr = std::make_unique<CHBlockChunkCodec>(sample_block);
 
     auto result = nextResult(sample_block, 0, decoder_ptr);
     if (result.eof)
@@ -206,7 +207,7 @@ template <typename RPCContext>
 PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
     const Block & header,
     size_t stream_id,
-    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
@@ -220,7 +221,15 @@ PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
     std::shared_ptr<PageReceivedMessage> recv_msg;
     if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
     {
-        return handleAbnormalChannel(decoder_ptr);
+        std::unique_lock lock(mu);
+        if (state != DB::ExchangeReceiverState::NORMAL)
+        {
+            return PageReceiverResult::newError(PageReceiverBase<RPCContext>::name, details::constructStatusString(state, err_msg));
+        }
+
+        /// live_connections == 0, msg_channel is finished, and state is NORMAL,
+        /// that is the end.
+        return PageReceiverResult::newEOF(PageReceiverBase<RPCContext>::name);
     }
 
     assert(recv_msg != nullptr);
@@ -232,36 +241,10 @@ PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
 }
 
 template <typename RPCContext>
-PageReceiverResult PageReceiverBase<RPCContext>::handleAbnormalChannel(
-    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
-{
-    std::optional<Block> last_block = decoder_ptr->flush();
-    std::unique_lock lock(mu);
-    if (this->state != DB::ExchangeReceiverState::NORMAL)
-    {
-        return PageReceiverResult::newError(PageReceiverBase<RPCContext>::name, details::constructStatusString(state, err_msg));
-    }
-
-    // If there are cached data in SquashDecoder, then just push the block and return EOF next iteration
-    if (last_block && last_block->rows() > 0)
-    {
-        auto result = PageReceiverResult::newOk("");
-        result.decode_detail.packets = 0;
-        result.decode_detail.rows = last_block->rows();
-        // TODO: push block to queue
-        return result;
-    }
-
-    /// live_connections == 0, msg_channel is finished, and state is NORMAL,
-    /// that is the end.
-    return PageReceiverResult::newEOF(PageReceiverBase<RPCContext>::name);
-}
-
-template <typename RPCContext>
 PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
     const Block & header,
     const std::shared_ptr<PageReceivedMessage> & recv_msg,
-    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
     UNUSED(header, decoder_ptr);
 
@@ -275,7 +258,7 @@ PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
 template <typename RPCContext>
 PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
     const std::shared_ptr<PageReceivedMessage> & recv_msg,
-    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
     PageDecodeDetail detail;
@@ -289,16 +272,15 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
         detail.packet_bytes = packet.ByteSizeLong();
     }
 
-    // Parse the chunks into block and push to queue
     for (const String * chunk : recv_msg->chunks)
     {
-        auto result = decoder_ptr->decodeAndSquash(*chunk);
-        if (!result)
+        auto block = decoder_ptr->decode(*chunk);
+        if (!block)
             continue;
-        detail.rows += result->rows();
-        if likely (result->rows() > 0)
+        detail.rows += block.rows();
+        if likely (block.rows() > 0)
         {
-            recv_msg->seg_task->receiveMemTable(std::move(result.value()));
+            recv_msg->seg_task->receiveMemTable(std::move(block));
         }
     }
 

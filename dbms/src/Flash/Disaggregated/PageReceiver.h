@@ -116,7 +116,7 @@ public:
     PageReceiverResult nextResult(
         const Block & header,
         size_t stream_id,
-        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
+        std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
 private:
     using Request = typename RPCContext::Request;
@@ -141,17 +141,14 @@ private:
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
 
-    PageReceiverResult handleAbnormalChannel(
-        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
-
     PageReceiverResult toDecodeResult(
         const Block & header,
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
-        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
+        std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
     PageDecodeDetail decodeChunks(
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
-        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
+        std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
 private:
     std::unique_ptr<RPCContext> rpc_context;
