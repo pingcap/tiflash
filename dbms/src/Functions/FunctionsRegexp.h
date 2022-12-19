@@ -1032,7 +1032,8 @@ public:
                 {
                     auto nullmap_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize_fill(col_size, 1);
+                    UInt8 default_val = 1;
+                    nullmap.assign(col_size, default_val);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
                     return;
                 }
@@ -1723,7 +1724,6 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
                     {
-                        null_map[i] = 1;
                         col_res->insertData("", 0);
                         continue;
                     }
@@ -1755,7 +1755,6 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
-                        null_map[i] = 1;
                         col_res->insertData("", 0);
                         continue;
                     }
@@ -1860,8 +1859,8 @@ private:
         }
         else
         {
+            // 1 has been assigned when null_map is resized
             col_res->insertData("", 0);
-            null_map[idx] = 1;
         }
     }
 
@@ -2063,7 +2062,7 @@ public:
                 {
                     auto null_map_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & null_map = null_map_col->getData();
-                    null_map.resize(col_size, 1);
+                    null_map.resize_fill(col_size, 1);
                     FunctionsRegexp::fillColumnStringWhenAllNull(col_res, col_size);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
                     return;
