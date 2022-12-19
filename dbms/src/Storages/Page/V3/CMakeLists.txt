@@ -15,8 +15,6 @@
 add_headers_and_sources(page_storage_v3 ./)
 add_headers_and_sources(page_storage_v3 ./spacemap)
 
-add_subdirectory(Remote/Proto)
-
 list(APPEND page_storage_v3_sources
     ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
     ${TiFlash_SOURCE_DIR}/dbms/src/Storages/Page/PageUtil.cpp
