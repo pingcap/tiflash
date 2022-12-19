@@ -2027,7 +2027,6 @@ public:
 
         auto & res_data = col_res->getChars();
         auto & res_offsets = col_res->getOffsets();
-        res_data.resize(col_size * 15);
         res_offsets.resize(col_size);
         ColumnString::Offset res_offset = 0;
 
