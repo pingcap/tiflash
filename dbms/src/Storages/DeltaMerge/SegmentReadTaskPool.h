@@ -229,6 +229,7 @@ public:
     int64_t increaseUnorderedInputStreamRefCount();
     int64_t decreaseUnorderedInputStreamRefCount();
     Int64 getFreeBlockSlots() const;
+    Int64 getFreeActiveSegments() const;
     bool valid() const;
     void setException(const DB::Exception & e);
 
@@ -242,10 +243,7 @@ public:
         return mem_tracker;
     }
 
-    bool needScheduleToRead() const;
-
 private:
-    Int64 getFreeActiveSegments() const;
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);

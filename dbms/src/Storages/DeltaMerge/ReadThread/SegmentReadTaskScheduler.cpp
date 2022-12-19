@@ -118,6 +118,29 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
     return pools;
 }
 
+bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr & pool)
+{
+    // Block queue is full, we don't have to read.
+    if (pool->getFreeBlockSlots() < 0)
+    {
+        return false;
+    }
+    // If block queue is not full, we need to schedule a segment to read.
+
+    // Can we schedule a segment from MergedTaskPool ?
+    if (merged_task_pool.pop(pool->poolId()))
+    {
+        return true;
+    }
+    // Can we schedule a new segment ?
+    if (pool->getFreeActiveSegments() > 0)
+    {
+        return true;
+    }
+    // Active segments is reaching the limit.
+    return false;
+}
+
 SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlock()
 {
     int64_t pool_count = read_pools.size(); // All read task pool need to be scheduled, including invalid read task pool.
@@ -125,7 +148,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
     {
         auto pool = read_pools.next();
         // If !pool->valid(), schedule it for clean MergedTaskPool.
-        if (pool != nullptr && (pool->needScheduleToRead() || !pool->valid()))
+        if (pool != nullptr && (needScheduleToRead(pool) || !pool->valid()))
         {
             return pool;
         }
