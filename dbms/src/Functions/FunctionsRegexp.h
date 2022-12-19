@@ -1017,7 +1017,8 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize_fill(col_size, 0);
+        ResultType default_val = 0;
+        vec_res.assign(col_size, default_val);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1320,7 +1321,8 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize_fill(col_size, 0);
+        ResultType default_val = 0;
+        vec_res.assign(col_size, default_val);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1369,7 +1371,8 @@ public:
                 {
                     auto nullmap_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize_fill(col_size, 1);
+                    UInt8 default_val = 1;
+                    nullmap.assign(col_size, default_val);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
                     return;
                 }
@@ -1701,7 +1704,8 @@ public:
 
         auto null_map_col = ColumnUInt8::create();
         typename ColumnUInt8::Container & null_map = null_map_col->getData();
-        null_map.resize_fill(col_size, 1);
+        UInt8 default_val = 1;
+        null_map.assign(col_size, default_val);
 
         // Start to execute substr
         if (canMemorize<PatT, MatchTypeT>())
@@ -2061,7 +2065,8 @@ public:
                 {
                     auto null_map_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & null_map = null_map_col->getData();
-                    null_map.resize_fill(col_size, 1);
+                    UInt8 default_val = 1;
+                    null_map.assign(col_size, default_val);
                     FunctionsRegexp::fillColumnStringWhenAllNull(col_res, col_size);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
                     return;
