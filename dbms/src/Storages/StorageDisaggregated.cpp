@@ -85,7 +85,14 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+    auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
+        bo,
+        cluster,
+        table_scan.isPartitionTableScan(),
+        physical_table_ids,
+        ranges_for_each_physical_table,
+        store_type,
+        &Poco::Logger::get("pingcap/coprocessor"));
     LOG_DEBUG(log, "batch cop tasks(nums: {}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
 }
@@ -232,7 +239,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const String executor_id = table_scan.getTableScanExecutorID();
+    const String & executor_id = table_scan.getTableScanExecutorID();
 
     exchange_receiver = std::make_shared<ExchangeReceiver>(
         std::make_shared<GRPCReceiverContext>(
@@ -257,16 +264,17 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     const String extra_info = "disaggregated compute node exchange receiver";
     for (size_t i = 0; i < num_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
-                                                                                   log->identifier(),
-                                                                                   executor_id,
-                                                                                   /*stream_id=*/0);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(
+            exchange_receiver,
+            log->identifier(),
+            executor_id,
+            /*stream_id=*/0);
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
 
-    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
-    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[table_scan.getTableScanExecutorID()];
+    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
+    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
     pipeline.transform([&](auto & stream) {
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);

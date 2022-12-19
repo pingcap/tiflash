@@ -19,7 +19,6 @@
 #if Poco_NetSSL_FOUND
 
 #include <Common/Logger.h>
-#include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <Poco/Crypto/X509Certificate.h>
 #include <Poco/Net/Context.h>
