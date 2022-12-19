@@ -423,4 +423,6 @@ struct ProbeProcessInfo
     void updateStartRow();
 };
 
+void convertColumnToNullable(ColumnWithTypeAndName & column);
+
 } // namespace DB

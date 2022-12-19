@@ -23,6 +23,7 @@ DAGProperties getDAGPropertiesForTest(int server_num)
     properties.is_mpp_query = true;
     properties.mpp_partition_num = server_num;
     properties.start_ts = MockTimeStampGenerator::instance().nextTs();
+    properties.local_query_id = properties.start_ts;
     return properties;
 }
 
@@ -68,7 +69,7 @@ size_t MPPTaskTestUtils::serverNum()
     return server_num;
 }
 
-std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
+std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
@@ -76,7 +77,7 @@ std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMP
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
-    return {properties.start_ts, res};
+    return {MPPQueryId(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
@@ -133,14 +134,14 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     return buf.toString();
 }
 
-::testing::AssertionResult MPPTaskTestUtils::assertQueryCancelled(size_t start_ts)
+::testing::AssertionResult MPPTaskTestUtils::assertQueryCancelled(const MPPQueryId & query_id)
 {
     auto seconds = std::chrono::seconds(1);
     auto retry_times = 0;
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
-        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(start_ts) != nullptr)
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id) != nullptr)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
@@ -154,13 +155,13 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     return ::testing::AssertionSuccess();
 }
 
-::testing::AssertionResult MPPTaskTestUtils::assertQueryActive(size_t start_ts)
+::testing::AssertionResult MPPTaskTestUtils::assertQueryActive(const MPPQueryId & query_id)
 {
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
-        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(start_ts) == nullptr)
+        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id) == nullptr)
         {
-            return ::testing::AssertionFailure() << "Query " << start_ts << "not active" << std::endl;
+            return ::testing::AssertionFailure() << "Query " << query_id.toString() << "not active" << std::endl;
         }
     }
     return ::testing::AssertionSuccess();

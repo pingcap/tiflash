@@ -55,9 +55,9 @@ struct MPPQueryTaskSet
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 /// a map from the mpp query id to mpp query task set, we use
-/// the start ts of a query as the query id as TiDB will guarantee
-/// the uniqueness of the start ts
-using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSetPtr>;
+/// the query_ts + local_query_id + serverID as the query id, because TiDB can't guarantee
+/// the uniqueness of the start ts when stale read or set snapshot
+using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryTaskSetPtr, MPPQueryIdHash>;
 
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
@@ -77,9 +77,9 @@ public:
 
     ~MPPTaskManager() = default;
 
-    MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
+    MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
 
-    MPPQueryTaskSetPtr getQueryTaskSet(UInt64 query_id);
+    MPPQueryTaskSetPtr getQueryTaskSet(const MPPQueryId & query_id);
 
     std::pair<bool, String> registerTask(MPPTaskPtr task);
 
@@ -93,13 +93,13 @@ public:
 
     std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
 
-    void abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type);
+    void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
 
     String toString();
 
 private:
-    MPPQueryTaskSetPtr addMPPQueryTaskSet(UInt64 query_id);
-    void removeMPPQueryTaskSet(UInt64 query_id, bool on_abort);
+    MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
+    void removeMPPQueryTaskSet(const MPPQueryId & query_id, bool on_abort);
 };
 
 } // namespace DB
