@@ -16,6 +16,7 @@
 
 #include <Columns/FilterDescription.h>
 #include <Interpreters/ExpressionActions.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB
 {
@@ -29,7 +30,7 @@ public:
 
     bool alwaysFalse() const;
     // return false if all filter out.
-    bool transform(Block & block);
+    bool transform(Block & block, FilterPtr child_filter);
     Block getHeader() const;
     ExpressionActionsPtr getExperssion() const;
 

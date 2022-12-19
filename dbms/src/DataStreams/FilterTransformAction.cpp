@@ -18,6 +18,8 @@
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
+#include <algorithm>
+#include "Common/Exception.h"
 
 namespace DB
 {
@@ -68,19 +70,21 @@ ExpressionActionsPtr FilterTransformAction::getExperssion() const
     return expression;
 }
 
-bool FilterTransformAction::transform(Block & block)
+bool FilterTransformAction::transform(Block & block, FilterPtr child_filter)
 {
     if (unlikely(!block))
         return true;
 
     expression->execute(block);
 
-    if (constant_filter_description.always_true)
+    if (constant_filter_description.always_true && !child_filter)
         return true;
 
     size_t columns = block.columns();
     size_t rows = block.rows();
     ColumnPtr column_of_filter = block.safeGetByPosition(filter_column).column;
+
+    RUNTIME_CHECK_MSG(!child_filter || child_filter->size() == rows, "Unexpected child filter size");
 
     /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
         *  and now - are calculated. That is, not all cases are covered by the code above.
@@ -100,13 +104,22 @@ bool FilterTransformAction::transform(Block & block)
 
     if (constant_filter_description.always_true)
     {
-        return true;
+        if (child_filter)
+            filter = child_filter;
+        else
+            return true;
     }
     else
     {
         FilterDescription filter_and_holder(*column_of_filter);
         filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
         filter_holder = filter_and_holder.data_holder;
+
+        if (child_filter)
+        {
+            /// Merge child_filter
+            std::transform(filter->cbegin(), filter->cend(), child_filter->cbegin(), filter->begin(), [](const UInt8 a, const UInt8 b) { return a > 0 && b != 0; });
+        }
     }
 
     /** Let's find out how many rows will be in result.
