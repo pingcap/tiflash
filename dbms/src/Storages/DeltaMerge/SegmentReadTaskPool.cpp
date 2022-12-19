@@ -278,11 +278,6 @@ int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
     return unordered_input_stream_ref_count.fetch_sub(1, std::memory_order_relaxed);
 }
 
-bool SegmentReadTaskPool::needScheduleToRead() const
-{
-    return getFreeBlockSlots() > 0 && getFreeActiveSegments() > 0;
-}
-
 Int64 SegmentReadTaskPool::getFreeBlockSlots() const
 {
     return block_slot_limit - blk_stat.pendingCount();
