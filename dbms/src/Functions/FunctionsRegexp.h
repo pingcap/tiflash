@@ -1015,7 +1015,7 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        UInt8 default_val = 0;
+        ResultType default_val = 0;
         vec_res.assign(col_size, default_val);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
@@ -1319,7 +1319,7 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        UInt8 default_val = 0;
+        ResultType default_val = 0;
         vec_res.assign(col_size, default_val);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
