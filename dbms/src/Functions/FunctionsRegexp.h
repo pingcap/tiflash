@@ -1698,7 +1698,8 @@ public:
 
         auto null_map_col = ColumnUInt8::create();
         typename ColumnUInt8::Container & null_map = null_map_col->getData();
-        null_map.resize_fill(col_size, 1);
+        UInt8 default_val = 1;
+        null_map.assign(col_size, default_val);
 
         // Start to execute substr
         if (canMemorize<PatT, MatchTypeT>())
