@@ -104,8 +104,11 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     std::vector<pingcap::kv::RegionVerID> region_ids;
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
-    dispatch_req_meta->set_start_ts(sender_target_task_start_ts);
-    dispatch_req_meta->set_task_id(sender_target_task_task_id);
+    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
+    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
+    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
+    dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
     const auto & settings = context.getSettings();
     dispatch_req->set_timeout(60);
@@ -171,10 +174,9 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
     // Exec summary of ExchangeSender will be merged into TableScan.
-    executor->set_executor_id(fmt::format("{}_{}_{}",
+    executor->set_executor_id(fmt::format("{}_{}",
                                           ExecIDPrefixForTiFlashStorageSender,
-                                          sender_target_task_start_ts,
-                                          sender_target_task_task_id));
+                                          sender_target_mpp_task_id.toString()));
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
