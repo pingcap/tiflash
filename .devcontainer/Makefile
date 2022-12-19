@@ -17,9 +17,13 @@ export COMPOSE_PROJECT_NAME = tiflash-devcontainer
 
 CONTAINER_SHELL := docker compose run --rm -it --entrypoint /usr/local/bin/dumb-init shell -- /usr/local/bin/zsh
 
-.PHONY: dev
-dev: SHELL := $(CONTAINER_SHELL)
-dev:
+.PHONY: rebuild-docker
+rebuild-docker:
+	docker compose build
+
+.PHONY: dev-in-container
+dev-in-container: SHELL := $(CONTAINER_SHELL)
+dev-in-container:
 	mkdir -p cmake-build-Debug \
 		&& cd cmake-build-Debug \
 		&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
@@ -28,9 +32,12 @@ dev:
 		&& cmake --build . \
 		&& cmake --install . --prefix=artifacts
 
-.PHONY: release
-release: SHELL := $(CONTAINER_SHELL)
-release:
+.PHONY: dev
+dev: rebuild-docker dev-in-container
+
+.PHONY: release-in-container
+release-in-container: SHELL := $(CONTAINER_SHELL)
+release-in-container:
 	mkdir -p cmake-build-Release \
 	&& cd cmake-build-Release \
 	&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
@@ -39,9 +46,12 @@ release:
 	&& cmake --build . \
 	&& cmake --install . --prefix=artifacts
 
-.PHONY: test
-test: SHELL := $(CONTAINER_SHELL)
-test:
+.PHONY: release
+dev: rebuild-docker release-in-container
+
+.PHONY: test-in-container
+test-in-container: SHELL := $(CONTAINER_SHELL)
+test-in-container:
 	mkdir -p cmake-build-Debug \
 		&& cd cmake-build-Debug \
 		&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
@@ -49,6 +59,9 @@ test:
 				-DCMAKE_CXX_COMPILER=clang++ \
 		&& cmake --build . --target gtests_dbms \
 		&& dbms/gtests_dbms
+
+.PHONY: test
+dev: rebuild-docker test-in-container
 
 .PHONY: clean-all
 clean-all:
