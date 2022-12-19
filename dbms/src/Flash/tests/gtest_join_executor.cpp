@@ -543,20 +543,145 @@ try
     context.addMockTable("null_test", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
     context.addMockTable("null_test", "null_table", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toVec<Int32>("c", {})});
 
-    auto request = context
-                       .scan("null_test", "null_table")
-                       .join(context.scan("null_test", "t"), tipb::JoinType::TypeInnerJoin, {col("a")})
-                       .build(context);
+    std::shared_ptr<tipb::DAGRequest> request;
+
+    // inner join
     {
+        // null table join non-null table
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        // non-null table join null table
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+
+        // null table join null table
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                      .build(context);
         executeAndAssertColumnsEqual(request, {});
     }
 
-    request = context
-                  .scan("null_test", "t")
-                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
-                  .build(context);
+    // cross join
+    const auto cond = gt(col("a"), lit(Field(static_cast<Int64>(5))));
+    // non-null table join null table
     {
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
         executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}})});
+
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        // the 4th col is left semi helper col.
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})});
+
+        request = context.scan("null_test", "t")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        // the 4th col is left semi helper col.
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
+    }
+
+    // null table join non-null table
+    {
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+    }
+
+    // null table join null table
+    {
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
     }
 }
 CATCH
@@ -584,11 +709,16 @@ try
                        .build(context);
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
-    std::vector<size_t> expect{10, 10, 10, 2, 2, 1, 1, 1};
+    std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        ASSERT_EQ(expect[i], getExecuteStreamsReturnBlockCount(request));
+        auto blocks = getExecuteStreamsReturnBlocks(request);
+        ASSERT_EQ(expect[i].size(), blocks.size());
+        for (size_t j = 0; j < blocks.size(); ++j)
+        {
+            ASSERT_EQ(expect[i][j], blocks[j].rows());
+        }
     }
 }
 CATCH

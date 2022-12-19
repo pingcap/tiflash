@@ -43,12 +43,14 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -98,8 +100,8 @@ AnalysisResult analyzeExpressions(
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    // selection on table scan had been executed in handleTableScan
-    // In test mode, filter is not pushed down to table scan
+    // selection on table scan had been executed in handleTableScan.
+    // In test mode, filter is not pushed down to table scan.
     if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
     {
         std::vector<const tipb::Expr *> where_conditions;
@@ -185,10 +187,19 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 {
     const auto push_down_filter = PushDownFilter::pushDownFilterFrom(query_block.selection_name, query_block.selection);
 
-    DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
-    storage_interpreter.execute(pipeline);
+    if (context.isDisaggregatedComputeMode())
+    {
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, push_down_filter, max_streams);
+        disaggregated_tiflash_interpreter.execute(pipeline);
+        analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
+        storage_interpreter.execute(pipeline);
 
-    analyzer = std::move(storage_interpreter.analyzer);
+        analyzer = std::move(storage_interpreter.analyzer);
+    }
 }
 
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)
