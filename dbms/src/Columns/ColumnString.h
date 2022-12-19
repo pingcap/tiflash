@@ -301,7 +301,7 @@ public:
     /// Sorting with respect of collation.
     void getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const;
 
-    ColumnPtr replicate(const Offsets & replicate_offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
@@ -320,14 +320,29 @@ public:
     void getExtremes(Field & min, Field & max) const override;
 
 
-    bool canBeInsideNullable() const override { return true; }
+    bool canBeInsideNullable() const override
+    {
+        return true;
+    }
 
 
-    Chars_t & getChars() { return chars; }
-    const Chars_t & getChars() const { return chars; }
+    Chars_t & getChars()
+    {
+        return chars;
+    }
+    const Chars_t & getChars() const
+    {
+        return chars;
+    }
 
-    Offsets & getOffsets() { return offsets; }
-    const Offsets & getOffsets() const { return offsets; }
+    Offsets & getOffsets()
+    {
+        return offsets;
+    }
+    const Offsets & getOffsets() const
+    {
+        return offsets;
+    }
 };
 
 
