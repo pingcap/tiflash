@@ -178,6 +178,7 @@ public:
         : dag_request(nullptr)
         , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(false)
+        , return_executor_id(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , flags(0)
@@ -349,7 +350,7 @@ public:
     String table_scan_executor_id;
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    bool return_executor_id{};
+    bool return_executor_id;
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;

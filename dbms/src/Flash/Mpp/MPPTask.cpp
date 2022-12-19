@@ -227,6 +227,7 @@ void MPPTask::unregisterTask()
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
+    // Parse the encoded plan into `dag_req`
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context->getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
@@ -275,6 +276,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         }
         is_root_mpp_task = task_meta.task_id() == -1;
     }
+
+    // Build the dag_context
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);

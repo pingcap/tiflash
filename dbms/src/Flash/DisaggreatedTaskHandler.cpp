@@ -9,7 +9,7 @@ namespace DB
 {
 grpc::Status DisaggregatedTaskHandler::execute(const ContextPtr & context)
 {
-    UNUSED(request, response);
+    UNUSED(request);
     RUNTIME_CHECK(context->isDisaggregatedStorageMode());
 
     // We need to refresh the read node's region cache

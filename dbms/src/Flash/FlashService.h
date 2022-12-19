@@ -17,7 +17,6 @@
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
-#include <grpcpp/server_context.h>
 
 #include <boost/noncopyable.hpp>
 #pragma GCC diagnostic push

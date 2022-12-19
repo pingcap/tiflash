@@ -169,7 +169,7 @@ void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
     while (true)
     {
         // no more results
-        if(!consumeOneResult(log))
+        if (!consumeOneResult(log))
             break;
     }
 }
@@ -199,7 +199,7 @@ bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
     const auto decode_detail = result.decode_detail;
     total_rows += decode_detail.rows;
     total_pages += decode_detail.pages;
-    
+
     return true;
 }
 

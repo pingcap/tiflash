@@ -31,7 +31,7 @@ public:
         Context & context_,
         const PlanQuerySource & plan_source_);
 
-    ~Planner() = default;
+    ~Planner() override = default;
 
     BlockIO execute() override;
 

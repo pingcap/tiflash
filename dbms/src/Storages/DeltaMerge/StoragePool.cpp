@@ -710,7 +710,7 @@ void StoragePool::shutdown()
         global_context.getBackgroundPool().removeTask(gc_handle);
         gc_handle = nullptr;
     }
-    if (run_mode != PageStorageRunMode::ONLY_V3)
+    if (run_mode != PageStorageRunMode::ONLY_V3 && run_mode != PageStorageRunMode::UNI_PS)
     {
         meta_storage_v2->shutdown();
         log_storage_v2->shutdown();
