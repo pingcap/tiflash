@@ -196,6 +196,7 @@ public:
         {
             writes.emplace_back(r);
         }
+        total_data_size += rhs.total_data_size;
     }
 
     void clear()

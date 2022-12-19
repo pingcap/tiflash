@@ -72,6 +72,11 @@ struct ExternalIdTrait
     {
         return page_id.low;
     }
+    // Used for indicate infinite end
+    static inline bool isInvalidPageId(const PageId & page_id)
+    {
+        return page_id == 0;
+    }
 };
 } // namespace u128
 namespace universal
@@ -98,6 +103,10 @@ struct ExternalIdTrait
     static inline PageId getPageMapKey(const PageId & page_id)
     {
         return page_id;
+    }
+    static inline bool isInvalidPageId(const PageId & page_id)
+    {
+        return page_id.empty();
     }
 };
 } // namespace universal
