@@ -18,6 +18,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
@@ -39,6 +40,26 @@ namespace FailPoints
 extern const char random_receiver_sync_msg_push_failure_failpoint[];
 extern const char random_receiver_async_msg_push_failure_failpoint[];
 } // namespace FailPoints
+
+namespace ExchangeReceiverMetric
+{
+inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_add(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Increment(size);
+}
+
+inline void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_sub(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(size);
+}
+
+inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
+{
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(data_size_in_queue.load());
+}
+} // namespace ExchangeReceiverMetric
 
 constexpr Int32 batch_packet_count = 16;
 
@@ -141,8 +162,9 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed)
 class ReceiverChannelWriter
 {
 public:
-    ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_)
-        : msg_channels(msg_channels_)
+    ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_)
+        : data_size_in_queue(data_size_in_queue_)
+        , msg_channels(msg_channels_)
         , req_info(req_info_)
         , log(log_)
     {}
@@ -167,6 +189,8 @@ public:
         else
             success = writeNonFineGrain<is_sync>(source_index, tracked_packet, error_ptr, resp_ptr);
 
+        if (likely(success))
+            ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
         LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels->size(), success, enable_fine_grained_shuffle);
         return success;
     }
@@ -266,6 +290,7 @@ private:
         return success;
     }
 
+    std::atomic<Int64> * data_size_in_queue;
     std::vector<MsgChannelPtr> * msg_channels;
     String req_info;
     const LoggerPtr log;
@@ -324,6 +349,8 @@ public:
         const LoggerPtr & log);
 
     MemoryTracker * getMemoryTracker() const { return memory_tracker; }
+
+    std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
 protected:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -393,6 +420,8 @@ protected:
     bool collected = false;
     int thread_count = 0;
     MemoryTracker * memory_tracker;
+
+    std::atomic<Int64> data_size_in_queue{};
 
     // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
     std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;

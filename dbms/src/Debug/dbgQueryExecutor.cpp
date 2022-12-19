@@ -42,6 +42,9 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
 
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
+    root_tm.set_query_ts(properties.query_ts);
+    root_tm.set_local_query_id(properties.local_query_id);
+    root_tm.set_server_id(properties.server_id);
     root_tm.set_address(root_addr);
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
@@ -71,6 +74,9 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     {
         mpp::TaskMeta tm;
         tm.set_start_ts(properties.start_ts);
+        tm.set_query_ts(properties.query_ts);
+        tm.set_local_query_id(properties.local_query_id);
+        tm.set_server_id(properties.server_id);
         tm.set_address(Debug::LOCAL_HOST);
         tm.set_task_id(root_task_id);
         tm.set_partition_id(-1);
@@ -84,6 +90,9 @@ void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tip
 {
     mpp::TaskMeta tm;
     tm.set_start_ts(properties.start_ts);
+    tm.set_query_ts(properties.query_ts);
+    tm.set_local_query_id(properties.local_query_id);
+    tm.set_server_id(properties.server_id);
     tm.set_address(addr);
     tm.set_task_id(task_id);
     tm.set_partition_id(-1);
@@ -109,6 +118,9 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
     }
     auto * tm = req->mutable_meta();
     tm->set_start_ts(properties.start_ts);
+    tm->set_query_ts(properties.query_ts);
+    tm->set_local_query_id(properties.local_query_id);
+    tm->set_server_id(properties.server_id);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
@@ -128,6 +140,9 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
     }
     auto * tm = req->mutable_meta();
     tm->set_start_ts(properties.start_ts);
+    tm->set_query_ts(properties.query_ts);
+    tm->set_local_query_id(properties.local_query_id);
+    tm->set_server_id(properties.server_id);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);

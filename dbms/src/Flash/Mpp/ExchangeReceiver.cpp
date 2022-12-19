@@ -66,7 +66,8 @@ public:
         std::vector<MsgChannelPtr> * msg_channels_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const String & req_id)
+        const String & req_id,
+        std::atomic<Int64> * data_size_in_queue)
         : rpc_context(context)
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(&req)
@@ -74,7 +75,7 @@ public:
         , msg_channels(msg_channels_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
-        , channel_writer(msg_channels_, req_info, log)
+        , channel_writer(msg_channels_, req_info, log, data_size_in_queue)
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -397,7 +398,7 @@ void ExchangeReceiverWithRPCContext<RPCContext>::reactor(const std::vector<Reque
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channels, rpc_context, req, exc_log->identifier()));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channels, rpc_context, req, exc_log->identifier(), &data_size_in_queue));
 
     while (alive_async_connections > 0)
     {
@@ -439,7 +440,7 @@ void ExchangeReceiverWithRPCContext<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log);
+        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);

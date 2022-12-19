@@ -17,7 +17,7 @@
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
-#include <Common/getNumberOfLogicalCPUCores.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/EstablishCall.h>
@@ -63,9 +63,8 @@ constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService() = default;
 
-void FlashService::init(const TiFlashSecurityConfig & security_config_, Context & context_)
+void FlashService::init(Context & context_)
 {
-    security_config = &security_config_;
     context = &context_;
     log = &Poco::Logger::get("FlashService");
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
@@ -366,7 +365,7 @@ grpc::Status FlashService::CancelMPPTask(
 
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -408,7 +407,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -417,7 +416,7 @@ grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_con
     // For coprocessor/mpp test, we don't care about security config.
     if likely (!context->isMPPTest() && !context->isCopTest())
     {
-        if (!security_config->checkGrpcContext(grpc_context))
+        if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
         {
             return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
         }

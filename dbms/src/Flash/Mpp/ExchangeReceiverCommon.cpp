@@ -40,6 +40,7 @@ ExchangeReceiverBase::~ExchangeReceiverBase()
         close();
         waitAllLocalConnDone();
         thread_manager->wait();
+        ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
     {
@@ -127,6 +128,7 @@ ExchangeReceiverResult ExchangeReceiverBase::nextResult(
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
 
+        ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
 }

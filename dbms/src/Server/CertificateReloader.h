@@ -14,11 +14,32 @@
 
 #pragma once
 
+#include <Common/config.h>
+
+#if Poco_NetSSL_FOUND
+
 #include <Common/Logger.h>
-#include <Flash/Mpp/MPPTaskId.h>
+#include <Common/TiFlashSecurity.h>
+#include <Interpreters/Context.h>
+#include <Poco/Crypto/X509Certificate.h>
+#include <Poco/Net/Context.h>
+#include <openssl/ssl.h>
+
+#include <ext/singleton.h>
 
 namespace DB
 {
-/// All tracing logs must logged by the logger that got by `getMPPTaskTracingLog`.
-LoggerPtr getMPPTaskTracingLog(const MPPTaskId & mpp_task_id);
+
+class CertificateReloader : public ext::Singleton<CertificateReloader>
+{
+public:
+    static void initSSLCallback(Poco::Net::Context::Ptr context, Context * global_context);
+    /// A callback for OpenSSL
+    int setCertificate(SSL * ssl, void * arg);
+
+private:
+    LoggerPtr log = Logger::get("CertificateReloader");
+};
 } // namespace DB
+
+#endif

@@ -47,7 +47,7 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
 }
 
 // Update metric for tunnel's response bytes
-void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
+void updateMetric(std::atomic<Int64> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode)
 {
     switch (mode)
     {
@@ -61,6 +61,7 @@ void updateMetric(size_t pushed_data_size, TunnelSenderMode mode)
     default:
         throw DB::Exception("Illegal TunnelSenderMode");
     }
+    MPPTunnelMetric::addDataSizeMetric(data_size_in_queue, pushed_data_size);
 }
 } // namespace
 
@@ -88,6 +89,7 @@ MPPTunnel::MPPTunnel(
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get(req_id, tunnel_id))
+    , data_size_in_queue(0)
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -107,6 +109,7 @@ MPPTunnel::~MPPTunnel()
     try
     {
         close("", true);
+        MPPTunnelMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
     {
@@ -161,7 +164,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
-        updateMetric(pushed_data_size, mode);
+        updateMetric(data_size_in_queue, pushed_data_size, mode);
         updateConnProfileInfo(pushed_data_size);
         return;
     }
@@ -192,7 +195,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         RUNTIME_CHECK_MSG(mode == TunnelSenderMode::SYNC_GRPC, "This should be a sync tunnel");
 
         LOG_TRACE(log, "ready to connect sync");
-        sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id);
+        sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
         sync_tunnel_sender->startSendThread(writer);
         tunnel_sender = sync_tunnel_sender;
 
@@ -240,11 +243,11 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         auto kick_func_for_test = call_data->getKickFuncForTest();
         if (unlikely(kick_func_for_test.has_value()))
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value());
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value(), &data_size_in_queue);
         }
         else
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, call_data->grpcCall());
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, call_data->grpcCall(), &data_size_in_queue);
         }
         call_data->attachAsyncTunnelSender(async_tunnel_sender);
         tunnel_sender = async_tunnel_sender;
@@ -352,6 +355,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
         TrackedMppDataPacketPtr res;
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
+            MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
             if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
