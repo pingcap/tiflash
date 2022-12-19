@@ -24,25 +24,37 @@ BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_)
     , all_match(false)
 {}
 
-void BitmapFilter::set(const UInt32 * data, UInt32 size)
+void BitmapFilter::set(const ColumnPtr & col, const FilterPtr f)
+{
+    const auto * v = toColumnVectorDataPtr<UInt32>(col);
+    set(v->data(), v->size(), f);
+}
+
+void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr f)
 {
     if (size == 0)
     {
         return;
     }
-    size_t max_row_id = *std::max_element(data, data + size);
-    RUNTIME_CHECK(max_row_id < filter.size(), max_row_id, filter.size());
-    for (UInt32 i = 0; i < size; i++)
+    //size_t max_row_id = *std::max_element(data, data + size);
+    //RUNTIME_CHECK(max_row_id < filter.size(), max_row_id, filter.size());
+    if (f == nullptr)
     {
-        UInt32 row_id = *(data + i);
-        filter[row_id] = true;
+         for (UInt32 i = 0; i < size; i++)
+        {
+            UInt32 row_id = *(data + i);
+            filter[row_id] = true;
+        }
     }
-}
-
-void BitmapFilter::set(const ColumnPtr & col)
-{
-    const auto * v = toColumnVectorDataPtr<UInt32>(col);
-    set(v->data(), v->size());
+    else
+    {
+        RUNTIME_CHECK(size == f->size(), size, f->size());
+        for (UInt32 i = 0; i < size; i++)
+        {
+            UInt32 row_id = *(data + i);
+            filter[row_id] = (*f)[i];
+        }
+    }
 }
 
 void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const

@@ -2294,10 +2294,11 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap);
     for (;;)
     {
-        auto blk = stream->read();
+        FilterPtr f = nullptr;
+        auto blk = stream->read(f, true);
         if (likely(blk))
         {
-            bitmap_filter->set(blk.segmentRowIdCol());
+            bitmap_filter->set(blk.segmentRowIdCol(), f);
         }
         else
         {

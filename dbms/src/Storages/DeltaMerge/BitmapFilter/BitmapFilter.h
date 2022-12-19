@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/IColumn.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB::DM
 {
@@ -26,9 +27,8 @@ class BitmapFilter
 public:
     BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_);
 
-    void set(const UInt32 * data, UInt32 size);
-
-    void set(const ColumnPtr & col);
+    void set(const ColumnPtr & col, const FilterPtr f);
+    void set(const UInt32 * data, UInt32 size, const FilterPtr f);
 
     void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
