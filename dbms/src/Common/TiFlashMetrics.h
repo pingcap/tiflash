@@ -105,6 +105,7 @@ namespace DB
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                       \
         F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.001, 2, 20}))                                            \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                          \
+    M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                    \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                              \
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
     M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                              \
@@ -262,6 +263,9 @@ namespace DB
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+    M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                              \
+        F(type_send, {{"type", "send_queue"}}),                                                                                           \
+        F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

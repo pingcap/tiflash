@@ -59,7 +59,7 @@ public:
     ExecutionResult execute();
     ExecutionResult execute(ResultHandler::Handler handler);
 
-    virtual void cancel(bool is_kill) = 0;
+    virtual void cancel() = 0;
 
     virtual String dump() const = 0;
 

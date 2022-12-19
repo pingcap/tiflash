@@ -360,15 +360,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         remote_read_streams_start_index = 1;
     }
 
-    /// We don't want the table to be dropped during the lifetime of this query,
-    /// and sometimes if there is no local region, we will use the RemoteBlockInputStream
-    /// or even the null_stream to hold the lock.
-    pipeline.transform([&](auto & stream) {
-        // todo do not need to hold all locks in each stream, if the stream is reading from table a
-        //  it only needs to hold the lock of table a
-        for (const auto & lock : drop_locks)
-            stream->addTableLock(lock);
-    });
+    for (const auto & lock : drop_locks)
+        dagContext().addTableLock(lock);
 
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);

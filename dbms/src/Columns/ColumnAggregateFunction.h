@@ -173,7 +173,7 @@ public:
 
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
 
-    ColumnPtr replicate(const Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
