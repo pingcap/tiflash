@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Columns/FilterDescription.h>
-#include <Interpreters/ExpressionActions.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {

@@ -18,8 +18,8 @@
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
+
 #include <algorithm>
-#include "Common/Exception.h"
 
 namespace DB
 {
