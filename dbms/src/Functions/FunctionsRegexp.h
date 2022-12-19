@@ -1015,7 +1015,8 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize_fill(col_size, 0);
+        UInt8 default_val = 0;
+        vec_res.assign(col_size, 0);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1030,7 +1031,8 @@ public:
                 {
                     auto nullmap_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize_fill(col_size, 1);
+                    UInt8 default_val = 1;
+                    nullmap.assign(col_size, 1);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
                     return;
                 }
@@ -1317,7 +1319,8 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize_fill(col_size, 0);
+        UInt8 default_val = 0;
+        vec_res.assign(col_size, 0);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1366,7 +1369,8 @@ public:
                 {
                     auto nullmap_col = ColumnUInt8::create();
                     typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                    nullmap.resize_fill(col_size, 1);
+                    UInt8 default_val = 1;
+                    nullmap.assign(col_size, 1);
                     res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
                     return;
                 }
