@@ -46,10 +46,10 @@ namespace TiDB
 {
 
 constexpr int64_t MPP_VERSION_V0 = 0;
-constexpr int64_t MPP_VERSION_V1 = 1000;
+constexpr int64_t MPP_VERSION_V1 = 1;
 MAYBE_UNUSED_MEMBER constexpr int64_t MPP_VERSION_V2 = MPP_VERSION_V1 * 2;
 constexpr int64_t MPP_VERSION = MPP_VERSION_V1;
-static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.6.0";
+static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.7.0";
 
 bool CheckMppVersion(int64_t mpp_version)
 {
