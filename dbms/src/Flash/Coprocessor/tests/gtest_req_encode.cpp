@@ -111,6 +111,7 @@ TEST(RequestEncodeTest, MPPPartitionRegions)
 
     {
         const auto & table0 = req.table_regions(0);
+        ASSERT_EQ(table0.regions_size(), 3);
 
         const auto & reg0 = table0.regions(0);
         ASSERT_REGION_ID_EQ(reg0, pkv::RegionVerID(111, 1, 4));
@@ -132,6 +133,7 @@ TEST(RequestEncodeTest, MPPPartitionRegions)
 
     {
         const auto & table1 = req.table_regions(1);
+        ASSERT_EQ(table1.regions_size(), 2);
 
         const auto & reg0 = table1.regions(0);
         ASSERT_REGION_ID_EQ(reg0, pkv::RegionVerID(444, 1, 4));
