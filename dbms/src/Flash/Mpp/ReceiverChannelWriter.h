@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Common/FailPoint.h>
-#include <Common/TiFlashMetrics.h>
 #include <Common/MPMCQueue.h>
+#include <Common/TiFlashMetrics.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 
 namespace DB
 {
@@ -90,7 +90,8 @@ using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>
 
 inline void injectFailPointReceiverPushFail(bool & push_succeed, ExchangeMode mode)
 {
-    switch (mode) {
+    switch (mode)
+    {
     case ExchangeMode::Local:
         fiu_do_on(FailPoints::random_receiver_local_msg_push_failure_failpoint, push_succeed = false);
         break;

@@ -170,7 +170,6 @@ protected:
     const String tunnel_id;
 
     std::atomic<Int64> * data_size_in_queue; // Come from MppTunnel
-    
 };
 
 /// SyncTunnelSender maintains a new thread itself to consume and send data
@@ -178,9 +177,10 @@ class SyncTunnelSender : public TunnelSender
 {
 public:
     SyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
-    : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-    , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size)) {}
-    
+        : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
+        , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
+    {}
+
     ~SyncTunnelSender() override;
     void startSendThread(PacketWriter * writer);
 

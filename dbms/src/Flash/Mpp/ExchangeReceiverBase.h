@@ -228,9 +228,10 @@ struct SupportForLocalExchange
         MemoryTracker * recv_mem_tracker_,
         std::function<void(bool, const String &)> && notify_receiver_,
         ReceiverChannelWriter && channel_writer_)
-    : recv_mem_tracker(recv_mem_tracker_)
-    , notify_receiver(std::move(notify_receiver_))
-    , channel_writer(std::move(channel_writer_)) {}
+        : recv_mem_tracker(recv_mem_tracker_)
+        , notify_receiver(std::move(notify_receiver_))
+        , channel_writer(std::move(channel_writer_))
+    {}
 
     template <bool enable_fine_grained_shuffle>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
