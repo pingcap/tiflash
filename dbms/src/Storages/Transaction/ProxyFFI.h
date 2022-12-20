@@ -167,6 +167,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
 void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view);
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts);
+FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(
@@ -210,6 +211,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_set_store = SetStore,
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
+        .fn_fast_add_peer = FastAddPeer,
     };
 }
 

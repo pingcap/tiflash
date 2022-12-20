@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/ColumnFile/RemoteProto/RemoteProtos.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -39,6 +40,8 @@ class ColumnFileBig;
 class ColumnFilePersisted;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
+class IColumnFileSetStorageReader;
+using IColumnFileSetStorageReaderPtr = std::shared_ptr<IColumnFileSetStorageReader>;
 
 static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 
@@ -127,8 +130,10 @@ public:
 
     ColumnFilePersisted * tryToColumnFilePersisted();
 
-    virtual ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+    virtual ColumnFileReaderPtr getReader(
+        const DMContext &,
+        const IColumnFileSetStorageReaderPtr &,
+        const ColumnDefinesPtr &) const = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
@@ -140,6 +145,11 @@ public:
     }
 
     virtual String toString() const = 0;
+
+    virtual RemoteProtocol::ColumnFile serializeToRemoteProtocol() const
+    {
+        RUNTIME_CHECK_MSG(false, "Current ColumnFile cannot be serialized to remote protocol, type={}", magic_enum::enum_name(getType()));
+    }
 };
 
 

@@ -88,16 +88,15 @@ static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<Bl
 using UniversalPageId = String;
 using UniversalPageIds = std::vector<UniversalPageId>;
 
-struct ByteBuffer
+template <class Pos>
+struct ByteBufferInternal
 {
-    using Pos = char *;
-
-    ByteBuffer()
+    ByteBufferInternal()
         : begin_pos(nullptr)
         , end_pos(nullptr)
     {}
 
-    ByteBuffer(Pos begin_pos_, Pos end_pos_)
+    ByteBufferInternal(Pos begin_pos_, Pos end_pos_)
         : begin_pos(begin_pos_)
         , end_pos(end_pos_)
     {}
@@ -109,6 +108,20 @@ struct ByteBuffer
 private:
     Pos begin_pos;
     Pos end_pos; /// 1 byte after the end of the buffer
+};
+
+struct ByteBuffer : public ByteBufferInternal<char *>
+{
+    using ByteBufferInternal<char *>::ByteBufferInternal;
+};
+
+struct ConstByteBuffer : public ByteBufferInternal<const char *>
+{
+    using ByteBufferInternal<const char *>::ByteBufferInternal;
+    
+    ConstByteBuffer(const ByteBuffer & buf)
+        : ConstByteBuffer(buf.begin(), buf.end())
+    {}
 };
 
 /// https://stackoverflow.com/a/13938417

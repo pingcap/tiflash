@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -100,7 +101,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         {
             if (overlapped_region.first != region_id)
             {
-                auto uni_ps = tmt.getContext().getGlobalUniversalPageStorage();
+                auto uni_ps = tmt.getContext().getWriteNodePageStorage();
                 RaftLogReader reader(*uni_ps);
                 auto page_id = RaftLogReader::toRegionMetaKey(region_id);
                 auto value = reader.read(page_id);

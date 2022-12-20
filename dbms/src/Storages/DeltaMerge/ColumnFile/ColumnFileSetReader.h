@@ -44,10 +44,11 @@ private:
     Block readPKVersion(size_t offset, size_t limit);
 
 public:
-    ColumnFileSetReader(const DMContext & context_,
-                        const ColumnFileSetSnapshotPtr & snapshot_,
-                        const ColumnDefinesPtr & col_defs_,
-                        const RowKeyRange & segment_range_);
+    ColumnFileSetReader(
+        const DMContext & context_,
+        const ColumnFileSetSnapshotPtr & snapshot_,
+        const ColumnDefinesPtr & col_defs_,
+        const RowKeyRange & segment_range_);
 
     // If we need to read columns besides pk and version, a ColumnFileSetReader can NOT be used more than once.
     // This method create a new reader based on the current one. It will reuse some caches in the current reader.

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 
 namespace DB
 {
@@ -80,14 +81,29 @@ public:
         wbs.removed_data.delPage(file->pageId());
     }
 
-    ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext & context,
+        const IColumnFileSetStorageReaderPtr &,
+        const ColumnDefinesPtr & col_defs) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
     static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
+
+    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override
+    {
+        return RemoteProtocol::ColumnFileBig{
+            .file_id = file->fileId(),
+        };
+    }
+
+    static std::shared_ptr<ColumnFileBig> deserializeFromRemoteProtocol(
+        const RemoteProtocol::ColumnFileBig & proto,
+        const Remote::DMFileOID & oid,
+        const DMContext & context,
+        const RowKeyRange & segment_range);
 
     String toString() const override
     {

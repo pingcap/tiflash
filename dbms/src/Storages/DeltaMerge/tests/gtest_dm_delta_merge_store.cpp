@@ -103,7 +103,7 @@ try
     ASSERT_NE(store, nullptr);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
-    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalUniversalPageStorage();
+    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getWriteNodePageStorage();
 
     // Start a PageStorage gc and suspend it before clean external page
     auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
@@ -142,7 +142,7 @@ try
     ASSERT_NE(store, nullptr);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
-    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalUniversalPageStorage();
+    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getWriteNodePageStorage();
 
     // Start a PageStorage gc and suspend it before removing dtfiles
     auto sp_gc = SyncPointCtl::enableInScope("before_DeltaMergeStore::callbacks_remover_remove");
@@ -181,7 +181,7 @@ try
     ASSERT_NE(store, nullptr);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
-    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalUniversalPageStorage();
+    auto global_uni_page_storage = TiFlashTestEnv::getGlobalContext().getWriteNodePageStorage();
 
     // Start a PageStorage gc and suspend it before clean external page
     auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
