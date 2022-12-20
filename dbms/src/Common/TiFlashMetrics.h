@@ -169,8 +169,10 @@ namespace DB
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                        \
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                         \
         F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
-        F(type_blob,  {{"type", "blob"}},  ExpBuckets{0.0001, 2, 20}),                                                                    \
         /* the bucket range for apply in memory is 50us ~ 120s */                                                                         \
+        F(type_choose_stat,  {{"type", "choose_stat"}},   ExpBuckets{0.00005, 1.8, 26}),                                                  \
+        F(type_search_pos,    {{"type", "search_pos"}},     ExpBuckets{0.00005, 1.8, 26}),                                                \
+        F(type_blob_write, {{"type", "blob_write"}}, ExpBuckets{0.00005, 1.8, 26}),                                                       \
         F(type_latch,  {{"type", "latch"}},   ExpBuckets{0.00005, 1.8, 26}),                                                              \
         F(type_wal,    {{"type", "wal"}},     ExpBuckets{0.00005, 1.8, 26}),                                                              \
         F(type_commit, {{"type", "commmit"}}, ExpBuckets{0.00005, 1.8, 26}))                                                              \
