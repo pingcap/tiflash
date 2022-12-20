@@ -106,10 +106,12 @@ grpc::Status CoprocessorHandler::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
-            DAGContext dag_context(dag_request);
-            dag_context.tables_regions_info = std::move(tables_regions_info);
-            dag_context.log = Logger::get("CoprocessorHandler");
-            dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
+            DAGContext dag_context(
+                dag_request,
+                std::move(tables_regions_info),
+                cop_context.db_context.getClientInfo().current_address.toString(),
+                false,
+                Logger::get("CoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);

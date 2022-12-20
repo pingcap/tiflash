@@ -127,13 +127,17 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    explicit DAGContext(const tipb::DAGRequest & dag_request_)
+    explicit DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
+        , tidb_host(tidb_host_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
+        , is_batch_cop(is_batch_cop_)
+        , tables_regions_info(std::move(tables_regions_info_))
+        , log(std::move(log_))
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
@@ -345,9 +349,9 @@ public:
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
     bool return_executor_id{};
-    bool is_mpp_task = false;
-    bool is_root_mpp_task = false;
-    bool is_batch_cop = false;
+    /* const */ bool is_mpp_task = false;
+    /* const */ bool is_root_mpp_task = false;
+    /* const */ bool is_batch_cop = false;
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
