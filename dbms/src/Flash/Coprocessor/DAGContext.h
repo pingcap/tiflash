@@ -158,7 +158,7 @@ public:
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , mpp_task_meta(meta_)
-        , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
+        , mpp_task_id(mpp_task_meta)
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)

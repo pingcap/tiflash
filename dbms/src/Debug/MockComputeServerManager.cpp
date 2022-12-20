@@ -115,11 +115,14 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
     server_map[partition_id] = std::move(server);
 }
 
-void MockComputeServerManager::cancelQuery(size_t start_ts)
+void MockComputeServerManager::cancelQuery(const MPPQueryId & query_id)
 {
     mpp::CancelTaskRequest req;
     auto * meta = req.mutable_meta();
-    meta->set_start_ts(start_ts);
+    meta->set_query_ts(query_id.query_ts);
+    meta->set_local_query_id(query_id.local_query_id);
+    meta->set_server_id(query_id.server_id);
+    meta->set_start_ts(query_id.start_ts);
     mpp::CancelTaskResponse response;
     for (const auto & server : server_map)
         server.second->flashService()->cancelMPPTaskForTest(&req, &response);

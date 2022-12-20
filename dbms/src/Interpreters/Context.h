@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashSecurity.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
