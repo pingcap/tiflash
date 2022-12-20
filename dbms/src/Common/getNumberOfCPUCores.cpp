@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/getNumberOfCPUCores.h>
 #include <Common/Logger.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <common/types.h>
 
 namespace CPUCores
