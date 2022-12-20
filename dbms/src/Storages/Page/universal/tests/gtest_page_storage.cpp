@@ -455,5 +455,6 @@ TEST_F(UniPageStorageTest, UniversalPageId)
     auto u_id = buildTableUniversalPageId(getStoragePrefix(TableStorageTag::Log), 1, 1);
     ASSERT_EQ(DB::PS::V3::universal::ExternalIdTrait::getU64ID(u_id), 1);
 }
+
 } // namespace PS::universal::tests
 } // namespace DB

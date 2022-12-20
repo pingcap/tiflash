@@ -16,6 +16,7 @@
 
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ReadIndexWorker.h>
+#include <Storages/Page/UniversalWriteBatch.h>
 #include <kvproto/raft_serverpb.pb.h>
 #include <raft_cmdpb.pb.h>
 
@@ -24,6 +25,22 @@
 namespace DB
 {
 kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts);
+
+namespace keys {
+static constexpr uint8_t LOCAL_PREFIX = 0x1;
+static constexpr uint8_t REGION_RAFT_PREFIX = 0x2;
+static constexpr uint8_t REGION_META_PREFIX = 0x3;
+static constexpr uint8_t REGION_STATE_SUFFIX = 0x1;
+static constexpr uint8_t APPLY_STATE_SUFFIX = 0x3;
+
+void makeRegionPrefix(WriteBuffer & ss, uint64_t region_id, uint8_t suffix);
+void makeRegionMeta(WriteBuffer & ss, uint64_t region_id, uint8_t suffix);
+std::string regionStateKey(uint64_t region_id);
+std::string applyStateKey(uint64_t region_id);
+bool validateRegionStateKey(const char* buf, size_t len, uint64_t region_id);
+bool validateApplyStateKey(const char* buf, size_t len, uint64_t region_id);
+
+} // namespace keys
 
 struct MockProxyRegion : MutexLockWrap
 {
@@ -36,6 +53,7 @@ struct MockProxyRegion : MutexLockWrap
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
+    UniversalWriteBatch persistMeta();
 
     struct NormalWrite
     {

@@ -27,6 +27,9 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
+#include "Poco/Logger.h"
+#include "common/types.h"
 
 namespace DB
 {
@@ -35,6 +38,63 @@ namespace RegionBench
 extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
+
+namespace keys {
+void makeRegionPrefix(WriteBuffer & ss, uint64_t region_id, uint8_t suffix) {
+    uint8_t kk1 = LOCAL_PREFIX;
+    uint8_t kk2 = REGION_RAFT_PREFIX;
+    ss.write(reinterpret_cast<const char *>(&kk1), 1);
+    ss.write(reinterpret_cast<const char *>(&kk2), 1);
+    auto encoded = RecordKVFormat::encodeUInt64(region_id);
+    decltype(auto) src = reinterpret_cast<const char *>(&encoded);
+    ss.write(src, sizeof encoded);
+    ss.write(reinterpret_cast<const char *>(&suffix), 1);
+}
+
+void makeRegionMeta(WriteBuffer & ss, uint64_t region_id, uint8_t suffix) {
+    uint8_t kk1 = LOCAL_PREFIX;
+    uint8_t kk2 = REGION_META_PREFIX;
+    ss.write(reinterpret_cast<const char *>(&kk1), 1);
+    ss.write(reinterpret_cast<const char *>(&kk2), 1);
+    auto encoded = RecordKVFormat::encodeUInt64(region_id);
+    decltype(auto) src = reinterpret_cast<const char *>(&encoded);
+    ss.write(src, sizeof encoded);
+    ss.write(reinterpret_cast<const char *>(&suffix), 1);
+}
+
+std::string regionStateKey(uint64_t region_id) {
+    WriteBufferFromOwnString buff;
+    makeRegionMeta(buff, region_id, REGION_STATE_SUFFIX);
+    return buff.releaseStr();
+}
+
+std::string applyStateKey(uint64_t region_id) {
+    WriteBufferFromOwnString buff;
+    makeRegionPrefix(buff, region_id, APPLY_STATE_SUFFIX);
+    return buff.releaseStr();
+}
+
+bool validateRegionStateKey(const char* buf, size_t len, uint64_t region_id) {
+    if(len != 11) return false;
+    if(buf[0] != LOCAL_PREFIX) return false;
+    if(buf[1] != REGION_META_PREFIX) return false;
+    auto parsed_region_id = RecordKVFormat::decodeUInt64(*reinterpret_cast<const UInt64 *>(buf + 2));
+    if(buf[10] != REGION_STATE_SUFFIX) return false;
+    if (region_id != parsed_region_id) return false;
+    return true;
+}
+
+bool validateApplyStateKey(const char* buf, size_t len, uint64_t region_id) {
+    if(len != 11) return false;
+    if(buf[0] != LOCAL_PREFIX) return false;
+    if(buf[1] != REGION_RAFT_PREFIX) return false;
+    auto parsed_region_id = RecordKVFormat::decodeUInt64(*reinterpret_cast<const UInt64 *>(buf + 2));
+    if(buf[10] != APPLY_STATE_SUFFIX) return false;
+    if (region_id != parsed_region_id) return false;
+    return true;
+}
+
+} // namespacce keys
 
 kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts)
 {
@@ -194,6 +254,30 @@ void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
 {
     auto _ = genLockGuard();
     this->state = s;
+}
+
+UniversalWriteBatch MockProxyRegion::persistMeta()
+{
+    auto _ = genLockGuard();
+    auto wb = UniversalWriteBatch();
+
+    auto region_key = keys::regionStateKey(this->id);
+    auto region_local_state = this->state.SerializeAsString();
+    MemoryWriteBuffer buf(0, region_local_state.size());
+    buf.write(region_local_state.data(), region_local_state.size());
+    wb.putPage(UniversalPageId(region_key.data(), region_key.size()), 0, buf.tryGetReadBuffer(), region_local_state.size());
+
+    auto apply_key = keys::applyStateKey(this->id);
+    auto raft_apply_state = this->apply.SerializeAsString();
+    MemoryWriteBuffer buf2(0, raft_apply_state.size());
+    buf2.write(raft_apply_state.data(), raft_apply_state.size());
+    wb.putPage(UniversalPageId(apply_key.data(), apply_key.size()), 0, buf2.tryGetReadBuffer(), raft_apply_state.size());
+
+    raft_serverpb::RegionLocalState restored_region_state;
+    raft_serverpb::RaftApplyState restored_apply_state;
+    restored_region_state.ParseFromArray(region_local_state.data(), region_local_state.size());
+    restored_apply_state.ParseFromArray(raft_apply_state.data(), raft_apply_state.size());
+    return wb;
 }
 
 MockProxyRegion::MockProxyRegion(uint64_t id_)
