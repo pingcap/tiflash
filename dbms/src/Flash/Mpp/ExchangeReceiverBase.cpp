@@ -14,7 +14,7 @@
 
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
+#include <Flash/Mpp/ExchangeReceiverBase.h>
 #include <common/defines.h>
 
 #include <magic_enum.hpp>

@@ -16,7 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
+#include <Flash/Mpp/ExchangeReceiverBase.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
@@ -191,7 +191,7 @@ void MPPTunnel::connect(PacketWriter * writer)
     {
         std::unique_lock lk(mu);
         RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
-        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
+        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, "MPPTunnel has connected or finished: {}", statusToString());
         RUNTIME_CHECK_MSG(mode == TunnelSenderMode::SYNC_GRPC, "This should be a sync tunnel");
 
         LOG_TRACE(log, "ready to connect sync");
@@ -205,7 +205,7 @@ void MPPTunnel::connect(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocal(size_t source_index, const String & req_info, ExchangeReceiverBase * recv_base, bool is_fine_grained)
+void MPPTunnel::connectLocal(size_t source_index, const String & req_info, SupportForLocalExchange & support_for_local, bool is_fine_grained)
 {
     {
         std::unique_lock lk(mu);
@@ -215,12 +215,12 @@ void MPPTunnel::connectLocal(size_t source_index, const String & req_info, Excha
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, recv_base, log, queue_size, mem_tracker, tunnel_id);
+            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, support_for_local, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_fine_grained_sender;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, recv_base, log, queue_size, mem_tracker, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, support_for_local, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_sender;
         }
 
@@ -234,7 +234,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
 {
     {
         std::unique_lock lk(mu);
-        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
+        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, "MPPTunnel has connected or finished: {}", statusToString());
 
         LOG_TRACE(log, "ready to connect async");
         RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", magic_enum::enum_name(mode));

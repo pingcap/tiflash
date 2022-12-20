@@ -19,6 +19,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/ExchangeReceiverBase.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -28,8 +29,7 @@
 
 #include <magic_enum.hpp>
 #include <memory>
-
-#include "Flash/Mpp/ExchangeReceiverCommon.h"
+#include "Flash/Mpp/ReceiverChannelWriter.h"
 
 
 namespace DB
@@ -75,7 +75,7 @@ public:
         , msg_channels(msg_channels_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
-        , channel_writer(msg_channels_, req_info, log, data_size_in_queue)
+        , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ExchangeMode::Async)
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -254,7 +254,7 @@ private:
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            if (!channel_writer.write<enable_fine_grained_shuffle, false>(request->source_index, packet))
+            if (!channel_writer.write<enable_fine_grained_shuffle>(request->source_index, packet))
                 return false;
 
             // can't reuse packet since it is sent to readers.
@@ -342,6 +342,12 @@ void ExchangeReceiverWithRPCContext<RPCContext>::setUpConnection()
 {
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
+    SupportForLocalExchange support_for_local(
+        getMemoryTracker(),
+        [this](bool meet_error, const String & local_err_msg) {
+            this->connectionLocalDone(meet_error, local_err_msg, exc_log);
+        },
+        ReceiverChannelWriter(&(getMsgChannels()), "", exc_log, getDataSizeInQueue(), ExchangeMode::Local));
 
     for (size_t index = 0; index < source_num; ++index)
     {
@@ -351,7 +357,8 @@ void ExchangeReceiverWithRPCContext<RPCContext>::setUpConnection()
         else if (req.is_local)
         {
             String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
-            rpc_context->establishMPPConnectionLocal(req, req.source_index, req_info, this, enable_fine_grained_shuffle_flag);
+            support_for_local.channel_writer.setReqInfo(req_info);
+            rpc_context->establishMPPConnectionLocal(req, req.source_index, req_info, support_for_local, enable_fine_grained_shuffle_flag);
             ++local_conn_num;
         }
         else
@@ -440,7 +447,7 @@ void ExchangeReceiverWithRPCContext<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue);
+        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, ExchangeMode::Sync);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
@@ -460,7 +467,7 @@ void ExchangeReceiverWithRPCContext<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!channel_writer.write<enable_fine_grained_shuffle, true>(req.source_index, packet))
+                if (!channel_writer.write<enable_fine_grained_shuffle>(req.source_index, packet))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());

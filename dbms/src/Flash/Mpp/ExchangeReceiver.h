@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Mpp/ExchangeReceiverCommon.h>
+#include <Flash/Mpp/ExchangeReceiverBase.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Interpreters/Context.h>
 

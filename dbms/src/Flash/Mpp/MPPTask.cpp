@@ -173,7 +173,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
-        
+
         tunnel_set_local->registerTunnel(MPPTaskId(task_meta), tunnel);
         injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
