@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockComputeServerManager.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+#include "TestUtils/FunctionTestUtils.h"
 
 namespace DB
 {
@@ -303,13 +303,10 @@ try
     auto request = context
                        .scan("test_db", "test_table_2")
                        .aggregation({Max(col("s3"))}, {col("s1")});
-    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
-        TiFlashTestEnv::getGlobalContext(i).setMPPTest();
     auto expected_cols = {
         toNullableVec<String>({"99"}),
         toNullableVec<Int32>({{0}})};
-    ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(request, properties, expect_cols);
+    ASSERT_COLUMNS_EQ_UR(expected_cols, buildAndExecuteMPPTasks(request));
 }
 CATCH
 

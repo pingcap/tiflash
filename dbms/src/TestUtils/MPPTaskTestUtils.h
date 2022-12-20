@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Debug/MockComputeServerManager.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 namespace DB::tests
@@ -77,12 +78,14 @@ public:
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
     std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
-    ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
     static ::testing::AssertionResult assertQueryCancelled(const MPPQueryId & query_id);
     static ::testing::AssertionResult assertQueryActive(const MPPQueryId & query_id);
+
     static String queryInfo(size_t server_id);
 
 protected:
@@ -96,7 +99,7 @@ protected:
     {                                                                                                                                       \
         TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
         MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
-        ASSERT_COLUMNS_EQ_UR(exeucteMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+        ASSERT_COLUMNS_EQ_UR(expected_cols, executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap())); \
     } while (0)
 
 
