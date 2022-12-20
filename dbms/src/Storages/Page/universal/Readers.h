@@ -99,8 +99,44 @@ public:
         // return fmt::format("r_{}_{}", ns_id, page_id);
     }
 
+    // 0x01 0x02 region_id 0x01 log_idx
+    static UniversalPageId toFullRaftLogKey(NamespaceId region_id, PageId log_index)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        // BigEndian
+        UniversalPageIdFormat::encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        UniversalPageIdFormat::encodeUInt64(log_index, buff);
+        return buff.releaseStr();
+    }
+
+    // 0x01 0x03 region_id
+    static UniversalPageId toRegionMetaPrefixKey(NamespaceId region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x03, buff);
+        // BigEndian
+        UniversalPageIdFormat::encodeUInt64(region_id, buff);
+        return buff.releaseStr();
+    }
+
+    // 0x01 0x03 region_id 0x01
+    static UniversalPageId toRegionMetaKey(NamespaceId region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x03, buff);
+        // BigEndian
+        UniversalPageIdFormat::encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     // scan the pages between [start, end)
-    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(DB::PageId page_id, const DB::Page & page)> & acceptor)
+    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor)
     {
         // always traverse with the latest snapshot
         auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
@@ -108,7 +144,7 @@ public:
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
-            acceptor(DB::PS::V3::universal::ExternalIdTrait::getU64ID(page_id), uni_storage.blob_store->read(page_id_and_entry));
+            acceptor(page_id, uni_storage.blob_store->read(page_id_and_entry));
         }
     }
 

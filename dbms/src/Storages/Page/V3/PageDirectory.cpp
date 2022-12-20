@@ -1291,7 +1291,7 @@ typename Trait::PageIdSet PageDirectory<Trait>::getRangePageIds(const typename T
          iter != mvcc_table_directory.end();
          ++iter)
     {
-        if (iter->first >= end)
+        if (!Trait::ExternalIdTrait::isInvalidPageId(end) && iter->first >= end)
             break;
         page_ids.insert(iter->first);
     }

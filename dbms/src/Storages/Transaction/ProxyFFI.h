@@ -141,8 +141,8 @@ void WriteBatchMerge(RawVoidPtr lhs, RawVoidPtr rhs);
 void WriteBatchClear(RawVoidPtr ptr);
 void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr);
 PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
-PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
-void GcPageWithViewVec(PageWithView * inner, uint64_t len);
+PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
+void GcPageAndCppStrWithViewVec(PageAndCppStrWithView * inner, uint64_t len);
 void PurgePageStorage(const EngineStoreServerWrap * server);
 CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_page_id);
 uint8_t IsPSEmpty(const EngineStoreServerWrap * server);
@@ -193,7 +193,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_consume_write_batch = ConsumeWriteBatch,
         .fn_handle_read_page = HandleReadPage,
         .fn_handle_scan_page = HandleScanPage,
-        .fn_gc_page_with_view_vec = GcPageWithViewVec,
+        .fn_gc_page_and_cpp_str_with_view_vec = GcPageAndCppStrWithViewVec,
         .fn_handle_purge_pagestorage = PurgePageStorage,
         .fn_handle_seek_ps_key = SeekPSKey,
         .fn_ps_is_empty = IsPSEmpty,
