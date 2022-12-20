@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/CoprocessorHandler.h>
-
+#include <Server/MockComputeClient.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <TestUtils/TiFlashTestEnv.h>
 namespace DB
 {
+using TiFlashTestEnv = tests::TiFlashTestEnv;
+
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
 {
     tipb_region_info->set_region_id(region.first);

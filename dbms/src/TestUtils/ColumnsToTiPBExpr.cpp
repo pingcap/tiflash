@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/Coprocessor/DAGCodec.h>

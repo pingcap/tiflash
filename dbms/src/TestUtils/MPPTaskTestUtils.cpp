@@ -11,7 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Debug/MockComputeServerManager.h>
+#include <Debug/MockStorage.h>
+#include <Debug/dbgQueryExecutor.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB::tests
@@ -144,8 +149,8 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
-            // Currenly we wait for 10 times to ensure all tasks are cancelled.
-            if (retry_times > 10)
+            // Currenly we wait for 20 times to ensure all tasks are cancelled.
+            if (retry_times > 20)
             {
                 return ::testing::AssertionFailure() << "Query not cancelled, " << queryInfo(i) << std::endl;
             }

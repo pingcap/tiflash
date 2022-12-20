@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AstToPB.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Storages/Transaction/TiDB.h>
+#include <kvproto/mpp.pb.h>
+
 
 namespace DB::mock
 {

@@ -14,12 +14,7 @@
 
 #pragma once
 
-#include <Debug/MockComputeServerManager.h>
-#include <Debug/MockStorage.h>
-#include <Debug/dbgQueryExecutor.h>
-#include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <gtest/gtest.h>
 
 namespace DB::tests
 {
@@ -51,12 +46,12 @@ public:
 
     void reset()
     {
-        port = 3931;
+        port = 4931;
     }
 
 private:
     const Int64 port_upper_bound = 65536;
-    std::atomic<Int64> port = 3931;
+    std::atomic<Int64> port = 4931;
 };
 
 // Hold MPP test related infomation:

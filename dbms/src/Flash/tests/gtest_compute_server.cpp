@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockComputeServerManager.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
@@ -288,6 +289,28 @@ try
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, aggWithColumnPrune)
+try
+{
+    startServers(1);
+    context.addMockTable(
+        {"test_db", "test_table_2"},
+        {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
+        {toNullableVec<Int32>("s1", {0, 0, 0}), toNullableVec<String>("s2", {"1", "11", "8"}), toNullableVec<String>("s3", {"4", "9", "99"})});
+
+    auto request = context
+                       .scan("test_db", "test_table_2")
+                       .aggregation({Max(col("s3"))}, {col("s1")});
+    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setMPPTest();
+    auto expected_cols = {
+        toNullableVec<String>({"99"}),
+        toNullableVec<Int32>({{0}})};
+    ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(request, properties, expect_cols);
 }
 CATCH
 

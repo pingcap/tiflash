@@ -15,14 +15,10 @@
 #pragma once
 
 #include <Debug/MockStorage.h>
-#include <Flash/Mpp/MPPTaskManager.h>
 #include <Server/FlashGrpcServerHolder.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB::tests
 {
-
 /** Hold Mock Compute Server to manage the lifetime of them.
   * Maintains Mock Compute Server info.
   */
