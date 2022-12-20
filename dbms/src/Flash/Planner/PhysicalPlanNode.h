@@ -81,7 +81,7 @@ public:
     String toString();
 
 protected:
-    virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*concurrency*/){};
+    virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

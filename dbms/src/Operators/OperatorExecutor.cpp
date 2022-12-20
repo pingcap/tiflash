@@ -23,21 +23,20 @@ OperatorStatus OperatorExecutor::execute()
     if (status != OperatorStatus::PASS)
         return status;
 
-    assert(transform_index >= 0);
-    for (size_t i = transform_index; i < transforms.size(); ++i)
+    for (; transform_index < transforms.size(); ++transform_index)
     {
-        auto status = transforms[i]->transform(block);
+        auto status = transforms[transform_index]->transform(block);
         if (status != OperatorStatus::PASS)
-            return pushSpiller(status, transforms[i]);
+            return pushSpiller(status, transforms[transform_index]);
     }
     return pushSpiller(sink->write(std::move(block)), sink);
 }
 
-std::tuple<OperatorStatus, int64_t> OperatorExecutor::fetchBlock(Block & block)
+std::tuple<OperatorStatus, size_t> OperatorExecutor::fetchBlock(Block & block)
 {
     auto status = sink->prepare();
     if (status != OperatorStatus::PASS)
-        return {pushSpiller(status, sink), -1};
+        return {pushSpiller(status, sink), 0};
     for (int64_t index = transforms.size() - 1; index >= 0; --index)
     {
         auto status = transforms[index]->fetchBlock(block);

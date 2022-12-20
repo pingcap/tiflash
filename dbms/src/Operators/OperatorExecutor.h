@@ -40,7 +40,7 @@ public:
 
 private:
     // status, next_transform_index
-    std::tuple<OperatorStatus, int64_t> fetchBlock(Block & block);
+    std::tuple<OperatorStatus, size_t> fetchBlock(Block & block);
 
     template <typename Op>
     OperatorStatus pushSpiller(OperatorStatus status, const Op & op)

@@ -64,7 +64,7 @@ public:
 
     // call fetchBlock first, and then call transform.
     virtual OperatorStatus fetchBlock(Block &) { return OperatorStatus::NO_OUTPUT; }
-    virtual OperatorStatus transform(Block & /*block*/) = 0;
+    virtual OperatorStatus transform(Block & block) = 0;
 
     virtual void transformHeader(Block & header) { transform(header); }
 
@@ -79,7 +79,7 @@ public:
 
     // call prepare first, and then call write.
     virtual OperatorStatus prepare() { return OperatorStatus::PASS; }
-    virtual OperatorStatus write(Block && /*block*/) = 0;
+    virtual OperatorStatus write(Block && block) = 0;
 
     virtual OperatorStatus await() { return OperatorStatus::PASS; }
 };

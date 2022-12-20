@@ -16,8 +16,8 @@
 
 #include <Operators/Operator.h>
 
-#include <memory>
 #include <atomic>
+#include <memory>
 
 namespace DB
 {

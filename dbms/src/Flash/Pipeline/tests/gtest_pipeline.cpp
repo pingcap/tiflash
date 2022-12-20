@@ -68,10 +68,14 @@ try
         auto request = context.receive("exchange")
                            .filter(eq(col("s1"), col("s2")))
                            .project({concat(col("s1"), col("s2"))})
+                           .limit(1)
+                           .exchangeSender(tipb::Hash)
                            .build(context);
         assertEquals(
             request,
-            "[<Projection, project_2> | is_tidb_operator: false, schema: <project_2_tidbConcat(s1, s2)_collator_46 , Nullable(String)>] <== "
+            "[<MockExchangeSender, exchange_sender_4> | is_tidb_operator: true, schema: <exchange_sender_4_CAST(tidbConcat(s1, s2)_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>] <== "
+            "[<Projection, limit_3> | is_tidb_operator: false, schema: <exchange_sender_4_CAST(tidbConcat(s1, s2)_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>] <== "
+            "[<Limit, limit_3> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>] <== "
             "[<Projection, project_2> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>] <== "
             "[<Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>] <== "
             "[<MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>]");
