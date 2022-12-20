@@ -271,7 +271,7 @@ PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, Ba
         {
             auto * target = reinterpret_cast<PageAndCppStrWithView *>(data) + i;
             auto * s = RawCppString::New(page_ids[i].data(), page_ids[i].size());
-            target->key = GenRawCppPtr(s, RawCppPtrTypeImpl::UniversalPage);
+            target->key = GenRawCppPtr(s, RawCppPtrTypeImpl::String);
             BaseBuffView temp_key_view{s->data(), s->size()};
             // key_view offset
             memcpy(reinterpret_cast<char *>(target) + sizeof(RawCppPtr) + sizeof(RawCppPtr) + sizeof(BaseBuffView), &temp_key_view, sizeof(BaseBuffView));
