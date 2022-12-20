@@ -15,7 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include "DataStreams/IBlockInputStream.h"
+
 
 namespace CurrentMetrics
 {
