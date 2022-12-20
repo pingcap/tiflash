@@ -46,6 +46,9 @@ using MPPCtxPtr = std::shared_ptr<MPPCtx>;
 struct MPPInfo
 {
     Timestamp start_ts;
+    UInt64 query_ts;
+    UInt64 server_id;
+    UInt64 local_query_id;
     Int64 partition_id;
     Int64 task_id;
     const std::vector<Int64> sender_target_task_ids;
@@ -53,11 +56,17 @@ struct MPPInfo
 
     MPPInfo(
         Timestamp start_ts_,
+        UInt64 query_ts_,
+        UInt64 server_id_,
+        UInt64 local_query_id_,
         Int64 partition_id_,
         Int64 task_id_,
         const std::vector<Int64> & sender_target_task_ids_,
         const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
         : start_ts(start_ts_)
+        , query_ts(query_ts_)
+        , server_id(server_id_)
+        , local_query_id(local_query_id_)
         , partition_id(partition_id_)
         , task_id(task_id_)
         , sender_target_task_ids(sender_target_task_ids_)

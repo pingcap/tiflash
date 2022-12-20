@@ -85,7 +85,14 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+    auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
+        bo,
+        cluster,
+        table_scan.isPartitionTableScan(),
+        physical_table_ids,
+        ranges_for_each_physical_table,
+        store_type,
+        &Poco::Logger::get("pingcap/coprocessor"));
     LOG_DEBUG(log, "batch cop tasks(nums: {}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
 }
@@ -97,8 +104,11 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     std::vector<pingcap::kv::RegionVerID> region_ids;
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
-    dispatch_req_meta->set_start_ts(sender_target_task_start_ts);
-    dispatch_req_meta->set_task_id(sender_target_task_task_id);
+    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
+    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
+    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
+    dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
     const auto & settings = context.getSettings();
     dispatch_req->set_timeout(60);
@@ -164,10 +174,9 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
     // Exec summary of ExchangeSender will be merged into TableScan.
-    executor->set_executor_id(fmt::format("{}_{}_{}",
+    executor->set_executor_id(fmt::format("{}_{}",
                                           ExecIDPrefixForTiFlashStorageSender,
-                                          sender_target_task_start_ts,
-                                          sender_target_task_task_id));
+                                          sender_target_mpp_task_id.toString()));
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
@@ -230,7 +239,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 
     // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const String executor_id = table_scan.getTableScanExecutorID();
+    const String & executor_id = table_scan.getTableScanExecutorID();
 
     exchange_receiver = std::make_shared<ExchangeReceiver>(
         std::make_shared<GRPCReceiverContext>(
@@ -255,16 +264,17 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     const String extra_info = "disaggregated compute node exchange receiver";
     for (size_t i = 0; i < num_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
-                                                                                   log->identifier(),
-                                                                                   executor_id,
-                                                                                   /*stream_id=*/0);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(
+            exchange_receiver,
+            log->identifier(),
+            executor_id,
+            /*stream_id=*/0);
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
 
-    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
-    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[table_scan.getTableScanExecutorID()];
+    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
+    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
     pipeline.transform([&](auto & stream) {
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);

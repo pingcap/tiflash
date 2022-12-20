@@ -19,6 +19,9 @@
 
 namespace DB
 {
+
+using FilterPtr = IColumn::Filter *;
+
 struct FilterTransformAction
 {
 public:
@@ -29,7 +32,7 @@ public:
 
     bool alwaysFalse() const;
     // return false if all filter out.
-    bool transform(Block & block);
+    bool transform(Block & block, FilterPtr child_filter);
     Block getHeader() const;
     ExpressionActionsPtr getExperssion() const;
 
@@ -40,4 +43,5 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 };
+
 } // namespace DB
