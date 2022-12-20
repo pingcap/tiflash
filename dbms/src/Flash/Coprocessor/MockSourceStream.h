@@ -18,7 +18,6 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/MockExchangeReceiverInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 
 namespace DB

@@ -21,6 +21,19 @@ namespace DB
 {
 const String StorageDisaggregated::ExecIDPrefixForTiFlashStorageSender = "exec_id_disaggregated_tiflash_storage_sender";
 
+StorageDisaggregated::StorageDisaggregated(
+    Context & context_,
+    const TiDBTableScan & table_scan_,
+    const PushDownFilter & push_down_filter_)
+    : IStorage()
+    , context(context_)
+    , table_scan(table_scan_)
+    , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
+    , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
+    , push_down_filter(push_down_filter_)
+{
+}
+
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
     const SelectQueryInfo &,

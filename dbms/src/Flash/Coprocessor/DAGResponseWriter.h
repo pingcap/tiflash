@@ -14,11 +14,13 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <common/types.h>
 #include <tipb/select.pb.h>
 
 namespace DB
 {
+class DAGContext;
+
 class DAGResponseWriter
 {
 public:
