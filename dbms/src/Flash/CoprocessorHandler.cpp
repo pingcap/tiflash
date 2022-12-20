@@ -110,7 +110,7 @@ grpc::Status CoprocessorHandler::execute()
                 dag_request,
                 std::move(tables_regions_info),
                 cop_context.db_context.getClientInfo().current_address.toString(),
-                false,
+                /*is_batch_cop=*/false,
                 Logger::get("CoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
