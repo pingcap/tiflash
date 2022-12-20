@@ -46,16 +46,19 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         }
 
         filter.resize(block.rows());
-        bitmap_filter->get(filter, block.startOffset(), block.rows());
-        if (return_filter)
+        bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows());
+        if (!all_match)
         {
-            res_filter = &filter;
-        }
-        else
-        {
-            for (auto & col : block)
+            if (return_filter)
             {
-                col.column = col.column->filter(filter, block.rows());
+                res_filter = &filter;
+            }
+            else
+            {
+                for (auto & col : block)
+                {
+                    col.column = col.column->filter(filter, block.rows());
+                }
             }
         }
     }

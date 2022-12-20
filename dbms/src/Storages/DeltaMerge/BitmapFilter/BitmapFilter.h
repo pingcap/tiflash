@@ -30,7 +30,8 @@ public:
     void set(const ColumnPtr & col, const FilterPtr f);
     void set(const UInt32 * data, UInt32 size, const FilterPtr f);
 
-    void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    // If return true, all data is match and do not fill the filter.
+    bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
     SegmentSnapshotPtr & snapshot();
 

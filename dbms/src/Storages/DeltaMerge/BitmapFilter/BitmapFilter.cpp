@@ -57,19 +57,21 @@ void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr f)
     }
 }
 
-void BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
+bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 {
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
-    if (all_match)
+    auto begin = filter.cbegin() + start;
+    auto end = filter.cbegin() + start + limit;
+    if (all_match || std::find(begin, end, false) == end)
     {
-        static const UInt8 match = 1;
-        f.assign(static_cast<size_t>(limit), match);
+        //static const UInt8 match = 1;
+        //f.assign(static_cast<size_t>(limit), match);
+        return true;
     }
     else
     {
-        std::copy(filter.cbegin() + start,
-                  filter.cbegin() + start + limit,
-                  f.begin());
+        std::copy(begin, end, f.begin());
+        return false;
     }
 }
 
