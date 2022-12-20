@@ -15,11 +15,13 @@
 #pragma once
 
 #include <Columns/FilterDescription.h>
-#include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
+
+using FilterPtr = IColumn::Filter *;
+
 struct FilterTransformAction
 {
 public:
@@ -41,4 +43,5 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 };
+
 } // namespace DB
