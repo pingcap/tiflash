@@ -45,4 +45,5 @@ private:
 
     DB::LoggerPtr log;
 };
+
 } // namespace DB

@@ -11,6 +11,7 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
     const Context & db_context,
     const RemoteReadTaskPtr & remote_read_tasks,
     const PageReceiverPtr & page_receiver,
+    const DM::ColumnDefinesPtr & columns_to_read,
     UInt64 read_tso,
     size_t num_streams,
     size_t extra_table_id_index,
@@ -19,9 +20,6 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
     size_t expected_block_size)
 {
     DM::RSOperatorPtr rs_filter = {};
-    DM::ColumnDefines columns_to_read;
-
-    Block sample_block = toEmptyBlock(columns_to_read);
 
     BlockInputStreams streams;
     for (size_t i = 0; i < num_streams; ++i)
@@ -30,7 +28,7 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
             db_context,
             remote_read_tasks,
             page_receiver,
-            columns_to_read,
+            *columns_to_read,
             rs_filter,
             read_tso,
             expected_block_size,

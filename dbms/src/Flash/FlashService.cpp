@@ -494,10 +494,9 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
 }
 grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response)
 {
-    UNUSED(context, request, response);
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling disaggregated establish request: {}", request->DebugString());
-    if (auto check_result = checkGrpcContext(grpc_context); check_result.ok())
+    LOG_DEBUG(log, "Handling disaggregated establish request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
     // TODO metrics
     auto [db_context, status] = createDBContext(grpc_context);

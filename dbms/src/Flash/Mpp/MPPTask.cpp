@@ -225,6 +225,11 @@ void MPPTask::unregisterTask()
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
+// Some preparation
+// - Parse the encoded plan
+// - Build `dag_context`
+// - Set the read_tso, schema_version, timezone
+// - Register tunnels and the task
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     // Parse the encoded plan into `dag_req`

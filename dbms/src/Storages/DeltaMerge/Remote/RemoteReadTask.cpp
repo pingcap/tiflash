@@ -24,6 +24,8 @@ RemoteReadTask::RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_)
 {
     for (const auto & table_task : tasks_)
     {
+        if (!table_task)
+            continue;
         auto res = tasks.emplace(table_task->storeID(), table_task);
         RUNTIME_CHECK_MSG(res.second, "Duplicated task from store_id={}", table_task->storeID());
         num_segments += table_task->size();

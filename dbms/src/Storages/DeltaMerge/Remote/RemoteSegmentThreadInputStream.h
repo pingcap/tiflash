@@ -43,6 +43,7 @@ public:
         const Context & db_context,
         const RemoteReadTaskPtr & remote_read_tasks,
         const PageReceiverPtr & page_receiver,
+        const DM::ColumnDefinesPtr & columns_to_read,
         UInt64 read_tso,
         size_t num_streams,
         size_t extra_table_id_index,

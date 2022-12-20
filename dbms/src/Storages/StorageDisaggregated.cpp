@@ -17,6 +17,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
@@ -28,6 +29,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <kvproto/mpp.pb.h>
+#include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
@@ -87,49 +89,8 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
     establish_req->set_timeout(10); // 10 secs
     establish_req->set_address(batch_cop_task.store_addr);
     establish_req->set_schema_ver(settings.schema_version);
-    RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
-                      "region_infos and table_regions should not exist at the same time, single table region info: {}, partition table region info: {}",
-                      batch_cop_task.region_infos.size(),
-                      batch_cop_task.table_regions.size());
 
-    std::vector<pingcap::kv::RegionVerID> region_ids;
-    if (!batch_cop_task.table_regions.empty())
-    {
-        // For non-partition table
-        for (const auto & region_info : batch_cop_task.region_infos)
-        {
-            region_ids.push_back(region_info.region_id);
-            auto * region = establish_req->add_regions();
-            region->set_region_id(region_info.region_id.id);
-            region->mutable_region_epoch()->set_version(region_info.region_id.ver);
-            region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
-            for (const auto & key_range : region_info.ranges)
-            {
-                key_range.setKeyRange(region->add_ranges());
-            }
-        }
-    }
-    else
-    {
-        // For partition table
-        for (const auto & table_region : batch_cop_task.table_regions)
-        {
-            auto * req_table_region = establish_req->add_table_regions();
-            req_table_region->set_physical_table_id(table_region.physical_table_id);
-            auto * region = req_table_region->add_regions();
-            for (const auto & region_info : table_region.region_infos)
-            {
-                region_ids.push_back(region_info.region_id);
-                region->set_region_id(region_info.region_id.id);
-                region->mutable_region_epoch()->set_version(region_info.region_id.ver);
-                region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
-                for (const auto & key_range : region_info.ranges)
-                {
-                    key_range.setKeyRange(region->add_ranges());
-                }
-            }
-        }
-    }
+    std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, establish_req);
 
     {
         // Setup the encoded plan
@@ -180,10 +141,11 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
         thread_manager->schedule(
             true,
             "EstablishDisaggregated",
-            [&db_context, &remote_tasks, idx, cluster, req = std::move(req)] {
+            [&db_context, &remote_tasks, idx, cluster, req = std::move(req), log = this->log] {
                 auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
                 cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
                 const auto & resp = call.getResp();
+                LOG_DEBUG(log, "Get resp from {}, resp={}, req={}", req->address(), resp->ShortDebugString(), req->ShortDebugString());
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(resp->error().msg());
@@ -214,6 +176,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
+    LOG_DEBUG(log, "build streams with {} segment tasks", remote_read_tasks->numSegments());
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a PageReceiver to fetch the pages from all write nodes
     auto * kv_cluster = db_context.getTMTContext().getKVCluster();
@@ -226,6 +189,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         executor_id);
 
     // Build the input streams to read blocks from remote segments
+    auto column_defines = genColumnDefinesForTableScan(table_scan);
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
@@ -233,11 +197,13 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         db_context,
         remote_read_tasks,
         page_receiver,
+        column_defines,
         read_tso,
         num_streams,
         0,
         extra_info,
         /*tracing_id*/ log->identifier());
+    RUNTIME_CHECK(!streams.empty(), streams.size(), num_streams);
     pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
 
     auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
@@ -261,6 +227,7 @@ BlockInputStreams StorageDisaggregated::read(
     auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
     RUNTIME_CHECK(!batch_cop_tasks.empty());
 
+    s3_read = true;
     if (s3_read)
     {
         // Fetch the remote segment read tasks from write nodes

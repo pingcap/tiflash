@@ -525,7 +525,7 @@ public:
     }
     bool isDisaggregatedStorageMode() const
     {
-        return disaggregated_mode == DisaggregatedMode::Storage;
+        return disaggregated_mode == DisaggregatedMode::Storage || disaggregated_mode == DisaggregatedMode::None;
     }
 
 private:

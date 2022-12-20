@@ -1099,7 +1099,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 //    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
 //    LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
-    ///
+    // TODO: decide by global_context->isDisaggregatedComputeMode();
     global_context->initializeWriteNodePageStorage(global_context->getPathPool(), global_context->getFileProvider());
 
     global_context->initializeReadNodePageStorage(global_context->getPathPool(), global_context->getFileProvider());
