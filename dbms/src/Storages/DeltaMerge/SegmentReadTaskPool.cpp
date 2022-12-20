@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include "DataStreams/IBlockInputStream.h"
 
 namespace CurrentMetrics
 {
@@ -238,10 +239,11 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
-    auto block = stream->read();
+    FilterPtr filter;
+    auto block = stream->read(filter, true);
     if (block)
     {
-        pushBlock(std::move(block));
+        pushBlock({std::move(block), filter});
         return true;
     }
     else
@@ -251,22 +253,22 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
     }
 }
 
-void SegmentReadTaskPool::popBlock(Block & block)
+void SegmentReadTaskPool::popBlock(BlockUnit & block_unit)
 {
-    q.pop(block);
-    blk_stat.pop(block);
-    global_blk_stat.pop(block);
+    q.pop(block_unit);
+    blk_stat.pop(block_unit.first);
+    global_blk_stat.pop(block_unit.first);
     if (exceptionHappened())
     {
         throw exception;
     }
 }
 
-void SegmentReadTaskPool::pushBlock(Block && block)
+void SegmentReadTaskPool::pushBlock(BlockUnit && block_unit)
 {
-    blk_stat.push(block);
-    global_blk_stat.push(block);
-    q.push(std::move(block), nullptr);
+    blk_stat.push(block_unit.first);
+    global_blk_stat.push(block_unit.first);
+    q.push(std::move(block_unit), nullptr);
 }
 
 int64_t SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()

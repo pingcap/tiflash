@@ -32,6 +32,7 @@ using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
 using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
 using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
+using BlockUnit = std::pair<Block, FilterPtr>;
 
 struct SegmentReadTask
 {
@@ -217,7 +218,7 @@ public:
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
     bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
-    void popBlock(Block & block);
+    void popBlock(BlockUnit & block);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
@@ -243,7 +244,7 @@ private:
     int64_t getFreeActiveSegmentCountUnlock();
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
-    void pushBlock(Block && block);
+    void pushBlock(BlockUnit && block);
 
     const uint64_t pool_id;
     const int64_t table_id;
@@ -257,7 +258,7 @@ private:
     AfterSegmentRead after_segment_read;
     std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
-    WorkQueue<Block> q;
+    WorkQueue<BlockUnit> q;
     BlockStat blk_stat;
     LoggerPtr log;
 

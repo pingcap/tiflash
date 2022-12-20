@@ -39,7 +39,7 @@ void MergedTask::initOnce()
         return;
     }
 
-    for (cur_idx = 0; cur_idx < static_cast<int>(units.size()); cur_idx++)
+    for (cur_idx = 0; cur_idx < static_cast<int>(units.size()); ++cur_idx)
     {
         auto & [pool, task, stream] = units[cur_idx];
         if (!pool->valid())

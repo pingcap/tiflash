@@ -47,7 +47,7 @@ public:
     {
         if (extra_table_id_index != InvalidColumnID)
         {
-            auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
+            const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
@@ -55,7 +55,7 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
-    ~UnorderedInputStream()
+    ~UnorderedInputStream() override
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
@@ -72,8 +72,7 @@ protected:
         return readImpl(filter_ignored, false);
     }
 
-    // Currently, res_filter and return_filter is unused.
-    Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) override
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override
     {
         if (done)
         {
@@ -83,27 +82,30 @@ protected:
         while (true)
         {
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
-            Block res;
+            BlockUnit res;
             task_pool->popBlock(res);
-            if (res)
+            Block & res_block = res.first;
+            if (res_block)
             {
                 if (extra_table_id_index != InvalidColumnID)
                 {
-                    auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
+                    const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
                     ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
-                    size_t row_number = res.rows();
+                    size_t row_number = res_block.rows();
                     auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
                     col.column = std::move(col_data);
-                    res.insert(extra_table_id_index, std::move(col));
+                    res_block.insert(extra_table_id_index, std::move(col));
                 }
-                if (!res.rows())
+                if (!res_block.rows())
                 {
                     continue;
                 }
                 else
                 {
-                    total_rows += res.rows();
-                    return res;
+                    total_rows += res.first.rows();
+                    if (return_filter)
+                        res_filter = res.second;
+                    return res_block;
                 }
             }
             else
