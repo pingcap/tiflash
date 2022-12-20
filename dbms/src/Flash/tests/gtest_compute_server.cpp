@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <TestUtils/MPPTaskTestUtils.h>
-#include "TestUtils/FunctionTestUtils.h"
 
 namespace DB
 {
@@ -294,7 +293,7 @@ CATCH
 TEST_F(ComputeServerRunner, aggWithColumnPrune)
 try
 {
-    startServers(1);
+    startServers(3);
     context.addMockTable(
         {"test_db", "test_table_2"},
         {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},

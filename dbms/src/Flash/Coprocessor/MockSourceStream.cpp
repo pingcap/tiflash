@@ -14,7 +14,6 @@
 
 #include <Flash/Coprocessor/MockSourceStream.h>
 
-
 namespace DB
 {
 std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(Context & context, size_t max_streams, DB::LoggerPtr log, const TiDBTableScan & table_scan)

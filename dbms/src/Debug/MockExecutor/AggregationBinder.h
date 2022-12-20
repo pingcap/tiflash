@@ -17,7 +17,6 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Parsers/ASTFunction.h>
 
-
 namespace DB::mock
 {
 class ExchangeSenderBinder;

@@ -18,7 +18,6 @@
 #include <Interpreters/sortBlock.h>
 #include <tipb/select.pb.h>
 
-
 namespace DB
 {
 namespace ErrorCodes

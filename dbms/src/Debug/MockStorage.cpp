@@ -14,8 +14,6 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 
-#include <cstddef>
-
 namespace DB::tests
 {
 void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & columnInfos)
