@@ -58,9 +58,21 @@ DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
     std::unique_lock lock(rw_lock);
     if (fullname_types.size() < MAX_FULLNAME_TYPES)
     {
+        // DataTypeEnum may generate too many full_name, so just skip inserting DataTypeEnum into fullname_types when
+        // the capacity limit is almost reached, which ensures that most datatypes can be cached.
+        if (fullname_types.size() > FULLNAME_TYPES_HIGH_WATER_MARK && (datatype_ptr->getTypeId() == TypeIndex::Enum8 || datatype_ptr->getTypeId() == TypeIndex::Enum16))
+        {
+            return datatype_ptr;
+        }
         fullname_types.emplace(full_name, datatype_ptr);
     }
     return datatype_ptr;
+}
+
+size_t DataTypeFactory::getFullNameTypeSize() const
+{
+    std::shared_lock lock(rw_lock);
+    return fullname_types.size();
 }
 
 DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const

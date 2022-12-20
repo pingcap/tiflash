@@ -48,6 +48,7 @@ public:
     DataTypePtr getOrSet(const String & full_name);
     DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
     DataTypePtr get(const ASTPtr & ast) const;
+    size_t getFullNameTypeSize() const;
 
     /// For compatibility with SQL, it's possible to specify that certain data type name is case insensitive.
     enum CaseSensitiveness
@@ -68,8 +69,9 @@ private:
     /// Case insensitive data types will be additionally added here with lowercased name.
     DataTypesDictionary case_insensitive_data_types;
 
-    static constexpr int MAX_FULLNAME_TYPES = 10000;
-    std::shared_mutex rw_lock;
+    static constexpr int MAX_FULLNAME_TYPES = 50000;
+    static constexpr int FULLNAME_TYPES_HIGH_WATER_MARK = 49000;
+    mutable std::shared_mutex rw_lock;
     FullnameTypes fullname_types;
     DataTypeFactory();
     friend class ext::Singleton<DataTypeFactory>;
