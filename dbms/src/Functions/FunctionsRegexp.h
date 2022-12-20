@@ -1728,6 +1728,7 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
                     {
+                        // null_map has been set to 1 in the previous
                         col_res->insertData("", 0);
                         continue;
                     }
@@ -1759,6 +1760,7 @@ public:
                 {
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
+                        // null_map has been set to 1 in the previous
                         col_res->insertData("", 0);
                         continue;
                     }
