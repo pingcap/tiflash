@@ -83,9 +83,15 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
 {
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<::mpp::EstablishDisaggregatedTaskRequest>();
-    establish_req->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-    establish_req->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-    establish_req->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+    {
+        auto * meta = establish_req->mutable_meta();
+        meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
+        meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
+        meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+        auto * dag_context = db_context.getDAGContext();
+        meta->set_task_id(dag_context->getMPPTaskId().task_id);
+        meta->set_executor_id(table_scan.getTableScanExecutorID());
+    }
     establish_req->set_timeout(10); // 10 secs
     establish_req->set_address(batch_cop_task.store_addr);
     establish_req->set_schema_ver(settings.schema_version);
@@ -134,6 +140,8 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     auto thread_manager = newThreadManager();
     auto * cluster = context.getTMTContext().getKVCluster();
+    auto * task_id = context.getDAGContext()->getDisaggregatedTaskId().get();
+
     for (size_t idx = 0; idx < establish_reqs.size(); ++idx)
     {
         // TODO: make call by threadManager
@@ -141,11 +149,11 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
         thread_manager->schedule(
             true,
             "EstablishDisaggregated",
-            [&db_context, &remote_tasks, idx, cluster, req = std::move(req), log = this->log] {
+            [&db_context, &remote_tasks, idx, cluster, task_id, req = std::move(req), log = this->log] {
                 auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
                 cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
                 const auto & resp = call.getResp();
-                LOG_DEBUG(log, "Get resp from {}, resp={}, req={}", req->address(), resp->ShortDebugString(), req->ShortDebugString());
+                LOG_DEBUG(log, "Get resp from {}, resp={}", req->address(), resp->ShortDebugString(), req->ShortDebugString());
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(resp->error().msg());
@@ -160,6 +168,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         db_context,
                         resp->store_id(),
                         req->address(),
+                        *task_id,
                         table);
                 }
                 // TODO: update region cache by `resp->retry_regions`

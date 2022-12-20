@@ -22,7 +22,7 @@ public:
         TableID table_id,
         const std::vector<UInt64> & seg_ids)
     {
-        UInt64 snapshot_id = 0;
+        DisaggregatedTaskId snapshot_id;
         String address;
         auto store = std::make_shared<RemoteTableReadTask>(store_id, table_id, snapshot_id, address);
         for (const auto & seg_id : seg_ids)

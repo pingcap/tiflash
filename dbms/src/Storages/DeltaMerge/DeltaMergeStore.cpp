@@ -48,6 +48,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -1073,10 +1075,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     return streams;
 }
 
-SegmentReadTasks DeltaMergeStore::establishRemoteReadTask(
+DisaggregatedTableReadSnapshotPtr
+DeltaMergeStore::buildRemoteReadSnapshot(
     const Context & db_context,
     const DB::Settings & db_settings,
     const RowKeyRanges & sorted_ranges,
+    const RSOperatorPtr & filter,
     size_t num_streams,
     const String & tracing_id,
     const SegmentIdSet & read_segments,
@@ -1096,7 +1100,8 @@ SegmentReadTasks DeltaMergeStore::establishRemoteReadTask(
     // GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
 
-    return tasks;
+    auto snap = std::make_unique<DisaggregatedTableReadSnapshot>(physical_table_id, filter, std::move(tasks));
+    return snap;
 }
 
 PageMap DeltaMergeStore::readPages(

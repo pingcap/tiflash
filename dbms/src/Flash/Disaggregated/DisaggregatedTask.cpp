@@ -4,6 +4,9 @@
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 
+#include "Flash/Mpp/MPPTaskId.h"
+#include "Storages/DeltaMerge/Remote/DisaggregatedTaskId.h"
+
 namespace DB
 {
 DisaggregatedTask::DisaggregatedTask(ContextPtr context_)
@@ -25,7 +28,8 @@ void DisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * c
     // set schema ver and start ts // TODO: set timeout
     auto schema_ver = request->schema_ver();
     context->setSetting("schema_version", schema_ver);
-    auto start_ts = request->start_ts();
+    const auto & meta = request->meta();
+    auto start_ts = meta.start_ts();
     context->setSetting("read_tso", start_ts);
 
     // Parse the encoded plan into `dag_req`
@@ -34,7 +38,15 @@ void DisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * c
 
     context->getTimezoneInfo().resetByDAGRequest(dag_req);
 
-    dag_context = std::make_unique<DAGContext>(dag_req, std::move(tables_regions_info), context->getClientInfo().current_address.toString(), /*is_batch_cop*/ false, Logger::get("DisaggregatedTaskHandler"));
+    MPPTaskId mpp_task_id(meta.start_ts(), meta.task_id(), -1, meta.query_ts(), meta.local_query_id());
+    DM::DisaggregatedTaskId task_id(mpp_task_id, meta.executor_id());
+
+    dag_context = std::make_unique<DAGContext>(
+        dag_req,
+        task_id,
+        std::move(tables_regions_info),
+        context->getClientInfo().current_address.toString(),
+        Logger::get("DisaggregatedTaskHandler"));
     context->setDAGContext(dag_context.get());
 
     // TODO: register task

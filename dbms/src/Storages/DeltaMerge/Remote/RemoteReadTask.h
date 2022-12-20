@@ -3,12 +3,14 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/Types.h>
 #include <common/types.h>
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -87,11 +89,11 @@ public:
     RemoteTableReadTask(
         UInt64 store_id_,
         TableID table_id_,
-        UInt64 snap_id_,
+        DisaggregatedTaskId snap_id_,
         const String & address_)
         : store_id(store_id_)
         , table_id(table_id_)
-        , snapshot_id(snap_id_)
+        , snapshot_id(std::move(snap_id_))
         , address(address_)
     {}
 
@@ -107,6 +109,7 @@ public:
         const Context & db_context,
         UInt64 store_id,
         const String & address,
+        const DisaggregatedTaskId & snapshot_id,
         const dtpb::DisaggregatedPhysicalTable & table);
 
     size_t size() const
@@ -135,7 +138,7 @@ public:
 private:
     const UInt64 store_id;
     const TableID table_id;
-    const UInt64 snapshot_id;
+    const DisaggregatedTaskId snapshot_id;
     const String address;
 
     mutable std::mutex mtx_tasks;
@@ -149,7 +152,7 @@ public:
     static RemoteSegmentReadTaskPtr buildFrom(
         const Context & db_context,
         const dtpb::DisaggregatedSegment & serialized,
-        UInt64 snapshot_id,
+        const DisaggregatedTaskId & snapshot_id,
         UInt64 store_id,
         TableID table_id,
         const String & address);
@@ -182,7 +185,7 @@ public:
 
     // Only used by buildFrom
     RemoteSegmentReadTask(
-        UInt64 snapshot_id_,
+        DisaggregatedTaskId snapshot_id_,
         UInt64 store_id_,
         TableID table_id_,
         UInt64 segment_id_,
@@ -191,7 +194,7 @@ public:
 
 public:
     SegmentReadTaskState state = SegmentReadTaskState::Init;
-    const UInt64 snapshot_id;
+    const DisaggregatedTaskId snapshot_id;
     const UInt64 store_id;
     const TableID table_id;
     const UInt64 segment_id;

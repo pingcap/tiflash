@@ -21,6 +21,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -325,10 +326,11 @@ public:
                            size_t extra_table_id_index = InvalidColumnID,
                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
-    SegmentReadTasks
-    establishRemoteReadTask(const Context & db_context,
+    DisaggregatedTableReadSnapshotPtr
+    buildRemoteReadSnapshot(const Context & db_context,
                             const DB::Settings & db_settings,
                             const RowKeyRanges & sorted_ranges,
+                            const RSOperatorPtr & filter,
                             size_t num_streams,
                             const String & tracing_id,
                             const SegmentIdSet & read_segments = {},

@@ -18,6 +18,7 @@
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
@@ -80,6 +81,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
               context.getSettingsRef().task_scheduler_thread_soft_limit,
               context.getSettingsRef().task_scheduler_thread_hard_limit,
               context.getSettingsRef().task_scheduler_active_set_soft_limit)))
+    , snapshot_manager(std::make_unique<DM::DisaggregatedSnapshotManager>())
     , engine(raft_config.engine)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
@@ -191,6 +193,12 @@ pingcap::pd::ClientPtr TMTContext::getPDClient() const
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()
 {
     return mpp_task_manager;
+}
+
+DM::DisaggregatedSnapshotManager * TMTContext::getDisaggregatedSnapshotManager() const
+{
+    assert(context.isDisaggregatedStorageMode());
+    return snapshot_manager.get();
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const

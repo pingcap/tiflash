@@ -138,7 +138,7 @@ FetchPagesRequest::FetchPagesRequest(DM::RemoteSegmentReadTaskPtr seg_task_)
     : seg_task(std::move(seg_task_))
     , req(std::make_shared<mpp::FetchDisaggregatedPagesRequest>())
 {
-    req->set_snapshot_id(seg_task->snapshot_id);
+    // req->set_snapshot_id(seg_task->snapshot_id);
     req->set_lease(60); // 60 seconds
     for (auto page_id : seg_task->pendingPageIds())
     {

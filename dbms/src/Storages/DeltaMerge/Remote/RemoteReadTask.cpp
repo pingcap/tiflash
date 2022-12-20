@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <mutex>
+#include "Storages/DeltaMerge/Remote/DisaggregatedTaskId.h"
 
 namespace DB::DM
 {
@@ -197,6 +198,7 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
     const Context & db_context,
     const UInt64 store_id,
     const String & address,
+    const DisaggregatedTaskId & snapshot_id,
     const dtpb::DisaggregatedPhysicalTable & remote_table)
 {
     // Deserialize from `DisaggregatedPhysicalTable`, this should also
@@ -204,14 +206,14 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
     auto table_task = std::make_shared<RemoteTableReadTask>(
         store_id,
         remote_table.table_id(),
-        remote_table.snapshot_id(),
+        snapshot_id,
         address);
     for (const auto & remote_seg : remote_table.segments())
     {
         auto seg_task = RemoteSegmentReadTask::buildFrom(
             db_context,
             remote_seg,
-            table_task->snapshot_id,
+            snapshot_id,
             table_task->store_id,
             table_task->table_id,
             table_task->address);
@@ -224,13 +226,13 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
  * Remote segment
  */
 RemoteSegmentReadTask::RemoteSegmentReadTask(
-    UInt64 snapshot_id_,
+    DisaggregatedTaskId snapshot_id_,
     UInt64 store_id_,
     TableID table_id_,
     UInt64 segment_id_,
     RowKeyRanges ranges_,
     String address_)
-    : snapshot_id(snapshot_id_)
+    : snapshot_id(std::move(snapshot_id_))
     , store_id(store_id_)
     , table_id(table_id_)
     , segment_id(segment_id_)
@@ -242,7 +244,7 @@ RemoteSegmentReadTask::RemoteSegmentReadTask(
 RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
     const Context & db_context,
     const dtpb::DisaggregatedSegment & serialized,
-    UInt64 snapshot_id,
+    const DisaggregatedTaskId & snapshot_id,
     UInt64 store_id,
     TableID table_id,
     const String & address)

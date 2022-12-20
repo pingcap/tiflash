@@ -33,6 +33,11 @@
 
 namespace DB
 {
+namespace DM
+{
+class DisaggregatedTableReadSnapshot;
+using DisaggregatedTableReadSnapshotPtr = std::unique_ptr<DisaggregatedTableReadSnapshot>;
+} // namespace DM
 class TMTContext;
 using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
@@ -70,7 +75,8 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
-    void buildLocalStreamsForPhysicalTable(
+    DM::DisaggregatedTableReadSnapshotPtr
+    buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
