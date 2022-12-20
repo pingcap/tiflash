@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
@@ -159,7 +160,6 @@ public:
 LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID logical_table_id,
     MvccQueryInfo & mvcc_query_info_,
-    size_t num_streams,
     bool for_batch_cop,
     Context & context,
     const LoggerPtr & log)
@@ -172,7 +172,7 @@ LearnerReadSnapshot doLearnerRead(
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
     // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
-    size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info->concurrent), regions_info.size()));
+    size_t concurrent_num = std::max(1, regions_info.size());
 
     // use single thread to do replica read by default because there is some overhead from thread pool itself.
     concurrent_num = std::min(tmt.replicaReadMaxThread(), concurrent_num);
@@ -208,29 +208,40 @@ LearnerReadSnapshot doLearnerRead(
 
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
         batch_read_index_req.reserve(ori_batch_region_size);
+        size_t stale_read_count = 0;
 
         {
             // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
             auto read_index_tso = mvcc_query_info->read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info->read_tso;
-
+            RegionTable & region_table = tmt.getRegionTable();
             for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
             {
                 const auto & region_to_query = regions_info[region_idx];
                 const RegionID region_id = region_to_query.region_id;
-                if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
+                UInt64 physical_tso = read_index_tso >> TsoPhysicalShiftBits;
+                bool can_stale_read = physical_tso < region_table.getSelfSafeTS(region_id);
+                if (!can_stale_read)
                 {
-                    auto resp = kvrpcpb::ReadIndexResponse();
-                    resp.set_read_index(ori_read_index);
-                    batch_read_index_result.emplace(region_id, std::move(resp));
+                    if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
+                    {
+                        auto resp = kvrpcpb::ReadIndexResponse();
+                        resp.set_read_index(ori_read_index);
+                        batch_read_index_result.emplace(region_id, std::move(resp));
+                    }
+                    else
+                    {
+                        auto & region = regions_snapshot.find(region_id)->second;
+                        batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, read_index_tso));
+                    }
                 }
                 else
                 {
-                    auto & region = regions_snapshot.find(region_id)->second;
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, read_index_tso));
+                    batch_read_index_result.emplace(region_id, kvrpcpb::ReadIndexResponse());
+                    ++stale_read_count;
                 }
             }
         }
-
+        GET_METRIC(tiflash_stale_read_count).Increment(stale_read_count);
         GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
 
         const auto & make_default_batch_read_index_result = [&](bool with_region_error) {
@@ -307,7 +318,11 @@ LearnerReadSnapshot doLearnerRead(
             else
             {
                 // cache read-index to avoid useless overhead about retry.
-                mvcc_query_info.addReadIndexRes(region_id, resp.read_index());
+                // resp.read_index() is 0 when stale read, skip it to avoid overwriting read_index res in last retry.
+                if (resp.read_index() != 0)
+                {
+                    mvcc_query_info.addReadIndexRes(region_id, resp.read_index());
+                }
             }
         }
 
@@ -488,9 +503,10 @@ void validateQueryInfo(
     }
 }
 
-MvccQueryInfo::MvccQueryInfo(bool resolve_locks_, UInt64 read_tso_)
+MvccQueryInfo::MvccQueryInfo(bool resolve_locks_, UInt64 read_tso_, DM::ScanContextPtr scan_ctx)
     : read_tso(read_tso_)
     , resolve_locks(read_tso_ == std::numeric_limits<UInt64>::max() ? false : resolve_locks_)
+    , scan_context(std::move(scan_ctx))
 {
     // using `std::numeric_limits::max()` to resolve lock may break basic logic.
 }

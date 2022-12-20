@@ -26,6 +26,8 @@
     M(MemoryCapacity)                           \
     M(PSMVCCNumSnapshots)                       \
     M(PSMVCCSnapshotsList)                      \
+    M(PSMVCCNumDelta)                           \
+    M(PSMVCCNumBase)                            \
     M(RWLockWaitingReaders)                     \
     M(RWLockWaitingWriters)                     \
     M(RWLockActiveReaders)                      \
@@ -49,10 +51,10 @@
     M(DT_SnapshotOfReadRaw)                     \
     M(DT_SnapshotOfSegmentSplit)                \
     M(DT_SnapshotOfSegmentMerge)                \
+    M(DT_SnapshotOfSegmentIngest)               \
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
-    M(DT_SnapshotOfSegmentIngest)               \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \

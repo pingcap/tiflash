@@ -75,10 +75,6 @@ struct DMContext : private boost::noncopyable
     const size_t delta_small_column_file_bytes;
     // The expected stable pack rows.
     const size_t stable_pack_rows;
-    // The rows of segment to be regarded as small. Small segments will be merged.
-    const size_t small_segment_rows;
-    // The bytes of segment to be regarded as small. Small segments will be merged.
-    const size_t small_segment_bytes;
 
     // The number of points to check for calculating region split.
     const size_t region_split_check_points = 128;
@@ -121,8 +117,6 @@ public:
         , delta_small_column_file_rows(settings.dt_segment_delta_small_column_file_rows)
         , delta_small_column_file_bytes(settings.dt_segment_delta_small_column_file_size)
         , stable_pack_rows(settings.dt_segment_stable_pack_rows)
-        , small_segment_rows(settings.dt_segment_limit_rows / 3)
-        , small_segment_bytes(settings.dt_segment_limit_size / 3)
         , enable_logical_split(settings.dt_enable_logical_split)
         , read_delta_only(settings.dt_read_delta_only)
         , read_stable_only(settings.dt_read_stable_only)

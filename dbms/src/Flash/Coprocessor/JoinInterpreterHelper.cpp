@@ -300,24 +300,6 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     return columns_for_other_join_filter;
 }
 
-/// all the columns from build side streams should be added after join, even for the join key.
-NamesAndTypesList TiFlashJoin::genColumnsAddedByJoin(
-    const Block & build_side_header,
-    const String & match_helper_name) const
-{
-    NamesAndTypesList columns_added_by_join;
-    bool make_nullable = isTiFlashLeftJoin();
-    for (auto const & p : build_side_header)
-    {
-        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-    }
-    if (!match_helper_name.empty())
-    {
-        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
-    }
-    return columns_added_by_join;
-}
-
 NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     const Block & left_input_header,
     const Block & right_input_header,

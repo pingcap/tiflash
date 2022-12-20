@@ -68,7 +68,9 @@ struct SegmentSnapshot : private boost::noncopyable
 ///
 /// The data of stable value space is stored in "data" storage, while data of delta value space is stored in "log" storage.
 /// And all meta data is stored in "meta" storage.
-class Segment : private boost::noncopyable
+class Segment
+    : public std::enable_shared_from_this<Segment>
+    , private boost::noncopyable
 {
 public:
     using DeltaTree = DefaultDeltaTree;
@@ -112,7 +114,7 @@ public:
 
     DISALLOW_COPY_AND_MOVE(Segment);
 
-    Segment(
+    explicit Segment(
         const LoggerPtr & parent_log_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
@@ -154,7 +156,6 @@ public:
     bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
 
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
@@ -185,8 +186,11 @@ public:
         UInt64 max_version = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    /// Return a stream which is suitable for exporting data.
-    ///  reorganize_block: put those rows with the same pk rows into the same block or not.
+    /**
+     * Return a sorted stream which is suitable for exporting data. Unlike `getInputStream`, deletes will be preserved.
+     * But outdated versions (exceeds GC safe point) will still be removed.
+     * @param reorganize_block  put those rows with the same pk rows into the same block or not.
+     */
     BlockInputStreamPtr getInputStreamForDataExport(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -354,6 +358,68 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
+    struct IngestDataInfo
+    {
+        bool option_clear_data;
+        bool is_snapshot_empty; // It's value makes sense only when option_clear_data == false.
+        SegmentSnapshotPtr snapshot; // It's not empty only when option_clear_data == false.
+    };
+
+    IngestDataInfo prepareIngestDataWithClearData() const;
+
+    IngestDataInfo prepareIngestDataWithPreserveData(
+        DMContext & dm_context,
+        const SegmentSnapshotPtr & segment_snap) const;
+
+    /**
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
+     *
+     * @returns one of:
+     *          - A new segment: A new segment is created for containing the data
+     *          - The same segment as this: Data is ingested into the delta layer of current segment
+     *          - nullptr: when there are errors
+     */
+    [[nodiscard]] SegmentPtr applyIngestData(
+        const Lock &,
+        DMContext & dm_context,
+        const DMFilePtr & data_file,
+        const IngestDataInfo & prepared_info);
+
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareIngestDataWithXxx` and `applyIngestData`.
+     *
+     * @returns one of:
+     *          - A new segment: A new segment is created for containing the data
+     *          - The same segment as this: Data is ingested into the delta layer of current segment
+     *          - nullptr: when there are errors
+     */
+    [[nodiscard]] SegmentPtr ingestDataForTest(DMContext & dm_context,
+                                               const DMFilePtr & data_file,
+                                               bool clear_data);
+
+    /**
+     * Use this function when the data file is small. The data file will be appended to the
+     * delta layer directly.
+     *
+     * If your data file is big, try to use `prepareIngestDataXxx` and `applyIngestData`.
+     *
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
+     *
+     * @returns false iff the segment is abandoned.
+     */
+    bool ingestDataToDelta(
+        DMContext & dm_context,
+        const RowKeyRange & range,
+        const DMFiles & data_files,
+        bool clear_data_in_range);
+
     /**
      * Replace all data in the snapshot using the specified DMFile as the stable instead.
      * Newly appended data since the snapshot was created will be retained the segment.
@@ -429,12 +495,12 @@ public:
     }
 
     /**
-      * Marks this segment as abandoned.
-      * Note: Segment member functions never abandon the segment itself.
-      * The abandon state is usually triggered by the DeltaMergeStore.
-      * When triggering, remember to hold a unique_lock from the DeltaMergeStore.
-      * Otherwise, the abandon operation may break an existing segment update operation.
-      */
+     * Marks this segment as abandoned.
+     * Note: Segment member functions never abandon the segment itself.
+     * The abandon state is usually triggered by the DeltaMergeStore.
+     * When triggering, remember to hold a unique_lock from the DeltaMergeStore.
+     * Otherwise, the abandon operation may break an existing segment update operation.
+     */
     void abandon(DMContext & context)
     {
         LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());

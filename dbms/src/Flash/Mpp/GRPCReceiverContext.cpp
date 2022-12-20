@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -221,6 +223,113 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     return req;
 }
 
+void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
+    LoggerPtr log,
+    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs)
+{
+    if (disaggregated_dispatch_reqs.empty())
+        throw Exception("unexpected disaggregated_dispatch_reqs, it's empty.");
+
+    std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
+    for (const StorageDisaggregated::RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
+    {
+        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
+        thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [&dispatch_req, this] {
+            // When send req succeed or backoff timeout, need_retry is false.
+            bool need_retry = true;
+            pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
+            while (need_retry)
+            {
+                try
+                {
+                    pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
+                    this->cluster->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
+                    need_retry = false;
+                    const auto & resp = rpc_call.getResp();
+                    if (resp->has_error())
+                    {
+                        this->setDispatchMPPTaskErrMsg(resp->error().msg());
+                        return;
+                    }
+                    for (const auto & retry_region : resp->retry_regions())
+                    {
+                        auto region_id = pingcap::kv::RegionVerID(
+                            retry_region.id(),
+                            retry_region.region_epoch().conf_ver(),
+                            retry_region.region_epoch().version());
+                        this->cluster->region_cache->dropRegion(region_id);
+                    }
+                }
+                catch (...)
+                {
+                    std::string local_err_msg = getCurrentExceptionMessage(true);
+                    try
+                    {
+                        bo.backoff(pingcap::kv::boTiFlashRPC, pingcap::Exception(local_err_msg));
+                    }
+                    catch (...)
+                    {
+                        need_retry = false;
+                        this->setDispatchMPPTaskErrMsg(local_err_msg);
+                        this->cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
+                    }
+                }
+            }
+        });
+    }
+
+    thread_manager->wait();
+
+    // No need to lock, because all concurrent threads are done.
+    if (!dispatch_mpp_task_err_msg.empty())
+        throw Exception(dispatch_mpp_task_err_msg);
+}
+
+void GRPCReceiverContext::setDispatchMPPTaskErrMsg(const std::string & err)
+{
+    std::lock_guard<std::mutex> lock(dispatch_mpp_task_err_msg_mu);
+    // Only record first dispatch_mpp_task_err_msg.
+    if (dispatch_mpp_task_err_msg.empty())
+    {
+        dispatch_mpp_task_err_msg = err;
+    }
+}
+
+void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
+{
+    auto sender_task_size = exchange_receiver_meta.encoded_task_meta_size();
+    auto thread_manager = newThreadManager();
+    for (auto i = 0; i < sender_task_size; ++i)
+    {
+        auto sender_task = std::make_unique<mpp::TaskMeta>();
+        if (unlikely(!sender_task->ParseFromString(exchange_receiver_meta.encoded_task_meta(i))))
+        {
+            LOG_WARNING(log, "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, will ignore this error");
+            return;
+        }
+        auto cancel_req = std::make_shared<mpp::CancelTaskRequest>();
+        cancel_req->set_allocated_meta(sender_task.release());
+        auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::CancelTaskRequest>>(cancel_req);
+        thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [cancel_req, log, this] {
+            try
+            {
+                auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
+                // No need to retry.
+                this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
+                const auto & resp = rpc_call.getResp();
+                if (resp->has_error())
+                    throw Exception(resp->error().msg());
+            }
+            catch (...)
+            {
+                String cancel_err_msg = getCurrentExceptionMessage(true);
+                LOG_WARNING(log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+            }
+        });
+    }
+    thread_manager->wait();
+}
+
 bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) const
 {
     return enable_async_grpc && !request.is_local;
@@ -263,7 +372,7 @@ void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
     schema.clear();
     for (int i = 0; i < exchange_receiver_meta.field_types_size(); ++i)
     {
-        String name = "exchange_receiver_" + std::to_string(i);
+        String name = genNameForExchangeReceiver(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
         schema.emplace_back(std::move(name), std::move(info));
     }

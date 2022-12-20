@@ -11,16 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #pragma once
 
-#include <Core/Types.h>
+#include <Core/Block.h>
 
 namespace DB
 {
+struct LimitTransformAction
+{
+public:
+    LimitTransformAction(
+        const Block & header_,
+        size_t limit_);
 
-void SkipJson(size_t & cursor, const String & raw_value);
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
-String DecodeJsonAsString(size_t & cursor, const String & raw_value);
+    bool transform(Block & block);
+    Block getHeader() const;
+    size_t getLimit() const;
 
+private:
+    Block header;
+    size_t limit;
+    size_t pos = 0;
+};
 } // namespace DB
