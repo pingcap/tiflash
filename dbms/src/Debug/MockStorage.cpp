@@ -148,16 +148,16 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableSca
         ColumnsWithTypeAndName res;
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
-            bool in = false;
+            bool contains = false;
             for (const auto & column : table_scan.getColumns())
             {
                 if (column.id == column_with_type_and_name.column_id)
                 {
-                    in = true;
+                    contains = true;
                     break;
                 }
             }
-            if (in)
+            if (contains)
             {
                 res.push_back(
                     ColumnWithTypeAndName(
