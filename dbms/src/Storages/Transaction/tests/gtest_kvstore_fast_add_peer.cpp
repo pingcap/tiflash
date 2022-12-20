@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+
 #include "Debug/MockRaftStoreProxy.h"
 #include "kvstore_helper.h"
-#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 
 namespace DB
 {
 namespace tests
 {
 
-using PS::V3::universal::PageDirectoryTrait;
-using PS::V3::universal::BlobStoreTrait;
-using PS::V3::PageDirectory;
 using PS::V3::CheckpointManifestFileReader;
+using PS::V3::PageDirectory;
 using PS::V3::RemoteDataLocation;
 using PS::V3::Remote::WriterInfo;
+using PS::V3::universal::BlobStoreTrait;
+using PS::V3::universal::PageDirectoryTrait;
 
 std::string readData(const std::string & output_directory, const RemoteDataLocation & location)
 {
@@ -69,7 +70,7 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             auto writer_info = std::make_shared<WriterInfo>();
             writer_info->set_store_id(kvs.getStore().store_id.load());
             std::string output_directory = TiFlashTestEnv::getTemporaryPath("FastAddPeer/");
-            
+
             page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
                 .temp_directory = output_directory,
                 .remote_directory = output_directory,
@@ -84,16 +85,19 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             Poco::DirectoryIterator end;
             std::string optimal;
             auto optimal_index = 0;
-            while (it != end) {
-                if (it->isFile()) {
+            while (it != end)
+            {
+                if (it->isFile())
+                {
                     Poco::Path p(it.path());
                     auto index = 0;
                     std::istringstream(p.getBaseName()) >> index;
-                    if (p.getExtension() == "manifest" && index > optimal_index) {
+                    if (p.getExtension() == "manifest" && index > optimal_index)
+                    {
                         optimal_index = index;
                         optimal = p.getFileName();
                     }
-                    ++ it;
+                    ++it;
                 }
             }
             LOG_DEBUG(log, "use optimal manifest {}", optimal);
@@ -107,9 +111,11 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
 
             raft_serverpb::RegionLocalState restored_region_state;
             raft_serverpb::RaftApplyState restored_apply_state;
-            for(auto iter = records.begin(); iter != records.end(); iter++) {
+            for (auto iter = records.begin(); iter != records.end(); iter++)
+            {
                 std::string page_id = iter->page_id;
-                if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id)) {
+                if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id))
+                {
                     std::string decoded_data;
                     auto & location = iter->entry.remote_info->data_location;
                     auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
@@ -119,7 +125,9 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
                     auto n = buf.readBig(ret.data(), location.size_in_file);
                     RUNTIME_CHECK(n == location.size_in_file);
                     restored_apply_state.ParseFromArray(ret.data(), ret.size());
-                } else if (keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id)) {
+                }
+                else if (keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
+                {
                     std::string decoded_data;
                     auto & location = iter->entry.remote_info->data_location;
                     auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
@@ -129,7 +137,9 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
                     auto n = buf.readBig(ret.data(), location.size_in_file);
                     RUNTIME_CHECK(n == location.size_in_file);
                     restored_region_state.ParseFromArray(ret.data(), ret.size());
-                } else {
+                }
+                else
+                {
                     std::string decoded_data;
                     auto & location = iter->entry.remote_info->data_location;
                     auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
