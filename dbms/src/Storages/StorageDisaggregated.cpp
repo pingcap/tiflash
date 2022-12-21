@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <Flash/Disaggregated/PageReceiver.h>
@@ -247,6 +248,8 @@ BlockInputStreams StorageDisaggregated::read(
         // TODO: build rough set filter
         DAGPipeline pipeline;
         buildRemoteSegmentInputStreams(db_context, remote_read_tasks, num_streams, pipeline);
+        NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+        pushDownFilter(std::move(source_columns), pipeline);
         return pipeline.streams;
     }
 
@@ -258,7 +261,10 @@ BlockInputStreams StorageDisaggregated::read(
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
-    pushDownFilter(pipeline);
+
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
+    pushDownFilter(std::move(source_columns), pipeline);
 
     return pipeline.streams;
 }
@@ -458,13 +464,8 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::pushDownFilter(DAGPipeline & pipeline)
+void StorageDisaggregated::pushDownFilter(NamesAndTypes && source_columns, DAGPipeline & pipeline)
 {
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    assert(receiver_dag_schema.size() == source_columns.size());
-    UNUSED(receiver_dag_schema);
-
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (push_down_filter.hasValue())

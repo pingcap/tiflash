@@ -14,6 +14,8 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "Common/Allocator.h"
+
 namespace DB
 {
 class Context;
@@ -167,12 +169,7 @@ public:
         const DM::RSOperatorPtr & rs_filter,
         size_t expected_block_size);
 
-    void receivePage(PageId page_id, Page && page)
-    {
-        // TODO: directly write down to local cache?
-        std::lock_guard lock(mtx_queue);
-        persisted_pages.push(std::make_pair(page_id, std::move(page)));
-    }
+    void receivePage(dtpb::RemotePage && remote_page);
 
     void receiveMemTable(Block && block)
     {
@@ -219,6 +216,8 @@ private:
     // A temporary queue for storing the blocks
     // from remote mem-table
     std::queue<Block> mem_table_blocks;
+
+    static Allocator<false> allocator;
 };
 
 } // namespace DM

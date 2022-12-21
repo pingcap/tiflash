@@ -31,6 +31,7 @@
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
@@ -511,10 +512,30 @@ grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc
     return grpc::Status::OK;
 }
 
-grpc::Status FlashService::FetchDisaggregatedPages(grpc::ServerContext * context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * writer)
+grpc::Status FlashService::FetchDisaggregatedPages(
+    grpc::ServerContext * grpc_context,
+    const mpp::FetchDisaggregatedPagesRequest * request,
+    grpc::ServerWriter<::mpp::PagesPacket> * sync_writer)
 {
-    UNUSED(context, request, writer);
-    RUNTIME_CHECK(false);
+    LOG_DEBUG(log, "Handling fetch pages request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+
+    const DM::DisaggregatedTaskId task_id(request->meta());
+
+    auto & tmt = context->getTMTContext();
+    auto * snap_manager = tmt.getDisaggregatedSnapshotManager();
+    auto snap = snap_manager->getSnapshot(task_id);
+
+    // mpp::PagesPacket msg;
+    // grpc::WriteOptions options;
+    // sync_writer->WriteLast(msg, options);
+    UNUSED(sync_writer);
+
+    snap_manager->unregisterSnapshot(task_id);
+    LOG_DEBUG(log, "release snapshot, task_id={}", task_id);
+
+    return grpc::Status::OK;
 }
 
 void FlashService::setMockStorage(MockStorage & mock_storage_)

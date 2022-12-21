@@ -82,7 +82,7 @@ public:
     // Build the disaggregated task
     grpc::Status EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response) override;
     // Exchange page data
-    grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * writer) override;
+    grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * sync_writer) override;
 
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);

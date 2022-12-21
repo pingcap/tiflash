@@ -56,3 +56,14 @@ message DisaggregatedPhysicalTable {
     uint64 table_id = 2;
     repeated DisaggregatedSegment segments = 3;
 }
+
+// TODO: this does not belong to DeltaMerge
+message RemotePage {
+    // The page is read as a cf in DeltaVS,
+    // so we can get the u64 page_id.
+    // TODO: do we need the full page_id?
+    uint64 page_id = 1;
+    bytes data = 2;
+    uint64 checksum = 3;
+    repeated uint64 field_offsets = 4;
+}

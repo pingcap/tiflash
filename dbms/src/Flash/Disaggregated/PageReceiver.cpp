@@ -1,18 +1,18 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <Flash/Disaggregated/PageReceiver.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
+#include <common/logger_useful.h>
 
 #include <memory>
 #include <mutex>
-
-#include "Common/Logger.h"
-#include "Storages/DeltaMerge/DeltaMergeDefines.h"
-#include "Storages/DeltaMerge/DeltaMergeHelpers.h"
-#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -39,20 +39,13 @@ bool pushPacket(const DM::RemoteSegmentReadTaskPtr & seg_task,
 
     assert(!msg_channels.empty());
 
-    std::vector<const String *> chunks(packet.chunks_size());
-    for (int i = 0; i < packet.chunks_size(); ++i)
-    {
-        chunks[i] = &packet.chunks(i);
-    }
-
-    if (!(error_ptr == nullptr && chunks.empty()))
+    if (!(error_ptr == nullptr && packet.chunks_size() == 0))
     {
         auto recv_msg = std::make_shared<PageReceivedMessage>(
             req_info,
             seg_task,
             tracked_packet,
-            error_ptr,
-            std::move(chunks));
+            error_ptr);
 
         push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
     }
@@ -184,13 +177,13 @@ bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
 
     auto decoder_ptr = std::make_unique<CHBlockChunkCodec>(sample_block);
 
-    auto result = nextResult(sample_block, 0, decoder_ptr);
-    if (result.eof)
+    auto result = nextResult(0, decoder_ptr);
+    if (result.eof())
     {
         LOG_DEBUG(log, "fetch reader meets eof");
         return false;
     }
-    if (result.meet_error)
+    if (!result.ok())
     {
         LOG_WARNING(log, "fetch reader meets error: {}", result.error_msg);
         throw Exception(result.error_msg);
@@ -205,7 +198,6 @@ bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
 
 template <typename RPCContext>
 PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
-    const Block & header,
     size_t stream_id,
     std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
@@ -237,17 +229,14 @@ PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
         return PageReceiverResult::newError(recv_msg->req_info, recv_msg->error_ptr->msg());
 
     // Decode the pages or blocks into recv_msg->seg_task
-    return toDecodeResult(header, recv_msg, decoder_ptr);
+    return toDecodeResult(recv_msg, decoder_ptr);
 }
 
 template <typename RPCContext>
 PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
-    const Block & header,
     const std::shared_ptr<PageReceivedMessage> & recv_msg,
     std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
-    UNUSED(header, decoder_ptr);
-
     assert(recv_msg != nullptr);
     /// the data packets (now we ignore execution summary)
     auto result = PageReceiverResult::newOk(recv_msg->req_info);
@@ -263,7 +252,7 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
     assert(recv_msg != nullptr);
     PageDecodeDetail detail;
 
-    if (recv_msg->chunks.empty())
+    if (recv_msg->empty())
         return detail;
 
     {
@@ -272,9 +261,9 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
         detail.packet_bytes = packet.ByteSizeLong();
     }
 
-    for (const String * chunk : recv_msg->chunks)
+    for (const String & chunk : recv_msg->chunks())
     {
-        auto block = decoder_ptr->decode(*chunk);
+        auto block = decoder_ptr->decode(chunk);
         if (!block)
             continue;
         detail.rows += block.rows();
@@ -286,6 +275,14 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
 
     // TODO: Parse the chunks into pages and push to queue
     // recv_msg->seg_task->receivePage(PageId page_id, Page &&page)
+    for (const String & page : recv_msg->pages())
+    {
+        dtpb::RemotePage remote_page;
+        bool parsed = remote_page.ParseFromString(page); // TODO: handle error
+        RUNTIME_CHECK_MSG(parsed, "Can not parse remote page");
+        recv_msg->seg_task->receivePage(std::move(remote_page));
+        detail.pages += 1;
+    }
 
     return detail;
 }

@@ -138,13 +138,20 @@ FetchPagesRequest::FetchPagesRequest(DM::RemoteSegmentReadTaskPtr seg_task_)
     : seg_task(std::move(seg_task_))
     , req(std::make_shared<mpp::FetchDisaggregatedPagesRequest>())
 {
-    // req->set_snapshot_id(seg_task->snapshot_id);
+    // Invalid task, just skip
+    if (!seg_task)
+        return;
+
+    req->set_address(seg_task->address);
     req->set_lease(60); // 60 seconds
+
+    *req->mutable_meta() = seg_task->snapshot_id.toMeta();
+    req->set_table_id(seg_task->table_id);
+    req->set_segment_id(seg_task->segment_id);
     for (auto page_id : seg_task->pendingPageIds())
     {
         req->add_pages(page_id);
     }
-    req->set_address(seg_task->address);
 }
 
 GRPCPagesReceiverContext::Request GRPCPagesReceiverContext::popRequest() const
@@ -188,20 +195,8 @@ void GRPCPagesReceiverContext::makeAsyncReader(
     reader->init(callback);
 }
 
-void GRPCPagesReceiverContext::fillSchema(DAGSchema & schema) const
-{
-    schema.clear();
-    // TODO: do we need this?
-    // for (int i = 0; i < exchange_receiver_meta.field_types_size(); ++i)
-    // {
-    //     String name = genNameForExchangeReceiver(i);
-    //     ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
-    //     schema.emplace_back(std::move(name), std::move(info));
-    // }
-}
-
 String FetchPagesRequest::debugString() const
 {
-    return req->DebugString();
+    return req->ShortDebugString();
 }
 } // namespace DB

@@ -92,7 +92,7 @@ private:
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void pushDownFilter(DAGPipeline & pipeline);
+    void pushDownFilter(NamesAndTypes && source_columns, DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

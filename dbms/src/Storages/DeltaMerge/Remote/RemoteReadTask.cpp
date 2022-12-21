@@ -10,6 +10,7 @@
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Transaction/Types.h>
 #include <common/defines.h>
 #include <common/types.h>
@@ -34,6 +35,12 @@ RemoteReadTask::RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_)
         // Push all inited tasks to ready queue
         for (const auto & task : table_task->allTasks())
         {
+            // TODO: If all pages are ready in local
+            // cache, and the segment does not contains any
+            // blocks on write node's mem-table, then we
+            // can simply skip the fetch page pharse and
+            // push it into ready queue
+
             if (auto iter = ready_segment_tasks.find(task->state); iter != ready_segment_tasks.end())
             {
                 iter->second.push_back(task);
@@ -225,6 +232,9 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
 /**
  * Remote segment
  */
+
+Allocator<false> RemoteSegmentReadTask::allocator;
+
 RemoteSegmentReadTask::RemoteSegmentReadTask(
     DisaggregatedTaskId snapshot_id_,
     UInt64 store_id_,
@@ -267,6 +277,21 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
     // TODO build the page ids need to fetch from write nodes
 
     return task;
+}
+
+void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
+{
+    // TODO: directly write down to local cache?
+    std::lock_guard lock(mtx_queue);
+    size_t buf_size = remote_page.data().size();
+    char * data_buf = static_cast<char *>(allocator.alloc(buf_size));
+    MemHolder mem_holder = createMemHolder(data_buf, [buf_size](char * p) {
+        allocator.free(p, buf_size);
+    });
+    Page page;
+    page.data = ByteBuffer(data_buf, data_buf + buf_size);
+    page.mem_holder = mem_holder;
+    persisted_pages.push({remote_page.page_id(), std::move(page)});
 }
 
 BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(

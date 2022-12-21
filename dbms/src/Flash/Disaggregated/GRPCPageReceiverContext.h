@@ -103,8 +103,6 @@ public:
         return grpc::Status::OK;
     }
 
-    void fillSchema(DAGSchema & schema) const;
-
     // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
     // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),
     // and ExchangeSender+TableScan(executed in tiflash_storage node).

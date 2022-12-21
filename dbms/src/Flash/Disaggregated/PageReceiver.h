@@ -21,20 +21,22 @@ struct PageReceivedMessage
     DM::RemoteSegmentReadTaskPtr seg_task;
     const TrackedPageDataPacketPtr packet;
     const mpp::Error * error_ptr;
+
+    bool empty() const { return packet->pages_size() == 0 && packet->chunks_size() == 0; }
+    // The serialized pages to be parsed as Page
+    const auto & pages() const { return packet->pages(); }
     // The chunks to be parsed as Block
-    std::vector<const String *> chunks;
+    const auto & chunks() const { return packet->chunks(); }
 
     PageReceivedMessage(
         const String & req_info_,
         const DM::RemoteSegmentReadTaskPtr & seg_task_,
         const TrackedPageDataPacketPtr & packet_,
-        const mpp::Error * error_ptr_,
-        std::vector<const String *> && chunks_)
+        const mpp::Error * error_ptr_)
         : req_info(req_info_)
         , seg_task(seg_task_)
         , packet(packet_)
         , error_ptr(error_ptr_)
-        , chunks(std::move(chunks_))
     {
     }
 };
@@ -58,38 +60,45 @@ struct PageDecodeDetail
 };
 struct PageReceiverResult
 {
+    enum class Type
+    {
+        Ok,
+        Eof,
+        Error,
+    };
+
+    Type type;
     String req_info;
-    bool meet_error;
     String error_msg;
-    bool eof;
     // details to collect execution summary
     PageDecodeDetail decode_detail;
 
     static PageReceiverResult newOk(const String & req_info_)
     {
-        return PageReceiverResult{req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false};
+        return PageReceiverResult{Type::Ok, req_info_, /*error_msg*/ ""};
     }
 
     static PageReceiverResult newEOF(const String & req_info_)
     {
-        return PageReceiverResult{req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ true};
+        return PageReceiverResult{Type::Eof, req_info_, /*error_msg*/ ""};
     }
 
     static PageReceiverResult newError(const String & req_info, const String & error_msg)
     {
-        return PageReceiverResult{req_info, /*meet_error*/ true, error_msg, /*eof*/ false};
+        return PageReceiverResult{Type::Error, req_info, error_msg};
     }
+
+    bool ok() const { return type == Type::Ok; }
+    bool eof() const { return type == Type::Eof; }
 
 private:
     explicit PageReceiverResult(
+        Type type_,
         const String & req_info_ = "",
-        bool meet_error_ = false,
-        const String & error_msg_ = "",
-        bool eof_ = false)
-        : req_info(req_info_)
-        , meet_error(meet_error_)
+        const String & error_msg_ = "")
+        : type(type_)
+        , req_info(req_info_)
         , error_msg(error_msg_)
-        , eof(eof_)
     {}
 };
 
@@ -114,7 +123,6 @@ public:
     void close();
 
     PageReceiverResult nextResult(
-        const Block & header,
         size_t stream_id,
         std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
@@ -142,7 +150,6 @@ private:
     void cancelAllMsgChannels();
 
     PageReceiverResult toDecodeResult(
-        const Block & header,
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
