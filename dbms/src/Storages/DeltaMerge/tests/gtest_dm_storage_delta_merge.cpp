@@ -708,7 +708,7 @@ try
     auto create_table = [&]() {
         NamesAndTypesList names_and_types_list{
             {"col1", std::make_shared<DataTypeInt64>()},
-            {"col2", std::make_shared<DataTypeString>()},
+            {"col2", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>())},
         };
         for (const auto & name_type : names_and_types_list)
         {
