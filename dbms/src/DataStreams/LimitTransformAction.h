@@ -14,54 +14,16 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <common/likely.h>
 
 #include <atomic>
 #include <memory>
 
 namespace DB
 {
-class LocalLimitPos
+struct LocalLimitTransformAction
 {
 public:
-    size_t get()
-    {
-        return pos;
-    }
-
-    size_t addAndGet(size_t rows)
-    {
-        pos += rows;
-        return pos;
-    }
-
-private:
-    size_t pos = 0;
-};
-
-class GlobalLimitPos
-{
-public:
-    size_t get()
-    {
-        return pos;
-    }
-
-    size_t addAndGet(size_t rows)
-    {
-        size_t pre_pos = pos.fetch_add(rows);
-        return pre_pos + rows;
-    }
-
-private:
-    std::atomic_size_t pos = 0;
-};
-
-template <typename LimitPos>
-struct LimitTransformAction
-{
-public:
-    LimitTransformAction(
+    LocalLimitTransformAction(
         const Block & header_,
         size_t limit_)
         : header(header_)
@@ -69,36 +31,7 @@ public:
     {
     }
 
-    bool transform(Block & block)
-    {
-        if (unlikely(!block))
-            return true;
-
-        /// pos - how many lines were read, including the last read block
-        if (limit_pos.get() >= limit)
-        {
-            return false;
-        }
-
-        auto rows = block.rows();
-        auto pos = limit_pos.addAndGet(rows);
-        assert(pos >= rows);
-        if (pos <= limit)
-        {
-            // give away the whole block
-            return true;
-        }
-        else
-        {
-            // pos > limit
-            // give away a piece of the block
-            assert(rows + limit > pos);
-            size_t length = rows + limit - pos;
-            for (size_t i = 0; i < block.columns(); ++i)
-                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(0, length);
-            return true;
-        }
-    }
+    bool transform(Block & block);
 
     Block getHeader() const { return header; }
     size_t getLimit() const { return limit; }
@@ -106,10 +39,30 @@ public:
 private:
     const Block header;
     const size_t limit;
-    LimitPos limit_pos;
+    size_t pos = 0;
 };
 
-using LocalLimitTransformAction = LimitTransformAction<LocalLimitPos>;
-using GlobalLimitTransformAction = LimitTransformAction<GlobalLimitPos>;
+struct GlobalLimitTransformAction
+{
+public:
+    GlobalLimitTransformAction(
+        const Block & header_,
+        size_t limit_)
+        : header(header_)
+        , limit(limit_)
+    {
+    }
+
+    bool transform(Block & block);
+
+    Block getHeader() const { return header; }
+    size_t getLimit() const { return limit; }
+
+private:
+    const Block header;
+    const size_t limit;
+    std::atomic_size_t pos{0};
+};
+
 using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
 } // namespace DB
