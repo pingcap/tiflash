@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {

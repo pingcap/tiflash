@@ -11,37 +11,37 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #pragma once
 
-#include <Columns/FilterDescription.h>
-#include <Interpreters/ExpressionActions.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
-
-using FilterPtr = IColumn::Filter *;
-
-struct FilterTransformAction
+struct SegmentReadTransformAction
 {
 public:
-    FilterTransformAction(
+    SegmentReadTransformAction(
         const Block & header_,
-        const ExpressionActionsPtr & expression_,
-        const String & filter_column_name_);
-
-    bool alwaysFalse() const;
-    // return false if all filter out.
-    bool transform(Block & block, FilterPtr child_filter);
+        int extra_table_id_index_,
+        TableID physical_table_id_)
+        : header(header_)
+        , extra_table_id_index(extra_table_id_index_)
+        , physical_table_id(physical_table_id_)
+    {
+    }
+    bool transform(Block & block);
     Block getHeader() const;
-    ExpressionActionsPtr getExperssion() const;
+    size_t totalRows() const
+    {
+        return total_rows;
+    }
 
 private:
     Block header;
-    ExpressionActionsPtr expression;
-    size_t filter_column;
-
-    ConstantFilterDescription constant_filter_description;
+    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
+    const int extra_table_id_index;
+    const TableID physical_table_id;
+    size_t total_rows = 0;
 };
-
 } // namespace DB

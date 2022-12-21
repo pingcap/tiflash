@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/RegionInfo.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 
