@@ -107,10 +107,12 @@ void ExecutorTest::executeExecutor(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-    std::vector<size_t> concurrencies{1, 2, 10};
+    std::vector<size_t> concurrencies{1};
+//    std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
-        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        std::vector<size_t> block_sizes{ 2};
+//        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));

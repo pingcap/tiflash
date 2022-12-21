@@ -1729,33 +1729,26 @@ struct CrossJoinAdder;
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const Block & block_right, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
         size_t expanded_row_size = 0;
-        for (const Block & block_right : blocks)
+        size_t rows_right = block_right.rows();
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
-            size_t rows_right = block_right.rows();
-            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-            {
-                rows_right = std::min(rows_right, 1);
-            }
-
-            for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
-                for (size_t j = 0; j < rows_right; ++j)
-                    dst_columns[col_num]->insertFrom(*src_left_columns[col_num], i);
-
-            for (size_t col_num = 0; col_num < num_columns_to_add; ++col_num)
-            {
-                const IColumn * column_right = block_right.getByPosition(col_num).column.get();
-                dst_columns[num_existing_columns + col_num]->insertRangeFrom(*column_right, 0, rows_right);
-            }
-            expanded_row_size += rows_right;
-            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-            {
-                if (expanded_row_size >= 1)
-                    break;
-            }
+            rows_right = std::min(rows_right, 1);
         }
+
+        for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
+            for (size_t j = 0; j < rows_right; ++j)
+                dst_columns[col_num]->insertFrom(*src_left_columns[col_num], i);
+
+        for (size_t col_num = 0; col_num < num_columns_to_add; ++col_num)
+        {
+            const IColumn * column_right = block_right.getByPosition(col_num).column.get();
+            dst_columns[num_existing_columns + col_num]->insertRangeFrom(*column_right, 0, rows_right);
+        }
+        expanded_row_size += rows_right;
+
         (*is_row_matched)[i - start_offset] = 0;
         (*expanded_row_size_after_join)[i - start_offset] = current_offset + expanded_row_size;
         current_offset += expanded_row_size;
@@ -1774,9 +1767,9 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, STRICTNESS>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const Block & block_right, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, block_right, is_row_matched, current_offset, expanded_row_size_after_join);
     }
     static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
@@ -1797,7 +1790,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, STRICTNESS>
 template <>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>
 {
-    static void addFound(MutableColumns & /* dst_columns */, size_t /* num_existing_columns */, ColumnRawPtrs & /* src_left_columns */, size_t /* num_columns_to_add */, size_t start_offset, size_t i, const BlocksList & /* blocks */, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addFound(MutableColumns & /* dst_columns */, size_t /* num_existing_columns */, ColumnRawPtrs & /* src_left_columns */, size_t /* num_columns_to_add */, size_t start_offset, size_t i, const Block & /* block */, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
         (*is_row_matched)[i - start_offset] = 0;
         (*expanded_row_size_after_join)[i - start_offset] = current_offset;
@@ -1814,9 +1807,9 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
 template <>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const Block & block_right, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, block_right, is_row_matched, current_offset, expanded_row_size_after_join);
     }
     static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
@@ -1830,15 +1823,13 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftSemi, STRICTNESS>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const Block & block_right, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
-        dst_columns[num_existing_columns + num_columns_to_add - 1]->insert(FIELD_INT8_1);
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, block_right, is_row_matched, current_offset, expanded_row_size_after_join);
     }
     static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
         CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
-        dst_columns[num_existing_columns + num_columns_to_add - 1]->insert(FIELD_INT8_0);
     }
     static bool allRightRowsMaybeAdded()
     {
@@ -1874,6 +1865,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         right_table_rows += block_right.rows();
 
     size_t left_rows_per_iter = std::max(rows_left, 1);
+    left_rows_per_iter = left_rows_per_iter + 1;
     if (max_block_size_for_cross_join > 0 && right_table_rows > 0 && other_condition_ptr != nullptr
         && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
     {
@@ -1891,92 +1883,181 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
     std::unique_ptr<IColumn::Offsets> expanded_row_size_after_join;
 
     size_t output_rows = 0;
-    std::vector<Block> result_blocks;
-    bool block_full_after_handle_condition = false;
+    Blocks final_blocks;
+    bool block_full = false;
 
-    while (!block_full_after_handle_condition)
+    if (rows_left == 0)
     {
-        Block block_per_iter;
-        MutableColumns dst_columns(num_existing_columns + num_columns_to_add);
-        for (size_t i = 0; i < block.columns(); i++)
-        {
-            dst_columns[i] = block.getByPosition(i).column->cloneEmpty();
-        }
-
-        // rows_left == 0 means that it call getHeader.
-        if (rows_left != 0)
-        {
-            probe_process_info.end_row = std::min(probe_process_info.start_row + left_rows_per_iter, rows_left);
-            IColumn::Offset current_offset = 0;
-            is_row_matched = std::make_unique<IColumn::Filter>(probe_process_info.end_row - probe_process_info.start_row);
-            expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(probe_process_info.end_row - probe_process_info.start_row);
-            for (size_t i = probe_process_info.start_row; i < probe_process_info.end_row; i++)
-            {
-                if constexpr (has_null_map)
-                {
-                    if ((*null_map)[i])
-                    {
-                        /// filter out by left_conditions, so just treated as not joined column
-                        CrossJoinAdder<KIND, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, probe_process_info.start_row, i, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
-                        continue;
-                    }
-                }
-                if (right_table_rows > 0)
-                {
-                    CrossJoinAdder<KIND, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, probe_process_info.start_row, i, blocks, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
-                }
-                else
-                {
-                    CrossJoinAdder<KIND, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, probe_process_info.start_row, i, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
-                }
-            }
-
-            // Check that all rows are joined.
-            probe_process_info.all_rows_joined_finish = probe_process_info.end_row == rows_left;
-        }
-        else
-        {
-            is_row_matched = std::make_unique<IColumn::Filter>(0);
-            expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(0);
-        }
-        block_per_iter = block.cloneWithColumns(std::move(dst_columns));
-
+        is_row_matched = std::make_unique<IColumn::Filter>(0);
+        expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(0);
         if (other_condition_ptr != nullptr)
-            handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
-
-        output_rows += block_per_iter.rows();
-
-        // rows_left == 0 means it call getHeader, mark block full.
-        // Or all rows are joined, mark block full.
-        // Or use output_rows to determine whether block is full.
-        block_full_after_handle_condition = rows_left == 0 || probe_process_info.all_rows_joined_finish || output_rows >= probe_process_info.max_block_size;
-        if (!block_full_after_handle_condition)
-            probe_process_info.updateStartRow();
-        result_blocks.push_back(block_per_iter);
+            handleOtherConditions(block, is_row_matched, expanded_row_size_after_join, right_column_index);
+        return;
     }
-    if (result_blocks.size() == 1)
-    {
-        block = result_blocks[0];
-    }
-    else
-    {
-        auto & sample_block = result_blocks[0];
+
+    auto merge_blocks = [](Blocks && need_merge_blocks) {
+        auto & sample_block = need_merge_blocks[0];
         MutableColumns dst_columns(sample_block.columns());
         for (size_t i = 0; i < sample_block.columns(); i++)
         {
             dst_columns[i] = sample_block.getByPosition(i).column->cloneEmpty();
         }
-        for (auto & current_block : result_blocks)
+        for (auto & current_block : need_merge_blocks)
         {
             if (current_block.rows() > 0)
             {
                 for (size_t column = 0; column < current_block.columns(); column++)
                 {
-                    dst_columns[column]->insertRangeFrom(*current_block.getByPosition(column).column, 0, current_block.rows());
+                    dst_columns[column]->insertRangeFrom(*current_block.getByPosition(column).column, 0, current_block.getByPosition(column).column->size());
                 }
             }
         }
-        block = sample_block.cloneWithColumns(std::move(dst_columns));
+        return sample_block.cloneWithColumns(std::move(dst_columns));
+    };
+
+    auto handle_result_block = [&](Block result_block, Blocks & result_blocks) {
+        //        if (other_condition_ptr != nullptr)
+        //            handleOtherConditions(result_block, is_row_matched, expanded_row_size_after_join, right_column_index);
+
+        output_rows += result_block.rows();
+
+        if (other_condition_ptr == nullptr && !result_blocks.empty() && output_rows >= probe_process_info.max_block_size)
+        {
+            return true;
+        }
+        result_blocks.push_back(result_block);
+        return false;
+    };
+
+    auto handle_result_block_with_other_condition = [&](Block && result_block) {
+
+        handleOtherConditions(result_block, is_row_matched, expanded_row_size_after_join, right_column_index);
+        if (!final_blocks.empty() && result_block.rows() >= probe_process_info.max_block_size)
+        {
+            return true;
+        }
+        final_blocks.push_back(result_block);
+        return false;
+    };
+
+    while (!block_full && !probe_process_info.all_rows_joined_finish)
+    {
+        probe_process_info.updateStartRow();
+        size_t i = 0;
+        for (i = probe_process_info.start_row; i < rows_left; ++i)
+        {
+            Blocks result_blocks;
+            BlockListIterator it;
+            IColumn::Offset current_offset = 0;
+            bool left_semi_added = false;
+            for (it = probe_process_info.cross_right_blocks_it; it != blocks.end(); ++it)
+            {
+                is_row_matched = std::make_unique<IColumn::Filter>(1);
+                expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(1);
+                Block result_block;
+                MutableColumns dst_columns(num_existing_columns + num_columns_to_add);
+                for (size_t j = 0; j < block.columns(); ++j)
+                {
+                    dst_columns[j] = block.getByPosition(j).column->cloneEmpty();
+                }
+
+                if constexpr (has_null_map)
+                {
+                    if ((*null_map)[i])
+                    {
+                        /// filter out by left_conditions, so just treated as not joined column
+                        CrossJoinAdder<KIND, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, i, i, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
+                        probe_process_info.cross_right_blocks_it = blocks.begin();
+                        block_full = handle_result_block(block.cloneWithColumns(std::move(dst_columns)), result_blocks);
+                        break;
+                    }
+                }
+                if ((*it).rows() > 0)
+                {
+                    size_t before_add_offset = current_offset;
+                    CrossJoinAdder<KIND, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, i, i, *it, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
+                    left_semi_added = isLeftSemiFamily(kind);
+                    if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+                    {
+                        if (current_offset - before_add_offset >= 1)
+                        {
+                            block_full = handle_result_block(block.cloneWithColumns(std::move(dst_columns)), result_blocks);
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    CrossJoinAdder<KIND, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, i, i, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
+                }
+                block_full = handle_result_block(block.cloneWithColumns(std::move(dst_columns)), result_blocks);
+                if (other_condition_ptr == nullptr)
+                {
+                    current_offset = 0;
+                }
+
+                if (block_full)
+                {
+                    break;
+                }
+            }
+
+            if (blocks.empty() && isLeftJoin(kind))
+            {
+                block_full = handle_result_block(block, result_blocks);
+            }
+
+            if (result_blocks.empty())
+            {
+                result_blocks.push_back(block.cloneEmpty());
+            }
+
+            if (other_condition_ptr != nullptr)
+            {
+                Block merged_block = merge_blocks(std::move(result_blocks));
+                if (isLeftSemiFamily(kind))
+                {
+                    auto left_semi_helper_col = block.getByName(match_helper_name).column->cloneEmpty();
+                    if (left_semi_added)
+                    {
+                        left_semi_helper_col->insert(FIELD_INT8_1);
+                    }
+                    else
+                    {
+                        left_semi_helper_col->insert(FIELD_INT8_0);
+                    }
+
+                    merged_block.getByPosition(num_existing_columns + num_columns_to_add - 1).column = std::move(left_semi_helper_col);
+                }
+
+                block_full = handle_result_block_with_other_condition(std::move(merged_block));
+            }
+            else
+            {
+                for (const auto & result_block : result_blocks)
+                {
+                    final_blocks.push_back(result_block);
+                }
+            }
+
+            probe_process_info.cross_right_blocks_it = it == blocks.end() ? blocks.begin() : it;
+            if (block_full)
+            {
+                break;
+            }
+        }
+        probe_process_info.end_row = i;
+        // Check that all rows are joined.
+        probe_process_info.all_rows_joined_finish = (probe_process_info.end_row == rows_left);
+    }
+
+    if (final_blocks.size() == 1)
+    {
+        block = final_blocks[0];
+    }
+    else
+    {
+        block = merge_blocks(std::move(final_blocks));
     }
 }
 
@@ -2024,6 +2105,11 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
                                 + key_names_right[i] + " " + right_type->getName() + " at right",
                             ErrorCodes::TYPE_MISMATCH);
     }
+}
+
+BlockListIterator Join::getRightBlocksBegin() const
+{
+    return blocks.begin();
 }
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
@@ -2416,7 +2502,7 @@ BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sampl
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
-void ProbeProcessInfo::resetBlock(Block && block_)
+void ProbeProcessInfo::resetBlock(Block && block_, BlockListIterator it)
 {
     block = std::move(block_);
     start_row = 0;
@@ -2424,6 +2510,7 @@ void ProbeProcessInfo::resetBlock(Block && block_)
     all_rows_joined_finish = false;
     // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
     max_block_size = std::max(max_block_size, block.rows());
+    cross_right_blocks_it = it;
 }
 
 void ProbeProcessInfo::updateStartRow()
