@@ -16,6 +16,7 @@
 
 #include <Debug/MockStorage.h>
 #include <Server/FlashGrpcServerHolder.h>
+#include <Flash/Mpp/MPPTaskId.h>
 
 namespace DB::tests
 {
