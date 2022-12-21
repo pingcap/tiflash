@@ -25,11 +25,12 @@ using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 class BitmapFilter
 {
 public:
-    BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_);
+    BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, bool default_value);
 
+    void set(BlockInputStreamPtr & stream);
     void set(const ColumnPtr & col, const FilterPtr f);
     void set(const UInt32 * data, UInt32 size, const FilterPtr f);
-
+    void set(UInt32 start, UInt32 limit);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 

@@ -18,11 +18,30 @@
 
 namespace DB::DM
 {
-BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_)
-    : filter(size_, false)
+BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, bool default_value)
+    : filter(size_, default_value)
     , snap(snapshot_)
-    , all_match(false)
+    , all_match(default_value)
 {}
+
+void BitmapFilter::set(BlockInputStreamPtr & stream)
+{
+    stream->readPrefix();
+    for (;;)
+    {
+        FilterPtr f = nullptr;
+        auto blk = stream->read(f, /*res_filter*/true);
+        if (likely(blk))
+        {
+            set(blk.segmentRowIdCol(), f);
+        }
+        else
+        {
+            break;
+        }
+    }
+    stream->readSuffix();
+}
 
 void BitmapFilter::set(const ColumnPtr & col, const FilterPtr f)
 {
@@ -55,6 +74,12 @@ void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr f)
             filter[row_id] = (*f)[i];
         }
     }
+}
+
+void BitmapFilter::set(UInt32 start, UInt32 limit)
+{
+    RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
+    std::fill(filter.begin() + start, filter.begin() + start + limit, true);
 }
 
 bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const

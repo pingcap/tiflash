@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
 
@@ -52,6 +53,7 @@ private:
     ColumnDefines read_columns;
 };
 
+template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
@@ -112,6 +114,10 @@ public:
             if (res)
             {
                 res.setStartOffset(res.startOffset() + precede_stream_rows);
+                if constexpr (need_row_id)
+                {
+                    res.setSegmentRowIdCol(createSegmentRowIdCol(res.startOffset(), res.rows()));
+                }
                 break;
             }
             else
@@ -126,6 +132,17 @@ public:
     }
 
 private:
+    ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit)
+    {
+        auto seg_row_id_col = ColumnUInt32::create();
+        ColumnUInt32::Container & res = seg_row_id_col->getData();
+        res.resize(limit);
+        for (UInt64 i = 0; i < limit; ++i)
+        {
+            res[i] = i + start;
+        }
+        return seg_row_id_col;
+    }
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;
