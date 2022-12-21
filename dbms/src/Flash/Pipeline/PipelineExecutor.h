@@ -22,6 +22,29 @@ namespace DB
 {
 class Context;
 
+/**
+ * PipelineExecutor is the implementation of the pipeline-base execution model.
+ * 
+ *                                            ┌──────────────────┐
+ *                                            │  task scheduler  │
+ *           generate          submit tasks   │                  │
+ *  pipeline ────────►  event1 ─────────────► │ ┌──────────────┐ │
+ *                                            │ │spill executor│ │
+ *                        │ trigger           │ └────▲──┬──────┘ │
+ *                        ▼                   │      │  │        │
+ *                             submit tasks   │ ┌────┴──▼─────┐  │
+ *                      event2 ─────────────► │ │task executor│  │
+ *                                            │ └────▲──┬─────┘  │
+ *                        │ trigger           │      │  │        │
+ *                        ▼                   │  ┌───┴──▼────┐   │
+ *                             submit tasks   │  │io reactor │   │
+ *                      event3 ─────────────► │  └───────────┘   │
+ *                                            │                  │
+ *                                            └──────────────────┘
+ * 
+ * As shown above, the pipeline generates a number of events, which are executed in dependency order, 
+ * and the events generate a number of tasks that are submitted to the task scheduler for execution.
+ */
 class PipelineExecutor : public QueryExecutor
 {
 public:
@@ -37,7 +60,7 @@ public:
         root_pipeline = pipelines[0];
     }
 
-    String dump() const override;
+    String toString() const override;
 
     void cancel() override;
 

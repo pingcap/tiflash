@@ -48,7 +48,7 @@ void PipelineExecutor::cancel()
     status.cancel();
 }
 
-String PipelineExecutor::dump() const
+String PipelineExecutor::toString() const
 {
     FmtBuffer buffer;
     assert(root_pipeline);

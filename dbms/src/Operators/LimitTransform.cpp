@@ -16,47 +16,10 @@
 
 namespace DB
 {
-void GlobalLimitTransformAction::transform(Block & block)
-{
-    if (unlikely(!block))
-        return;
-
-    /// pos - how many lines were read, including the last read block
-    if (pos >= limit)
-    {
-        block = {};
-    }
-
-    auto rows = block.rows();
-    size_t pre_pos = pos.fetch_add(rows);
-    // The limit has been reached.
-    if (pre_pos >= limit)
-    {
-        block = {};
-        return;
-    }
-    size_t cur_pos = pre_pos + rows;
-    if (cur_pos <= limit)
-    {
-        // give away the whole block
-        return;
-    }
-    else
-    {
-        // cur_pos > limit
-        // give away a piece of the block
-        assert(rows + limit > cur_pos);
-        size_t length = rows + limit - cur_pos;
-        for (size_t i = 0; i < block.columns(); ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(0, length);
-        return;
-    }
-}
-
 OperatorStatus LimitTransform::transform(Block & block)
 {
-    if (likely(block))
-        action->transform(block);
+    if (!action->transform(block))
+        block = {};
     return OperatorStatus::PASS;
 }
 

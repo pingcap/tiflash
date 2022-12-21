@@ -46,7 +46,7 @@ protected:
 
 private:
     LoggerPtr log;
-    LimitTransformAction limit_transform_action;
+    LocalLimitTransformAction action;
 };
 
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/LimitBlockInputStream.h>
+#include <DataStreams/LimitTransformAction.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>

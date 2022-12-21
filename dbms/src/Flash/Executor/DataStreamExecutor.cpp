@@ -48,7 +48,7 @@ void DataStreamExecutor::cancel()
         p_stream->cancel(/*kill=*/false);
 }
 
-String DataStreamExecutor::dump() const
+String DataStreamExecutor::toString() const
 {
     FmtBuffer fb;
     data_stream->dumpTree(fb);

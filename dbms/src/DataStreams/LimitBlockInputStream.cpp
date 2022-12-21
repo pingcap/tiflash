@@ -24,8 +24,7 @@ LimitBlockInputStream::LimitBlockInputStream(
     size_t limit_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , limit_transform_action(input->getHeader(), limit_)
-
+    , action(input->getHeader(), limit_)
 {
     children.push_back(input);
 }
@@ -35,7 +34,7 @@ Block LimitBlockInputStream::readImpl()
 {
     Block res = children.back()->read();
 
-    if (limit_transform_action.transform(res))
+    if (action.transform(res))
     {
         return res;
     }
@@ -47,6 +46,6 @@ Block LimitBlockInputStream::readImpl()
 
 void LimitBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    buffer.fmtAppend(", limit = {}", limit_transform_action.getLimit());
+    buffer.fmtAppend(", limit = {}", action.getLimit());
 }
 } // namespace DB

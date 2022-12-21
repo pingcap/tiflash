@@ -37,6 +37,7 @@ SpillExecutor::SpillExecutor(TaskScheduler & scheduler_, size_t thread_num)
     }
     else
     {
+        // If thread_num is 0, we will execute spill in the calling thread.
         submit_func = [&](TaskPtr && task) {
             handleTask(std::move(task));
         };

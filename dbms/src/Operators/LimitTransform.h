@@ -14,34 +14,11 @@
 
 #pragma once
 
+#include <DataStreams/LimitTransformAction.h>
 #include <Operators/Operator.h>
-
-#include <atomic>
-#include <memory>
 
 namespace DB
 {
-class GlobalLimitTransformAction
-{
-public:
-    GlobalLimitTransformAction(
-        const Block & header_,
-        size_t limit_)
-        : header(header_)
-        , limit(limit_)
-    {}
-
-    void transform(Block & block);
-    Block getHeader() const { return header; }
-    size_t getLimit() const { return limit; }
-
-private:
-    const Block header;
-    const size_t limit;
-    std::atomic_size_t pos = 0;
-};
-using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
-
 class LimitTransform : public Transform
 {
 public:

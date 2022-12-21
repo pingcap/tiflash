@@ -18,10 +18,11 @@
 
 namespace DB
 {
-class FinalizePipelineEvent : public Event
+//
+class PipelineCompleteEvent : public Event
 {
 public:
-    FinalizePipelineEvent(PipelineExecStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
+    PipelineCompleteEvent(PipelineExecStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
         : Event(exec_status_, mem_tracker_)
     {}
 

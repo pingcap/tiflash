@@ -130,7 +130,7 @@ std::optional<QueryExecutorPtr> pipelineExecute(Context & context, bool internal
     auto pipelines = physical_plan.toPipelines();
     auto executor = std::make_unique<PipelineExecutor>(process_list_entry, context, pipelines);
     if (likely(!internal))
-        LOG_DEBUG(logger, fmt::format("Query pipeline:\n{}", executor->dump()));
+        LOG_DEBUG(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     return {std::move(executor)};
 }
 } // namespace

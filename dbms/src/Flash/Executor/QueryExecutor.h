@@ -61,7 +61,7 @@ public:
 
     virtual void cancel() = 0;
 
-    virtual String dump() const = 0;
+    virtual String toString() const = 0;
 
     virtual int estimateNewThreadCount() = 0;
 

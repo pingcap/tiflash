@@ -58,7 +58,10 @@ struct OperatorBuilder
 
 struct OperatorsBuilder
 {
+    // A Group generates a set of operator executors running in parallel.
     using BuilderGroup = std::vector<OperatorBuilder>;
+    // The relationship between different BuilderGroups is similar to
+    // the relationship between `streams` and `streams_with_non_joined_data` in `DAGPipeline`.
     std::vector<BuilderGroup> groups;
 
     size_t max_concurrency_in_groups = 0;

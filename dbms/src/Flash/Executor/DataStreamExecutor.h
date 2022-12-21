@@ -30,7 +30,7 @@ public:
         assert(data_stream);
     }
 
-    String dump() const override;
+    String toString() const override;
 
     void cancel() override;
 
