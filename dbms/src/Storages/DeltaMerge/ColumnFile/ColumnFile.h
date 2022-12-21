@@ -43,7 +43,6 @@ using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
 static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 
-
 /// ColumnFile represents the files stored in a Segment, like the "SST File" of LSM-Tree.
 /// ColumnFile has several concrete sub-classes that represent different kinds of data.
 ///
@@ -178,6 +177,5 @@ size_t copyColumnsData(
 /// Debugging string
 template <typename T>
 String columnFilesToString(const T & column_files);
-
 } // namespace DM
 } // namespace DB
