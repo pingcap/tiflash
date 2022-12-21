@@ -40,7 +40,6 @@ public:
 
 private:
     void loop();
-    bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task);
 
 private:
     TaskScheduler & scheduler;

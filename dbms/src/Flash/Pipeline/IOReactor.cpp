@@ -22,6 +22,28 @@
 
 namespace DB
 {
+namespace
+{
+bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
+{
+    auto status = task->await();
+    switch (status)
+    {
+    case ExecTaskStatus::WAITING:
+        return false;
+    case ExecTaskStatus::RUNNING:
+        ready_tasks.push_back(std::move(task));
+        return true;
+    case ExecTaskStatus::FINISHED:
+    case ExecTaskStatus::ERROR:
+    case ExecTaskStatus::CANCELLED:
+        return true;
+    default:
+        __builtin_unreachable();
+    }
+}
+} // namespace
+
 IOReactor::IOReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
 {
@@ -124,24 +146,5 @@ void IOReactor::loop()
         }
     }
     LOG_INFO(logger, "io reactor loop finished");
-}
-
-bool IOReactor::handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
-{
-    auto status = task->await();
-    switch (status)
-    {
-    case ExecTaskStatus::WAITING:
-        return false;
-    case ExecTaskStatus::RUNNING:
-        ready_tasks.push_back(std::move(task));
-        return true;
-    case ExecTaskStatus::FINISHED:
-    case ExecTaskStatus::ERROR:
-    case ExecTaskStatus::CANCELLED:
-        return true;
-    default:
-        __builtin_unreachable();
-    }
 }
 } // namespace DB
