@@ -32,7 +32,6 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
-
 namespace DB
 {
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)

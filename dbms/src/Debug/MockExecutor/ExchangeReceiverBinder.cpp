@@ -20,7 +20,6 @@
 #include <Storages/Transaction/TiDB.h>
 #include <kvproto/mpp.pb.h>
 
-
 namespace DB::mock
 {
 bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
