@@ -17,6 +17,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+
 namespace DB
 {
 namespace DM
@@ -24,7 +26,7 @@ namespace DM
 void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files)
 {
     writeIntBinary(column_files.size(), buf);
-    BlockPtr last_schema;
+    ColumnFileSchemaPtr last_schema;
 
     for (const auto & column_file : column_files)
     {
@@ -66,7 +68,8 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, 
     size_t column_file_count;
     readIntBinary(column_file_count, buf);
     ColumnFilePersisteds column_files;
-    BlockPtr last_schema;
+    // BlockPtr last_schema;
+    ColumnFileSchemaPtr last_schema;
     for (size_t i = 0; i < column_file_count; ++i)
     {
         std::underlying_type<ColumnFile::Type>::type column_file_type;

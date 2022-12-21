@@ -95,6 +95,7 @@ protected:
     SegmentPtr segment;
     bool is_common_handle = true;
     const size_t rowkey_column_size = 2;
+    ColumnFileSchemaPtr schema;
 };
 
 TEST_F(SegmentCommonHandleTest, WriteRead)
@@ -112,7 +113,7 @@ try
                                                          is_common_handle,
                                                          rowkey_column_size);
         // write to segment
-        segment->write(dmContext(), block);
+        segment->write(dmContext(), block, schema);
         // estimate segment
         auto estimated_rows = segment->getEstimatedRows();
         ASSERT_EQ(estimated_rows, block.rows());
@@ -158,7 +159,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
     }
 
     { // Round 2
@@ -197,7 +198,7 @@ try
                                                          is_common_handle,
                                                          rowkey_column_size);
         // write to segment
-        segment->write(dmContext(), block);
+        segment->write(dmContext(), block, schema);
         // estimate segment
         auto estimated_rows = segment->getEstimatedRows();
         ASSERT_EQ(estimated_rows, block.rows());
@@ -252,7 +253,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
         ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write_2);
     }
 
@@ -299,7 +300,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -360,7 +361,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -429,7 +430,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
         // flush [0, 50) to segment's stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
@@ -447,7 +448,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
     }
 
     if (read_before_delete)
@@ -510,7 +511,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
     }
 
     {
@@ -676,7 +677,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
     }
 
     {
@@ -790,7 +791,7 @@ try
                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                          is_common_handle,
                                                          rowkey_column_size);
-        segment->write(dmContext(), std::move(block));
+        segment->write(dmContext(), std::move(block), schema);
         // flush segment
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
@@ -848,7 +849,7 @@ try
                 EXTRA_HANDLE_COLUMN_STRING_TYPE,
                 is_common_handle,
                 rowkey_column_size);
-            segment->write(dmContext(), std::move(block));
+            segment->write(dmContext(), std::move(block), schema);
             num_batches_written += 1;
         }
 

@@ -23,6 +23,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+
 namespace DB
 {
 namespace DM
@@ -106,7 +108,7 @@ void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) co
         file->removeData(wbs);
 }
 
-BlockPtr ColumnFilePersistedSet::getLastSchema()
+ColumnFileSchemaPtr ColumnFilePersistedSet::getLastSchema()
 {
     for (auto it = persisted_files.rbegin(); it != persisted_files.rend(); ++it)
     {

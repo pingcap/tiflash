@@ -68,7 +68,7 @@ TEST_P(SegmentReplaceDataTest, Basic)
 try
 {
     // Data in memtable should be discarded after replaceData
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 100);
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     {
         auto replace_block = prepareWriteBlock(/* from */ 0, /* to */ replace_to_rows);
@@ -93,7 +93,7 @@ try
     }
 
     // Write some data and create a new stable.
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 47, /* at */ replace_to_rows + 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 47, /* at */ replace_to_rows + 100);
     ASSERT_EQ(47 + replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_EQ(47 + replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
@@ -138,7 +138,7 @@ try
         return;
     }
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 100);
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     {
         auto replace_block = prepareWriteBlock(/* from */ 0, /* to */ replace_to_rows);
@@ -146,7 +146,7 @@ try
     }
     ASSERT_EQ(replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 47, /* at */ replace_to_rows - 10); // 10 rows will be overlapped
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 47, /* at */ replace_to_rows - 10); // 10 rows will be overlapped
     ASSERT_EQ(37 + replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -195,7 +195,7 @@ try
         ASSERT_TRUE(stable_page_ids.count(dm_file->fileId()));
     }
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 47);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 47);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
@@ -226,7 +226,7 @@ try
         ASSERT_EQ(rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
         // Write some rows doesn't affect our next replaceData
-        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema);
     }
 
     ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr);
@@ -246,7 +246,7 @@ try
     auto seg_right_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, Segment::SplitMode::Physical);
     ASSERT_TRUE(seg_right_id.has_value());
 
-    writeSegment(*seg_right_id, 10);
+    writeSegment(*seg_right_id, schema, 10);
     ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
     ASSERT_EQ(10, getSegmentRowNumWithoutMVCC(*seg_right_id));
 
@@ -273,7 +273,7 @@ CATCH
 TEST_F(SegmentReplaceDataSimpleTest, ReleaseExistingSharedDMFile)
 try
 {
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 500, /* at */ 0);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 500, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
@@ -311,10 +311,10 @@ CATCH
 TEST_F(SegmentReplaceDataSimpleTest, ReadSnapshotBeforeReplace)
 try
 {
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400); // 400 in stable
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 400); // 400 in stable
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 41); // 41 in memtable
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 41); // 41 in memtable
 
     auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
     auto in_stream = segment->getInputStreamModeRaw(*dm_context, *tableColumns());
@@ -346,11 +346,11 @@ CATCH
 TEST_F(SegmentReplaceDataSimpleTest, NewWriteInMemtableAfterSnapshot)
 try
 {
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400, /* at */ 0); // [0, 400)
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 400, /* at */ 0); // [0, 400)
     auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
     ASSERT_TRUE(snapshot != nullptr);
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200, /* at */ 300); // [300, 500)
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 200, /* at */ 300); // [300, 500)
 
     ASSERT_EQ(500, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
@@ -366,13 +366,13 @@ CATCH
 TEST_F(SegmentReplaceDataSimpleTest, NewWriteInPersistedAfterSnapshot)
 try
 {
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400, /* at */ 0); // [0, 400)
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 400, /* at */ 0); // [0, 400)
     auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
     ASSERT_TRUE(snapshot != nullptr);
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200, /* at */ 300); // [300, 500)
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 200, /* at */ 300); // [300, 500)
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 50, /* at */ 220); // [220, 270)
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 50, /* at */ 220); // [220, 270)
 
     ASSERT_EQ(500, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 

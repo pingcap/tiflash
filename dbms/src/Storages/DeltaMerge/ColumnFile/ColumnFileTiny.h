@@ -16,6 +16,9 @@
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+
 namespace DB
 {
 namespace DM
@@ -32,7 +35,8 @@ class ColumnFileTiny : public ColumnFilePersisted
     friend class ColumnFileTinyReader;
 
 private:
-    BlockPtr schema;
+    ColumnFileSchemaPtr schema;
+    //BlockPtr schema;
 
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -46,7 +50,7 @@ private:
     /// Currently this field is unused.
     CachePtr cache;
     /// Used to map column id to column instance in a Block.
-    ColIdToOffset colid_to_offset;
+    //ColIdToOffset colid_to_offset;
 
 private:
     /// Read a block of columns in `column_defines` from cache / disk,
@@ -59,21 +63,29 @@ private:
     const DataTypePtr & getDataType(ColId column_id) const
     {
         // Note that column_id must exist
-        auto index = colid_to_offset.at(column_id);
-        return schema->getByPosition(index).type;
+        // auto index = colid_to_offset.at(column_id);
+        // return schema->getByPosition(index).type;
+        return schema->getDataType(column_id);
     }
 
 public:
-    ColumnFileTiny(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
+    // ColumnFileTiny(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
+    //     : schema(schema_)
+    //     , rows(rows_)
+    //     , bytes(bytes_)
+    //     , data_page_id(data_page_id_)
+    //     , cache(cache_)
+    // {
+    //     for (size_t i = 0; i < schema->columns(); ++i)
+    //         colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
+    // }
+    ColumnFileTiny(const ColumnFileSchemaPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , rows(rows_)
         , bytes(bytes_)
         , data_page_id(data_page_id_)
         , cache(cache_)
-    {
-        for (size_t i = 0; i < schema->columns(); ++i)
-            colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
-    }
+    {}
 
     Type getType() const override { return Type::TINY_FILE; }
 
@@ -84,9 +96,9 @@ public:
     void clearCache() { cache = {}; }
 
     /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
-    BlockPtr getSchema() const { return schema; }
+    ColumnFileSchemaPtr getSchema() const { return schema; }
     /// Replace the schema with a new schema, and the new schema instance should be exactly the same as the previous one.
-    void resetIdenticalSchema(BlockPtr schema_) { schema = schema_; }
+    void resetIdenticalSchema(ColumnFileSchemaPtr schema_) { schema = schema_; }
 
     ColumnTinyFilePtr cloneWith(PageId new_data_page_id)
     {
@@ -109,11 +121,11 @@ public:
 
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
-    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema = nullptr, const CachePtr & cache = nullptr);
+    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, ColumnFileSchemaPtr & schema, const CachePtr & cache = nullptr);
 
     static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    static std::tuple<ColumnFilePersistedPtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
+    static std::tuple<ColumnFilePersistedPtr, ColumnFileSchemaPtr> deserializeMetadata(ReadBuffer & buf, const ColumnFileSchemaPtr & last_schema);
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {
@@ -135,7 +147,7 @@ public:
         String s = "{tiny_file,rows:" + DB::toString(rows) //
             + ",bytes:" + DB::toString(bytes) //
             + ",data_page_id:" + DB::toString(data_page_id) //
-            + ",schema:" + (schema ? schema->dumpStructure() : "none") //
+            + ",schema:" + (schema ? schema->toString() : "none") //
             + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
         return s;
     }

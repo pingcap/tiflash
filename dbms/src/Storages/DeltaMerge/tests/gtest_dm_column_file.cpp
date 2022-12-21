@@ -28,6 +28,8 @@
 
 #include <vector>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+
 namespace DB
 {
 namespace DM
@@ -172,7 +174,7 @@ try
         ColumnFilePersisteds column_file_persisteds;
         size_t rows = 100; // arbitrary value
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, rows, false);
-        auto schema = std::make_shared<Block>(block.cloneEmpty());
+        auto schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
         column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
         column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
         column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));

@@ -35,8 +35,8 @@ public:
     virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
 };
 
-void serializeSchema(WriteBuffer & buf, const BlockPtr & schema);
-BlockPtr deserializeSchema(ReadBuffer & buf);
+void serializeSchema(WriteBuffer & buf, const Block & schema);
+ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf);
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
 void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);

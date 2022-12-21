@@ -28,25 +28,7 @@ namespace DM
 {
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
-    // If this column file's schema is identical to last_schema, then use the last_schema instance (instead of the one in `column_file`),
-    // so that we don't have to serialize my_schema instance.
-    if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
-    {
-        auto my_schema = m_file->getSchema();
-        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
-            m_file->resetIdenticalSchema(last_schema);
-        else
-            last_schema = my_schema;
-    }
-    else if (auto * t_file = column_file->tryToTinyFile(); t_file)
-    {
-        auto my_schema = t_file->getSchema();
-        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
-            t_file->resetIdenticalSchema(last_schema);
-        else
-            last_schema = my_schema;
-    }
-
+    // 这里有必要额外判断一遍嘛？感觉不是很需要？为什么会又刚好一样了呢？是指做了两遍 ddl 的场景么？
     if (!column_files.empty())
     {
         // As we are now appending a new column file (which can be used for new appends),
@@ -197,7 +179,7 @@ void MemTableSet::appendColumnFile(const ColumnFilePtr & column_file)
     appendColumnFileInner(column_file);
 }
 
-void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
+void MemTableSet::appendToCache(DMContext & context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit)
 {
     // If the `column_files` is not empty, and the last `column_file` is a `ColumnInMemoryFile`, we will merge the newly block into the last `column_file`.
     // Otherwise, create a new `ColumnInMemoryFile` and write into it.
@@ -213,8 +195,12 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
     if (!success)
     {
         // Create a new column file.
-        auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
-        auto new_column_file = std::make_shared<ColumnFileInMemory>(my_schema);
+        if (column_file_schema == nullptr || !isSameSchema(block, column_file_schema))
+        {
+            // 说明 schema 调整，更新最新的 schema
+            column_file_schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
+        }
+        auto new_column_file = std::make_shared<ColumnFileInMemory>(column_file_schema);
         // Must append the empty `new_column_file` to `column_files` before appending data to it,
         // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);

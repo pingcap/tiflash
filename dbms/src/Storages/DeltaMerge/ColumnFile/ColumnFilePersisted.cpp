@@ -21,16 +21,18 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+
 namespace DB
 {
 namespace DM
 {
-void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
+void serializeSchema(WriteBuffer & buf, const Block & schema)
 {
     if (schema)
     {
-        writeIntBinary(static_cast<UInt32>(schema->columns()), buf);
-        for (auto & col : *schema)
+        writeIntBinary(static_cast<UInt32>(schema.columns()), buf);
+        for (const auto & col : schema)
         {
             writeIntBinary(col.column_id, buf);
             writeStringBinary(col.name, buf);
@@ -43,12 +45,12 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
     }
 }
 
-BlockPtr deserializeSchema(ReadBuffer & buf)
+ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf)
 {
     UInt32 cols;
     readIntBinary(cols, buf);
     if (!cols)
-        return {};
+        return nullptr;
     auto schema = std::make_shared<Block>();
     for (size_t i = 0; i < cols; ++i)
     {
@@ -60,7 +62,8 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
         readStringBinary(type_name, buf);
         schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().get(type_name), name, column_id));
     }
-    return schema;
+
+    return std::make_shared<ColumnFileSchema>(*schema);
 }
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)

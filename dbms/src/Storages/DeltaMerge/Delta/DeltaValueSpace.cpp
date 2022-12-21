@@ -33,14 +33,14 @@ namespace DM
 // ================================================
 DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
     : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(id_, persisted_files))
-    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema(), in_memory_files))
+    , mem_table_set(std::make_shared<MemTableSet>(in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
     , log(Logger::get())
 {}
 
 DeltaValueSpace::DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_)
     : persisted_file_set(std::move(persisted_file_set_))
-    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema()))
+    , mem_table_set(std::make_shared<MemTableSet>())
     , delta_index(std::make_shared<DeltaIndex>())
     , log(Logger::get())
 {}
@@ -238,13 +238,13 @@ bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFile
     return true;
 }
 
-bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
+bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    mem_table_set->appendToCache(context, block, offset, limit);
+    mem_table_set->appendToCache(context, block, column_file_schema, offset, limit);
     return true;
 }
 

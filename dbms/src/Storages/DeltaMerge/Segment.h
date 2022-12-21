@@ -147,13 +147,13 @@ public:
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
     /// The block data of the passed in ColumnFile should be placed on disk before calling this function.
     /// To write new block data, you can use `writeToCache`.
-    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
+    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file); // todo 看一下这个函数的调用
 
     /// Write a block of data into the MemTableSet part of the Segment. The data will be flushed to disk later.
-    bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
+    bool writeToCache(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit);
 
     /// For test only.
-    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
+    bool write(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, bool flush_cache = true);
 
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
 

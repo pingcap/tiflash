@@ -106,7 +106,7 @@ try
     // As long as the segment is not empty, we will ingest into the delta,
     // instead of ingest by replacing the stable.
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 100, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
@@ -124,7 +124,7 @@ try
     // determine it and we treat this case as "likely to be not empty".
     // So finally we will ingest into the delta.
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 100, /* at */ 0);
     deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
@@ -141,7 +141,7 @@ try
     // The segment is referencing a non-empty stable. But the stable's any pack
     // is not covered by the segment range.
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, schema, 100, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 

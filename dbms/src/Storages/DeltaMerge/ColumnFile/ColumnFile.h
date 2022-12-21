@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -41,6 +42,7 @@ class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
 static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
+
 
 /// ColumnFile represents the files stored in a Segment, like the "SST File" of LSM-Tree.
 /// ColumnFile has several concrete sub-classes that represent different kinds of data.
@@ -127,7 +129,8 @@ public:
     ColumnFilePersisted * tryToColumnFilePersisted();
 
     virtual ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
+        = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
@@ -175,5 +178,6 @@ size_t copyColumnsData(
 /// Debugging string
 template <typename T>
 String columnFilesToString(const T & column_files);
+
 } // namespace DM
 } // namespace DB

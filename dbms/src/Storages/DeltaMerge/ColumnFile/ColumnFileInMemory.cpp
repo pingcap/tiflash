@@ -32,6 +32,7 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
     Columns read_cols;
 
     std::scoped_lock lock(cache->mutex);
+    const auto & colid_to_offset = schema->getColIdToOffset();
     for (size_t i = col_start; i < col_end; ++i)
     {
         const auto & cd = col_defs[i];

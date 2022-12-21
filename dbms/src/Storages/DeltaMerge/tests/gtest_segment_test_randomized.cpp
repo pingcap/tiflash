@@ -158,7 +158,7 @@ protected:
         auto segment_id = getRandomSegmentId();
         auto write_rows = std::uniform_int_distribution<size_t>{20, 100}(random);
         LOG_DEBUG(logger, "start random write, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
-        writeSegment(segment_id, write_rows);
+        writeSegment(segment_id, schema, write_rows);
     }
 
     void writeRandomSegmentWithDeletedPack()
