@@ -57,16 +57,17 @@ void ExecutorTest::SetUp()
 {
     initializeContext();
     initializeClientInfo();
-    TaskSchedulerConfig config{5, 5};
     if (!TaskScheduler::instance)
+    {
+        TaskSchedulerConfig config{8, 8};
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+    }
 }
 
 void ExecutorTest::TearDown()
 {
     if (TaskScheduler::instance)
     {
-        TaskScheduler::instance->close();
         TaskScheduler::instance.reset();
     }
 }

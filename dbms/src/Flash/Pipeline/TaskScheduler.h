@@ -33,9 +33,9 @@ class TaskScheduler
 public:
     explicit TaskScheduler(const TaskSchedulerConfig & config);
 
-    void submit(std::vector<TaskPtr> & tasks);
+    ~TaskScheduler();
 
-    void close();
+    void submit(std::vector<TaskPtr> & tasks);
 
     static std::unique_ptr<TaskScheduler> instance;
 

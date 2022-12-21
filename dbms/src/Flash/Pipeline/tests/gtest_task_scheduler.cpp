@@ -177,7 +177,6 @@ TEST_F(TaskSchedulerTestRunner, simple_task)
     TaskScheduler task_scheduler{config};
     task_scheduler.submit(tasks);
     waiter.wait();
-    task_scheduler.close();
 }
 
 TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
@@ -191,7 +190,6 @@ TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
     TaskScheduler task_scheduler{config};
     task_scheduler.submit(tasks);
     waiter.wait();
-    task_scheduler.close();
 }
 
 TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
@@ -206,7 +204,6 @@ TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
-        task_scheduler.close();
     };
     test(0);
     test(thread_num);

@@ -1268,7 +1268,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
-    if (settings.enable_pipeline)
+    // For test mode, TaskScheduler is controlled by test case.
+    bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
+    if (enable_pipeline)
     {
         size_t task_executor_thread_num = settings.pipeline_task_executor_threads < 0
             ? std::thread::hardware_concurrency()
@@ -1280,9 +1282,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
     SCOPE_EXIT({
-        if (TaskScheduler::instance)
+        if (enable_pipeline)
         {
-            TaskScheduler::instance->close();
+            assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();
         }
     });

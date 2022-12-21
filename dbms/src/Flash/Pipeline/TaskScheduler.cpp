@@ -25,6 +25,13 @@ TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
 {
 }
 
+TaskScheduler::~TaskScheduler()
+{
+    task_executor.close();
+    io_reactor.close();
+    spill_executor.close();
+}
+
 void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
 {
     if (unlikely(tasks.empty()))
@@ -54,13 +61,6 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     }
     task_executor.submit(running_tasks);
     io_reactor.submit(waiting_tasks);
-}
-
-void TaskScheduler::close()
-{
-    task_executor.close();
-    io_reactor.close();
-    spill_executor.close();
 }
 
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;

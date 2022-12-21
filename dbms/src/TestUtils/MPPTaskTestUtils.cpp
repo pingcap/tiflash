@@ -37,6 +37,7 @@ void MPPTaskTestUtils::SetUpTestCase()
 void MPPTaskTestUtils::TearDown()
 {
     MockComputeServerManager::instance().reset();
+    ExecutorTest::TearDown();
 }
 
 void MPPTaskTestUtils::startServers()

@@ -177,7 +177,6 @@ protected:
 
     void TearDown() override
     {
-        TaskScheduler::instance->close();
         TaskScheduler::instance.reset();
     }
 };
