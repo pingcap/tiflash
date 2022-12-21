@@ -47,9 +47,9 @@ namespace TiDB
 
 constexpr int64_t MPP_VERSION_V0 = 0;
 constexpr int64_t MPP_VERSION_V1 = 1;
-MAYBE_UNUSED_MEMBER constexpr int64_t MPP_VERSION_V2 = MPP_VERSION_V1 * 2;
+static const char * MPP_V1_TIFLASH_RELEASE_VERSION = "?"; // TODO: set version after committed
+// constexpr int64_t MPP_VERSION_V2 = MPP_VERSION_V1 * 2;
 constexpr int64_t MPP_VERSION = MPP_VERSION_V1;
-static const char * MPP_TIFLASH_RELEASE_VERSION = "v6.7.0";
 
 bool CheckMppVersion(int64_t mpp_version)
 {
@@ -62,7 +62,7 @@ std::string GenMppVersionErrorMessage(int64_t mpp_version)
                                mpp_version,
                                TiDB::MPP_VERSION_V0,
                                TiDB::MPP_VERSION_V1,
-                               MPP_TIFLASH_RELEASE_VERSION);
+                               MPP_V1_TIFLASH_RELEASE_VERSION);
     return err_msg;
 }
 

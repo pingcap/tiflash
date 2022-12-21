@@ -122,31 +122,6 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
         compressed_buffer_ptr = &compressed_buffer[0];
         break;
     }
-    // case CompressionMethod::SNAPPY:
-    // {
-    //     static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
-    //     compressed_size = snappy::MaxCompressedLength(uncompressed_size);
-    //     compressed_buffer.resize(header_size + compressed_size);
-
-    //     compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::SNAPPY);
-
-    //     snappy::RawCompress(
-    //         working_buffer.begin(),
-    //         uncompressed_size,
-    //         &compressed_buffer[header_size],
-    //         &compressed_size);
-
-    //     compressed_size = header_size + compressed_size;
-
-    //     UInt32 compressed_size_32 = compressed_size;
-    //     UInt32 uncompressed_size_32 = uncompressed_size;
-
-    //     unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
-    //     unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
-
-    //     compressed_buffer_ptr = &compressed_buffer[0];
-    //     break;
-    // }
     default:
         throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
     }

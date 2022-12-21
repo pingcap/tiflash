@@ -82,6 +82,12 @@ namespace DB
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                 \
         F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}))                                                       \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
+    M(tiflash_exchange_data_bytes, "Total bytes of exchange operator", Counter,                                                           \
+        F(type_hash_original_all, {"type", "hash_original_all"}),                                                                         \
+        F(type_hash_none, {"type", "hash_none"}),                                                                                         \
+        F(type_hash_none_local, {"type", "hash_none_local"}),                                                                             \
+        F(type_hash_lz4, {"type", "hash_lz4"}),                                                                                           \
+        F(type_hash_zstd, {"type", "hash_zstd"}))                                                                                         \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \

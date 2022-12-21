@@ -129,6 +129,11 @@ size_t getExtraInfoSize(const Block & block)
     return size;
 }
 
+size_t ApproxBlockBytes(const Block & block)
+{
+    return block.bytes() + getExtraInfoSize(block);
+}
+
 void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
@@ -165,7 +170,7 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     if (start != 0 || end != block.rows())
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
 
-    size_t init_size = block.bytes() + getExtraInfoSize(block);
+    size_t init_size = ApproxBlockBytes(block);
     WriteBuffer * ostr_ptr = initOutput(init_size);
 
     block.checkNumberOfRows();

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
@@ -28,7 +29,6 @@
 #include "common/logger_useful.h"
 #include "ext/scope_guard.h"
 #include "mpp.pb.h"
-
 namespace DB
 {
 template <class ExchangeWriterPtr>
@@ -112,6 +112,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
         partitionAndEncodeThenWriteBlocks();
 }
 
+extern size_t ApproxBlockBytes(const Block & block);
+
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
@@ -129,6 +131,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         tracked_packets[part_id]->getPacket().set_compress(method);
     }
 
+    size_t ori_block_mem_size = 0;
+
 
     if (!blocks.empty())
     {
@@ -141,6 +145,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
+            ori_block_mem_size += ApproxBlockBytes(block);
+
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
             HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
             blocks.pop_back();
@@ -159,6 +165,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
                         codec_stream = compress_chunk_codec_stream.get();
                     }
                     codec_stream->encode(dest_block, 0, dest_block_rows);
+                    // ori_block_mem_size += ApproxBlockBytes(dest_block);
                     tracked_packets[part_id]->addChunk(codec_stream->getString());
                     codec_stream->clear();
                 }
@@ -169,24 +176,51 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
     }
 
     writePackets(tracked_packets);
+
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
 }
 
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
 {
-    // auto * logger = &Poco::Logger::get("tzg");
-
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
         const auto & packet = packets[part_id];
         assert(packet);
-        if (likely(packet->getPacket().chunks_size() > 0))
+
+        auto & inner_packet = packet->getPacket();
+        if (likely(inner_packet.chunks_size() > 0))
         {
-            // Stopwatch watch{};
             writer->partitionWrite(packet, part_id);
-            // auto cost = watch.elapsedSeconds();
-            // if (cost > 1.001)
-            //     LOG_DEBUG(logger, "finish to write partition {}, chunck cnt {}, time cost {:.3f}s", part_id, packet->getPacket().chunks_size(), cost);
+
+            auto sz = inner_packet.ByteSizeLong();
+            switch (inner_packet.compress())
+            {
+            case mpp::NONE:
+            {
+                if (writer->getTunnels()[part_id]->isLocal())
+                {
+                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+                }
+                else
+                {
+                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
+                }
+                break;
+            }
+            case mpp::LZ4:
+            {
+                GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
+                break;
+            }
+            case mpp::ZSTD:
+            {
+                GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
+                break;
+            }
+            default:
+                break;
+            }
         }
     }
 }

@@ -55,7 +55,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     {
         if (exchange_type == tipb::ExchangeType::Hash)
         {
-            RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() != mpp::CompressMethod::NONE);
+            // RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() != mpp::CompressMethod::NONE);
 
             if (enable_fine_grained_shuffle)
             {
