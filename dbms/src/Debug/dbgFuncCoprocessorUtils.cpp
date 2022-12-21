@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/dbgFuncCoprocessorUtils.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
