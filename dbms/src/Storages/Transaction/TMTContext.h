@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
 #include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>

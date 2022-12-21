@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Interpreters/Context.h>
+#include <Storages/StorageDisaggregated.h>
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>

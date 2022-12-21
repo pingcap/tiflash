@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -15,7 +16,6 @@
 
 #include <memory>
 #include <mutex>
-#include "Storages/DeltaMerge/Remote/DisaggregatedTaskId.h"
 
 namespace DB::DM
 {

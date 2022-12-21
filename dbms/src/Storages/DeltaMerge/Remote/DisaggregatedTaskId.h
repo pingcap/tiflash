@@ -2,6 +2,7 @@
 
 #include <Flash/Mpp/MPPTaskId.h>
 #include <fmt/format.h>
+#include <kvproto/mpp.pb.h>
 
 namespace DB::DM
 {
@@ -17,6 +18,10 @@ public:
         , executor_id(std::move(executor_id_))
     {
     }
+
+    explicit DisaggregatedTaskId(const mpp::DisaggregatedTaskMeta & task_meta);
+
+    mpp::DisaggregatedTaskMeta toMeta() const;
 
     const MPPTaskId mpp_task_id;
     const String executor_id;

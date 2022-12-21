@@ -3,9 +3,10 @@
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
-
-#include "Flash/Mpp/MPPTaskId.h"
-#include "Storages/DeltaMerge/Remote/DisaggregatedTaskId.h"
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -48,13 +49,33 @@ void DisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * c
         context->getClientInfo().current_address.toString(),
         Logger::get("DisaggregatedTaskHandler"));
     context->setDAGContext(dag_context.get());
-
-    // TODO: register task
 }
 
-void DisaggregatedTask::execute()
+void DisaggregatedTask::execute(mpp::EstablishDisaggregatedTaskResponse * response)
 {
     query_executor_holder.set(queryExecute(*context));
+
+    auto & tmt = context->getTMTContext();
+    {
+        auto kvstore = tmt.getKVStore();
+        auto store_meta = kvstore->getStoreMeta();
+        response->set_store_id(store_meta.id());
+    }
+
+    auto * manager = tmt.getDisaggregatedSnapshotManager();
+    const auto & task_id = *dag_context->getDisaggregatedTaskId();
+    auto snap = manager->getSnapshot(task_id);
+    if (!snap)
+    {
+        response->mutable_error()->set_code(1); // code = 1?
+        response->mutable_error()->set_msg("register fail");
+        return;
+    }
+
+    for (const auto & [table_id, table_tasks] : snap->tasks())
+    {
+        response->add_tables(table_tasks->toRemote(task_id).SerializeAsString());
+    }
 }
 
 } // namespace DB

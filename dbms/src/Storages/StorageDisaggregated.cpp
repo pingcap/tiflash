@@ -23,6 +23,7 @@
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <Flash/Disaggregated/PageReceiver.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/StorageDisaggregated.h>
@@ -42,7 +43,7 @@ struct RpcTypeTraits<::mpp::EstablishDisaggregatedTaskRequest>
 {
     using RequestType = ::mpp::EstablishDisaggregatedTaskRequest;
     using ResultType = ::mpp::EstablishDisaggregatedTaskResponse;
-    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; }
+    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; } // NOLINT(readability-identifier-naming)
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
@@ -140,7 +141,8 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     auto thread_manager = newThreadManager();
     auto * cluster = context.getTMTContext().getKVCluster();
-    auto * task_id = context.getDAGContext()->getDisaggregatedTaskId().get();
+    const auto & executor_id = table_scan.getTableScanExecutorID();
+    const DM::DisaggregatedTaskId task_id(context.getDAGContext()->getMPPTaskId(), executor_id);
 
     for (size_t idx = 0; idx < establish_reqs.size(); ++idx)
     {
@@ -149,7 +151,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
         thread_manager->schedule(
             true,
             "EstablishDisaggregated",
-            [&db_context, &remote_tasks, idx, cluster, task_id, req = std::move(req), log = this->log] {
+            [&db_context, &remote_tasks, idx, cluster, &task_id, req = std::move(req), log = this->log] {
                 auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
                 cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
                 const auto & resp = call.getResp();
@@ -159,7 +161,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     throw Exception(resp->error().msg());
                 // Parse the resp and gen tasks on read node
                 // The number of tasks is equal to number of write nodes
-                for (const auto & physical_table : resp->segments())
+                for (const auto & physical_table : resp->tables())
                 {
                     dtpb::DisaggregatedPhysicalTable table;
                     auto parse_ok = table.ParseFromString(physical_table);
@@ -168,7 +170,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         db_context,
                         resp->store_id(),
                         req->address(),
-                        *task_id,
+                        task_id,
                         table);
                 }
                 // TODO: update region cache by `resp->retry_regions`

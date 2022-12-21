@@ -18,8 +18,11 @@
 #include <Flash/CoprocessorHandler.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <kvproto/coprocessor.pb.h>
+
 namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;

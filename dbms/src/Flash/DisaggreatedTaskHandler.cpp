@@ -40,12 +40,7 @@ grpc::Status DisaggregatedTaskHandler::execute(const ContextPtr & context)
             }
         }
 
-        task->execute();
-
-        // TODO: set response
-        // response->set_store_id(int64_t value);
-        // response->set_snapshot_id(int64_t value);
-        // response->add_segments()
+        task->execute(response);
     }
     catch (Exception & e)
     {

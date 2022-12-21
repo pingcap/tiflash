@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -25,19 +26,30 @@ public:
         , filter(std::move(filter_))
         , tasks(std::move(tasks_))
     {
-        UNUSED(table_id);
     }
 
-private:
+    dtpb::DisaggregatedPhysicalTable toRemote(const DisaggregatedTaskId & task_id) const;
+
+    DISALLOW_COPY(DisaggregatedTableReadSnapshot);
+
+public:
     const TableID table_id;
+
+private:
     RSOperatorPtr filter;
     // TODO: we could reduce the members in tasks
     SegmentReadTasks tasks;
 };
 
+// The read snapshot of one physical table
+// This class is not thread safe
 class DisaggregatedReadSnapshot
 {
 public:
+    using TableSnapshotMap = std::unordered_map<TableID, DisaggregatedTableReadSnapshotPtr>;
+
+    DisaggregatedReadSnapshot() = default;
+
     void addTask(TableID physical_table_id, DisaggregatedTableReadSnapshotPtr && task)
     {
         if (!task)
@@ -45,44 +57,15 @@ public:
         table_snapshots.emplace(physical_table_id, std::move(task));
     }
 
+    const TableSnapshotMap & tasks()
+    {
+        return table_snapshots;
+    }
+
+    DISALLOW_COPY(DisaggregatedReadSnapshot);
+
 private:
     std::unordered_map<TableID, DisaggregatedTableReadSnapshotPtr> table_snapshots;
-};
-
-class DisaggregatedSnapshotManager;
-using DisaggregatedSnapshotManagerPtr = std::unique_ptr<DisaggregatedSnapshotManager>;
-// DisaggregatedSnapshotManager holds all snapshot for disaggregated read tasks
-// in the write node. It's a single instance holden in global_context.
-class DisaggregatedSnapshotManager
-{
-public:
-    std::tuple<bool, String> registerSnapshot(const DisaggregatedTaskId & task_id, DisaggregatedReadSnapshotPtr && snap)
-    {
-        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return {false, "disaggregated task has been registered"};
-
-        snapshots.emplace(task_id, std::move(snap));
-        return {true, ""};
-    }
-
-    bool unregisterSnapshot(const DisaggregatedTaskId & snap_id)
-    {
-        std::unique_lock lock(mtx);
-        if (auto iter = snapshots.find(snap_id); iter != snapshots.end())
-        {
-            snapshots.erase(iter);
-            return true;
-        }
-        return false;
-    }
-
-    DISALLOW_COPY_AND_MOVE(DisaggregatedSnapshotManager);
-
-    DisaggregatedSnapshotManager() = default;
-
-private:
-    std::mutex mtx;
-    std::unordered_map<DisaggregatedTaskId, DisaggregatedReadSnapshotPtr> snapshots;
 };
 
 

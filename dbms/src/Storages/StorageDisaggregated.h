@@ -32,6 +32,8 @@
 
 namespace DB
 {
+class ExchangeReceiver;
+
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
 // Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),

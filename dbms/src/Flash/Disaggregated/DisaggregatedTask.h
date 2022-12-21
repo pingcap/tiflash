@@ -23,7 +23,7 @@ public:
 
     void prepare(const mpp::EstablishDisaggregatedTaskRequest * request);
 
-    void execute();
+    void execute(mpp::EstablishDisaggregatedTaskResponse * response);
 
 private:
     ContextPtr context;
