@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/MockTableScanBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/MockSourceStream.h>

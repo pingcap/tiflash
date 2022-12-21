@@ -18,6 +18,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/StreamWriter.h>

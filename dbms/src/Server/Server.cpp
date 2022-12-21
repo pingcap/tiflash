@@ -505,10 +505,11 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
         }
         LOG_INFO(
             log,
-            "Storage inited finish. [total_count={}] [init_count={}] [error_count={}]",
+            "Storage inited finish. [total_count={}] [init_count={}] [error_count={}] [datatype_fullname_count={}]",
             storages.size(),
             init_cnt,
-            err_cnt);
+            err_cnt,
+            DataTypeFactory::instance().getFullNameCacheSize());
     };
     if (lazily_init_store)
     {
