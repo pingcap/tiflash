@@ -397,6 +397,7 @@ void MockDAGRequestContext::addMockTable(const String & db, const String & table
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assert(columnInfos.size() == columns.size());
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
 }
