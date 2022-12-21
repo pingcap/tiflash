@@ -42,10 +42,10 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
     }
 }
 
-void DataStreamExecutor::cancel(bool is_kill)
+void DataStreamExecutor::cancel()
 {
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(data_stream.get()); p_stream)
-        p_stream->cancel(is_kill);
+        p_stream->cancel(/*kill=*/false);
 }
 
 String DataStreamExecutor::dump() const

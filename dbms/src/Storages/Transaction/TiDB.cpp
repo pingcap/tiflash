@@ -1143,4 +1143,13 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     return tidb_column_info;
 }
 
+std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos)
+{
+    std::vector<ColumnInfo> tidb_column_infos;
+    tidb_column_infos.reserve(tipb_column_infos.size());
+    for (const auto & tipb_column_info : tipb_column_infos)
+        tidb_column_infos.emplace_back(toTiDBColumnInfo(tipb_column_info));
+    return tidb_column_infos;
+}
+
 } // namespace TiDB

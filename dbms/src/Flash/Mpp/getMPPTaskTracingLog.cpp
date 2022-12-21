@@ -13,11 +13,12 @@
 // limitations under the License.
 
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
 LoggerPtr getMPPTaskTracingLog(const MPPTaskId & mpp_task_id)
 {
-    return Logger::get(tracing_log_source, mpp_task_id.toString());
+    return Logger::get(DB::tracing_log_source, mpp_task_id.toString());
 }
 } // namespace DB

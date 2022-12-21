@@ -11,9 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #pragma once
 
-/// Get number of CPU cores without hyper-threading.
-/// Note: do not support environment under resource isolation mechanism like Docker, CGroup.
-unsigned getNumberOfPhysicalCPUCores();
+#include <Core/Block.h>
+
+namespace DB
+{
+struct LimitTransformAction
+{
+public:
+    LimitTransformAction(
+        const Block & header_,
+        size_t limit_);
+
+    bool transform(Block & block);
+    Block getHeader() const;
+    size_t getLimit() const;
+
+private:
+    Block header;
+    size_t limit;
+    size_t pos = 0;
+};
+} // namespace DB

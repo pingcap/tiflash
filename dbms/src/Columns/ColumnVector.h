@@ -366,7 +366,7 @@ public:
 
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
 
-    ColumnPtr replicate(const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     void getExtremes(Field & min, Field & max) const override;
 

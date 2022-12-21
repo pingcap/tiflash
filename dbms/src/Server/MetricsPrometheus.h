@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashSecurity.h>
 #include <Common/Timer.h>
 #include <Poco/Net/HTTPServer.h>
 #include <common/logger_useful.h>
@@ -35,7 +34,7 @@ class Context;
 class MetricsPrometheus
 {
 public:
-    MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & config);
+    MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_);
     ~MetricsPrometheus();
 
 private:

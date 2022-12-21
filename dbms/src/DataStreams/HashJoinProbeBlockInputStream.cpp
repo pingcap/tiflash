@@ -20,9 +20,11 @@ namespace DB
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
-    const String & req_id)
+    const String & req_id,
+    UInt64 max_block_size)
     : log(Logger::get(req_id))
     , join(join_)
+    , probe_process_info(max_block_size)
 {
     children.push_back(input);
 
@@ -50,28 +52,32 @@ Block HashJoinProbeBlockInputStream::getTotals()
         }
         join->joinTotals(totals);
     }
+
     return totals;
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
-    join->joinBlock(res);
-    return res;
+    assert(res.rows() == 0);
+    ProbeProcessInfo header_probe_process_info(0);
+    header_probe_process_info.resetBlock(std::move(res));
+    return join->joinBlock(header_probe_process_info);
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    Block res = children.back()->read();
-    if (!res)
-        return res;
+    if (probe_process_info.all_rows_joined_finish)
+    {
+        Block block = children.back()->read();
+        if (!block)
+            return block;
+        join->checkTypes(block);
+        probe_process_info.resetBlock(std::move(block));
+    }
 
-    join->joinBlock(res);
-
-    // TODO split block if block.size() > settings.max_block_size
-    // https://github.com/pingcap/tiflash/issues/3436
-
-    return res;
+    return join->joinBlock(probe_process_info);
 }
+
 
 } // namespace DB
