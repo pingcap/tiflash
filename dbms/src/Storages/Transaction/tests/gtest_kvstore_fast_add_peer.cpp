@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+#include <Storages/Transaction/FastAddPeer.h>
 
 #include "Debug/MockRaftStoreProxy.h"
 #include "kvstore_helper.h"
@@ -67,10 +68,10 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
             ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
 
+            // Dump PS.
             auto writer_info = std::make_shared<WriterInfo>();
             writer_info->set_store_id(kvs.getStore().store_id.load());
             std::string output_directory = TiFlashTestEnv::getTemporaryPath("FastAddPeer/");
-
             page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
                 .temp_directory = output_directory,
                 .remote_directory = output_directory,
@@ -81,27 +82,11 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             });
 
             // Find the newest manifest
-            Poco::DirectoryIterator it(output_directory);
-            Poco::DirectoryIterator end;
-            std::string optimal;
-            auto optimal_index = 0;
-            while (it != end)
-            {
-                if (it->isFile())
-                {
-                    Poco::Path p(it.path());
-                    auto index = 0;
-                    std::istringstream(p.getBaseName()) >> index;
-                    if (p.getExtension() == "manifest" && index > optimal_index)
-                    {
-                        optimal_index = index;
-                        optimal = p.getFileName();
-                    }
-                    ++it;
-                }
-            }
-            LOG_DEBUG(log, "use optimal manifest {}", optimal);
-            ASSERT_NE(optimal, "");
+            auto maybe_remote_meta = fetchRemotePeerMeta(output_directory, 0, region_id, 0);
+            ASSERT(maybe_remote_meta.has_value());
+
+            auto remote_meta = std::move(maybe_remote_meta.value());
+            const auto & [s_id, restored_region_state, restored_apply_state, optimal] = remote_meta;
 
             auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = output_directory + optimal});
             auto edit = reader->read();
@@ -109,41 +94,18 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             auto records = edit.getRecords();
             ASSERT_EQ(3, records.size());
 
-            raft_serverpb::RegionLocalState restored_region_state;
-            raft_serverpb::RaftApplyState restored_apply_state;
             for (auto iter = records.begin(); iter != records.end(); iter++)
             {
                 std::string page_id = iter->page_id;
-                if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id))
+                if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id) || keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
                 {
-                    std::string decoded_data;
-                    auto & location = iter->entry.remote_info->data_location;
-                    auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
-                    std::string ret;
-                    ret.resize(location.size_in_file);
-                    buf.seek(location.offset_in_file);
-                    auto n = buf.readBig(ret.data(), location.size_in_file);
-                    RUNTIME_CHECK(n == location.size_in_file);
-                    restored_apply_state.ParseFromArray(ret.data(), ret.size());
-                }
-                else if (keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
-                {
-                    std::string decoded_data;
-                    auto & location = iter->entry.remote_info->data_location;
-                    auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
-                    std::string ret;
-                    ret.resize(location.size_in_file);
-                    buf.seek(location.offset_in_file);
-                    auto n = buf.readBig(ret.data(), location.size_in_file);
-                    RUNTIME_CHECK(n == location.size_in_file);
-                    restored_region_state.ParseFromArray(ret.data(), ret.size());
                 }
                 else
                 {
-                    std::string decoded_data;
                     auto & location = iter->entry.remote_info->data_location;
                     auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
                     buf.seek(location.offset_in_file);
+
                     const auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
                         RaftStoreProxyPtr{proxy_instance.get()}));
                     auto decoded_region = Region::deserialize(buf, proxy_helper.get());
