@@ -45,10 +45,11 @@ private:
 
 public:
     DataTypePtr get(const String & full_name) const;
+    // In order to optimize the speed of generating data type instances, this will cache the full_name -> DataTypePtr.
     DataTypePtr getOrSet(const String & full_name);
     DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
     DataTypePtr get(const ASTPtr & ast) const;
-    size_t getFullNameTypeSize() const;
+    size_t getFullNameCacheSize() const;
 
     /// For compatibility with SQL, it's possible to specify that certain data type name is case insensitive.
     enum CaseSensitiveness

@@ -69,7 +69,7 @@ DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
     return datatype_ptr;
 }
 
-size_t DataTypeFactory::getFullNameTypeSize() const
+size_t DataTypeFactory::getFullNameCacheSize() const
 {
     std::shared_lock lock(rw_lock);
     return fullname_types.size();
