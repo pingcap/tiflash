@@ -16,21 +16,25 @@
 
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
+
 #include "Storages/DeltaMerge/DeltaMergeDefines.h"
 
 namespace DB
 {
 namespace DM
 {
-class ColumnFileSchema {
+class ColumnFileSchema
+{
 private:
     Block schema;
-    
+
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
     ColIdToOffset colid_to_offset;
 
 public:
-    explicit ColumnFileSchema(const Block & schema_): schema(schema_) {
+    explicit ColumnFileSchema(const Block & schema_)
+        : schema(schema_)
+    {
         for (size_t i = 0; i < schema.columns(); ++i)
             colid_to_offset.emplace(schema.getByPosition(i).column_id, i);
     }
@@ -49,10 +53,9 @@ public:
 
     const Block & getSchema() const { return schema; }
     const ColIdToOffset & getColIdToOffset() const { return colid_to_offset; }
-
 };
 
 using ColumnFileSchemaPtr = std::shared_ptr<ColumnFileSchema>;
 
-}
-}
+} // namespace DM
+} // namespace DB
