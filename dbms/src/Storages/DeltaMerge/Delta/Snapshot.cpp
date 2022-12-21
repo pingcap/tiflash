@@ -40,6 +40,10 @@ public:
     {
         RUNTIME_CHECK_MSG(false, "Must not read from NopColumnFileSetStorageReader");
     }
+    Page readForColumnFileTiny(PageId) const override
+    {
+        RUNTIME_CHECK_MSG(false, "Must not read from NopColumnFileSetStorageReader");
+    }
 };
 
 // FIXME: This function doesn't make sense. It simply builds a "remote" snapshot, based on

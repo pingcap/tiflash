@@ -2,6 +2,8 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <kvproto/mpp.pb.h>
 
+#include <memory>
+
 namespace DB::DM
 {
 
@@ -19,6 +21,54 @@ DisaggregatedTableReadSnapshot::toRemote(const DisaggregatedTaskId & task_id) co
         remote_table.mutable_segments()->Add(std::move(remote_seg));
     }
     return remote_table;
+}
+
+std::tuple<SegmentReadTaskPtr, String> DisaggregatedReadSnapshot::popTask(TableID physical_table_id, UInt64 segment_id)
+{
+    std::unique_lock lock(mtx);
+    auto table_iter = table_snapshots.find(physical_table_id);
+    if (table_iter == table_snapshots.end())
+    {
+        return {nullptr, fmt::format("Segment task not found by table_id, table_id={}, segment_id={}", physical_table_id, segment_id)};
+    }
+
+    assert(table_iter->second->table_id == physical_table_id);
+    auto seg_task = table_iter->second->popTask(segment_id);
+    if (!seg_task)
+    {
+        return {nullptr, fmt::format("Segment task not found by segment_id, table_id={}, segment_id={}", physical_table_id, segment_id)};
+    }
+    if (table_iter->second->empty())
+    {
+        table_snapshots.erase(table_iter);
+        LOG_DEBUG(Logger::get(), "all tasks of table are pop, table_id={}", physical_table_id);
+    }
+    return {seg_task, ""};
+}
+
+bool DisaggregatedReadSnapshot::empty() const
+{
+    for (const auto & tbl : table_snapshots)
+    {
+        if (!tbl.second->empty())
+            return false;
+    }
+    return true;
+}
+
+SegmentReadTaskPtr DisaggregatedTableReadSnapshot::popTask(const UInt64 segment_id)
+{
+    std::unique_lock lock(mtx);
+    for (auto iter = tasks.begin(); iter != tasks.end(); ++iter)
+    {
+        auto seg = *iter;
+        if (seg->segment->segmentId() == segment_id)
+        {
+            tasks.erase(iter);
+            return seg;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace DB::DM

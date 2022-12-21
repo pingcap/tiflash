@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -30,6 +32,7 @@
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfRead;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -45,6 +48,19 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
 
 namespace tests
 {
+PageIds getCFTinyIds(const ColumnFileSetSnapshotPtr & snapshot)
+{
+    PageIds page_ids;
+    for (const auto & cf : snapshot->getColumnFiles())
+    {
+        if (auto * tiny = cf->tryToTinyFile(); tiny)
+        {
+            page_ids.emplace_back(tiny->getDataPageId());
+        }
+    }
+    return page_ids;
+}
+
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 {
     {
@@ -587,6 +603,14 @@ void SegmentTestBasic::replaceSegmentData(PageId segment_id, const DMFilePtr & f
         operation_statistics["replaceDataWithSnapshot"]++;
     else
         operation_statistics["replaceData"]++;
+}
+
+SegmentReadTaskPtr SegmentTestBasic::genSegmentReadTask(PageId segment_id) const
+{
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments.at(segment_id);
+    auto segment_snap = segment->createSnapshot(*dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfRead);
+    return std::make_shared<SegmentReadTask>(segment, segment_snap);
 }
 
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id) const

@@ -72,7 +72,7 @@ void DisaggregatedTask::execute(mpp::EstablishDisaggregatedTaskResponse * respon
         return;
     }
 
-    for (const auto & [table_id, table_tasks] : snap->tasks())
+    for (const auto & [table_id, table_tasks] : snap->tableSnapshots())
     {
         response->add_tables(table_tasks->toRemote(task_id).SerializeAsString());
     }

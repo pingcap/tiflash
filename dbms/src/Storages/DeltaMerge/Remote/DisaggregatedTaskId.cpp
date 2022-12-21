@@ -3,6 +3,8 @@
 
 namespace DB::DM
 {
+const DisaggregatedTaskId DisaggregatedTaskId::unknown_disaggregated_task_id{};
+
 DisaggregatedTaskId::DisaggregatedTaskId(const mpp::DisaggregatedTaskMeta & task_meta)
     : mpp_task_id(
         task_meta.start_ts(),

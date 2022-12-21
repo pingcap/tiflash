@@ -9,6 +9,9 @@ namespace DB::DM
 class DisaggregatedTaskId
 {
 public:
+    static const DisaggregatedTaskId unknown_disaggregated_task_id;
+
+public:
     DisaggregatedTaskId()
         : DisaggregatedTaskId(MPPTaskId::unknown_mpp_task_id, "")
     {}

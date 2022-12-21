@@ -73,9 +73,11 @@ public:
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
-        if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [field_index={}] is_valid={} field_offsets.size()={}", index, is_valid, field_offsets.size()),
-                            ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(iter != field_offsets.end(),
+                          "Try to getFieldData with invalid field index [field_index={}] is_valid={} field_offsets.size()={}",
+                          index,
+                          is_valid,
+                          field_offsets.size());
 
         PageFieldOffset beg = iter->offset;
         ++iter;

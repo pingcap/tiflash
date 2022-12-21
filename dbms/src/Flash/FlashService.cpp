@@ -22,6 +22,7 @@
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/DisaggreatedTaskHandler.h>
+#include <Flash/Disaggregated/PageTunnel.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -522,18 +523,19 @@ grpc::Status FlashService::FetchDisaggregatedPages(
         return check_result;
 
     const DM::DisaggregatedTaskId task_id(request->meta());
+    PageIds read_ids;
+    read_ids.reserve(request->pages_size());
+    for (auto page_id : request->pages())
+        read_ids.emplace_back(page_id);
 
-    auto & tmt = context->getTMTContext();
-    auto * snap_manager = tmt.getDisaggregatedSnapshotManager();
-    auto snap = snap_manager->getSnapshot(task_id);
+    auto tunnel = PageTunnel::build(
+        *context,
+        task_id,
+        request->table_id(),
+        request->segment_id(),
+        read_ids);
 
-    // mpp::PagesPacket msg;
-    // grpc::WriteOptions options;
-    // sync_writer->WriteLast(msg, options);
-    UNUSED(sync_writer);
-
-    snap_manager->unregisterSnapshot(task_id);
-    LOG_DEBUG(log, "release snapshot, task_id={}", task_id);
+    tunnel->connect(sync_writer);
 
     return grpc::Status::OK;
 }

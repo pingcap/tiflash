@@ -1,0 +1,95 @@
+
+#include <Common/Exception.h>
+#include <Flash/Disaggregated/PageTunnel.h>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
+#include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <common/logger_useful.h>
+#include <kvproto/mpp.pb.h>
+
+#include <memory>
+
+namespace DB
+{
+PageTunnelPtr PageTunnel::build(
+    const Context & context,
+    const DM::DisaggregatedTaskId & task_id,
+    TableID table_id,
+    UInt64 segment_id,
+    const PageIds & read_page_ids)
+{
+    auto & tmt = context.getTMTContext();
+    auto * snap_manager = tmt.getDisaggregatedSnapshotManager();
+    auto snap = snap_manager->getSnapshot(task_id);
+    auto [seg_task, err_msg] = snap->popTask(table_id, segment_id);
+    RUNTIME_CHECK(!seg_task, err_msg); // TODO: return bad request
+
+    auto tunnel = std::make_unique<PageTunnel>(task_id, snap_manager, seg_task, read_page_ids);
+    return tunnel;
+}
+
+mpp::PagesPacket PageTunnel::readPacket()
+{
+    mpp::PagesPacket packet;
+
+    // read page data by page_ids
+    size_t total_pages_data_size = 0;
+    auto persisted_cf = seg_task->read_snapshot->delta->getPersistedFileSetSnapshot();
+    for (const auto page_id : read_page_ids)
+    {
+        auto page = persisted_cf->getStorage()->readForColumnFileTiny(page_id);
+        dtpb::RemotePage remote_page;
+        remote_page.set_page_id(page_id);
+        remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
+        remote_page.set_checksum(0x0); // TODO do we need to send checksum to remote?
+        size_t idx = 0;
+        auto iter = page.field_offsets.begin();
+        while (iter != page.field_offsets.end())
+        {
+            RUNTIME_CHECK(iter->index == idx);
+            remote_page.add_field_offsets(iter->offset);
+
+            iter++;
+            idx += 1;
+        }
+        total_pages_data_size += page.data.size();
+        packet.mutable_pages()->Add(remote_page.SerializeAsString());
+    }
+
+    // generate an inputstream of mem-table
+    auto mem_table = seg_task->read_snapshot->delta->getMemTableSetSnapshot();
+
+    LOG_DEBUG(log,
+              "send packet, pages={} pages_size={} blocks={}",
+              packet.pages_size(),
+              total_pages_data_size,
+              packet.chunks_size());
+    return packet;
+}
+
+void PageTunnel::connect(SyncPagePacketWriter * sync_writer)
+{
+    // TODO: split the packet into smaller size
+    sync_writer->Write(readPacket());
+}
+
+void PageTunnel::waitForFinish()
+{
+}
+
+void PageTunnel::close()
+{
+    if (!snap_manager)
+        return;
+
+    if (auto snap = snap_manager->getSnapshot(task_id);
+        snap && snap->empty())
+    {
+        snap_manager->unregisterSnapshot(task_id);
+        LOG_DEBUG(log, "release snapshot, task_id={}", task_id);
+    }
+}
+} // namespace DB
