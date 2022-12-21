@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/MockExchangeReceiverInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Planner/FinalizeHelper.h>
