@@ -28,7 +28,6 @@
 #include <kvproto/diagnosticspb.pb.h>
 
 #include <ext/scope_guard.h>
-#include <optional>
 
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
     do                                                                                    \
@@ -768,121 +767,6 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
 {
     RegionTable & region_table = server->tmt->getRegionTable();
     region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
-}
-
-FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
-{
-    auto * apply = RawCppString::New(apply_str);
-    auto * region = RawCppString::New(region_str);
-    return FastAddPeerRes{
-        .status = status,
-        .apply_state = CppStrWithView{.inner = GenRawCppPtr(apply, RawCppPtrTypeImpl::String), .view = BaseBuffView{apply->data(), apply->size()}},
-        .region = CppStrWithView{.inner = GenRawCppPtr(region, RawCppPtrTypeImpl::String), .view = BaseBuffView{region->data(), region->size()}},
-    };
-}
-
-using raft_serverpb::PeerState;
-using raft_serverpb::RaftApplyState;
-using raft_serverpb::RegionLocalState;
-
-using RemoteMeta = std::tuple<uint64_t, RegionLocalState, RaftApplyState>;
-std::optional<RemoteMeta> fetchRemotePeerMeta(uint64_t region_id, uint64_t new_peer_id)
-{
-    UNUSED(region_id);
-    UNUSED(new_peer_id);
-    // auto reader = PS::V3::CheckpointManifestFileReader<PS::V3::universal::PageDirectoryTrait>::create(
-    //     PS::V3::CheckpointManifestFileReader<PS::V3::universal::PageDirectoryTrait>::Options{.file_path = "6.manifest"});
-    return std::nullopt;
-}
-
-std::optional<RemoteMeta> selectRemotePeer(uint64_t region_id, uint64_t new_peer_id)
-{
-    auto log = &Poco::Logger::get("fast add");
-
-    std::vector<RemoteMeta> choices;
-    std::map<uint64_t, std::string> reason;
-    std::map<uint64_t, std::string> candidate_stat;
-
-    // Fetch meta from all store by fetchRemotePeerMeta.
-    std::optional<RemoteMeta> choosed = std::nullopt;
-    uint64_t largest_applied_index = 0;
-    for (auto it = choices.begin(); it != choices.end(); it++)
-    {
-        auto store_id = std::get<0>(*it);
-        const auto & region_state = std::get<1>(*it);
-        const auto & apply_state = std::get<2>(*it);
-        const auto & peers = region_state.region().peers();
-        bool ok = false;
-        for (auto && pr : peers)
-        {
-            if (pr.id() == new_peer_id)
-            {
-                ok = true;
-                break;
-            }
-        }
-        if (!ok)
-        {
-            // Can't use this peer if it has no new_peer_id.
-            reason[store_id] = fmt::format("has no peer_id {}", region_state.DebugString());
-            continue;
-        }
-        auto peer_state = region_state.state();
-        if (peer_state == PeerState::Tombstone || peer_state == PeerState::Applying)
-        {
-            // Can't use this peer in these states.
-            reason[store_id] = fmt::format("bad peer_state {}", region_state.DebugString());
-            continue;
-        }
-        auto applied_index = apply_state.applied_index();
-        if (!choosed.has_value() || applied_index > largest_applied_index)
-        {
-            candidate_stat[store_id] = fmt::format("applied index {}", applied_index);
-            choosed = *it;
-        }
-    }
-
-    FmtBuffer fmt_buf;
-    for (auto iter = reason.begin(); iter != reason.end(); iter++)
-    {
-        fmt_buf.fmtAppend("store {} reason {}, ", iter->first, iter->second);
-    }
-    std::string failed_reason = fmt_buf.toString();
-    fmt_buf.clear();
-    for (auto iter = reason.begin(); iter != reason.end(); iter++)
-    {
-        fmt_buf.fmtAppend("store {} stat {}, ", iter->first, iter->second);
-    }
-    std::string choice_stat = fmt_buf.toString();
-
-    LOG_DEBUG(log, "fast add result region_id {} new peer_id {};", region_id, new_peer_id, failed_reason, choice_stat);
-    return choosed;
-}
-
-FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
-{
-    UNUSED(server);
-    UNUSED(region_id);
-    UNUSED(new_peer_id);
-
-    std::optional<RemoteMeta> maybe_peer = std::nullopt;
-    while (true)
-    {
-        auto maybe_peer = selectRemotePeer(region_id, new_peer_id);
-        if (!maybe_peer.has_value())
-        {
-            // TODO retry
-            return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-        }
-        else
-            break;
-    }
-
-    // Load data from remote.
-
-    // Generate result.
-    auto & peer = maybe_peer.value();
-    return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<1>(peer).SerializeAsString(), std::get<2>(peer).SerializeAsString());
 }
 
 std::string_view buffToStrView(const BaseBuffView & buf)
