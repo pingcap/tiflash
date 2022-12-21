@@ -156,6 +156,7 @@ private:
 
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
+using BlockListIterator = std::list<Block>::const_iterator;
 
 
 /// Compare number of columns, data types, column types, column names, and values of constant columns.

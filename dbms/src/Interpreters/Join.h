@@ -122,6 +122,8 @@ public:
       */
     Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
+    BlockListIterator getRightBlocksBegin() const;
+
     void checkTypes(const Block & block) const;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
@@ -398,10 +400,10 @@ private:
 
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    void joinBlockImplCross(Block & block) const;
+    void joinBlockImplCross(Block & block, ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, ProbeProcessInfo & probe_process_info) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
@@ -414,12 +416,13 @@ struct ProbeProcessInfo
     size_t start_row;
     size_t end_row;
     bool all_rows_joined_finish;
+    BlockListIterator cross_right_blocks_it;
 
     ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
         , all_rows_joined_finish(true){};
 
-    void resetBlock(Block && block_);
+    void resetBlock(Block && block_, BlockListIterator it);
     void updateStartRow();
 };
 

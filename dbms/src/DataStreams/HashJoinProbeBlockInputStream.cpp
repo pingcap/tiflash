@@ -61,7 +61,7 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     Block res = children.back()->getHeader();
     assert(res.rows() == 0);
     ProbeProcessInfo header_probe_process_info(0);
-    header_probe_process_info.resetBlock(std::move(res));
+    header_probe_process_info.resetBlock(std::move(res), join->getRightBlocksBegin());
     return join->joinBlock(header_probe_process_info);
 }
 
@@ -70,13 +70,15 @@ Block HashJoinProbeBlockInputStream::readImpl()
     if (probe_process_info.all_rows_joined_finish)
     {
         Block block = children.back()->read();
+        std::cout<<"read block rows : "<<block.rows()<<std::endl;
         if (!block)
             return block;
         join->checkTypes(block);
-        probe_process_info.resetBlock(std::move(block));
+        probe_process_info.resetBlock(std::move(block), join->getRightBlocksBegin());
     }
-
-    return join->joinBlock(probe_process_info);
+    Block ret = join->joinBlock(probe_process_info);
+    std::cout<<"out block rows : "<<ret.rows()<<std::endl;
+    return ret;
 }
 
 
