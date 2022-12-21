@@ -19,9 +19,9 @@ namespace DB
 /**
  *     sink     transform     ...     transform    source
  *
- *  prepare───►fetchBlock ◄── ... ◄── fetchBlock───►read────┐
+ *  prepare───►fetchBlock───► ... ───►fetchBlock───►read────┐
  *                                                          │ block
- *    write◄────transform ◄── ... ◄── transform◄────────────┘
+ *    write◄────transform◄─── ... ◄───transform◄────────────┘
  */
 OperatorStatus OperatorExecutor::execute()
 {
