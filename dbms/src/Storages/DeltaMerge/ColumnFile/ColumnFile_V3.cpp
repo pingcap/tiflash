@@ -68,7 +68,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, 
     size_t column_file_count;
     readIntBinary(column_file_count, buf);
     ColumnFilePersisteds column_files;
-    // BlockPtr last_schema;
+    column_files.reserve(column_file_count);
     ColumnFileSchemaPtr last_schema;
     for (size_t i = 0; i < column_file_count; ++i)
     {
