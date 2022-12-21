@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Debug/MockStorage.h>
-#include <Server/FlashGrpcServerHolder.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Server/FlashGrpcServerHolder.h>
 
 namespace DB::tests
 {

@@ -17,9 +17,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 
 namespace DB
 {
