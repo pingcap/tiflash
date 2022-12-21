@@ -130,7 +130,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     return std::make_tuple(store_id, restored_region_state, restored_apply_state, optimal);
 }
 
-std::optional<RemoteMeta> selectRemotePeer(uint64_t region_id, uint64_t new_peer_id)
+std::optional<RemoteMeta> selectRemotePeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
     auto log = &Poco::Logger::get("fast add");
 
@@ -138,7 +138,7 @@ std::optional<RemoteMeta> selectRemotePeer(uint64_t region_id, uint64_t new_peer
     std::map<uint64_t, std::string> reason;
     std::map<uint64_t, std::string> candidate_stat;
 
-    // Fetch meta from all store by fetchRemotePeerMeta.
+    // TODO Fetch meta from all store by fetchRemotePeerMeta.
     std::optional<RemoteMeta> choosed = std::nullopt;
     uint64_t largest_applied_index = 0;
     for (auto it = choices.begin(); it != choices.end(); it++)
@@ -203,7 +203,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     std::optional<RemoteMeta> maybe_peer = std::nullopt;
     while (true)
     {
-        auto maybe_peer = selectRemotePeer(region_id, new_peer_id);
+        auto maybe_peer = selectRemotePeer(server, region_id, new_peer_id);
         if (!maybe_peer.has_value())
         {
             // TODO retry
