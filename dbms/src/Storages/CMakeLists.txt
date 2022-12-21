@@ -17,6 +17,7 @@ add_subdirectory (Page)
 add_subdirectory (DeltaMerge/File/dtpb)
 add_subdirectory (DeltaMerge/workload)
 add_subdirectory (Page/workload)
+add_subdirectory (Page/V3/Remote/Proto)
 
 if (ENABLE_TESTS)
     add_subdirectory (tests EXCLUDE_FROM_ALL)

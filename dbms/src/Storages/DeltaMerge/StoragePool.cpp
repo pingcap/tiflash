@@ -23,9 +23,9 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <fmt/format.h>
 
 
@@ -154,7 +154,7 @@ void GlobalStoragePool::doCheckpoint()
         return;
 
     last_checkpoint_time = now;
-    
+
     auto wi = std::make_shared<PS::V3::Remote::WriterInfo>();
     auto store_info = global_context.getTMTContext().getKVStore()->getStoreMeta();
     if (store_info.id() == 0)
@@ -213,7 +213,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , storage_path_pool(storage_path_pool_)
-    , uni_ps(global_ctx.getGlobalUniversalPageStorage())
+    , uni_ps(global_ctx.getWriteNodePageStorage())
     , global_context(global_ctx)
     , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {

@@ -18,8 +18,9 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/universal/Readers.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -79,7 +80,7 @@ private:
     UniversalPageStoragePtr global_uni_page_storage;
     KVStoreReaderPtr page_reader;
 
-//    NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
+    //    NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
     const RegionManager & region_manager;
     std::mutex mutex;
     LoggerPtr log;

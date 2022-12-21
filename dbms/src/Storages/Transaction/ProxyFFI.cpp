@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/Page/UniversalWriteBatch.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -213,7 +214,7 @@ void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         uni_ps->write(std::move(*wb));
         // TODO: verify that clear is allowed after std::move and the wb is reusable
@@ -230,7 +231,7 @@ PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView p
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId id{page_id.data, page_id.len};
         auto * page = new Page(reader.read(id));
@@ -251,39 +252,46 @@ PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView p
     }
 }
 
-PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id)
+PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId start_id{start_page_id.data, start_page_id.len};
         UniversalPageId end_id{end_page_id.data, end_page_id.len};
+        std::vector<UniversalPageId> page_ids;
         std::vector<DB::Page *> pages;
-        auto checker = [&](PageId page_id, const DB::Page & page) {
-            UNUSED(page_id);
+        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
+            page_ids.push_back(page_id);
             pages.push_back(new Page(page));
         };
         reader.traverse(start_id, end_id, checker);
-        auto * data = static_cast<char *>(malloc(pages.size() * sizeof(PageWithView)));
+        auto * data = static_cast<char *>(malloc(pages.size() * sizeof(PageAndCppStrWithView)));
         for (size_t i = 0; i < pages.size(); i++)
         {
-            auto * target = reinterpret_cast<PageWithView *>(data) + i;
+            auto * target = reinterpret_cast<PageAndCppStrWithView *>(data) + i;
+            auto * s = RawCppString::New(page_ids[i].data(), page_ids[i].size());
+            target->key = GenRawCppPtr(s, RawCppPtrTypeImpl::String);
+            BaseBuffView temp_key_view{s->data(), s->size()};
+            // key_view offset
+            memcpy(reinterpret_cast<char *>(target) + sizeof(RawCppPtr) + sizeof(RawCppPtr) + sizeof(BaseBuffView), &temp_key_view, sizeof(BaseBuffView));
             if (pages[i]->isValid())
             {
-                target->inner = GenRawCppPtr(pages[i], RawCppPtrTypeImpl::UniversalPage);
+                target->page = GenRawCppPtr(pages[i], RawCppPtrTypeImpl::UniversalPage);
                 BaseBuffView temp{.data = pages[i]->data.begin(), .len = pages[i]->data.size()};
-                memcpy(reinterpret_cast<char *>(target) + sizeof(RawCppPtr), &temp, sizeof(BaseBuffView));
+                // page_view offset
+                memcpy(reinterpret_cast<char *>(target) + sizeof(RawCppPtr) + sizeof(RawCppPtr), &temp, sizeof(BaseBuffView));
             }
             else
             {
-                target->inner = GenRawCppPtr();
+                target->page = GenRawCppPtr();
                 BaseBuffView temp{.data = nullptr, .len = 0};
-                memcpy(reinterpret_cast<char *>(target) + sizeof(RawCppPtr), &temp, sizeof(BaseBuffView));
+                memcpy(reinterpret_cast<char *>(target) + sizeof(RawCppPtr) + sizeof(RawCppPtr), &temp, sizeof(BaseBuffView));
             }
         }
         //        LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle scan page {}", pages.size());
-        return PageWithViewVec{.inner = reinterpret_cast<PageWithView *>(data), .len = pages.size()};
+        return PageAndCppStrWithViewVec{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size() };
     }
     catch (...)
     {
@@ -292,11 +300,12 @@ PageWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffVie
     }
 }
 
-void GcPageWithViewVec(PageWithView * inner, uint64_t len)
+void GcPageAndCppStrWithViewVec(PageAndCppStrWithView * inner, uint64_t len)
 {
     for (size_t i = 0; i < len; i++)
     {
-        GcRawCppPtr(inner[i].inner.ptr, inner[i].inner.type);
+        GcRawCppPtr(inner[i].page.ptr, inner[i].page.type);
+        GcRawCppPtr(inner[i].key.ptr, inner[i].key.type);
     }
     delete inner;
 }
@@ -305,7 +314,7 @@ void PurgePageStorage(const EngineStoreServerWrap * server)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         uni_ps->gc();
     }
     catch (...)
@@ -319,7 +328,7 @@ CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftLogReader reader(*uni_ps);
         UniversalPageId page_id{raw_page_id.data, raw_page_id.len};
         auto page_ids = reader.getLowerBound(page_id);
@@ -344,7 +353,7 @@ uint8_t IsPSEmpty(const EngineStoreServerWrap * server)
 {
     try
     {
-        auto uni_ps = server->tmt->getContext().getGlobalUniversalPageStorage();
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         return uni_ps->isEmpty();
     }
     catch (...)
@@ -570,8 +579,13 @@ RawCppPtr PreHandleSnapshot(
 
 #ifndef NDEBUG
         {
-            auto & kvstore = server->tmt->getKVStore();
-            auto state = kvstore->getProxyHelper()->getRegionLocalState(new_region->id());
+            auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+            RaftLogReader reader(*uni_ps);
+            auto page_id = RaftLogReader::toRegionMetaKey(new_region->id());
+            auto value = reader.read(page_id);
+            raft_serverpb::RegionLocalState state;
+            state.ParseFromArray(value.data.begin(), value.data.size());
+
             assert(state.state() == raft_serverpb::PeerState::Applying);
         }
 #endif

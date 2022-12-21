@@ -116,7 +116,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
     : global_context(global_context_)
-    , global_uni_page_storage(global_context_.getGlobalUniversalPageStorage())
+    , global_uni_page_storage(global_context_.getWriteNodePageStorage())
     , region_manager(region_manager_)
     , log(Logger::get())
 {}
@@ -155,7 +155,7 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
         const auto global_run_mode = global_context.getPageStorageRunMode();
-        auto global_uni_storage = global_context.getGlobalUniversalPageStorage();
+        auto global_uni_storage = global_context.getWriteNodePageStorage();
         page_reader = std::make_shared<KVStoreReader>(*global_uni_storage);
 
         auto run_mode = global_run_mode;

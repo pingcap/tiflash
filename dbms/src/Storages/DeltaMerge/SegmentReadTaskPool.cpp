@@ -321,52 +321,26 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     }
 }
 
-StableSnapshotPtr RemoteSegmentReadTask::buildRemoteStableSnap(const Context & db_context, TableID table_id, UInt64 stable_id, const RowKeyRange & seg_range)
+RemoteReadTaskPtr RemoteReadTask::buildFrom(const DMContext & context, SegmentReadTasks & tasks)
 {
-    // Create stable VS
-    auto stable = std::make_shared<StableValueSpace>(stable_id);
-    DMFiles dmfiles;
-    auto provider = db_context.getFileProvider();
-    const auto & remote_source = db_context.remoteDataServiceSource();
-    // build the full path
-    const auto remote_parent_path = fmt::format("{}/t_{}", remote_source, table_id);
-    for (const auto & file_id : stable_files)
-    {
-        LOG_DEBUG(Logger::get(), "Loading remote dtfile from {}, file_id={}", remote_parent_path, file_id);
-        auto dmfile = DMFile::restore(provider, file_id, /*page_id*/ file_id, remote_parent_path, DMFile::ReadMetaMode::all());
-        RUNTIME_CHECK(dmfile != nullptr);
-        dmfiles.emplace_back(dmfile);
-    }
-    stable->setFiles(dmfiles, seg_range);
-    return stable->createSnapshot();
-}
+    RUNTIME_CHECK(context.table_id > 0);
 
-RemoteReadTaskPtr RemoteReadTask::buildFrom(const Context & db_context, TableID physical_table_id, SegmentReadTasks & tasks)
-{
     auto read_tasks = std::make_shared<RemoteReadTask>();
-    read_tasks->table_id = physical_table_id;
+    read_tasks->table_id = context.table_id;
     for (const auto & task : tasks)
     {
         auto seg_task = std::make_shared<RemoteSegmentReadTask>();
         seg_task->segment = task->segment;
         seg_task->ranges = task->ranges;
-        seg_task->segment_snap = task->read_snapshot;
 
-        // delta snapshot
-        // const auto &delta = task->read_snapshot->delta;
-
-        // stable snapshot
-        const auto & stable = task->read_snapshot->stable;
-        for (const auto & dmf : stable->getDMFiles())
-        {
-            // here directly return the file id for read node download it from remote
-            seg_task->stable_files.emplace_back(dmf->fileId());
-        }
-        seg_task->segment_snap->stable = seg_task->buildRemoteStableSnap(
-            db_context,
-            physical_table_id,
-            task->read_snapshot->stable->getId(),
+        auto delta_snap = task->segment->getDelta()->createSnapshotFromRemote(
+            context,
             task->segment->getRowKeyRange());
+        auto stable_snap = task->segment->getStable()->createSnapshotFromRemote(
+            context,
+            task->segment->getRowKeyRange());
+
+        seg_task->segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 
         read_tasks->tasks.emplace_back(std::move(seg_task));
     }

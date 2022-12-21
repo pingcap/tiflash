@@ -16,6 +16,7 @@
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/Page/PageDefines.h>
+#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -72,6 +73,11 @@ struct ExternalIdTrait
     {
         return page_id.low;
     }
+    // Used for indicate infinite end
+    static inline bool isInvalidPageId(const PageId & page_id)
+    {
+        return page_id == 0;
+    }
 };
 } // namespace u128
 namespace universal
@@ -88,8 +94,16 @@ struct ExternalIdTrait
     }
     static inline U64PageId getU64ID(const PageId & page_id)
     {
-        // FIXME: ignore page_id without table prefix
-        return DB::UniversalPageIdFormat::decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
+        // Only count id with known prefix
+        // TODO: remove hardcode
+        if (startsWith(page_id, "t_l_") || startsWith(page_id, "t_d_") || startsWith(page_id, "t_m_"))
+        {
+            return DB::UniversalPageIdFormat::decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
+        }
+        else
+        {
+            return 0;
+        }
     }
     static inline Prefix getPrefix(const PageId & page_id)
     {
@@ -98,6 +112,10 @@ struct ExternalIdTrait
     static inline PageId getPageMapKey(const PageId & page_id)
     {
         return page_id;
+    }
+    static inline bool isInvalidPageId(const PageId & page_id)
+    {
+        return page_id.empty();
     }
 };
 } // namespace universal

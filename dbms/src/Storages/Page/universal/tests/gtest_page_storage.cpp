@@ -101,10 +101,133 @@ TEST_F(UniPageStorageTest, RaftLog)
     }
 
     RaftLogReader raft_log_reader(*page_storage);
-    auto checker = [this](DB::PageId page_id, const DB::Page & page) {
-        LOG_INFO(log, "{} {}", page_id, page.isValid());
+    auto checker = [this](const DB::Page & page) {
+        LOG_INFO(log, "{}", page.isValid());
     };
     raft_log_reader.traverse(RaftLogReader::toFullPageId(10, 0), RaftLogReader::toFullPageId(101, 0), checker);
+}
+
+TEST_F(UniPageStorageTest, SeekKey)
+{
+    UInt64 tag = 0;
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(10, 5), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 4;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(10, 7), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 5;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(10, 6), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 6;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(10, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 7;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(10, 9), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    RaftLogReader raft_log_reader(*page_storage);
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 4);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 5));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 5);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 5));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 6);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 6));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 7);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 7));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 8);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 9));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 9);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 9));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 10);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 1);
+        ASSERT_EQ(result_ids[0], RaftLogReader::toFullRaftLogKey(10, 10));
+    }
+    {
+        auto target_id = RaftLogReader::toFullRaftLogKey(10, 11);
+        auto result_ids = raft_log_reader.getLowerBound(target_id);
+        ASSERT_EQ(result_ids.size(), 0);
+    }
+}
+
+TEST_F(UniPageStorageTest, Scan)
+{
+    UInt64 tag = 0;
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(RaftLogReader::toRegionMetaKey(10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 4;
+        wb.putPage(RaftLogReader::toRegionMetaKey(15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 5;
+        wb.putPage(RaftLogReader::toRegionMetaKey(18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 6;
+        wb.putPage(RaftLogReader::toRegionMetaKey(20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 7;
+        wb.putPage(RaftLogReader::toRegionMetaKey(25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    RaftLogReader raft_log_reader(*page_storage);
+    {
+        auto start = RaftLogReader::toRegionMetaPrefixKey(15);
+        auto end = RaftLogReader::toRegionMetaPrefixKey(25);
+        size_t count = 0;
+        auto checker = [&count](const DB::Page & page) {
+            UNUSED(page);
+            count++;
+        };
+        raft_log_reader.traverse(start, end, checker);
+        ASSERT_EQ(count, 3);
+    }
+    {
+        auto start = RaftLogReader::toRegionMetaPrefixKey(15);
+        auto end = "";
+        size_t count = 0;
+        auto checker = [&count](const DB::Page & page) {
+            UNUSED(page);
+            count++;
+        };
+        raft_log_reader.traverse(start, end, checker);
+        ASSERT_EQ(count, 4);
+    }
 }
 
 // ===== Begin Remote Checkpoint Tests =====

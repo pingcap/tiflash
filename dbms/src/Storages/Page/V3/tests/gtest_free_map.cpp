@@ -290,13 +290,13 @@ TEST_P(SpaceMapTest, TestSearch)
 
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
 
-    ASSERT_EQ(offset, 0);
-    ASSERT_EQ(max_cap, 40);
-    ASSERT_EQ(expansion, false);
+    ASSERT_EQ(offset, 60);
+    ASSERT_EQ(max_cap, 50);
+    ASSERT_EQ(expansion, true);
 
-    Range ranges1[] = {{.start = 20,
+    Range ranges1[] = {{.start = 0,
                         .end = 50},
-                       {.start = 60,
+                       {.start = 80,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges1, 2), 2));
 
@@ -307,13 +307,13 @@ TEST_P(SpaceMapTest, TestSearch)
     ASSERT_TRUE(smap->markUsed(50, 10));
 
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(5);
-    ASSERT_EQ(offset, 0);
-    ASSERT_EQ(max_cap, 45);
-    ASSERT_EQ(expansion, false);
+    ASSERT_EQ(offset, 60);
+    ASSERT_EQ(max_cap, 50);
+    ASSERT_EQ(expansion, true);
 
-    Range ranges2[] = {{.start = 5,
+    Range ranges2[] = {{.start = 0,
                         .end = 50},
-                       {.start = 60,
+                       {.start = 65,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges2, 2), 2));
 
@@ -488,9 +488,9 @@ TEST(SpaceMapSTDMapTest, TestMarkFreeSearch)
     }
     {
         ASSERT_TRUE(smap->markFree(25, 25));
-        // After calling `markFree`, the `hint_biggest_offset` and `hint_biggest_cap` is not accurate.
-        ASSERT_EQ(smap_std->hint_biggest_offset, 50);
-        ASSERT_EQ(smap_std->hint_biggest_cap, 50);
+        auto iter = smap_std->free_map_invert_index.rbegin();
+        ASSERT_EQ(*(iter->second.begin()), 25);
+        ASSERT_EQ(iter->first, 75);
 
         // Allocate a space the same size as current actual `biggest_cap`
         std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(75);
@@ -513,8 +513,9 @@ TEST(SpaceMapSTDMapTest, TestMarkFreeSearch)
     }
     {
         ASSERT_TRUE(smap->markFree(25, 25));
-        ASSERT_EQ(smap_std->hint_biggest_offset, 50);
-        ASSERT_EQ(smap_std->hint_biggest_cap, 50);
+        auto iter = smap_std->free_map_invert_index.rbegin();
+        ASSERT_EQ(*(iter->second.begin()), 25);
+        ASSERT_EQ(iter->first, 75);
 
         // Allocate a space smaller than current actual `biggest_cap`
         std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(50);

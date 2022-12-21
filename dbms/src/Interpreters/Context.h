@@ -22,6 +22,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Storages/Page/PageStorage.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -108,6 +109,12 @@ class DeltaIndexManager;
 class GlobalStoragePool;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
+
+namespace DM::Remote
+{
+class Manager;
+using ManagerPtr = std::shared_ptr<Manager>;
+} // namespace DM::Remote
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -423,8 +430,15 @@ public:
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
-    void initializeGlobalUniversalPageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider);
-    UniversalPageStoragePtr getGlobalUniversalPageStorage() const;
+    void initializeWriteNodePageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider);
+    UniversalPageStoragePtr getWriteNodePageStorage() const;
+
+    void initializeReadNodePageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider);
+    UniversalPageStoragePtr getReadNodePageStorage() const;
+
+    void initializeDeltaMergeRemoteManager();
+    DM::Remote::ManagerPtr getDMRemoteManager() const;
+
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
