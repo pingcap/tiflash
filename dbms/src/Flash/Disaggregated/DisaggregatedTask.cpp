@@ -39,15 +39,14 @@ void DisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * c
 
     context->getTimezoneInfo().resetByDAGRequest(dag_req);
 
-    MPPTaskId mpp_task_id(meta.start_ts(), meta.task_id(), -1, meta.query_ts(), meta.local_query_id());
-    DM::DisaggregatedTaskId task_id(mpp_task_id, meta.executor_id());
+    DM::DisaggregatedTaskId task_id(meta);
 
     dag_context = std::make_unique<DAGContext>(
         dag_req,
         task_id,
         std::move(tables_regions_info),
         context->getClientInfo().current_address.toString(),
-        Logger::get("DisaggregatedTaskHandler"));
+        Logger::get(fmt::format("{}", task_id)));
     context->setDAGContext(dag_context.get());
 }
 

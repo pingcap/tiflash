@@ -23,27 +23,32 @@ DisaggregatedTableReadSnapshot::toRemote(const DisaggregatedTaskId & task_id) co
     return remote_table;
 }
 
-std::tuple<SegmentReadTaskPtr, String> DisaggregatedReadSnapshot::popTask(TableID physical_table_id, UInt64 segment_id)
+SegmentPagesFetchTask DisaggregatedReadSnapshot::popSegTask(TableID physical_table_id, UInt64 segment_id)
 {
     std::unique_lock lock(mtx);
     auto table_iter = table_snapshots.find(physical_table_id);
     if (table_iter == table_snapshots.end())
     {
-        return {nullptr, fmt::format("Segment task not found by table_id, table_id={}, segment_id={}", physical_table_id, segment_id)};
+        return SegmentPagesFetchTask::error(fmt::format("Segment task not found by table_id, table_id={}, segment_id={}", physical_table_id, segment_id));
     }
 
     assert(table_iter->second->table_id == physical_table_id);
     auto seg_task = table_iter->second->popTask(segment_id);
     if (!seg_task)
     {
-        return {nullptr, fmt::format("Segment task not found by segment_id, table_id={}, segment_id={}", physical_table_id, segment_id)};
+        return SegmentPagesFetchTask::error(fmt::format("Segment task not found by segment_id, table_id={}, segment_id={}", physical_table_id, segment_id));
     }
+
+    auto task = SegmentPagesFetchTask::task(
+        seg_task,
+        table_iter->second->column_defines,
+        table_iter->second->output_field_types);
     if (table_iter->second->empty())
     {
         table_snapshots.erase(table_iter);
         LOG_DEBUG(Logger::get(), "all tasks of table are pop, table_id={}", physical_table_id);
     }
-    return {seg_task, ""};
+    return task;
 }
 
 bool DisaggregatedReadSnapshot::empty() const

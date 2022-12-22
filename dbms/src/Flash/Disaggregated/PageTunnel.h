@@ -50,20 +50,29 @@ public:
     PageTunnel(DM::DisaggregatedTaskId task_id_,
                DM::DisaggregatedSnapshotManager * manager,
                DM::SegmentReadTaskPtr seg_task_,
+               DM::ColumnDefinesPtr column_defines_,
+               std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
                PageIds read_page_ids)
         : task_id(std::move(task_id_))
         , snap_manager(manager)
-        , seg_task(seg_task_)
+        , seg_task(std::move(seg_task_))
+        , column_defines(column_defines_)
+        , result_field_types(std::move(result_field_types_))
         , read_page_ids(std::move(read_page_ids))
         , log(Logger::get())
     {}
 
     // just for test
-    PageTunnel(DM::SegmentReadTaskPtr seg_task_, PageIds read_page_ids)
+    PageTunnel(DM::SegmentReadTaskPtr seg_task_,
+               DM::ColumnDefinesPtr column_defines,
+               std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
+               PageIds read_page_ids)
         : PageTunnel(
             DM::DisaggregatedTaskId::unknown_disaggregated_task_id,
-            nullptr,
+            /*manager*/ nullptr,
             std::move(seg_task_),
+            std::move(column_defines),
+            std::move(result_field_types_),
             std::move(read_page_ids))
     {}
 
@@ -74,6 +83,8 @@ private:
     const DM::DisaggregatedTaskId task_id;
     DM::DisaggregatedSnapshotManager * const snap_manager;
     DM::SegmentReadTaskPtr seg_task;
+    DM::ColumnDefinesPtr column_defines;
+    std::shared_ptr<std::vector<tipb::FieldType>> result_field_types;
     PageIds read_page_ids;
 
     LoggerPtr log;

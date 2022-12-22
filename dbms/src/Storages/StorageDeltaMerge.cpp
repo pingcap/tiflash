@@ -840,6 +840,8 @@ StorageDeltaMerge::buildRemoteReadSnapshot(
         read_segments,
         scan_context);
 
+    snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
+
     // Ensure read_tso is valid after snapshot is built
     checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
     return snap;

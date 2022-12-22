@@ -17,6 +17,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
@@ -368,7 +369,7 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getSharedDeltaIndex() { return shared_delta_index; }
+    const auto & getSharedDeltaIndex() const { return shared_delta_index; }
 
     bool isForUpdate() const { return is_update; }
 };
@@ -437,7 +438,7 @@ public:
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
-        : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
+        : mem_table_input_stream(delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
         , persisted_files_input_stream(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)
     {}
 
@@ -457,6 +458,27 @@ public:
             persisted_files_done = true;
             return mem_table_input_stream.read();
         }
+    }
+};
+
+class DeltaMemTableInputStream : public IBlockInputStream
+{
+private:
+    ColumnFileSetInputStream mem_table_input_stream;
+
+public:
+    DeltaMemTableInputStream(const DeltaSnapshotPtr & delta_snap_,
+                             const ColumnDefinesPtr & col_defs_,
+                             const RowKeyRange & segment_range_)
+        : mem_table_input_stream(delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
+    {}
+
+    String getName() const override { return "DeltaValue"; }
+    Block getHeader() const override { return mem_table_input_stream.getHeader(); }
+
+    Block read() override
+    {
+        return mem_table_input_stream.read();
     }
 };
 

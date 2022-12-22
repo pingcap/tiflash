@@ -40,6 +40,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "mpp.pb.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -522,22 +524,59 @@ grpc::Status FlashService::FetchDisaggregatedPages(
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
 
+    mpp::PagesPacket err_response;
+    auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
+        *err_response.mutable_error()->mutable_msg() = err_msg;
+        sync_writer->Write(err_response);
+
+        return grpc::Status(err_code, err_msg);
+    };
+
     const DM::DisaggregatedTaskId task_id(request->meta());
-    PageIds read_ids;
-    read_ids.reserve(request->pages_size());
-    for (auto page_id : request->pages())
-        read_ids.emplace_back(page_id);
+    LOG_DEBUG(log, "Fetching pages, task_id={}", task_id);
+    try
+    {
+        PageIds read_ids;
+        read_ids.reserve(request->pages_size());
+        for (auto page_id : request->pages())
+            read_ids.emplace_back(page_id);
 
-    auto tunnel = PageTunnel::build(
-        *context,
-        task_id,
-        request->table_id(),
-        request->segment_id(),
-        read_ids);
+        auto tunnel = PageTunnel::build(
+            *context,
+            task_id,
+            request->table_id(),
+            request->segment_id(),
+            read_ids);
 
-    tunnel->connect(sync_writer);
+        tunnel->connect(sync_writer);
 
-    return grpc::Status::OK;
+        return grpc::Status::OK;
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return record_error(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return record_error(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return record_error(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return record_error(grpc::StatusCode::INTERNAL, "other exception");
+    }
 }
 
 void FlashService::setMockStorage(MockStorage & mock_storage_)

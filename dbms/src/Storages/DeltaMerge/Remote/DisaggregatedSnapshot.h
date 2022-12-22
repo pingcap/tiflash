@@ -1,11 +1,13 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/expression.pb.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -17,6 +19,34 @@ class DisaggregatedTableReadSnapshot;
 using DisaggregatedTableReadSnapshotPtr = std::unique_ptr<DisaggregatedTableReadSnapshot>;
 class DisaggregatedReadSnapshot;
 using DisaggregatedReadSnapshotPtr = std::shared_ptr<DisaggregatedReadSnapshot>;
+
+struct SegmentPagesFetchTask
+{
+    SegmentReadTaskPtr seg_task;
+    DM::ColumnDefinesPtr column_defines;
+    std::shared_ptr<std::vector<tipb::FieldType>> output_field_types;
+
+    String err_msg;
+
+    bool isValid() const { return seg_task != nullptr; }
+
+public:
+    static SegmentPagesFetchTask error(String err_msg)
+    {
+        return SegmentPagesFetchTask{nullptr, nullptr, nullptr, std::move(err_msg)};
+    }
+    static SegmentPagesFetchTask task(
+        SegmentReadTaskPtr seg_task,
+        DM::ColumnDefinesPtr column_defines,
+        std::shared_ptr<std::vector<tipb::FieldType>> output_field_types)
+    {
+        return SegmentPagesFetchTask{
+            std::move(seg_task),
+            std::move(column_defines),
+            std::move(output_field_types),
+            ""};
+    }
+};
 
 // The read snapshot stored on the write node.
 // This class is not thread safe
@@ -34,7 +64,7 @@ public:
         table_snapshots.emplace(physical_table_id, std::move(task));
     }
 
-    std::tuple<SegmentReadTaskPtr, String> popTask(TableID physical_table_id, UInt64 segment_id);
+    SegmentPagesFetchTask popSegTask(TableID physical_table_id, UInt64 segment_id);
 
     bool empty() const;
     const TableSnapshotMap & tableSnapshots() const { return table_snapshots; }
@@ -69,6 +99,10 @@ public:
 
 public:
     const TableID table_id;
+
+    // TODO: these can be shared on DisaggregatedReadSnapshot level
+    DM::ColumnDefinesPtr column_defines;
+    std::shared_ptr<std::vector<tipb::FieldType>> output_field_types;
 
 private:
     mutable std::mutex mtx;

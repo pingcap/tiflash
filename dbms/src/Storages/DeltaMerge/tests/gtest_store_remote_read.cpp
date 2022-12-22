@@ -1,11 +1,14 @@
 #include <Flash/Disaggregated/PageTunnel.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/Page/PageDefines.h>
+
+#include "tipb/expression.pb.h"
 
 namespace DB::DM::tests
 {
@@ -60,7 +63,6 @@ TEST_P(DeltaMergeStoreRWTest, StoreDisaggregatedRead)
 
     {
         // read all columns from store
-        // const auto & columns = store->getTableColumns();
         auto table_read_snap = store->buildRemoteReadSnapshot(
             *db_context,
             db_context->getSettingsRef(),
@@ -69,12 +71,15 @@ TEST_P(DeltaMergeStoreRWTest, StoreDisaggregatedRead)
             /*num_streams=*/1,
             TRACING_NAME);
 
+        const auto columns = std::make_shared<ColumnDefines>(store->getTableColumns());
+        auto result_fields = std::make_shared<std::vector<tipb::FieldType>>(reverseGetFieldType(*columns));
+
         for (const auto & seg_task : table_read_snap->getTasks())
         {
             auto delta_vs = seg_task->read_snapshot->delta;
             auto mem_table = delta_vs->getMemTableSetSnapshot();
             auto read_ids = getCFTinyIds(delta_vs->getPersistedFileSetSnapshot());
-            auto tunnel = std::make_unique<PageTunnel>(seg_task, read_ids);
+            auto tunnel = std::make_unique<PageTunnel>(seg_task, columns, result_fields, read_ids);
             auto packet = tunnel->readPacket();
             EXPECT_EQ(packet.pages_size(), read_ids.size());
             EXPECT_EQ(packet.chunks_size(), mem_table->getColumnFileCount());
