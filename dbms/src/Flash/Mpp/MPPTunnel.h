@@ -22,6 +22,7 @@
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/defines.h>
@@ -397,7 +398,7 @@ public:
     void close(const String & reason, bool wait_sender_finish);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
-    void connect(PacketWriter * writer);
+    void connectSync(PacketWriter * writer);
 
     void connectLocal(size_t source_index, const String & req_info, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 

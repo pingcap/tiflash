@@ -185,7 +185,7 @@ void MPPTunnel::writeDone()
     waitForSenderFinish(/*allow_throw=*/true);
 }
 
-void MPPTunnel::connect(PacketWriter * writer)
+void MPPTunnel::connectSync(PacketWriter * writer)
 {
     {
         std::unique_lock lk(mu);

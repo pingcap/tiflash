@@ -289,7 +289,7 @@ void GRPCReceiverContext::establishMPPConnectionLocal(
     tunnel->connectLocal(source_index, req_info, local_request_handler, is_fine_grained);
 }
 
-ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
+ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const
 {
     auto reader = std::make_shared<GrpcExchangePacketReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(

@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Interpreters/Context.h>
 
 #include <future>
@@ -122,11 +121,6 @@ public:
 
     bool isFineGrainedShuffleEnabled() const { return enable_fine_grained_shuffle_flag; }
 
-    void connectionLocalDone(
-        bool meet_error,
-        const String & local_err_msg,
-        const LoggerPtr & log);
-
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
 
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
@@ -159,9 +153,7 @@ private:
         const String & local_err_msg,
         const LoggerPtr & log);
 
-    // Local tunnel sender holds the pointer of ExchangeReceiverBase, so we must
-    // ensure that ExchangeReceiverBase is destructed after all tunnel senders.
-    void waitAllLocalConnDone();
+    void waitAllConnectionDone();
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
@@ -196,15 +188,13 @@ private:
     std::vector<MsgChannelPtr> msg_channels;
 
     std::mutex mu;
+    std::condition_variable cv;
     /// should lock `mu` when visit these members
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
 
     LoggerPtr exc_log;
-
-    Int32 local_conn_num;
-    std::condition_variable local_conn_cv;
 
     bool collected = false;
     int thread_count = 0;

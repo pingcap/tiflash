@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
@@ -85,7 +86,7 @@ public:
 
     bool supportAsync(const ExchangeRecvRequest & request) const;
 
-    ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
+    ExchangePacketReaderPtr makeSyncReader(const ExchangeRecvRequest & request) const;
 
     void makeAsyncReader(
         const ExchangeRecvRequest & request,
