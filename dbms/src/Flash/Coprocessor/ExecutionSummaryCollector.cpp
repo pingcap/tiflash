@@ -78,7 +78,7 @@ void ExecutionSummaryCollector::fillLocalExecutionSummary(
             current.num_produced_rows += p_stream->getProfileInfo().rows;
             current.num_iterations += p_stream->getProfileInfo().blocks;
         }
-        current.concurrency++;
+        ++current.concurrency;
     }
     // get execution info from scan_context
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
