@@ -130,6 +130,7 @@ public:
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
 
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
+
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
     using Request = typename RPCContext::Request;
