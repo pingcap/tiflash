@@ -42,7 +42,7 @@ void DataTypeNumberBase<T>::serializeTextEscaped(const IColumn & column, size_t 
 template <typename T>
 static void deserializeText(IColumn & column, ReadBuffer & istr)
 {
-    T x;
+    T x{};
 
     if constexpr (std::is_integral_v<T> && std::is_arithmetic_v<T>)
         readIntTextUnsafe(x, istr);
@@ -198,7 +198,7 @@ template <typename T>
 void DataTypeNumberBase<T>::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
     /// ColumnVector<T>::value_type is a narrower type. For example, UInt8, when the Field type is UInt64
-    typename ColumnVector<T>::value_type x = get<typename NearestFieldType<FieldType>::Type>(field);
+    auto x = get<typename NearestFieldType<FieldType>::Type>(field);
     writeBinary(x, ostr);
 }
 
