@@ -57,7 +57,6 @@ extern const int LOGICAL_ERROR;
 namespace FailPoints
 {
 extern const char random_aggregate_create_state_failpoint[];
-extern const char random_aggregate_merge_failpoint[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME

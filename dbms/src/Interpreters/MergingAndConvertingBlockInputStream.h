@@ -13,11 +13,8 @@ extern const char random_aggregate_merge_failpoint[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
-#define AggregationMethodNameTwoLevel(NAME) AggregatedDataVariants::AggregationMethod_##NAME##_two_level
 #define AggregationMethodType(NAME) AggregatedDataVariants::Type::NAME
-#define AggregationMethodTypeTwoLevel(NAME) AggregatedDataVariants::Type::NAME##_two_level
 #define ToAggregationMethodPtr(NAME, ptr) (reinterpret_cast<AggregationMethodName(NAME) *>(ptr))
-#define ToAggregationMethodPtrTwoLevel(NAME, ptr) (reinterpret_cast<AggregationMethodNameTwoLevel(NAME) *>(ptr))
 
 /** Combines aggregation states together, turns them into blocks, and outputs streams.
   * If the aggregation states are two-level, then it produces blocks strictly in order of 'bucket_num'.
@@ -236,9 +233,6 @@ private:
 };
 
 #undef AggregationMethodName
-#undef AggregationMethodNameTwoLevel
 #undef AggregationMethodType
-#undef AggregationMethodTypeTwoLevel
 #undef ToAggregationMethodPtr
-#undef ToAggregationMethodPtrTwoLevel
-}
+} // namespace DB
