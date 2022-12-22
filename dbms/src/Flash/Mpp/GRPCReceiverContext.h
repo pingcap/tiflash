@@ -18,6 +18,7 @@
 #include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
@@ -99,7 +100,7 @@ public:
 
     void fillSchema(DAGSchema & schema) const;
 
-    void establishMPPConnectionLocal(const ExchangeRecvRequest & request, size_t source_index, const String & req_info, SupportForLocalExchange & support_for_local, bool is_fine_grained);
+    void establishMPPConnectionLocal(const ExchangeRecvRequest & request, size_t source_index, const String & req_info, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
     void sendMPPTaskToTiFlashStorageNode(

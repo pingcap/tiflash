@@ -19,7 +19,7 @@
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/ExchangeReceiverBase.h>
+#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
@@ -98,20 +98,11 @@ public:
     {
     }
 
-    virtual bool push(TrackedMppDataPacketPtr &&)
-    {
-        throw Exception("Shouldn't call this push function");
-    }
+    virtual bool push(TrackedMppDataPacketPtr &&) = 0;
 
-    virtual void cancelWith(const String &)
-    {
-        throw Exception("Shouldn't call this cancelWith function");
-    }
+    virtual void cancelWith(const String &) = 0;
 
-    virtual bool finish()
-    {
-        throw Exception("Shouldn't call this finish function");
-    }
+    virtual bool finish() = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -262,14 +253,14 @@ public:
     LocalTunnelSender(
         size_t source_index_,
         const String & req_info_,
-        SupportForLocalExchange & support_for_local_,
+        LocalRequestHandler & local_request_handler_,
         const LoggerPtr & log_,
         MemoryTrackerPtr & memory_tracker_,
         const String & tunnel_id_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, nullptr)
         , source_index(source_index_)
         , req_info(req_info_)
-        , support_for_local(support_for_local_)
+        , local_request_handler(local_request_handler_)
         , is_done(false)
     {}
 
@@ -286,9 +277,9 @@ public:
         // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
         // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
-        data->switchMemTracker(support_for_local.recv_mem_tracker);
+        data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
-        auto res = support_for_local.write<enable_fine_grained_shuffle>(source_index, data);
+        auto res = local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
 
         if (unlikely(!res))
             closeLocalTunnel(true, "Push mpp packet failed at local tunnel");
@@ -324,13 +315,13 @@ private:
         {
             is_done = true;
             consumer_state.setMsg(local_err_msg);
-            support_for_local.connectionLocalDone(meet_error, local_err_msg);
+            local_request_handler.connectionLocalDone(meet_error, local_err_msg);
         }
     }
 
     size_t source_index;
     String req_info;
-    SupportForLocalExchange support_for_local;
+    LocalRequestHandler local_request_handler;
 
     std::mutex mu;
     bool is_done;
@@ -408,7 +399,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, const String & req_info, SupportForLocalExchange & support_for_local, bool is_fine_grained);
+    void connectLocal(size_t source_index, const String & req_info, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
