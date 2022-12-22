@@ -44,7 +44,7 @@ public:
     String getName() const override { return name; }
     Block getTotals() override;
     Block getHeader() const override;
-    Block getOutputBlock(ProbeProcessInfo & probe_process_info) const;
+    Block getOutputBlock(ProbeProcessInfo & probe_process_info_) const;
     static Block mergeResultBlocks(Blocks && result_blocks);
 
 protected:
