@@ -16,6 +16,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
+#include <common/likely.h>
 #include <common/logger_useful.h>
 #include <tipb/select.pb.h>
 

@@ -14,11 +14,8 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
-#include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
-#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
-
-#include <memory>
 
 namespace DB
 {
@@ -44,12 +41,9 @@ tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
     return response;
 }
 
-// exchange/remote read
-std::pair<RemoteExecutionSummary, RemoteExecutionSummary> ExecutionSummaryCollector::getRemoteExecutionSummaries() const
+RemoteExecutionSummary ExecutionSummaryCollector::getRemoteExecutionSummariesFromExchange() const
 {
-    /// get executionSummary info from remote input streams
     RemoteExecutionSummary exchange_execution_summary;
-    RemoteExecutionSummary remote_execution_summary;
     for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {
         for (const auto & stream_ptr : map_entry.second)
@@ -58,24 +52,15 @@ std::pair<RemoteExecutionSummary, RemoteExecutionSummary> ExecutionSummaryCollec
             {
                 exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
             }
-            else if (auto * cop_stream_ptr = dynamic_cast<CoprocessorBlockInputStream *>(stream_ptr.get()); cop_stream_ptr)
-            {
-                remote_execution_summary.merge(cop_stream_ptr->getRemoteExecutionSummary());
-            }
-            else
-            {
-                /// local read input stream
-            }
         }
     }
-    return {exchange_execution_summary, remote_execution_summary};
+    return exchange_execution_summary;
 }
 
 void ExecutionSummaryCollector::fillLocalExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
     const BlockInputStreams & streams,
-    const RemoteExecutionSummary & remote_read_execution_summary,
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
     ExecutionSummary current;
@@ -96,12 +81,7 @@ void ExecutionSummaryCollector::fillLocalExecutionSummary(
     {
         current.scan_context->merge(*(iter->second));
     }
-    /// part 2: remote execution info from remote read, merge to local execution info.
-    if (auto it = remote_read_execution_summary.execution_summaries.find(executor_id); it != remote_read_execution_summary.execution_summaries.end())
-    {
-        current.mergeFromRemoteRead(it->second);
-    }
-    /// part 3: for join need to add the build time
+    /// part 2: for join need to add the build time
     /// In TiFlash, a hash join's build side is finished before probe side starts,
     /// so the join probe side's running time does not include hash table's build time,
     /// when construct ExecSummaries, we need add the build cost to probe executor
@@ -133,14 +113,11 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     if (!dag_context.collect_execution_summaries)
         return;
 
-    /// get executionSummary info from remote input streams
-    auto [exchange_execution_summary, remote_read_execution_summary] = getRemoteExecutionSummaries();
-
     /// fill execution_summary for local executor
     if (dag_context.return_executor_id)
     {
         for (auto & p : dag_context.getProfileStreamsMap())
-            fillLocalExecutionSummary(response, p.first, p.second, remote_read_execution_summary, dag_context.scan_context_map);
+            fillLocalExecutionSummary(response, p.first, p.second, dag_context.scan_context_map);
     }
     else
     {
@@ -150,10 +127,12 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         {
             auto it = profile_streams_map.find(executor_id);
             assert(it != profile_streams_map.end());
-            fillLocalExecutionSummary(response, executor_id, it->second, remote_read_execution_summary, dag_context.scan_context_map);
+            fillLocalExecutionSummary(response, executor_id, it->second, dag_context.scan_context_map);
         }
     }
 
+    // TODO support cop remote read and disaggregated mode.
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange();
     // fill execution_summary to reponse for remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
     {

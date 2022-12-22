@@ -37,8 +37,6 @@ struct ExecutionSummary
     void merge(const ExecutionSummary & other);
     void merge(const tipb::ExecutorExecutionSummary & other);
     void init(const tipb::ExecutorExecutionSummary & other);
-
-    void mergeFromRemoteRead(const ExecutionSummary & remote);
 };
 
 } // namespace DB

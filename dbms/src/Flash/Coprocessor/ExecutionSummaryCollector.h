@@ -14,13 +14,15 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
+class DAGContext;
+
 class ExecutionSummaryCollector
 {
 public:
@@ -39,13 +41,12 @@ private:
         ExecutionSummary & current,
         const String & executor_id) const;
 
-    std::pair<RemoteExecutionSummary, RemoteExecutionSummary> getRemoteExecutionSummaries() const;
+    RemoteExecutionSummary getRemoteExecutionSummariesFromExchange() const;
 
     void fillLocalExecutionSummary(
         tipb::SelectResponse & response,
         const String & executor_id,
         const BlockInputStreams & streams,
-        const RemoteExecutionSummary & remote_read_execution_summary,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
 private:
