@@ -91,6 +91,9 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             auto maybe_remote_meta = selectRemotePeer(page_storage, region_id, peer_id);
             ASSERT(maybe_remote_meta.has_value());
 
+            auto maybe_remote_meta2 = selectRemotePeer(page_storage, region_id, 42);
+            ASSERT(!maybe_remote_meta2.has_value());
+
             auto remote_meta = std::move(maybe_remote_meta.value());
             const auto & [s_id, restored_region_state, restored_apply_state, optimal] = remote_meta;
 

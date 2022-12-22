@@ -206,14 +206,14 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
         if (!ok)
         {
             // Can't use this peer if it has no new_peer_id.
-            reason[store_id] = fmt::format("has no peer_id {}", region_state.DebugString());
+            reason[store_id] = fmt::format("has no peer_id {}", region_state.ShortDebugString());
             continue;
         }
         auto peer_state = region_state.state();
         if (peer_state == PeerState::Tombstone || peer_state == PeerState::Applying)
         {
             // Can't use this peer in these states.
-            reason[store_id] = fmt::format("bad peer_state {}", region_state.DebugString());
+            reason[store_id] = fmt::format("bad peer_state {}", region_state.ShortDebugString());
             continue;
         }
         auto applied_index = apply_state.applied_index();
