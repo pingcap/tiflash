@@ -14,12 +14,16 @@
 
 #pragma once
 
+#include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Keys.h>
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <kvproto/raft_serverpb.pb.h>
 #include <raft_cmdpb.pb.h>
 
 #include <ext/singleton.h>
+
+#include "metapb.pb.h"
 
 namespace DB
 {
@@ -36,6 +40,8 @@ struct MockProxyRegion : MutexLockWrap
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
+    UniversalWriteBatch persistMeta();
+    void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
 
     struct NormalWrite
     {

@@ -29,7 +29,6 @@
 #include <kvproto/diagnosticspb.pb.h>
 
 #include <ext/scope_guard.h>
-#include <optional>
 
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
     do                                                                                    \
@@ -292,7 +291,7 @@ PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, Ba
             }
         }
         //        LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle scan page {}", pages.size());
-        return PageAndCppStrWithViewVec{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size() };
+        return PageAndCppStrWithViewVec{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size()};
     }
     catch (...)
     {
@@ -782,99 +781,6 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
 {
     RegionTable & region_table = server->tmt->getRegionTable();
     region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
-}
-
-FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
-{
-    auto * apply = RawCppString::New(apply_str);
-    auto * region = RawCppString::New(region_str);
-    return FastAddPeerRes{
-        .status = status,
-        .apply_state = CppStrWithView{.inner = GenRawCppPtr(apply, RawCppPtrTypeImpl::String), .view = BaseBuffView{apply->data(), apply->size()}},
-        .region = CppStrWithView{.inner = GenRawCppPtr(region, RawCppPtrTypeImpl::String), .view = BaseBuffView{region->data(), region->size()}},
-    };
-}
-
-using raft_serverpb::PeerState;
-using raft_serverpb::RaftApplyState;
-using raft_serverpb::RegionLocalState;
-
-using RemoteMeta = std::tuple<uint64_t, RegionLocalState, RaftApplyState>;
-std::optional<RemoteMeta> fetchRemotePeerMeta(uint64_t region_id, uint64_t new_peer_id)
-{
-    UNUSED(region_id);
-    UNUSED(new_peer_id);
-    return std::nullopt;
-}
-
-std::optional<RemoteMeta> selectRemotePeer(uint64_t region_id, uint64_t new_peer_id)
-{
-    UNUSED(region_id);
-    UNUSED(new_peer_id);
-
-    std::vector<RemoteMeta> choices;
-
-    // Fetch meta from all store by fetchRemotePeerMeta.
-    std::optional<RemoteMeta> choosed = std::nullopt;
-    uint64_t largest_applied_index = 0;
-    for (auto it = choices.begin(); it != choices.end(); it++)
-    {
-        const auto & region_state = std::get<1>(*it);
-        const auto & apply_state = std::get<2>(*it);
-        const auto & peers = region_state.region().peers();
-        bool ok = false;
-        for (auto && pr : peers)
-        {
-            if (pr.id() == new_peer_id)
-            {
-                ok = true;
-                break;
-            }
-        }
-        if (!ok)
-        {
-            // Can't use this peer if it has no new_peer_id.
-            continue;
-        }
-        auto peer_state = region_state.state();
-        if (peer_state == PeerState::Tombstone || peer_state == PeerState::Applying)
-        {
-            // Can't use this peer in these states.
-            continue;
-        }
-        auto applied_index = apply_state.applied_index();
-        if (!choosed.has_value() || applied_index > largest_applied_index)
-        {
-            choosed = *it;
-        }
-    }
-    return choosed;
-}
-
-FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
-{
-    UNUSED(server);
-    UNUSED(region_id);
-    UNUSED(new_peer_id);
-
-    std::optional<RemoteMeta> maybe_peer = std::nullopt;
-    while (true)
-    {
-        auto maybe_peer = selectRemotePeer(region_id, new_peer_id);
-        if (!maybe_peer.has_value())
-        {
-            // TODO retry
-            return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-        }
-        else
-            break;
-    }
-
-    // Load data from remote.
-
-    // Generate result.
-    auto & peer = maybe_peer.value();
-    return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<1>(peer).SerializeAsString(), std::get<2>(peer).SerializeAsString());
 }
 
 std::string_view buffToStrView(const BaseBuffView & buf)

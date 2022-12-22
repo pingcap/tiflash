@@ -25,8 +25,13 @@
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+
+#include "Poco/Logger.h"
+#include "common/types.h"
+#include "metapb.pb.h"
 
 namespace DB
 {
@@ -194,6 +199,39 @@ void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
 {
     auto _ = genLockGuard();
     this->state = s;
+}
+
+UniversalWriteBatch MockProxyRegion::persistMeta()
+{
+    auto _ = genLockGuard();
+    auto wb = UniversalWriteBatch();
+
+    auto region_key = keys::regionStateKey(this->id);
+    auto region_local_state = this->state.SerializeAsString();
+    MemoryWriteBuffer buf(0, region_local_state.size());
+    buf.write(region_local_state.data(), region_local_state.size());
+    wb.putPage(UniversalPageId(region_key.data(), region_key.size()), 0, buf.tryGetReadBuffer(), region_local_state.size());
+
+    auto apply_key = keys::applyStateKey(this->id);
+    auto raft_apply_state = this->apply.SerializeAsString();
+    MemoryWriteBuffer buf2(0, raft_apply_state.size());
+    buf2.write(raft_apply_state.data(), raft_apply_state.size());
+    wb.putPage(UniversalPageId(apply_key.data(), apply_key.size()), 0, buf2.tryGetReadBuffer(), raft_apply_state.size());
+
+    raft_serverpb::RegionLocalState restored_region_state;
+    raft_serverpb::RaftApplyState restored_apply_state;
+    restored_region_state.ParseFromArray(region_local_state.data(), region_local_state.size());
+    restored_apply_state.ParseFromArray(raft_apply_state.data(), raft_apply_state.size());
+    return wb;
+}
+
+void MockProxyRegion::addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role)
+{
+    auto _ = genLockGuard();
+    auto & peer = *state.mutable_region()->mutable_peers()->Add();
+    peer.set_store_id(store_id);
+    peer.set_id(peer_id);
+    peer.set_role(role);
 }
 
 MockProxyRegion::MockProxyRegion(uint64_t id_)
