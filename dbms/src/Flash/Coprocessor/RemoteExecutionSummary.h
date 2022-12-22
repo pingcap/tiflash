@@ -14,58 +14,18 @@
 
 #pragma once
 
-#include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
-#include <common/likely.h>
-#include <common/logger_useful.h>
 #include <tipb/select.pb.h>
 
-#include <atomic>
 #include <unordered_map>
 
 namespace DB
 {
 struct RemoteExecutionSummary
 {
-    void merge(const RemoteExecutionSummary & other)
-    {
-        for (const auto & p : other.execution_summaries)
-        {
-            const auto & executor_id = p.first;
-            auto it = execution_summaries.find(executor_id);
-            if (unlikely(it == execution_summaries.end()))
-            {
-                execution_summaries[executor_id] = p.second;
-            }
-            else
-            {
-                it->second.merge(p.second);
-            }
-        }
-    }
+    void merge(const RemoteExecutionSummary & other);
 
-    void add(tipb::SelectResponse & resp)
-    {
-        if (unlikely(resp.execution_summaries_size() == 0))
-            return;
-
-        for (const auto & execution_summary : resp.execution_summaries())
-        {
-            if (likely(execution_summary.has_executor_id()))
-            {
-                const auto & executor_id = execution_summary.executor_id();
-                auto it = execution_summaries.find(executor_id);
-                if (unlikely(it == execution_summaries.end()))
-                {
-                    execution_summaries[executor_id].init(execution_summary);
-                }
-                else
-                {
-                    it->second.merge(execution_summary);
-                }
-            }
-        }
-    }
+    void add(tipb::SelectResponse & resp);
 
     // <executor_id, ExecutionSummary>
     std::unordered_map<String, ExecutionSummary> execution_summaries;

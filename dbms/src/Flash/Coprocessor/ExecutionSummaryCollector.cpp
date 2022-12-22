@@ -16,9 +16,29 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
+#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 
 namespace DB
 {
+namespace
+{
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
+{
+    RemoteExecutionSummary exchange_execution_summary;
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    {
+        for (const auto & stream_ptr : map_entry.second)
+        {
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
+            {
+                exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+            }
+        }
+    }
+    return exchange_execution_summary;
+}
+} // namespace
+
 void ExecutionSummaryCollector::fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
@@ -39,22 +59,6 @@ tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
     tipb::SelectResponse response;
     addExecuteSummaries(response);
     return response;
-}
-
-RemoteExecutionSummary ExecutionSummaryCollector::getRemoteExecutionSummariesFromExchange() const
-{
-    RemoteExecutionSummary exchange_execution_summary;
-    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
-    {
-        for (const auto & stream_ptr : map_entry.second)
-        {
-            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
-            {
-                exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
-            }
-        }
-    }
-    return exchange_execution_summary;
 }
 
 void ExecutionSummaryCollector::fillLocalExecutionSummary(
@@ -132,7 +136,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     }
 
     // TODO support cop remote read and disaggregated mode.
-    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange();
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(dag_context);
     // fill execution_summary to reponse for remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
     {

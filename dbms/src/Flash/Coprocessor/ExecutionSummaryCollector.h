@@ -16,7 +16,6 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
-#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
@@ -40,8 +39,6 @@ private:
         tipb::ExecutorExecutionSummary * execution_summary,
         ExecutionSummary & current,
         const String & executor_id) const;
-
-    RemoteExecutionSummary getRemoteExecutionSummariesFromExchange() const;
 
     void fillLocalExecutionSummary(
         tipb::SelectResponse & response,
