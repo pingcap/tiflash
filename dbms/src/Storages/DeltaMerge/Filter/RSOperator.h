@@ -28,7 +28,7 @@ using RSOperatorPtr = std::shared_ptr<RSOperator>;
 using RSOperators = std::vector<RSOperatorPtr>;
 using Fields = std::vector<Field>;
 
-inline static const RSOperatorPtr EMPTY_FILTER{};
+inline static const RSOperatorPtr EMPTY_RS_OPERATOR{};
 
 struct RSCheckParam
 {
@@ -117,11 +117,11 @@ public:
 };
 
 #define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex) \
-    auto it = param.indexes.find(attr.col_id);                             \
-    if (it == param.indexes.end())                                         \
+    auto it = (param).indexes.find((attr).col_id);                         \
+    if (it == (param).indexes.end())                                       \
         return Some;                                                       \
-    auto rsindex = it->second;                                             \
-    if (!rsindex.type->equals(*attr.type))                                 \
+    auto(rsindex) = it->second;                                            \
+    if (!(rsindex).type->equals(*(attr).type))                             \
         return Some;
 
 

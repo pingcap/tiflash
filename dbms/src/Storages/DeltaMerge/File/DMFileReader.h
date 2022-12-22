@@ -104,6 +104,8 @@ public:
     /// Skipped rows before next call of #read().
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
+    /// Skip next pack.
+    bool skipNextBlock();
     Block read();
     std::string path() const
     {

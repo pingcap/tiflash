@@ -26,11 +26,13 @@ class BitmapFilter
 public:
     BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_);
 
-    void set(const UInt32 * data, UInt32 size);
+    BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, bool all_match_);
 
-    void set(const ColumnPtr & col);
+    void set(const UInt32 * data, UInt32 start, UInt32 limit);
 
-    void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    void set(const ColumnPtr & col, UInt32 start);
+
+    bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
     SegmentSnapshotPtr & snapshot();
 

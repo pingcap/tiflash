@@ -57,7 +57,7 @@ Block FilterBlockInputStream::getHeader() const
     return filter_transform_action.getHeader();
 }
 
-Block FilterBlockInputStream::readImpl()
+Block FilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
     Block res;
 
@@ -72,8 +72,12 @@ Block FilterBlockInputStream::readImpl()
         if (!res)
             return res;
 
-        if (filter_transform_action.transform(res))
+        if (filter_transform_action.transform(res, filter, return_filter))
+        {
+            if (return_filter)
+                res_filter = &filter;
             return res;
+        }
     }
 }
 

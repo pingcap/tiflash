@@ -376,15 +376,32 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
+    bool has_cast = executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle pushed down filter for local and remote table scan.
-    if (push_down_filter.hasValue())
+    /// When late materialization is enable, pushed down filters are executed in tablescan operator, so skip it here.
+    if ((push_down_filter.hasValue() && !settings.dt_enable_late_materialization.get()) || has_cast)
     {
-        ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
-        recordProfileStreams(pipeline, push_down_filter.executor_id);
+        // It is kind of hard to push down extra cast on filter columns.
+        // If there is a cast on filter columns, we will not push down the filter,
+        // then we need to executePushedDownFilter here.
+        for (const auto * expr : push_down_filter.conditions)
+        {
+            if ((expr->field_type().tp() == TiDB::TypeTimestamp || expr->field_type().tp() == TiDB::TypeTime) && !context.getTimezoneInfo().is_utc_timezone)
+            {
+                ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
+                recordProfileStreams(pipeline, push_down_filter.executor_id);
+                break;
+            }
+        }
     }
+    // (void)has_cast;
+    // if (push_down_filter.hasValue())
+    // {
+    //     ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
+    //     recordProfileStreams(pipeline, push_down_filter.executor_id);
+    // }
 }
 
 void DAGStorageInterpreter::prepare()
@@ -421,7 +438,7 @@ void DAGStorageInterpreter::prepare()
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-void DAGStorageInterpreter::executeCastAfterTableScan(
+bool DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
 {
@@ -447,6 +464,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             stream->setExtraInfo("cast after remote tableScan");
         }
     }
+    return has_cast;
 }
 
 std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(const std::vector<RemoteRequest> & remote_requests)

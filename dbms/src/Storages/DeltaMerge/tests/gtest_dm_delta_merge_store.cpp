@@ -484,6 +484,7 @@ try
     ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0 * 2);
 
     auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
+    auto push_down_filter = std::make_shared<PushDownFilter>(filter);
     scan_context = std::make_shared<ScanContext>();
     in = store->read(*db_context,
                      db_context->getSettingsRef(),
@@ -491,7 +492,7 @@ try
                      {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                      /* num_streams= */ 1,
                      /* max_version= */ std::numeric_limits<UInt64>::max(),
-                     filter,
+                     push_down_filter,
                      TRACING_NAME,
                      /* keep_order= */ false,
                      /* is_fast_scan= */ false,

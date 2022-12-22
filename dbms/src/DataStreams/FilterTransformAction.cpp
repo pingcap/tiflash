@@ -19,6 +19,8 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
 
+#include "Columns/IColumn.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -68,7 +70,7 @@ ExpressionActionsPtr FilterTransformAction::getExperssion() const
     return expression;
 }
 
-bool FilterTransformAction::transform(Block & block)
+bool FilterTransformAction::transform(Block & block, IColumn::Filter & filter, bool return_filter)
 {
     if (unlikely(!block))
         return true;
@@ -76,7 +78,14 @@ bool FilterTransformAction::transform(Block & block)
     expression->execute(block);
 
     if (constant_filter_description.always_true)
+    {
+        if (return_filter)
+        {
+            filter.resize(block.rows());
+            std::fill(filter.begin(), filter.end(), 1);
+        }
         return true;
+    }
 
     size_t columns = block.columns();
     size_t rows = block.rows();
@@ -95,19 +104,24 @@ bool FilterTransformAction::transform(Block & block)
         return true;
     }
 
-    IColumn::Filter * filter;
-    ColumnPtr filter_holder;
-
     if (constant_filter_description.always_true)
     {
+        if (return_filter)
+        {
+            filter.resize(rows);
+            std::fill(filter.begin(), filter.end(), 1);
+        }
         return true;
     }
     else
     {
         FilterDescription filter_and_holder(*column_of_filter);
-        filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
-        filter_holder = filter_and_holder.data_holder;
+        filter.resize(rows);
+        std::copy(filter_and_holder.data->cbegin(), filter_and_holder.data->cend(), filter.begin());
     }
+
+    if (return_filter)
+        return true;
 
     /** Let's find out how many rows will be in result.
       * To do this, we filter out the first non-constant column
@@ -129,12 +143,12 @@ bool FilterTransformAction::transform(Block & block)
     if (first_non_constant_column != filter_column)
     {
         ColumnWithTypeAndName & current_column = block.safeGetByPosition(first_non_constant_column);
-        current_column.column = current_column.column->filter(*filter, -1);
+        current_column.column = current_column.column->filter(filter, -1);
         filtered_rows = current_column.column->size();
     }
     else
     {
-        filtered_rows = countBytesInFilter(*filter);
+        filtered_rows = countBytesInFilter(filter);
     }
 
     /// If the current block is completely filtered out, let's move on to the next one.
@@ -173,7 +187,7 @@ bool FilterTransformAction::transform(Block & block)
         if (current_column.column->isColumnConst())
             current_column.column = current_column.column->cut(0, filtered_rows);
         else
-            current_column.column = current_column.column->filter(*filter, filtered_rows);
+            current_column.column = current_column.column->filter(filter, filtered_rows);
     }
 
     return true;

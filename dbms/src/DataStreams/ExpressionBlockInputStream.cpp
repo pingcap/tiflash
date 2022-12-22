@@ -45,9 +45,9 @@ Block ExpressionBlockInputStream::getHeader() const
     return res;
 }
 
-Block ExpressionBlockInputStream::readImpl()
+Block ExpressionBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
-    Block res = children.back()->read();
+    Block res = children.back()->read(res_filter, return_filter);
     if (!res)
         return res;
     expression->execute(res);

@@ -16,6 +16,9 @@
 
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/ReadUtil.h>
 
 namespace DB
 {
@@ -24,10 +27,14 @@ namespace DM
 class SkippableBlockInputStream : public IBlockInputStream
 {
 public:
-    virtual ~SkippableBlockInputStream() = default;
+    ~SkippableBlockInputStream() override = default;
 
     /// Return false if it is the end of stream.
     virtual bool getSkippedRows(size_t & skip_rows) = 0;
+
+    /// Skip next block in the stream.
+    /// Return false if failed to skip or the end of stream.
+    virtual bool skipNextBlock() = 0;
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
@@ -36,7 +43,7 @@ using SkippableBlockInputStreams = std::vector<SkippableBlockInputStreamPtr>;
 class EmptySkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
+    explicit EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
         : read_columns(read_columns_)
     {}
 
@@ -46,10 +53,12 @@ public:
 
     bool getSkippedRows(size_t &) override { return false; }
 
+    bool skipNextBlock() override { return false; }
+
     Block read() override { return {}; }
 
 private:
-    ColumnDefines read_columns;
+    ColumnDefines read_columns{};
 };
 
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
@@ -80,13 +89,36 @@ public:
         skip_rows = 0;
         while (current_stream != children.end())
         {
-            auto skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
 
             size_t skip;
             bool has_next_block = skippable_stream->getSkippedRows(skip);
             skip_rows += skip;
 
             if (has_next_block)
+            {
+                return true;
+            }
+            else
+            {
+                (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
+                ++current_stream;
+            }
+        }
+
+        return false;
+    }
+
+    bool skipNextBlock() override
+    {
+        while (current_stream != children.end())
+        {
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+
+            bool skipped = skippable_stream->skipNextBlock();
+
+            if (skipped)
             {
                 return true;
             }
@@ -129,6 +161,72 @@ private:
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;
+};
+
+class ColumnOrderedSkippableBlockInputStream : public SkippableBlockInputStream
+{
+    static constexpr auto NAME = "ColumnOrderedSkippableBlockInputStream";
+
+public:
+    explicit ColumnOrderedSkippableBlockInputStream(
+        const ColumnDefines & columns_to_read_,
+        SkippableBlockInputStreamPtr stable_,
+        BlockInputStreamPtr delta_,
+        size_t stable_rows_,
+        const String & req_id_)
+        : header(toEmptyBlock(columns_to_read_))
+        , stable(stable_)
+        , delta(delta_)
+        , stable_rows(stable_rows_)
+        , log(Logger::get(NAME, req_id_))
+    {}
+
+    String getName() const override { return NAME; }
+
+    Block getHeader() const override { return header; }
+
+    bool getSkippedRows(size_t & skip_rows) override
+    {
+        if (cur_read_rows > stable_rows)
+        {
+            return false;
+        }
+        return stable->getSkippedRows(skip_rows);
+    }
+
+    bool skipNextBlock() override
+    {
+        // TODO: support skip rows in delta
+        if (cur_read_rows > stable_rows)
+        {
+            return false;
+        }
+        return stable->skipNextBlock();
+    }
+
+    Block read() override
+    {
+        auto inner_stable = static_cast<BlockInputStreamPtr>(stable);
+        auto [block, from_delta] = readBlock(inner_stable, delta);
+        if (block)
+        {
+            if (from_delta)
+            {
+                block.setStartOffset(block.startOffset() + stable_rows);
+            }
+            cur_read_rows += block.rows();
+        }
+        return block;
+    }
+
+private:
+    Block header;
+    SkippableBlockInputStreamPtr stable;
+    BlockInputStreamPtr delta;
+    size_t stable_rows;
+    size_t cur_read_rows = 0;
+    const LoggerPtr log;
+    IColumn::Filter filter{};
 };
 
 } // namespace DM

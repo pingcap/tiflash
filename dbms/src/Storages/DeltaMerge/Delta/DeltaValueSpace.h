@@ -300,7 +300,7 @@ class DeltaValueSnapshot
     friend class DeltaValueSpace;
 
 private:
-    bool is_update;
+    bool is_update = false;
 
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;

@@ -86,7 +86,7 @@ private:
     size_t num_read = 0;
 
     RowKeyValue last_value;
-    RowKeyValueRef last_value_ref;
+    RowKeyValueRef last_value_ref{};
     UInt64 last_version = 0;
     size_t last_handle_pos = 0;
     size_t last_handle_read_num = 0;
@@ -163,6 +163,13 @@ public:
         sk_skip_stable_rows = 0;
         sk_skip_total_rows = 0;
         return true;
+    }
+
+    bool skipNextBlock() override
+    {
+        if (stable_done)
+            return false;
+        return stable_input_stream->skipNextBlock();
     }
 
     Block read() override
@@ -424,7 +431,7 @@ private:
 
         if (stable_ignore < 0)
         {
-            size_t stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
+            auto stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
             if (use_stable_rows > stable_ignore_abs)
             {
                 use_stable_rows += stable_ignore;

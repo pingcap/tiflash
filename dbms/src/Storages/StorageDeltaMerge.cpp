@@ -25,6 +25,8 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -38,7 +40,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PrimaryKeyNotMatchException.h>
@@ -74,7 +76,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     const String & db_engine,
     const String & db_name_,
     const String & table_name_,
-    const OptionTableInfoConstRef table_info_,
+    OptionTableInfoConstRef table_info_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Timestamp tombstone,
@@ -700,12 +702,12 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(const DB::MvccQueryInfo &
 }
 
 
-DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo & query_info,
-                                                         const ColumnDefines & columns_to_read,
-                                                         const Context & context,
-                                                         const LoggerPtr & tracing_logger)
+DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
 {
-    DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
+    DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
     const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
     if (enable_rs_filter)
     {
@@ -725,13 +727,77 @@ DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo &
             };
             rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         }
-        if (likely(rs_operator != DM::EMPTY_FILTER))
+        if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
             LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    return rs_operator;
+    /// Get columns before push down filters, before_where actions, and column names of filters
+    /// in order to construct FilterBlockInputStream
+    String filter_column_name;
+    ColumnDefines filter_columns;
+    ExpressionActionsPtr before_where;
+    ExpressionActionsPtr project_after_where;
+    const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
+    const bool enable_late_materialization = context.getSettingsRef().dt_enable_late_materialization.get();
+    if (enable_late_materialization && likely(query_info.dag_query))
+    {
+        if (query_info.dag_query->filters.empty())
+        {
+            return EMPTY_FILTER;
+        }
+        std::unordered_set<ColId> filter_column_ids;
+        for (const auto * filter : query_info.dag_query->filters)
+        {
+            FilterParser::parseFilterColumnsFromDAGQuery(*filter, columns_to_read, filter_column_ids);
+        }
+
+        for (const auto id : filter_column_ids)
+        {
+            auto iter = std::find_if(
+                defines.begin(),
+                defines.end(),
+                [id](const ColumnDefine & d) -> bool { return d.id == id; });
+            if (iter != defines.end())
+                filter_columns.push_back(*iter);
+        }
+
+        for (const auto & col : filter_columns)
+        {
+            // do not support push down filter on datetime and time
+            if (col.id != -1 && (col.type->getTypeId() == TypeIndex::MyDateTime || col.type->getTypeId() == TypeIndex::MyTime))
+                return std::make_shared<DM::PushDownFilter>(rs_operator);
+        }
+
+        NamesAndTypes columns_to_read_name_and_type;
+        for (const auto & col : columns_to_read)
+        {
+            columns_to_read_name_and_type.emplace_back(col.name, col.type);
+        }
+
+        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, context);
+        ExpressionActionsChain chain;
+        analyzer->initChain(chain, analyzer->getCurrentInputColumns());
+        filter_column_name = analyzer->appendWhere(chain, query_info.dag_query->filters);
+        before_where = chain.getLastActions();
+        chain.addStep();
+
+        // prepare projection for removing useless tmp column.
+        NamesWithAliases project_cols;
+        for (const auto & col : filter_columns)
+        {
+            chain.getLastStep().required_output.push_back(col.name);
+            project_cols.emplace_back(col.name, col.name);
+        }
+        chain.getLastActions()->add(ExpressionAction::project(project_cols));
+        project_after_where = chain.getLastActions();
+
+        chain.finalize();
+        chain.clear();
+    }
+
+    return std::make_shared<DM::PushDownFilter>(rs_operator, before_where, project_after_where, filter_columns, filter_column_name);
 }
 
 BlockInputStreams StorageDeltaMerge::read(
@@ -772,7 +838,7 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, tracing_logger);
 
-    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+    auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
@@ -783,7 +849,7 @@ BlockInputStreams StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
-        rs_operator,
+        filter,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -1062,7 +1128,7 @@ void StorageDeltaMerge::alterImpl(
     const AlterCommands & commands,
     const String & database_name,
     const String & table_name_,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     const Context & context)
 try
 {

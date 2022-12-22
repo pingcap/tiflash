@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/ReadUtil.h>
 
 namespace DB::DM
 {
@@ -37,7 +37,7 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
 
 Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
-    auto [block, from_delta] = readBlock();
+    auto [block, from_delta] = readBlock(stable, delta);
     if (block)
     {
         if (from_delta)
@@ -46,49 +46,21 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         }
 
         filter.resize(block.rows());
-        bitmap_filter->get(filter, block.startOffset(), block.rows());
+        auto all_match = bitmap_filter->get(filter, block.startOffset(), block.rows());
         if (return_filter)
         {
             res_filter = &filter;
         }
-        else
+        else if (!all_match)
         {
+            size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1);
             for (auto & col : block)
             {
-                col.column = col.column->filter(filter, block.rows());
+                col.column = col.column->filter(filter, passed_count);
             }
         }
     }
     return block;
-}
-
-// <Block, from_delta>
-std::pair<Block, bool> BitmapFilterBlockInputStream::readBlock()
-{
-    if (stable == nullptr && delta == nullptr)
-    {
-        return {{}, false};
-    }
-
-    if (stable == nullptr)
-    {
-        return {delta->read(), true};
-    }
-
-    auto block = stable->read();
-    if (block)
-    {
-        return {block, false};
-    }
-    else
-    {
-        stable = nullptr;
-        if (delta != nullptr)
-        {
-            block = delta->read();
-        }
-        return {block, true};
-    }
 }
 
 } // namespace DB::DM

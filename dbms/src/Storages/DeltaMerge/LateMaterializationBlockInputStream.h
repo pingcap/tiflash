@@ -18,20 +18,26 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB::DM
 {
-class BitmapFilterBlockInputStream : public IProfilingBlockInputStream
+
+/** BlockInputStream to do late materialization.
+  * 1. Read one block of the filter column.
+  * 2. Run pushed down filter on the block, return block and filter.
+  * 3. Read one block of the rest columns, join the two block by columns, and assign the filter to the returned block before return.
+  * 4. Repeat 1-3 until the filter column stream is empty.
+  */
+class LateMaterializationBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "BitmapFilterBlockInputStream";
+    static constexpr auto NAME = "LateMaterializationBlockInputStream";
 
 public:
-    BitmapFilterBlockInputStream(
+    LateMaterializationBlockInputStream(
         const ColumnDefines & columns_to_read,
-        BlockInputStreamPtr stable_,
-        BlockInputStreamPtr delta_,
-        size_t stable_rows_,
-        size_t delta_rows_,
+        BlockInputStreamPtr filter_column_stream_,
+        SkippableBlockInputStreamPtr rest_column_stream_,
         const BitmapFilterPtr & bitmap_filter_,
         const String & req_id_);
 
@@ -40,23 +46,15 @@ public:
     Block getHeader() const override { return header; }
 
 protected:
-    Block readImpl() override
-    {
-        FilterPtr filter_ignored;
-        return readImpl(filter_ignored, false);
-    }
-
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
+    Block readImpl() override;
 
 private:
     Block header;
-    BlockInputStreamPtr stable;
-    BlockInputStreamPtr delta;
-    size_t stable_rows;
-    [[maybe_unused]] size_t delta_rows;
+    BlockInputStreamPtr filter_column_stream;
+    SkippableBlockInputStreamPtr rest_column_stream;
     BitmapFilterPtr bitmap_filter;
     const LoggerPtr log;
-    IColumn::Filter filter{};
+    IColumn::Filter mvcc_filter{};
 };
 
 } // namespace DB::DM

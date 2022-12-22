@@ -197,4 +197,7 @@ struct BlockExtraInfo
     bool is_valid = false;
 };
 
+/// join blocks by columns
+Block hstackBlocks(const Blocks & blocks, const Block & header);
+
 } // namespace DB

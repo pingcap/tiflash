@@ -29,7 +29,7 @@ public:
 
     bool alwaysFalse() const;
     // return false if all filter out.
-    bool transform(Block & block);
+    bool transform(Block & block, IColumn::Filter & filter, bool return_filter);
     Block getHeader() const;
     ExpressionActionsPtr getExperssion() const;
 

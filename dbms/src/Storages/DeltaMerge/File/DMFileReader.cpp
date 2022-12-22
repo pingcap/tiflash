@@ -305,6 +305,48 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_pack_id < use_packs.size();
 }
 
+bool DMFileReader::skipNextBlock()
+{
+    /// Find the packs to read next, and mark them as not used.
+    auto & use_packs = pack_filter.getUsePacks();
+    size_t start_pack_id = next_pack_id;
+    const auto & pack_stats = dmfile->getPackStats();
+
+    while (next_pack_id < use_packs.size() && !use_packs[next_pack_id])
+    {
+        scan_context->total_dmfile_skipped_packs += 1;
+        scan_context->total_dmfile_skipped_rows += pack_stats[next_pack_id].rows;
+        next_row_offset += pack_stats[next_pack_id].rows;
+        ++next_pack_id;
+    }
+
+    if (next_pack_id >= use_packs.size())
+    {
+        return false;
+    }
+
+    size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
+
+    const std::vector<RSResult> & handle_res = pack_filter.getHandleRes();
+    RSResult expected_handle_res = handle_res[next_pack_id];
+    size_t read_rows = 0;
+    for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
+    {
+        if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)
+            break;
+        if (enable_handle_clean_read && handle_res[next_pack_id] != expected_handle_res)
+            break;
+
+        read_rows += pack_stats[next_pack_id].rows;
+        scan_context->total_dmfile_skipped_packs += 1;
+        use_packs[next_pack_id] = false;
+    }
+
+    scan_context->total_dmfile_skipped_rows += read_rows;
+    next_row_offset += read_rows;
+    return true;
+}
+
 inline bool isExtraColumn(const ColumnDefine & cd)
 {
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;

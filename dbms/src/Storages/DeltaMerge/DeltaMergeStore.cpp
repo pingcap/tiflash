@@ -46,6 +46,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 
+#include "Storages/DeltaMerge/Filter/PushDownFilter.h"
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -958,7 +960,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RowKeyRanges & sorted_ranges,
                                         size_t num_streams,
                                         UInt64 max_version,
-                                        const RSOperatorPtr & filter,
+                                        const PushDownFilterPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
