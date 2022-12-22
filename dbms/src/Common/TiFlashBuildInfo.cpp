@@ -147,6 +147,6 @@ void outputDetail(std::ostream & os)
        << "UTC Build Time:  " << getUTCBuildTime() << std::endl
        << "Enable Features: " << getEnabledFeatures() << std::endl
        << "Profile:         " << getProfile() << std::endl
-       << "Mpp Version:     " << TiDB::GetMppVersion() << std::endl;
+       << "Mpp Version:     " << fmt::format("{} (release version {})", TiDB::GetMppVersion(), TiDB::GetMppVersionReleaseInfo(TiDB::GetMppVersion())) << std::endl;
 }
 } // namespace TiFlashBuildInfo

@@ -17,6 +17,7 @@
 #include <common/defines.h>
 #include <fmt/format.h>
 
+#include <array>
 #include <memory>
 
 namespace DB
@@ -47,9 +48,15 @@ namespace TiDB
 
 constexpr int64_t MPP_VERSION_V0 = 0;
 constexpr int64_t MPP_VERSION_V1 = 1;
-static const char * MPP_V1_TIFLASH_RELEASE_VERSION = "?"; // TODO: set version after committed
+constexpr int64_t MPP_VERSION_MAX = 2;
+
 // constexpr int64_t MPP_VERSION_V2 = MPP_VERSION_V1 * 2;
 constexpr int64_t MPP_VERSION = MPP_VERSION_V1;
+
+static_assert(MPP_VERSION < MPP_VERSION_MAX && MPP_VERSION >= MPP_VERSION_V0);
+
+// TODO: set version after committed
+constexpr std::array<const char *, MPP_VERSION_MAX> MPP_TIFLASH_RELEASE_VERSION = {"", "?"};
 
 bool CheckMppVersion(int64_t mpp_version)
 {
@@ -62,13 +69,22 @@ std::string GenMppVersionErrorMessage(int64_t mpp_version)
                                mpp_version,
                                TiDB::MPP_VERSION_V0,
                                TiDB::MPP_VERSION_V1,
-                               MPP_V1_TIFLASH_RELEASE_VERSION);
+                               MPP_TIFLASH_RELEASE_VERSION[TiDB::MPP_VERSION_V1]);
     return err_msg;
 }
 
 int64_t GetMppVersion()
 {
     return MPP_VERSION;
+}
+
+std::string GetMppVersionReleaseInfo(int64_t mpp_version)
+{
+    if (mpp_version >= MPP_VERSION_V0 && mpp_version < MPP_VERSION_MAX)
+    {
+        return MPP_TIFLASH_RELEASE_VERSION[mpp_version];
+    }
+    return "unknown";
 }
 
 } // namespace TiDB
