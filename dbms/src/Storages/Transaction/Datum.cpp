@@ -115,7 +115,7 @@ bool DatumFlat::overflow(const ColumnInfo & column_info)
 #error "Please undefine macro M first."
 #endif
 #define M(tt, v, cf, ct) \
-    case Type##tt:          \
+    case Type##tt:       \
         return DatumOp<Type##tt>::overflow(field(), column_info);
         COLUMN_TYPES(M)
 #undef M
@@ -135,7 +135,7 @@ DatumBumpy::DatumBumpy(const DB::Field & field, TP tp)
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, ct)                     \
+#define M(tt, v, cf, ct)                        \
     case Type##tt:                              \
         DatumOp<Type##tt>::flatten(orig, copy); \
         break;

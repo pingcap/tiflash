@@ -990,7 +990,7 @@ CodecFlag ColumnInfo::getCodecFlag() const
 #error "Please undefine macro M first."
 #endif
 #define M(tt, v, cf, ct) \
-    case Type##tt:          \
+    case Type##tt:       \
         return getCodecFlagBase<CodecFlag##cf>(hasUnsignedFlag());
         COLUMN_TYPES(M)
 #undef M

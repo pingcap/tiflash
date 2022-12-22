@@ -336,7 +336,7 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     }
     else
     {
-        const auto *nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
+        const auto * nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
         nested_type = nullable_type->getNestedType().get();
     }
 
@@ -405,27 +405,27 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
         column_info.setUnsignedFlag();
 
     // Fill flen and decimal for decimal.
-    if (const auto *decimal_type32 = checkAndGetDataType<DataTypeDecimal<Decimal32>>(nested_type))
+    if (const auto * decimal_type32 = checkAndGetDataType<DataTypeDecimal<Decimal32>>(nested_type))
         setDecimalPrecScale(decimal_type32, column_info);
-    else if (const auto *decimal_type64 = checkAndGetDataType<DataTypeDecimal<Decimal64>>(nested_type))
+    else if (const auto * decimal_type64 = checkAndGetDataType<DataTypeDecimal<Decimal64>>(nested_type))
         setDecimalPrecScale(decimal_type64, column_info);
-    else if (const auto *decimal_type128 = checkAndGetDataType<DataTypeDecimal<Decimal128>>(nested_type))
+    else if (const auto * decimal_type128 = checkAndGetDataType<DataTypeDecimal<Decimal128>>(nested_type))
         setDecimalPrecScale(decimal_type128, column_info);
-    else if (const auto *decimal_type256 = checkAndGetDataType<DataTypeDecimal<Decimal256>>(nested_type))
+    else if (const auto * decimal_type256 = checkAndGetDataType<DataTypeDecimal<Decimal256>>(nested_type))
         setDecimalPrecScale(decimal_type256, column_info);
 
     // Fill decimal for date time.
-    if (const auto *type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
+    if (const auto * type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
         column_info.decimal = type->getFraction();
 
     // Fill decimal for duration.
-    if (const auto *type = checkAndGetDataType<DataTypeMyDuration>(nested_type))
+    if (const auto * type = checkAndGetDataType<DataTypeMyDuration>(nested_type))
         column_info.decimal = type->getFsp();
 
     // Fill elems for enum.
     if (checkDataType<DataTypeEnum16>(nested_type))
     {
-        const auto *enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
+        const auto * enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
         for (const auto & element : enum16_type->getValues())
         {
             column_info.elems.emplace_back(element.first, element.second);
