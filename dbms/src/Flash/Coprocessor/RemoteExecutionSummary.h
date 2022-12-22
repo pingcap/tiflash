@@ -14,29 +14,20 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
-#include <common/types.h>
+#include <Flash/Coprocessor/ExecutionSummary.h>
 #include <tipb/select.pb.h>
 
-#include <memory>
+#include <unordered_map>
 
 namespace DB
 {
-/// do not need be thread safe since it is only used in single thread env
-struct ExecutionSummary
+struct RemoteExecutionSummary
 {
-    UInt64 time_processed_ns = 0;
-    UInt64 num_produced_rows = 0;
-    UInt64 num_iterations = 0;
-    UInt64 concurrency = 0;
+    void merge(const RemoteExecutionSummary & other);
 
-    DM::ScanContextPtr scan_context = std::make_shared<DB::DM::ScanContext>();
+    void add(tipb::SelectResponse & resp);
 
-    ExecutionSummary() = default;
-
-    void merge(const ExecutionSummary & other);
-    void merge(const tipb::ExecutorExecutionSummary & other);
-    void init(const tipb::ExecutorExecutionSummary & other);
+    // <executor_id, ExecutionSummary>
+    std::unordered_map<String, ExecutionSummary> execution_summaries;
 };
-
 } // namespace DB

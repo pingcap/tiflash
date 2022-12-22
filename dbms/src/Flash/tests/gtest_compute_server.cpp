@@ -290,6 +290,53 @@ try
 }
 CATCH
 
+TEST_F(ComputeServerRunner, aggWithColumnPrune)
+try
+{
+    startServers(3);
+
+    context.addMockTable(
+        {"test_db", "test_table_2"},
+        {{"i1", TiDB::TP::TypeLong}, {"i2", TiDB::TP::TypeLong}, {"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}, {"s4", TiDB::TP::TypeString}, {"s5", TiDB::TP::TypeString}},
+        {toNullableVec<Int32>("i1", {0, 0, 0}), toNullableVec<Int32>("i2", {1, 1, 1}), toNullableVec<String>("s1", {"1", "9", "8"}), toNullableVec<String>("s2", {"1", "9", "8"}), toNullableVec<String>("s3", {"4", "9", "99"}), toNullableVec<String>("s4", {"4", "9", "999"}), toNullableVec<String>("s5", {"4", "9", "9999"})});
+    std::vector<String> res{"9", "9", "99", "999", "9999"};
+    std::vector<String> max_cols{"s1", "s2", "s3", "s4", "s5"};
+    for (size_t i = 0; i < 1; ++i)
+    {
+        {
+            auto request = context
+                               .scan("test_db", "test_table_2")
+                               .aggregation({Max(col(max_cols[i]))}, {col("i1")});
+            auto expected_cols = {
+                toNullableVec<String>({res[i]}),
+                toNullableVec<Int32>({{0}})};
+            ASSERT_COLUMNS_EQ_UR(expected_cols, buildAndExecuteMPPTasks(request));
+        }
+
+        {
+            auto request = context
+                               .scan("test_db", "test_table_2")
+                               .aggregation({Max(col(max_cols[i]))}, {col("i2")});
+            auto expected_cols = {
+                toNullableVec<String>({res[i]}),
+                toNullableVec<Int32>({{1}})};
+            ASSERT_COLUMNS_EQ_UR(expected_cols, buildAndExecuteMPPTasks(request));
+        }
+
+        {
+            auto request = context
+                               .scan("test_db", "test_table_2")
+                               .aggregation({Max(col(max_cols[i]))}, {col("i1"), col("i2")});
+            auto expected_cols = {
+                toNullableVec<String>({res[i]}),
+                toNullableVec<Int32>({{0}}),
+                toNullableVec<Int32>({{1}})};
+            ASSERT_COLUMNS_EQ_UR(expected_cols, buildAndExecuteMPPTasks(request));
+        }
+    }
+}
+CATCH
+
 TEST_F(ComputeServerRunner, cancelAggTasks)
 try
 {
