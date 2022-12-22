@@ -44,6 +44,8 @@ public:
     String getName() const override { return name; }
     Block getTotals() override;
     Block getHeader() const override;
+    Block getOutputBlock(ProbeProcessInfo & probe_process_info) const;
+    static Block mergeResultBlocks(Blocks && result_blocks);
 
 protected:
     Block readImpl() override;
@@ -52,6 +54,8 @@ private:
     const LoggerPtr log;
     JoinPtr join;
     ProbeProcessInfo probe_process_info;
+    Block over_limit_block;
+    bool join_finished;
 };
 
 } // namespace DB

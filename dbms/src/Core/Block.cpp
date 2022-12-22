@@ -514,6 +514,26 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
     return ReturnType(true);
 }
 
+Block blocksMerge(Blocks && result_blocks)
+{
+    auto & sample_block = result_blocks[0];
+    MutableColumns dst_columns(sample_block.columns());
+    for (size_t i = 0; i < sample_block.columns(); i++)
+    {
+        dst_columns[i] = sample_block.getByPosition(i).column->cloneEmpty();
+    }
+    for (auto & current_block : result_blocks)
+    {
+        if (current_block.rows() > 0)
+        {
+            for (size_t column = 0; column < current_block.columns(); column++)
+            {
+                dst_columns[column]->insertRangeFrom(*current_block.getByPosition(column).column, 0, current_block.rows());
+            }
+        }
+    }
+    return sample_block.cloneWithColumns(std::move(dst_columns));
+}
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 {

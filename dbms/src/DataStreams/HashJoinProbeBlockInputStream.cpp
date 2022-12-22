@@ -25,6 +25,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     : log(Logger::get(req_id))
     , join(join_)
     , probe_process_info(max_block_size)
+    , join_finished(false)
 {
     children.push_back(input);
 
@@ -67,17 +68,81 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    if (probe_process_info.all_rows_joined_finish)
+    // if join finished, return {}
+    if (join_finished)
+    {
+        return Block{};
+    }
+
+    Blocks result_blocks;
+    size_t output_rows = 0;
+
+    // if over_limit_block is not null, we need to push it into result_blocks first.
+    if (over_limit_block)
+    {
+        result_blocks.push_back(over_limit_block);
+        output_rows += over_limit_block.rows();
+        over_limit_block = Block{};
+    }
+
+    while (output_rows <= probe_process_info.max_block_size)
+    {
+        Block result_block = getOutputBlock(probe_process_info);
+
+        if (!result_block)
+        {
+            // if result blocks is not empty, merge and return them, then mark join finished.
+            if (!result_blocks.empty())
+            {
+                join_finished = true;
+                return mergeResultBlocks(std::move(result_blocks));
+            }
+            // if result blocks is empty, return result block directly.
+            return result_block;
+        }
+        size_t current_rows = result_block.rows();
+
+        if (!output_rows || output_rows + current_rows <= probe_process_info.max_block_size)
+        {
+            result_blocks.push_back(result_block);
+        }
+        else
+        {
+            // if output_rows + current_rows > max block size, put the current result block into over_limit_block and handle it in next read.
+            over_limit_block = result_block;
+        }
+        output_rows += current_rows;
+    }
+
+    return mergeResultBlocks(std::move(result_blocks));
+}
+
+Block HashJoinProbeBlockInputStream::getOutputBlock(ProbeProcessInfo & probe_process_info_) const
+{
+    if (probe_process_info_.all_rows_joined_finish)
     {
         Block block = children.back()->read();
         if (!block)
+        {
             return block;
+        }
         join->checkTypes(block);
-        probe_process_info.resetBlock(std::move(block));
+        probe_process_info_.resetBlock(std::move(block));
     }
 
-    return join->joinBlock(probe_process_info);
+    return join->joinBlock(probe_process_info_);
 }
 
+Block HashJoinProbeBlockInputStream::mergeResultBlocks(Blocks && result_blocks)
+{
+    if (result_blocks.size() == 1)
+    {
+        return result_blocks[0];
+    }
+    else
+    {
+        return blocksMerge(std::move(result_blocks));
+    }
+}
 
 } // namespace DB
