@@ -193,6 +193,7 @@ public:
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
         , initialize_concurrency(concurrency)
+        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(true)
         , is_root_mpp_task(false)
         , log(Logger::get(log_identifier))
