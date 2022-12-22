@@ -15,10 +15,8 @@
 #pragma once
 
 #include <Debug/MockStorage.h>
-#include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Server/FlashGrpcServerHolder.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB::tests
 {

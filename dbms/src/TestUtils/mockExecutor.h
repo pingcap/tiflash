@@ -16,6 +16,7 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/MockExecutor/AstToPB.h>
+#include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context.h>
