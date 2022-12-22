@@ -18,7 +18,6 @@
 
 namespace DB
 {
-//
 class PipelineCompleteEvent : public Event
 {
 public:
