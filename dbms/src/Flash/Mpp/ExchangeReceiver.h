@@ -16,7 +16,6 @@
 
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>

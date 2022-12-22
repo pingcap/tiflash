@@ -15,13 +15,14 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
 namespace DB
 {
+class DAGContext;
+
 template <class ExchangeWriterPtr>
 class FineGrainedShuffleWriter : public DAGResponseWriter
 {

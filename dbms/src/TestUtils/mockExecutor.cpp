@@ -13,6 +13,17 @@
 // limitations under the License.
 
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
+#include <Debug/MockExecutor/ExchangeSenderBinder.h>
+#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/JoinBinder.h>
+#include <Debug/MockExecutor/LimitBinder.h>
+#include <Debug/MockExecutor/ProjectBinder.h>
+#include <Debug/MockExecutor/SelectionBinder.h>
+#include <Debug/MockExecutor/SortBinder.h>
+#include <Debug/MockExecutor/TableScanBinder.h>
+#include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
@@ -261,18 +272,19 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
-                                            tipb::JoinType tp,
-                                            MockAstVec join_cols,
-                                            MockAstVec left_conds,
-                                            MockAstVec right_conds,
-                                            MockAstVec other_conds,
-                                            MockAstVec other_eq_conds_from_in)
+DAGRequestBuilder & DAGRequestBuilder::join(
+    const DAGRequestBuilder & right,
+    tipb::JoinType tp,
+    MockAstVec join_col_exprs,
+    MockAstVec left_conds,
+    MockAstVec right_conds,
+    MockAstVec other_conds,
+    MockAstVec other_eq_conds_from_in)
 {
     assert(root);
     assert(right.root);
 
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     return *this;
 }
 
@@ -385,6 +397,7 @@ void MockDAGRequestContext::addMockTable(const String & db, const String & table
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assert(columnInfos.size() == columns.size());
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
 }

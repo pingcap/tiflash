@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 

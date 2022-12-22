@@ -11,7 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Debug/MockComputeServerManager.h>
+#include <Debug/MockStorage.h>
+#include <Debug/dbgQueryExecutor.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB::tests
@@ -80,7 +85,7 @@ std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepa
     return {MPPQueryId(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
 }
 
-ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);
@@ -104,7 +109,7 @@ ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<
     auto * data = req->mutable_data();
     dag_request->AppendToString(data);
 
-    DAGContext dag_context(*dag_request);
+    DAGContext dag_context(*dag_request, {}, "", false, Logger::get());
 
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setDAGContext(&dag_context);
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setCopTest();
@@ -145,8 +150,8 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
-            // Currenly we wait for 10 times to ensure all tasks are cancelled.
-            if (retry_times > 10)
+            // Currenly we wait for 20 times to ensure all tasks are cancelled.
+            if (retry_times > 20)
             {
                 return ::testing::AssertionFailure() << "Query not cancelled, " << queryInfo(i) << std::endl;
             }
@@ -165,5 +170,16 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
         }
     }
     return ::testing::AssertionSuccess();
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::buildAndExecuteMPPTasks(DAGRequestBuilder builder)
+{
+    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setMPPTest();
+    auto tasks = (builder).buildMPPTasks(context, properties);
+    MockComputeServerManager::instance().resetMockMPPServerInfo(serverNum());
+    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+    return executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
 }
 } // namespace DB::tests

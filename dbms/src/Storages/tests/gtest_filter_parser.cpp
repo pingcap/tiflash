@@ -83,7 +83,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request);
+    DAGContext dag_context(dag_request, {}, "", false, log);
     ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
     DAGQuerySource dag(ctx);

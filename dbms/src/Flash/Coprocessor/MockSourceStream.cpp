@@ -12,29 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Interpreters/Context.h>
-#include <Interpreters/IQuerySource.h>
+#include <Flash/Coprocessor/MockSourceStream.h>
 
 namespace DB
 {
-class DAGContext;
-
-class PlanQuerySource : public IQuerySource
+std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(Context & context, size_t max_streams, DB::LoggerPtr log, const TiDBTableScan & table_scan)
 {
-public:
-    explicit PlanQuerySource(Context & context_);
-
-    std::tuple<std::string, ASTPtr> parse(size_t) override;
-    String str(size_t max_query_size) override;
-    std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
-
-    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
-    const tipb::DAGRequest & getDAGRequest() const;
-
-private:
-    Context & context;
-};
-
+    ColumnsWithTypeAndName columns_with_type_and_name = context.mockStorage().getColumnsForMPPTableScan(table_scan, context.mockMPPServerInfo().partition_id, context.mockMPPServerInfo().partition_num);
+    return cutStreams<MockTableScanBlockInputStream>(context, columns_with_type_and_name, max_streams, log);
+}
 } // namespace DB
