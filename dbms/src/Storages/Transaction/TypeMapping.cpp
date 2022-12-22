@@ -149,17 +149,24 @@ TypeMapping::TypeMapping()
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, ct) \
-    type_map[TiDB::Type##tt] = std::bind(getDataTypeByColumnInfoBase<DataType##ct>, std::placeholders::_1, (DataType##ct *)nullptr);
+#define M(tt, v, cf, ct)                                                                        \
+    type_map[TiDB::Type##tt] = [](const ColumnInfo & column_info) {                             \
+        return getDataTypeByColumnInfoBase<DataType##ct>(column_info, (DataType##ct *)nullptr); \
+    };
     COLUMN_TYPES(M)
 #undef M
 }
 
+// Get the basic data type according to column_info.
+// This method ignores the nullable flag.
 DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
 {
     return type_map[column_info.tp](column_info);
 }
 
+// Get the data type according to column_info, respecting
+// the nullable flag.
+// This does not support the "duration" type.
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 {
     DataTypePtr base = TypeMapping::instance().getDataType(column_info);
@@ -171,6 +178,8 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
     return base;
 }
 
+// Get the data type according to column_info.
+// This support the duration type that only will be generated when executing
 DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info)
 {
     DataTypePtr base = TypeMapping::instance().getDataType(column_info);
