@@ -31,6 +31,7 @@
 
 #include "Poco/Logger.h"
 #include "common/types.h"
+#include "metapb.pb.h"
 
 namespace DB
 {
@@ -222,6 +223,15 @@ UniversalWriteBatch MockProxyRegion::persistMeta()
     restored_region_state.ParseFromArray(region_local_state.data(), region_local_state.size());
     restored_apply_state.ParseFromArray(raft_apply_state.data(), raft_apply_state.size());
     return wb;
+}
+
+void MockProxyRegion::addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role)
+{
+    auto _ = genLockGuard();
+    auto & peer = *state.mutable_region()->mutable_peers()->Add();
+    peer.set_store_id(store_id);
+    peer.set_id(peer_id);
+    peer.set_role(role);
 }
 
 MockProxyRegion::MockProxyRegion(uint64_t id_)

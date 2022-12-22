@@ -52,15 +52,18 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
     auto log = &Poco::Logger::get("fast add");
     {
         auto region_id = 1;
+        auto peer_id = 1;
         {
             KVStore & kvs = getKVS();
             auto & page_storage = kvs.region_persister->global_uni_page_storage;
 
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            auto region = proxy_instance->getRegion(region_id);
+            auto store_id = kvs.getStore().store_id.load();
+            region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
             auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             MockRaftStoreProxy::FailCond cond;
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            auto region = proxy_instance->getRegion(region_id);
             auto wb = region->persistMeta();
             page_storage->write(std::move(wb), nullptr);
 
@@ -68,10 +71,13 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
             ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
 
-            // Dump PS.
+            // Dump PS
             auto writer_info = std::make_shared<WriterInfo>();
-            writer_info->set_store_id(kvs.getStore().store_id.load());
-            std::string output_directory = TiFlashTestEnv::getTemporaryPath("FastAddPeer/");
+            writer_info->set_store_id(store_id);
+            auto remote_directory = TiFlashTestEnv::getTemporaryPath("FastAddPeer");
+            page_storage->config.ps_remote_directory.set(remote_directory);
+            std::string output_directory = composeOutputDirectory(remote_directory, store_id, page_storage->storage_name);
+            LOG_DEBUG(log, "output_directory {}", output_directory);
             page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
                 .temp_directory = output_directory,
                 .remote_directory = output_directory,
@@ -81,8 +87,8 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
                 .blob_store = *page_storage->blob_store,
             });
 
-            // Find the newest manifest
-            auto maybe_remote_meta = fetchRemotePeerMeta(output_directory, 0, region_id, 0);
+            // Must Found the newest manifest
+            auto maybe_remote_meta = selectRemotePeer(page_storage, region_id, peer_id);
             ASSERT(maybe_remote_meta.has_value());
 
             auto remote_meta = std::move(maybe_remote_meta.value());
@@ -90,7 +96,6 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
 
             auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = output_directory + optimal});
             auto edit = reader->read();
-            LOG_DEBUG(log, "content is {}", edit.toDebugString());
             auto records = edit.getRecords();
             ASSERT_EQ(3, records.size());
 
@@ -113,7 +118,6 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
                     auto key = RecordKVFormat::genKey(proxy_instance->table_id, 34, 1);
                     TiKVValue value = std::string("v2");
                     EXPECT_THROW(decoded_region->insert(ColumnFamilyType::Default, std::move(key), std::move(value)), Exception);
-                    LOG_DEBUG(log, "loaded region {}", decoded_region->getDebugString());
                 }
             }
             LOG_DEBUG(log, "APPLY restored {} origin {}", restored_apply_state.ShortDebugString(), region->getApply().ShortDebugString());

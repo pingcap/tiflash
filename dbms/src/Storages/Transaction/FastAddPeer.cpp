@@ -14,7 +14,6 @@
 
 #include "FastAddPeer.h"
 
-#include <Interpreters/Context.h>
 #include <Poco/DirectoryIterator.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -24,6 +23,9 @@
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <cstdio>
+
 
 namespace DB
 {
@@ -87,8 +89,8 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
                 optimal_index = index;
                 optimal = p.getFileName();
             }
-            ++it;
         }
+        ++it;
     }
     LOG_DEBUG(log, "use optimal manifest {}", optimal);
 
@@ -130,7 +132,37 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     return std::make_tuple(store_id, restored_region_state, restored_apply_state, optimal);
 }
 
-std::optional<RemoteMeta> selectRemotePeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
+std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
+{
+    return fmt::format(
+        "{}/store_{}/ps_{}_manifest/",
+        remote_dir,
+        store_id,
+        storage_name);
+}
+
+std::vector<uint64_t> listAllStores(const std::string & remote_dir)
+{
+    Poco::DirectoryIterator it(remote_dir);
+    Poco::DirectoryIterator end;
+    std::vector<uint64_t> res;
+    while (it != end)
+    {
+        if (it->isDirectory())
+        {
+            Poco::Path p(it.path());
+            auto store_id = 0;
+            if (sscanf(p.getBaseName().c_str(), "store_%u", &store_id) == 1 && store_id != 0)
+            {
+                res.push_back(store_id);
+            }
+        }
+        ++it;
+    }
+    return res;
+}
+
+std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t region_id, uint64_t new_peer_id)
 {
     auto log = &Poco::Logger::get("fast add");
 
@@ -138,7 +170,22 @@ std::optional<RemoteMeta> selectRemotePeer(EngineStoreServerWrap * server, uint6
     std::map<uint64_t, std::string> reason;
     std::map<uint64_t, std::string> candidate_stat;
 
-    // TODO Fetch meta from all store by fetchRemotePeerMeta.
+    // TODO Reconsider this logic when use S3.
+    const auto & remote_dir = page_storage->config.ps_remote_directory.toString();
+    // TODO Fill storage_name
+    const auto & storage_name = page_storage->storage_name;
+    auto stores = listAllStores(remote_dir);
+    for (auto store_it = stores.begin(); store_it != stores.end(); store_it++)
+    {
+        auto store_id = *store_it;
+        auto output_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
+        auto maybe_choice = fetchRemotePeerMeta(output_directory, store_id, region_id, new_peer_id);
+        if (maybe_choice.has_value())
+        {
+            choices.push_back(std::move(maybe_choice.value()));
+        }
+    }
+
     std::optional<RemoteMeta> choosed = std::nullopt;
     uint64_t largest_applied_index = 0;
     for (auto it = choices.begin(); it != choices.end(); it++)
@@ -184,13 +231,13 @@ std::optional<RemoteMeta> selectRemotePeer(EngineStoreServerWrap * server, uint6
     }
     std::string failed_reason = fmt_buf.toString();
     fmt_buf.clear();
-    for (auto iter = reason.begin(); iter != reason.end(); iter++)
+    for (auto iter = candidate_stat.begin(); iter != candidate_stat.end(); iter++)
     {
         fmt_buf.fmtAppend("store {} stat {}, ", iter->first, iter->second);
     }
     std::string choice_stat = fmt_buf.toString();
 
-    LOG_DEBUG(log, "fast add result region_id {} new peer_id {};", region_id, new_peer_id, failed_reason, choice_stat);
+    LOG_INFO(log, "fast add result region_id {} new_peer_id {} remote_dir {} storage_name {} total choices {}; failed: {}; candidates: {};", region_id, new_peer_id, remote_dir, storage_name, choices.size(), failed_reason, choice_stat);
     return choosed;
 }
 
@@ -203,7 +250,8 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     std::optional<RemoteMeta> maybe_peer = std::nullopt;
     while (true)
     {
-        auto maybe_peer = selectRemotePeer(server, region_id, new_peer_id);
+        auto page_storage = server->tmt->getContext().getWriteNodePageStorage();
+        auto maybe_peer = selectRemotePeer(page_storage, region_id, new_peer_id);
         if (!maybe_peer.has_value())
         {
             // TODO retry

@@ -291,7 +291,7 @@ PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, Ba
             }
         }
         //        LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle scan page {}", pages.size());
-        return PageAndCppStrWithViewVec{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size() };
+        return PageAndCppStrWithViewVec{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size()};
     }
     catch (...)
     {

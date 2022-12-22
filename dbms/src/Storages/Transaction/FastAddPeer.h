@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 
@@ -25,5 +26,7 @@ namespace DB
 {
 using RemoteMeta = std::tuple<uint64_t, RegionLocalState, RaftApplyState, std::string>;
 
+std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr, uint64_t region_id, uint64_t new_peer_id);
+std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name);
 std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id);
 } // namespace DB

@@ -23,6 +23,8 @@
 
 #include <ext/singleton.h>
 
+#include "metapb.pb.h"
+
 namespace DB
 {
 kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts);
@@ -39,6 +41,7 @@ struct MockProxyRegion : MutexLockWrap
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
     UniversalWriteBatch persistMeta();
+    void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
 
     struct NormalWrite
     {
