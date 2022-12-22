@@ -58,7 +58,7 @@ bool pushPacket(size_t source_index,
     bool push_succeed = true;
 
     const mpp::Error * error_ptr = nullptr;
-    auto & packet = tracked_packet->packet;
+    auto & packet = tracked_packet->getPacket();
     if (packet.has_error())
         error_ptr = &packet.error();
     const String * resp_ptr = nullptr;
@@ -688,8 +688,8 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     if (recv_msg->chunks.empty())
         return detail;
-    auto & packet = recv_msg->packet->packet;
-    auto compress_method = recv_msg->packet->getPacket().compress();
+    auto & packet = recv_msg->packet->getPacket();
+    auto compress_method = packet.compress().method();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();

@@ -58,7 +58,7 @@ bool CheckMppVersion(int64_t mpp_version)
 
 std::string GenMppVersionErrorMessage(int64_t mpp_version)
 {
-    auto err_msg = fmt::format("Invalid mpp version `{}`, expect version: min `{}`, max `{}` release version `{}`",
+    auto err_msg = fmt::format("invalid mpp version `{}`, expect version: min `{}`, max `{}` release version `{}`",
                                mpp_version,
                                TiDB::MPP_VERSION_V0,
                                TiDB::MPP_VERSION_V1,

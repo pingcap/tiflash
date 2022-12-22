@@ -1,5 +1,5 @@
 diff --git a/pkg/mpp/mpp.pb.go b/pkg/mpp/mpp.pb.go
-index 16fd5dd..9eda45d 100644
+index 16fd5dd..63a6d6c 100644
 --- a/pkg/mpp/mpp.pb.go
 +++ b/pkg/mpp/mpp.pb.go
 @@ -26,12 +26,89 @@ var _ = math.Inf
@@ -155,15 +155,23 @@ index 16fd5dd..9eda45d 100644
  // Dipsatch the task request to different tiflash servers.
  type DispatchTaskRequest struct {
  	Meta        *TaskMeta                 `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-@@ -194,6 +286,7 @@ type DispatchTaskRequest struct {
+@@ -193,17 +285,19 @@ type DispatchTaskRequest struct {
+ 	// If this task contains table scan, we still need their region info.
  	SchemaVer int64 `protobuf:"varint,5,opt,name=schema_ver,json=schemaVer,proto3" json:"schema_ver,omitempty"`
  	// Used for partition table scan
- 	TableRegions         []*coprocessor.TableRegions `protobuf:"bytes,6,rep,name=table_regions,json=tableRegions,proto3" json:"table_regions,omitempty"`
-+	ExchangeSenderMeta   *ExchangeSenderMeta         `protobuf:"bytes,7,opt,name=exchange_sender_meta,json=exchangeSenderMeta,proto3" json:"exchange_sender_meta,omitempty"`
- 	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
- 	XXX_unrecognized     []byte                      `json:"-"`
- 	XXX_sizecache        int32                       `json:"-"`
-@@ -203,7 +296,7 @@ func (m *DispatchTaskRequest) Reset()         { *m = DispatchTaskRequest{} }
+-	TableRegions         []*coprocessor.TableRegions `protobuf:"bytes,6,rep,name=table_regions,json=tableRegions,proto3" json:"table_regions,omitempty"`
+-	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
+-	XXX_unrecognized     []byte                      `json:"-"`
+-	XXX_sizecache        int32                       `json:"-"`
++	TableRegions []*coprocessor.TableRegions `protobuf:"bytes,6,rep,name=table_regions,json=tableRegions,proto3" json:"table_regions,omitempty"`
++	// Used for exchange sender
++	ExchangeSenderMeta   *ExchangeSenderMeta `protobuf:"bytes,7,opt,name=exchange_sender_meta,json=exchangeSenderMeta,proto3" json:"exchange_sender_meta,omitempty"`
++	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
++	XXX_unrecognized     []byte              `json:"-"`
++	XXX_sizecache        int32               `json:"-"`
+ }
+ 
+ func (m *DispatchTaskRequest) Reset()         { *m = DispatchTaskRequest{} }
  func (m *DispatchTaskRequest) String() string { return proto.CompactTextString(m) }
  func (*DispatchTaskRequest) ProtoMessage()    {}
  func (*DispatchTaskRequest) Descriptor() ([]byte, []int) {
@@ -172,7 +180,7 @@ index 16fd5dd..9eda45d 100644
  }
  func (m *DispatchTaskRequest) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -274,6 +367,13 @@ func (m *DispatchTaskRequest) GetTableRegions() []*coprocessor.TableRegions {
+@@ -274,6 +368,13 @@ func (m *DispatchTaskRequest) GetTableRegions() []*coprocessor.TableRegions {
  	return nil
  }
  
@@ -186,7 +194,7 @@ index 16fd5dd..9eda45d 100644
  // Get response of DispatchTaskRequest.
  type DispatchTaskResponse struct {
  	Error                *Error           `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
-@@ -287,7 +387,7 @@ func (m *DispatchTaskResponse) Reset()         { *m = DispatchTaskResponse{} }
+@@ -287,7 +388,7 @@ func (m *DispatchTaskResponse) Reset()         { *m = DispatchTaskResponse{} }
  func (m *DispatchTaskResponse) String() string { return proto.CompactTextString(m) }
  func (*DispatchTaskResponse) ProtoMessage()    {}
  func (*DispatchTaskResponse) Descriptor() ([]byte, []int) {
@@ -195,7 +203,7 @@ index 16fd5dd..9eda45d 100644
  }
  func (m *DispatchTaskResponse) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -343,7 +443,7 @@ func (m *CancelTaskRequest) Reset()         { *m = CancelTaskRequest{} }
+@@ -343,7 +444,7 @@ func (m *CancelTaskRequest) Reset()         { *m = CancelTaskRequest{} }
  func (m *CancelTaskRequest) String() string { return proto.CompactTextString(m) }
  func (*CancelTaskRequest) ProtoMessage()    {}
  func (*CancelTaskRequest) Descriptor() ([]byte, []int) {
@@ -204,7 +212,7 @@ index 16fd5dd..9eda45d 100644
  }
  func (m *CancelTaskRequest) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -397,7 +497,7 @@ func (m *CancelTaskResponse) Reset()         { *m = CancelTaskResponse{} }
+@@ -397,7 +498,7 @@ func (m *CancelTaskResponse) Reset()         { *m = CancelTaskResponse{} }
  func (m *CancelTaskResponse) String() string { return proto.CompactTextString(m) }
  func (*CancelTaskResponse) ProtoMessage()    {}
  func (*CancelTaskResponse) Descriptor() ([]byte, []int) {
@@ -213,7 +221,7 @@ index 16fd5dd..9eda45d 100644
  }
  func (m *CancelTaskResponse) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -446,7 +546,7 @@ func (m *EstablishMPPConnectionRequest) Reset()         { *m = EstablishMPPConne
+@@ -446,7 +547,7 @@ func (m *EstablishMPPConnectionRequest) Reset()         { *m = EstablishMPPConne
  func (m *EstablishMPPConnectionRequest) String() string { return proto.CompactTextString(m) }
  func (*EstablishMPPConnectionRequest) ProtoMessage()    {}
  func (*EstablishMPPConnectionRequest) Descriptor() ([]byte, []int) {
@@ -222,7 +230,57 @@ index 16fd5dd..9eda45d 100644
  }
  func (m *EstablishMPPConnectionRequest) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -492,20 +592,21 @@ func (m *EstablishMPPConnectionRequest) GetReceiverMeta() *TaskMeta {
+@@ -489,23 +590,71 @@ func (m *EstablishMPPConnectionRequest) GetReceiverMeta() *TaskMeta {
+ 	return nil
+ }
+ 
++type CompressMeta struct {
++	Method               CompressMethod `protobuf:"varint,1,opt,name=method,proto3,enum=mpp.CompressMethod" json:"method,omitempty"`
++	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
++	XXX_unrecognized     []byte         `json:"-"`
++	XXX_sizecache        int32          `json:"-"`
++}
++
++func (m *CompressMeta) Reset()         { *m = CompressMeta{} }
++func (m *CompressMeta) String() string { return proto.CompactTextString(m) }
++func (*CompressMeta) ProtoMessage()    {}
++func (*CompressMeta) Descriptor() ([]byte, []int) {
++	return fileDescriptor_819623c7fa76fc55, []int{9}
++}
++func (m *CompressMeta) XXX_Unmarshal(b []byte) error {
++	return m.Unmarshal(b)
++}
++func (m *CompressMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
++	if deterministic {
++		return xxx_messageInfo_CompressMeta.Marshal(b, m, deterministic)
++	} else {
++		b = b[:cap(b)]
++		n, err := m.MarshalToSizedBuffer(b)
++		if err != nil {
++			return nil, err
++		}
++		return b[:n], nil
++	}
++}
++func (m *CompressMeta) XXX_Merge(src proto.Message) {
++	xxx_messageInfo_CompressMeta.Merge(m, src)
++}
++func (m *CompressMeta) XXX_Size() int {
++	return m.Size()
++}
++func (m *CompressMeta) XXX_DiscardUnknown() {
++	xxx_messageInfo_CompressMeta.DiscardUnknown(m)
++}
++
++var xxx_messageInfo_CompressMeta proto.InternalMessageInfo
++
++func (m *CompressMeta) GetMethod() CompressMethod {
++	if m != nil {
++		return m.Method
++	}
++	return CompressMethod_NONE
++}
++
  // when TiFlash sends data to TiDB, Data packets wrap tipb.SelectResponse, i.e., serialize tipb.SelectResponse into data;
  // when TiFlash sends data to TiFlash, data blocks are serialized into chunks, and the execution_summaries in tipb.SelectResponse are serialized into data only for the last packet.
  type MPPDataPacket struct {
@@ -233,14 +291,14 @@ index 16fd5dd..9eda45d 100644
 -	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 -	XXX_unrecognized     []byte   `json:"-"`
 -	XXX_sizecache        int32    `json:"-"`
-+	Data                 []byte         `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-+	Error                *Error         `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-+	Chunks               [][]byte       `protobuf:"bytes,3,rep,name=chunks,proto3" json:"chunks,omitempty"`
-+	StreamIds            []uint64       `protobuf:"varint,4,rep,packed,name=stream_ids,json=streamIds,proto3" json:"stream_ids,omitempty"`
-+	Compress             CompressMethod `protobuf:"varint,5,opt,name=compress,proto3,enum=mpp.CompressMethod" json:"compress,omitempty"`
-+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-+	XXX_unrecognized     []byte         `json:"-"`
-+	XXX_sizecache        int32          `json:"-"`
++	Data                 []byte        `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
++	Error                *Error        `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
++	Chunks               [][]byte      `protobuf:"bytes,3,rep,name=chunks,proto3" json:"chunks,omitempty"`
++	StreamIds            []uint64      `protobuf:"varint,4,rep,packed,name=stream_ids,json=streamIds,proto3" json:"stream_ids,omitempty"`
++	Compress             *CompressMeta `protobuf:"bytes,5,opt,name=compress,proto3" json:"compress,omitempty"`
++	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
++	XXX_unrecognized     []byte        `json:"-"`
++	XXX_sizecache        int32         `json:"-"`
  }
  
  func (m *MPPDataPacket) Reset()         { *m = MPPDataPacket{} }
@@ -248,34 +306,34 @@ index 16fd5dd..9eda45d 100644
  func (*MPPDataPacket) ProtoMessage()    {}
  func (*MPPDataPacket) Descriptor() ([]byte, []int) {
 -	return fileDescriptor_819623c7fa76fc55, []int{8}
-+	return fileDescriptor_819623c7fa76fc55, []int{9}
++	return fileDescriptor_819623c7fa76fc55, []int{10}
  }
  func (m *MPPDataPacket) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -562,6 +663,13 @@ func (m *MPPDataPacket) GetStreamIds() []uint64 {
+@@ -562,6 +711,13 @@ func (m *MPPDataPacket) GetStreamIds() []uint64 {
  	return nil
  }
  
-+func (m *MPPDataPacket) GetCompress() CompressMethod {
++func (m *MPPDataPacket) GetCompress() *CompressMeta {
 +	if m != nil {
 +		return m.Compress
 +	}
-+	return CompressMethod_NONE
++	return nil
 +}
 +
  type Error struct {
  	Code                 int32    `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
  	Msg                  string   `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-@@ -574,7 +682,7 @@ func (m *Error) Reset()         { *m = Error{} }
+@@ -574,7 +730,7 @@ func (m *Error) Reset()         { *m = Error{} }
  func (m *Error) String() string { return proto.CompactTextString(m) }
  func (*Error) ProtoMessage()    {}
  func (*Error) Descriptor() ([]byte, []int) {
 -	return fileDescriptor_819623c7fa76fc55, []int{9}
-+	return fileDescriptor_819623c7fa76fc55, []int{10}
++	return fileDescriptor_819623c7fa76fc55, []int{11}
  }
  func (m *Error) XXX_Unmarshal(b []byte) error {
  	return m.Unmarshal(b)
-@@ -618,6 +726,8 @@ func (m *Error) GetMsg() string {
+@@ -618,6 +774,8 @@ func (m *Error) GetMsg() string {
  }
  
  func init() {
@@ -284,7 +342,15 @@ index 16fd5dd..9eda45d 100644
  	proto.RegisterType((*TaskMeta)(nil), "mpp.TaskMeta")
  	proto.RegisterType((*IsAliveRequest)(nil), "mpp.IsAliveRequest")
  	proto.RegisterType((*IsAliveResponse)(nil), "mpp.IsAliveResponse")
-@@ -633,45 +743,85 @@ func init() {
+@@ -626,6 +784,7 @@ func init() {
+ 	proto.RegisterType((*CancelTaskRequest)(nil), "mpp.CancelTaskRequest")
+ 	proto.RegisterType((*CancelTaskResponse)(nil), "mpp.CancelTaskResponse")
+ 	proto.RegisterType((*EstablishMPPConnectionRequest)(nil), "mpp.EstablishMPPConnectionRequest")
++	proto.RegisterType((*CompressMeta)(nil), "mpp.CompressMeta")
+ 	proto.RegisterType((*MPPDataPacket)(nil), "mpp.MPPDataPacket")
+ 	proto.RegisterType((*Error)(nil), "mpp.Error")
+ }
+@@ -633,45 +792,86 @@ func init() {
  func init() { proto.RegisterFile("mpp.proto", fileDescriptor_819623c7fa76fc55) }
  
  var fileDescriptor_819623c7fa76fc55 = []byte{
@@ -327,53 +393,54 @@ index 16fd5dd..9eda45d 100644
 -	0x7b, 0xdf, 0xef, 0xc6, 0xde, 0x97, 0x1f, 0xe3, 0xff, 0x60, 0x47, 0xaa, 0x45, 0x64, 0xf8, 0xaa,
 -	0x8c, 0x56, 0xa5, 0xfb, 0x42, 0xdc, 0x74, 0xdd, 0xcf, 0xd9, 0xcf, 0x00, 0x00, 0x00, 0xff, 0xff,
 -	0xef, 0x8c, 0x66, 0x5e, 0x71, 0x04, 0x00, 0x00,
-+	// 722 bytes of a gzipped FileDescriptorProto
-+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0xcd, 0x6e, 0xd3, 0x4a,
-+	0x14, 0xae, 0xe3, 0xfc, 0x9e, 0x38, 0xb9, 0xe9, 0xb4, 0xba, 0x4d, 0xab, 0xdb, 0xdc, 0xd4, 0xab,
-+	0x08, 0xa9, 0xa9, 0x48, 0x11, 0x4b, 0x24, 0x68, 0xb3, 0x88, 0x44, 0x4a, 0x34, 0x8d, 0x2a, 0xd4,
-+	0x8d, 0x35, 0xb5, 0x87, 0xc4, 0x4a, 0xec, 0x19, 0x66, 0xa6, 0x11, 0xac, 0x79, 0x09, 0x16, 0xbc,
-+	0x02, 0xef, 0xc1, 0x12, 0xf1, 0x04, 0xa8, 0xbc, 0x08, 0x9a, 0xb1, 0x9d, 0x26, 0xb4, 0x88, 0xb2,
-+	0xf2, 0x9c, 0xef, 0xfc, 0x7d, 0xe7, 0x9b, 0xe3, 0x81, 0x4a, 0xc4, 0x79, 0x97, 0x0b, 0xa6, 0x18,
-+	0xb2, 0x23, 0xce, 0xf7, 0xb6, 0x27, 0x6c, 0xc2, 0x8c, 0x7d, 0xa4, 0x4f, 0x89, 0x6b, 0x6f, 0xd3,
-+	0xd7, 0x98, 0x4f, 0xa5, 0x64, 0x22, 0x85, 0x9c, 0x88, 0x2a, 0xc2, 0xaf, 0x12, 0xcb, 0xed, 0x03,
-+	0xea, 0xbf, 0xf3, 0xa7, 0x24, 0x9e, 0xd0, 0x73, 0x1a, 0x07, 0x54, 0x0c, 0xa9, 0x22, 0xe8, 0x08,
-+	0xca, 0x3e, 0x8b, 0xb8, 0xa0, 0x52, 0x36, 0xad, 0xb6, 0xd5, 0xa9, 0xf7, 0xb6, 0xba, 0xba, 0xdf,
-+	0x49, 0x0a, 0x0e, 0xa9, 0x9a, 0xb2, 0x00, 0x2f, 0x83, 0xdc, 0x4f, 0x16, 0x94, 0xc7, 0x44, 0xce,
-+	0x4c, 0xf6, 0x2e, 0x94, 0xa5, 0x22, 0x42, 0x79, 0x2a, 0xc9, 0xce, 0xe3, 0x92, 0xb1, 0xc7, 0x12,
-+	0xed, 0x40, 0x49, 0x11, 0x39, 0xf3, 0xc2, 0xa0, 0x99, 0x6b, 0x5b, 0x1d, 0x1b, 0x17, 0xb5, 0x39,
-+	0x08, 0xd0, 0x01, 0x38, 0x9c, 0x08, 0x15, 0xaa, 0x90, 0xc5, 0xda, 0x6b, 0x1b, 0x6f, 0x75, 0x89,
-+	0x0d, 0x02, 0xd4, 0x84, 0x12, 0x09, 0x02, 0xc3, 0x29, 0xdf, 0xb6, 0x3a, 0x15, 0x9c, 0x99, 0xe8,
-+	0x7f, 0xa8, 0x46, 0x9c, 0x7b, 0x0b, 0x2a, 0x64, 0xc8, 0xe2, 0x66, 0xc1, 0xe4, 0x42, 0xc4, 0xf9,
-+	0x45, 0x82, 0xb8, 0x0d, 0xa8, 0x0f, 0xe4, 0xf3, 0x79, 0xb8, 0xa0, 0x98, 0xbe, 0xbd, 0xa6, 0x52,
-+	0xb9, 0x23, 0xf8, 0x67, 0x89, 0x48, 0xce, 0x62, 0x49, 0xd1, 0x7f, 0x50, 0x21, 0x0b, 0x12, 0xce,
-+	0xc9, 0xd5, 0x9c, 0x1a, 0xde, 0x65, 0x7c, 0x0b, 0xfc, 0xda, 0x23, 0x77, 0xa7, 0xc7, 0xb7, 0x1c,
-+	0x6c, 0x9d, 0x86, 0x92, 0x13, 0xe5, 0x4f, 0xb5, 0x14, 0x69, 0x27, 0x74, 0x00, 0x79, 0xad, 0xb8,
-+	0xa9, 0x58, 0xed, 0xd5, 0x8c, 0x8e, 0x99, 0x54, 0xd8, 0xb8, 0xf4, 0xf0, 0x34, 0xf6, 0x59, 0x40,
-+	0x03, 0x8f, 0xcf, 0x49, 0x52, 0xdc, 0xc1, 0xd5, 0x14, 0x1b, 0xcd, 0x49, 0xac, 0x87, 0x57, 0x61,
-+	0x44, 0xd9, 0xb5, 0x4a, 0xa5, 0xc9, 0x4c, 0xf4, 0x18, 0x4a, 0x82, 0x4e, 0x42, 0x16, 0x6b, 0x59,
-+	0xec, 0x4e, 0xb5, 0xb7, 0xd3, 0x5d, 0xbd, 0x74, 0x6c, 0x7c, 0x83, 0xf8, 0x0d, 0xc3, 0x59, 0x1c,
-+	0xda, 0x07, 0x90, 0xfe, 0x94, 0x46, 0x44, 0x8f, 0x93, 0xca, 0x55, 0x49, 0x90, 0x0b, 0x2a, 0xd0,
-+	0x33, 0xa8, 0x29, 0x3d, 0xb3, 0x97, 0xd5, 0x2d, 0x9a, 0xba, 0xbb, 0x6b, 0x75, 0xc7, 0x3a, 0x22,
-+	0x29, 0x2e, 0xb1, 0xa3, 0x56, 0x2c, 0x34, 0x80, 0x6d, 0x9a, 0xee, 0x94, 0x27, 0xcd, 0x52, 0x79,
-+	0x46, 0x81, 0x92, 0x51, 0x60, 0xc7, 0x28, 0x70, 0x77, 0xe9, 0x30, 0xa2, 0x77, 0x30, 0x37, 0x82,
-+	0xed, 0x75, 0x4d, 0xd3, 0xbb, 0x6a, 0x43, 0x81, 0x0a, 0xc1, 0x44, 0xaa, 0x2a, 0x24, 0x35, 0x35,
-+	0x82, 0x13, 0x07, 0x3a, 0x86, 0x9a, 0xa0, 0x4a, 0xbc, 0x5f, 0x0e, 0x91, 0x33, 0x43, 0xd4, 0xbb,
-+	0xe9, 0xfa, 0x27, 0x64, 0xb1, 0x63, 0x82, 0x52, 0xe6, 0xee, 0x6b, 0xd8, 0x3c, 0x21, 0xb1, 0x4f,
-+	0xe7, 0x7f, 0x79, 0x81, 0x4b, 0x3a, 0xb9, 0xdf, 0xd0, 0x71, 0x9f, 0x02, 0x5a, 0xad, 0xfc, 0xd0,
-+	0x31, 0xdc, 0x0f, 0x16, 0xec, 0xf7, 0xa5, 0x96, 0x37, 0x94, 0xd3, 0xe1, 0x68, 0x74, 0xc2, 0xe2,
-+	0x98, 0xfa, 0xfa, 0x8f, 0xc8, 0xe8, 0x75, 0xa1, 0xba, 0x2a, 0xf2, 0xbd, 0x2c, 0x41, 0xde, 0xfe,
-+	0xdb, 0x3d, 0x2d, 0x8c, 0x4f, 0xc3, 0x45, 0x96, 0x91, 0xbb, 0x2f, 0xc3, 0xc9, 0x62, 0xcc, 0x35,
-+	0x7c, 0xb6, 0xa0, 0x36, 0x1c, 0x8d, 0x4e, 0x89, 0x22, 0x23, 0xe2, 0xcf, 0xa8, 0x42, 0x08, 0xf2,
-+	0x01, 0x49, 0xdb, 0x39, 0xd8, 0x9c, 0xff, 0xac, 0x02, 0xfa, 0x17, 0x8a, 0xfe, 0xf4, 0x3a, 0x9e,
-+	0xc9, 0xa6, 0xdd, 0xb6, 0x3b, 0x0e, 0x4e, 0x2d, 0xb3, 0x90, 0x4a, 0x50, 0x12, 0x79, 0x61, 0x90,
-+	0xac, 0x71, 0x1e, 0x57, 0x12, 0x64, 0x10, 0xc8, 0xb5, 0xe7, 0xa8, 0xf0, 0x90, 0xe7, 0xe8, 0x10,
-+	0x0a, 0xa6, 0xaf, 0xa6, 0xa9, 0xff, 0x21, 0x43, 0xb3, 0x80, 0xcd, 0x19, 0x35, 0xc0, 0x8e, 0xe4,
-+	0xc4, 0x90, 0xac, 0x60, 0x7d, 0x7c, 0x74, 0x08, 0xf5, 0xf5, 0x52, 0xa8, 0x0c, 0xf9, 0xb3, 0x57,
-+	0x67, 0xfd, 0xc6, 0x06, 0x2a, 0x81, 0xfd, 0xf2, 0xf2, 0x49, 0xc3, 0xd2, 0xd0, 0xe5, 0xf9, 0xf8,
-+	0xb4, 0x91, 0x7b, 0xe1, 0x7e, 0xb9, 0x69, 0x59, 0x5f, 0x6f, 0x5a, 0xd6, 0xf7, 0x9b, 0x96, 0xf5,
-+	0xf1, 0x47, 0x6b, 0x03, 0x1a, 0x4c, 0x4c, 0xba, 0x2a, 0x9c, 0x2d, 0xba, 0xb3, 0x85, 0x79, 0x57,
-+	0xaf, 0x8a, 0xe6, 0x73, 0xfc, 0x33, 0x00, 0x00, 0xff, 0xff, 0x2d, 0xa1, 0xda, 0xda, 0xa7, 0x05,
-+	0x00, 0x00,
++	// 750 bytes of a gzipped FileDescriptorProto
++	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0xcd, 0x6e, 0xdb, 0x38,
++	0x10, 0x8e, 0x2c, 0xff, 0x8e, 0x65, 0xaf, 0xc3, 0x04, 0x1b, 0x27, 0xd8, 0x78, 0x1d, 0x9d, 0x8c,
++	0x5d, 0xc4, 0x41, 0x9d, 0xa2, 0x97, 0x02, 0x05, 0xda, 0xc4, 0x07, 0x03, 0x75, 0x6a, 0x30, 0x46,
++	0x50, 0xe4, 0x22, 0x30, 0x12, 0x6b, 0x0b, 0xb6, 0x44, 0x96, 0x64, 0x8c, 0xf6, 0xdc, 0x97, 0xe8,
++	0xa1, 0x6f, 0xd0, 0x17, 0xe9, 0xb1, 0xe8, 0x13, 0x14, 0xe9, 0x8b, 0x14, 0xa4, 0x24, 0xc7, 0xf9,
++	0xe9, 0xdf, 0x49, 0x9a, 0x6f, 0x86, 0xc3, 0x6f, 0x3e, 0xce, 0x0c, 0x54, 0x22, 0xce, 0xbb, 0x5c,
++	0x30, 0xc5, 0x90, 0x1d, 0x71, 0xbe, 0xb3, 0x39, 0x61, 0x13, 0x66, 0xec, 0x03, 0xfd, 0x97, 0xb8,
++	0x76, 0xd6, 0x7d, 0x8d, 0xf9, 0x54, 0x4a, 0x26, 0x52, 0xc8, 0x89, 0xa8, 0x22, 0xfc, 0x22, 0xb1,
++	0xdc, 0x3e, 0xa0, 0xfe, 0x1b, 0x7f, 0x4a, 0xe2, 0x09, 0x3d, 0xa5, 0x71, 0x40, 0xc5, 0x90, 0x2a,
++	0x82, 0x0e, 0xa0, 0xec, 0xb3, 0x88, 0x0b, 0x2a, 0x65, 0xd3, 0x6a, 0x5b, 0x9d, 0x7a, 0x6f, 0xa3,
++	0xab, 0xef, 0x3b, 0x4a, 0xc1, 0x21, 0x55, 0x53, 0x16, 0xe0, 0x65, 0x90, 0xfb, 0xc1, 0x82, 0xf2,
++	0x98, 0xc8, 0x99, 0x39, 0xbd, 0x0d, 0x65, 0xa9, 0x88, 0x50, 0x9e, 0x4a, 0x4e, 0xe7, 0x71, 0xc9,
++	0xd8, 0x63, 0x89, 0xb6, 0xa0, 0xa4, 0x88, 0x9c, 0x79, 0x61, 0xd0, 0xcc, 0xb5, 0xad, 0x8e, 0x8d,
++	0x8b, 0xda, 0x1c, 0x04, 0x68, 0x0f, 0x1c, 0x4e, 0x84, 0x0a, 0x55, 0xc8, 0x62, 0xed, 0xb5, 0x8d,
++	0xb7, 0xba, 0xc4, 0x06, 0x01, 0x6a, 0x42, 0x89, 0x04, 0x81, 0xe1, 0x94, 0x6f, 0x5b, 0x9d, 0x0a,
++	0xce, 0x4c, 0xf4, 0x2f, 0x54, 0x23, 0xce, 0xbd, 0x05, 0x15, 0x32, 0x64, 0x71, 0xb3, 0x60, 0xce,
++	0x42, 0xc4, 0xf9, 0x59, 0x82, 0xb8, 0x0d, 0xa8, 0x0f, 0xe4, 0xd3, 0x79, 0xb8, 0xa0, 0x98, 0xbe,
++	0xbe, 0xa4, 0x52, 0xb9, 0x23, 0xf8, 0x6b, 0x89, 0x48, 0xce, 0x62, 0x49, 0xd1, 0x3f, 0x50, 0x21,
++	0x0b, 0x12, 0xce, 0xc9, 0xc5, 0x9c, 0x1a, 0xde, 0x65, 0x7c, 0x0d, 0xdc, 0xbe, 0x23, 0x77, 0xe7,
++	0x8e, 0x2f, 0x39, 0xd8, 0x38, 0x0e, 0x25, 0x27, 0xca, 0x9f, 0x6a, 0x29, 0xd2, 0x9b, 0xd0, 0x1e,
++	0xe4, 0xb5, 0xe2, 0x26, 0x63, 0xb5, 0x57, 0x33, 0x3a, 0x66, 0x52, 0x61, 0xe3, 0xd2, 0xc5, 0xd3,
++	0xd8, 0x67, 0x01, 0x0d, 0x3c, 0x3e, 0x27, 0x49, 0x72, 0x07, 0x57, 0x53, 0x6c, 0x34, 0x27, 0xb1,
++	0x2e, 0x5e, 0x85, 0x11, 0x65, 0x97, 0x2a, 0x95, 0x26, 0x33, 0xd1, 0x03, 0x28, 0x09, 0x3a, 0x09,
++	0x59, 0xac, 0x65, 0xb1, 0x3b, 0xd5, 0xde, 0x56, 0x77, 0xf5, 0xd1, 0xb1, 0xf1, 0x0d, 0xe2, 0x57,
++	0x0c, 0x67, 0x71, 0x68, 0x17, 0x40, 0xfa, 0x53, 0x1a, 0x11, 0x5d, 0x4e, 0x2a, 0x57, 0x25, 0x41,
++	0xce, 0xa8, 0x40, 0x4f, 0xa0, 0xa6, 0x74, 0xcd, 0x5e, 0x96, 0xb7, 0x68, 0xf2, 0x6e, 0xdf, 0xc8,
++	0x3b, 0xd6, 0x11, 0x49, 0x72, 0x89, 0x1d, 0xb5, 0x62, 0xa1, 0x01, 0x6c, 0xd2, 0xb4, 0xa7, 0x3c,
++	0x69, 0x9a, 0xca, 0x33, 0x0a, 0x94, 0x8c, 0x02, 0x5b, 0x46, 0x81, 0xbb, 0x4d, 0x87, 0x11, 0xbd,
++	0x83, 0xb9, 0x11, 0x6c, 0xde, 0xd4, 0x34, 0x7d, 0xab, 0x36, 0x14, 0xa8, 0x10, 0x4c, 0xa4, 0xaa,
++	0x42, 0x92, 0x53, 0x23, 0x38, 0x71, 0xa0, 0x43, 0xa8, 0x09, 0xaa, 0xc4, 0xdb, 0x65, 0x11, 0x39,
++	0x53, 0x44, 0xbd, 0x9b, 0xb6, 0x7f, 0x42, 0x16, 0x3b, 0x26, 0x28, 0x65, 0xee, 0xbe, 0x84, 0xf5,
++	0x23, 0x12, 0xfb, 0x74, 0xfe, 0x87, 0x0f, 0xb8, 0xa4, 0x93, 0xfb, 0x01, 0x1d, 0xf7, 0x11, 0xa0,
++	0xd5, 0xcc, 0xbf, 0x5b, 0x86, 0xfb, 0xce, 0x82, 0xdd, 0xbe, 0xd4, 0xf2, 0x86, 0x72, 0x3a, 0x1c,
++	0x8d, 0x8e, 0x58, 0x1c, 0x53, 0x5f, 0x4f, 0x44, 0x46, 0xaf, 0x0b, 0xd5, 0x55, 0x91, 0xef, 0x65,
++	0x09, 0xf2, 0x7a, 0xb6, 0x7b, 0x5a, 0x18, 0x9f, 0x86, 0x8b, 0xec, 0x44, 0xee, 0xbe, 0x13, 0x4e,
++	0x16, 0x63, 0x9e, 0xe1, 0x31, 0x38, 0x2b, 0xa3, 0x4f, 0xd0, 0xff, 0x50, 0x8c, 0xcc, 0x0a, 0xf8,
++	0xd9, 0x76, 0x48, 0x43, 0xdc, 0x8f, 0x16, 0xd4, 0x86, 0xa3, 0xd1, 0x31, 0x51, 0x64, 0x44, 0xfc,
++	0x19, 0x55, 0x08, 0x41, 0x3e, 0x20, 0x29, 0x57, 0x07, 0x9b, 0xff, 0x5f, 0x4b, 0x88, 0xfe, 0x86,
++	0xa2, 0x3f, 0xbd, 0x8c, 0x67, 0xb2, 0x69, 0xb7, 0xed, 0x8e, 0x83, 0x53, 0xcb, 0x74, 0xb3, 0x12,
++	0x94, 0x44, 0x5e, 0x18, 0x24, 0x33, 0x90, 0xc7, 0x95, 0x04, 0x19, 0x04, 0x12, 0xed, 0xaf, 0xec,
++	0xb2, 0x82, 0xc9, 0xbd, 0x7e, 0x9b, 0x2d, 0x59, 0xd9, 0x64, 0xfb, 0x50, 0x30, 0xb7, 0x6a, 0x92,
++	0x7a, 0xfc, 0x0c, 0xc9, 0x02, 0x36, 0xff, 0xa8, 0x01, 0x76, 0x24, 0x27, 0x86, 0x62, 0x05, 0xeb,
++	0xdf, 0xff, 0xf6, 0xa1, 0x7e, 0xb3, 0x6c, 0x54, 0x86, 0xfc, 0xc9, 0x8b, 0x93, 0x7e, 0x63, 0x0d,
++	0x95, 0xc0, 0x7e, 0x7e, 0xfe, 0xb0, 0x61, 0x69, 0xe8, 0xfc, 0x74, 0x7c, 0xdc, 0xc8, 0x3d, 0x73,
++	0x3f, 0x5d, 0xb5, 0xac, 0xcf, 0x57, 0x2d, 0xeb, 0xeb, 0x55, 0xcb, 0x7a, 0xff, 0xad, 0xb5, 0x06,
++	0x0d, 0x26, 0x26, 0x5d, 0x15, 0xce, 0x16, 0xdd, 0xd9, 0xc2, 0xac, 0xe4, 0x8b, 0xa2, 0xf9, 0x1c,
++	0x7e, 0x0f, 0x00, 0x00, 0xff, 0xff, 0x91, 0xaa, 0x0c, 0xe0, 0xe2, 0x05, 0x00, 0x00,
 +}
 +
 +func (m *ExchangeSenderMeta) Marshal() (dAtA []byte, err error) {
@@ -409,7 +476,7 @@ index 16fd5dd..9eda45d 100644
  }
  
  func (m *TaskMeta) Marshal() (dAtA []byte, err error) {
-@@ -698,6 +848,11 @@ func (m *TaskMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+@@ -698,6 +898,11 @@ func (m *TaskMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
  		i -= len(m.XXX_unrecognized)
  		copy(dAtA[i:], m.XXX_unrecognized)
  	}
@@ -421,7 +488,7 @@ index 16fd5dd..9eda45d 100644
  	if len(m.Address) > 0 {
  		i -= len(m.Address)
  		copy(dAtA[i:], m.Address)
-@@ -774,6 +929,11 @@ func (m *IsAliveResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+@@ -774,6 +979,11 @@ func (m *IsAliveResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
  		i -= len(m.XXX_unrecognized)
  		copy(dAtA[i:], m.XXX_unrecognized)
  	}
@@ -433,7 +500,7 @@ index 16fd5dd..9eda45d 100644
  	if m.Available {
  		i--
  		if m.Available {
-@@ -811,6 +971,18 @@ func (m *DispatchTaskRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+@@ -811,6 +1021,18 @@ func (m *DispatchTaskRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
  		i -= len(m.XXX_unrecognized)
  		copy(dAtA[i:], m.XXX_unrecognized)
  	}
@@ -452,43 +519,89 @@ index 16fd5dd..9eda45d 100644
  	if len(m.TableRegions) > 0 {
  		for iNdEx := len(m.TableRegions) - 1; iNdEx >= 0; iNdEx-- {
  			{
-@@ -1089,21 +1261,26 @@ func (m *MPPDataPacket) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+@@ -1065,6 +1287,38 @@ func (m *EstablishMPPConnectionRequest) MarshalToSizedBuffer(dAtA []byte) (int,
+ 	return len(dAtA) - i, nil
+ }
+ 
++func (m *CompressMeta) Marshal() (dAtA []byte, err error) {
++	size := m.Size()
++	dAtA = make([]byte, size)
++	n, err := m.MarshalToSizedBuffer(dAtA[:size])
++	if err != nil {
++		return nil, err
++	}
++	return dAtA[:n], nil
++}
++
++func (m *CompressMeta) MarshalTo(dAtA []byte) (int, error) {
++	size := m.Size()
++	return m.MarshalToSizedBuffer(dAtA[:size])
++}
++
++func (m *CompressMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
++	i := len(dAtA)
++	_ = i
++	var l int
++	_ = l
++	if m.XXX_unrecognized != nil {
++		i -= len(m.XXX_unrecognized)
++		copy(dAtA[i:], m.XXX_unrecognized)
++	}
++	if m.Method != 0 {
++		i = encodeVarintMpp(dAtA, i, uint64(m.Method))
++		i--
++		dAtA[i] = 0x8
++	}
++	return len(dAtA) - i, nil
++}
++
+ func (m *MPPDataPacket) Marshal() (dAtA []byte, err error) {
+ 	size := m.Size()
+ 	dAtA = make([]byte, size)
+@@ -1089,21 +1343,33 @@ func (m *MPPDataPacket) MarshalToSizedBuffer(dAtA []byte) (int, error) {
  		i -= len(m.XXX_unrecognized)
  		copy(dAtA[i:], m.XXX_unrecognized)
  	}
-+	if m.Compress != 0 {
-+		i = encodeVarintMpp(dAtA, i, uint64(m.Compress))
++	if m.Compress != nil {
++		{
++			size, err := m.Compress.MarshalToSizedBuffer(dAtA[:i])
++			if err != nil {
++				return 0, err
++			}
++			i -= size
++			i = encodeVarintMpp(dAtA, i, uint64(size))
++		}
 +		i--
-+		dAtA[i] = 0x28
++		dAtA[i] = 0x2a
 +	}
  	if len(m.StreamIds) > 0 {
 -		dAtA9 := make([]byte, len(m.StreamIds)*10)
 -		var j8 int
-+		dAtA10 := make([]byte, len(m.StreamIds)*10)
-+		var j9 int
++		dAtA11 := make([]byte, len(m.StreamIds)*10)
++		var j10 int
  		for _, num := range m.StreamIds {
  			for num >= 1<<7 {
 -				dAtA9[j8] = uint8(uint64(num)&0x7f | 0x80)
-+				dAtA10[j9] = uint8(uint64(num)&0x7f | 0x80)
++				dAtA11[j10] = uint8(uint64(num)&0x7f | 0x80)
  				num >>= 7
 -				j8++
-+				j9++
++				j10++
  			}
 -			dAtA9[j8] = uint8(num)
 -			j8++
-+			dAtA10[j9] = uint8(num)
-+			j9++
++			dAtA11[j10] = uint8(num)
++			j10++
  		}
 -		i -= j8
 -		copy(dAtA[i:], dAtA9[:j8])
 -		i = encodeVarintMpp(dAtA, i, uint64(j8))
-+		i -= j9
-+		copy(dAtA[i:], dAtA10[:j9])
-+		i = encodeVarintMpp(dAtA, i, uint64(j9))
++		i -= j10
++		copy(dAtA[i:], dAtA11[:j10])
++		i = encodeVarintMpp(dAtA, i, uint64(j10))
  		i--
  		dAtA[i] = 0x22
  	}
-@@ -1188,6 +1365,21 @@ func encodeVarintMpp(dAtA []byte, offset int, v uint64) int {
+@@ -1188,6 +1454,21 @@ func encodeVarintMpp(dAtA []byte, offset int, v uint64) int {
  	dAtA[offset] = uint8(v)
  	return base
  }
@@ -510,7 +623,7 @@ index 16fd5dd..9eda45d 100644
  func (m *TaskMeta) Size() (n int) {
  	if m == nil {
  		return 0
-@@ -1207,6 +1399,9 @@ func (m *TaskMeta) Size() (n int) {
+@@ -1207,6 +1488,9 @@ func (m *TaskMeta) Size() (n int) {
  	if l > 0 {
  		n += 1 + l + sovMpp(uint64(l))
  	}
@@ -520,7 +633,7 @@ index 16fd5dd..9eda45d 100644
  	if m.XXX_unrecognized != nil {
  		n += len(m.XXX_unrecognized)
  	}
-@@ -1234,6 +1429,9 @@ func (m *IsAliveResponse) Size() (n int) {
+@@ -1234,6 +1518,9 @@ func (m *IsAliveResponse) Size() (n int) {
  	if m.Available {
  		n += 2
  	}
@@ -530,7 +643,7 @@ index 16fd5dd..9eda45d 100644
  	if m.XXX_unrecognized != nil {
  		n += len(m.XXX_unrecognized)
  	}
-@@ -1272,6 +1470,10 @@ func (m *DispatchTaskRequest) Size() (n int) {
+@@ -1272,6 +1559,10 @@ func (m *DispatchTaskRequest) Size() (n int) {
  			n += 1 + l + sovMpp(uint64(l))
  		}
  	}
@@ -541,17 +654,40 @@ index 16fd5dd..9eda45d 100644
  	if m.XXX_unrecognized != nil {
  		n += len(m.XXX_unrecognized)
  	}
-@@ -1383,6 +1585,9 @@ func (m *MPPDataPacket) Size() (n int) {
+@@ -1356,6 +1647,21 @@ func (m *EstablishMPPConnectionRequest) Size() (n int) {
+ 	return n
+ }
+ 
++func (m *CompressMeta) Size() (n int) {
++	if m == nil {
++		return 0
++	}
++	var l int
++	_ = l
++	if m.Method != 0 {
++		n += 1 + sovMpp(uint64(m.Method))
++	}
++	if m.XXX_unrecognized != nil {
++		n += len(m.XXX_unrecognized)
++	}
++	return n
++}
++
+ func (m *MPPDataPacket) Size() (n int) {
+ 	if m == nil {
+ 		return 0
+@@ -1383,6 +1689,10 @@ func (m *MPPDataPacket) Size() (n int) {
  		}
  		n += 1 + sovMpp(uint64(l)) + l
  	}
-+	if m.Compress != 0 {
-+		n += 1 + sovMpp(uint64(m.Compress))
++	if m.Compress != nil {
++		l = m.Compress.Size()
++		n += 1 + l + sovMpp(uint64(l))
 +	}
  	if m.XXX_unrecognized != nil {
  		n += len(m.XXX_unrecognized)
  	}
-@@ -1414,6 +1619,76 @@ func sovMpp(x uint64) (n int) {
+@@ -1414,6 +1724,76 @@ func sovMpp(x uint64) (n int) {
  func sozMpp(x uint64) (n int) {
  	return sovMpp(uint64((x << 1) ^ uint64((int64(x) >> 63))))
  }
@@ -628,7 +764,7 @@ index 16fd5dd..9eda45d 100644
  func (m *TaskMeta) Unmarshal(dAtA []byte) error {
  	l := len(dAtA)
  	iNdEx := 0
-@@ -1532,6 +1807,25 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
+@@ -1532,6 +1912,25 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
  			}
  			m.Address = string(dAtA[iNdEx:postIndex])
  			iNdEx = postIndex
@@ -654,7 +790,7 @@ index 16fd5dd..9eda45d 100644
  		default:
  			iNdEx = preIndex
  			skippy, err := skipMpp(dAtA[iNdEx:])
-@@ -1654,6 +1948,25 @@ func (m *IsAliveResponse) Unmarshal(dAtA []byte) error {
+@@ -1654,6 +2053,25 @@ func (m *IsAliveResponse) Unmarshal(dAtA []byte) error {
  				}
  			}
  			m.Available = bool(v != 0)
@@ -680,7 +816,7 @@ index 16fd5dd..9eda45d 100644
  		default:
  			iNdEx = preIndex
  			skippy, err := skipMpp(dAtA[iNdEx:])
-@@ -1881,6 +2194,42 @@ func (m *DispatchTaskRequest) Unmarshal(dAtA []byte) error {
+@@ -1881,6 +2299,42 @@ func (m *DispatchTaskRequest) Unmarshal(dAtA []byte) error {
  				return err
  			}
  			iNdEx = postIndex
@@ -723,15 +859,44 @@ index 16fd5dd..9eda45d 100644
  		default:
  			iNdEx = preIndex
  			skippy, err := skipMpp(dAtA[iNdEx:])
-@@ -2564,6 +2913,25 @@ func (m *MPPDataPacket) Unmarshal(dAtA []byte) error {
- 			} else {
- 				return fmt.Errorf("proto: wrong wireType = %d for field StreamIds", wireType)
- 			}
-+		case 5:
-+			if wireType != 0 {
-+				return fmt.Errorf("proto: wrong wireType = %d for field Compress", wireType)
+@@ -2357,6 +2811,76 @@ func (m *EstablishMPPConnectionRequest) Unmarshal(dAtA []byte) error {
+ 	}
+ 	return nil
+ }
++func (m *CompressMeta) Unmarshal(dAtA []byte) error {
++	l := len(dAtA)
++	iNdEx := 0
++	for iNdEx < l {
++		preIndex := iNdEx
++		var wire uint64
++		for shift := uint(0); ; shift += 7 {
++			if shift >= 64 {
++				return ErrIntOverflowMpp
 +			}
-+			m.Compress = 0
++			if iNdEx >= l {
++				return io.ErrUnexpectedEOF
++			}
++			b := dAtA[iNdEx]
++			iNdEx++
++			wire |= uint64(b&0x7F) << shift
++			if b < 0x80 {
++				break
++			}
++		}
++		fieldNum := int32(wire >> 3)
++		wireType := int(wire & 0x7)
++		if wireType == 4 {
++			return fmt.Errorf("proto: CompressMeta: wiretype end group for non-group")
++		}
++		if fieldNum <= 0 {
++			return fmt.Errorf("proto: CompressMeta: illegal tag %d (wire type %d)", fieldNum, wire)
++		}
++		switch fieldNum {
++		case 1:
++			if wireType != 0 {
++				return fmt.Errorf("proto: wrong wireType = %d for field Method", wireType)
++			}
++			m.Method = 0
 +			for shift := uint(0); ; shift += 7 {
 +				if shift >= 64 {
 +					return ErrIntOverflowMpp
@@ -741,16 +906,81 @@ index 16fd5dd..9eda45d 100644
 +				}
 +				b := dAtA[iNdEx]
 +				iNdEx++
-+				m.Compress |= CompressMethod(b&0x7F) << shift
++				m.Method |= CompressMethod(b&0x7F) << shift
 +				if b < 0x80 {
 +					break
 +				}
 +			}
++		default:
++			iNdEx = preIndex
++			skippy, err := skipMpp(dAtA[iNdEx:])
++			if err != nil {
++				return err
++			}
++			if (skippy < 0) || (iNdEx+skippy) < 0 {
++				return ErrInvalidLengthMpp
++			}
++			if (iNdEx + skippy) > l {
++				return io.ErrUnexpectedEOF
++			}
++			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
++			iNdEx += skippy
++		}
++	}
++
++	if iNdEx > l {
++		return io.ErrUnexpectedEOF
++	}
++	return nil
++}
+ func (m *MPPDataPacket) Unmarshal(dAtA []byte) error {
+ 	l := len(dAtA)
+ 	iNdEx := 0
+@@ -2564,6 +3088,42 @@ func (m *MPPDataPacket) Unmarshal(dAtA []byte) error {
+ 			} else {
+ 				return fmt.Errorf("proto: wrong wireType = %d for field StreamIds", wireType)
+ 			}
++		case 5:
++			if wireType != 2 {
++				return fmt.Errorf("proto: wrong wireType = %d for field Compress", wireType)
++			}
++			var msglen int
++			for shift := uint(0); ; shift += 7 {
++				if shift >= 64 {
++					return ErrIntOverflowMpp
++				}
++				if iNdEx >= l {
++					return io.ErrUnexpectedEOF
++				}
++				b := dAtA[iNdEx]
++				iNdEx++
++				msglen |= int(b&0x7F) << shift
++				if b < 0x80 {
++					break
++				}
++			}
++			if msglen < 0 {
++				return ErrInvalidLengthMpp
++			}
++			postIndex := iNdEx + msglen
++			if postIndex < 0 {
++				return ErrInvalidLengthMpp
++			}
++			if postIndex > l {
++				return io.ErrUnexpectedEOF
++			}
++			if m.Compress == nil {
++				m.Compress = &CompressMeta{}
++			}
++			if err := m.Compress.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
++				return err
++			}
++			iNdEx = postIndex
  		default:
  			iNdEx = preIndex
  			skippy, err := skipMpp(dAtA[iNdEx:])
 diff --git a/proto/mpp.proto b/proto/mpp.proto
-index f8af03b..801bee3 100644
+index f8af03b..8dd93bf 100644
 --- a/proto/mpp.proto
 +++ b/proto/mpp.proto
 @@ -11,12 +11,24 @@ option (gogoproto.unmarshaler_all) = true;
@@ -764,7 +994,7 @@ index f8af03b..801bee3 100644
 +  ZSTD = 2;
 +}
 +
-+message  ExchangeSenderMeta {
++message ExchangeSenderMeta {
 +	CompressMethod compress = 1;
 +}
 +
@@ -786,19 +1016,31 @@ index f8af03b..801bee3 100644
  }
  
  // Dipsatch the task request to different tiflash servers.
-@@ -36,6 +49,7 @@ message DispatchTaskRequest {
+@@ -36,6 +49,8 @@ message DispatchTaskRequest {
  	int64 schema_ver = 5;
  	// Used for partition table scan
  	repeated coprocessor.TableRegions table_regions = 6;
++	// Used for exchange sender
 +    ExchangeSenderMeta exchange_sender_meta = 7;
  }
  
  // Get response of DispatchTaskRequest.
-@@ -67,6 +81,7 @@ message MPPDataPacket {
+@@ -60,6 +75,10 @@ message EstablishMPPConnectionRequest {
+ 	TaskMeta receiver_meta = 2; // node closer to the tidb mpp gather.
+ }
+ 
++message CompressMeta {
++	CompressMethod method = 1;
++}
++
+ // when TiFlash sends data to TiDB, Data packets wrap tipb.SelectResponse, i.e., serialize tipb.SelectResponse into data;
+ // when TiFlash sends data to TiFlash, data blocks are serialized into chunks, and the execution_summaries in tipb.SelectResponse are serialized into data only for the last packet.
+ message MPPDataPacket {
+@@ -67,6 +86,7 @@ message MPPDataPacket {
  	Error error = 2;
  	repeated bytes chunks = 3;
  	repeated uint64 stream_ids = 4;
-+	CompressMethod compress = 5;
++	CompressMeta compress = 5;
  }
  
  message Error {

@@ -141,7 +141,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
         {
             method = mpp::CompressMethod::NONE;
         }
-        tracked_packets[part_id]->getPacket().set_compress(method);
+        tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
     }
 
     if (likely(!blocks.empty()))
@@ -171,7 +171,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
                 auto block = header.cloneWithColumns(std::move(columns));
                 {
                     ChunkCodecStream * codec_stream = chunk_codec_stream.get();
-                    if (tracked_packets[part_id]->getPacket().compress() != mpp::CompressMethod::NONE)
+                    if (tracked_packets[part_id]->getPacket().compress().method() != mpp::CompressMethod::NONE)
                     {
                         assert(compress_chunk_codec_stream);
                         // no need compress

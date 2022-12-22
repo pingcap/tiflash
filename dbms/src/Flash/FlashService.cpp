@@ -203,6 +203,14 @@ grpc::Status FlashService::DispatchMPPTask(
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    if (auto mpp_version = request->meta().mpp_version(); !TiDB::CheckMppVersion(mpp_version))
+    {
+        auto && err_msg = fmt::format("Failed to handling mpp dispatch request, reason=`{}`", TiDB::GenMppVersionErrorMessage(mpp_version));
+        LOG_WARNING(log, err_msg);
+        return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
@@ -249,6 +257,33 @@ grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_un
     return grpc::Status::OK;
 }
 
+static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::EstablishMPPConnectionRequest * request)
+{
+    const auto & sender_mpp_version = request->sender_meta().mpp_version();
+    const auto & receiver_mpp_version = request->receiver_meta().mpp_version();
+
+    std::string && err_reason{};
+
+    if (!TiDB::CheckMppVersion(sender_mpp_version))
+    {
+        err_reason += fmt::format("sender failed: {};", TiDB::GenMppVersionErrorMessage(sender_mpp_version));
+    }
+    if (!TiDB::CheckMppVersion(receiver_mpp_version))
+    {
+        err_reason += fmt::format("receiver failed: {};", TiDB::GenMppVersionErrorMessage(receiver_mpp_version));
+    }
+
+    if (!err_reason.empty())
+    {
+        auto && err_msg = fmt::format("Failed to establish MPP connection, sender-meta=`{}`, receiver-meta=`{}`, reason=`{}`",
+                                      request->sender_meta().DebugString(),
+                                      request->receiver_meta().DebugString(),
+                                      err_reason);
+        return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+    }
+    return grpc::Status::OK;
+}
+
 grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
                                                             const mpp::EstablishMPPConnectionRequest * request,
                                                             EstablishCallData * call_data)
@@ -262,6 +297,12 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext 
     if (!check_result.ok())
         return check_result;
 
+    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    {
+        LOG_WARNING(log, res.error_message());
+        return res;
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
 
@@ -272,18 +313,6 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext 
 
 grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer)
 {
-    {
-        const auto & sender_mpp_version = request->sender_meta().mpp_version();
-        const auto & receiver_mpp_version = request->receiver_meta().mpp_version();
-        if (!TiDB::CheckMppVersion(sender_mpp_version) || !TiDB::CheckMppVersion(receiver_mpp_version))
-        {
-            auto && err_msg = fmt::format("Failed to establish MPP connection, sender: {}, receiver: {}",
-                                          TiDB::GenMppVersionErrorMessage(sender_mpp_version),
-                                          TiDB::GenMppVersionErrorMessage(receiver_mpp_version));
-            return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
-        }
-    }
-
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
@@ -292,6 +321,13 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    {
+        LOG_WARNING(log, res.error_message());
+        return res;
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
@@ -345,6 +381,14 @@ grpc::Status FlashService::CancelMPPTask(
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    if (auto mpp_version = request->meta().mpp_version(); !TiDB::CheckMppVersion(mpp_version))
+    {
+        auto && err_msg = fmt::format("Failed to cancel mpp task, reason=`{}`", TiDB::GenMppVersionErrorMessage(mpp_version));
+        LOG_WARNING(log, err_msg);
+        return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
     Stopwatch watch;

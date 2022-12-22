@@ -128,7 +128,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             method = mpp::CompressMethod::NONE;
         }
-        tracked_packets[part_id]->getPacket().set_compress(method);
+        tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
     }
 
     size_t ori_block_mem_size = 0;
@@ -158,7 +158,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 if (dest_block_rows > 0)
                 {
                     auto * codec_stream = chunk_codec_stream.get();
-                    if (tracked_packets[part_id]->getPacket().compress() != mpp::CompressMethod::NONE)
+                    if (tracked_packets[part_id]->getPacket().compress().method() != mpp::CompressMethod::NONE)
                     {
                         assert(compress_chunk_codec_stream);
                         // no need compress
@@ -194,7 +194,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
             writer->partitionWrite(packet, part_id);
 
             auto sz = inner_packet.ByteSizeLong();
-            switch (inner_packet.compress())
+            switch (inner_packet.compress().method())
             {
             case mpp::NONE:
             {

@@ -227,11 +227,6 @@ void MPPTask::unregisterTask()
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    if (auto mpp_version = task_request.meta().mpp_version(); !TiDB::CheckMppVersion(mpp_version))
-    {
-        throw TiFlashException(TiDB::GenMppVersionErrorMessage(mpp_version), Errors::MPP::Internal);
-    }
-
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context->getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
