@@ -27,6 +27,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>

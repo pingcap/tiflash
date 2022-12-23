@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -36,6 +37,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/File.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -48,16 +50,13 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 
 #include <random>
-
-#include "Common/TiFlashException.h"
-#include "Storages/DeltaMerge/DeltaMergeDefines.h"
-#include "Storages/Transaction/Types.h"
 
 namespace DB
 {

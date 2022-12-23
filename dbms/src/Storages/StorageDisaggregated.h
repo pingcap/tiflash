@@ -22,7 +22,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/IStorage.h>
-#include <Storages/SelectQueryInfo.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -33,6 +32,7 @@
 namespace DB
 {
 class ExchangeReceiver;
+struct SelectQueryInfo;
 
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.

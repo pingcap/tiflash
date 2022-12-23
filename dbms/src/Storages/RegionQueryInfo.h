@@ -77,9 +77,9 @@ public:
 
     // Create a new MvccQueryInfo for a physical table.
     // - Different physical table in one TableScan operator share the same
-    // scan_context.
+    //   scan_context.
     // - The regions are not overlapped between different physical table,
-    // so regions_query_info and read_index_res are not copied.
+    //   so regions_query_info and read_index_res are not copied.
     std::unique_ptr<MvccQueryInfo> newForTable()
     {
         auto q = std::make_unique<MvccQueryInfo>(resolve_locks, read_tso, scan_context);

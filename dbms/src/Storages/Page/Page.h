@@ -74,10 +74,10 @@ public:
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         RUNTIME_CHECK_MSG(iter != field_offsets.end(),
-                          "Try to getFieldData with invalid field index [field_index={}] is_valid={} field_offsets.size()={}",
-                          index,
+                          "Try to getFieldData with invalid field index, page.is_valid={} field_offsets.size()={} field_index={}",
                           is_valid,
-                          field_offsets.size());
+                          field_offsets.size(),
+                          index);
 
         PageFieldOffset beg = iter->offset;
         ++iter;
