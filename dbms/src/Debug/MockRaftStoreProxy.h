@@ -43,14 +43,13 @@ struct MockProxyRegion : MutexLockWrap
     UniversalWriteBatch persistMeta();
     void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
 
-    struct NormalWrite
+    struct RawWrite
     {
-        std::vector<HandleID> keys;
+        std::vector<std::string> keys;
         std::vector<std::string> vals;
         std::vector<WriteCmdType> cmd_types;
         std::vector<ColumnFamilyType> cmd_cf;
     };
-
     struct AdminCommand
     {
         raft_cmdpb::AdminRequest request;
@@ -64,16 +63,16 @@ struct MockProxyRegion : MutexLockWrap
     struct CachedCommand
     {
         uint64_t term;
-        std::variant<NormalWrite, AdminCommand> inner;
+        std::variant<AdminCommand, RawWrite> inner;
 
         bool has_admin_request() const
         {
             return std::holds_alternative<AdminCommand>(inner);
         }
 
-        bool has_write_request() const
+        bool has_raw_write_request() const
         {
-            return std::holds_alternative<NormalWrite>(inner);
+            return std::holds_alternative<RawWrite>(inner);
         }
 
         AdminCommand & admin()
@@ -81,9 +80,9 @@ struct MockProxyRegion : MutexLockWrap
             return std::get<AdminCommand>(inner);
         }
 
-        NormalWrite & write()
+        RawWrite & raw_write()
         {
-            return std::get<NormalWrite>(inner);
+            return std::get<RawWrite>(inner);
         }
     };
 
@@ -192,6 +191,13 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::tuple<uint64_t, uint64_t> normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,
+        std::vector<std::string> && vals,
+        std::vector<WriteCmdType> && cmd_types,
+        std::vector<ColumnFamilyType> && cmd_cf);
+
+    std::tuple<uint64_t, uint64_t> rawWrite(
+        UInt64 region_id,
+        std::vector<std::string> && keys,
         std::vector<std::string> && vals,
         std::vector<WriteCmdType> && cmd_types,
         std::vector<ColumnFamilyType> && cmd_cf);

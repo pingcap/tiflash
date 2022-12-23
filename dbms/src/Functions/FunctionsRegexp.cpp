@@ -113,7 +113,7 @@ struct ReplaceRegexpImpl
             if (searcher.Match(input, start_pos, input.length(), re2_st::RE2::Anchor::UNANCHORED, matches, num_captures))
             {
                 match_occ++;
-                /// if occ > 0, it will replace all the match expr, otherwise it only replace the occ-th match
+                /// if occ == 0, it will replace all the match expr, otherwise it only replace the occ-th match
                 if (occ == 0 || match_occ == occ)
                 {
                     const auto & match = matches[0];
@@ -286,6 +286,8 @@ struct ReplaceRegexpImpl
 
 using FunctionTiDBRegexp = FunctionStringRegexp<NameTiDBRegexp>;
 using FunctionRegexpLike = FunctionStringRegexp<NameRegexpLike>;
+using FunctionRegexpInstr = FunctionStringRegexpInstr<NameRegexpInstr>;
+using FunctionRegexpSubstr = FunctionStringRegexpSubstr<NameRegexpSubstr>;
 using FunctionReplaceRegexpOne = FunctionStringReplace<ReplaceRegexpImpl<true>, NameReplaceRegexpOne>;
 using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<false>, NameReplaceRegexpAll>;
 
@@ -295,6 +297,8 @@ void registerFunctionsRegexp(FunctionFactory & factory)
     factory.registerFunction<FunctionReplaceRegexpAll>();
     factory.registerFunction<FunctionTiDBRegexp>();
     factory.registerFunction<FunctionRegexpLike>();
+    factory.registerFunction<FunctionRegexpInstr>();
+    factory.registerFunction<FunctionRegexpSubstr>();
 }
 
 } // namespace DB

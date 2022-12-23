@@ -19,7 +19,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -130,7 +129,8 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count);
+        uint64_t fine_grained_shuffle_stream_count,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
 
@@ -147,23 +147,9 @@ public:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     size_t getSourceNum() const { return source_num; }
-    uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
+    uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
 
-    int computeNewThreadCount() const { return thread_count; }
-
-    void collectNewThreadCount(int & cnt)
-    {
-        if (!collected)
-        {
-            collected = true;
-            cnt += computeNewThreadCount();
-        }
-    }
-
-    void resetNewThreadCountCompute()
-    {
-        collected = false;
-    }
+    int getExternalThreadCnt() const { return thread_count; }
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -203,12 +189,19 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
+    bool isReceiverForTiFlashStorage()
+    {
+        // If not empty, need to send MPPTask to tiflash_storage.
+        return !disaggregated_dispatch_reqs.empty();
+    }
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
-    const size_t max_streams;
+    const bool enable_fine_grained_shuffle_flag;
+    const size_t output_stream_count;
     const size_t max_buffer_size;
 
     std::shared_ptr<ThreadManager> thread_manager;
@@ -226,7 +219,11 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    uint64_t fine_grained_shuffle_stream_count;
+
+    std::atomic<Int64> data_size_in_queue;
+
+    // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
+    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

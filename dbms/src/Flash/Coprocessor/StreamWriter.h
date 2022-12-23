@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -47,6 +48,9 @@ struct StreamWriter
         ::coprocessor::BatchResponse resp;
         if (!response.SerializeToString(resp.mutable_data()))
             throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_batch_cop).Increment(resp.ByteSizeLong());
+
         std::lock_guard lk(write_mutex);
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");

@@ -17,6 +17,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
 #include <Poco/ThreadPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/workload/PSBackground.h>
@@ -121,6 +122,7 @@ protected:
     StressEnv options;
     Poco::ThreadPool pool;
 
+    std::shared_ptr<DB::BackgroundProcessingPool> bkg_pool;
     DB::PSDiskDelegatorPtr delegator;
 
     std::unique_ptr<GlobalStat> runtime_stat;

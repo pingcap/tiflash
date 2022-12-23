@@ -16,9 +16,11 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <Flash/Executor/QueryExecutor.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
 BlockIO executeQuery(Context & context, bool internal = false);
+QueryExecutorPtr queryExecute(Context & context, bool internal = false);
 } // namespace DB

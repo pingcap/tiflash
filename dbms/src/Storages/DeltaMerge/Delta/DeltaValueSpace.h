@@ -61,7 +61,7 @@ class DeltaValueSpace
     , private boost::noncopyable
 {
 public:
-    using Lock = std::unique_lock<std::mutex>;
+    using Lock = std::unique_lock<std::recursive_mutex>;
 
 private:
     /// column files in `persisted_file_set` are all persisted in disks and can be restored after restart.
@@ -95,7 +95,8 @@ private:
     DeltaIndexPtr delta_index;
 
     // Protects the operations in this instance.
-    mutable std::mutex mutex;
+    // It is a recursive_mutex because the lock may be also used by the parent segment as its update lock.
+    mutable std::recursive_mutex mutex;
 
     LoggerPtr log;
 

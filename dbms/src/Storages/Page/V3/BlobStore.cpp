@@ -78,7 +78,6 @@ BlobStore<Trait>::BlobStore(String storage_name, const FileProviderPtr & file_pr
     , config(config_)
     , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
-    , cached_files(config.cached_fd_size)
 {
 }
 
@@ -99,9 +98,9 @@ void BlobStore<Trait>::registerPaths()
         for (const auto & blob_name : file_list)
         {
             const auto & [blob_id, err_msg] = BlobStats::getBlobIdFromName(blob_name);
-            auto lock_stats = blob_stats.lock();
             if (blob_id != INVALID_BLOBFILE_ID)
             {
+                auto lock_stats = blob_stats.lock();
                 Poco::File blob(fmt::format("{}/{}", path, blob_name));
                 auto blob_size = blob.getSize();
                 delegator->addPageFileUsedSize({blob_id, 0}, blob_size, path, true);
@@ -127,7 +126,6 @@ void BlobStore<Trait>::reloadConfig(const BlobConfig & rhs)
     // until it is changed to read only type by gc thread or tiflash is restarted.
     config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
-    config.cached_fd_size = rhs.cached_fd_size;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
     config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
 }
@@ -524,27 +522,42 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
 template <typename Trait>
 void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    bool need_remove_stat = false;
     const auto & stat = blob_stats.blobIdToStat(blob_id);
     {
         auto lock = stat->lock();
         auto remaining_valid_size = stat->removePosFromStat(offset, size, lock);
+        if (bool remove_file_on_disk = stat->isReadOnly() && (remaining_valid_size == 0);
+            !remove_file_on_disk)
+        {
+            return;
+        }
         // BlobFile which is read-only won't be reused for another writing,
-        // so it's safe and necessary to remove it here.
-        need_remove_stat = stat->isReadOnly() && (remaining_valid_size == 0);
+        // so it's safe and necessary to remove it from disk.
     }
 
-    // We don't need hold the BlobStat lock(Also can't do that).
-    // Because once BlobStat become Read-Only type, Then valid size won't increase.
-    if (need_remove_stat)
-    {
-        LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
-        auto blob_file = getBlobFile(blob_id);
+    // Note that we must release the lock on blob_stat before removing it
+    // from all blob_stats, or deadlocks could happen.
+    // As the blob_stat has been became read-only, it is safe to release the lock.
+    LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+
+    {
+        // Remove the stat from memory
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        blob_file->remove();
-        cached_files.remove(blob_id);
+    }
+    {
+        // Remove the blob file from disk and memory
+        std::lock_guard files_gurad(mtx_blob_files);
+        if (auto iter = blob_files.find(blob_id);
+            iter != blob_files.end())
+        {
+            auto blob_file = iter->second;
+            blob_file->remove();
+            blob_files.erase(iter);
+        }
+        // If the blob_id does not exist, the blob_file is never
+        // opened for read/write. It is safe to ignore it.
     }
 }
 
@@ -720,7 +733,15 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
         Page page;
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), page);
+
+        // Calculate the field_offsets from page entry
+        for (size_t index = 0; index < entry.field_offsets.size(); index++)
+        {
+            const auto offset = entry.field_offsets[index].first;
+            page.field_offsets.emplace(index, offset);
+        }
+
+        page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), std::move(page));
 
         pos += entry.size;
     }
@@ -737,13 +758,13 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
 template <typename Trait>
 Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    if (!id_entry.second.isValid())
+    const auto & [page_id_v3, entry] = id_entry;
+    const size_t buf_size = entry.size;
+
+    if (!entry.isValid())
     {
         return Page::invalidPage();
     }
-
-    const auto & [page_id_v3, entry] = id_entry;
-    const size_t buf_size = entry.size;
 
     // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
@@ -780,6 +801,13 @@ Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry & id_entry, con
     Page page;
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
+
+    // Calculate the field_offsets from page entry
+    for (size_t index = 0; index < entry.field_offsets.size(); index++)
+    {
+        const auto offset = entry.field_offsets[index].first;
+        page.field_offsets.emplace(index, offset);
+    }
 
     return page;
 }
@@ -1174,10 +1202,12 @@ String BlobStore<Trait>::getBlobFileParentPath(BlobFileId blob_id)
 template <typename Trait>
 BlobFilePtr BlobStore<Trait>::getBlobFile(BlobFileId blob_id)
 {
-    return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
-                       })
-        .first;
+    std::lock_guard files_gurad(mtx_blob_files);
+    if (auto iter = blob_files.find(blob_id); iter != blob_files.end())
+        return iter->second;
+    auto file = std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
+    blob_files.emplace(blob_id, file);
+    return file;
 }
 
 template class BlobStore<u128::BlobStoreTrait>;

@@ -254,8 +254,8 @@ try
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
       MergeSorting, limit = 0
@@ -275,10 +275,10 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
-     Expression: <cast after window>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
        Expression: <final projection>
         MergeSorting, limit = 0
@@ -299,10 +299,10 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
-     Expression: <cast after window>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
        Union: <merge into one for window input>
         Expression x 10: <final projection>
@@ -334,7 +334,7 @@ try
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after window>
+  Expression: <before order and select>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     Expression: <final projection>
      MergeSorting: <enable fine grained shuffle>, limit = 0
@@ -370,8 +370,8 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
       MergeSorting, limit = 0
@@ -675,6 +675,5 @@ Union: <for test>
     }
 }
 CATCH
-
 } // namespace tests
 } // namespace DB
