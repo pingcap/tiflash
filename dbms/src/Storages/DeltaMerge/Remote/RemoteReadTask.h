@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <Common/Allocator.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
@@ -13,8 +14,6 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
-
-#include "Common/Allocator.h"
 
 namespace DB
 {

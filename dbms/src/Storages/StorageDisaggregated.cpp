@@ -239,8 +239,9 @@ BlockInputStreams StorageDisaggregated::read(
     auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
     RUNTIME_CHECK(!batch_cop_tasks.empty());
 
-    s3_read = true;
-    if (s3_read)
+    // Build disaggregated task if remote data service is enabled
+    bool remote_data_read = !db_context.remoteDataServiceSource().empty();
+    if (remote_data_read)
     {
         // Fetch the remote segment read tasks from write nodes
         auto remote_read_tasks = buildDisaggregatedTask(db_context, batch_cop_tasks);

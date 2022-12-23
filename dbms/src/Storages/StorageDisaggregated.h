@@ -102,7 +102,5 @@ private:
     const PushDownFilter & push_down_filter;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
-
-    bool s3_read = false;
 };
 } // namespace DB

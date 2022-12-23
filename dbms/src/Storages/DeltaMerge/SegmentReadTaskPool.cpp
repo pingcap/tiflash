@@ -14,12 +14,10 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
-#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
-#include <google/protobuf/repeated_ptr_field.h>
 
 #include <memory>
 

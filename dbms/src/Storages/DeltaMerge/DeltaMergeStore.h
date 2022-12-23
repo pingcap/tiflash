@@ -336,10 +336,12 @@ public:
                             const SegmentIdSet & read_segments = {},
                             const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
+#if 0
     PageMap readPages(const SegmentReadTasks & tasks,
                       const std::unordered_map<UInt64, PageIds> & read_segments,
                       const String & tracing_id,
                       const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+#endif
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)

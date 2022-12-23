@@ -37,10 +37,9 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>
+#include <kvproto/mpp.pb.h>
 
 #include <ext/scope_guard.h>
-
-#include "mpp.pb.h"
 
 namespace DB
 {

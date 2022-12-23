@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
@@ -23,8 +24,7 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageDefines.h>
 
-#include "Common/Exception.h"
-#include "magic_enum.hpp"
+#include <magic_enum.hpp>
 
 namespace DB
 {

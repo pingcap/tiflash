@@ -44,6 +44,8 @@ PageTunnelPtr PageTunnel::build(
 
 mpp::PagesPacket PageTunnel::readPacket()
 {
+    // TODO: the returned rows should respect max_rows_per_chunk
+
     mpp::PagesPacket packet;
 
     // read page data by page_ids
