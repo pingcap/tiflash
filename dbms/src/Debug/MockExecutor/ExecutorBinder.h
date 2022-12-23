@@ -14,17 +14,19 @@
 
 #pragma once
 
+#include <Common/typeid_cast.h>
 #include <Debug/DAGProperties.h>
-#include <Debug/MockComputeServerManager.h>
 #include <Debug/MockExecutor/AstToPB.h>
-#include <Debug/MockExecutor/AstToPBUtils.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Parsers/IAST.h>
+#include <kvproto/mpp.pb.h>
+#include <tipb/executor.pb.h>
 
 
 namespace DB::mock
 {
 class ExchangeSenderBinder;
 class ExchangeReceiverBinder;
-
 
 // Convert CH AST to tipb::Executor
 // Used in integration test framework and Unit test framework.
@@ -45,7 +47,7 @@ public:
         index_++;
     }
 
-    std::vector<std::shared_ptr<ExecutorBinder>> getChildren()
+    std::vector<std::shared_ptr<ExecutorBinder>> getChildren() const
     {
         return children;
     }

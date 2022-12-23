@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/Types.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
+ExecutionResult QueryExecutor::execute()
+{
+    return execute(ResultHandler{});
+}
 
-void SkipJson(size_t & cursor, const String & raw_value);
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
-String DecodeJsonAsString(size_t & cursor, const String & raw_value);
-
+ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
+{
+    return execute(ResultHandler{handler});
+}
 } // namespace DB

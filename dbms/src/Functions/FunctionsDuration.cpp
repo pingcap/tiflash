@@ -215,5 +215,6 @@ void registerFunctionsDuration(FunctionFactory & factory)
     factory.registerFunction<FunctionDurationMicroSecond>();
 
     factory.registerFunction<FunctionToTiDBTimeToSec>();
+    factory.registerFunction<FunctionExtractMyDuration>();
 }
 } // namespace DB

@@ -53,46 +53,46 @@ using DB::Timestamp;
 
 // Column types.
 // In format:
-// TiDB type, int value, codec flag, CH type, should widen.
+// TiDB type, int value, codec flag, CH type.
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define COLUMN_TYPES(M)                              \
-    M(Decimal, 0, Decimal, Decimal32, false)         \
-    M(Tiny, 1, VarInt, Int8, true)                   \
-    M(Short, 2, VarInt, Int16, true)                 \
-    M(Long, 3, VarInt, Int32, true)                  \
-    M(Float, 4, Float, Float32, false)               \
-    M(Double, 5, Float, Float64, false)              \
-    M(Null, 6, Nil, Nothing, false)                  \
-    M(Timestamp, 7, UInt, MyDateTime, false)         \
-    M(LongLong, 8, Int, Int64, false)                \
-    M(Int24, 9, VarInt, Int32, true)                 \
-    M(Date, 10, UInt, MyDate, false)                 \
-    M(Time, 11, Duration, Int64, false)              \
-    M(Datetime, 12, UInt, MyDateTime, false)         \
-    M(Year, 13, Int, Int16, false)                   \
-    M(NewDate, 14, Int, MyDate, false)               \
-    M(Varchar, 15, CompactBytes, String, false)      \
-    M(Bit, 16, VarInt, UInt64, false)                \
-    M(JSON, 0xf5, Json, String, false)               \
-    M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
-    M(Enum, 0xf7, VarUInt, Enum16, false)            \
-    M(Set, 0xf8, VarUInt, UInt64, false)             \
-    M(TinyBlob, 0xf9, CompactBytes, String, false)   \
-    M(MediumBlob, 0xfa, CompactBytes, String, false) \
-    M(LongBlob, 0xfb, CompactBytes, String, false)   \
-    M(Blob, 0xfc, CompactBytes, String, false)       \
-    M(VarString, 0xfd, CompactBytes, String, false)  \
-    M(String, 0xfe, CompactBytes, String, false)     \
-    M(Geometry, 0xff, CompactBytes, String, false)
+#define COLUMN_TYPES(M)                       \
+    M(Decimal, 0, Decimal, Decimal32)         \
+    M(Tiny, 1, VarInt, Int8)                  \
+    M(Short, 2, VarInt, Int16)                \
+    M(Long, 3, VarInt, Int32)                 \
+    M(Float, 4, Float, Float32)               \
+    M(Double, 5, Float, Float64)              \
+    M(Null, 6, Nil, Nothing)                  \
+    M(Timestamp, 7, UInt, MyDateTime)         \
+    M(LongLong, 8, Int, Int64)                \
+    M(Int24, 9, VarInt, Int32)                \
+    M(Date, 10, UInt, MyDate)                 \
+    M(Time, 11, Duration, Int64)              \
+    M(Datetime, 12, UInt, MyDateTime)         \
+    M(Year, 13, Int, Int16)                   \
+    M(NewDate, 14, Int, MyDate)               \
+    M(Varchar, 15, CompactBytes, String)      \
+    M(Bit, 16, VarInt, UInt64)                \
+    M(JSON, 0xf5, Json, String)               \
+    M(NewDecimal, 0xf6, Decimal, Decimal32)   \
+    M(Enum, 0xf7, VarUInt, Enum16)            \
+    M(Set, 0xf8, VarUInt, UInt64)             \
+    M(TinyBlob, 0xf9, CompactBytes, String)   \
+    M(MediumBlob, 0xfa, CompactBytes, String) \
+    M(LongBlob, 0xfb, CompactBytes, String)   \
+    M(Blob, 0xfc, CompactBytes, String)       \
+    M(VarString, 0xfd, CompactBytes, String)  \
+    M(String, 0xfe, CompactBytes, String)     \
+    M(Geometry, 0xff, CompactBytes, String)
 
 enum TP
 {
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, ct, w) Type##tt = (v),
+#define M(tt, v, cf, ct) Type##tt = (v),
     COLUMN_TYPES(M)
 #undef M
 };
@@ -423,5 +423,6 @@ String genJsonNull();
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
+std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
 
 } // namespace TiDB

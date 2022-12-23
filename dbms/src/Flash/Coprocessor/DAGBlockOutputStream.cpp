@@ -35,7 +35,6 @@ void DAGBlockOutputStream::writeSuffix()
 {
     // todo error handle
     response_writer->flush();
-    response_writer->finishWrite();
 }
 
 } // namespace DB

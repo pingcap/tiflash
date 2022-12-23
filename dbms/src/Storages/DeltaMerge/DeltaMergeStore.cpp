@@ -416,7 +416,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -432,6 +432,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                rowkey_column_size,
                                db_settings,
                                physical_table_id,
+                               scan_context_,
                                tracing_id);
     return DMContextPtr(ctx);
 }
@@ -562,7 +563,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
             if (unlikely(cur_offset != offset))
-                throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("cur_offset does not equal to offset. is_common_handle {} start_key {} cur_offset {} cur_limit {} rows {} offset {} rowkey_range {}", is_common_handle, start_key.toRowKeyValue().toString(), cur_offset, cur_limit, rows, offset, rowkey_range.toDebugString()), ErrorCodes::LOGICAL_ERROR);
 
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
@@ -736,7 +737,7 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
     return true;
 }
 
-void DeltaMergeStore::mergeDeltaAll(const Context & context)
+bool DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
     LOG_INFO(log, "Begin table mergeDeltaAll");
 
@@ -752,12 +753,15 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
         }
     }
 
+    bool all_succ = true;
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
+        bool succ = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual) != nullptr;
+        all_succ = all_succ && succ;
     }
 
-    LOG_INFO(log, "Finish table mergeDeltaAll");
+    LOG_INFO(log, "Finish table mergeDeltaAll: {}", all_succ);
+    return all_succ;
 }
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
@@ -962,11 +966,13 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index)
+                                        size_t extra_table_id_index,
+                                        const ScanContextPtr & scan_context)
 {
     bool enable_remote_read = !db_context.remoteDataServiceSource().empty();
     // Use the id from MPP/Coprocessor level as tracing_id
-    auto dm_context = newDMContext(db_context, db_settings, tracing_id);
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+
     // If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order && !enable_remote_read;
     auto log_tracing_id = getLogTracingId(*dm_context);
@@ -1206,7 +1212,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
     // Don't do compact on starting up.
-    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
     bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()

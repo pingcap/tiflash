@@ -27,6 +27,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
@@ -37,7 +38,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
 
 namespace DB
 {
@@ -842,7 +842,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns)
+    const ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
 
@@ -867,9 +867,9 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 
         if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
         {
-            if (table_scan_columns[i].decimal() > 6)
+            if (table_scan_columns[i].decimal > 6)
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
-            auto fsp = table_scan_columns[i].decimal() < 0 ? 0 : table_scan_columns[i].decimal();
+            const auto fsp = table_scan_columns[i].decimal < 0 ? 0 : table_scan_columns[i].decimal;
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
             fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
@@ -910,20 +910,10 @@ String DAGExpressionAnalyzer::appendDurationCast(
     return applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
 }
 
-void DAGExpressionAnalyzer::appendJoin(
-    ExpressionActionsChain & chain,
-    SubqueryForSet & join_query,
-    const NamesAndTypesList & columns_added_by_join) const
-{
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsPtr actions = chain.getLastActions();
-    actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
-}
-
 std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
     const ExpressionActionsPtr & actions,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     bool left,
     bool is_right_out_join)
 {
@@ -939,10 +929,13 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
 
         String key_name = getActions(key, actions);
         DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
-        if (!removeNullable(current_type)->equals(*removeNullable(key_types[i])))
+        const auto & join_key_type = join_key_types[i];
+        if (!removeNullable(current_type)->equals(*removeNullable(join_key_type.key_type)))
         {
             /// need to convert to key type
-            key_name = appendCast(key_types[i], actions, key_name);
+            key_name = join_key_type.is_incompatible_decimal
+                ? applyFunction("formatDecimal", {key_name}, actions, nullptr)
+                : appendCast(join_key_type.key_type, actions, key_name);
             has_actions = true;
         }
         if (!has_actions && (!left || is_right_out_join))
@@ -986,7 +979,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     Names & key_names,
     bool left,
     bool is_right_out_join,
@@ -997,7 +990,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
-    std::tie(ret, key_names) = buildJoinKey(actions, keys, key_types, left, is_right_out_join);
+    std::tie(ret, key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
 
     if (!filters.empty())
     {
@@ -1051,7 +1044,7 @@ void DAGExpressionAnalyzer::appendCastAfterWindow(
     NamesAndTypes updated_window_columns;
 
     auto update_cast_column = [&](const tipb::Expr & expr, const NameAndTypePair & origin_column) {
-        String updated_name = appendCastIfNeeded(expr, actions, origin_column.name);
+        String updated_name = appendCastForFunctionExpr(expr, actions, origin_column.name);
         if (origin_column.name != updated_name)
         {
             DataTypePtr type = actions->getSampleBlock().getByName(updated_name).type;
@@ -1089,7 +1082,7 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
     std::vector<NameAndTypePair> updated_aggregated_columns;
 
     auto update_cast_column = [&](const tipb::Expr & expr, const NameAndTypePair & origin_column) {
-        String updated_name = appendCastIfNeeded(expr, actions, origin_column.name);
+        String updated_name = appendCastForFunctionExpr(expr, actions, origin_column.name);
         if (origin_column.name != updated_name)
         {
             DataTypePtr type = actions->getSampleBlock().getByName(updated_name).type;
@@ -1298,7 +1291,7 @@ String DAGExpressionAnalyzer::alignReturnType(
     DataTypePtr orig_type = actions->getSampleBlock().getByName(expr_name).type;
     if (force_uint8 && isUInt8Type(orig_type))
         return expr_name;
-    String updated_name = appendCastIfNeeded(expr, actions, expr_name);
+    String updated_name = appendCastForFunctionExpr(expr, actions, expr_name);
     DataTypePtr updated_type = actions->getSampleBlock().getByName(updated_name).type;
     if (force_uint8 && !isUInt8Type(updated_type))
         updated_name = convertToUInt8(actions, updated_name);
@@ -1334,7 +1327,7 @@ String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, const 
     return cast_expr_name;
 }
 
-String DAGExpressionAnalyzer::appendCastIfNeeded(
+String DAGExpressionAnalyzer::appendCastForFunctionExpr(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions,
     const String & expr_name)
@@ -1349,8 +1342,22 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
-        if (expected_type->getName() != actual_type->getName())
-            return appendCast(expected_type, actions, expr_name);
+        if (expected_type->equals(*actual_type))
+            return expr_name;
+        if (expected_type->isNullable() && !actual_type->isNullable())
+        {
+            /// if TiDB require nullable type while TiFlash get not null type
+            /// don't add convert if the nested type is the same since just
+            /// convert the type to nullable is meaningless and will affect
+            /// the performance of TiFlash
+            if (removeNullable(expected_type)->equals(*actual_type))
+            {
+                LOG_TRACE(context.getDAGContext()->log, "Skip implicit cast for column {}, expected type {}, actual type {}", expr_name, expected_type->getName(), actual_type->getName());
+                return expr_name;
+            }
+        }
+        LOG_TRACE(context.getDAGContext()->log, "Add implicit cast for column {}, expected type {}, actual type {}", expr_name, expected_type->getName(), actual_type->getName());
+        return appendCast(expected_type, actions, expr_name);
     }
     return expr_name;
 }

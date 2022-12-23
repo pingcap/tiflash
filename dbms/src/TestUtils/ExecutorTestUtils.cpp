@@ -98,10 +98,8 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setDAGContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    auto res = executeQuery(context.context, /*internal=*/true);
-    FmtBuffer fb;
-    res.in->dumpTree(fb);
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 
 void ExecutorTest::executeExecutor(
@@ -224,14 +222,35 @@ void ExecutorTest::enablePlanner(bool is_enable)
     context.context.setSetting("enable_planner", is_enable ? "true" : "false");
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
+{
+    DAGContext dag_context(*request, "executor_test", concurrency);
+    return executeStreams(&dag_context);
+}
+
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
+{
+    context.context.setExecutorTest();
+    context.context.setMockStorage(context.mockStorage());
+    context.context.setDAGContext(dag_context);
+    // Currently, don't care about regions information in tests.
+    Blocks blocks;
+    queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    return mergeBlocks(blocks).getColumnsWithTypeAndName();
+}
+
+Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    return readBlock(executeQuery(context.context, /*internal=*/true).in);
+    Blocks blocks;
+    queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    return blocks;
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)

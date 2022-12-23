@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
@@ -26,11 +27,9 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     Int64 batch_send_min_limit_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
@@ -40,22 +39,6 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::finishWrite()
-{
-    assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->sendExecutionSummary(response);
 }
 
 template <class ExchangeWriterPtr>
@@ -72,9 +55,9 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
     size_t rows = block.rows();
-    rows_in_blocks += rows;
     if (rows > 0)
     {
+        rows_in_blocks += rows;
         blocks.push_back(block);
     }
 
@@ -99,7 +82,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -122,14 +105,14 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
-        const auto & packet = packets[part_id];
+        auto & packet = packets[part_id];
         assert(packet);
         if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(packet, part_id);
+            writer->partitionWrite(std::move(packet), part_id);
     }
 }
 

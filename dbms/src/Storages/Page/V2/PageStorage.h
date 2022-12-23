@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -89,8 +90,9 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const PageStorageConfig & config_,
                 const FileProviderPtr & file_provider_,
+                BackgroundProcessingPool & ver_compact_pool_,
                 bool no_more_insert_ = false);
-    ~PageStorage() override = default;
+    ~PageStorage() override { shutdown(); }
 
     void restore() override;
 
@@ -133,6 +135,8 @@ public:
         // Unimplemented
         RUNTIME_CHECK(false);
     }
+
+    void shutdown() override;
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
@@ -244,6 +248,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    bool compactInMemVersions();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -277,6 +285,10 @@ private:
     ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
+
+    // background pool for running compact on `versioned_page_entries`
+    BackgroundProcessingPool & ver_compact_pool;
+    BackgroundProcessingPool::TaskHandle ver_compact_handle = nullptr;
 
     // true means this instance runs under mix mode
     bool no_more_insert = false;

@@ -26,6 +26,7 @@
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/defines.h>
 #include <fmt/format.h>
 
 
@@ -96,16 +97,19 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
                                       path_pool.getPSDiskDelegatorGlobalMulti("log"),
                                       extractConfig(settings, StorageType::Log, global_ctx.remoteDataServiceSource()),
                                       global_ctx.getFileProvider(),
+                                      global_ctx,
                                       true))
     , data_storage(PageStorage::create("__global__.data",
                                        path_pool.getPSDiskDelegatorGlobalMulti("data"),
                                        extractConfig(settings, StorageType::Data, global_ctx.remoteDataServiceSource()),
                                        global_ctx.getFileProvider(),
+                                       global_ctx,
                                        true))
     , meta_storage(PageStorage::create("__global__.meta",
                                        path_pool.getPSDiskDelegatorGlobalMulti("meta"),
                                        extractConfig(settings, StorageType::Meta, global_ctx.remoteDataServiceSource()),
                                        global_ctx.getFileProvider(),
+                                       global_ctx,
                                        true))
     , global_context(global_ctx)
 {
@@ -224,16 +228,19 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     {
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
-                                             extractConfig(global_context.getSettingsRef(), StorageType::Log, global_ctx.remoteDataServiceSource()),
-                                             global_context.getFileProvider());
+                                             extractConfig(global_context.getSettingsRef(), StorageType::Log, global_context.remoteDataServiceSource()),
+                                             global_context.getFileProvider(),
+                                             global_context);
         data_storage_v2 = PageStorage::create(name + ".data",
                                               storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
-                                              extractConfig(global_context.getSettingsRef(), StorageType::Data, global_ctx.remoteDataServiceSource()),
-                                              global_ctx.getFileProvider());
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Data, global_context.remoteDataServiceSource()),
+                                              global_context.getFileProvider(),
+                                              global_context);
         meta_storage_v2 = PageStorage::create(name + ".meta",
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
-                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta, global_ctx.remoteDataServiceSource()),
-                                              global_ctx.getFileProvider());
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta, global_context.remoteDataServiceSource()),
+                                              global_context.getFileProvider(),
+                                              global_context);
         log_storage_reader = std::make_shared<PageReader>(run_mode, TableStorageTag::Log, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, /*uni_ps_*/ nullptr, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, TableStorageTag::Data, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, /*uni_ps_*/ nullptr, nullptr);
         meta_storage_reader = std::make_shared<PageReader>(run_mode, TableStorageTag::Meta, ns_id, meta_storage_v2, /*storage_v3_*/ nullptr, /*uni_ps_*/ nullptr, nullptr);
@@ -285,20 +292,23 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
             // And we rely on the mechanism that writing file will be rotated if no valid pages in non writing files to reduce the disk space usage of these ps instances.
             log_storage_v2 = PageStorage::create(name + ".log",
                                                  storage_path_pool.getPSDiskDelegatorMulti("log"),
-                                                 extractConfig(global_context.getSettingsRef(), StorageType::Log, global_ctx.remoteDataServiceSource()),
+                                                 extractConfig(global_context.getSettingsRef(), StorageType::Log, global_context.remoteDataServiceSource()),
                                                  global_context.getFileProvider(),
+                                                 global_context,
                                                  /* use_v3 */ false,
                                                  /* no_more_write_to_v2 */ true);
             data_storage_v2 = PageStorage::create(name + ".data",
                                                   storage_path_pool.getPSDiskDelegatorMulti("data"),
-                                                  extractConfig(global_context.getSettingsRef(), StorageType::Data, global_ctx.remoteDataServiceSource()),
-                                                  global_ctx.getFileProvider(),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Data, global_context.remoteDataServiceSource()),
+                                                  global_context.getFileProvider(),
+                                                  global_context,
                                                   /* use_v3 */ false,
                                                   /* no_more_write_to_v2 */ true);
             meta_storage_v2 = PageStorage::create(name + ".meta",
                                                   storage_path_pool.getPSDiskDelegatorMulti("meta"),
-                                                  extractConfig(global_context.getSettingsRef(), StorageType::Meta, global_ctx.remoteDataServiceSource()),
-                                                  global_ctx.getFileProvider(),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Meta, global_context.remoteDataServiceSource()),
+                                                  global_context.getFileProvider(),
+                                                  global_context,
                                                   /* use_v3 */ false,
                                                   /* no_more_write_to_v2 */ true);
         }
@@ -699,6 +709,12 @@ void StoragePool::shutdown()
     {
         global_context.getBackgroundPool().removeTask(gc_handle);
         gc_handle = nullptr;
+    }
+    if (run_mode != PageStorageRunMode::ONLY_V3)
+    {
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
     }
 }
 

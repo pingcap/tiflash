@@ -16,7 +16,10 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -24,10 +27,11 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
+#include <Flash/Coprocessor/ExecutionSummaryCollector.cpp>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
-
+#include <memory>
 
 namespace DB
 {
@@ -40,7 +44,16 @@ using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
 {
-    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns);
+    /// We only sampled some fields to compare equality in this test.
+    /// It would be better to check all fields.
+    /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
+    /// https://en.cppreference.com/w/cpp/language/default_comparisons
+    return (left.concurrency == right.concurrency) && //
+        (left.num_iterations == right.num_iterations) && //
+        (left.num_produced_rows == right.num_produced_rows) && //
+        (left.time_processed_ns == right.time_processed_ns) && //
+        (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && //
+        (left.scan_context->total_dmfile_skipped_rows == right.scan_context->total_dmfile_skipped_rows);
 }
 
 struct MockWriter
@@ -49,23 +62,32 @@ struct MockWriter
         : queue(queue_)
     {}
 
-    ExecutionSummary mockExecutionSummary()
+    static ExecutionSummary mockExecutionSummary()
     {
         ExecutionSummary summary;
         summary.time_processed_ns = 100;
         summary.num_produced_rows = 10000;
         summary.num_iterations = 50;
         summary.concurrency = 1;
+        summary.scan_context = std::make_unique<DM::ScanContext>();
+
+        summary.scan_context->total_dmfile_scanned_packs = 1;
+        summary.scan_context->total_dmfile_skipped_packs = 2;
+        summary.scan_context->total_dmfile_scanned_rows = 8000;
+        summary.scan_context->total_dmfile_skipped_rows = 15000;
+        summary.scan_context->total_dmfile_rough_set_index_load_time_ms = 10;
+        summary.scan_context->total_dmfile_read_time_ms = 200;
+        summary.scan_context->total_create_snapshot_time_ms = 5;
         return summary;
     }
 
-    void partitionWrite(const TrackedMppDataPacketPtr &, uint16_t) { FAIL() << "cannot reach here."; }
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet)
+    void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet)
     {
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
-        queue->push(packet);
+        queue->push(std::move(packet));
     }
     void write(tipb::SelectResponse & response)
     {
@@ -77,6 +99,7 @@ struct MockWriter
             summary_ptr->set_num_produced_rows(summary.num_produced_rows);
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
+            summary_ptr->mutable_tiflash_scan_context()->CopyFrom(summary.scan_context->serialize());
             summary_ptr->set_executor_id("Executor_0");
         }
         ++total_packets;
@@ -87,7 +110,11 @@ struct MockWriter
         tracked_packet->serializeByResponse(response);
         queue->push(tracked_packet);
     }
-    void sendExecutionSummary(tipb::SelectResponse & response) { write(response); }
+    void sendExecutionSummary(const tipb::SelectResponse & response)
+    {
+        tipb::SelectResponse tmp = response;
+        write(tmp);
+    }
     uint16_t getPartitionNum() const { return 1; }
 
     PacketQueuePtr queue;
@@ -184,6 +211,16 @@ struct MockReceiverContext
         return std::make_shared<Reader>(queue);
     }
 
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
+    {
+        throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
+    void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
+    {
+        throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
     static Status getStatusOK()
     {
         return ::grpc::Status();
@@ -193,10 +230,11 @@ struct MockReceiverContext
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
+        grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
     PacketQueuePtr queue;
-    std::vector<tipb::FieldType> field_types;
+    std::vector<tipb::FieldType> field_types{};
 };
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 using MockWriterPtr = std::shared_ptr<MockWriter>;
@@ -294,15 +332,17 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
-            /*should_send_exec_summary_at_last=*/true,
             *dag_context_ptr);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
             dag_writer->write(block);
         dag_writer->flush();
+
+        // 3. send execution summary
         writer->add_summary = true;
-        dag_writer->finishWrite();
+        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
+        writer->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
     }
 
     void prepareQueueV2(
@@ -318,15 +358,18 @@ public:
             writer,
             0,
             batch_send_min_limit,
-            /*should_send_exec_summary_at_last=*/true,
             *dag_context_ptr);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
             dag_writer->write(block);
         dag_writer->flush();
+
+        // 3. send execution summary
         writer->add_summary = true;
-        dag_writer->finishWrite();
+        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
+        auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
+        writer->write(execution_summary_response);
     }
 
     void checkChunkInResponse(
@@ -355,11 +398,10 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        auto summary = receiver_stream->getRemoteExecutionSummaries(0);
-        ASSERT_TRUE(summary != nullptr);
-        ASSERT_EQ(summary->size(), 1);
-        ASSERT_EQ(summary->begin()->first, "Executor_0");
-        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary->begin()->second));
+        const auto & summary = receiver_stream->getRemoteExecutionSummary();
+        ASSERT_EQ(summary.execution_summaries.size(), 1);
+        ASSERT_EQ(summary.execution_summaries.begin()->first, "Executor_0");
+        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary.execution_summaries.begin()->second));
 
         /// Check Connection Info
         auto infos = receiver_stream->getConnectionProfileInfos();
@@ -425,7 +467,7 @@ public:
     }
 
     Context context;
-    std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DAGContext> dag_context_ptr{};
 };
 
 TEST_F(TestTiRemoteBlockInputStream, testNoChunkInResponse)

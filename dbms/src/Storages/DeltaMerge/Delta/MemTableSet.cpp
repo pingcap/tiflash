@@ -234,6 +234,9 @@ void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
 
 void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & new_column_files, bool clear_data_in_range)
 {
+    for (const auto & f : new_column_files)
+        RUNTIME_CHECK(f->isBigFile());
+
     // Prepend a DeleteRange to clean data before applying column files
     if (clear_data_in_range)
     {
@@ -242,9 +245,7 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
     }
 
     for (const auto & f : new_column_files)
-    {
         appendColumnFileInner(f);
-    }
 }
 
 ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const IColumnFileSetStorageReaderPtr & storage_reader, bool disable_sharing)

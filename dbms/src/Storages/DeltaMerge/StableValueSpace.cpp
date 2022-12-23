@@ -62,6 +62,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 {},
                 dm_context->db_context.getFileProvider(),
                 dm_context->getReadLimiter(),
+                dm_context->scan_context,
                 dm_context->tracing_id);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
@@ -226,7 +227,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                   .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
                                                   .onlyReadOnePackEveryTime()
                                                   .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
-                                                  .build(file, read_columns, RowKeyRanges{rowkey_range});
+                                                  .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -261,6 +262,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             {},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
+            context.scan_context,
             context.tracing_id);
         const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
@@ -383,7 +385,7 @@ StableValueSpace::Snapshot::getInputStream(
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
-        streams.emplace_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
+        streams.emplace_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
@@ -411,6 +413,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
+            context.scan_context,
             context.tracing_id);
         const auto & pack_stats = f->getPackStats();
         const auto & use_packs = filter.getUsePacks();
@@ -455,6 +458,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
+            context.scan_context,
             context.tracing_id);
         const auto & handle_filter_result = filter.getHandleRes();
         if (file_idx == 0)

@@ -21,7 +21,6 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/IInterpreter.h>
 
@@ -30,6 +29,7 @@ namespace DB
 class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
+class DAGContext;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */

@@ -207,15 +207,7 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & reader) con
     else
     {
         const auto & schema_ref = *schema;
-
-        PageStorage::PageReadFields fields;
-        fields.first = data_page_id;
-        for (size_t i = 0; i < schema_ref.columns(); ++i)
-            fields.second.push_back(i);
-
-        auto page_map = reader.read({fields});
-        auto page = page_map[data_page_id];
-
+        auto page = reader.read(data_page_id);
         auto columns = schema_ref.cloneEmptyColumns();
 
         if (unlikely(columns.size() != page.fieldSize()))

@@ -149,3 +149,99 @@ inline bool equalsCaseInsensitive(char a, char b)
 {
     return a == b || (isAlphaASCII(a) && alternateCaseIfAlphaASCII(a) == b);
 }
+
+inline bool isPunctuation(char c)
+{
+    return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
+}
+
+// match at lease x digits
+inline std::tuple<std::string, std::string, bool> digit(const std::string & str, int x)
+{
+    for (size_t i = 0, times = x; i < times && i < str.length() && isdigit(str[i]); ++i, --x)
+    {
+        // find x digit
+    }
+    if (x > 0)
+    {
+        return {"", str, false};
+    }
+    size_t idx = 0;
+    for (auto sz = str.length(); idx < sz && isdigit(str[idx]); ++idx)
+    {
+        // remove all remaining spaces
+    }
+    return {str.substr(0, idx), str.substr(idx), true};
+}
+
+// remove at lease x spaces
+inline std::pair<std::string, bool> space(const std::string & str, int x)
+{
+    for (size_t i = 0, times = x, sz = str.length(); i < times && i < sz && isspace(str[i]); ++i, --x)
+    {
+        // find x spaces
+    }
+    if (x > 0)
+    {
+        return {str, false};
+    }
+    size_t idx = 0;
+    for (auto sz = str.length(); idx < sz && isspace(str[idx]); ++idx)
+    {
+        // remove all remaining spaces
+    }
+    return {str.substr(idx), true};
+}
+
+// remove at least one space
+inline std::pair<std::string, bool> space1(const std::string & str)
+{
+    return space(str, 1);
+}
+
+// remove at least zero space
+inline std::string space0(const std::string & str)
+{
+    return space(str, 0).first;
+}
+
+inline std::pair<std::string, bool> anyPunct(const std::string & str)
+{
+    if (!str.empty() && isPunctuation(str[0]))
+    {
+        return {str.substr(1), true};
+    }
+    return {str, false};
+}
+
+inline std::pair<std::string, bool> matchColon(const std::string & str)
+{
+    std::string rest = space0(str);
+    if (rest.empty() || rest[0] != ':')
+    {
+        return {str, false};
+    }
+    rest = rest.substr(1);
+    rest = space0(rest);
+    return {rest, true};
+}
+
+// number, idx of rest string, matched
+inline std::tuple<int, int, bool> number(const std::string & str)
+{
+    size_t idx = 0;
+    for (auto sz = str.length(); idx < sz && isdigit(str[idx]); ++idx)
+    {
+        // find digit string
+    }
+    std::string digits = str.substr(0, idx);
+    try
+    {
+        int result = std::stoi(digits);
+        return {result, idx, true};
+    }
+    catch (std::exception & e)
+    {
+        return {0, 0, false};
+    }
+}

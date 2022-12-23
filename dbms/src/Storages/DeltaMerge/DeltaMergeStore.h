@@ -22,6 +22,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
@@ -275,11 +276,15 @@ public:
 
     void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
+    /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
                      const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range);
 
+    /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
+    /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
@@ -316,7 +321,8 @@ public:
                            bool is_fast_scan = false,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
-                           size_t extra_table_id_index = InvalidColumnID);
+                           size_t extra_table_id_index = InvalidColumnID,
+                           const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
@@ -330,7 +336,7 @@ public:
     /// Merge delta into the stable layer for all segments.
     ///
     /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
-    void mergeDeltaAll(const Context & context);
+    bool mergeDeltaAll(const Context & context);
 
     /// Merge delta into the stable layer for one segment located by the specified start key.
     /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
@@ -415,7 +421,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {
@@ -445,7 +451,7 @@ private:
     {
         ForegroundWrite,
         Background,
-        IngestBySplit,
+        ForIngest,
     };
 
     /**
@@ -513,29 +519,31 @@ private:
         SegmentSnapshotPtr segment_snap = nullptr);
 
     /**
-     * Discard all data in the segment, and use the specified DMFile as the stable instead.
-     * The specified DMFile is safe to be shared for multiple segments.
+     * Ingest a DMFile into the segment, optionally causing a new segment being created.
      *
-     * Note 1: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
-     *         stable file for multiple segments. It is your own duty to enable GC later.
-     *
-     * Note 2: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
-     *         to the PageStorage's data. Otherwise there will be exceptions.
-     *
-     * Note 3: This API is subjected to be changed in future, as it relies on the knowledge that all current data
-     *         in this segment is useless, which is a pretty tough requirement.
+     * Note 1: You must ensure the DMFile is not shared in multiple segments.
+     * Note 2: You must enable the GC for the DMFile by yourself.
+     * Note 3: You must ensure the DMFile has been managed by the storage pool, and has been written
+     *         to the PageStorage's data.
+
+     * @param clear_all_data_in_segment Whether all data in the segment should be discarded.
+     * @returns one of:
+     *          - A new segment: A new segment is created for containing the data
+     *          - The same segment as passed in: Data is ingested into the delta layer of current segment
+     *          - nullptr: when there are errors
      */
-    SegmentPtr segmentDangerouslyReplaceData(
+    SegmentPtr segmentIngestData(
         DMContext & dm_context,
         const SegmentPtr & segment,
-        const DMFilePtr & data_file);
+        const DMFilePtr & data_file,
+        bool clear_all_data_in_segment);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
-    inline bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
@@ -562,7 +570,8 @@ private:
         DMContext & dm_context,
         const SegmentPtr & segment,
         const RowKeyRange & ingest_range,
-        const DMFilePtr & file);
+        const DMFilePtr & file,
+        bool clear_data_in_range);
 
     bool updateGCSafePoint();
 
