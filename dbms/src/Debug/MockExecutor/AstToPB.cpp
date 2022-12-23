@@ -12,7 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <DataTypes/FieldToDataType.h>
 #include <Debug/MockExecutor/AstToPB.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
+#include <Debug/MockExecutor/FuncSigMap.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/convertFieldToType.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {

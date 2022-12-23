@@ -50,7 +50,16 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     else
     {
         /// build from user input blocks.
-        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID());
+        NamesAndTypes names_and_types;
+        std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
+        if (context.isMPPTest())
+        {
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStreamForMpp(context, max_streams, log, table_scan);
+        }
+        else
+        {
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID());
+        }
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
