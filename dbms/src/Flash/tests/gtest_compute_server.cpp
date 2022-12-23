@@ -503,7 +503,7 @@ try
 CATCH
 
 /// For FineGrainedShuffleJoin/Agg test usage, update internal exchange senders/receivers flag
-/// Allow select,agg,join,tableScan,exchangeSender,exchangeReceiver executors only
+/// Allow select,agg,join,tableScan,exchangeSender,exchangeReceiver,projection executors only
 void setFineGrainedShuffleForExchange(tipb::Executor & root)
 {
     tipb::Executor * current = &root;
@@ -516,6 +516,9 @@ void setFineGrainedShuffleForExchange(tipb::Executor & root)
             break;
         case tipb::ExecType::TypeAggregation:
             current = const_cast<tipb::Executor *>(&current->aggregation().child());
+            break;
+        case tipb::ExecType::TypeProjection:
+            current = const_cast<tipb::Executor *>(&current->projection().child());
             break;
         case tipb::ExecType::TypeJoin:
         {
@@ -562,15 +565,18 @@ try
 
     for (auto join_type : join_types)
     {
+        std::cout << "JoinType: " << static_cast<int>(join_type) << std::endl;
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto request = context
                            .scan("test_db", "l_table_2")
-                           .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, disable);
+                           .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, disable)
+                           .project({col("l_table_2.s1"), col("l_table_2.s2"), col("l_table_2.s3")});
         const auto expected_cols = buildAndExecuteMPPTasks(request);
 
         auto request2 = context
                             .scan("test_db", "l_table_2")
-                            .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, enable);
+                            .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, enable)
+                            .project({col("l_table_2.s1"), col("l_table_2.s2"), col("l_table_2.s3")});
         auto tasks = request2.buildMPPTasks(context, properties);
         for (auto & task : tasks)
         {
