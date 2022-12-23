@@ -56,7 +56,6 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
 }
 
 ColumnFileReaderPtr ColumnFileInMemory::getReader(
-    const DMContext &,
     const IColumnFileSetStorageReaderPtr &,
     const ColumnDefinesPtr & col_defs) const
 {

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
@@ -22,6 +23,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageDefines.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -134,6 +137,13 @@ public:
         const DMContext &,
         const IColumnFileSetStorageReaderPtr &,
         const ColumnDefinesPtr &) const = 0;
+
+    virtual ColumnFileReaderPtr getReader(
+        const IColumnFileSetStorageReaderPtr &,
+        const ColumnDefinesPtr &) const
+    {
+        RUNTIME_CHECK_MSG(false, "Current ColumnFile cannot create reader without DMContext, type={}", magic_enum::enum_name(getType()));
+    }
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.

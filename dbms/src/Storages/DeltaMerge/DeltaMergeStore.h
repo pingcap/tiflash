@@ -21,10 +21,12 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
@@ -323,6 +325,23 @@ public:
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID,
                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+
+    DisaggregatedTableReadSnapshotPtr
+    buildRemoteReadSnapshot(const Context & db_context,
+                            const DB::Settings & db_settings,
+                            const RowKeyRanges & sorted_ranges,
+                            const RSOperatorPtr & filter,
+                            size_t num_streams,
+                            const String & tracing_id,
+                            const SegmentIdSet & read_segments = {},
+                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+
+#if 0
+    PageMap readPages(const SegmentReadTasks & tasks,
+                      const std::unordered_map<UInt64, PageIds> & read_segments,
+                      const String & tracing_id,
+                      const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+#endif
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
 #include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -95,6 +96,9 @@ public:
 
     MPPTaskManagerPtr getMPPTaskManager();
 
+    // Return a raw ptr to avoid being cycle reference
+    DM::DisaggregatedSnapshotManager * getDisaggregatedSnapshotManager() const;
+
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
@@ -138,6 +142,7 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
     MPPTaskManagerPtr mpp_task_manager;
+    DM::DisaggregatedSnapshotManagerPtr snapshot_manager;
 
     ::TiDB::StorageEngine engine;
 

@@ -330,9 +330,9 @@ try
         // Force to run in ps v1 mode
         FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
         persister.restore(*mocked_path_pool, nullptr, config);
-//        ASSERT_EQ(persister.page_writer, nullptr);
+        //        ASSERT_EQ(persister.page_writer, nullptr);
         ASSERT_EQ(persister.page_reader, nullptr);
-//        ASSERT_NE(persister.stable_page_storage, nullptr); // ps v1
+        //        ASSERT_NE(persister.stable_page_storage, nullptr); // ps v1
 
         for (size_t i = 0; i < region_num; ++i)
         {
@@ -353,9 +353,9 @@ try
         RegionPersister persister(global_ctx, region_manager);
         // restore normally, should run in ps v1 mode.
         RegionMap new_regions = persister.restore(*mocked_path_pool, nullptr, config);
-//        ASSERT_EQ(persister.page_writer, nullptr);
+        //        ASSERT_EQ(persister.page_writer, nullptr);
         ASSERT_EQ(persister.page_reader, nullptr);
-//        ASSERT_NE(persister.stable_page_storage, nullptr); // ps v1
+        //        ASSERT_NE(persister.stable_page_storage, nullptr); // ps v1
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
         {
@@ -373,9 +373,9 @@ try
         // Force to run in ps v2 mode
         FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatible_mode);
         RegionMap new_regions = persister.restore(*mocked_path_pool, nullptr, config);
-//        ASSERT_NE(persister.page_writer, nullptr);
+        //        ASSERT_NE(persister.page_writer, nullptr);
         ASSERT_NE(persister.page_reader, nullptr);
-//        ASSERT_EQ(persister.stable_page_storage, nullptr);
+        //        ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
         {
@@ -404,9 +404,9 @@ try
         RegionPersister persister(global_ctx, region_manager);
         // Restore normally, should run in ps v2 mode.
         RegionMap new_regions = persister.restore(*mocked_path_pool, nullptr, config);
-//        ASSERT_NE(persister.page_writer, nullptr);
+        //        ASSERT_NE(persister.page_writer, nullptr);
         ASSERT_NE(persister.page_reader, nullptr);
-//        ASSERT_EQ(persister.stable_page_storage, nullptr);
+        //        ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num + region_num_under_nromal_mode; ++i)
         {

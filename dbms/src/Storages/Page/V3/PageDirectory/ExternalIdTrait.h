@@ -13,10 +13,10 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/StringUtils/StringUtils.h>
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/Page/PageDefines.h>
-#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -45,7 +45,7 @@ struct UniversalPageIdFormat
         return toBigEndian(v);
     }
 };
-}
+} // namespace DB
 
 namespace DB::PS::V3
 {

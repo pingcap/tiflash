@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -33,6 +32,8 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -136,10 +137,37 @@ public:
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , is_batch_cop(is_batch_cop_)
+        , is_disaggregated_task(false)
         , tables_regions_info(std::move(tables_regions_info_))
         , log(std::move(log_))
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
+        , max_recorded_error_count(getMaxErrorCount(*dag_request))
+        , warnings(max_recorded_error_count)
+        , warning_count(0)
+    {
+        assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
+        return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
+
+        initOutputInfo();
+    }
+
+    // for disaggregated task
+    explicit DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggregatedTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
+        : dag_request(&dag_request_)
+        , dummy_query_string(dag_request->DebugString())
+        , dummy_ast(makeDummyQuery())
+        , tidb_host(compute_node_host_)
+        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , is_batch_cop(false)
+        , is_disaggregated_task(true)
+        , tables_regions_info(std::move(tables_regions_info_))
+        , log(std::move(log_))
+        , flags(dag_request->flags())
+        , sql_mode(dag_request->sql_mode())
+        , disaggregated_id(std::make_unique<DM::DisaggregatedTaskId>(task_id_))
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
@@ -178,6 +206,7 @@ public:
         : dag_request(nullptr)
         , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(false)
+        , return_executor_id(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , flags(0)
@@ -258,6 +287,10 @@ public:
     const MPPTaskId & getMPPTaskId() const
     {
         return mpp_task_id;
+    }
+    const std::unique_ptr<DM::DisaggregatedTaskId> & getDisaggregatedTaskId() const
+    {
+        return disaggregated_id;
     }
 
     std::pair<bool, double> getTableScanThroughput();
@@ -349,10 +382,11 @@ public:
     String table_scan_executor_id;
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    bool return_executor_id{};
+    bool return_executor_id;
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
+    const bool is_disaggregated_task = false;
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
@@ -402,6 +436,8 @@ private:
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
+    // The disaggregated
+    const std::unique_ptr<DM::DisaggregatedTaskId> disaggregated_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;

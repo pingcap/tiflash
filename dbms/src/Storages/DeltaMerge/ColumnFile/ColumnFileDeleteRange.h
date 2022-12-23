@@ -40,6 +40,13 @@ public:
 
     ColumnFileReaderPtr getReader(
         const DMContext &,
+        const IColumnFileSetStorageReaderPtr & reader,
+        const ColumnDefinesPtr & col_defs) const override
+    {
+        return getReader(reader, col_defs);
+    }
+
+    ColumnFileReaderPtr getReader(
         const IColumnFileSetStorageReaderPtr &,
         const ColumnDefinesPtr &) const override;
 

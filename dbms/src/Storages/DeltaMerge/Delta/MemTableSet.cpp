@@ -26,6 +26,28 @@ namespace DB
 {
 namespace DM
 {
+MemTableSet::MemTableSet(const BlockPtr & last_schema_, const ColumnFiles & in_memory_files)
+    : last_schema(last_schema_)
+    , column_files(in_memory_files)
+    , column_files_count(column_files.size())
+    , log(Logger::get())
+{
+    for (const auto & file : column_files)
+    {
+        rows += file->getRows();
+        bytes += file->getBytes();
+        deletes += file->getDeletes();
+        if (auto * m_file = file->tryToInMemoryFile(); m_file)
+        {
+            last_schema = m_file->getSchema();
+        }
+        else if (auto * t_file = file->tryToTinyFile(); t_file)
+        {
+            last_schema = t_file->getSchema();
+        }
+    }
+}
+
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
     // If this column file's schema is identical to last_schema, then use the last_schema instance (instead of the one in `column_file`),

@@ -15,11 +15,13 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <common/types.h>
 
 #include <mutex>
 
@@ -43,11 +45,12 @@ struct SegmentReadTask
     SegmentSnapshotPtr read_snapshot;
     RowKeyRanges ranges;
 
-    SegmentReadTask(const SegmentPtr & segment_, //
+    SegmentReadTask(const SegmentPtr & segment_,
                     const SegmentSnapshotPtr & read_snapshot_,
                     const RowKeyRanges & ranges_);
 
-    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
+    SegmentReadTask(const SegmentPtr & segment_,
+                    const SegmentSnapshotPtr & read_snapshot_);
 
     ~SegmentReadTask();
 
@@ -290,46 +293,6 @@ private:
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
-
-struct RemoteSegmentReadTask
-{
-    // UInt64 segment_id;
-    SegmentPtr segment; // FIXME: temporary directly reuse the segment
-    RowKeyRanges ranges;
-
-    // The snapshot of reading ids acquired from write node
-    std::vector<UInt64> delta_page_ids;
-    std::vector<UInt64> stable_files;
-
-    // FIXME: This should be only stored in write node
-    SegmentSnapshotPtr segment_snap;
-
-    StableSnapshotPtr buildRemoteStableSnap(const Context & db_context, TableID table_id, UInt64 stable_id, const RowKeyRange & seg_range);
-};
-using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
-
-class RemoteReadTask;
-using RemoteReadTaskPtr = std::shared_ptr<RemoteReadTask>;
-class RemoteReadTask
-{
-public:
-    static RemoteReadTaskPtr buildFrom(const DMContext & context, SegmentReadTasks & tasks);
-
-    RemoteSegmentReadTaskPtr nextTask()
-    {
-        std::lock_guard gurad(mtx_tasks);
-        if (tasks.empty())
-            return nullptr;
-        auto task = tasks.front();
-        tasks.pop_front();
-        return task;
-    }
-
-private:
-    UInt64 table_id;
-    mutable std::mutex mtx_tasks;
-    std::list<RemoteSegmentReadTaskPtr> tasks;
-};
 
 } // namespace DM
 } // namespace DB

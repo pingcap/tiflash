@@ -117,7 +117,7 @@ struct ByteBuffer : public ByteBufferInternal<char *>
 struct ConstByteBuffer : public ByteBufferInternal<const char *>
 {
     using ByteBufferInternal<const char *>::ByteBufferInternal;
-    
+
     ConstByteBuffer(const ByteBuffer & buf)
         : ConstByteBuffer(buf.begin(), buf.end())
     {}

@@ -15,11 +15,12 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -30,6 +31,9 @@
 
 namespace DB
 {
+class ExchangeReceiver;
+struct SelectQueryInfo;
+
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
 // Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),
@@ -69,11 +73,26 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
+    // helper functions for building the task read from S3
+    std::shared_ptr<::mpp::EstablishDisaggregatedTaskRequest>
+    buildDisaggregatedTaskForNode(
+        const Context & db_context,
+        const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+    DM::RemoteReadTaskPtr buildDisaggregatedTask(
+        const Context & db_context,
+        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+    void buildRemoteSegmentInputStreams(
+        const Context & db_context,
+        const DM::RemoteReadTaskPtr & remote_read_tasks,
+        size_t num_streams,
+        DAGPipeline & pipeline);
+
+private:
     using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void pushDownFilter(DAGPipeline & pipeline);
+    void pushDownFilter(NamesAndTypes && source_columns, DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

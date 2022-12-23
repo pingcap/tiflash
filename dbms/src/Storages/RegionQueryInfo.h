@@ -17,6 +17,8 @@
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
+#include <memory>
+
 namespace DB
 {
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
@@ -60,16 +62,29 @@ struct MvccQueryInfo
 
     const bool resolve_locks;
 
+    DM::ScanContextPtr scan_context;
+
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
+    // The cache result of read index. Avoid emitting duplicated read index
+    // request when retrying.
     using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
     ReadIndexRes read_index_res;
 
-    DM::ScanContextPtr scan_context;
-
 public:
     explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
+
+    // Create a new MvccQueryInfo for a physical table.
+    // - Different physical table in one TableScan operator share the same
+    //   scan_context.
+    // - The regions are not overlapped between different physical table,
+    //   so regions_query_info and read_index_res are not copied.
+    std::unique_ptr<MvccQueryInfo> newForTable()
+    {
+        auto q = std::make_unique<MvccQueryInfo>(resolve_locks, read_tso, scan_context);
+        return q;
+    }
 };
 
 } // namespace DB

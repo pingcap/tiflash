@@ -27,6 +27,9 @@
 
 #include <future>
 
+#include "Flash/Disaggregated/PageTunnel.h"
+#include "Storages/DeltaMerge/Remote/DisaggregatedTaskId.h"
+
 namespace ProfileEvents
 {
 extern const Event DMSegmentIsEmptyFastPath;
@@ -591,6 +594,63 @@ try
 }
 CATCH
 
+TEST_F(SegmentOperationTest, DisaggregatedReadCFTinyPages)
+try
+{
+    auto result_fields = std::make_shared<std::vector<tipb::FieldType>>(reverseGetFieldType(*table_columns));
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    {
+        // 1 persisted cftiny, no mem-table
+        auto read_task = genSegmentReadTask(DELTA_MERGE_FIRST_SEGMENT_ID);
+        auto read_ids = getCFTinyIds(read_task->read_snapshot->delta->getPersistedFileSetSnapshot());
+        ASSERT_EQ(read_ids.size(), 1) << fmt::format("{}", read_ids);
+        auto tunnel = std::make_unique<PageTunnel>(read_task, table_columns, result_fields, read_ids);
+        const auto packet = tunnel->readPacket();
+        ASSERT_EQ(packet.pages_size(), 1);
+        ASSERT_EQ(packet.chunks_size(), 0);
+    }
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    {
+        // 4 persisted cftiny, no mem-table
+        auto read_task = genSegmentReadTask(DELTA_MERGE_FIRST_SEGMENT_ID);
+        auto read_ids = getCFTinyIds(read_task->read_snapshot->delta->getPersistedFileSetSnapshot());
+        ASSERT_EQ(read_ids.size(), 4) << fmt::format("{}", read_ids);
+        auto tunnel = std::make_unique<PageTunnel>(read_task, table_columns, result_fields, read_ids);
+        const auto packet = tunnel->readPacket();
+        ASSERT_EQ(packet.pages_size(), 4);
+        ASSERT_EQ(packet.chunks_size(), 0);
+    }
+
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    {
+        // delta-merge done, 0 persisted cftiny, no mem-table
+        auto read_task = genSegmentReadTask(DELTA_MERGE_FIRST_SEGMENT_ID);
+        auto read_ids = getCFTinyIds(read_task->read_snapshot->delta->getPersistedFileSetSnapshot());
+        ASSERT_EQ(read_ids.size(), 0) << fmt::format("{}", read_ids);
+        auto tunnel = std::make_unique<PageTunnel>(read_task, table_columns, result_fields, read_ids);
+        const auto packet = tunnel->readPacket();
+        ASSERT_EQ(packet.pages_size(), 0);
+        ASSERT_EQ(packet.chunks_size(), 0);
+    }
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    {
+        // 0 persisted cftiny, 1 mem-table
+        auto read_task = genSegmentReadTask(DELTA_MERGE_FIRST_SEGMENT_ID);
+        auto read_ids = getCFTinyIds(read_task->read_snapshot->delta->getPersistedFileSetSnapshot());
+        ASSERT_EQ(read_ids.size(), 0) << fmt::format("{}", read_ids);
+        auto tunnel = std::make_unique<PageTunnel>(read_task, table_columns, result_fields, read_ids);
+        const auto packet = tunnel->readPacket();
+        ASSERT_EQ(packet.pages_size(), 0);
+        ASSERT_EQ(packet.chunks_size(), 1);
+    }
+}
+CATCH
 
 class SegmentEnableLogicalSplitTest : public SegmentOperationTest
 {

@@ -15,6 +15,7 @@
 protobuf_generate_cpp(
         dtpb_srcs dtpb_hdrs
         dmfile.proto
+        column_file.proto
 )
 
 add_library(dtpb

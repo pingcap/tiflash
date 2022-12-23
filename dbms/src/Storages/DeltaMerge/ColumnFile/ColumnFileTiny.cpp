@@ -117,7 +117,6 @@ void ColumnFileTiny::fillColumns(const IColumnFileSetStorageReaderPtr & storage_
 }
 
 ColumnFileReaderPtr ColumnFileTiny::getReader(
-    const DMContext & /*context*/,
     const IColumnFileSetStorageReaderPtr & reader,
     const ColumnDefinesPtr & col_defs) const
 {

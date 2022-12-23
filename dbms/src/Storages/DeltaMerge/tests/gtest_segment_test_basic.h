@@ -15,14 +15,18 @@
 
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
 #include <vector>
+
+#include "tipb/expression.pb.h"
 
 namespace DB
 {
@@ -73,6 +77,8 @@ public:
      */
     void replaceSegmentData(PageId segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot = nullptr);
     void replaceSegmentData(PageId segment_id, const Block & block, SegmentSnapshotPtr snapshot = nullptr);
+
+    SegmentReadTaskPtr genSegmentReadTask(PageId segment_id) const;
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     Block prepareWriteBlockInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
@@ -132,6 +138,11 @@ protected:
     LoggerPtr logger_op;
     LoggerPtr logger;
 };
+
+PageIds getCFTinyIds(const ColumnFileSetSnapshotPtr & snapshot);
+
+std::vector<tipb::FieldType> reverseGetFieldType(const ColumnDefines & cds);
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

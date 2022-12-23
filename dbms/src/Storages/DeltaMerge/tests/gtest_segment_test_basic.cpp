@@ -13,23 +13,30 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
+#include <Core/Types.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <magic_enum.hpp>
 
+#include "tipb/expression.pb.h"
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfRead;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -45,6 +52,19 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
 
 namespace tests
 {
+PageIds getCFTinyIds(const ColumnFileSetSnapshotPtr & snapshot)
+{
+    PageIds page_ids;
+    for (const auto & cf : snapshot->getColumnFiles())
+    {
+        if (auto * tiny = cf->tryToTinyFile(); tiny)
+        {
+            page_ids.emplace_back(tiny->getDataPageId());
+        }
+    }
+    return page_ids;
+}
+
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 {
     {
@@ -589,6 +609,14 @@ void SegmentTestBasic::replaceSegmentData(PageId segment_id, const DMFilePtr & f
         operation_statistics["replaceData"]++;
 }
 
+SegmentReadTaskPtr SegmentTestBasic::genSegmentReadTask(PageId segment_id) const
+{
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments.at(segment_id);
+    auto segment_snap = segment->createSnapshot(*dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfRead);
+    return std::make_shared<SegmentReadTask>(segment, segment_snap);
+}
+
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id) const
 {
     RUNTIME_CHECK(segments_id.size() >= 2);
@@ -763,6 +791,115 @@ try
 }
 CATCH
 
+std::vector<tipb::FieldType> reverseGetFieldType(const ColumnDefines & cds)
+{
+    std::vector<tipb::FieldType> field_types;
+    field_types.reserve(cds.size());
+
+    for (const auto & cd : cds)
+    {
+        tipb::FieldType ft;
+        // TODO: set flen and decimal for decimal
+        // TODO: set decimal for date time
+        // TODO: set decimal for duration
+        // TODO: set elems for enum
+        // TODO: set default value
+        UInt32 flags = 0;
+
+        // set nullable flag
+        const IDataType * nested_type = cd.type.get();
+        if (!cd.type->isNullable())
+        {
+            flags |= TiDB::ColumnFlagNotNull;
+        }
+        else
+        {
+            const auto * nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
+            nested_type = nullable_type->getNestedType().get();
+        }
+
+        // TODO: set sign flag
+        if (nested_type->isUnsignedInteger())
+        {
+            flags |= TiDB::ColumnFlagUnsigned;
+        }
+
+        switch (nested_type->getTypeId())
+        {
+        case DB::TypeIndex::Nothing:
+            ft.set_tp(TiDB::TypeNull);
+            break;
+        case DB::TypeIndex::UInt8:
+        case DB::TypeIndex::Int8:
+            ft.set_tp(TiDB::TypeTiny);
+            break;
+        case DB::TypeIndex::UInt16:
+        case DB::TypeIndex::Int16:
+            ft.set_tp(TiDB::TypeShort);
+            break;
+        case DB::TypeIndex::UInt32:
+        case DB::TypeIndex::Int32:
+            ft.set_tp(TiDB::TypeLong);
+            break;
+        case DB::TypeIndex::UInt64:
+        case DB::TypeIndex::Int64:
+            ft.set_tp(TiDB::TypeLongLong);
+            break;
+        case DB::TypeIndex::Float32:
+            ft.set_tp(TiDB::TypeFloat);
+            break;
+        case DB::TypeIndex::Float64:
+            ft.set_tp(TiDB::TypeDouble);
+            break;
+        case DB::TypeIndex::Date:
+        case DB::TypeIndex::MyDate:
+            ft.set_tp(TiDB::TypeDate);
+            break;
+        case DB::TypeIndex::DateTime:
+        case DB::TypeIndex::MyDateTime:
+            ft.set_tp(TiDB::TypeDatetime);
+            break;
+        case DB::TypeIndex::MyTimeStamp:
+            ft.set_tp(TiDB::TypeTimestamp);
+            break;
+        case DB::TypeIndex::MyTime:
+            ft.set_tp(TiDB::TypeTime);
+            break;
+        case DB::TypeIndex::String:
+        case DB::TypeIndex::FixedString:
+            ft.set_tp(TiDB::TypeString);
+            break;
+        case DB::TypeIndex::Enum8:
+        case DB::TypeIndex::Enum16:
+            ft.set_tp(TiDB::TypeEnum);
+            break;
+        case DB::TypeIndex::Decimal32:
+        case DB::TypeIndex::Decimal64:
+        case DB::TypeIndex::Decimal128:
+        case DB::TypeIndex::Decimal256:
+            ft.set_tp(TiDB::TypeNewDecimal);
+            break;
+        case DB::TypeIndex::UInt128:
+        case DB::TypeIndex::Int128:
+        case DB::TypeIndex::Int256:
+        case DB::TypeIndex::UUID:
+        case DB::TypeIndex::Array:
+        case DB::TypeIndex::Tuple:
+        case DB::TypeIndex::Set:
+        case DB::TypeIndex::Interval:
+        case DB::TypeIndex::Nullable:
+        case DB::TypeIndex::Function:
+        case DB::TypeIndex::AggregateFunction:
+        case DB::TypeIndex::LowCardinality:
+            RUNTIME_CHECK(false);
+        }
+
+        ft.set_flag(flags);
+        field_types.emplace_back(ft);
+    }
+
+    return field_types;
+}
 
 } // namespace tests
 } // namespace DM

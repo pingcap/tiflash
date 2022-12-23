@@ -17,8 +17,8 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
+#include <Storages/Page/WriteBatch.h>
 
 #include <vector>
 
@@ -101,7 +101,7 @@ public:
                 .offsets = std::move(w.offsets),
                 .page_offset = w.page_offset,
                 .page_checksum = w.page_checksum,
-                .target_file_id = w.target_file_id
+                .target_file_id = w.target_file_id,
             });
         }
         us_batch.total_data_size = batch.getTotalDataSize();
@@ -134,7 +134,7 @@ public:
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }
-    
+
     void putPage(UniversalPageId page_id, UInt64 tag, std::string_view data)
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
