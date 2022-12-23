@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ConfigReloader.h"
-
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/Config/ConfigReloader.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Poco/File.h>
 #include <Poco/Util/Application.h>
 #include <common/logger_useful.h>
-
-#include "ConfigProcessor.h"
 
 
 namespace DB
@@ -41,7 +39,6 @@ void ConfigReloader::start()
 {
     thread = std::thread(&ConfigReloader::run, this);
 }
-
 
 ConfigReloader::~ConfigReloader()
 {
@@ -78,14 +75,23 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
     std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
-    if (force || new_files.isDifferOrNewerThan(files))
+    bool config_object_updated = false;
+    for (const auto & conf : config_objects)
+    {
+        if (conf->fileUpdated())
+        {
+            config_object_updated = true;
+            break;
+        }
+    }
+
+    if (force || new_files.isDifferOrNewerThan(files) || config_object_updated)
     {
         ConfigProcessor config_processor(path);
         ConfigProcessor::LoadedConfig loaded_config;
         try
         {
-            LOG_DEBUG(log, "Loading config `{}`", path);
-
+            LOG_DEBUG(log, "Loading config from `{}`", path);
             loaded_config = config_processor.loadConfig();
         }
         catch (...)
@@ -93,9 +99,10 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
             if (throw_on_error)
                 throw;
 
-            tryLogCurrentException(log, "Error loading config from `" + path + "'");
+            tryLogCurrentException(log, fmt::format("Error loading config from `{}`", path));
             return;
         }
+
         config_processor.savePreprocessedConfig(loaded_config);
 
         /** We should remember last modification time if and only if config was sucessfully loaded
@@ -114,44 +121,12 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
         {
             if (throw_on_error)
                 throw;
-            tryLogCurrentException(log, "Error updating configuration from `" + path + "' config.");
+            tryLogCurrentException(log, fmt::format("Error updating configuration from `{}` config.", path));
         }
     }
 }
 
-struct ConfigReloader::FileWithTimestamp
-{
-    std::string path;
-    time_t modification_time;
-
-    FileWithTimestamp(const std::string & path_, time_t modification_time_)
-        : path(path_)
-        , modification_time(modification_time_)
-    {}
-
-    bool operator<(const FileWithTimestamp & rhs) const { return path < rhs.path; }
-
-    static bool isTheSame(const FileWithTimestamp & lhs, const FileWithTimestamp & rhs)
-    {
-        return (lhs.modification_time == rhs.modification_time) && (lhs.path == rhs.path);
-    }
-};
-
-
-void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path)
-{
-    if (!path.empty() && Poco::File(path).exists())
-    {
-        files.emplace(path, Poco::File(path).getLastModified().epochTime());
-    }
-}
-
-bool ConfigReloader::FilesChangesTracker::isDifferOrNewerThan(const FilesChangesTracker & rhs) const
-{
-    return (files.size() != rhs.files.size()) || !std::equal(files.begin(), files.end(), rhs.files.begin(), FileWithTimestamp::isTheSame);
-}
-
-ConfigReloader::FilesChangesTracker ConfigReloader::getNewFileList() const
+FilesChangesTracker ConfigReloader::getNewFileList() const
 {
     FilesChangesTracker file_list;
 

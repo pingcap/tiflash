@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
-#include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 
 namespace DB::mock
 {
+class ExchangeSenderBinder;
+class ExchangeReceiverBinder;
 class JoinBinder : public ExecutorBinder
 {
 public:

@@ -13,6 +13,17 @@
 // limitations under the License.
 
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
+#include <Debug/MockExecutor/ExchangeSenderBinder.h>
+#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/JoinBinder.h>
+#include <Debug/MockExecutor/LimitBinder.h>
+#include <Debug/MockExecutor/ProjectBinder.h>
+#include <Debug/MockExecutor/SelectionBinder.h>
+#include <Debug/MockExecutor/SortBinder.h>
+#include <Debug/MockExecutor/TableScanBinder.h>
+#include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
@@ -90,7 +101,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context, DAGRequestType type)
 {
     // build tree struct base executor
-    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
+    MPPInfo mpp_info(properties.start_ts, properties.query_ts, properties.server_id, properties.local_query_id, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
@@ -261,19 +272,19 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
-                                            tipb::JoinType tp,
-                                            MockAstVec join_cols,
-                                            MockAstVec left_conds,
-                                            MockAstVec right_conds,
-                                            MockAstVec other_conds,
-                                            MockAstVec other_eq_conds_from_in,
-                                            uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::join(
+    const DAGRequestBuilder & right,
+    tipb::JoinType tp,
+    MockAstVec join_col_exprs,
+    MockAstVec left_conds,
+    MockAstVec right_conds,
+    MockAstVec other_conds,
+    MockAstVec other_eq_conds_from_in,
+    uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     assert(right.root);
-
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
     return *this;
 }
 
@@ -386,6 +397,7 @@ void MockDAGRequestContext::addMockTable(const String & db, const String & table
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assert(columnInfos.size() == columns.size());
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
 }

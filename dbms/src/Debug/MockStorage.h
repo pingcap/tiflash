@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
 
@@ -47,7 +48,7 @@ public:
     /// for table scan
     void addTableSchema(const String & name, const MockColumnInfoVec & columnInfos);
 
-    void addTableData(const String & name, const ColumnsWithTypeAndName & columns);
+    void addTableData(const String & name, ColumnsWithTypeAndName & columns);
 
     Int64 getTableId(const String & name);
 
@@ -72,7 +73,7 @@ public:
     MockColumnInfoVec getExchangeSchema(const String & exchange_name);
 
     /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
-    ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);
+    ColumnsWithTypeAndName getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num);
 
     TableInfo getTableInfo(const String & name);
 

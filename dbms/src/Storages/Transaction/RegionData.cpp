@@ -115,7 +115,11 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
     const auto & [pk, ts] = write_it->first;
 
     std::ignore = value;
-    std::ignore = value;
+
+    if (pk->empty())
+    {
+        throw Exception("Observe empty PK: raw key " + key->toDebugString(), ErrorCodes::ILLFORMAT_RAFT_ROW);
+    }
 
     if (!need_value)
         return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);

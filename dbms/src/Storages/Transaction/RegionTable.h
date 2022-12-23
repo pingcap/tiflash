@@ -59,8 +59,15 @@ using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 using SafeTS = UInt64;
 enum : SafeTS
 {
-    InvalidSafeTS = std::numeric_limits<UInt64>::max()
+    InvalidSafeTS = std::numeric_limits<UInt64>::max(),
 };
+
+using TsoShiftBits = UInt64;
+enum : TsoShiftBits
+{
+    TsoPhysicalShiftBits = 18,
+};
+
 class RegionTable : private boost::noncopyable
 {
 public:
@@ -189,6 +196,7 @@ public:
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
     bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
 
+    UInt64 getSelfSafeTS(UInt64 region_id);
 
 private:
     friend class MockTiDB;

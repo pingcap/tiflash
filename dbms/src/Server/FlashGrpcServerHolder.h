@@ -22,6 +22,7 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/PDTiKVClient.h>
+#include <grpc/grpc_security.h>
 
 
 namespace DB
@@ -35,7 +36,6 @@ public:
     FlashGrpcServerHolder(
         Context & context,
         Poco::Util::LayeredConfiguration & config_,
-        TiFlashSecurityConfig & security_config,
         const TiFlashRaftConfig & raft_config,
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();

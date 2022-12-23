@@ -14,6 +14,17 @@
 
 #pragma once
 
-/// Get number of CPU cores without hyper-threading.
-/// Note: do not support environment under resource isolation mechanism like Docker, CGroup.
-unsigned getNumberOfPhysicalCPUCores();
+namespace DB
+{
+/** Base class for Configuration component that keep track of a set of files
+  *
+  *  If the set of files are changed, the ConfigReloader will call reloadIfNewer
+  *  to reload all the config.
+  */
+class ConfigObject
+{
+public:
+    virtual bool fileUpdated() = 0;
+    virtual ~ConfigObject() = default;
+};
+} // namespace DB

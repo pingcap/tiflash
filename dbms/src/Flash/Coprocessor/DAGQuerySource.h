@@ -14,13 +14,14 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 
 namespace DB
 {
+class DAGContext;
+
 /// DAGQuerySource is an adaptor between DAG and CH's executeQuery.
 /// TODO: consider to directly use DAGContext instead.
 class DAGQuerySource : public IQuerySource

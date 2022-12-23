@@ -773,6 +773,5 @@ Union: <for test>
     }
 }
 CATCH
-
 } // namespace tests
 } // namespace DB

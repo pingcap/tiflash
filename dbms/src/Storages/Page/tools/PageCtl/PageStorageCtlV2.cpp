@@ -20,6 +20,7 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
 #include <Storages/Page/WriteBatch.h>
@@ -173,8 +174,9 @@ try
         return 0;
     }
 
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
     DB::PageStorageConfig config = parse_storage_config(argc, argv, logger);
-    PageStorage storage("PageCtl", delegator, config, file_provider);
+    PageStorage storage("PageCtl", delegator, config, file_provider, *bkg_pool);
     storage.restore();
     switch (mode)
     {
