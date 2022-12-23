@@ -438,7 +438,7 @@ public:
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
-        : mem_table_input_stream(delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
+        : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
         , persisted_files_input_stream(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)
     {}
 

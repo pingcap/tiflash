@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/PODArray.h>
@@ -23,11 +24,15 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 #include <gtest/gtest.h>
 
 #include <future>
 
 #include "Flash/Disaggregated/PageTunnel.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+#include "Storages/DeltaMerge/File/dtpb/column_file.pb.h"
 #include "Storages/DeltaMerge/Remote/DisaggregatedTaskId.h"
 
 namespace ProfileEvents
@@ -590,6 +595,90 @@ try
         const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
         LOG_DEBUG(log, "All delta-merged, log valid size on disk: {}", file_usage.total_valid_size);
         EXPECT_EQ(file_usage.total_valid_size, 0);
+    }
+}
+CATCH
+
+TEST_F(SegmentOperationTest, SnapshotToRemote)
+try
+{
+    // stable
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    // delta-vs persisted cfs
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000); // cftiny with schema
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000); // cftiny without schema (the same as before)
+    ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID); // deleta_range + cfbig
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    // delta-vs mem-table
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 2000);
+
+    {
+        auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(*dm_context, /* for_update */ false, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto key_range = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getRowKeyRange();
+        const auto remote_seg = snapshot->toRemote(DELTA_MERGE_FIRST_SEGMENT_ID, key_range);
+
+        ASSERT_EQ(remote_seg.segment_id(), DELTA_MERGE_FIRST_SEGMENT_ID);
+        // stable
+        ASSERT_EQ(remote_seg.stable_pages_size(), 1);
+        // delta-vs mem-table
+        ASSERT_TRUE(remote_seg.has_mem_table());
+        // delta-vs persisted cfs
+        ASSERT_EQ(remote_seg.column_files_size(), 4) << remote_seg.DebugString();
+        auto persisted_cfs = snapshot->delta->getPersistedFileSetSnapshot();
+        ASSERT_EQ(persisted_cfs->getColumnFileCount(), remote_seg.column_files_size());
+        const auto & remote_delta_vs = remote_seg.column_files();
+        for (size_t index = 0; index < persisted_cfs->getColumnFileCount(); ++index)
+        {
+            const auto & remote_cf = remote_delta_vs.at(index);
+            const auto & cf = persisted_cfs->getColumnFiles()[index];
+            switch (cf->getType())
+            {
+            case ColumnFile::TINY_FILE:
+            {
+                ASSERT_TRUE(cf->isTinyFile());
+                ASSERT_EQ(remote_cf.has_tiny(), cf->isTinyFile());
+                const auto & remote_tiny = remote_cf.tiny();
+                ASSERT_EQ(remote_tiny.page_id(), cf->getId());
+                if (index == 0)
+                {
+                    dtpb::TiFlashSchema remote_schema;
+                    ASSERT_TRUE(remote_schema.ParseFromString(remote_tiny.schema()));
+                    auto [schema, colid_to_offset] = DB::DM::fromRemote(remote_schema);
+                    ASSERT_EQ(schema->columns(), 3);
+                    ASSERT_EQ(colid_to_offset.size(), 3);
+                    LOG_DEBUG(Logger::get(), "{}", schema->dumpJsonStructure());
+                    LOG_DEBUG(Logger::get(), "{}", colid_to_offset);
+                }
+                else if (index == 1)
+                {
+                    ASSERT_EQ(remote_tiny.schema().size(), 0);
+                }
+                break;
+            }
+            case ColumnFile::DELETE_RANGE:
+            {
+                ASSERT_TRUE(cf->isDeleteRange());
+                ASSERT_EQ(remote_cf.has_delete_range(), cf->isDeleteRange());
+                // const auto & remote_delete = remote_cf.delete_range();
+                break;
+            }
+            case ColumnFile::BIG_FILE:
+            {
+                ASSERT_TRUE(cf->isBigFile());
+                ASSERT_EQ(remote_cf.has_big(), cf->isBigFile());
+                const auto & remote_big = remote_cf.big();
+                auto * cf_big = cf->tryToBigFile();
+                ASSERT_NE(cf_big, nullptr);
+                ASSERT_EQ(remote_big.file_id(), cf_big->getFile()->fileId());
+                ASSERT_EQ(remote_big.page_id(), cf_big->getFile()->pageId());
+                break;
+            }
+            default:
+                RUNTIME_CHECK(false);
+                break;
+            }
+        }
     }
 }
 CATCH
