@@ -85,18 +85,6 @@ std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepa
     return {MPPQueryId(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
 }
 
-ColumnsWithTypeAndName MPPTaskTestUtils::buildAndExecuteMPPTasks(DAGRequestBuilder builder)
-{
-    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
-        TiFlashTestEnv::getGlobalContext(i).setMPPTest();
-    auto tasks = (builder).buildMPPTasks(context, properties);
-    MockComputeServerManager::instance().resetMockMPPServerInfo(serverNum());
-    TiFlashTestEnv::getGlobalContext().setMPPTest();
-    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
-    return executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
-}
-
 ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
