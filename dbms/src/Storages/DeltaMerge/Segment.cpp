@@ -20,6 +20,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Poco/Logger.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -138,7 +139,7 @@ dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id, const RowKey
         if (auto * big = cf->tryToBigFile(); big)
         {
             auto * remote_big = remote_cf->mutable_big();
-            remote_big->set_page_id(big->getDataPageId());
+            remote_big->set_page_id(big->getFile()->pageId());
             remote_big->set_file_id(big->getFile()->fileId());
         }
         else if (auto * tiny = cf->tryToTinyFile(); tiny)
@@ -148,7 +149,9 @@ dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id, const RowKey
             if (auto schema = tiny->getSchema(); schema && schema != last_schema)
             {
                 last_schema = schema;
-                // TODO set schema for the first different cftiny
+                // set schema for the first different cftiny
+                auto remote_schema = ::DB::DM::toRemote(*schema);
+                remote_tiny->mutable_schema()->assign(remote_schema.SerializeAsString());
             }
         }
         else if (auto * range = cf->tryToDeleteRange(); range)

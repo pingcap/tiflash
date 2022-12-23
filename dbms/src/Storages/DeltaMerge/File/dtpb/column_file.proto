@@ -16,6 +16,20 @@ syntax = "proto3";
 
 package dtpb;
 
+message TiFlashColumnInfo {
+    int64 column_id = 1;
+    // serialized name by IDataType::getName()
+    // TODO: deseri this name is costly, consider another way
+    // like the tipb.ColumnInfo
+    bytes type_full_name = 2;
+    // maybe this is not need
+    bytes column_name = 3;
+}
+
+message TiFlashSchema {
+    repeated TiFlashColumnInfo columns = 1;
+}
+
 message KeyRange {
     bytes start = 1;
     bytes end = 2;
