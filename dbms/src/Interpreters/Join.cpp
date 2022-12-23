@@ -1214,7 +1214,10 @@ void NO_INLINE joinBlockImplTypeCase(
                 /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
                 /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
                 auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
-                segment_index = packet_stream_id % segment_size;
+                if likely (fine_grained_shuffle_count == segment_size)
+                    segment_index = packet_stream_id;
+                else
+                    segment_index = packet_stream_id % segment_size;
             }
             else
             {
