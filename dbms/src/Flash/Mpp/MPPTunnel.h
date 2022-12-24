@@ -20,9 +20,9 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
-#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/defines.h>

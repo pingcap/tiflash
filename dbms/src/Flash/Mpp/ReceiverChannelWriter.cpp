@@ -50,9 +50,9 @@ bool ReceiverChannelWriter::writeFineGrain(size_t source_index, const TrackedMpp
             // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
             // This can happen when there are old version nodes when upgrading.
             LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                            "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                            "Cannot handle this.",
-                        source_index);
+                           "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                           "Cannot handle this.",
+                      source_index);
             return false;
         }
 

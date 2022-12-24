@@ -17,9 +17,9 @@
 #include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
-#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
