@@ -140,6 +140,7 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
 {
     tipb_executor->set_tp(tipb::ExecType::TypeJoin);
     tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
 
     tipb::Join * join = tipb_executor->mutable_join();
 
@@ -288,14 +289,15 @@ ExecutorBinderPtr compileJoin(size_t & executor_index,
                               const ASTs & left_conds,
                               const ASTs & right_conds,
                               const ASTs & other_conds,
-                              const ASTs & other_eq_conds_from_in)
+                              const ASTs & other_eq_conds_from_in,
+                              uint64_t fine_grained_shuffle_stream_count)
 {
     DAGSchema output_schema;
 
     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
-    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
+    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
     join->children.push_back(left);
     join->children.push_back(right);
 
