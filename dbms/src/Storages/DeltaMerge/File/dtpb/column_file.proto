@@ -31,14 +31,26 @@ message TiFlashSchema {
 }
 
 message KeyRange {
-    bytes start = 1;
-    bytes end = 2;
+    bytes start_serialized = 1;
+    bytes end_serialized = 2;
 }
 
+message ColumnFileInMemory {
+    // serialized schema
+    bytes schema = 1;
+    // serialized block columns
+    repeated bytes block_columns = 2;
+
+    uint64 rows = 3;
+    // uint64 bytes = 4;
+}
 message ColumnFileTiny {
     uint64 page_id = 1;
     // serialized schema
     bytes schema = 2;
+
+    uint64 rows = 3;
+    uint64 bytes = 4;
 }
 message ColumnFileBig {
     uint64 page_id = 1;
@@ -53,6 +65,8 @@ message ColumnFileRemote {
         ColumnFileTiny tiny = 1;
         ColumnFileBig big = 2;
         ColumnFileDeleteRange delete_range = 3;
+
+        ColumnFileInMemory in_memory = 100;
     }
 }
 
@@ -61,8 +75,11 @@ message DisaggregatedSegment {
     KeyRange key_range = 2;
     repeated ColumnFileBig stable_pages = 3;
     // serialized array of ColumnFileRemote
-    repeated ColumnFileRemote column_files = 4;
-    bool has_mem_table = 5;
+    repeated ColumnFileRemote column_files_persisted = 4;
+
+    // TODO: We should defer mem_table resolution to a later request.
+    // bool has_mem_table = 5;
+    repeated ColumnFileRemote column_files_memtable = 5;
 }
 
 message DisaggregatedPhysicalTable {

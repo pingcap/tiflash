@@ -116,7 +116,7 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override;
+    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override;
 
     static std::shared_ptr<ColumnFileTiny> deserializeFromRemoteProtocol(
         const RemoteProtocol::ColumnFileTiny & proto,

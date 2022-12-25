@@ -99,17 +99,12 @@ Block ColumnFileInMemory::readDataForFlush() const
     return cache_block.cloneWithColumns(std::move(columns));
 }
 
-RemoteProtocol::ColumnFile ColumnFileInMemory::serializeToRemoteProtocol() const
+dtpb::ColumnFileRemote ColumnFileInMemory::serializeToRemoteProtocol() const
 {
-    auto ret = RemoteProtocol::ColumnFileInMemory{
-        .schema = String(),
-        .block_columns = std::vector<String>(),
-        .rows = cache->block.rows(),
-    };
-    ret.block_columns.reserve(cache->block.columns());
-
+    dtpb::ColumnFileRemote ret;
+    auto * remote_in_memory = ret.mutable_in_memory();
     {
-        auto wb = WriteBufferFromString(ret.schema);
+        auto wb = WriteBufferFromString(*remote_in_memory->mutable_schema());
         serializeSchema(wb, schema);
     }
     const auto block_rows = cache->block.rows();
@@ -127,8 +122,9 @@ RemoteProtocol::ColumnFile ColumnFileInMemory::serializeToRemoteProtocol() const
                 CompressionMethod::LZ4,
                 CompressionSettings::getDefaultLevel(CompressionMethod::LZ4));
         }
-        ret.block_columns.emplace_back(std::move(buf));
+        remote_in_memory->add_block_columns(std::move(buf));
     }
+    remote_in_memory->set_rows(block_rows);
 
     return ret;
 }

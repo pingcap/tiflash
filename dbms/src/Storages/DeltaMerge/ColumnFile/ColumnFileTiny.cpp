@@ -150,20 +150,19 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::deserializeMetadata
     return {std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id), std::move(schema)};
 }
 
-RemoteProtocol::ColumnFile ColumnFileTiny::serializeToRemoteProtocol() const
+dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol() const
 {
     // FIXME: Different dt_compression_method between Read Node and Write Node will lead to surprising results.
 
-    auto ret = RemoteProtocol::ColumnFileTiny{
-        .schema = String(),
-        .page_id = data_page_id,
-        .rows = rows,
-        .bytes = bytes,
-    };
+    dtpb::ColumnFileRemote ret;
+    auto * remote_tiny = ret.mutable_tiny();
+    remote_tiny->set_page_id(data_page_id);
     {
-        auto wb = WriteBufferFromString(ret.schema);
+        auto wb = WriteBufferFromString(*remote_tiny->mutable_schema());
         serializeSchema(wb, schema);
     }
+    remote_tiny->set_rows(rows);
+    remote_tiny->set_bytes(bytes);
 
     return ret;
 }

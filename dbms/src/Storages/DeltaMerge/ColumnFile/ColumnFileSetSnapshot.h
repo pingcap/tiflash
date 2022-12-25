@@ -101,14 +101,12 @@ public:
 
     const auto & getStorage() const { return storage; }
 
-    std::vector<RemoteProtocol::ColumnFile> serializeToRemoteProtocol() const
+    google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> serializeToRemoteProtocol() const
     {
-        std::vector<RemoteProtocol::ColumnFile> ret;
-        ret.reserve(column_files.size());
-
+        google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> ret;
+        ret.Reserve(column_files.size());
         for (const auto & file : column_files)
-            ret.push_back(file->serializeToRemoteProtocol());
-
+            ret.Add(file->serializeToRemoteProtocol());
         return ret;
     }
 

@@ -66,11 +66,18 @@ public:
 
     static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
 
-    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override
+    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {
-        return RemoteProtocol::ColumnFileDeleteRange{
-            .range = delete_range,
-        };
+        WriteBufferFromOwnString wb;
+        dtpb::ColumnFileRemote ret;
+        auto * remote_del = ret.mutable_delete_range();
+        wb.restart();
+        delete_range.start.serialize(wb);
+        remote_del->mutable_key_range()->set_start_serialized(wb.releaseStr());
+        wb.restart();
+        delete_range.end.serialize(wb);
+        remote_del->mutable_key_range()->set_end_serialized(wb.releaseStr());
+        return ret;
     }
 
     static std::shared_ptr<ColumnFileDeleteRange> deserializeFromRemoteProtocol(

@@ -92,11 +92,12 @@ public:
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
 
-    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override
+    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {
-        return RemoteProtocol::ColumnFileBig{
-            .file_id = file->fileId(),
-        };
+        dtpb::ColumnFileRemote ret;
+        ret.mutable_big()->set_file_id(file->fileId());
+        ret.mutable_big()->set_page_id(file->pageId());
+        return ret;
     }
 
     static std::shared_ptr<ColumnFileBig> deserializeFromRemoteProtocol(
