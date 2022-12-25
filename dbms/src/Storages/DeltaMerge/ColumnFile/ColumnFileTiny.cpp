@@ -168,26 +168,26 @@ dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol() const
 }
 
 std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(
-    const RemoteProtocol::ColumnFileTiny & proto,
+    const dtpb::ColumnFileTiny & proto,
     const Remote::PageOID & oid,
     const DMContext & context)
 {
-    RUNTIME_CHECK(oid.page_id == proto.page_id);
+    RUNTIME_CHECK(oid.page_id == proto.page_id());
 
-    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid.info(), proto.rows);
+    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid.info(), proto.rows());
 
     auto page_cache = context.db_context.getDMRemoteManager()->getPageCache();
     page_cache->ensurePagesReady({oid});
 
     BlockPtr schema;
     {
-        auto read_buf = ReadBufferFromString(proto.schema);
+        auto read_buf = ReadBufferFromString(proto.schema());
         schema = deserializeSchema(read_buf);
     }
 
     // TODO: Currently building the Tiny does not rely on oid. oid is required when reading.
     //       This might not be a correct design.
-    return std::make_shared<ColumnFileTiny>(schema, proto.rows, proto.bytes, proto.page_id);
+    return std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
 }
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & reader) const

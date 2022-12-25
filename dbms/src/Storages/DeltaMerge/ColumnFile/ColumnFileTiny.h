@@ -119,7 +119,7 @@ public:
     dtpb::ColumnFileRemote serializeToRemoteProtocol() const override;
 
     static std::shared_ptr<ColumnFileTiny> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileTiny & proto,
+        const dtpb::ColumnFileTiny & proto,
         const Remote::PageOID & oid,
         const DMContext & context);
 

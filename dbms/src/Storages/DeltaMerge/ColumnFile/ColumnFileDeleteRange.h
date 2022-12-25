@@ -68,24 +68,24 @@ public:
 
     dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {
-        WriteBufferFromOwnString wb;
         dtpb::ColumnFileRemote ret;
         auto * remote_del = ret.mutable_delete_range();
-        wb.restart();
-        delete_range.start.serialize(wb);
-        remote_del->mutable_key_range()->set_start_serialized(wb.releaseStr());
-        wb.restart();
-        delete_range.end.serialize(wb);
-        remote_del->mutable_key_range()->set_end_serialized(wb.releaseStr());
+        {
+            WriteBufferFromString wb(*remote_del->mutable_key_range());
+            delete_range.serialize(wb);
+        }
         return ret;
     }
 
     static std::shared_ptr<ColumnFileDeleteRange> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileDeleteRange & proto)
+        const dtpb::ColumnFileDeleteRange & proto)
     {
-        LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileDeleteRange from remote, range={}", proto.range.toDebugString());
+        ReadBufferFromString rb(proto.key_range());
+        auto range = RowKeyRange::deserialize(rb);
 
-        return std::make_shared<ColumnFileDeleteRange>(proto.range);
+        LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileDeleteRange from remote, range={}", range.toDebugString());
+
+        return std::make_shared<ColumnFileDeleteRange>(range);
     }
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override

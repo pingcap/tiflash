@@ -111,7 +111,7 @@ public:
     }
 
     static ColumnFileSetSnapshotPtr deserializeFromRemoteProtocol(
-        const std::vector<RemoteProtocol::ColumnFile> & proto,
+        const google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> & proto,
         UInt64 remote_write_node_id,
         const DMContext & context,
         const RowKeyRange & segment_range);

@@ -101,7 +101,7 @@ public:
     }
 
     static std::shared_ptr<ColumnFileBig> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileBig & proto,
+        const dtpb::ColumnFileBig & proto,
         const Remote::DMFileOID & oid,
         const DMContext & context,
         const RowKeyRange & segment_range);

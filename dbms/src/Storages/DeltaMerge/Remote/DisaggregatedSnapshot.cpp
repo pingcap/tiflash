@@ -15,13 +15,13 @@ DisaggregatedTableReadSnapshot::toRemote(const DisaggregatedTaskId & task_id) co
     remote_table.set_table_id(table_id);
     for (const auto & seg_task : tasks)
     {
-        auto remote_seg = seg_task->read_snapshot->toRemote(
-            seg_task->segment->segmentId(),
+        auto remote_seg = seg_task->read_snapshot->serializeToRemoteProtocol(
             seg_task->segment->getRowKeyRange());
         remote_table.mutable_segments()->Add(std::move(remote_seg));
     }
     return remote_table;
 }
+
 
 SegmentPagesFetchTask DisaggregatedReadSnapshot::popSegTask(TableID physical_table_id, UInt64 segment_id)
 {

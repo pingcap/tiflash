@@ -130,26 +130,26 @@ dtpb::ColumnFileRemote ColumnFileInMemory::serializeToRemoteProtocol() const
 }
 
 std::shared_ptr<ColumnFileInMemory> ColumnFileInMemory::deserializeFromRemoteProtocol(
-    const RemoteProtocol::ColumnFileInMemory & proto)
+    const dtpb::ColumnFileInMemory & proto)
 {
-    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileInMemory from remote, rows={}", proto.rows);
+    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileInMemory from remote, rows={}", proto.rows());
 
     BlockPtr schema;
     {
-        auto read_buf = ReadBufferFromString(proto.schema);
+        auto read_buf = ReadBufferFromString(proto.schema());
         schema = deserializeSchema(read_buf);
     }
 
     auto columns = schema->cloneEmptyColumns();
-    RUNTIME_CHECK(columns.size() == proto.block_columns.size());
+    RUNTIME_CHECK(static_cast<int>(columns.size()) == proto.block_columns().size());
 
     for (size_t index = 0; index < schema->columns(); ++index)
     {
-        const auto & data = proto.block_columns[index];
+        const auto & data = proto.block_columns()[index];
         const auto data_buf = ConstByteBuffer(data.data(), data.data() + data.size());
         const auto & type = schema->getByPosition(index).type;
         auto & column = columns[index];
-        deserializeColumn(*column, type, data_buf, proto.rows);
+        deserializeColumn(*column, type, data_buf, proto.rows());
     }
 
     auto block = schema->cloneWithColumns(std::move(columns));

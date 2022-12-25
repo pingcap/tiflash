@@ -121,7 +121,7 @@ public:
     dtpb::ColumnFileRemote serializeToRemoteProtocol() const override;
 
     static std::shared_ptr<ColumnFileInMemory> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileInMemory & proto);
+        const dtpb::ColumnFileInMemory & proto);
 };
 
 

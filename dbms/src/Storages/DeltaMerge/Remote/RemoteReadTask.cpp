@@ -171,36 +171,6 @@ bool RemoteReadTask::doneOrErrorHappen() const
     return false;
 }
 
-dtpb::DisaggregatedPhysicalTable RemoteTableReadTask::getSerializeTask(
-    const TableID table_id,
-    SegmentReadTasks & tasks)
-{
-    RUNTIME_CHECK(table_id > 0);
-
-    dtpb::DisaggregatedPhysicalTable serialized;
-    serialized.set_table_id(table_id);
-
-    for (const auto & task : tasks)
-    {
-#if 0
-        auto delta_snap = task->segment->getDelta()->createSnapshotFromRemote(
-            context,
-            task->segment->getRowKeyRange());
-        auto stable_snap = task->segment->getStable()->createSnapshotFromRemote(
-            context,
-            task->segment->getRowKeyRange());
-        auto segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
-#endif
-
-        auto ser_seg = task->read_snapshot->toRemote(
-            task->segment->segmentId(),
-            task->segment->getRowKeyRange());
-        serialized.add_segments()->Swap(&ser_seg);
-    }
-
-    return serialized;
-}
-
 RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
     const Context & db_context,
     const UInt64 store_id,
@@ -259,6 +229,8 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
     TableID table_id,
     const String & address)
 {
+
+
     // TODO set by serialized.key_range()
     RowKeyRanges key_ranges;
     auto task = std::make_shared<RemoteSegmentReadTask>(
@@ -302,6 +274,7 @@ BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
     size_t expected_block_size)
 {
     UNUSED(this, rs_filter, key_ranges, read_tso, expected_block_size);
+    // TODO -------------
     auto block = toEmptyBlock(columns_to_read);
     // 1. restore dmfiles and build input stream for stable
     // 2. build a temp delta vs and generate input stream for delta

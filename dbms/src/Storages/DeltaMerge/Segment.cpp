@@ -40,6 +40,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -106,18 +108,14 @@ extern const int UNKNOWN_FORMAT_VERSION;
 namespace DM
 {
 
-dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id, const RowKeyRange & key_range) const
+dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(const RowKeyRange & segment_range) const
 {
     dtpb::DisaggregatedSegment remote;
-    remote.set_segment_id(seg_id);
     WriteBufferFromOwnString wb;
     {
         // segment key_range
-        key_range.start.serialize(wb);
-        remote.mutable_key_range()->set_start_serialized(wb.releaseStr());
-        wb.restart();
-        key_range.end.serialize(wb);
-        remote.mutable_key_range()->set_end_serialized(wb.releaseStr());
+        segment_range.serialize(wb);
+        remote.set_key_range(wb.releaseStr());
     }
 
     // stable
@@ -130,6 +128,51 @@ dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id, const RowKey
     remote.mutable_column_files_memtable()->CopyFrom(delta->getMemTableSetSnapshot()->serializeToRemoteProtocol());
     remote.mutable_column_files_persisted()->CopyFrom(delta->getPersistedFileSetSnapshot()->serializeToRemoteProtocol());
     return remote;
+}
+
+SegmentSnapshotPtr SegmentSnapshot::fromRemoteProtocol(
+    UInt64 write_node_id,
+    const DMContext & context,
+    const dtpb::DisaggregatedSegment & proto)
+{
+    RowKeyRange segment_range;
+    {
+        ReadBufferFromString rb(proto.key_range());
+        segment_range = RowKeyRange::deserialize(rb);
+    }
+
+    auto delta_snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
+    delta_snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+        proto.column_files_memtable(),
+        write_node_id,
+        context,
+        segment_range);
+    delta_snap->persisted_files_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+        proto.column_files_persisted(),
+        write_node_id,
+        context,
+        segment_range);
+
+    auto data_store = context.db_context.getDMRemoteManager()->getDataStore();
+    auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
+    DMFiles dmfiles;
+    for (const auto & stable_file : proto.stable_pages())
+    {
+        auto oid = Remote::DMFileOID{
+            .write_node_id = write_node_id,
+            .table_id = context.table_id,
+            .file_id = stable_file.file_id(),
+        };
+        auto prepared = data_store->prepareDMFile(oid);
+        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        dmfiles.emplace_back(std::move(dmfile));
+    }
+    new_stable->setFiles(dmfiles, segment_range);
+    auto stable_snap = new_stable->createSnapshot();
+
+    return std::make_shared<SegmentSnapshot>(
+        std::move(delta_snap),
+        std::move(stable_snap));
 }
 
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
@@ -219,8 +262,15 @@ StableValueSpacePtr createNewStable( //
 
     if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
     {
+        UInt64 store_id;
+        {
+            auto & tmt = context.db_context.getTMTContext();
+            auto kvstore = tmt.getKVStore();
+            auto store_meta = kvstore->getStoreMeta();
+            store_id = store_meta.id();
+        }
         auto oid = Remote::DMFileOID{
-            .write_node_id = 0,
+            .write_node_id = store_id,
             .table_id = context.table_id,
             .file_id = dtfile->fileId(),
         };
