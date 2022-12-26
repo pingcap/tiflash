@@ -304,6 +304,18 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
                  task->pendingPageIds());
     }
 
+    task->dm_context = std::make_shared<DMContext>(
+        db_context,
+        /* path_pool */ nullptr,
+        /* storage_pool */ nullptr,
+        /* min_version */ 0,
+        /* is_common_handle */ segment_range.is_common_handle,
+        /* rowkey_column_size */ segment_range.rowkey_column_size,
+        db_context.getSettingsRef(),
+        /* table_id */ table_id,
+        /* scan_context */ std::make_shared<ScanContext>() // Currently we don't access its content
+    );
+
     return task;
 }
 

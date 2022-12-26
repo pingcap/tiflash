@@ -104,7 +104,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     else
         snap = DeltaValueSnapshot::createSnapshotForRead(type);
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*(context.storage_pool), context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
     IColumnFileSetStorageReaderPtr storage_reader = std::make_shared<LocalColumnFileSetStorage>(storage_snap);
     snap->mem_table_snap = mem_table_set->createSnapshot(storage_reader, for_update);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_reader);

@@ -111,7 +111,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
     });
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     Segment::SplitMode seg_split_mode;
     switch (opt_split_mode)
@@ -279,7 +279,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         }
     });
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
     auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
@@ -425,7 +425,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         }
     });
 
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();

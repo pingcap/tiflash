@@ -114,15 +114,15 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
         else if (auto * t = column_file->tryToTinyFile(); t)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.storage_pool.newLogPageId();
+            PageId new_data_page_id = context.storage_pool->newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
             auto new_column_file = t->cloneWith(new_data_page_id);
             cloned.push_back(new_column_file);
         }
         else if (auto * f = column_file->tryToBigFile(); f)
         {
-            auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_page_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto delegator = context.path_pool->getStableDiskDelegator();
+            auto new_page_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             // Note that the file id may has already been mark as deleted. We must
             // create a reference to the page id itself instead of create a reference
             // to the file id.
@@ -376,13 +376,13 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_DEBUG(log, "Compact cancel because nothing to compact, delta={}", simpleInfo());
             return true;
         }
-        log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
+        log_storage_snap = context.storage_pool->logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
     {
         // do compaction task
-        const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
+        const auto & reader = context.storage_pool->newLogReader(context.getReadLimiter(), log_storage_snap);
         compaction_task->prepare(context, wbs, reader);
         log_storage_snap.reset(); // release the snapshot ASAP
     }

@@ -262,7 +262,7 @@ StableValueSpacePtr createNewStable( //
     PageId stable_id,
     WriteBatches & wbs)
 {
-    auto delegator = context.path_pool.getStableDiskDelegator();
+    auto delegator = context.path_pool->getStableDiskDelegator();
     auto store_path = delegator.choosePath();
 
     const auto & db_context = context.db_context;
@@ -270,7 +270,7 @@ StableValueSpacePtr createNewStable( //
     DMFileBlockOutputStream::Flags flags;
     flags.setSingleFile(db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
 
-    PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    PageId dtfile_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
 
     auto stable = std::make_shared<StableValueSpace>(stable_id);
@@ -379,8 +379,8 @@ SegmentPtr Segment::newSegment( //
         rowkey_range,
         segment_id,
         next_segment_id,
-        context.storage_pool.newMetaPageId(),
-        context.storage_pool.newMetaPageId());
+        context.storage_pool->newMetaPageId(),
+        context.storage_pool->newMetaPageId());
 }
 
 SegmentPtr Segment::restoreSegment( //
@@ -388,7 +388,7 @@ SegmentPtr Segment::restoreSegment( //
     DMContext & context,
     PageId segment_id)
 {
-    Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
+    Page page = context.storage_pool->metaReader()->read(segment_id); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -1467,21 +1467,21 @@ Segment::prepareSplitLogical( //
     }
 
     GenPageId log_gen_page_id = [&]() {
-        return storage_pool.newLogPageId();
+        return storage_pool->newLogPageId();
     };
 
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
-    auto delegate = dm_context.path_pool.getStableDiskDelegator();
+    auto delegate = dm_context.path_pool->getStableDiskDelegator();
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
         auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-        auto other_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto my_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
         // Note that the file id may has already been mark as deleted. We must
         // create a reference to the page id itself instead of create a reference
@@ -1507,7 +1507,7 @@ Segment::prepareSplitLogical( //
         other_stable_files.push_back(other_dmfile);
     }
 
-    auto other_stable_id = storage_pool.newMetaPageId();
+    auto other_stable_id = storage_pool->newMetaPageId();
 
     auto my_stable = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
@@ -1612,7 +1612,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             *read_info.read_columns,
             dm_context.min_version,
             is_common_handle);
-        auto other_stable_id = dm_context.storage_pool.newMetaPageId();
+        auto other_stable_id = dm_context.storage_pool->newMetaPageId();
         other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
 
@@ -1660,8 +1660,8 @@ SegmentPair Segment::applySplit( //
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
-    auto other_segment_id = dm_context.storage_pool.newMetaPageId();
-    auto other_delta_id = dm_context.storage_pool.newMetaPageId();
+    auto other_segment_id = dm_context.storage_pool->newMetaPageId();
+    auto other_delta_id = dm_context.storage_pool->newMetaPageId();
 
     auto my_delta = std::make_shared<DeltaValueSpace>( //
         delta->getId(),

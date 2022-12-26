@@ -318,7 +318,7 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
             auto segment = id_to_segment[segment_id];
             segment_id = segment->nextSegmentId();
         }
-        WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
+        WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
         while (!segment_ids.empty())
         {
             auto segment_id_to_drop = segment_ids.top();
@@ -425,17 +425,17 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Here we use global context from db_context, instead of db_context directly.
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
-    auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               *path_pool,
-                               *storage_pool,
-                               latest_gc_safe_point.load(std::memory_order_acquire),
-                               settings.not_compress_columns,
-                               is_common_handle,
-                               rowkey_column_size,
-                               db_settings,
-                               physical_table_id,
-                               scan_context_,
-                               tracing_id);
+    auto * ctx = new DMContext(
+        db_context.getGlobalContext(),
+        path_pool,
+        storage_pool,
+        latest_gc_safe_point.load(std::memory_order_acquire),
+        is_common_handle,
+        rowkey_column_size,
+        db_settings,
+        physical_table_id,
+        scan_context_,
+        tracing_id);
     return DMContextPtr(ctx);
 }
 
@@ -531,7 +531,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     while (offset != rows)
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
-        WriteBatches wbs(*storage_pool, db_context.getWriteLimiter());
+        WriteBatches wbs(storage_pool, db_context.getWriteLimiter());
         ColumnFilePtr write_column_file;
         RowKeyRange write_range;
 

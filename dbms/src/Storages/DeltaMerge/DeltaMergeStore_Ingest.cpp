@@ -95,7 +95,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
     const std::vector<DMFilePtr> & files,
     bool clear_data_in_range)
 {
-    auto delegate = dm_context->path_pool.getStableDiskDelegator();
+    auto delegate = path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
 
     Segments updated_segments;
@@ -127,7 +127,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
             // Write could fail, because we do not lock the segment here.
             // Thus, other threads may update the instance at any time, like split, merge, merge delta,
             // causing the segment to be abandoned.
-            WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
+            WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
 
             DMFiles data_files;
             data_files.reserve(files.size());
@@ -418,10 +418,10 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │-------- Ingest Range --------│
          */
 
-        auto delegate = dm_context.path_pool.getStableDiskDelegator();
+        auto delegate = dm_context.path_pool->getStableDiskDelegator();
         auto file_provider = dm_context.db_context.getFileProvider();
 
-        WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+        WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
         // Generate DMFile instance with a new ref_id pointed to the file_id,
         // because we may use the same DMFile to ingest into multiple segments.
@@ -575,7 +575,7 @@ void DeltaMergeStore::ingestFiles(
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
 
-    auto delegate = dm_context->path_pool.getStableDiskDelegator();
+    auto delegate = path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
 
     size_t rows = 0;
@@ -639,7 +639,7 @@ void DeltaMergeStore::ingestFiles(
     // Check https://github.com/pingcap/tics/issues/2040 for more details.
     // TODO: If tiflash crash during the middle of ingesting, we may leave some DTFiles on disk and
     // they can not be deleted. We should find a way to cleanup those files.
-    WriteBatches ingest_wbs(*storage_pool, dm_context->getWriteLimiter());
+    WriteBatches ingest_wbs(storage_pool, dm_context->getWriteLimiter());
     if (!files.empty())
     {
         for (const auto & file : files)

@@ -213,6 +213,7 @@ private:
     std::vector<UInt64> delta_page_ids;
     std::vector<UInt64> stable_files;
 
+    DMContextPtr dm_context;
     SegmentPtr segment;
     RowKeyRanges read_ranges;
     SegmentSnapshotPtr segment_snap;

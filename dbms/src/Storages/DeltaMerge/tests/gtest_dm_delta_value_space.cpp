@@ -149,8 +149,8 @@ Block appendColumnFileTinyToDeltaValueSpace(DMContext & context, DeltaValueSpace
 Block appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefinesPtr column_defines, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, WriteBatches & wbs, UInt64 tso = 2)
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
-    auto delegator = context.path_pool.getStableDiskDelegator();
-    auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto delegator = context.path_pool->getStableDiskDelegator();
+    auto file_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile

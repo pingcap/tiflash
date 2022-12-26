@@ -1040,8 +1040,8 @@ public:
 
     std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
     {
-        auto delegator = context.path_pool.getStableDiskDelegator();
-        auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto delegator = context.path_pool->getStableDiskDelegator();
+        auto file_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
@@ -1087,7 +1087,7 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                WriteBatches wbs(*storage_pool);
+                WriteBatches wbs(storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
