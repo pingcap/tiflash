@@ -25,7 +25,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     : log(Logger::get(req_id))
     , join(join_)
     , probe_process_info(max_block_size)
-    , join_finished(false)
+    , squashing_transform(max_block_size)
 {
     children.push_back(input);
 
@@ -68,53 +68,20 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    // if join finished, return {}
-    if (join_finished)
+    // if join finished, return {} directly.
+    if (squashing_transform.isJoinFinished())
     {
         return Block{};
     }
 
-    result_blocks.clear();
-    size_t output_rows = 0;
+    squashing_transform.handleOverLimitBlock();
 
-    // if over_limit_block is not null, we need to push it into result_blocks first.
-    if (over_limit_block)
-    {
-        output_rows += over_limit_block.rows();
-        result_blocks.push_back(std::move(over_limit_block));
-        over_limit_block = Block{};
-    }
-
-    while (output_rows <= probe_process_info.max_block_size)
+    while (squashing_transform.needAppendBlock())
     {
         Block result_block = getOutputBlock(probe_process_info);
-
-        if (!result_block)
-        {
-            // if result blocks is not empty, merge and return them, then mark join finished.
-            if (!result_blocks.empty())
-            {
-                join_finished = true;
-                return mergeResultBlocks(std::move(result_blocks));
-            }
-            // if result blocks is empty, return result block directly.
-            return result_block;
-        }
-        size_t current_rows = result_block.rows();
-
-        if (!output_rows || output_rows + current_rows <= probe_process_info.max_block_size)
-        {
-            result_blocks.push_back(result_block);
-        }
-        else
-        {
-            // if output_rows + current_rows > max block size, put the current result block into over_limit_block and handle it in next read.
-            over_limit_block = result_block;
-        }
-        output_rows += current_rows;
+        squashing_transform.appendBlock(result_block);
     }
-
-    return mergeResultBlocks(std::move(result_blocks));
+    return squashing_transform.getFinalOutputBlock();
 }
 
 Block HashJoinProbeBlockInputStream::getOutputBlock(ProbeProcessInfo & probe_process_info_) const
@@ -133,16 +100,77 @@ Block HashJoinProbeBlockInputStream::getOutputBlock(ProbeProcessInfo & probe_pro
     return join->joinBlock(probe_process_info_);
 }
 
-Block HashJoinProbeBlockInputStream::mergeResultBlocks(Blocks && result_blocks)
+SquashingHashJoinBlockTransform::SquashingHashJoinBlockTransform(UInt64 max_block_size_)
+    : output_rows(0)
+    , max_block_size(max_block_size_)
+    , join_finished(false)
+{}
+
+void SquashingHashJoinBlockTransform::handleOverLimitBlock()
 {
-    if (result_blocks.size() == 1)
+    // we need to reset squash before handle over limit block;
+    reset();
+    // if over_limit_block is not null, we need to push it into blocks first.
+    if (over_limit_block)
     {
-        return result_blocks[0];
+        output_rows += over_limit_block.rows();
+        blocks.push_back(std::move(over_limit_block));
+        over_limit_block = Block{};
+    }
+}
+
+void SquashingHashJoinBlockTransform::appendBlock(Block block)
+{
+    if (!block)
+    {
+        // if append block is {}, mark join finished.
+        join_finished = true;
+        return;
+    }
+    size_t current_rows = block.rows();
+
+    if (!output_rows || output_rows + current_rows <= max_block_size)
+    {
+        blocks.push_back(block);
     }
     else
     {
-        return mergeBlocks(std::move(result_blocks));
+        // if output_rows + current_rows > max block size, put the current result block into over_limit_block and handle it in next read.
+        over_limit_block = block;
     }
+    output_rows += current_rows;
+}
+
+Block SquashingHashJoinBlockTransform::getFinalOutputBlock()
+{
+    if (blocks.empty())
+    {
+        return {};
+    }
+    else if (blocks.size() == 1)
+    {
+        return blocks[0];
+    }
+    else
+    {
+        return mergeBlocks(std::move(blocks));
+    }
+}
+
+void SquashingHashJoinBlockTransform::reset()
+{
+    blocks.clear();
+    output_rows = 0;
+}
+
+bool SquashingHashJoinBlockTransform::isJoinFinished() const
+{
+    return join_finished;
+}
+
+bool SquashingHashJoinBlockTransform::needAppendBlock() const
+{
+    return output_rows <= max_block_size && !join_finished;
 }
 
 } // namespace DB
