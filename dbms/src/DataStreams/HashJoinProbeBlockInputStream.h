@@ -54,6 +54,7 @@ private:
     const LoggerPtr log;
     JoinPtr join;
     ProbeProcessInfo probe_process_info;
+    Blocks result_blocks;
     Block over_limit_block;
     bool join_finished;
 };

@@ -166,7 +166,7 @@ void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequ
     });
 }
 
-Block mergeBlocks(Blocks blocks)
+Block mergeBlocksForTest(Blocks blocks)
 {
     if (blocks.empty())
         return {};
@@ -214,7 +214,7 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     Blocks actual_blocks;
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
-    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
+    return mergeBlocksForTest(actual_blocks).getColumnsWithTypeAndName();
 }
 
 void ExecutorTest::enablePlanner(bool is_enable)
@@ -231,7 +231,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     // Currently, don't care about regions information in tests.
     Blocks blocks;
     queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
-    return mergeBlocks(blocks).getColumnsWithTypeAndName();
+    return mergeBlocksForTest(blocks).getColumnsWithTypeAndName();
 }
 
 Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)

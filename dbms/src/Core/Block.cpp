@@ -514,7 +514,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
     return ReturnType(true);
 }
 
-Block blocksMerge(Blocks && result_blocks)
+Block mergeBlocks(Blocks && result_blocks)
 {
     auto & sample_block = result_blocks[0];
     MutableColumns dst_columns(sample_block.columns());

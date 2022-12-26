@@ -74,14 +74,14 @@ Block HashJoinProbeBlockInputStream::readImpl()
         return Block{};
     }
 
-    Blocks result_blocks;
+    result_blocks.clear();
     size_t output_rows = 0;
 
     // if over_limit_block is not null, we need to push it into result_blocks first.
     if (over_limit_block)
     {
-        result_blocks.push_back(over_limit_block);
         output_rows += over_limit_block.rows();
+        result_blocks.push_back(std::move(over_limit_block));
         over_limit_block = Block{};
     }
 
@@ -141,7 +141,7 @@ Block HashJoinProbeBlockInputStream::mergeResultBlocks(Blocks && result_blocks)
     }
     else
     {
-        return blocksMerge(std::move(result_blocks));
+        return mergeBlocks(std::move(result_blocks));
     }
 }
 

@@ -158,7 +158,7 @@ private:
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
 
-Block blocksMerge(Blocks && result_blocks);
+Block mergeBlocks(Blocks && result_blocks);
 
 /// Compare number of columns, data types, column types, column names, and values of constant columns.
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs);
