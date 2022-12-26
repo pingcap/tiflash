@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/SortCursor.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Common/Logger.h>
 
 #include <queue>
 
