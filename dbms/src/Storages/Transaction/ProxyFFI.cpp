@@ -29,6 +29,7 @@
 #include <kvproto/diagnosticspb.pb.h>
 
 #include <ext/scope_guard.h>
+#include "RaftStoreProxyFFI/ProxyFFI.h"
 
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
     do                                                                                    \
@@ -668,6 +669,36 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
         case RawCppPtrTypeImpl::UniversalPage:
             delete reinterpret_cast<Page *>(ptr);
             break;
+        default:
+            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+            exit(-1);
+        }
+    }
+}
+
+void GcRawCppPtr(RawVoidPtr ptr, uint64_t hint_size, SpecialCppPtrType type)
+{
+    if (ptr)
+    {
+        switch (static_cast<SpecialCppPtrType>(type))
+        {
+        case SpecialCppPtrType::None:
+            // Do nothing.
+            break;
+        case SpecialCppPtrType::TupleOfRawCppPtr:
+        {
+            auto * special_ptr = reinterpret_cast<RawCppPtrTuple *>(ptr);
+            delete special_ptr->inner;
+            delete special_ptr;
+            break;
+        }
+        case SpecialCppPtrType::ArrayOfRawCppPtr:
+        {
+            auto * special_ptr = reinterpret_cast<RawCppPtrArr *>(ptr);
+            delete special_ptr->inner;
+            delete special_ptr;
+            break;
+        }
         default:
             LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
             exit(-1);
