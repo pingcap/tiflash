@@ -348,11 +348,14 @@ public:
 
     static DeltaSnapshotPtr createSnapshotForRead(CurrentMetrics::Metric type)
     {
+        // read snapshot do nothing with the DeltaVS
         return std::make_shared<DeltaValueSnapshot>(type, /* is_update */ false, nullptr);
     }
 
     static DeltaSnapshotPtr createSnapshotForUpdate(CurrentMetrics::Metric type, DeltaValueSpacePtr delta)
     {
+        // after update snapshot is released, it will change the DeltaVS updating flag
+        assert(delta != nullptr);
         return std::make_shared<DeltaValueSnapshot>(type, /* is_update */ true, delta);
     }
 

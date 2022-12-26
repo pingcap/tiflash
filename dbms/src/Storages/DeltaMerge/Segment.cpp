@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/DeltaMerge.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -171,6 +172,7 @@ SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
         write_node_id,
         table_id,
         segment_range);
+    delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
 
     auto data_store = remote_manager->getDataStore();
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
