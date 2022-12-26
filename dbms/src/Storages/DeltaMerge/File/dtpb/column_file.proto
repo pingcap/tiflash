@@ -30,15 +30,6 @@ message TiFlashSchema {
     repeated TiFlashColumnInfo columns = 1;
 }
 
-message ColumnFileInMemory {
-    // serialized schema
-    bytes schema = 1;
-    // serialized block columns
-    repeated bytes block_columns = 2;
-
-    uint64 rows = 3;
-    // uint64 bytes = 4;
-}
 message ColumnFileTiny {
     uint64 page_id = 1;
     // serialized schema
@@ -50,6 +41,10 @@ message ColumnFileTiny {
 message ColumnFileBig {
     uint64 page_id = 1;
     uint64 file_id = 2;
+
+    // TODO: We should better recalculate these fields from local DTFile.
+    uint64 valid_rows = 10;
+    uint64 valid_bytes = 11;
 }
 message ColumnFileDeleteRange {
     bytes key_range = 1;
@@ -60,8 +55,6 @@ message ColumnFileRemote {
         ColumnFileTiny tiny = 1;
         ColumnFileBig big = 2;
         ColumnFileDeleteRange delete_range = 3;
-
-        ColumnFileInMemory in_memory = 100;
     }
 }
 

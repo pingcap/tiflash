@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -66,9 +67,10 @@ struct SegmentSnapshot : private boost::noncopyable
 
     dtpb::DisaggregatedSegment serializeToRemoteProtocol(const RowKeyRange & segment_range) const;
 
-    static SegmentSnapshotPtr fromRemoteProtocol(
+    static SegmentSnapshotPtr deserializeFromRemoteProtocol(
+        const Remote::ManagerPtr & remote_manager,
         UInt64 write_node_id,
-        const DMContext & context,
+        Int64 table_id,
         const dtpb::DisaggregatedSegment & proto);
 };
 

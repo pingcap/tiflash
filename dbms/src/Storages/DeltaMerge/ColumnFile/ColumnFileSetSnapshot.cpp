@@ -36,15 +36,15 @@ RowKeyRange ColumnFileSetSnapshot::getSquashDeleteRange() const
 
 ColumnFileSetSnapshotPtr ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
     const google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> & proto,
+    const Remote::ManagerPtr & remote_manager,
     UInt64 remote_write_node_id,
-    const DMContext & context, // RemoteManager, table_id, MinMaxIndex, ReadLimiter is used.
+    Int64 table_id,
     const RowKeyRange & segment_range)
 {
-    auto remote_manager = context.db_context.getDMRemoteManager();
     IColumnFileSetStorageReaderPtr base_storage = std::make_shared<RemoteColumnFileSetStorage>(
         remote_manager,
         remote_write_node_id,
-        context.table_id);
+        table_id);
 
     auto log = Logger::get();
 
@@ -59,17 +59,13 @@ ColumnFileSetSnapshotPtr ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
             auto tiny_file = remote_column_file.tiny();
             auto page_oid = Remote::PageOID{
                 .write_node_id = remote_write_node_id,
-                .table_id = context.table_id,
+                .table_id = table_id,
                 .page_id = tiny_file.page_id(),
             };
             ret->column_files.push_back(ColumnFileTiny::deserializeFromRemoteProtocol(
                 tiny_file,
                 page_oid,
-                context));
-        }
-        else if (remote_column_file.has_in_memory())
-        {
-            ret->column_files.push_back(ColumnFileInMemory::deserializeFromRemoteProtocol(remote_column_file.in_memory()));
+                remote_manager->getPageCache()));
         }
         else if (remote_column_file.has_delete_range())
         {
@@ -80,13 +76,13 @@ ColumnFileSetSnapshotPtr ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
             auto big_file = remote_column_file.big();
             auto file_oid = Remote::DMFileOID{
                 .write_node_id = remote_write_node_id,
-                .table_id = context.table_id,
+                .table_id = table_id,
                 .file_id = big_file.file_id(),
             };
             ret->column_files.push_back(ColumnFileBig::deserializeFromRemoteProtocol(
                 big_file,
                 file_oid,
-                context,
+                remote_manager->getDataStore(),
                 segment_range));
         }
         else

@@ -170,13 +170,12 @@ dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol() const
 std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(
     const dtpb::ColumnFileTiny & proto,
     const Remote::PageOID & oid,
-    const DMContext & context)
+    const Remote::LocalPageCachePtr & page_cache)
 {
     RUNTIME_CHECK(oid.page_id == proto.page_id());
 
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid.info(), proto.rows());
 
-    auto page_cache = context.db_context.getDMRemoteManager()->getPageCache();
     page_cache->ensurePagesReady({oid});
 
     BlockPtr schema;

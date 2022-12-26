@@ -32,6 +32,12 @@ using RemoteTableReadTaskPtr = std::shared_ptr<RemoteTableReadTask>;
 class RemoteSegmentReadTask;
 using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
 
+namespace Remote
+{
+class LocalPageCache;
+using LocalPageCachePtr = std::shared_ptr<LocalPageCache>;
+} // namespace Remote
+
 enum class SegmentReadTaskState
 {
     Init,
@@ -185,7 +191,6 @@ public:
         UInt64 store_id_,
         TableID table_id_,
         UInt64 segment_id_,
-        RowKeyRanges ranges_,
         String address_);
 
 public:
@@ -194,20 +199,23 @@ public:
     const UInt64 store_id;
     const TableID table_id;
     const UInt64 segment_id;
-    const RowKeyRanges ranges;
     const String address;
 
 private:
+    Remote::LocalPageCachePtr page_cache;
+
     // The snapshot of reading ids acquired from write node
     std::vector<UInt64> delta_page_ids;
     std::vector<UInt64> stable_files;
-    // FIXME: These should be only stored in write node
+
+    SegmentPtr segment;
     SegmentSnapshotPtr segment_snap;
 
     // The page ids need to fetch from write node
     std::vector<UInt64> pending_page_ids;
 
     std::mutex mtx_queue;
+
     // FIXME: this should be directly persisted to local cache? Or it will consume
     // too many memory
     // A temporary queue for storing the pages

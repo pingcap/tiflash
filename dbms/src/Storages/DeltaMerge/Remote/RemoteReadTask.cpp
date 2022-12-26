@@ -210,50 +210,60 @@ RemoteSegmentReadTask::RemoteSegmentReadTask(
     UInt64 store_id_,
     TableID table_id_,
     UInt64 segment_id_,
-    RowKeyRanges ranges_,
     String address_)
     : snapshot_id(std::move(snapshot_id_))
     , store_id(store_id_)
     , table_id(table_id_)
     , segment_id(segment_id_)
-    , ranges(std::move(ranges_))
     , address(std::move(address_))
 {
 }
 
 RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
     const Context & db_context,
-    const dtpb::DisaggregatedSegment & serialized,
+    const dtpb::DisaggregatedSegment & proto,
     const DisaggregatedTaskId & snapshot_id,
     UInt64 store_id,
     TableID table_id,
     const String & address)
 {
+    SegmentSnapshotPtr snapshot;
 
+    RowKeyRange segment_range;
+    {
+        ReadBufferFromString rb(proto.key_range());
+        segment_range = RowKeyRange::deserialize(rb);
+    }
 
-    // TODO set by serialized.key_range()
-    RowKeyRanges key_ranges;
     auto task = std::make_shared<RemoteSegmentReadTask>(
         snapshot_id,
         store_id,
         table_id,
-        serialized.segment_id(),
-        key_ranges,
+        proto.segment_id(),
         address);
 
-    UNUSED(db_context);
-    // TODO set by serialized.stable_pages()
-    // TODO set by serialized.column_files()
-    // TODO set by serialized.has_mem_table()
+    task->page_cache = db_context.getDMRemoteManager()->getPageCache();
+    task->segment = std::make_shared<Segment>(
+        Logger::get(),
+        0,
+        segment_range,
+        0,
+        0,
+        nullptr,
+        nullptr);
 
-    // TODO build the page ids need to fetch from write nodes
+    task->segment_snap = SegmentSnapshot::deserializeFromRemoteProtocol(
+        db_context.getDMRemoteManager(),
+        store_id,
+        table_id,
+        proto);
 
     return task;
 }
 
 void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
 {
-    // TODO: directly write down to local cache?
+    // TODO: Use LocalPageCache
     std::lock_guard lock(mtx_queue);
     size_t buf_size = remote_page.data().size();
     char * data_buf = static_cast<char *>(allocator.alloc(buf_size));

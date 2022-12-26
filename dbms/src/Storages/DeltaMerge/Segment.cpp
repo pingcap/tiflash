@@ -130,9 +130,10 @@ dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(const RowK
     return remote;
 }
 
-SegmentSnapshotPtr SegmentSnapshot::fromRemoteProtocol(
+SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
+    const Remote::ManagerPtr & remote_manager,
     UInt64 write_node_id,
-    const DMContext & context,
+    Int64 table_id,
     const dtpb::DisaggregatedSegment & proto)
 {
     RowKeyRange segment_range;
@@ -144,23 +145,25 @@ SegmentSnapshotPtr SegmentSnapshot::fromRemoteProtocol(
     auto delta_snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
     delta_snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
         proto.column_files_memtable(),
+        remote_manager,
         write_node_id,
-        context,
+        table_id,
         segment_range);
     delta_snap->persisted_files_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
         proto.column_files_persisted(),
+        remote_manager,
         write_node_id,
-        context,
+        table_id,
         segment_range);
 
-    auto data_store = context.db_context.getDMRemoteManager()->getDataStore();
+    auto data_store = remote_manager->getDataStore();
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
     DMFiles dmfiles;
     for (const auto & stable_file : proto.stable_pages())
     {
         auto oid = Remote::DMFileOID{
             .write_node_id = write_node_id,
-            .table_id = context.table_id,
+            .table_id = table_id,
             .file_id = stable_file.file_id(),
         };
         auto prepared = data_store->prepareDMFile(oid);

@@ -112,8 +112,9 @@ public:
 
     static ColumnFileSetSnapshotPtr deserializeFromRemoteProtocol(
         const google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> & proto,
+        const Remote::ManagerPtr & remote_manager,
         UInt64 remote_write_node_id,
-        const DMContext & context,
+        Int64 table_id,
         const RowKeyRange & segment_range);
 };
 

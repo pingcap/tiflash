@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 
 namespace DB
@@ -121,7 +122,7 @@ public:
     static std::shared_ptr<ColumnFileTiny> deserializeFromRemoteProtocol(
         const dtpb::ColumnFileTiny & proto,
         const Remote::PageOID & oid,
-        const DMContext & context);
+        const Remote::LocalPageCachePtr & page_cache);
 
     PageId getDataPageId() const { return data_page_id; }
 

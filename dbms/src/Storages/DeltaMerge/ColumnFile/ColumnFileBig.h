@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 
 namespace DB
@@ -39,6 +40,9 @@ private:
 
     RowKeyRange segment_range;
 
+    void calculateStat(const DMContext & context);
+
+public:
     ColumnFileBig(const DMFilePtr & file_, size_t valid_rows_, size_t valid_bytes_, const RowKeyRange & segment_range_)
         : file(file_)
         , valid_rows(valid_rows_)
@@ -47,9 +51,6 @@ private:
     {
     }
 
-    void calculateStat(const DMContext & context);
-
-public:
     ColumnFileBig(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
 
     ColumnFileBig(const ColumnFileBig &) = default;
@@ -97,13 +98,15 @@ public:
         dtpb::ColumnFileRemote ret;
         ret.mutable_big()->set_file_id(file->fileId());
         ret.mutable_big()->set_page_id(file->pageId());
+        ret.mutable_big()->set_valid_rows(valid_rows);
+        ret.mutable_big()->set_valid_bytes(valid_bytes);
         return ret;
     }
 
     static std::shared_ptr<ColumnFileBig> deserializeFromRemoteProtocol(
         const dtpb::ColumnFileBig & proto,
         const Remote::DMFileOID & oid,
-        const DMContext & context,
+        const Remote::IDataStorePtr & data_store,
         const RowKeyRange & segment_range);
 
     String toString() const override
