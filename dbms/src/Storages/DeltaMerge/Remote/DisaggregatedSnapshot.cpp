@@ -17,16 +17,9 @@ DisaggregatedTableReadSnapshot::toRemote(const DisaggregatedTaskId & task_id) co
     for (const auto & seg_task : tasks)
     {
         auto remote_seg = seg_task->read_snapshot->serializeToRemoteProtocol(
-            seg_task->segment->getRowKeyRange());
-        // serialize the read ranges to read node
-        WriteBufferFromOwnString wb;
-        for (const auto & read_range : seg_task->ranges)
-        {
-            read_range.serialize(wb);
-            remote_seg.add_read_key_ranges()->assign(wb.releaseStr());
-            wb.restart();
-        }
-        LOG_DEBUG(Logger::get(), "serialize to remote {}", remote_seg.DebugString());
+            seg_task->segment->segmentId(),
+            seg_task->segment->getRowKeyRange(),
+            /*read_ranges*/ seg_task->ranges);
         remote_table.mutable_segments()->Add(std::move(remote_seg));
     }
     return remote_table;

@@ -236,7 +236,6 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
     const String & address,
     const LoggerPtr & log)
 {
-    LOG_DEBUG(log, "Building from {}", proto.DebugString());
     RowKeyRange segment_range;
     {
         ReadBufferFromString rb(proto.key_range());
@@ -258,11 +257,11 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
 
     task->page_cache = db_context.getDMRemoteManager()->getPageCache();
     task->segment = std::make_shared<Segment>(
-        Logger::get(),
-        0,
+        log,
+        /*epoch*/ 0,
         segment_range,
-        0,
-        0,
+        proto.segment_id(),
+        /*next_segment_id*/ 0,
         nullptr,
         nullptr);
     task->read_ranges = std::move(read_ranges);
@@ -299,7 +298,10 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
         {
             task->pending_page_ids.emplace_back(oid.page_id);
         }
-        LOG_INFO(log, "local cache hit rate: {:.2f}%, pending_ids: {}", 100.0 * pending_oids.size() / all_persisted_ids.size(), task->pendingPageIds());
+        LOG_INFO(log,
+                 "local cache hit rate: {}, pending_ids: {}",
+                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 * pending_oids.size() / all_persisted_ids.size())),
+                 task->pendingPageIds());
     }
 
     return task;

@@ -108,9 +108,14 @@ extern const int UNKNOWN_FORMAT_VERSION;
 namespace DM
 {
 
-dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(const RowKeyRange & segment_range) const
+dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(
+    PageId segment_id,
+    const RowKeyRange & segment_range,
+    const RowKeyRanges & read_ranges) const
 {
     dtpb::DisaggregatedSegment remote;
+    remote.set_segment_id(segment_id);
+
     WriteBufferFromOwnString wb;
     {
         // segment key_range
@@ -127,6 +132,16 @@ dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(const RowK
     }
     remote.mutable_column_files_memtable()->CopyFrom(delta->getMemTableSetSnapshot()->serializeToRemoteProtocol());
     remote.mutable_column_files_persisted()->CopyFrom(delta->getPersistedFileSetSnapshot()->serializeToRemoteProtocol());
+
+    // serialize the read ranges to read node
+    for (const auto & read_range : read_ranges)
+    {
+        wb.restart();
+        read_range.serialize(wb);
+        remote.add_read_key_ranges()->assign(wb.releaseStr());
+    }
+    LOG_DEBUG(Logger::get(), "serialize to remote {}", remote.DebugString());
+
     return remote;
 }
 

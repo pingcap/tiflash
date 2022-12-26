@@ -80,7 +80,7 @@ message DisaggregatedSegment {
 
     // TODO: We should defer mem_table resolution to a later request.
     // bool has_mem_table = 5;
-    repeated ColumnFileRemote column_files_memtable = 5; // rn 
+    repeated ColumnFileRemote column_files_memtable = 5;
 
     repeated bytes read_key_ranges = 6;
 }

@@ -65,7 +65,10 @@ struct SegmentSnapshot : private boost::noncopyable
 
     bool isForUpdate() const { return delta->isForUpdate(); }
 
-    dtpb::DisaggregatedSegment serializeToRemoteProtocol(const RowKeyRange & segment_range) const;
+    dtpb::DisaggregatedSegment serializeToRemoteProtocol(
+        PageId segment_id,
+        const RowKeyRange & segment_range,
+        const RowKeyRanges & read_ranges) const;
 
     static SegmentSnapshotPtr deserializeFromRemoteProtocol(
         const Context & db_context,
