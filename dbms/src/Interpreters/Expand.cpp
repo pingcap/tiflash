@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Repeat.h>
 #include <Columns/ColumnNullable.h>
-#include <Functions/FunctionHelpers.h>
 #include <DataTypes/DataTypeNullable.h>
-#include "DataTypes/DataTypesNumber.h"
+#include <Functions/FunctionHelpers.h>
+#include <Interpreters/Expand.h>
 #include <tipb/executor.pb.h>
+
+#include "DataTypes/DataTypesNumber.h"
 
 namespace DB
 {
@@ -32,10 +33,10 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
 }
 }
 
-Repeat::Repeat(const DB::GroupingSets & gss)
+Expand::Expand(const DB::GroupingSets & gss)
     : group_sets_names(gss){}
 
-void Repeat::getGroupingSetsDes(FmtBuffer & buffer) const
+void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
 {
     buffer.fmtAppend("[");
     for (const auto & grouping_set: group_sets_names)
@@ -78,7 +79,7 @@ void Repeat::getGroupingSetsDes(FmtBuffer & buffer) const
 /// \param input the source block
 /// \return
 
-void Repeat::replicateAndFillNull(Block & block) const
+void Expand::replicateAndFillNull(Block & block) const
 {
     size_t origin_rows = block.rows();
     // make a replicate slice, using it to replicate origin rows.
@@ -119,7 +120,7 @@ void Repeat::replicateAndFillNull(Block & block) const
     // replicate the original block rows.
     size_t existing_columns = block.columns();
 
-    if (offsets_to_replicate)
+    if (offsets_to_replicate && offsets_to_replicate->size() > 0)
     {
         for (size_t i = 0; i < existing_columns; ++i)
         {
@@ -202,7 +203,7 @@ void Repeat::replicateAndFillNull(Block & block) const
     // return input from block.
 }
 
-bool Repeat::isInGroupSetColumn(String name) const{
+bool Expand::isInGroupSetColumn(String name) const{
     for(const auto& it1 : group_sets_names)
     {
         // for every grouping set.
@@ -220,13 +221,13 @@ bool Repeat::isInGroupSetColumn(String name) const{
     return false;
 }
 
-const GroupingColumnNames& Repeat::getGroupSetColumnNamesByOffset(size_t offset) const
+const GroupingColumnNames& Expand::getGroupSetColumnNamesByOffset(size_t offset) const
 {
     /// currently, there only can be one groupingExprs in one groupingSet before the planner supporting the grouping set merge.
     return group_sets_names[offset][0];
 }
 
-void Repeat::getAllGroupSetColumnNames(std::set<String>& name_set) const
+void Expand::getAllGroupSetColumnNames(std::set<String>& name_set) const
 {
     for(const auto& it1 : group_sets_names)
     {
@@ -242,11 +243,11 @@ void Repeat::getAllGroupSetColumnNames(std::set<String>& name_set) const
     }
 }
 
-std::shared_ptr<Repeat> Repeat::sharedRepeat(const GroupingSets & groupingSets)
+std::shared_ptr<Expand> Expand::sharedExpand(const GroupingSets & groupingSets)
 {
-   return std::make_shared<Repeat>(groupingSets);
+   return std::make_shared<Expand>(groupingSets);
 }
 
-const std::string Repeat::grouping_identifier_column_name = "groupingID";
-const DataTypePtr Repeat::grouping_identifier_column_type = std::make_shared<DataTypeUInt64>();
+const std::string Expand::grouping_identifier_column_name = "groupingID";
+const DataTypePtr Expand::grouping_identifier_column_type = std::make_shared<DataTypeUInt64>();
 }

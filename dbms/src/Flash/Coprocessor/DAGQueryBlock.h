@@ -60,8 +60,8 @@ public:
     String having_name;
     const tipb::Executor * limit_or_topn = nullptr;
     String limit_or_topn_name;
-    const tipb::Executor * repeat_source = nullptr;          // repeat source node can only be before sender
-    String repeat_source_name;
+    const tipb::Executor * expand = nullptr;          // expand node can only be before sender
+    String expand_name;
     const tipb::Executor * exchange_sender = nullptr;
     String exchange_sender_name;
     UInt32 id;

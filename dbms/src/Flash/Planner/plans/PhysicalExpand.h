@@ -21,25 +21,25 @@
 
 namespace DB
 {
-class PhysicalRepeat : public PhysicalUnary
+class PhysicalExpand : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::RepeatSource & repeat,
+        const tipb::Expand & expand,
         const PhysicalPlanNodePtr & child);
 
-    PhysicalRepeat(
+    PhysicalExpand(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const std::shared_ptr<Repeat> & shared_repeat,
+        const std::shared_ptr<Expand> & shared_expand,
         const Block & sample_block_)
         : PhysicalUnary(executor_id_, PlanType::Repeat, schema_, req_id, child_)
-        , shared_repeat(shared_repeat), sample_block(sample_block_){}
+        , shared_expand(shared_expand), sample_block(sample_block_){}
 
     void finalize(const Names & parent_require) override;
 
@@ -49,7 +49,7 @@ public:
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
-    std::shared_ptr<Repeat> shared_repeat;
+    std::shared_ptr<Expand> shared_expand;
     Block sample_block;
 };
 }  // namespace DB

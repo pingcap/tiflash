@@ -18,6 +18,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
+#include <DataStreams/ExpandBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
@@ -31,7 +32,6 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataStreams/RepeatSourceBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -48,9 +48,9 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/Expand.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
-#include <Interpreters/Repeat.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -82,7 +82,7 @@ struct AnalysisResult
     ExpressionActionsPtr before_having;
     ExpressionActionsPtr before_order_and_select;
     ExpressionActionsPtr final_projection;
-    ExpressionActionsPtr before_repeat_source;
+    ExpressionActionsPtr before_expand;
 
     String filter_column_name;
     String having_column_name;
@@ -142,8 +142,8 @@ AnalysisResult analyzeExpressions(
         chain.addStep();
     }
 
-    if (query_block.repeat_source) {
-        res.before_repeat_source = analyzer.appendRepeatSource(query_block.repeat_source->repeat_source(), chain);
+    if (query_block.expand) {
+        res.before_expand = analyzer.appendExpand(query_block.expand->expand(), chain);
     }
 
     const auto & dag_context = *context.getDAGContext();
@@ -743,10 +743,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute the repeat source OP after all filter/limits and so on.
     // since repeat source OP has some row replication work to do, place it after limit can reduce some unnecessary burden.
     // and put it before the final projection, because we should recognize some base col as grouping set col before change their alias.
-    if (res.before_repeat_source)
+    if (res.before_expand)
     {
-        executeRepeatSource(pipeline, res.before_repeat_source);
-        recordProfileStreams(pipeline, query_block.repeat_source_name);
+        executeExpandSource(pipeline, res.before_expand);
+        recordProfileStreams(pipeline, query_block.expand_name);
     }
 
     // execute final project action
@@ -792,10 +792,10 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeRepeatSource(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
+void DAGQueryBlockInterpreter::executeExpandSource(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
 {
     pipeline.transform([&](auto &stream) {
-        stream = std::make_shared<RepeatSourceBlockInputStream>(stream, expr);
+        stream = std::make_shared<ExpandBlockInputStream>(stream, expr);
     });
 }
 

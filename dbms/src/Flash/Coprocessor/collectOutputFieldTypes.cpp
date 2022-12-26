@@ -109,8 +109,8 @@ bool collectForRepeat(std::vector<tipb::FieldType> &out_field_types, const tipb:
         traverseExecutorTree(child, [&out_child_fields](const tipb::Executor & e) { return collectForExecutor(out_child_fields, e); });
     });
 
-    // 对孩子的节点需要根据 grouping sets 的对应关系，给予 nullable 的处理
-    for (const auto & grouping_set : executor.repeat_source().grouping_sets()){
+    // make the columns from grouping sets nullable.
+    for (const auto & grouping_set : executor.expand().grouping_sets()){
         for (const auto & grouping_exprs : grouping_set.grouping_exprs()){
             for (const auto & grouping_col : grouping_exprs.grouping_expr()){
                 // assert that: grouping_col must be the column ref guaranteed by tidb.
@@ -230,7 +230,7 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         return collectForTableScan(output_field_types, executor.partition_table_scan());
     case tipb::ExecType::TypeJoin:
         return collectForJoin(output_field_types, executor);
-    case tipb::ExecType::TypeRepeatSource:
+    case tipb::ExecType::TypeExpand:
         return collectForRepeat(output_field_types, executor);
     default:
         return true;

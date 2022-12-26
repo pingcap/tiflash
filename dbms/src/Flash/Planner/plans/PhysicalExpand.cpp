@@ -15,30 +15,30 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
+#include <DataStreams/ExpandBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalRepeat.h>
+#include <Flash/Planner/plans/PhysicalExpand.h>
 #include <Interpreters/Context.h>
 #include <fmt/format.h>
-#include <DataStreams/RepeatSourceBlockInputStream.h>
-#include <DataTypes/DataTypeNullable.h>
 
 namespace DB
 {
-PhysicalPlanNodePtr PhysicalRepeat::build(
+PhysicalPlanNodePtr PhysicalExpand::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const tipb::RepeatSource & repeat_source,
+    const tipb::Expand & expand,
     const PhysicalPlanNodePtr & child)
 {
     assert(child);
 
     child->finalize();
 
-    if (unlikely(repeat_source.grouping_sets().empty()))
+    if (unlikely(expand.grouping_sets().empty()))
     {
         //should not reach here
         throw TiFlashException("Repeat executor without grouping sets", Errors::Planner::BadRequest);
@@ -48,7 +48,7 @@ PhysicalPlanNodePtr PhysicalRepeat::build(
     ExpressionActionsPtr before_repeat_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
 
 
-    auto shared_repeat = analyzer.buildRepeatGroupingColumns(repeat_source, before_repeat_actions);
+    auto shared_repeat = analyzer.buildExpandGroupingColumns(expand, before_repeat_actions);
 
     // construct sample block.
     NamesAndTypes repeat_output_columns;
@@ -59,7 +59,7 @@ PhysicalPlanNodePtr PhysicalRepeat::build(
     }
     repeat_output_columns.emplace_back(shared_repeat->grouping_identifier_column_name, shared_repeat->grouping_identifier_column_type);
 
-    auto physical_repeat = std::make_shared<PhysicalRepeat>(
+    auto physical_repeat = std::make_shared<PhysicalExpand>(
         executor_id,
         repeat_output_columns,
         log->identifier(),
@@ -71,34 +71,34 @@ PhysicalPlanNodePtr PhysicalRepeat::build(
 }
 
 
-void PhysicalRepeat::repeatTransform(DAGPipeline & child_pipeline, Context & context)
+void PhysicalExpand::repeatTransform(DAGPipeline & child_pipeline, Context & context)
 {
     auto repeat_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader(), context);
-    repeat_actions->add(ExpressionAction::repeatSource(shared_repeat));
+    repeat_actions->add(ExpressionAction::expandSource(shared_expand));
     String repeat_extra_info = fmt::format("repeat source, repeat_executor_id = {}", execId());
     child_pipeline.transform([&](auto &stream) {
-        stream = std::make_shared<RepeatSourceBlockInputStream>(stream, repeat_actions);
+        stream = std::make_shared<ExpandBlockInputStream>(stream, repeat_actions);
         stream->setExtraInfo(repeat_extra_info);
     });
 }
 
-void PhysicalRepeat::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalExpand::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     child->transform(pipeline, context, max_streams);
     repeatTransform(pipeline, context);
 }
 
-void PhysicalRepeat::finalize(const Names & parent_require)
+void PhysicalExpand::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     Names required_output;
-    required_output.reserve( shared_repeat->getGroupSetNum());    // grouping set column should be existed in the child output schema.
+    required_output.reserve( shared_expand->getGroupSetNum());    // grouping set column should be existed in the child output schema.
     auto name_set = std::set<String>();
-    shared_repeat->getAllGroupSetColumnNames(name_set);
+    shared_expand->getAllGroupSetColumnNames(name_set);
     // append parent_require column it may expect self-filled groupingID.
     for (const auto & one : parent_require)
     {
-        if (one != Repeat::grouping_identifier_column_name)
+        if (one != Expand::grouping_identifier_column_name)
         {
             name_set.insert(one);
         }
@@ -109,7 +109,7 @@ void PhysicalRepeat::finalize(const Names & parent_require)
     child->finalize(required_output);
 }
 
-const Block & PhysicalRepeat::getSampleBlock() const
+const Block & PhysicalExpand::getSampleBlock() const
 {
     return sample_block;
 }
