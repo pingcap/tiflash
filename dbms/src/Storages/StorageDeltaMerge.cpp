@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -36,6 +37,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/File.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -48,6 +50,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
@@ -584,21 +587,9 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
     throw Exception(fmt::format("Unable to parse segment IDs in literal form: `{}`", partition_ast.fields_str.toString()));
 }
 
-BlockInputStreams StorageDeltaMerge::read(
-    const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & /*processed_stage*/,
-    size_t max_block_size,
-    unsigned num_streams)
+void setColumnsToRead(const DeltaMergeStorePtr & store, ColumnDefines & columns_to_read, size_t & extra_table_id_index, const Names & column_names)
 {
-    auto & store = getAndMaybeInitStore();
-    // Note that `columns_to_read` should keep the same sequence as ColumnRef
-    // in `Coprocessor.TableScan.columns`, or rough set filter could be
-    // failed to parsed.
-    ColumnDefines columns_to_read;
     auto header = store->getHeader();
-    size_t extra_table_id_index = InvalidColumnID;
     for (size_t i = 0; i < column_names.size(); i++)
     {
         ColumnDefine col_define;
@@ -623,52 +614,41 @@ BlockInputStreams StorageDeltaMerge::read(
         }
         columns_to_read.push_back(col_define);
     }
+}
 
-    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    if (select_query.raw_for_mutable) // for selraw
-    {
-        // Read without MVCC filtering and del_mark = 1 filtering
-        return store->readRaw(
-            context,
-            context.getSettingsRef(),
-            columns_to_read,
-            num_streams,
-            query_info.keep_order,
-            parseSegmentSet(select_query.segment_expression_list),
-            extra_table_id_index);
-    }
-
-    // Read with MVCC filtering
-    TMTContext & tmt = context.getTMTContext();
-    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+// Check whether tso is smaller than TiDB GcSafePoint
+void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id)
+{
+    auto & tmt = context.getTMTContext();
     RUNTIME_CHECK(tmt.isInitialized());
+    auto pd_client = tmt.getPDClient();
+    if (unlikely(pd_client->isMock()))
+        return;
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        /* ignore_cache= */ false,
+        context.getSettingsRef().safe_point_update_interval_seconds);
+    if (read_tso < safe_point)
+    {
+        throw TiFlashException(
+            fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}",
+                        req_id,
+                        read_tso,
+                        safe_point),
+            Errors::Coprocessor::BadRequest);
+    }
+}
 
-    const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto tracing_logger = log->getChild(query_info.req_id);
-
+DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
+    const DB::MvccQueryInfo & mvcc_query_info,
+    unsigned num_streams,
+    const Context & context,
+    const String & req_id,
+    const LoggerPtr & tracing_logger)
+{
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
-    // Check whether tso is smaller than TiDB GcSafePoint
-    const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
-        auto pd_client = tmt.getPDClient();
-        if (likely(!pd_client->isMock()))
-        {
-            auto safe_point = PDClientHelper::getGCSafePointWithRetry(
-                pd_client,
-                /* ignore_cache= */ false,
-                global_context.getSettingsRef().safe_point_update_interval_seconds);
-            if (read_tso < safe_point)
-            {
-                throw Exception(
-                    fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}",
-                                context.getCurrentQueryId(),
-                                read_tso,
-                                safe_point),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-    };
-    check_read_tso(mvcc_query_info.read_tso);
+    checkReadTso(mvcc_query_info.read_tso, context, req_id);
 
     FmtBuffer fmt_buf;
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -703,7 +683,7 @@ BlockInputStreams StorageDeltaMerge::read(
         tidb_table_info.id,
         is_common_handle,
         rowkey_column_size,
-        /*expected_ranges_count*/ num_streams,
+        num_streams,
         tracing_logger);
 
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -719,7 +699,15 @@ BlockInputStreams StorageDeltaMerge::read(
         LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
-    /// Get Rough set filter from query
+    return ranges;
+}
+
+
+DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo & query_info,
+                                                         const ColumnDefines & columns_to_read,
+                                                         const Context & context,
+                                                         const LoggerPtr & tracing_logger)
+{
     DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
     const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
     if (enable_rs_filter)
@@ -746,6 +734,51 @@ BlockInputStreams StorageDeltaMerge::read(
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
+    return rs_operator;
+}
+
+BlockInputStreams StorageDeltaMerge::read(
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    QueryProcessingStage::Enum & /*processed_stage*/,
+    size_t max_block_size,
+    unsigned num_streams)
+{
+    auto & store = getAndMaybeInitStore();
+    // Note that `columns_to_read` should keep the same sequence as ColumnRef
+    // in `Coprocessor.TableScan.columns`, or rough set filter could be
+    // failed to parsed.
+    ColumnDefines columns_to_read;
+    size_t extra_table_id_index = InvalidColumnID;
+    setColumnsToRead(store, columns_to_read, extra_table_id_index, column_names);
+
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+    if (select_query.raw_for_mutable) // for selraw
+    {
+        // Read without MVCC filtering and del_mark = 1 filtering
+        return store->readRaw(
+            context,
+            context.getSettingsRef(),
+            columns_to_read,
+            num_streams,
+            query_info.keep_order,
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
+    }
+
+    auto tracing_logger = log->getChild(query_info.req_id);
+
+    // Read with MVCC filtering
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+
+    auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
+
+    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+
+    const auto & scan_context = mvcc_query_info.scan_context;
+
     auto streams = store->read(
         context,
         context.getSettingsRef(),
@@ -759,14 +792,58 @@ BlockInputStreams StorageDeltaMerge::read(
         /* is_fast_scan */ query_info.is_fast_scan,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
-        extra_table_id_index);
+        extra_table_id_index,
+        scan_context);
 
     /// Ensure read_tso info after read.
-    check_read_tso(mvcc_query_info.read_tso);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
+}
+
+DisaggregatedTableReadSnapshotPtr
+StorageDeltaMerge::buildRemoteReadSnapshot(
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    unsigned num_streams)
+{
+    auto & store = getAndMaybeInitStore();
+    ColumnDefines columns_to_read;
+    size_t extra_table_id_index = InvalidColumnID;
+    setColumnsToRead(store, columns_to_read, extra_table_id_index, column_names);
+
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+
+    auto tracing_logger = log->getChild(query_info.req_id);
+
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+    auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
+
+    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+
+    const auto & scan_context = mvcc_query_info.scan_context;
+
+    auto read_segments = parseSegmentSet(select_query.segment_expression_list);
+
+    auto snap = store->buildRemoteReadSnapshot(
+        context,
+        context.getSettingsRef(),
+        ranges,
+        rs_operator,
+        num_streams,
+        query_info.req_id,
+        read_segments,
+        scan_context);
+
+    snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
+
+    // Ensure read_tso is valid after snapshot is built
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    return snap;
 }
 
 void StorageDeltaMerge::checkStatus(const Context & context)

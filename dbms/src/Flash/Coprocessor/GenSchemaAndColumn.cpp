@@ -13,9 +13,12 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -34,13 +37,35 @@ DataTypePtr getPkType(const ColumnInfo & column_info)
 }
 } // namespace
 
+NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan)
+{
+    return genNamesAndTypes(table_scan, "table_scan");
+}
+
+NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_scan)
+{
+    NamesAndTypes names_and_types;
+    names_and_types.reserve(table_scan.getColumnSize());
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        const auto & column_info = table_scan.getColumns()[i];
+        names_and_types.emplace_back(genNameForExchangeReceiver(i), getDataTypeByColumnInfoForComputingLayer(column_info));
+    }
+    return names_and_types;
+}
+
+String genNameForExchangeReceiver(Int32 col_index)
+{
+    return "exchange_receiver_" + std::to_string(col_index);
+}
+
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        auto column_info = TiDB::toTiDBColumnInfo(table_scan.getColumns()[i]);
+        const auto column_info = table_scan.getColumns()[i];
         switch (column_info.id)
         {
         case TiDBPkColumnID:
@@ -54,6 +79,40 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
         }
     }
     return names_and_types;
+}
+
+DM::ColumnDefinesPtr genColumnDefinesForTableScan(const TiDBTableScan & table_scan)
+{
+    auto column_defines = std::make_shared<DM::ColumnDefines>();
+    column_defines->reserve(table_scan.getColumnSize());
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        const auto & column_info = table_scan.getColumns()[i];
+        switch (column_info.id)
+        {
+        case TiDBPkColumnID:
+            column_defines->emplace_back(DM::ColumnDefine{
+                TiDBPkColumnID,
+                MutableSupport::tidb_pk_column_name,
+                getPkType(column_info)});
+            break;
+        case ExtraTableIDColumnID:
+            column_defines->emplace_back(DM::ColumnDefine{
+                ExtraTableIDColumnID,
+                MutableSupport::extra_table_id_column_name,
+                MutableSupport::extra_table_id_column_type});
+            break;
+        default:
+            // TODO: Is it ok to use the default value here?
+            column_defines->emplace_back(DM::ColumnDefine{
+                column_info.id,
+                column_info.name,
+                getDataTypeByColumnInfoForComputingLayer(column_info),
+                column_info.defaultValueToField()});
+            break;
+        }
+    }
+    return column_defines;
 }
 
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)

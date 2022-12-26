@@ -15,14 +15,18 @@
 
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
 #include <vector>
+
+#include "tipb/expression.pb.h"
 
 namespace DB
 {
@@ -63,18 +67,21 @@ public:
      * written randomly in the segment range.
      */
     void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
-    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileByReplace(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
     void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void deleteRangeSegment(PageId segment_id);
 
     /**
      * This function does not check rows.
      */
-    void replaceSegmentData(const std::vector<PageId> & segments_id, const DMFilePtr & file);
-    void replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block);
+    void replaceSegmentData(PageId segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot = nullptr);
+    void replaceSegmentData(PageId segment_id, const Block & block, SegmentSnapshotPtr snapshot = nullptr);
+
+    SegmentReadTaskPtr genSegmentReadTask(PageId segment_id) const;
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
-    std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
+    Block prepareWriteBlockInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
 
     size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
     size_t getSegmentRowNum(PageId segment_id);
@@ -131,6 +138,11 @@ protected:
     LoggerPtr logger_op;
     LoggerPtr logger;
 };
+
+PageIds getCFTinyIds(const ColumnFileSetSnapshotPtr & snapshot);
+
+std::vector<tipb::FieldType> reverseGetFieldType(const ColumnDefines & cds);
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

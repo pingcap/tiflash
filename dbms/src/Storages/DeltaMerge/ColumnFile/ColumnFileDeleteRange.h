@@ -40,6 +40,13 @@ public:
 
     ColumnFileReaderPtr getReader(
         const DMContext &,
+        const IColumnFileSetStorageReaderPtr & reader,
+        const ColumnDefinesPtr & col_defs) const override
+    {
+        return getReader(reader, col_defs);
+    }
+
+    ColumnFileReaderPtr getReader(
         const IColumnFileSetStorageReaderPtr &,
         const ColumnDefinesPtr &) const override;
 
@@ -59,19 +66,26 @@ public:
 
     static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
 
-    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override
+    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {
-        return RemoteProtocol::ColumnFileDeleteRange{
-            .range = delete_range,
-        };
+        dtpb::ColumnFileRemote ret;
+        auto * remote_del = ret.mutable_delete_range();
+        {
+            WriteBufferFromString wb(*remote_del->mutable_key_range());
+            delete_range.serialize(wb);
+        }
+        return ret;
     }
 
     static std::shared_ptr<ColumnFileDeleteRange> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileDeleteRange & proto)
+        const dtpb::ColumnFileDeleteRange & proto)
     {
-        LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileDeleteRange from remote, range={}", proto.range.toDebugString());
+        ReadBufferFromString rb(proto.key_range());
+        auto range = RowKeyRange::deserialize(rb);
 
-        return std::make_shared<ColumnFileDeleteRange>(proto.range);
+        LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileDeleteRange from remote, range={}", range.toDebugString());
+
+        return std::make_shared<ColumnFileDeleteRange>(range);
     }
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override

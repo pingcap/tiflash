@@ -16,22 +16,30 @@
 
 namespace DB
 {
-
-void ExecutionSummary::merge(const ExecutionSummary & other, bool streaming_call)
+void ExecutionSummary::merge(const ExecutionSummary & other)
 {
-    if (streaming_call)
-    {
-        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
-        num_produced_rows = std::max(num_produced_rows, other.num_produced_rows);
-        num_iterations = std::max(num_iterations, other.num_iterations);
-        concurrency = std::max(concurrency, other.concurrency);
-    }
-    else
-    {
-        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
-        num_produced_rows += other.num_produced_rows;
-        num_iterations += other.num_iterations;
-        concurrency += other.concurrency;
-    }
+    time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+    num_produced_rows += other.num_produced_rows;
+    num_iterations += other.num_iterations;
+    concurrency += other.concurrency;
+    scan_context->merge(*other.scan_context);
+}
+
+void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
+{
+    time_processed_ns = std::max(time_processed_ns, other.time_processed_ns());
+    num_produced_rows += other.num_produced_rows();
+    num_iterations += other.num_iterations();
+    concurrency += other.concurrency();
+    scan_context->merge(other.tiflash_scan_context());
+}
+
+void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
+{
+    time_processed_ns = other.time_processed_ns();
+    num_produced_rows = other.num_produced_rows();
+    num_iterations = other.num_iterations();
+    concurrency = other.concurrency();
+    scan_context->deserialize(other.tiflash_scan_context());
 }
 } // namespace DB

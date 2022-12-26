@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/LRUCache.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
@@ -32,6 +31,7 @@
 #include <Storages/PathPool.h>
 
 #include <mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -126,7 +126,8 @@ private:
 
     BlobStats blob_stats;
 
-    DB::LRUCache<BlobFileId, BlobFile> cached_files;
+    std::mutex mtx_blob_files;
+    std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
 };
 
 namespace u128

@@ -84,6 +84,13 @@ public:
 
     ColumnFileReaderPtr getReader(
         const DMContext &,
+        const IColumnFileSetStorageReaderPtr & reader,
+        const ColumnDefinesPtr & col_defs) const override
+    {
+        return getReader(reader, col_defs);
+    }
+
+    ColumnFileReaderPtr getReader(
         const IColumnFileSetStorageReaderPtr &,
         const ColumnDefinesPtr & col_defs) const override;
 
@@ -110,11 +117,6 @@ public:
             + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
         return s;
     }
-
-    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override;
-
-    static std::shared_ptr<ColumnFileInMemory> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileInMemory & proto);
 };
 
 

@@ -16,6 +16,7 @@
 #include <Common/ProfileEvents.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Executor/DataStreamExecutor.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -46,7 +47,7 @@ void prepareForExecute(Context & context)
     quota.checkExceeded(time(nullptr));
 }
 
-ProcessList::EntryPtr getProcessListEntry(Context & context, const DAGContext & dag_context)
+ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_context)
 {
     if (dag_context.is_mpp_task)
     {
@@ -57,10 +58,12 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, const DAGContext & 
     else
     {
         RUNTIME_ASSERT(dag_context.getProcessListEntry() == nullptr, "process list entry for non-MPP must be nullptr");
-        return setProcessListElement(
+        auto process_list_entry = setProcessListElement(
             context,
             dag_context.dummy_query_string,
             dag_context.dummy_ast.get());
+        dag_context.setProcessListEntry(process_list_entry);
+        return process_list_entry;
     }
 }
 
@@ -93,7 +96,6 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
-    dag_context.attachBlockIO(res);
     return res;
 }
 } // namespace
@@ -110,5 +112,10 @@ BlockIO executeQuery(Context & context, bool internal)
         DAGQuerySource dag(context);
         return executeDAG(dag, context, internal);
     }
+}
+
+QueryExecutorPtr queryExecute(Context & context, bool internal)
+{
+    return std::make_unique<DataStreamExecutor>(executeQuery(context, internal));
 }
 } // namespace DB

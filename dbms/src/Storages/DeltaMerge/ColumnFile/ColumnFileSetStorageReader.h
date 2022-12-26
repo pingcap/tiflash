@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/Remote/Manager.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
 namespace DB::DM
@@ -32,6 +34,8 @@ public:
     virtual ~IColumnFileSetStorageReader() = default;
 
     virtual Page readForColumnFileTiny(const PageStorage::PageReadFields &) const = 0;
+
+    virtual Page readForColumnFileTiny(PageId) const = 0;
 };
 
 using IColumnFileSetStorageReaderPtr = std::shared_ptr<IColumnFileSetStorageReader>;
@@ -54,6 +58,12 @@ public:
     {
         auto page_map = storage_snap->log_reader.read({fields});
         return page_map[fields.first];
+    }
+
+    Page readForColumnFileTiny(PageId page_id) const override
+    {
+        auto page = storage_snap->log_reader.read(page_id);
+        return page;
     }
 };
 
@@ -85,6 +95,11 @@ public:
             .page_id = fields.first,
         };
         return page_cache->getPage(oid, fields.second);
+    }
+
+    Page readForColumnFileTiny(PageId) const override
+    {
+        RUNTIME_CHECK(false);
     }
 };
 

@@ -18,8 +18,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
-#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/universal/Readers.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/CHTableHandle.h>

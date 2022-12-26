@@ -19,6 +19,8 @@
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
+#include <memory>
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SegmentReadTasks;
@@ -319,32 +321,6 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
         exception_happened.store(true, std::memory_order_relaxed);
         q.finish();
     }
-}
-
-RemoteReadTaskPtr RemoteReadTask::buildFrom(const DMContext & context, SegmentReadTasks & tasks)
-{
-    RUNTIME_CHECK(context.table_id > 0);
-
-    auto read_tasks = std::make_shared<RemoteReadTask>();
-    read_tasks->table_id = context.table_id;
-    for (const auto & task : tasks)
-    {
-        auto seg_task = std::make_shared<RemoteSegmentReadTask>();
-        seg_task->segment = task->segment;
-        seg_task->ranges = task->ranges;
-
-        auto delta_snap = task->segment->getDelta()->createSnapshotFromRemote(
-            context,
-            task->segment->getRowKeyRange());
-        auto stable_snap = task->segment->getStable()->createSnapshotFromRemote(
-            context,
-            task->segment->getRowKeyRange());
-
-        seg_task->segment_snap = std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
-
-        read_tasks->tasks.emplace_back(std::move(seg_task));
-    }
-    return read_tasks;
 }
 
 } // namespace DB::DM

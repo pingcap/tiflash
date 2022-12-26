@@ -233,6 +233,7 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
     // advance the `stats_map_path_idx` without size checking
     stats_map_path_index += path_iter_idx + 1;
 
+    // Can not find a suitable stat under all paths
     return std::make_pair(nullptr, roll_id);
 }
 

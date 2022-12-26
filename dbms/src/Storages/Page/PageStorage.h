@@ -42,6 +42,7 @@
 
 namespace DB
 {
+class Context;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
@@ -102,6 +103,7 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
         const FileProviderPtr & file_provider,
+        Context & global_ctx,
         bool use_v3 = false,
         bool no_more_insert_to_v2 = false);
 
@@ -207,6 +209,8 @@ public:
             return;
         return checkpointImpl(writer_info, config.ps_remote_directory);
     }
+
+    virtual void shutdown() {}
 
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.

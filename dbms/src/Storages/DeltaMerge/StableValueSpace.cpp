@@ -62,6 +62,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 {},
                 dm_context->db_context.getFileProvider(),
                 dm_context->getReadLimiter(),
+                dm_context->scan_context,
                 dm_context->tracing_id);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
@@ -226,7 +227,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                   .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
                                                   .onlyReadOnePackEveryTime()
                                                   .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
-                                                  .build(file, read_columns, RowKeyRanges{rowkey_range});
+                                                  .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -261,6 +262,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             {},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
+            context.scan_context,
             context.tracing_id);
         const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
@@ -312,29 +314,6 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
 using Snapshot = StableValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-// FIXME: This function doesn't make sense. It simply builds a "remote" snapshot, based on
-//        own data. In real world, read node doesn't know anything about the stable, so we
-//        need to reassemble this function to something else.
-SnapshotPtr StableValueSpace::createSnapshotFromRemote(const DMContext & context, const RowKeyRange & seg_range)
-{
-    auto stable = std::make_shared<StableValueSpace>(id);
-    auto data_store = context.db_context.getDMRemoteManager()->getDataStore();
-    DMFiles dmfiles;
-    for (const auto & file : files)
-    {
-        auto oid = Remote::DMFileOID{
-            .write_node_id = 0,
-            .table_id = context.table_id,
-            .file_id = file->fileId(),
-        };
-        auto prepared = data_store->prepareDMFile(oid);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-        dmfiles.emplace_back(std::move(dmfile));
-    }
-    stable->setFiles(dmfiles, seg_range);
-    return stable->createSnapshot();
-}
-
 SnapshotPtr StableValueSpace::createSnapshot()
 {
     auto snap = std::make_shared<Snapshot>(this->shared_from_this());
@@ -383,7 +362,7 @@ StableValueSpace::Snapshot::getInputStream(
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
-        streams.emplace_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
+        streams.emplace_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
@@ -411,6 +390,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
+            context.scan_context,
             context.tracing_id);
         const auto & pack_stats = f->getPackStats();
         const auto & use_packs = filter.getUsePacks();
@@ -455,6 +435,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
+            context.scan_context,
             context.tracing_id);
         const auto & handle_filter_result = filter.getHandleRes();
         if (file_idx == 0)

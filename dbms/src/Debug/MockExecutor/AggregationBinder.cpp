@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
-#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/FuncSigMap.h>
+#include <Parsers/ASTIdentifier.h>
 #include <fmt/core.h>
 
 namespace DB::mock

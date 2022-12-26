@@ -14,25 +14,25 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
+class DAGContext;
+
 class ExecutionSummaryCollector
 {
 public:
     explicit ExecutionSummaryCollector(
         DAGContext & dag_context_)
         : dag_context(dag_context_)
-    {
-        for (auto & p : dag_context.getProfileStreamsMap())
-        {
-            local_executors.insert(p.first);
-        }
-    }
+    {}
 
     void addExecuteSummaries(tipb::SelectResponse & response);
+
+    tipb::SelectResponse genExecutionSummaryResponse();
 
 private:
     void fillTiExecutionSummary(
@@ -40,8 +40,13 @@ private:
         ExecutionSummary & current,
         const String & executor_id) const;
 
+    void fillLocalExecutionSummary(
+        tipb::SelectResponse & response,
+        const String & executor_id,
+        const BlockInputStreams & streams,
+        const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
+
 private:
     DAGContext & dag_context;
-    std::unordered_set<String> local_executors;
 };
 } // namespace DB

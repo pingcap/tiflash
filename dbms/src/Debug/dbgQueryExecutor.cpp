@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Server/MockComputeClient.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <TestUtils/TiFlashTestEnv.h>
+#include <kvproto/coprocessor.pb.h>
 
 namespace DB
 {
+using TiFlashTestEnv = tests::TiFlashTestEnv;
+
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
 {
     tipb_region_info->set_region_id(region.first);
@@ -42,6 +51,9 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
 
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
+    root_tm.set_query_ts(properties.query_ts);
+    root_tm.set_local_query_id(properties.local_query_id);
+    root_tm.set_server_id(properties.server_id);
     root_tm.set_address(root_addr);
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
@@ -71,6 +83,9 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     {
         mpp::TaskMeta tm;
         tm.set_start_ts(properties.start_ts);
+        tm.set_query_ts(properties.query_ts);
+        tm.set_local_query_id(properties.local_query_id);
+        tm.set_server_id(properties.server_id);
         tm.set_address(Debug::LOCAL_HOST);
         tm.set_task_id(root_task_id);
         tm.set_partition_id(-1);
@@ -84,6 +99,9 @@ void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tip
 {
     mpp::TaskMeta tm;
     tm.set_start_ts(properties.start_ts);
+    tm.set_query_ts(properties.query_ts);
+    tm.set_local_query_id(properties.local_query_id);
+    tm.set_server_id(properties.server_id);
     tm.set_address(addr);
     tm.set_task_id(task_id);
     tm.set_partition_id(-1);
@@ -109,6 +127,9 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
     }
     auto * tm = req->mutable_meta();
     tm->set_start_ts(properties.start_ts);
+    tm->set_query_ts(properties.query_ts);
+    tm->set_local_query_id(properties.local_query_id);
+    tm->set_server_id(properties.server_id);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
@@ -128,6 +149,9 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
     }
     auto * tm = req->mutable_meta();
     tm->set_start_ts(properties.start_ts);
+    tm->set_query_ts(properties.query_ts);
+    tm->set_local_query_id(properties.local_query_id);
+    tm->set_server_id(properties.server_id);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
@@ -285,9 +309,12 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 
     table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request);
-    dag_context.tables_regions_info = std::move(tables_regions_info);
-    dag_context.log = log;
+    DAGContext dag_context(
+        dag_request,
+        std::move(tables_regions_info),
+        /*tidb_host*/ "",
+        /*is_batch_cop*/ false,
+        log);
     context.setDAGContext(&dag_context);
 
     DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
@@ -315,9 +342,12 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
     auto & table_regions_info = tables_regions_info.getSingleTableRegions();
     table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request);
-    dag_context.tables_regions_info = std::move(tables_regions_info);
-    dag_context.log = log;
+    DAGContext dag_context(
+        dag_request,
+        std::move(tables_regions_info),
+        /*tidb_host*/ "",
+        /*is_batch_cop*/ false,
+        log);
     context.setDAGContext(&dag_context);
     DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
