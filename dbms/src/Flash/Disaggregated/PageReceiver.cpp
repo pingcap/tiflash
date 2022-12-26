@@ -369,7 +369,7 @@ std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Reques
         status = reader->finish();
         if (status.ok())
         {
-            LOG_DEBUG(log, "finish read: {}", req.debugString());
+            // LOG_DEBUG(log, "finish read: {}", req.debugString());
             break;
         }
         else
@@ -437,9 +437,9 @@ void PageReceiverBase<RPCContext>::connectionDone(
     }
     LOG_DEBUG(
         log,
-        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
+        "connection end. meet error: {}{}, current alive connections: {}",
         meet_error,
-        local_err_msg,
+        meet_error ? fmt::format(", err msg: {}", local_err_msg) : "",
         copy_live_conn);
 
     if (copy_live_conn == 0)

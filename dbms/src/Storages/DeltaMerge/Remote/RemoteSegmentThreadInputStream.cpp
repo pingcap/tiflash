@@ -22,6 +22,7 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
     DM::RSOperatorPtr rs_filter = {};
 
     BlockInputStreams streams;
+    streams.reserve(num_streams);
     for (size_t i = 0; i < num_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<DM::RemoteSegmentThreadInputStream>(
@@ -88,7 +89,7 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
             {
                 // There is no task left
                 done = true;
-                LOG_DEBUG(log, "Read from remote done");
+                LOG_DEBUG(log, "Read from remote segment done");
                 return {};
             }
             cur_segment_id = task->segment_id;
@@ -100,13 +101,13 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
                 max_version,
                 filter,
                 expected_block_size);
-            LOG_TRACE(log, "Start to read segment, segment={}", cur_segment_id);
+            LOG_TRACE(log, "Start to read remote segment, segment={}", cur_segment_id);
         }
 
         Block res = cur_stream->read(res_filter, return_filter);
         if (!res)
         {
-            LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment_id);
+            LOG_TRACE(log, "Finish reading remote segment, segment={}", cur_segment_id);
             cur_segment_id = 0;
             cur_stream = {};
             // try read from next task

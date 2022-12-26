@@ -272,9 +272,6 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
         table_id,
         proto);
 
-    LOG_DEBUG(log, "ColumnFiles in MemTable: {}", task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount());
-    LOG_DEBUG(log, "ColumnFiles in Persisted: {}", task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
-
     {
         auto persisted_cfs = task->segment_snap->delta->getPersistedFileSetSnapshot();
         std::vector<Remote::PageOID> all_persisted_ids;
@@ -299,7 +296,9 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
             task->pending_page_ids.emplace_back(oid.page_id);
         }
         LOG_INFO(log,
-                 "local cache hit rate: {}, pending_ids: {}",
+                 "mem-table cfs: {}, persisted cfs: {}, local cache hit rate: {}, pending_ids: {}",
+                 task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
+                 task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
                  (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 * pending_oids.size() / all_persisted_ids.size())),
                  task->pendingPageIds());
     }

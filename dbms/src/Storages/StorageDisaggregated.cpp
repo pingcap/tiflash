@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -37,6 +38,8 @@
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
+
+#include <atomic>
 
 namespace pingcap::kv
 {
@@ -127,6 +130,12 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
     return establish_req;
 }
 
+struct DisaggregatedExecutionSummary
+{
+    std::atomic<size_t> establish_rpc_ms{0};
+    std::atomic<size_t> build_remote_task_ms{0};
+};
+
 DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     const Context & db_context,
     const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
@@ -138,6 +147,8 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
         establish_reqs.emplace_back(buildDisaggregatedTaskForNode(
             db_context,
             batch_cop_task));
+
+    DisaggregatedExecutionSummary summary;
 
     // Collect the response from write nodes and build the remote tasks
     std::vector<DM::RemoteTableReadTaskPtr> remote_tasks(establish_reqs.size(), nullptr);
@@ -153,7 +164,8 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
         thread_manager->schedule(
             true,
             "EstablishDisaggregated",
-            [&db_context, &remote_tasks, idx, cluster, &task_id, req = std::move(req), log = this->log] {
+            [&db_context, &remote_tasks, idx, cluster, &task_id, &summary, req = std::move(req), log = this->log] {
+                Stopwatch watch;
                 auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
                 cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
                 const auto & resp = call.getResp();
@@ -161,6 +173,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(resp->error().msg());
+                summary.establish_rpc_ms = watch.elapsedMillisecondsFromLastTime();
                 // Parse the resp and gen tasks on read node
                 // The number of tasks is equal to number of write nodes
                 for (const auto & physical_table : resp->tables())
@@ -169,7 +182,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     auto parse_ok = table.ParseFromString(physical_table);
                     RUNTIME_CHECK(parse_ok); // TODO: handle error
 
-                    LOG_DEBUG(Logger::get(), "Build remoteTableReadTask, store={}, addr={}, id={}, table={}", resp->store_id(), req->address(), task_id, table.DebugString());
+                    LOG_DEBUG(log, "Build remoteTableReadTask, store={}, addr={}, id={}, table={}", resp->store_id(), req->address(), task_id, table.DebugString());
 
                     remote_tasks[idx] = DM::RemoteTableReadTask::buildFrom(
                         db_context,
@@ -180,11 +193,14 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         log);
                 }
                 // TODO: update region cache by `resp->retry_regions`
+                summary.build_remote_task_ms = watch.elapsedMillisecondsFromLastTime();
             });
     }
     thread_manager->wait();
 
-    return std::make_shared<DM::RemoteReadTask>(std::move(remote_tasks));
+    auto read_task = std::make_shared<DM::RemoteReadTask>(std::move(remote_tasks));
+    LOG_INFO(log, "establish disaggregated task rpc cost {}ms, build remote tasks cost {}ms", summary.establish_rpc_ms, summary.build_remote_task_ms);
+    return read_task;
 }
 
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
