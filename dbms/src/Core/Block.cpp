@@ -517,18 +517,18 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
 Block mergeBlocks(Blocks && blocks)
 {
     assert(!blocks.empty());
-    auto & sample_block = blocks[0];
+    auto & first_block = blocks[0];
     size_t result_rows = 0;
     for (const auto & block : blocks)
     {
         result_rows += block.rows();
     }
 
-    MutableColumns dst_columns(sample_block.columns());
+    MutableColumns dst_columns(first_block.columns());
 
-    for (size_t i = 0; i < sample_block.columns(); i++)
+    for (size_t i = 0; i < first_block.columns(); i++)
     {
-        dst_columns[i] = (*std::move(sample_block.getByPosition(i).column)).mutate();
+        dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
         dst_columns[i]->reserve(result_rows);
     }
 
@@ -542,7 +542,7 @@ Block mergeBlocks(Blocks && blocks)
             }
         }
     }
-    return sample_block.cloneWithColumns(std::move(dst_columns));
+    return first_block.cloneWithColumns(std::move(dst_columns));
 }
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
