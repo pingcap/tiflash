@@ -669,7 +669,6 @@ String DAGExpressionAnalyzer::applyFunction(
     const TiDB::TiDBCollatorPtr & collator)
 {
     String result_name = genFuncString(func_name, arg_names, {collator});
-    // 啊这个好！可以避免相同表达式的重复计算
     if (actions->getSampleBlock().has(result_name))
         return result_name;
     const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
