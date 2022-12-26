@@ -117,6 +117,11 @@ public:
             + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
         return s;
     }
+
+    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override;
+
+    static std::shared_ptr<ColumnFileInMemory> deserializeFromRemoteProtocol(
+        const dtpb::ColumnFileInMemory & proto);
 };
 
 

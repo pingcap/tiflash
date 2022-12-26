@@ -73,21 +73,24 @@ mpp::PagesPacket PageTunnel::readPacket()
     }
 
     // generate an inputstream of mem-table
-    auto chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(*result_field_types);
-    auto delta_vs = seg_task->read_snapshot->delta;
-    auto mem_table_stream = std::make_shared<DM::DeltaMemTableInputStream>(delta_vs, column_defines, seg_task->segment->getRowKeyRange());
-    mem_table_stream->readPrefix();
-    while (true)
+    if (false) // Currently the memtable data is responded in the 1st response.
     {
-        Block block = mem_table_stream->read();
-        if (!block)
-            break;
-        chunk_codec_stream->encode(block, 0, block.rows());
-        // serialize block as chunk
-        packet.add_chunks(chunk_codec_stream->getString());
-        chunk_codec_stream->clear();
+        auto chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(*result_field_types);
+        auto delta_vs = seg_task->read_snapshot->delta;
+        auto mem_table_stream = std::make_shared<DM::DeltaMemTableInputStream>(delta_vs, column_defines, seg_task->segment->getRowKeyRange());
+        mem_table_stream->readPrefix();
+        while (true)
+        {
+            Block block = mem_table_stream->read();
+            if (!block)
+                break;
+            chunk_codec_stream->encode(block, 0, block.rows());
+            // serialize block as chunk
+            packet.add_chunks(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
+        }
+        mem_table_stream->readSuffix();
     }
-    mem_table_stream->readSuffix();
 
     LOG_DEBUG(log,
               "send packet, pages={} pages_size={} blocks={}",

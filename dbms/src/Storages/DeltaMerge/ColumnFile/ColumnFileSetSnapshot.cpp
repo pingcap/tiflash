@@ -85,6 +85,10 @@ ColumnFileSetSnapshotPtr ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
                 remote_manager->getDataStore(),
                 segment_range));
         }
+        else if (remote_column_file.has_in_memory())
+        {
+            ret->column_files.push_back(ColumnFileInMemory::deserializeFromRemoteProtocol(remote_column_file.in_memory()));
+        }
         else
         {
             RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");

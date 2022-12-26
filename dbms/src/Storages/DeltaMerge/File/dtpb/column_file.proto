@@ -30,6 +30,16 @@ message TiFlashSchema {
     repeated TiFlashColumnInfo columns = 1;
 }
 
+message ColumnFileInMemory {
+    // serialized schema
+    bytes schema = 1;
+    // serialized block columns
+    repeated bytes block_columns = 2;
+
+    uint64 rows = 3;
+    // uint64 bytes = 4;
+}
+
 message ColumnFileTiny {
     uint64 page_id = 1;
     // serialized schema
@@ -55,6 +65,9 @@ message ColumnFileRemote {
         ColumnFileTiny tiny = 1;
         ColumnFileBig big = 2;
         ColumnFileDeleteRange delete_range = 3;
+
+        // TODO: To be dropped.
+        ColumnFileInMemory in_memory = 100;
     }
 }
 

@@ -45,8 +45,6 @@ public:
 
     Page getPage(const PageOID & oid, const PageStorage::FieldIndices & indices);
 
-    void putPage(const PageOID & oid);
-
 private:
     LoggerPtr log;
 

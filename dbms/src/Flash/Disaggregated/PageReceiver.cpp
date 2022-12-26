@@ -261,6 +261,7 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
         detail.packet_bytes = packet.ByteSizeLong();
     }
 
+    // Note: Currently in the 2nd response memtable data is not contained.
     for (const String & chunk : recv_msg->chunks())
     {
         auto block = decoder_ptr->decode(chunk);
