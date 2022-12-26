@@ -514,15 +514,15 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
     return ReturnType(true);
 }
 
-Block mergeBlocks(Blocks && result_blocks)
+Block mergeBlocks(Blocks && blocks)
 {
-    auto & sample_block = result_blocks[0];
+    auto & sample_block = blocks[0];
     MutableColumns dst_columns(sample_block.columns());
     for (size_t i = 0; i < sample_block.columns(); i++)
     {
         dst_columns[i] = sample_block.getByPosition(i).column->cloneEmpty();
     }
-    for (auto & current_block : result_blocks)
+    for (auto & current_block : blocks)
     {
         if (current_block.rows() > 0)
         {
