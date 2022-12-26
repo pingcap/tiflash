@@ -69,7 +69,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             ProfileEvents::increment(ProfileEvents::DMCleanReadRows, rows);
 
-            return getNewBlockByHeader(header, cur_raw_block);
+            // return getNewBlockByHeader(header, cur_raw_block);
+            return getNewBlockByHeaderId(header, col_offset_by_id, cur_raw_block);
         }
 
         filter.resize(rows);
@@ -393,22 +394,26 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if (passed_count == rows)
         {
             ++complete_passed;
-            return getNewBlockByHeader(header, cur_raw_block);
+            // return getNewBlockByHeader(header, cur_raw_block);
+            return getNewBlockByHeaderId(header, col_offset_by_id, cur_raw_block);
         }
 
         if (return_filter)
         {
             // The caller of this method should do the filtering, we just need to return the original block.
             res_filter = &filter;
-            return getNewBlockByHeader(header, cur_raw_block);
+            // return getNewBlockByHeader(header, cur_raw_block);
+            return getNewBlockByHeaderId(header, col_offset_by_id, cur_raw_block);
         }
         else
         {
             Block res;
             for (const auto & c : header)
             {
-                auto & column = cur_raw_block.getByName(c.name);
+                // auto & column = cur_raw_block.getByName(c.name);
+                auto & column = cur_raw_block.getByPosition(col_offset_by_id.at(c.column_id));
                 column.column = column.column->filter(filter, passed_count);
+                column.name = c.name;
                 res.insert(std::move(column));
             }
             return res;

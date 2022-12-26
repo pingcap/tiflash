@@ -22,6 +22,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <common/logger_useful.h>
 
+#include <unordered_map>
+
 namespace DB
 {
 namespace DM
@@ -56,14 +58,21 @@ public:
     {
         children.push_back(input);
 
+        // The read_columns maybe less than we actually read from `input`.
+        // Record the column id to offset to rewrite the output block.
         auto input_header = input->getHeader();
+        for (size_t offset = 0; offset < input_header.columns(); ++offset)
+        {
+            const auto & c = input_header.getByPosition(offset);
+            col_offset_by_id[c.column_id] = offset;
+        }
 
         handle_col_pos = input_header.getPositionByName(EXTRA_HANDLE_COLUMN_NAME);
         version_col_pos = input_header.getPositionByName(VERSION_COLUMN_NAME);
         delete_col_pos = input_header.getPositionByName(TAG_COLUMN_NAME);
     }
 
-    ~DMVersionFilterBlockInputStream()
+    ~DMVersionFilterBlockInputStream() override
     {
         LOG_DEBUG(log,
                   "Total rows: {}, pass: {:.2f}%"
@@ -203,6 +212,7 @@ private:
     const UInt64 version_limit;
     const bool is_common_handle;
     const Block header;
+    std::unordered_map<ColumnID, size_t> col_offset_by_id;
 
     size_t handle_col_pos;
     size_t version_col_pos;
