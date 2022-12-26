@@ -251,7 +251,7 @@ try
     std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
     for (const auto & table : tables)
     {
-        std::vector<size_t> limits{0, 1, 100, 200, 300};
+        std::vector<size_t> limits{0, 1, 10, 20, 199, 200, 300};
         for (auto limit_num : limits)
         {
             auto request = context
