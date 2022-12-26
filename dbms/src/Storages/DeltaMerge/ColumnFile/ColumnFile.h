@@ -18,7 +18,6 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/ColumnFile/RemoteProto/RemoteProtos.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
