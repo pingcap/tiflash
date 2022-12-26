@@ -189,15 +189,10 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         r.resize(cols_size, true);
     }
 
-    UInt64 a = 0;
     for (auto const & [col_id, col] : ext::enumerate(cols))
     {
         for (size_t i = 0, size = col.column->size(); i < size; ++i)
         {
-            auto tra = (*col.column)[i];
-            tra.tryGet(a);
-            auto res = tra.toString();
-            std::cout<<a<<res;
             new (rows[i].place(col_id)) Field((*col.column)[i]);
         }
     }
@@ -225,38 +220,11 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         ASSERT_EQUAL(expect_col.column->size(), actual_col.column->size(), fmt::format("Column {} size mismatch", i));
         auto type_eq = dataTypeEqual(expected[i].type, actual[i].type);
         if (!type_eq)
-        {
-            std::cout << "type equal false" << std::endl;
             return type_eq;
-        }
     }
 
     auto const expected_row_set = columnsToRowSet(expected);
     auto const actual_row_set = columnsToRowSet(actual);
-
-    {
-        auto expect_it = expected_row_set.begin();
-        auto actual_it = actual_row_set.begin();
-        FmtBuffer buf1;
-        FmtBuffer buf2;
-        for (; expect_it != expected_row_set.end(); ++expect_it, ++actual_it)
-        {
-            buf1.joinStr(
-                   expect_it->begin(),
-                   expect_it->end(),
-                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
-                   " ")
-                .append("\n");
-            buf2.joinStr(
-                    actual_it->begin(),
-                    actual_it->end(),
-                    [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
-                    " ")
-                .append("\n");
-        }
-        auto res1 = buf1.toString();
-        auto res2 = buf2.toString();
-    }
 
     if (expected_row_set != actual_row_set)
     {
@@ -291,7 +259,6 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
                 .append("\n");
         }
         buf.append("...\n");
-        std::cout<<buf.toString()<<std::endl;
 
         return testing::AssertionFailure() << buf.toString();
     }
