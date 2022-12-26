@@ -518,18 +518,27 @@ Block mergeBlocks(Blocks && blocks)
 {
     assert(!blocks.empty());
     auto & sample_block = blocks[0];
+    size_t result_rows = 0;
+    for (const auto & block : blocks)
+    {
+        result_rows += block.rows();
+    }
+
     MutableColumns dst_columns(sample_block.columns());
+
     for (size_t i = 0; i < sample_block.columns(); i++)
     {
-        dst_columns[i] = sample_block.getByPosition(i).column->cloneEmpty();
+        dst_columns[i] = (*std::move(sample_block.getByPosition(i).column)).mutate();
+        dst_columns[i]->reserve(result_rows);
     }
-    for (auto & current_block : blocks)
+
+    for (size_t i = 1; i < blocks.size(); ++i)
     {
-        if (current_block.rows() > 0)
+        if (blocks[i].rows() > 0)
         {
-            for (size_t column = 0; column < current_block.columns(); column++)
+            for (size_t column = 0; column < blocks[i].columns(); column++)
             {
-                dst_columns[column]->insertRangeFrom(*current_block.getByPosition(column).column, 0, current_block.rows());
+                dst_columns[column]->insertRangeFrom(*blocks[i].getByPosition(column).column, 0, blocks[i].rows());
             }
         }
     }
