@@ -53,37 +53,40 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshotFromRemote(
     const DMContext & context,
     const RowKeyRange & segment_range)
 {
-    std::scoped_lock lock(mutex);
-    if (abandoned.load(std::memory_order_relaxed))
-        return {};
-
-    // The following should be placed in Write Node ============
-    // We will never read from the snapshot, so we just pass a nop reader.
-    IColumnFileSetStorageReaderPtr nop_reader = std::make_shared<NopColumnFileSetStorageReader>();
-    auto mem_snap = mem_table_set->createSnapshot(nop_reader, /* for_update */ false);
-    auto persisted_snap = persisted_file_set->createSnapshot(nop_reader);
-
-    auto mem_proto = mem_snap->serializeToRemoteProtocol();
-    auto persisted_proto = persisted_snap->serializeToRemoteProtocol();
-    // ============================================================
-
-    // The following should be placed in Read Node ============
-    const auto write_node_id = 0;
-    auto snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
-    snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
-        mem_proto,
-        write_node_id,
-        context,
-        segment_range);
-    snap->persisted_files_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
-        persisted_proto,
-        write_node_id,
-        context,
-        segment_range);
-    snap->shared_delta_index = delta_index; // FIXME
-    // ============================================================
-
-    return snap;
+    UNUSED(context);
+    UNUSED(segment_range);
+    return {};
+    //    std::scoped_lock lock(mutex);
+    //    if (abandoned.load(std::memory_order_relaxed))
+    //        return {};
+    //
+    //    // The following should be placed in Write Node ============
+    //    // We will never read from the snapshot, so we just pass a nop reader.
+    //    IColumnFileSetStorageReaderPtr nop_reader = std::make_shared<NopColumnFileSetStorageReader>();
+    //    auto mem_snap = mem_table_set->createSnapshot(nop_reader, /* for_update */ false);
+    //    auto persisted_snap = persisted_file_set->createSnapshot(nop_reader);
+    //
+    //    auto mem_proto = mem_snap->serializeToRemoteProtocol();
+    //    auto persisted_proto = persisted_snap->serializeToRemoteProtocol();
+    //    // ============================================================
+    //
+    //    // The following should be placed in Read Node ============
+    //    const auto write_node_id = 0;
+    //    auto snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
+    //    snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+    //        mem_proto,
+    //        write_node_id,
+    //        context,
+    //        segment_range);
+    //    snap->persisted_files_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+    //        persisted_proto,
+    //        write_node_id,
+    //        context,
+    //        segment_range);
+    //    snap->shared_delta_index = delta_index; // FIXME
+    //    // ============================================================
+    //
+    //    return snap;
 }
 
 DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type)

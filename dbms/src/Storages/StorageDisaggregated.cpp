@@ -168,6 +168,9 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     dtpb::DisaggregatedPhysicalTable table;
                     auto parse_ok = table.ParseFromString(physical_table);
                     RUNTIME_CHECK(parse_ok); // TODO: handle error
+
+                    LOG_DEBUG(Logger::get(), "Build remoteTableReadTask, store={}, addr={}, id={}, table={}", resp->store_id(), req->address(), task_id, table.DebugString());
+
                     remote_tasks[idx] = DM::RemoteTableReadTask::buildFrom(
                         db_context,
                         resp->store_id(),
@@ -244,8 +247,11 @@ BlockInputStreams StorageDisaggregated::read(
     bool remote_data_read = !db_context.remoteDataServiceSource().empty();
     if (remote_data_read)
     {
+        LOG_DEBUG(Logger::get(), "Using remote data read");
+
         // Fetch the remote segment read tasks from write nodes
         auto remote_read_tasks = buildDisaggregatedTask(db_context, batch_cop_tasks);
+
         // Build InputStream according to the remote segment read tasks
         // TODO: build rough set filter
         DAGPipeline pipeline;

@@ -40,6 +40,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -106,18 +108,14 @@ extern const int UNKNOWN_FORMAT_VERSION;
 namespace DM
 {
 
-dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id, const RowKeyRange & key_range) const
+dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(const RowKeyRange & segment_range) const
 {
     dtpb::DisaggregatedSegment remote;
-    remote.set_segment_id(seg_id);
     WriteBufferFromOwnString wb;
     {
         // segment key_range
-        key_range.start.serialize(wb);
-        remote.mutable_key_range()->set_start(wb.releaseStr());
-        wb.restart();
-        key_range.end.serialize(wb);
-        remote.mutable_key_range()->set_end(wb.releaseStr());
+        segment_range.serialize(wb);
+        remote.set_key_range(wb.releaseStr());
     }
 
     // stable
@@ -127,45 +125,57 @@ dtpb::DisaggregatedSegment SegmentSnapshot::toRemote(UInt64 seg_id, const RowKey
         remote_file->set_page_id(dt_file->pageId());
         remote_file->set_file_id(dt_file->fileId());
     }
-
-    // delta (mem-table) don't serialize now
-    remote.set_has_mem_table(delta->getMemTableSetSnapshot()->getColumnFileCount() > 0);
-    // delta (persisted)
-    auto persisted_cfs = delta->getPersistedFileSetSnapshot();
-    BlockPtr last_schema = nullptr;
-    for (const auto & cf : persisted_cfs->getColumnFiles())
-    {
-        auto * remote_cf = remote.add_column_files();
-        if (auto * big = cf->tryToBigFile(); big)
-        {
-            auto * remote_big = remote_cf->mutable_big();
-            remote_big->set_page_id(big->getFile()->pageId());
-            remote_big->set_file_id(big->getFile()->fileId());
-        }
-        else if (auto * tiny = cf->tryToTinyFile(); tiny)
-        {
-            auto * remote_tiny = remote_cf->mutable_tiny();
-            remote_tiny->set_page_id(tiny->getDataPageId());
-            if (auto schema = tiny->getSchema(); schema && schema != last_schema)
-            {
-                last_schema = schema;
-                // set schema for the first different cftiny
-                auto remote_schema = ::DB::DM::toRemote(*schema);
-                remote_tiny->mutable_schema()->assign(remote_schema.SerializeAsString());
-            }
-        }
-        else if (auto * range = cf->tryToDeleteRange(); range)
-        {
-            auto * remote_del = remote_cf->mutable_delete_range();
-            wb.restart();
-            range->getDeleteRange().start.serialize(wb);
-            remote_del->mutable_key_range()->set_start(wb.releaseStr());
-            wb.restart();
-            range->getDeleteRange().end.serialize(wb);
-            remote_del->mutable_key_range()->set_end(wb.releaseStr());
-        }
-    }
+    remote.mutable_column_files_memtable()->CopyFrom(delta->getMemTableSetSnapshot()->serializeToRemoteProtocol());
+    remote.mutable_column_files_persisted()->CopyFrom(delta->getPersistedFileSetSnapshot()->serializeToRemoteProtocol());
     return remote;
+}
+
+SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
+    const Remote::ManagerPtr & remote_manager,
+    UInt64 write_node_id,
+    Int64 table_id,
+    const dtpb::DisaggregatedSegment & proto)
+{
+    RowKeyRange segment_range;
+    {
+        ReadBufferFromString rb(proto.key_range());
+        segment_range = RowKeyRange::deserialize(rb);
+    }
+
+    auto delta_snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
+    delta_snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+        proto.column_files_memtable(),
+        remote_manager,
+        write_node_id,
+        table_id,
+        segment_range);
+    delta_snap->persisted_files_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
+        proto.column_files_persisted(),
+        remote_manager,
+        write_node_id,
+        table_id,
+        segment_range);
+
+    auto data_store = remote_manager->getDataStore();
+    auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
+    DMFiles dmfiles;
+    for (const auto & stable_file : proto.stable_pages())
+    {
+        auto oid = Remote::DMFileOID{
+            .write_node_id = write_node_id,
+            .table_id = table_id,
+            .file_id = stable_file.file_id(),
+        };
+        auto prepared = data_store->prepareDMFile(oid);
+        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        dmfiles.emplace_back(std::move(dmfile));
+    }
+    new_stable->setFiles(dmfiles, segment_range);
+    auto stable_snap = new_stable->createSnapshot();
+
+    return std::make_shared<SegmentSnapshot>(
+        std::move(delta_snap),
+        std::move(stable_snap));
 }
 
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
@@ -255,8 +265,15 @@ StableValueSpacePtr createNewStable( //
 
     if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
     {
+        UInt64 store_id;
+        {
+            auto & tmt = context.db_context.getTMTContext();
+            auto kvstore = tmt.getKVStore();
+            auto store_meta = kvstore->getStoreMeta();
+            store_id = store_meta.id();
+        }
         auto oid = Remote::DMFileOID{
-            .write_node_id = 0,
+            .write_node_id = store_id,
             .table_id = context.table_id,
             .file_id = dtfile->fileId(),
         };

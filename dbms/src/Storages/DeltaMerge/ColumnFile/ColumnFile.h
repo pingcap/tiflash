@@ -18,8 +18,8 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/ColumnFile/RemoteProto/RemoteProtos.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageDefines.h>
@@ -156,7 +156,7 @@ public:
 
     virtual String toString() const = 0;
 
-    virtual RemoteProtocol::ColumnFile serializeToRemoteProtocol() const
+    virtual dtpb::ColumnFileRemote serializeToRemoteProtocol() const
     {
         RUNTIME_CHECK_MSG(false, "Current ColumnFile cannot be serialized to remote protocol, type={}", magic_enum::enum_name(getType()));
     }

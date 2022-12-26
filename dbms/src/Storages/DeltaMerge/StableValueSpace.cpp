@@ -314,29 +314,6 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
 using Snapshot = StableValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-// FIXME: This function doesn't make sense. It simply builds a "remote" snapshot, based on
-//        own data. In real world, read node doesn't know anything about the stable, so we
-//        need to reassemble this function to something else.
-SnapshotPtr StableValueSpace::createSnapshotFromRemote(const DMContext & context, const RowKeyRange & seg_range)
-{
-    auto stable = std::make_shared<StableValueSpace>(id);
-    auto data_store = context.db_context.getDMRemoteManager()->getDataStore();
-    DMFiles dmfiles;
-    for (const auto & file : files)
-    {
-        auto oid = Remote::DMFileOID{
-            .write_node_id = 0,
-            .table_id = context.table_id,
-            .file_id = file->fileId(),
-        };
-        auto prepared = data_store->prepareDMFile(oid);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-        dmfiles.emplace_back(std::move(dmfile));
-    }
-    stable->setFiles(dmfiles, seg_range);
-    return stable->createSnapshot();
-}
-
 SnapshotPtr StableValueSpace::createSnapshot()
 {
     auto snap = std::make_shared<Snapshot>(this->shared_from_this());

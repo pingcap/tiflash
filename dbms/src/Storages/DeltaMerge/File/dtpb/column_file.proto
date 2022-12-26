@@ -30,22 +30,24 @@ message TiFlashSchema {
     repeated TiFlashColumnInfo columns = 1;
 }
 
-message KeyRange {
-    bytes start = 1;
-    bytes end = 2;
-}
-
 message ColumnFileTiny {
     uint64 page_id = 1;
     // serialized schema
     bytes schema = 2;
+
+    uint64 rows = 3;
+    uint64 bytes = 4;
 }
 message ColumnFileBig {
     uint64 page_id = 1;
     uint64 file_id = 2;
+
+    // TODO: We should better recalculate these fields from local DTFile.
+    uint64 valid_rows = 10;
+    uint64 valid_bytes = 11;
 }
 message ColumnFileDeleteRange {
-    KeyRange key_range = 1;
+    bytes key_range = 1;
 }
 
 message ColumnFileRemote {
@@ -58,11 +60,14 @@ message ColumnFileRemote {
 
 message DisaggregatedSegment {
     uint64 segment_id = 1;
-    KeyRange key_range = 2;
+    bytes key_range = 2;
     repeated ColumnFileBig stable_pages = 3;
     // serialized array of ColumnFileRemote
-    repeated ColumnFileRemote column_files = 4;
-    bool has_mem_table = 5;
+    repeated ColumnFileRemote column_files_persisted = 4;
+
+    // TODO: We should defer mem_table resolution to a later request.
+    // bool has_mem_table = 5;
+    repeated ColumnFileRemote column_files_memtable = 5;
 }
 
 message DisaggregatedPhysicalTable {

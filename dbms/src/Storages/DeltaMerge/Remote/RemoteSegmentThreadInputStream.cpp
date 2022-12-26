@@ -96,7 +96,7 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
             UNUSED(read_mode); // TODO: support more read mode
             cur_stream = task->getInputStream(
                 columns_to_read,
-                task->ranges,
+                RowKeyRanges{}, // task->ranges,
                 max_version,
                 filter,
                 expected_block_size);
