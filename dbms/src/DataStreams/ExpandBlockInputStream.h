@@ -19,15 +19,15 @@
 
 namespace DB
 {
-class RepeatSourceBlockInputStream : public IProfilingBlockInputStream
+class ExpandBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "RepeatSource";
+    static constexpr auto NAME = "Expand";
 
 public:
-    RepeatSourceBlockInputStream(
+    ExpandBlockInputStream(
         const BlockInputStreamPtr & input,
-        ExpressionActionsPtr repeat_source_actions_)
-        : repeat_source_actions(repeat_source_actions_)
+        ExpressionActionsPtr expand_actions_)
+        : expand_actions(expand_actions_)
     {
         children.push_back(input);
     }
@@ -39,7 +39,7 @@ protected:
     Block readImpl() override;
 
 private:
-    ExpressionActionsPtr repeat_source_actions;
+    ExpressionActionsPtr expand_actions;
 };
 
 } // namespace DB

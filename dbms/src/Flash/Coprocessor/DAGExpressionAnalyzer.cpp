@@ -32,10 +32,10 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Expand.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Interpreters/Repeat.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
@@ -806,13 +806,13 @@ NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
     return order_columns;
 }
 
-std::shared_ptr<Repeat> DAGExpressionAnalyzer::buildRepeatGroupingColumns(
-    const tipb::RepeatSource & repeatSource, const ExpressionActionsPtr & actions)
+std::shared_ptr<Expand> DAGExpressionAnalyzer::buildExpandGroupingColumns(
+    const tipb::Expand & expand, const ExpressionActionsPtr & actions)
 {
     GroupingSets group_sets_columns;
     std::map<String, bool> map_grouping_col;
-    group_sets_columns.reserve(repeatSource.grouping_sets().size());
-    for (const auto& group_set : repeatSource.grouping_sets()){
+    group_sets_columns.reserve(expand.grouping_sets().size());
+    for (const auto& group_set : expand.grouping_sets()){
         GroupingSet group_set_columns;
         group_set_columns.reserve(group_set.grouping_exprs().size());
         for (const auto &group_exprs : group_set.grouping_exprs()) {
@@ -838,30 +838,30 @@ std::shared_ptr<Repeat> DAGExpressionAnalyzer::buildRepeatGroupingColumns(
         if (map_grouping_col[mutable_one.name])
             mutable_one.type = makeNullable(mutable_one.type);
     }
-    source_columns.emplace_back(Repeat::grouping_identifier_column_name, Repeat::grouping_identifier_column_type);
-    auto shared_repeat = Repeat::sharedRepeat(group_sets_columns);
-    return shared_repeat;
+    source_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
+    auto shared_expand = Expand::sharedExpand(group_sets_columns);
+    return shared_expand;
 }
 
-ExpressionActionsPtr DAGExpressionAnalyzer::appendRepeatSource(
-        const tipb::RepeatSource & repeatSource, ExpressionActionsChain & chain)
+ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(
+        const tipb::Expand & expand, ExpressionActionsChain & chain)
 {
     auto & last_step = initAndGetLastStep(chain);
     for (const auto &origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
     {
         last_step.required_output.push_back(origin_col.name);
     }
-    auto shared_repeat = buildRepeatGroupingColumns(repeatSource, last_step.actions);
-    last_step.actions->add(ExpressionAction::repeatSource(shared_repeat));
+    auto shared_expand = buildExpandGroupingColumns(expand, last_step.actions);
+    last_step.actions->add(ExpressionAction::expandSource(shared_expand));
 
-    auto before_repeat_source = chain.getLastActions();
+    auto before_expand = chain.getLastActions();
     chain.finalize();
     chain.clear();
 
     auto & after_repeat_step = initAndGetLastStep(chain);
     for (const auto & column : getCurrentInputColumns())
         after_repeat_step.required_output.push_back(column.name);
-    return before_repeat_source;
+    return before_expand;
 }
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(

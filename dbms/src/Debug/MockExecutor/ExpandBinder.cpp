@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockExecutor/RepeatSourceBinder.h>
+#include <Debug/MockExecutor/ExpandBinder.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 
 namespace DB::mock
 {
 
-bool RepeatSourceBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ExpandBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
-    tipb_executor->set_tp(tipb::ExecType::TypeRepeatSource);
+    tipb_executor->set_tp(tipb::ExecType::TypeExpand);
     tipb_executor->set_executor_id(name);
-    tipb::RepeatSource * repeat_source = tipb_executor->mutable_repeat_source();
+    tipb::Expand * expand = tipb_executor->mutable_expand();
     for (const auto & grouping_set : grouping_sets_columns)
     {
-        auto * gss = repeat_source->add_grouping_sets();
+        auto * gss = expand->add_grouping_sets();
         for (const auto & grouping_exprs : grouping_set)
         {
             auto * ges = gss->add_grouping_exprs();
@@ -35,7 +36,7 @@ bool RepeatSourceBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t 
             }
         }
     }
-    auto * children_executor = repeat_source->mutable_child();
+    auto * children_executor = expand->mutable_child();
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
@@ -60,8 +61,8 @@ ExecutorBinderPtr compileRepeat(ExecutorBinderPtr input, size_t & executor_index
         field_type.set_decimal(-1);
         output_schema.push_back(std::make_pair("groupingID", TiDB::fieldTypeToColumnInfo(field_type)));
     }
-    ExecutorBinderPtr repeat_source = std::make_shared<RepeatSourceBinder>(executor_index, output_schema, std::move(grouping_set_columns));
-    repeat_source->children.push_back(input);
-    return repeat_source;
+    ExecutorBinderPtr expand = std::make_shared<ExpandBinder>(executor_index, output_schema, std::move(grouping_set_columns));
+    expand->children.push_back(input);
+    return expand;
 }
 } // namespace DB::mock

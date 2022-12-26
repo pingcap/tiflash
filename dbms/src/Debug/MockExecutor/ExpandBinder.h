@@ -21,11 +21,11 @@ using MockGroupingNameVec = std::vector<ASTPtr>;
 using MockVecGroupingNameVec = std::vector<MockGroupingNameVec>;
 using MockVVecGroupingNameVec = std::vector<MockVecGroupingNameVec>;
 
-class RepeatSourceBinder : public ExecutorBinder
+class ExpandBinder : public ExecutorBinder
 {
 public:
-    RepeatSourceBinder(size_t & index_, const DAGSchema & output_schema_, MockVVecGroupingNameVec gss)
-        : ExecutorBinder(index_, "repeat_source_" + std::to_string(index_), output_schema_)
+    ExpandBinder(size_t & index_, const DAGSchema & output_schema_, MockVVecGroupingNameVec gss)
+        : ExecutorBinder(index_, "expand_" + std::to_string(index_), output_schema_)
         , grouping_sets_columns(gss)
     {}
 

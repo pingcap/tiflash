@@ -71,9 +71,9 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
-    std::shared_ptr<Repeat> buildRepeatGroupingColumns(const tipb::RepeatSource & repeatSource, const ExpressionActionsPtr & actions);
+    std::shared_ptr<Expand> buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
-    ExpressionActionsPtr appendRepeatSource(const tipb::RepeatSource & repeatSource, ExpressionActionsChain & chain);
+    ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
 
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
 

@@ -197,9 +197,9 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), FineGrainedShuffle(executor), left, right));
         break;
     }
-    case tipb::ExecType::TypeRepeatSource:
+    case tipb::ExecType::TypeExpand:
     {
-        pushBack(PhysicalRepeat::build(context, executor_id, log, executor->repeat_source(), popBack()));
+        pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
         break;
     }
     default:

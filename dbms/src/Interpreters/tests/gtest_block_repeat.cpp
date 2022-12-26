@@ -14,9 +14,9 @@
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Interpreters/Expand.h>
 #include <Interpreters/sortBlock.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <Interpreters/Repeat.h>
 
 namespace DB
 {

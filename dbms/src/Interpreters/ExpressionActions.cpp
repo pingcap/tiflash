@@ -136,11 +136,11 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
     return a;
 }
 
-ExpressionAction ExpressionAction::repeatSource(std::shared_ptr<const Repeat> repeat_source_)
+ExpressionAction ExpressionAction::expandSource(std::shared_ptr<const Expand> expand_)
 {
     ExpressionAction a;
-    a.type = REPEAT;
-    a.repeat = repeat_source_;
+    a.type = EXPAND;
+    a.expand = expand_;
     return a;
 }
 
@@ -239,11 +239,11 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
         break;
     }
 
-    case REPEAT:
+    case EXPAND:
     {
         // sample_block is just for schema check followed by later block, modify it if your schema has changed during this action.
         auto name_set = std::set<String>();
-        repeat->getAllGroupSetColumnNames(name_set);
+        expand->getAllGroupSetColumnNames(name_set);
         // make grouping set column to be nullable.
         for (const auto & col_name: name_set) {
             auto & column_with_name = sample_block.getByName(col_name);
@@ -252,7 +252,7 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
                 column_with_name.column = makeNullable(column_with_name.column);
         }
         // fill one more column: groupingID.
-        sample_block.insert({nullptr, repeat->grouping_identifier_column_type, repeat->grouping_identifier_column_name});
+        sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
         break;
     }
 
@@ -341,9 +341,9 @@ void ExpressionAction::execute(Block & block) const   // 执行阶段
         break;
     }
 
-    case REPEAT:
+    case EXPAND:
     {
-        repeat->replicateAndFillNull(block); // repeat 的执行阶段直接 fill block 了
+        expand->replicateAndFillNull(block); // repeat 的执行阶段直接 fill block 了
         break;
     }
 

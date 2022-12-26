@@ -12,28 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams//RepeatSourceBlockInputStream.h>
+#include <DataStreams/ExpandBlockInputStream.h>
+
 namespace DB
 {
-Block RepeatSourceBlockInputStream::readImpl()
+Block ExpandBlockInputStream::readImpl()
 {
     Block block = children.back()->read();
     if (!block)
         return block;
-    repeat_source_actions->execute(block);
+    expand_actions->execute(block);
     return block;
 }
 
-Block RepeatSourceBlockInputStream::getHeader() const
+Block ExpandBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
-    repeat_source_actions->execute(res);
+    expand_actions->execute(res);
     return res;
 }
 
-void RepeatSourceBlockInputStream::appendInfo(FmtBuffer & buffer) const {
+void ExpandBlockInputStream::appendInfo(FmtBuffer & buffer) const {
     buffer.fmtAppend(": grouping set ");
-    repeat_source_actions.get()->getActions()[0].repeat->getGroupingSetsDes(buffer);
+    expand_actions.get()->getActions()[0].expand->getGroupingSetsDes(buffer);
 }
 
 } // namespace DB

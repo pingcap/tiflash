@@ -160,10 +160,10 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, FmtBuff
     buf.fmtAppend("}}, limit: {}\n", top_n.limit());
 }
 
-void serializeRepeatSource(const String & executor_id, const tipb::RepeatSource & repeat, FmtBuffer & buf)
+void serializeExpandSource(const String & executor_id, const tipb::Expand & expand, FmtBuffer & buf)
 {
-    buf.fmtAppend("{} | repeat_source_by: [", executor_id);
-    for (const auto & grouping_set : repeat.grouping_sets())
+    buf.fmtAppend("{} | expanded_by: [", executor_id);
+    for (const auto & grouping_set : expand.grouping_sets())
     {
         buf.fmtAppend("<");
         for (const auto & grouping_exprs : grouping_set.grouping_exprs())
@@ -306,8 +306,8 @@ void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_reques
         case tipb::ExecType::TypeLimit:
             serializeLimit("Limit", executor.limit(), buf);
             break;
-        case tipb::ExecType::TypeRepeatSource:
-            serializeRepeatSource("Repeat", executor.repeat_source(), buf);
+        case tipb::ExecType::TypeExpand:
+            serializeExpandSource("Repeat", executor.expand(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
@@ -366,8 +366,8 @@ void ExecutorSerializer::serializeTreeStruct(const tipb::Executor & root_executo
         case tipb::ExecType::TypeWindow:
             serializeWindow(executor.executor_id(), executor.window(), buf);
             break;
-        case tipb::ExecType::TypeRepeatSource:
-            serializeRepeatSource(executor.executor_id(), executor.repeat_source(), buf);
+        case tipb::ExecType::TypeExpand:
+            serializeExpandSource(executor.executor_id(), executor.expand(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
