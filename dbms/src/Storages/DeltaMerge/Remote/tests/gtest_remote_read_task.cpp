@@ -27,7 +27,7 @@ public:
         auto store = std::make_shared<RemoteTableReadTask>(store_id, table_id, snapshot_id, address);
         for (const auto & seg_id : seg_ids)
         {
-            auto seg_task = std::make_shared<RemoteSegmentReadTask>(snapshot_id, store_id, table_id, seg_id, RowKeyRanges{}, address);
+            auto seg_task = std::make_shared<RemoteSegmentReadTask>(snapshot_id, store_id, table_id, seg_id, address);
             store->tasks.emplace_back(std::move(seg_task));
         }
         return store;

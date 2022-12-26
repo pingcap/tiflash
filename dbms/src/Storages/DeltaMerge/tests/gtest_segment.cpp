@@ -599,6 +599,7 @@ try
 }
 CATCH
 
+#if 0
 TEST_F(SegmentOperationTest, SnapshotToRemote)
 try
 {
@@ -682,6 +683,7 @@ try
     }
 }
 CATCH
+#endif
 
 TEST_F(SegmentOperationTest, DisaggregatedReadCFTinyPages)
 try

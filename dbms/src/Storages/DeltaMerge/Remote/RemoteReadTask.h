@@ -2,6 +2,7 @@
 #pragma once
 
 #include <Common/Allocator.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
@@ -117,7 +118,8 @@ public:
         UInt64 store_id,
         const String & address,
         const DisaggregatedTaskId & snapshot_id,
-        const dtpb::DisaggregatedPhysicalTable & table);
+        const dtpb::DisaggregatedPhysicalTable & table,
+        const LoggerPtr & log);
 
     size_t size() const
     {
@@ -158,14 +160,17 @@ class RemoteSegmentReadTask
 public:
     static RemoteSegmentReadTaskPtr buildFrom(
         const Context & db_context,
-        const dtpb::DisaggregatedSegment & serialized,
+        const dtpb::DisaggregatedSegment & proto,
         const DisaggregatedTaskId & snapshot_id,
         UInt64 store_id,
         TableID table_id,
-        const String & address);
+        const String & address,
+        const LoggerPtr & log);
 
     // The page ids that is absent from local cache
     const std::vector<UInt64> & pendingPageIds() const { return pending_page_ids; }
+
+    RowKeyRanges getReadRanges() const { return read_ranges; }
 
     BlockInputStreamPtr getInputStream(
         const ColumnDefines & columns_to_read,
@@ -209,6 +214,7 @@ private:
     std::vector<UInt64> stable_files;
 
     SegmentPtr segment;
+    RowKeyRanges read_ranges;
     SegmentSnapshotPtr segment_snap;
 
     // The page ids need to fetch from write node
@@ -219,7 +225,7 @@ private:
     // FIXME: this should be directly persisted to local cache? Or it will consume
     // too many memory
     // A temporary queue for storing the pages
-    std::queue<std::pair<PageId, Page>> persisted_pages;
+    // std::queue<std::pair<PageId, Page>> persisted_pages;
     // A temporary queue for storing the blocks
     // from remote mem-table
     std::queue<Block> mem_table_blocks;

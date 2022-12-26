@@ -148,7 +148,6 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     for (size_t idx = 0; idx < establish_reqs.size(); ++idx)
     {
-        // TODO: make call by threadManager
         auto req = establish_reqs[idx];
         thread_manager->schedule(
             true,
@@ -157,7 +156,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                 auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
                 cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
                 const auto & resp = call.getResp();
-                LOG_DEBUG(log, "Get resp from {}, resp={}", req->address(), resp->ShortDebugString(), req->ShortDebugString());
+                LOG_DEBUG(log, "Get resp from {}, resp.store_id={} resp.num_tables={}", req->address(), resp->store_id(), resp->tables_size());
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(resp->error().msg());
@@ -176,7 +175,8 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         resp->store_id(),
                         req->address(),
                         task_id,
-                        table);
+                        table,
+                        log);
                 }
                 // TODO: update region cache by `resp->retry_regions`
             });

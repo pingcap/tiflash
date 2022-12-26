@@ -1,18 +1,24 @@
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <IO/ReadBufferFromMemory.h>
+#include <IO/ReadBufferFromString.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Transaction/Types.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <memory>
@@ -176,7 +182,8 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
     const UInt64 store_id,
     const String & address,
     const DisaggregatedTaskId & snapshot_id,
-    const dtpb::DisaggregatedPhysicalTable & remote_table)
+    const dtpb::DisaggregatedPhysicalTable & remote_table,
+    const LoggerPtr & log)
 {
     // Deserialize from `DisaggregatedPhysicalTable`, this should also
     // ensure the local cache pages.
@@ -193,7 +200,8 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
             snapshot_id,
             table_task->store_id,
             table_task->table_id,
-            table_task->address);
+            table_task->address,
+            log);
         table_task->tasks.emplace_back(std::move(seg_task));
     }
     return table_task;
@@ -225,14 +233,20 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
     const DisaggregatedTaskId & snapshot_id,
     UInt64 store_id,
     TableID table_id,
-    const String & address)
+    const String & address,
+    const LoggerPtr & log)
 {
-    SegmentSnapshotPtr snapshot;
-
+    LOG_DEBUG(log, "Building from {}", proto.DebugString());
     RowKeyRange segment_range;
     {
         ReadBufferFromString rb(proto.key_range());
         segment_range = RowKeyRange::deserialize(rb);
+    }
+    RowKeyRanges read_ranges(proto.read_key_ranges_size());
+    for (int i = 0; i < proto.read_key_ranges_size(); ++i)
+    {
+        ReadBufferFromString rb(proto.read_key_ranges(i));
+        read_ranges[i] = RowKeyRange::deserialize(rb);
     }
 
     auto task = std::make_shared<RemoteSegmentReadTask>(
@@ -251,6 +265,7 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
         0,
         nullptr,
         nullptr);
+    task->read_ranges = std::move(read_ranges);
 
     task->segment_snap = SegmentSnapshot::deserializeFromRemoteProtocol(
         db_context,
@@ -258,17 +273,43 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
         table_id,
         proto);
 
-    LOG_DEBUG(Logger::get(), "ColumnFiles in MemTable: {}", task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount());
-    LOG_DEBUG(Logger::get(), "ColumnFiles in Persisted: {}", task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
+    LOG_DEBUG(log, "ColumnFiles in MemTable: {}", task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount());
+    LOG_DEBUG(log, "ColumnFiles in Persisted: {}", task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
+
+    {
+        auto persisted_cfs = task->segment_snap->delta->getPersistedFileSetSnapshot();
+        std::vector<Remote::PageOID> all_persisted_ids;
+        all_persisted_ids.reserve(persisted_cfs->getColumnFileCount());
+        for (const auto & cfs : persisted_cfs->getColumnFiles())
+        {
+            if (auto * tiny = cfs->tryToTinyFile(); tiny)
+            {
+                auto page_oid = Remote::PageOID{
+                    .write_node_id = store_id,
+                    .table_id = table_id,
+                    .page_id = tiny->getDataPageId(),
+                };
+                all_persisted_ids.emplace_back(page_oid);
+            }
+        }
+
+        auto pending_oids = task->page_cache->getPendingIds(all_persisted_ids);
+        task->pending_page_ids.reserve(pending_oids.size());
+        for (const auto & oid : pending_oids)
+        {
+            task->pending_page_ids.emplace_back(oid.page_id);
+        }
+        LOG_INFO(log, "local cache hit rate: {:.2f}%, pending_ids: {}", 100.0 * pending_oids.size() / all_persisted_ids.size(), task->pendingPageIds());
+    }
 
     return task;
 }
 
 void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
 {
-    // TODO: Use LocalPageCache
     std::lock_guard lock(mtx_queue);
-    size_t buf_size = remote_page.data().size();
+    const size_t buf_size = remote_page.data().size();
+#if 0
     char * data_buf = static_cast<char *>(allocator.alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [buf_size](char * p) {
         allocator.free(p, buf_size);
@@ -277,6 +318,22 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
     persisted_pages.push({remote_page.page_id(), std::move(page)});
+#endif
+
+    // Use LocalPageCache
+    auto oid = Remote::PageOID{
+        .write_node_id = store_id,
+        .table_id = table_id,
+        .page_id = remote_page.page_id()};
+    auto read_buffer = std::make_shared<ReadBufferFromMemory>(remote_page.data().data(), buf_size);
+    PageFieldSizes field_sizes;
+    field_sizes.reserve(remote_page.field_offsets_size());
+    for (const auto & field_off : remote_page.field_offsets())
+    {
+        field_sizes.emplace_back(field_off);
+    }
+    page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
+    LOG_DEBUG(Logger::get(), "receive page, page_id={}", remote_page.page_id());
 }
 
 BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
