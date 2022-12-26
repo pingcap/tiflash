@@ -245,6 +245,15 @@ Block ColumnFileTinyReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
+bool ColumnFileTinyReader::skipNextBlock()
+{
+    if (read_done)
+        return false;
+
+    read_done = true;
+    return true;
+}
+
 ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Reuse the cache data.

@@ -17,9 +17,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 
 #include <algorithm>
-#include <iostream>
 
-#include "common/types.h"
 
 namespace DB::DM
 {

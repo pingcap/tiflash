@@ -23,6 +23,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/ColumnOrderedSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -2326,7 +2327,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
-    BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
+    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         columns_to_read,
         data_ranges,
@@ -2338,7 +2339,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         enable_del_clean_read);
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
-    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
+    SkippableBlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         columns_to_read_ptr,
@@ -2381,7 +2382,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         enable_del_clean_read);
 
     auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
-    BlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
+    SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         filter_columns_to_read_ptr,
@@ -2425,7 +2426,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         enable_del_clean_read);
 
     auto rest_columns_to_read_ptr = std::make_shared<ColumnDefines>(rest_columns_to_read);
-    BlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
+    SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         rest_columns_to_read_ptr,

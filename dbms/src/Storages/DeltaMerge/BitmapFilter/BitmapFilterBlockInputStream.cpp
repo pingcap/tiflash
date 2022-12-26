@@ -20,8 +20,8 @@ namespace DB::DM
 {
 BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     const ColumnDefines & columns_to_read,
-    BlockInputStreamPtr stable_,
-    BlockInputStreamPtr delta_,
+    SkippableBlockInputStreamPtr stable_,
+    SkippableBlockInputStreamPtr delta_,
     size_t stable_rows_,
     size_t delta_rows_,
     const BitmapFilterPtr & bitmap_filter_,

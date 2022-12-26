@@ -17,7 +17,7 @@
 namespace DB::DM
 {
 
-std::pair<Block, bool> readBlock(BlockInputStreamPtr & stable, BlockInputStreamPtr & delta)
+std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta)
 {
     if (stable == nullptr && delta == nullptr)
     {
@@ -42,6 +42,36 @@ std::pair<Block, bool> readBlock(BlockInputStreamPtr & stable, BlockInputStreamP
             block = delta->read();
         }
         return {block, true};
+    }
+}
+
+bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta)
+{
+    if (stable == nullptr && delta == nullptr)
+    {
+        return false;
+    }
+
+    if (stable == nullptr)
+    {
+        return delta->skipNextBlock();
+    }
+
+    if (stable->skipNextBlock())
+    {
+        return true;
+    }
+    else
+    {
+        stable = nullptr;
+        if (delta != nullptr)
+        {
+            return delta->skipNextBlock();
+        }
+        else
+        {
+            return false;
+        }
     }
 }
 

@@ -14,8 +14,7 @@
 
 #pragma once
 
-#include <Core/Block.h>
-#include <DataStreams/IBlockInputStream.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB::DM
 {
@@ -26,7 +25,11 @@ namespace DB::DM
   * Return: <Block, from_delta>
   * the block and a flag indicating whether the block is from the delta.
   */
-std::pair<Block, bool> readBlock(BlockInputStreamPtr & stable, BlockInputStreamPtr & delta);
+std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
 
+/** Skip the next block.
+  * Return false if meets the end of both stable and delta.
+  */
+bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
 
 } // namespace DB::DM
