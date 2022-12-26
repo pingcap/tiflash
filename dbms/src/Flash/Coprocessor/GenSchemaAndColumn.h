@@ -36,5 +36,8 @@ namespace DM
 struct ColumnDefine;
 using ColumnDefinesPtr = std::shared_ptr<std::vector<ColumnDefine>>;
 } // namespace DM
-DM::ColumnDefinesPtr genColumnDefinesForTableScan(const TiDBTableScan & table_scan);
+
+// The column defines and `extra table id index`
+std::tuple<DM::ColumnDefinesPtr, size_t>
+genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
 } // namespace DB
