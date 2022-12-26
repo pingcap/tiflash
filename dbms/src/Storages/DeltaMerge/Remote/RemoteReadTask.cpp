@@ -357,13 +357,14 @@ BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
     const DM::RSOperatorPtr & rs_filter,
     size_t expected_block_size)
 {
-    UNUSED(this, rs_filter, key_ranges, read_tso, expected_block_size);
-    // TODO -------------
-    auto block = toEmptyBlock(columns_to_read);
-    // 1. restore dmfiles and build input stream for stable
-    // 2. build a temp delta vs and generate input stream for delta
-    // 3. get the mem table from block_queue
-    return std::make_shared<NullBlockInputStream>(block);
+    return segment->getInputStreamModeNormal(
+        *dm_context,
+        columns_to_read,
+        segment_snap,
+        key_ranges,
+        rs_filter,
+        read_tso,
+        expected_block_size);
 }
 
 } // namespace DB::DM

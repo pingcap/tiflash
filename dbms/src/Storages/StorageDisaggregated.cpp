@@ -31,6 +31,7 @@
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Types.h>
 #include <kvproto/mpp.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Cluster.h>
@@ -205,7 +206,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         executor_id);
 
     // Build the input streams to read blocks from remote segments
-    auto column_defines = genColumnDefinesForTableScan(table_scan);
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
@@ -216,7 +218,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         column_defines,
         read_tso,
         num_streams,
-        0,
+        extra_table_id_index,
         extra_info,
         /*tracing_id*/ log->identifier());
     RUNTIME_CHECK(!streams.empty(), streams.size(), num_streams);
