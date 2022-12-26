@@ -568,8 +568,10 @@ try
                            .aggregation({Max(col("value"))}, {col("key")})
                            .build(context);
         auto expect = executeStreams(request, 1);
-        // test for one level merge and two level merge.
-        std::vector<UInt64> two_level_thresholds{0, 1, 100000, std::numeric_limits<UInt64>::max()};
+        context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+        // 0: use one level merge
+        // 1: use two level merge
+        std::vector<UInt64> two_level_thresholds{0, 1};
         for (auto two_level_threshold : two_level_thresholds)
         {
             context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
