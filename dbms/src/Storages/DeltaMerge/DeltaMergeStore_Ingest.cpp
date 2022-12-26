@@ -18,6 +18,8 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 #include <magic_enum.hpp>
 
@@ -59,13 +61,32 @@ std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
     return {parent_path, new_id};
 }
 
-void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId file_id, size_t file_size)
+void DeltaMergeStore::preIngestFile(
+    const Context & db_context,
+    const DMFilePtr & dtfile)
 {
     if (shutdown_called.load(std::memory_order_relaxed))
         return;
 
     auto delegator = path_pool->getStableDiskDelegator();
-    delegator.addDTFile(file_id, file_size, parent_path);
+    delegator.addDTFile(dtfile->fileId(), dtfile->getBytesOnDisk(), dtfile->parentPath());
+
+    if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
+    {
+        UInt64 store_id;
+        {
+            auto & tmt = db_context.getTMTContext();
+            auto kvstore = tmt.getKVStore();
+            auto store_meta = kvstore->getStoreMeta();
+            store_id = store_meta.id();
+        }
+        auto oid = Remote::DMFileOID{
+            .write_node_id = store_id,
+            .table_id = physical_table_id,
+            .file_id = dtfile->fileId(),
+        };
+        remote_manager->getDataStore()->putDMFile(dtfile, oid);
+    }
 }
 
 Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(

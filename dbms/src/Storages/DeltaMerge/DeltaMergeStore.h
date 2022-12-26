@@ -276,7 +276,7 @@ public:
 
     std::tuple<String, PageId> preAllocateIngestFile();
 
-    void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
+    void preIngestFile(const Context & db_context, const DMFilePtr & dtfile);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
