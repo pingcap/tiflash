@@ -516,6 +516,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
 
 Block mergeBlocks(Blocks && blocks)
 {
+    assert(!blocks.empty());
     auto & sample_block = blocks[0];
     MutableColumns dst_columns(sample_block.columns());
     for (size_t i = 0; i < sample_block.columns(); i++)
