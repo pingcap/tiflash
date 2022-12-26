@@ -130,8 +130,6 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     const Context & db_context,
     const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
 {
-    LOG_INFO(Logger::get("swx"), "Begin buildDisaggregatedTask");
-
     // Dispatch the task according to the batch_cop_tasks
     std::vector<std::shared_ptr<::mpp::EstablishDisaggregatedTaskRequest>> establish_reqs;
     establish_reqs.reserve(batch_cop_tasks.size());
@@ -171,12 +169,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     auto parse_ok = table.ParseFromString(physical_table);
                     RUNTIME_CHECK(parse_ok); // TODO: handle error
 
-                    LOG_INFO(Logger::get("swx"), "Build remoteTableReadTask, store={}, addr={}, id={}, table={}",
-                             resp->store_id(),
-                             req->address(),
-                             task_id,
-                             table.DebugString()
-                    );
+                    LOG_DEBUG(Logger::get(), "Build remoteTableReadTask, store={}, addr={}, id={}, table={}", resp->store_id(), req->address(), task_id, table.DebugString());
 
                     remote_tasks[idx] = DM::RemoteTableReadTask::buildFrom(
                         db_context,
@@ -189,8 +182,6 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
             });
     }
     thread_manager->wait();
-
-    LOG_INFO(Logger::get("swx"), "End buildDisaggregatedTask");
 
     return std::make_shared<DM::RemoteReadTask>(std::move(remote_tasks));
 }
@@ -247,8 +238,6 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    LOG_INFO(Logger::get("swx"), "Read from StorageDisaggregated");
-
     auto remote_table_ranges = buildRemoteTableRanges();
 
     auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
@@ -258,7 +247,7 @@ BlockInputStreams StorageDisaggregated::read(
     bool remote_data_read = !db_context.remoteDataServiceSource().empty();
     if (remote_data_read)
     {
-        LOG_INFO(Logger::get("swx"), "Using remote data read");
+        LOG_DEBUG(Logger::get(), "Using remote data read");
 
         // Fetch the remote segment read tasks from write nodes
         auto remote_read_tasks = buildDisaggregatedTask(db_context, batch_cop_tasks);
