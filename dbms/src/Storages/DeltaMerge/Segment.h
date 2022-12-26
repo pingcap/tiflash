@@ -68,7 +68,7 @@ struct SegmentSnapshot : private boost::noncopyable
     dtpb::DisaggregatedSegment serializeToRemoteProtocol(const RowKeyRange & segment_range) const;
 
     static SegmentSnapshotPtr deserializeFromRemoteProtocol(
-        const Remote::ManagerPtr & remote_manager,
+        const Context & db_context,
         UInt64 write_node_id,
         Int64 table_id,
         const dtpb::DisaggregatedSegment & proto);

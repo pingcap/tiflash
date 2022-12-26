@@ -35,7 +35,8 @@ extern const int LOGICAL_ERROR;
 
 namespace DM
 {
-void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
+
+void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, const Context & db_context)
 {
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -50,7 +51,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     }
     else
     {
-        auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
+        auto index_cache = db_context.getGlobalContext().getMinMaxIndexCache();
         for (const auto & file : files_)
         {
             auto pack_filter = DMFilePackFilter::loadFrom(
@@ -60,10 +61,10 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 {range},
                 EMPTY_FILTER,
                 {},
-                dm_context->db_context.getFileProvider(),
-                dm_context->getReadLimiter(),
-                dm_context->scan_context,
-                dm_context->tracing_id);
+                db_context.getFileProvider(),
+                db_context.getReadLimiter(),
+                std::make_shared<DM::ScanContext>(),
+                /* tracing_id */ "");
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;

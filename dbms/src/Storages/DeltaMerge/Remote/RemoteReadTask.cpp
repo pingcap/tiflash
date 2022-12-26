@@ -253,10 +253,13 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
         nullptr);
 
     task->segment_snap = SegmentSnapshot::deserializeFromRemoteProtocol(
-        db_context.getDMRemoteManager(),
+        db_context,
         store_id,
         table_id,
         proto);
+
+    LOG_DEBUG(Logger::get(), "ColumnFiles in MemTable: {}", task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount());
+    LOG_DEBUG(Logger::get(), "ColumnFiles in Persisted: {}", task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
 
     return task;
 }

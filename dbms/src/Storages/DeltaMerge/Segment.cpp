@@ -131,7 +131,7 @@ dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(const RowK
 }
 
 SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
-    const Remote::ManagerPtr & remote_manager,
+    const Context & db_context,
     UInt64 write_node_id,
     Int64 table_id,
     const dtpb::DisaggregatedSegment & proto)
@@ -142,6 +142,7 @@ SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
         segment_range = RowKeyRange::deserialize(rb);
     }
 
+    auto remote_manager = db_context.getDMRemoteManager();
     auto delta_snap = DeltaValueSnapshot::createSnapshotForRead(CurrentMetrics::DT_SnapshotOfRead);
     delta_snap->mem_table_snap = ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
         proto.column_files_memtable(),
@@ -170,7 +171,7 @@ SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
         auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
         dmfiles.emplace_back(std::move(dmfile));
     }
-    new_stable->setFiles(dmfiles, segment_range);
+    new_stable->setFiles(dmfiles, segment_range, db_context);
     auto stable_snap = new_stable->createSnapshot();
 
     return std::make_shared<SegmentSnapshot>(
@@ -258,7 +259,7 @@ StableValueSpacePtr createNewStable( //
     auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
 
     auto stable = std::make_shared<StableValueSpace>(stable_id);
-    stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
+    stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size), context.db_context);
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dtfile_id, 0);
     delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
@@ -1110,7 +1111,7 @@ SegmentPtr Segment::replaceData(const Segment::Lock & lock, //
     new_delta->saveMeta(wbs);
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
-    new_stable->setFiles({data_file}, rowkey_range, &context);
+    new_stable->setFiles({data_file}, rowkey_range, context.db_context);
     new_stable->saveMeta(wbs.meta);
 
     auto new_me = std::make_shared<Segment>( //
@@ -1496,8 +1497,8 @@ Segment::prepareSplitLogical( //
     auto my_stable = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
 
-    my_stable->setFiles(my_stable_files, my_range, &dm_context);
-    other_stable->setFiles(other_stable_files, other_range, &dm_context);
+    my_stable->setFiles(my_stable_files, my_range, dm_context.db_context);
+    other_stable->setFiles(other_stable_files, other_range, dm_context.db_context);
 
     LOG_DEBUG(log, "Split - SplitLogical - Finish prepare, segment={} split_point={}", info(), opt_split_point->toDebugString());
 
