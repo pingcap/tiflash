@@ -42,25 +42,23 @@ void Pipeline::addDependency(const PipelinePtr & dependency)
     dependencies.emplace_back(dependency);
 }
 
-String Pipeline::toString() const
+void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
 {
-    if (plans.empty())
-        return "";
-    FmtBuffer buffer;
-    buffer.append("[");
-    buffer.joinStr(
-        plans.cbegin(),
-        plans.cend(),
-        [](const auto & item, FmtBuffer & buf) { buf.append(item->toString()); },
-        "] <== [");
-    buffer.append("]");
-    return buffer.toString();
+    size_t prefix_size = 2 * level;
+    addPrefix(buffer, prefix_size);
+    buffer.append("pipeline:\n");
+    ++prefix_size;
+    for (auto it = plans.cbegin(); it != plans.cend(); ++it)
+    {
+        addPrefix(buffer, prefix_size);
+        buffer.append((*it)->toString());
+        buffer.append("\n");
+    }
 }
 
 void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 {
-    addPrefix(buffer, level);
-    buffer.fmtAppend("{}\n", toString());
+    toSelfString(buffer, level);
     ++level;
     for (const auto & dependency : dependencies)
     {

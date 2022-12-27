@@ -41,8 +41,6 @@ public:
 
     void addDependency(const PipelinePtr & dependency);
 
-    String toString() const;
-
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
     // only used for test.
@@ -53,6 +51,9 @@ public:
     Events toEvents(PipelineExecStatus & status, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
+
+private:
+    void toSelfString(FmtBuffer & buffer, size_t level) const;
 
 private:
     // data flow: plans.begin() <-- plans.end()
