@@ -174,7 +174,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                 LOG_DEBUG(log, "Get resp from {}, resp.store_id={} resp.num_tables={}", req->address(), resp->store_id(), resp->tables_size());
                 // TODO: handle error
                 if (resp->has_error())
-                    throw Exception(resp->error().msg());
+                    throw Exception(fmt::format("EstablishDisaggregated get resp with error={}", resp->error().msg()));
                 summary.establish_rpc_ms += watch.elapsedMillisecondsFromLastTime();
                 // Parse the resp and gen tasks on read node
                 // The number of tasks is equal to number of write nodes

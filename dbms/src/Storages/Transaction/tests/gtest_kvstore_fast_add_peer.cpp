@@ -49,7 +49,7 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
 TEST_F(RegionKVStoreTest, FAPRestorePS)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
-    auto *log = &Poco::Logger::get("fast add");
+    auto * log = &Poco::Logger::get("fast add");
     {
         auto region_id = 1;
         auto peer_id = 1;

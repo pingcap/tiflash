@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/CLIService.h>
+#include <Storages/Page/Config.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -145,6 +148,8 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
 class PageStorageControlV3
 {
 public:
+    constexpr static std::string_view NAME = "PageStorageControlV3";
+
     explicit PageStorageControlV3(const ControlOptions & options_)
         : options(options_)
     {
@@ -196,7 +201,6 @@ private:
             provider = context.getFileProvider();
         }
 
-        constexpr static std::string_view NAME = "PageStorageControlV3";
         PageStorageConfig config;
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
@@ -219,8 +223,27 @@ private:
         // Other display mode need to restore ps instance
         if (options.is_universal_ps)
         {
-            throw Exception("Not yet support");
+            return runUniPageStorage(delegator, config, provider, options);
         }
+        return runU128PageStorage(delegator, config, provider, options);
+    }
+
+    static int runUniPageStorage(const PSDiskDelegatorPtr & delegator, const PageStorageConfig & config, const FileProviderPtr & provider, const ControlOptions & options)
+    {
+#if 0
+        auto ps = UniversalPageStorage::create(String(NAME), delegator, config, provider);
+        ps->restore();
+        ps->gc();
+        UNUSED(options);
+#else
+        UNUSED(delegator, config, provider, options);
+        throw Exception("Not yet support");
+#endif
+        return 0;
+    }
+
+    static int runU128PageStorage(const PSDiskDelegatorPtr & delegator, const PageStorageConfig & config, const FileProviderPtr & provider, const ControlOptions & options)
+    {
         PageStorageImpl ps(String(NAME), delegator, config, provider);
         ps.restore();
         auto & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
