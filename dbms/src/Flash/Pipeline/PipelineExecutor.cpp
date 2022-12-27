@@ -20,6 +20,7 @@ namespace DB
 {
 ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
 {
+    assert(root_pipeline);
     // for result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
     if (!result_handler.isIgnored())
         root_pipeline->addGetResultSink(result_handler);
@@ -50,8 +51,8 @@ void PipelineExecutor::cancel()
 
 String PipelineExecutor::toString() const
 {
-    FmtBuffer buffer;
     assert(root_pipeline);
+    FmtBuffer buffer;
     // just call the root pipeline.
     root_pipeline->toTreeString(buffer);
     return buffer.toString();

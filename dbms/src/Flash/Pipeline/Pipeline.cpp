@@ -26,9 +26,9 @@ namespace DB
 {
 namespace
 {
-void addPrefix(FmtBuffer & buffer, size_t level)
+FmtBuffer & addPrefix(FmtBuffer & buffer, size_t level)
 {
-    buffer.append(String(level, ' '));
+    return buffer.append(String(level, ' '));
 }
 } // namespace
 
@@ -45,15 +45,10 @@ void Pipeline::addDependency(const PipelinePtr & dependency)
 void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
 {
     size_t prefix_size = 2 * level;
-    addPrefix(buffer, prefix_size);
-    buffer.append("pipeline:\n");
+    addPrefix(buffer, prefix_size).append("pipeline:\n");
     ++prefix_size;
     for (const auto & plan : plans)
-    {
-        addPrefix(buffer, prefix_size);
-        buffer.append(plan->toString());
-        buffer.append("\n");
-    }
+        addPrefix(buffer, prefix_size).append(plan->toString()).append("\n");
 }
 
 void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
@@ -77,6 +72,7 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
 
 OperatorExecutorGroups Pipeline::transform(Context & context, size_t concurrency)
 {
+    assert(!plans.empty());
     OperatorsBuilder builder;
     for (auto it = plans.rbegin(); it != plans.rend(); ++it)
         (*it)->transform(builder, context, concurrency);
@@ -101,6 +97,7 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
     //     ```
     Events events;
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+
     auto pipeline_event = std::make_shared<PipelineEvent>(status, memory_tracker, context, concurrency, shared_from_this());
     for (const auto & dependency : dependencies)
     {
@@ -114,9 +111,11 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
         }
     }
     events.push_back(pipeline_event);
+
     auto complete_event = std::make_shared<PipelineCompleteEvent>(status, memory_tracker);
     complete_event->addDependency(pipeline_event);
     events.push_back(complete_event);
+
     return events;
 }
 
@@ -128,12 +127,13 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
         [&](const tipb::Executor & executor) {
             switch (executor.tp())
             {
-            case tipb::ExecType::TypeTableScan:
+            case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
+            case tipb::ExecType::TypeLimit:
+            // Only support mock table_scan/exchange_sender/exchange_receiver in test mode now.
+            case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
-            case tipb::ExecType::TypeProjection:
-            case tipb::ExecType::TypeLimit:
                 return true;
             default:
                 is_supported = false;

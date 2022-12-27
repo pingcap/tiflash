@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
+#include <assert.h>
 
 namespace DB
 {
@@ -49,7 +50,8 @@ void PipelineExecStatus::addActivePipeline()
 void PipelineExecStatus::completePipeline()
 {
     auto pre_sub_count = active_pipeline_count.fetch_sub(1);
-    if (pre_sub_count <= 1)
+    assert(pre_sub_count >= 1);
+    if (1 == pre_sub_count)
         cv.notify_one();
 }
 

@@ -18,7 +18,6 @@
 
 #include <memory>
 
-// TODO support profile info.
 namespace DB
 {
 enum class OperatorStatus
@@ -43,6 +42,8 @@ public:
 
     virtual OperatorStatus spill() { throw Exception("Unsupport"); }
 };
+
+// TODO support profile info like `BlockStreamProfileInfo`.
 
 class Source : public Spiller
 {

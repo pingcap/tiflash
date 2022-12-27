@@ -28,6 +28,29 @@ struct TaskSchedulerConfig
     size_t spill_executor_thread_num;
 };
 
+/**
+ * ┌──────────────────┐
+ * │  task scheduler  │
+ * │                  │
+ * │ ┌──────────────┐ │
+ * │ │spill executor│ │
+ * │ └────▲──┬──────┘ │
+ * │      │  │        │
+ * │ ┌────┴──▼─────┐  │
+ * │ │task executor│  │
+ * │ └────▲──┬─────┘  │
+ * │      │  │        │
+ * │  ┌───┴──▼────┐   │
+ * │  │io reactor │   │
+ * │  └───────────┘   │
+ * │                  │
+ * └──────────────────┘
+ * 
+ * A globally shared execution scheduler, used by pipeline executor.
+ * - task executor: for operator compute.
+ * - spill executor: for spilling disk.
+ * - io reactor: for polling asynchronous io status.
+ */
 class TaskScheduler
 {
 public:

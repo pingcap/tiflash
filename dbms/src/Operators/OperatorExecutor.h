@@ -20,6 +20,8 @@
 
 namespace DB
 {
+// push model operator executor.
+// data flow: source --> transform --> .. --> transform --> sink
 class OperatorExecutor
 {
 public:

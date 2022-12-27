@@ -25,7 +25,7 @@ OperatorStatus FilterTransform::transform(Block & block)
     }
 
     if (likely(block))
-        return filter_transform_action.transform(block, nullptr)
+        return filter_transform_action.transform(block, /*child_filter=*/nullptr)
             ? OperatorStatus::PASS
             : OperatorStatus::MORE_INPUT;
 
