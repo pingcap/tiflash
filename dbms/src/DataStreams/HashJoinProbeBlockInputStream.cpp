@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
@@ -74,8 +73,6 @@ Block HashJoinProbeBlockInputStream::readImpl()
         return Block{};
     }
 
-    squashing_transform.handleOverLimitBlock();
-
     while (squashing_transform.needAppendBlock())
     {
         Block result_block = getOutputBlock(probe_process_info);
@@ -98,79 +95,6 @@ Block HashJoinProbeBlockInputStream::getOutputBlock(ProbeProcessInfo & probe_pro
     }
 
     return join->joinBlock(probe_process_info_);
-}
-
-SquashingHashJoinBlockTransform::SquashingHashJoinBlockTransform(UInt64 max_block_size_)
-    : output_rows(0)
-    , max_block_size(max_block_size_)
-    , join_finished(false)
-{}
-
-void SquashingHashJoinBlockTransform::handleOverLimitBlock()
-{
-    // we need to reset squash before handle over limit block;
-    reset();
-    // if over_limit_block is not null, we need to push it into blocks first.
-    if (over_limit_block)
-    {
-        output_rows += over_limit_block.rows();
-        blocks.push_back(std::move(over_limit_block));
-        over_limit_block = Block{};
-    }
-}
-
-void SquashingHashJoinBlockTransform::appendBlock(Block block)
-{
-    if (!block)
-    {
-        // if append block is {}, mark join finished.
-        join_finished = true;
-        return;
-    }
-    size_t current_rows = block.rows();
-
-    if (!output_rows || output_rows + current_rows <= max_block_size)
-    {
-        blocks.push_back(block);
-    }
-    else
-    {
-        // if output_rows + current_rows > max block size, put the current result block into over_limit_block and handle it in next read.
-        over_limit_block = block;
-    }
-    output_rows += current_rows;
-}
-
-Block SquashingHashJoinBlockTransform::getFinalOutputBlock()
-{
-    if (blocks.empty())
-    {
-        return {};
-    }
-    else if (blocks.size() == 1)
-    {
-        return blocks[0];
-    }
-    else
-    {
-        return mergeBlocks(std::move(blocks));
-    }
-}
-
-void SquashingHashJoinBlockTransform::reset()
-{
-    blocks.clear();
-    output_rows = 0;
-}
-
-bool SquashingHashJoinBlockTransform::isJoinFinished() const
-{
-    return join_finished;
-}
-
-bool SquashingHashJoinBlockTransform::needAppendBlock() const
-{
-    return output_rows <= max_block_size && !join_finished;
 }
 
 } // namespace DB

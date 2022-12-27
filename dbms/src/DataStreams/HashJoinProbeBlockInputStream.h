@@ -15,30 +15,11 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/SquashingHashJoinBlockTransform.h>
 #include <Interpreters/Join.h>
 
 namespace DB
 {
-
-class SquashingHashJoinBlockTransform
-{
-public:
-    SquashingHashJoinBlockTransform(UInt64 max_block_size_);
-
-    void handleOverLimitBlock();
-    void appendBlock(Block block);
-    Block getFinalOutputBlock();
-    void reset();
-    bool isJoinFinished() const;
-    bool needAppendBlock() const;
-
-private:
-    Blocks blocks;
-    Block over_limit_block;
-    size_t output_rows;
-    UInt64 max_block_size;
-    bool join_finished;
-};
 
 /** Executes a certain expression over the block.
   * Basically the same as ExpressionBlockInputStream,

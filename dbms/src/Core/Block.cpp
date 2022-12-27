@@ -534,9 +534,9 @@ Block mergeBlocks(Blocks && blocks)
 
     for (size_t i = 1; i < blocks.size(); ++i)
     {
-        if (blocks[i].rows() > 0)
+        if (likely(blocks[i].rows()) > 0)
         {
-            for (size_t column = 0; column < blocks[i].columns(); column++)
+            for (size_t column = 0; column < blocks[i].columns(); ++column)
             {
                 dst_columns[column]->insertRangeFrom(*blocks[i].getByPosition(column).column, 0, blocks[i].rows());
             }
