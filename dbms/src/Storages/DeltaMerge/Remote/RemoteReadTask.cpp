@@ -139,9 +139,9 @@ void RemoteReadTask::allDataReceive()
 
         for (auto iter = ready_segment_tasks.begin(); iter != ready_segment_tasks.end(); /* empty */)
         {
-            auto state = iter->first;
-            auto tasks = iter->second;
-            if (!(state == SegmentReadTaskState::Init || state == SegmentReadTaskState::Receiving))
+            const auto state = iter->first;
+            const auto & tasks = iter->second;
+            if (state != SegmentReadTaskState::Init && state != SegmentReadTaskState::Receiving)
             {
                 ++iter;
                 continue;
@@ -366,16 +366,6 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
 {
     std::lock_guard lock(mtx_queue);
     const size_t buf_size = remote_page.data().size();
-#if 0
-    char * data_buf = static_cast<char *>(allocator.alloc(buf_size));
-    MemHolder mem_holder = createMemHolder(data_buf, [buf_size](char * p) {
-        allocator.free(p, buf_size);
-    });
-    Page page;
-    page.data = ByteBuffer(data_buf, data_buf + buf_size);
-    page.mem_holder = mem_holder;
-    persisted_pages.push({remote_page.page_id(), std::move(page)});
-#endif
 
     // Use LocalPageCache
     auto oid = Remote::PageOID{
@@ -385,11 +375,10 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
     auto read_buffer = std::make_shared<ReadBufferFromMemory>(remote_page.data().data(), buf_size);
     PageFieldSizes field_sizes;
     field_sizes.reserve(remote_page.field_sizes_size());
-    for (const auto & field_off : remote_page.field_sizes())
+    for (const auto & field_sz : remote_page.field_sizes())
     {
-        field_sizes.emplace_back(field_off);
+        field_sizes.emplace_back(field_sz);
     }
-    LOG_DEBUG(Logger::get(), "receive page persisting, oid={}", oid.info());
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(Logger::get(), "receive page, oid={}", oid.info());
 }
