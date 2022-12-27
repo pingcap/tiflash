@@ -36,7 +36,7 @@ void SquashingHashJoinBlockTransform::handleOverLimitBlock()
     }
 }
 
-void SquashingHashJoinBlockTransform::appendBlock(Block block)
+void SquashingHashJoinBlockTransform::appendBlock(Block & block)
 {
     if (!block)
     {

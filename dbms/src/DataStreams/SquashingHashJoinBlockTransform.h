@@ -24,7 +24,7 @@ class SquashingHashJoinBlockTransform
 public:
     SquashingHashJoinBlockTransform(UInt64 max_block_size_);
 
-    void appendBlock(Block block);
+    void appendBlock(Block & block);
     Block getFinalOutputBlock();
     bool isJoinFinished() const;
     bool needAppendBlock() const;
