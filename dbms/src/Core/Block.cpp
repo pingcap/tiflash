@@ -516,7 +516,10 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
 
 Block mergeBlocks(Blocks && blocks)
 {
-    assert(!blocks.empty());
+    if (blocks.empty())
+    {
+        return {};
+    }
     auto & first_block = blocks[0];
     size_t result_rows = 0;
     for (const auto & block : blocks)
@@ -526,7 +529,7 @@ Block mergeBlocks(Blocks && blocks)
 
     MutableColumns dst_columns(first_block.columns());
 
-    for (size_t i = 0; i < first_block.columns(); i++)
+    for (size_t i = 0; i < first_block.columns(); ++i)
     {
         dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
         dst_columns[i]->reserve(result_rows);

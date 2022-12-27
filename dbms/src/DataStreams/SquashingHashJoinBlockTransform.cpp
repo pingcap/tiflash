@@ -26,9 +26,10 @@ SquashingHashJoinBlockTransform::SquashingHashJoinBlockTransform(UInt64 max_bloc
 
 void SquashingHashJoinBlockTransform::handleOverLimitBlock()
 {
-    // if over_limit_block is not null, we need to push it into blocks first.
+    // if over_limit_block is not null, we need to push it into blocks.
     if (over_limit_block.has_value())
     {
+        assert(!(output_rows && blocks.empty()));
         output_rows += over_limit_block->rows();
         blocks.push_back(std::move(over_limit_block.value()));
         over_limit_block = {};
@@ -37,7 +38,6 @@ void SquashingHashJoinBlockTransform::handleOverLimitBlock()
 
 void SquashingHashJoinBlockTransform::appendBlock(Block block)
 {
-    handleOverLimitBlock();
     if (!block)
     {
         // if append block is {}, mark join finished.
@@ -62,19 +62,17 @@ void SquashingHashJoinBlockTransform::appendBlock(Block block)
 Block SquashingHashJoinBlockTransform::getFinalOutputBlock()
 {
     Block final_block;
-    if (blocks.empty())
+
+    if (blocks.size() == 1)
     {
-        final_block = {};
-    }
-    else if (blocks.size() == 1)
-    {
-        final_block = blocks[0];
+        final_block = std::move(blocks[0]);
     }
     else
     {
         final_block = mergeBlocks(std::move(blocks));
     }
     reset();
+    handleOverLimitBlock();
     return final_block;
 }
 

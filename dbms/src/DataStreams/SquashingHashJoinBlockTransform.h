@@ -24,17 +24,16 @@ class SquashingHashJoinBlockTransform
 public:
     SquashingHashJoinBlockTransform(UInt64 max_block_size_);
 
-    void handleOverLimitBlock();
     void appendBlock(Block block);
     Block getFinalOutputBlock();
-    void reset();
     bool isJoinFinished() const;
     bool needAppendBlock() const;
 
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
+    void handleOverLimitBlock();
+    void reset();
+
     Blocks blocks;
     std::optional<Block> over_limit_block;
     size_t output_rows;

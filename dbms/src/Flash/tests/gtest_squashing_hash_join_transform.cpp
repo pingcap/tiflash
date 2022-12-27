@@ -48,9 +48,9 @@ public:
 TEST_F(SquashingHashJoinBlockTransformTest, testALL)
 try
 {
-    Int64 rows = 30000;
+    Int64 expect_rows = 30000;
     Blocks test_blocks;
-    for (Int64 i = 0; i < rows; ++i)
+    for (Int64 i = 0; i < expect_rows; ++i)
     {
         Block block{toVec({i})};
         test_blocks.push_back(block);
@@ -63,6 +63,7 @@ try
     {
         Blocks final_blocks;
         size_t index = 0;
+        Int64 actual_rows = 0;
         SquashingHashJoinBlockTransform squashing_transform(size);
         while (!squashing_transform.isJoinFinished())
         {
@@ -72,8 +73,10 @@ try
                 squashing_transform.appendBlock(result_block);
             }
             final_blocks.push_back(squashing_transform.getFinalOutputBlock());
+            actual_rows += final_blocks.back().rows();
         }
-        check(final_blocks, std::min(size, rows));
+        check(final_blocks, std::min(size, expect_rows));
+        ASSERT(actual_rows == expect_rows);
     }
 }
 CATCH

@@ -166,34 +166,6 @@ void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequ
     });
 }
 
-Block mergeBlocksForTest(Blocks blocks)
-{
-    if (blocks.empty())
-        return {};
-
-    Block sample_block = blocks.back();
-    std::vector<MutableColumnPtr> actual_cols;
-    for (const auto & column : sample_block.getColumnsWithTypeAndName())
-    {
-        actual_cols.push_back(column.type->createColumn());
-    }
-    for (const auto & block : blocks)
-    {
-        for (size_t i = 0; i < block.columns(); ++i)
-        {
-            for (size_t j = 0; j < block.rows(); ++j)
-            {
-                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
-            }
-        }
-    }
-
-    ColumnsWithTypeAndName actual_columns;
-    for (size_t i = 0; i < actual_cols.size(); ++i)
-        actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
-    return Block(actual_columns);
-}
-
 void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
     stream->readPrefix();
@@ -214,7 +186,7 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     Blocks actual_blocks;
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
-    return mergeBlocksForTest(actual_blocks).getColumnsWithTypeAndName();
+    return mergeBlocks(std::move(actual_blocks)).getColumnsWithTypeAndName();
 }
 
 void ExecutorTest::enablePlanner(bool is_enable)
@@ -231,7 +203,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     // Currently, don't care about regions information in tests.
     Blocks blocks;
     queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
-    return mergeBlocksForTest(blocks).getColumnsWithTypeAndName();
+    return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
 Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
