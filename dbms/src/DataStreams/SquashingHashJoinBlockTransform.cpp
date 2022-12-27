@@ -60,16 +60,7 @@ void SquashingHashJoinBlockTransform::appendBlock(Block & block)
 
 Block SquashingHashJoinBlockTransform::getFinalOutputBlock()
 {
-    Block final_block;
-
-    if (blocks.size() == 1)
-    {
-        final_block = std::move(blocks[0]);
-    }
-    else
-    {
-        final_block = mergeBlocks(std::move(blocks));
-    }
+    Block final_block = mergeBlocks(std::move(blocks));
     reset();
     handleOverLimitBlock();
     return final_block;

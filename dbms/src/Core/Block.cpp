@@ -520,6 +520,12 @@ Block mergeBlocks(Blocks && blocks)
     {
         return {};
     }
+
+    if (blocks.size() == 1)
+    {
+        return std::move(blocks[0]);
+    }
+
     auto & first_block = blocks[0];
     size_t result_rows = 0;
     for (const auto & block : blocks)
