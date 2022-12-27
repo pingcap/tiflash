@@ -141,7 +141,7 @@ dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(
         read_range.serialize(wb);
         remote.add_read_key_ranges()->assign(wb.releaseStr());
     }
-    LOG_DEBUG(Logger::get(), "serialize to remote {}", remote.DebugString());
+    // LOG_DEBUG(Logger::get(), "serialize to remote {}", remote.DebugString());
 
     return remote;
 }

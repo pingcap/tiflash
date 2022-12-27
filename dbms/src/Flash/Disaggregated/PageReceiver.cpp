@@ -417,11 +417,11 @@ std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Reques
                 local_err_msg = fmt::format("Push page packet failed. {}", getStatusString());
                 break;
             }
-            LOG_DEBUG(log,
-                      "push packet into channel, chunks: {} pages: {}, msg_size: {}",
-                      packet->chunks_size(),
-                      packet->pages_size(),
-                      msg_channel->size());
+            // LOG_DEBUG(log,
+            //           "push packet into channel, chunks: {} pages: {}, msg_size: {}",
+            //           packet->chunks_size(),
+            //           packet->pages_size(),
+            //           msg_channel->size());
         }
         // if meet error, such as decode packet fails, it will not retry.
         if (meet_error)

@@ -712,7 +712,7 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
     auto msg = fmt::format("limiter {} write {} read {}", limiterCount(), writeLimiterCount(), readLimiterCount());
     if (limiterCount() < 2)
     {
-        LOG_INFO(log, "{} NOT need to tune.", msg);
+        // LOG_INFO(log, "{} NOT need to tune.", msg);
         return {0, 0, false, 0, 0, false};
     }
     LOG_INFO(log, "{} need to tune.", msg);

@@ -184,7 +184,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     auto parse_ok = table.ParseFromString(physical_table);
                     RUNTIME_CHECK(parse_ok); // TODO: handle error
 
-                    LOG_DEBUG(log, "Build remoteTableReadTask, store={}, addr={}, id={}, table={}", resp->store_id(), req->address(), task_id, table.DebugString());
+                    LOG_DEBUG(log, "Build remoteTableReadTask, store={}, addr={}, task_id={}", resp->store_id(), req->address(), task_id);
 
                     remote_tasks[idx] = DM::RemoteTableReadTask::buildFrom(
                         db_context,
