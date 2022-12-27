@@ -13,11 +13,8 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
+#include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
 #include <IO/ReadBufferFromString.h>
-
-#include "Flash/Mpp/HashPartitionWriter.h"
-#include "IO/CompressedReadBuffer.h"
-#include "IO/CompressedStream.h"
 
 namespace DB
 {
@@ -43,7 +40,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
     ReadBuffer * istr_ptr = &istr;
     if (ToInternalCompressionMethod(compress_method) != CompressionMethod::NONE)
     {
-        compress_buffer = std::make_unique<CompressedReadBuffer<false>>(istr);
+        compress_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedReadBuffer>(istr);
         istr_ptr = compress_buffer.get();
     }
 

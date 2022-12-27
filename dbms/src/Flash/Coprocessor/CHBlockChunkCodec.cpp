@@ -48,7 +48,7 @@ public:
         }
         return output->releaseStr();
     }
-    virtual WriteBuffer * initOutput(size_t init_size)
+    virtual WriteBuffer * initOutputBuffer(size_t init_size)
     {
         assert(output == nullptr);
         output = std::make_unique<WriteBufferFromOwnString>(init_size);
@@ -68,15 +68,15 @@ class CompressCHBlockChunkCodecStream final : public CHBlockChunkCodecStream
     using Base = CHBlockChunkCodecStream;
 
 public:
-    explicit CompressCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method_ = CompressionMethod::LZ4)
+    explicit CompressCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method_)
         : Base(field_types)
         , compress_method(compress_method_)
     {
     }
-    WriteBuffer * initOutput(size_t init_size) override
+    WriteBuffer * initOutputBuffer(size_t init_size) override
     {
         assert(compress_write_buffer == nullptr);
-        compress_write_buffer = std::make_unique<CompressedWriteBuffer<false>>(*Base::initOutput(init_size), CompressionSettings(compress_method), init_size);
+        compress_write_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(*Base::initOutputBuffer(init_size), CompressionSettings(compress_method), init_size);
         return compress_write_buffer.get();
     }
     void clear() override
@@ -94,7 +94,7 @@ public:
         return Base::getString();
     }
     CompressionMethod compress_method;
-    std::unique_ptr<CompressedWriteBuffer<false>> compress_write_buffer{};
+    std::unique_ptr<CompressedCHBlockChunkCodec::CompressedWriteBuffer> compress_write_buffer{};
     ~CompressCHBlockChunkCodecStream() override = default;
 };
 
@@ -134,6 +134,21 @@ size_t ApproxBlockBytes(const Block & block)
     return block.bytes() + getExtraInfoSize(block);
 }
 
+CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method)
+{
+    switch (compress_method)
+    {
+    case mpp::NONE:
+        return CompressionMethod::NONE;
+    case mpp::LZ4:
+        return CompressionMethod::LZ4;
+    case mpp::ZSTD:
+        return CompressionMethod::ZSTD;
+    default:
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compress method {}", mpp::CompressMethod_Name(compress_method));
+    }
+}
+
 void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
@@ -171,7 +186,7 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
 
     size_t init_size = ApproxBlockBytes(block);
-    WriteBuffer * ostr_ptr = initOutput(init_size);
+    WriteBuffer * ostr_ptr = initOutputBuffer(init_size);
 
     block.checkNumberOfRows();
     size_t columns = block.columns();
@@ -201,9 +216,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 {
     Block res;
 
-    ReadBuffer * istr_ptr = &istr;
-
-    if (istr_ptr->eof())
+    if (istr.eof())
     {
         return res;
     }
@@ -211,12 +224,12 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
     /// Dimensions
     size_t columns = 0;
     size_t rows = 0;
-    readBlockMeta(*istr_ptr, columns, rows);
+    readBlockMeta(istr, columns, rows);
 
     for (size_t i = 0; i < columns; ++i)
     {
         ColumnWithTypeAndName column;
-        readColumnMeta(i, *istr_ptr, column);
+        readColumnMeta(i, istr, column);
 
         /// Data
         MutableColumnPtr read_column = column.type->createColumn();
@@ -226,7 +239,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
             read_column->reserve(rows);
 
         if (rows) /// If no rows, nothing to read.
-            readData(*column.type, *read_column, *istr_ptr, rows);
+            readData(*column.type, *read_column, istr, rows);
 
         column.column = std::move(read_column);
         res.insert(std::move(column));
@@ -284,43 +297,5 @@ Block CHBlockChunkCodec::decode(const String & str, const Block & header)
 std::unique_ptr<ChunkCodecStream> CompressedCHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method)
 {
     return std::make_unique<CompressCHBlockChunkCodecStream>(field_types, compress_method);
-}
-
-CompressedCHBlockChunkCodec::CompressedCHBlockChunkCodec(
-    const Block & header_)
-    : chunk_codec(header_)
-{
-}
-CompressedCHBlockChunkCodec::CompressedCHBlockChunkCodec(const DAGSchema & schema)
-    : chunk_codec(schema)
-{
-}
-Block CompressedCHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
-{
-    ReadBufferFromString read_buffer(str);
-    CompressedReadBuffer compress_read_buffer(read_buffer);
-    return CHBlockChunkCodec(schema).decodeImpl(compress_read_buffer);
-}
-Block CompressedCHBlockChunkCodec::decode(const String & str, const Block & header)
-{
-    ReadBufferFromString read_buffer(str);
-    CompressedReadBuffer compress_read_buffer(read_buffer);
-    return CHBlockChunkCodec(header).decodeImpl(compress_read_buffer);
-}
-Block CompressedCHBlockChunkCodec::decodeImpl(CompressedReadBuffer & istr, size_t reserve_size)
-{
-    return chunk_codec.decodeImpl(istr, reserve_size);
-}
-void CompressedCHBlockChunkCodec::readColumnMeta(size_t i, CompressedReadBuffer & istr, ColumnWithTypeAndName & column)
-{
-    return chunk_codec.readColumnMeta(i, istr, column);
-}
-void CompressedCHBlockChunkCodec::readBlockMeta(CompressedReadBuffer & istr, size_t & columns, size_t & rows) const
-{
-    return chunk_codec.readBlockMeta(istr, columns, rows);
-}
-void CompressedCHBlockChunkCodec::readData(const IDataType & type, IColumn & column, CompressedReadBuffer & istr, size_t rows)
-{
-    return CHBlockChunkCodec::readData(type, column, istr, rows);
 }
 } // namespace DB

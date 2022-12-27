@@ -112,8 +112,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
         partitionAndEncodeThenWriteBlocks();
 }
 
-extern size_t ApproxBlockBytes(const Block & block);
-
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
@@ -227,18 +225,4 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
 
 template class HashPartitionWriter<MPPTunnelSetPtr>;
 
-CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method)
-{
-    switch (compress_method)
-    {
-    case mpp::NONE:
-        return CompressionMethod::NONE;
-    case mpp::LZ4:
-        return CompressionMethod::LZ4;
-    case mpp::ZSTD:
-        return CompressionMethod::ZSTD;
-    default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compress method {}", mpp::CompressMethod_Name(compress_method));
-    }
-}
 } // namespace DB

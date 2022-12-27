@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedStream.h>
+#include <IO/CompressedWriteBuffer.h>
 
 namespace mpp
 {
@@ -25,28 +26,17 @@ enum CompressMethod : int;
 
 namespace DB
 {
-class CompressedCHBlockChunkCodec final
+class CompressedCHBlockChunkCodec
 {
 public:
     using CompressedReadBuffer = CompressedReadBuffer<false>;
-    CompressedCHBlockChunkCodec() = default;
-    explicit CompressedCHBlockChunkCodec(const Block & header_);
-    explicit CompressedCHBlockChunkCodec(const DAGSchema & schema);
+    using CompressedWriteBuffer = CompressedWriteBuffer<false>;
 
-    static Block decode(const String &, const DAGSchema & schema);
-    static Block decode(const String &, const Block & header);
     static std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method);
-
-private:
-    void readColumnMeta(size_t i, CompressedReadBuffer & istr, ColumnWithTypeAndName & column);
-    void readBlockMeta(CompressedReadBuffer & istr, size_t & columns, size_t & rows) const;
-    static void readData(const IDataType & type, IColumn & column, CompressedReadBuffer & istr, size_t rows);
-    /// 'reserve_size' used for Squash usage, and takes effect when 'reserve_size' > 0
-    Block decodeImpl(CompressedReadBuffer & istr, size_t reserve_size = 0);
-
-    CHBlockChunkCodec chunk_codec;
 };
 
 CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method);
+
+size_t ApproxBlockBytes(const Block & block);
 
 } // namespace DB

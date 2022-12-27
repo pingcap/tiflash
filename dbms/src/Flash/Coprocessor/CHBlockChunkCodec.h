@@ -20,7 +20,6 @@
 namespace DB
 {
 class CHBlockChunkDecodeAndSquash;
-class CompressedCHBlockChunkCodec;
 
 class CHBlockChunkCodec final : public ChunkCodec
 {
@@ -35,7 +34,6 @@ public:
 
 private:
     friend class CHBlockChunkDecodeAndSquash;
-    friend class CompressedCHBlockChunkCodec;
     void readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTypeAndName & column);
     void readBlockMeta(ReadBuffer & istr, size_t & columns, size_t & rows) const;
     static void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows);
