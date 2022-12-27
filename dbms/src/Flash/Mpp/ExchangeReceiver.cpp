@@ -747,8 +747,6 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         copy_live_conn = --live_connections;
     }
 
-    cv.notify_all();
-
     LOG_DEBUG(
         log,
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
@@ -762,7 +760,10 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         throw Exception("live_connections should not be less than 0!");
 
     if (meet_error || copy_live_conn == 0)
+    {
         finishAllMsgChannels();
+        cv.notify_all();
+    }
 }
 
 template <typename RPCContext>
