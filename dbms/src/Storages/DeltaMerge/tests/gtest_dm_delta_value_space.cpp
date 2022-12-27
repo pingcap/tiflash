@@ -84,8 +84,8 @@ protected:
     DeltaValueSpacePtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
-        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *storage_path_pool, "test.t1");
+        storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        storage_pool = std::make_shared<StoragePool>(*db_context, table_id, *storage_path_pool, "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -99,10 +99,9 @@ protected:
         *table_columns = *columns;
 
         dm_context = std::make_unique<DMContext>(*db_context,
-                                                 *storage_path_pool,
-                                                 *storage_pool,
+                                                 storage_path_pool,
+                                                 storage_pool,
                                                  /*min_version_*/ 0,
-                                                 settings.not_compress_columns,
                                                  false,
                                                  1,
                                                  db_context->getSettingsRef(),
@@ -115,8 +114,8 @@ protected:
 
 protected:
     /// all these var lives as ref in dm_context
-    std::unique_ptr<StoragePathPool> storage_path_pool;
-    std::unique_ptr<StoragePool> storage_pool;
+    std::shared_ptr<StoragePathPool> storage_path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
@@ -345,7 +344,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReader reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         // There should be three compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one.
@@ -386,7 +385,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         // generate and commit
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReader reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         compaction_task->prepare(dmContext(), wbs, reader);
@@ -410,7 +409,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+                PageReader reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;

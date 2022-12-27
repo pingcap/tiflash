@@ -47,15 +47,14 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
-        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
-        storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
+        path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
+        storage_pool = std::make_shared<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
         column_cache = std::make_shared<ColumnCache>();
         dm_context = std::make_unique<DMContext>( //
             *db_context,
-            *path_pool,
-            *storage_pool,
+            path_pool,
+            storage_pool,
             /*min_version_*/ 0,
-            settings.not_compress_columns,
             false,
             1,
             db_context->getSettingsRef(),
@@ -67,11 +66,11 @@ public:
     Context & dbContext() { return *db_context; }
 
 private:
-    std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::unique_ptr<StoragePathPool> path_pool;
-    std::unique_ptr<StoragePool> storage_pool;
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     DeltaMergeStore::Settings settings;
+    std::unique_ptr<DMContext> dm_context;
 
 protected:
     String parent_path;
