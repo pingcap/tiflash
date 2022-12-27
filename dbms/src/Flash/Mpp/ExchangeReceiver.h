@@ -102,10 +102,7 @@ public:
     ~ExchangeReceiverBase();
 
     void cancel();
-
     void close();
-
-    const DAGSchema & getOutputSchema() const { return schema; }
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
@@ -113,16 +110,12 @@ public:
         size_t stream_id,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
+    const DAGSchema & getOutputSchema() const { return schema; }
     size_t getSourceNum() const { return source_num; }
     uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
-
     int getExternalThreadCnt() const { return thread_count; }
     std::vector<MsgChannelPtr> & getMsgChannels() { return msg_channels; }
-
-    bool isFineGrainedShuffleEnabled() const { return enable_fine_grained_shuffle_flag; }
-
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
-
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
 private:
