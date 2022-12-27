@@ -32,7 +32,7 @@ void SquashingHashJoinBlockTransform::handleOverLimitBlock()
         assert(!(output_rows && blocks.empty()));
         output_rows += over_limit_block->rows();
         blocks.push_back(std::move(over_limit_block.value()));
-        over_limit_block = {};
+        over_limit_block.reset();
     }
 }
 
