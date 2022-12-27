@@ -21,6 +21,7 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 
@@ -91,7 +92,7 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextFetchTask()
     }
 }
 
-void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, bool meet_error)
+void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, SegmentReadTaskState target_state, bool meet_error)
 {
     {
         std::unique_lock ready_lock(mtx_ready_tasks);
@@ -110,14 +111,14 @@ void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, 
             {
                 continue;
             }
-            seg_task->state = meet_error ? SegmentReadTaskState::Error : SegmentReadTaskState::AllReady;
+            seg_task->state = meet_error ? SegmentReadTaskState::Error : target_state;
             found = true;
-            // Move it into the right ready state, note `task`/`task_iter` is invalid
+            // Move it into the right state, note `task`/`task_iter` is invalid
             state_iter->second.erase(task_iter);
             if (state_iter->second.empty())
                 ready_segment_tasks.erase(state_iter);
 
-            insertReadyTask(seg_task, ready_lock);
+            insertTask(seg_task, ready_lock);
             break;
         }
         RUNTIME_CHECK(found);
@@ -126,7 +127,48 @@ void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, 
     cv_ready_tasks.notify_one();
 }
 
-void RemoteReadTask::insertReadyTask(const RemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &)
+void RemoteReadTask::allDataReceive()
+{
+    {
+        std::unique_lock ready_lock(mtx_ready_tasks);
+        if (auto state_iter = ready_segment_tasks.find(SegmentReadTaskState::AllReady);
+            state_iter == ready_segment_tasks.end())
+        {
+            ready_segment_tasks.emplace(SegmentReadTaskState::AllReady, std::list<RemoteSegmentReadTaskPtr>{});
+        }
+
+        for (auto iter = ready_segment_tasks.begin(); iter != ready_segment_tasks.end(); /* empty */)
+        {
+            const auto state = iter->first;
+            const auto & tasks = iter->second;
+            if (state != SegmentReadTaskState::Init && state != SegmentReadTaskState::Receiving)
+            {
+                ++iter;
+                continue;
+            }
+
+            // init or receiving
+            for (const auto & seg_task : tasks)
+            {
+                auto old_state = seg_task->state;
+                seg_task->state = SegmentReadTaskState::AllReady;
+                LOG_DEBUG(
+                    Logger::get(),
+                    "seg_task: {} from {} to {}",
+                    seg_task->segment_id,
+                    magic_enum::enum_name(old_state),
+                    magic_enum::enum_name(seg_task->state));
+                insertTask(seg_task, ready_lock);
+            }
+
+            iter = ready_segment_tasks.erase(iter);
+        }
+    }
+    cv_ready_tasks.notify_all();
+}
+
+
+void RemoteReadTask::insertTask(const RemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &)
 {
     if (auto state_iter = ready_segment_tasks.find(seg_task->state);
         state_iter != ready_segment_tasks.end())
@@ -224,6 +266,8 @@ RemoteSegmentReadTask::RemoteSegmentReadTask(
     , table_id(table_id_)
     , segment_id(segment_id_)
     , address(std::move(address_))
+    , num_msg_to_consume(0)
+    , num_msg_consumed(0)
 {
 }
 
@@ -299,7 +343,7 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
                  "mem-table cfs: {}, persisted cfs: {}, local cache hit rate: {}, pending_ids: {}",
                  task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
                  task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
-                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 * pending_oids.size() / all_persisted_ids.size())),
+                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * pending_oids.size() / all_persisted_ids.size())),
                  task->pendingPageIds());
     }
 
@@ -322,16 +366,6 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
 {
     std::lock_guard lock(mtx_queue);
     const size_t buf_size = remote_page.data().size();
-#if 0
-    char * data_buf = static_cast<char *>(allocator.alloc(buf_size));
-    MemHolder mem_holder = createMemHolder(data_buf, [buf_size](char * p) {
-        allocator.free(p, buf_size);
-    });
-    Page page;
-    page.data = ByteBuffer(data_buf, data_buf + buf_size);
-    page.mem_holder = mem_holder;
-    persisted_pages.push({remote_page.page_id(), std::move(page)});
-#endif
 
     // Use LocalPageCache
     auto oid = Remote::PageOID{
@@ -340,13 +374,13 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
         .page_id = remote_page.page_id()};
     auto read_buffer = std::make_shared<ReadBufferFromMemory>(remote_page.data().data(), buf_size);
     PageFieldSizes field_sizes;
-    field_sizes.reserve(remote_page.field_offsets_size());
-    for (const auto & field_off : remote_page.field_offsets())
+    field_sizes.reserve(remote_page.field_sizes_size());
+    for (const auto & field_sz : remote_page.field_sizes())
     {
-        field_sizes.emplace_back(field_off);
+        field_sizes.emplace_back(field_sz);
     }
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
-    LOG_DEBUG(Logger::get(), "receive page, page_id={}", remote_page.page_id());
+    LOG_DEBUG(Logger::get(), "receive page, oid={}", oid.info());
 }
 
 BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(

@@ -173,7 +173,8 @@ public:
             store_path,
             flags);
 
-        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
+        // store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
+        store->preIngestFile(context.db_context, dmfile);
 
         const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);

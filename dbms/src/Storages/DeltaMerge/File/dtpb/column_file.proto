@@ -99,5 +99,5 @@ message RemotePage {
     uint64 page_id = 1;
     bytes data = 2;
     uint64 checksum = 3;
-    repeated uint64 field_offsets = 4;
+    repeated uint64 field_sizes = 4;
 }

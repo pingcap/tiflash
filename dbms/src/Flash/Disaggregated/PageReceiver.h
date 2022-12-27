@@ -164,13 +164,16 @@ private:
     const size_t persist_threads_num;
 
     std::shared_ptr<ThreadManager> thread_manager;
-    std::vector<std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>>> msg_channels;
+    // std::vector<std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>>> msg_channels;
+    std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>> msg_channel;
 
     std::mutex mu;
     /// should lock `mu` when visit these members
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
+
+    Int32 live_persisters;
 
     bool collected;
     int thread_count;

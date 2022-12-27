@@ -648,8 +648,8 @@ PageId SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
 SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
-    storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-    storage_pool = std::make_unique<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
+    storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+    storage_pool = std::make_shared<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
@@ -660,10 +660,9 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
 void SegmentTestBasic::reloadDMContext()
 {
     dm_context = std::make_unique<DMContext>(*db_context,
-                                             *storage_path_pool,
-                                             *storage_pool,
+                                             storage_path_pool,
+                                             storage_pool,
                                              /*min_version_*/ 0,
-                                             settings.not_compress_columns,
                                              options.is_common_handle,
                                              1,
                                              db_context->getSettingsRef(),

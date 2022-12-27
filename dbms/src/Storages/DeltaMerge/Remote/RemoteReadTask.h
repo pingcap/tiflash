@@ -43,6 +43,7 @@ enum class SegmentReadTaskState
 {
     Init,
     Error,
+    Receiving,
     AllReady,
 };
 
@@ -61,7 +62,12 @@ public:
     // worker thread need to update the task state.
     // Then the read threads can know the segment is ready
     // or there is error happened.
-    void updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, bool meet_error);
+    void updateTaskState(
+        const RemoteSegmentReadTaskPtr & seg_task,
+        SegmentReadTaskState target_state,
+        bool meet_error);
+
+    void allDataReceive();
 
     // Return a segment read task that is ready for reading.
     RemoteSegmentReadTaskPtr nextReadyTask();
@@ -69,7 +75,7 @@ public:
     friend class tests::RemoteReadTaskTest;
 
 private:
-    void insertReadyTask(const RemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &);
+    void insertTask(const RemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &);
 
     bool doneOrErrorHappen() const;
 
@@ -179,6 +185,14 @@ public:
         const DM::RSOperatorPtr & rs_filter,
         size_t expected_block_size);
 
+    void addPendingMsg() { num_msg_to_consume += 1; }
+    bool addConsumedMsg()
+    {
+        num_msg_consumed += 1;
+        // return there are more pending msg or not
+        return num_msg_consumed == num_msg_to_consume;
+    }
+
     void receivePage(dtpb::RemotePage && remote_page);
 
     void receiveMemTable(Block && block)
@@ -221,6 +235,11 @@ private:
     // The page ids need to fetch from write node
     std::vector<UInt64> pending_page_ids;
 
+public:
+    std::atomic<size_t> num_msg_to_consume;
+    std::atomic<size_t> num_msg_consumed;
+
+private:
     std::mutex mtx_queue;
 
     // FIXME: this should be directly persisted to local cache? Or it will consume

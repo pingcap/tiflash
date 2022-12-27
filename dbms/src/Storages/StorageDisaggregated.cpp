@@ -40,6 +40,7 @@
 #include <tipb/select.pb.h>
 
 #include <atomic>
+#include <numeric>
 
 namespace pingcap::kv
 {
@@ -132,8 +133,8 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
 
 struct DisaggregatedExecutionSummary
 {
-    std::atomic<size_t> establish_rpc_ms{0};
-    std::atomic<size_t> build_remote_task_ms{0};
+    size_t establish_rpc_ms{0};
+    size_t build_remote_task_ms{0};
 };
 
 DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
@@ -148,10 +149,10 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
             db_context,
             batch_cop_task));
 
-    DisaggregatedExecutionSummary summary;
-
     // Collect the response from write nodes and build the remote tasks
     std::vector<DM::RemoteTableReadTaskPtr> remote_tasks(establish_reqs.size(), nullptr);
+    // The execution summaries
+    std::vector<DisaggregatedExecutionSummary> summaries(establish_reqs.size());
 
     auto thread_manager = newThreadManager();
     auto * cluster = context.getTMTContext().getKVCluster();
@@ -161,6 +162,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     for (size_t idx = 0; idx < establish_reqs.size(); ++idx)
     {
         auto req = establish_reqs[idx];
+        auto & summary = summaries[idx];
         thread_manager->schedule(
             true,
             "EstablishDisaggregated",
@@ -173,7 +175,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(resp->error().msg());
-                summary.establish_rpc_ms = watch.elapsedMillisecondsFromLastTime();
+                summary.establish_rpc_ms += watch.elapsedMillisecondsFromLastTime();
                 // Parse the resp and gen tasks on read node
                 // The number of tasks is equal to number of write nodes
                 for (const auto & physical_table : resp->tables())
@@ -182,7 +184,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     auto parse_ok = table.ParseFromString(physical_table);
                     RUNTIME_CHECK(parse_ok); // TODO: handle error
 
-                    LOG_DEBUG(log, "Build remoteTableReadTask, store={}, addr={}, id={}, table={}", resp->store_id(), req->address(), task_id, table.DebugString());
+                    LOG_DEBUG(log, "Build remoteTableReadTask, store={}, addr={}, task_id={}", resp->store_id(), req->address(), task_id);
 
                     remote_tasks[idx] = DM::RemoteTableReadTask::buildFrom(
                         db_context,
@@ -193,13 +195,17 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         log);
                 }
                 // TODO: update region cache by `resp->retry_regions`
-                summary.build_remote_task_ms = watch.elapsedMillisecondsFromLastTime();
+                summary.build_remote_task_ms += watch.elapsedMillisecondsFromLastTime();
             });
     }
     thread_manager->wait();
 
     auto read_task = std::make_shared<DM::RemoteReadTask>(std::move(remote_tasks));
-    LOG_INFO(log, "establish disaggregated task rpc cost {}ms, build remote tasks cost {}ms", summary.establish_rpc_ms, summary.build_remote_task_ms);
+
+    const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
+    const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
+    LOG_INFO(log, "establish disaggregated task rpc cost {:.2f}ms, build remote tasks cost {:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
+
     return read_task;
 }
 

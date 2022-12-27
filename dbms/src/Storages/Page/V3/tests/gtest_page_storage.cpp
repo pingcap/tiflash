@@ -23,6 +23,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -765,6 +766,12 @@ try
         ASSERT_EQ(page_4.getFieldData(1).size(), 20);
         ASSERT_EQ(page_4.getFieldData(2).size(), 30);
         ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+        auto page_field_sizes = PageUtil::getFieldSizes(page_4.field_offsets, page_4.data.size());
+        ASSERT_EQ(page_field_sizes.size(), 4);
+        ASSERT_EQ(page_field_sizes[0], 20);
+        ASSERT_EQ(page_field_sizes[1], 20);
+        ASSERT_EQ(page_field_sizes[2], 30);
+        ASSERT_EQ(page_field_sizes[3], 30);
     }
     {
         // Read with ids can also fetch the fieldOffsets
@@ -778,6 +785,12 @@ try
         ASSERT_EQ(page_4.getFieldData(1).size(), 20);
         ASSERT_EQ(page_4.getFieldData(2).size(), 30);
         ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+        auto page_field_sizes = PageUtil::getFieldSizes(page_4.field_offsets, page_4.data.size());
+        ASSERT_EQ(page_field_sizes.size(), 4);
+        ASSERT_EQ(page_field_sizes[0], 20);
+        ASSERT_EQ(page_field_sizes[1], 20);
+        ASSERT_EQ(page_field_sizes[2], 30);
+        ASSERT_EQ(page_field_sizes[3], 30);
     }
 }
 CATCH
