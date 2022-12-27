@@ -72,6 +72,11 @@ public:
         return block;
     }
 
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        return readWithFilterImpl(stable, delta, filter);
+    }
+
 private:
     Block header;
     SkippableBlockInputStreamPtr stable;

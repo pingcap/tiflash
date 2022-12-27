@@ -68,10 +68,35 @@ bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamP
         {
             return delta->skipNextBlock();
         }
-        else
+        return false;
+    }
+}
+
+Block readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter)
+{
+    if (stable == nullptr && delta == nullptr && filter.empty())
+    {
+        return {};
+    }
+
+    if (stable == nullptr)
+    {
+        return delta->readWithFilter(filter);
+    }
+
+    auto block = stable->readWithFilter(filter);
+    if (block)
+    {
+        return block;
+    }
+    else
+    {
+        stable = nullptr;
+        if (delta != nullptr)
         {
-            return false;
+            block = delta->readWithFilter(filter);
         }
+        return block;
     }
 }
 

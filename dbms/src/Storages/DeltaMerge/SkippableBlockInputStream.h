@@ -34,6 +34,12 @@ public:
     /// Skip next block in the stream.
     /// Return false if failed to skip or the end of stream.
     virtual bool skipNextBlock() = 0;
+
+    /// Read specific rows of next block in the stream according to the filter.
+    /// Return empty block if failed to read or the end of stream.
+    /// Filter can not be all false.
+    /// Only used in Late Materialization.
+    virtual Block readWithFilter(const IColumn::Filter & filter) = 0;
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
@@ -55,6 +61,8 @@ public:
     bool skipNextBlock() override { return false; }
 
     Block read() override { return {}; }
+
+    Block readWithFilter(const IColumn::Filter & /*filter*/) override { return {}; }
 
 private:
     ColumnDefines read_columns{};
@@ -139,6 +147,31 @@ public:
         while (current_stream != children.end())
         {
             res = (*current_stream)->read();
+
+            if (res)
+            {
+                res.setStartOffset(res.startOffset() + precede_stream_rows);
+                break;
+            }
+            else
+            {
+                (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
+                ++current_stream;
+            }
+        }
+
+        return res;
+    }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        Block res;
+
+        while (current_stream != children.end())
+        {
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+            res = skippable_stream->readWithFilter(filter);
 
             if (res)
             {

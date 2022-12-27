@@ -64,6 +64,11 @@ public:
         return reader.read();
     }
 
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        return reader.readWithFilter(filter);
+    }
+
 private:
     DMFileReader reader;
     bool enable_read_thread;

@@ -104,9 +104,11 @@ public:
     /// Skipped rows before next call of #read().
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
-    /// Skip next pack.
+    /// Find the packs to read next, and mark them as not used.
     bool skipNextBlock();
     Block read();
+    /// Read specified rows.
+    Block readWithFilter(const IColumn::Filter & filter);
     std::string path() const
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
@@ -141,9 +143,9 @@ private:
     const bool is_common_handle;
 
     // read_one_pack_every_time is used to create info for every pack
-    const bool read_one_pack_every_time;
+    bool read_one_pack_every_time;
 
-    const bool single_file_mode{};
+    const bool single_file_mode = false;
 
     /// Clean read optimize
     // In normal mode, if there is no delta for some packs in stable, we can try to do clean read (enable_handle_clean_read is true).

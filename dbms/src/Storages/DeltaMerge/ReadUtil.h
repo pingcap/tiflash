@@ -32,4 +32,11 @@ std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, Skippabl
   */
 bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
 
+/** Read the next block with filter.
+  * Read from the stable first, then read from the delta.
+  * 
+  * Return: The block containing only the rows that pass the filter.
+  */
+Block readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter);
+
 } // namespace DB::DM

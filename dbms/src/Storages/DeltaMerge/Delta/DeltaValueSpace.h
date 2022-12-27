@@ -463,6 +463,14 @@ public:
         return block;
     }
 
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        auto block = doReadWithFilter(filter);
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        return block;
+    }
+
     // Read block from old to new.
     Block doRead()
     {
@@ -476,6 +484,21 @@ public:
         {
             persisted_files_done = true;
             return mem_table_input_stream.read();
+        }
+    }
+
+    Block doReadWithFilter(const IColumn::Filter & filter)
+    {
+        if (persisted_files_done)
+            return mem_table_input_stream.readWithFilter(filter);
+
+        Block block = persisted_files_input_stream.readWithFilter(filter);
+        if (block)
+            return block;
+        else
+        {
+            persisted_files_done = true;
+            return mem_table_input_stream.readWithFilter(filter);
         }
     }
 };

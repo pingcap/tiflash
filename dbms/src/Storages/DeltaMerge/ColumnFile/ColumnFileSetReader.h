@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileSetReader
 {
     friend class ColumnFileSetInputStream;
@@ -144,6 +143,39 @@ public:
         }
         return {};
     }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        while (cur_column_file_reader || next_file_index < column_files_count)
+        {
+            if (!cur_column_file_reader)
+            {
+                if (column_files[next_file_index]->isDeleteRange())
+                {
+                    ++next_file_index;
+                    continue;
+                }
+                else
+                {
+                    cur_column_file_reader = reader.column_file_readers[next_file_index];
+                    ++next_file_index;
+                }
+            }
+            Block block = cur_column_file_reader->readNextBlock();
+            if (block)
+            {
+                size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1);
+                for (auto & col : block)
+                {
+                    col.column = col.column->filter(filter, passed_count);
+                }
+                return block;
+            }
+            else
+                cur_column_file_reader = {};
+        }
+        return {};
+    }
 };
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

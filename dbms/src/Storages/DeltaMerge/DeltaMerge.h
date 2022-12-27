@@ -167,9 +167,7 @@ public:
 
     bool skipNextBlock() override
     {
-        if (stable_done)
-            return false;
-        return stable_input_stream->skipNextBlock();
+        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
 
     Block read() override
@@ -192,6 +190,11 @@ public:
         if (block)
             beforeReturnBlock(block);
         return block;
+    }
+
+    Block readWithFilter(const IColumn::Filter & /*filter*/) override
+    {
+        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
 
 private:
