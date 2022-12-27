@@ -21,13 +21,12 @@ SquashingHashJoinBlockTransform::SquashingHashJoinBlockTransform(UInt64 max_bloc
     : output_rows(0)
     , max_block_size(max_block_size_)
     , join_finished(false)
-    , over_limit(false)
 {}
 
 void SquashingHashJoinBlockTransform::handleOverLimitBlock()
 {
     // if over_limit_block is not null, we need to push it into blocks.
-    if (over_limit_block.has_value())
+    if (over_limit_block)
     {
         assert(!(output_rows && blocks.empty()));
         output_rows += over_limit_block->rows();
@@ -46,16 +45,16 @@ void SquashingHashJoinBlockTransform::appendBlock(Block & block)
     }
     size_t current_rows = block.rows();
 
-    over_limit = output_rows && output_rows + current_rows > max_block_size;
-    if (!over_limit)
+    if (!output_rows || output_rows + current_rows <= max_block_size)
     {
-        blocks.push_back(block);
+        blocks.push_back(std::move(block));
         output_rows += current_rows;
     }
     else
     {
         // if output_rows + current_rows > max block size, put the current result block into over_limit_block and handle it in next read.
-        over_limit_block = block;
+        assert(!over_limit_block);
+        over_limit_block.emplace(std::move(block));
     }
 }
 
@@ -80,7 +79,6 @@ void SquashingHashJoinBlockTransform::reset()
 {
     blocks.clear();
     output_rows = 0;
-    over_limit = false;
 }
 
 bool SquashingHashJoinBlockTransform::isJoinFinished() const
@@ -90,7 +88,7 @@ bool SquashingHashJoinBlockTransform::isJoinFinished() const
 
 bool SquashingHashJoinBlockTransform::needAppendBlock() const
 {
-    return !over_limit && !join_finished;
+    return !over_limit_block && !join_finished;
 }
 
 } // namespace DB

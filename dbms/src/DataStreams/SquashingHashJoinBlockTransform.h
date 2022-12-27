@@ -39,7 +39,6 @@ private:
     size_t output_rows;
     UInt64 max_block_size;
     bool join_finished;
-    bool over_limit;
 };
 
 } // namespace DB

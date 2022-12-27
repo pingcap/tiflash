@@ -75,15 +75,15 @@ Block HashJoinProbeBlockInputStream::readImpl()
 
     while (squashing_transform.needAppendBlock())
     {
-        Block result_block = getOutputBlock(probe_process_info);
+        Block result_block = getOutputBlock();
         squashing_transform.appendBlock(result_block);
     }
     return squashing_transform.getFinalOutputBlock();
 }
 
-Block HashJoinProbeBlockInputStream::getOutputBlock(ProbeProcessInfo & probe_process_info_) const
+Block HashJoinProbeBlockInputStream::getOutputBlock()
 {
-    if (probe_process_info_.all_rows_joined_finish)
+    if (probe_process_info.all_rows_joined_finish)
     {
         Block block = children.back()->read();
         if (!block)
@@ -91,10 +91,10 @@ Block HashJoinProbeBlockInputStream::getOutputBlock(ProbeProcessInfo & probe_pro
             return block;
         }
         join->checkTypes(block);
-        probe_process_info_.resetBlock(std::move(block));
+        probe_process_info.resetBlock(std::move(block));
     }
 
-    return join->joinBlock(probe_process_info_);
+    return join->joinBlock(probe_process_info);
 }
 
 } // namespace DB
