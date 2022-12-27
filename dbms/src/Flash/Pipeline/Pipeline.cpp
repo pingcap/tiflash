@@ -48,10 +48,10 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
     addPrefix(buffer, prefix_size);
     buffer.append("pipeline:\n");
     ++prefix_size;
-    for (auto it = plans.cbegin(); it != plans.cend(); ++it)
+    for (const auto & plan : plans)
     {
         addPrefix(buffer, prefix_size);
-        buffer.append((*it)->toString());
+        buffer.append(plan->toString());
         buffer.append("\n");
     }
 }
