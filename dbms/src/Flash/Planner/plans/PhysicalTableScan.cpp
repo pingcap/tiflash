@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
