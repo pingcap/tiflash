@@ -11,6 +11,7 @@
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <common/logger_useful.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 
@@ -27,7 +28,7 @@ String constructStatusString(ExchangeReceiverState state, const String & error_m
 bool pushPacket(const DM::RemoteSegmentReadTaskPtr & seg_task,
                 const String & req_info,
                 const TrackedPageDataPacketPtr & tracked_packet,
-                std::vector<std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>>> & msg_channels,
+                std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>> & msg_channel,
                 LoggerPtr & log)
 {
     bool push_succeed = true;
@@ -37,9 +38,11 @@ bool pushPacket(const DM::RemoteSegmentReadTaskPtr & seg_task,
     if (packet.has_error())
         error_ptr = &packet.error();
 
-    assert(!msg_channels.empty());
+    // assert(!msg_channels.empty());
 
-    if (!(error_ptr == nullptr && packet.chunks_size() == 0))
+    if (!(error_ptr == nullptr // no error
+          && packet.chunks_size() == 0 && packet.pages_size() == 0 // empty
+          ))
     {
         auto recv_msg = std::make_shared<PageReceivedMessage>(
             req_info,
@@ -47,10 +50,12 @@ bool pushPacket(const DM::RemoteSegmentReadTaskPtr & seg_task,
             tracked_packet,
             error_ptr);
 
-        push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
+        push_succeed = msg_channel->push(std::move(recv_msg)) == MPMCQueueResult::OK;
+        if (push_succeed)
+            seg_task->addPendingMsg();
     }
 
-    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}", msg_channels.size(), push_succeed);
+    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}", 1, push_succeed);
     return push_succeed;
 }
 } // namespace details
@@ -69,6 +74,7 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
     , thread_manager(newThreadManager())
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
+    , live_persisters(persist_threads_num)
     , collected(false)
     , thread_count(0)
     , exc_log(Logger::get(req_id, executor_id))
@@ -77,7 +83,8 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
 {
     try
     {
-        msg_channels.push_back(std::make_unique<MPMCQueue<PageReceivedMessagePtr>>(max_buffer_size));
+        // msg_channels.push_back(std::make_unique<MPMCQueue<PageReceivedMessagePtr>>(max_buffer_size));
+        msg_channel = std::make_unique<MPMCQueue<PageReceivedMessagePtr>>(max_buffer_size);
         // setup fetch threads to fetch pages/blocks from write nodes
         setUpConnection();
         // setup persist threads to pop msg (pages/blocks) and write down
@@ -159,11 +166,45 @@ void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
 {
     LoggerPtr log = exc_log->getChild(fmt::format("persist{}", idx));
 
-    while (true)
+    bool meet_error = false;
+    String local_err_msg;
+
+    while (!meet_error)
     {
-        // no more results
-        if (!consumeOneResult(log))
-            break;
+        try
+        {
+            // no more results
+            if (!consumeOneResult(log))
+                break;
+        }
+        catch (...)
+        {
+            meet_error = true;
+            local_err_msg = getCurrentExceptionMessage(false);
+        }
+    }
+
+    Int32 copy_persister_num = -1;
+    {
+        std::unique_lock lock(mu);
+        copy_persister_num = --live_persisters;
+    }
+
+    LOG_DEBUG(
+        log,
+        "persist end. meet error: {}{}, current alive persister: {}",
+        meet_error,
+        meet_error ? fmt::format(", err msg: {}", local_err_msg) : "",
+        copy_persister_num);
+
+    if (copy_persister_num < 0)
+    {
+        throw Exception("live_persisters should not be less than 0!");
+    }
+    else if (copy_persister_num == 0)
+    {
+        LOG_DEBUG(log, "All persist threads end in PageReceiver");
+        rpc_context->finishAllReceivingTasks();
     }
 }
 
@@ -198,20 +239,24 @@ bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
 
 template <typename RPCContext>
 PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
-    size_t stream_id,
+    size_t /*stream_id*/,
     std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
+#if 0
     if (unlikely(stream_id >= msg_channels.size()))
     {
         LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
         return PageReceiverResult::newError("", "stream_id out of range");
     }
+#endif
 
     // TODO: decode_ptr can not squash blocks, the blocks could comes
     // from different stores, tables, segments
 
     std::shared_ptr<PageReceivedMessage> recv_msg;
-    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
+    // auto pop_res = msg_channels[stream_id]->pop(recv_msg);
+    auto pop_res = msg_channel->pop(recv_msg);
+    if (pop_res != MPMCQueueResult::OK)
     {
         std::unique_lock lock(mu);
         if (state != DB::ExchangeReceiverState::NORMAL)
@@ -241,6 +286,18 @@ PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
     /// the data packets (now we ignore execution summary)
     auto result = PageReceiverResult::newOk(recv_msg->req_info);
     result.decode_detail = decodeChunks(recv_msg, decoder_ptr);
+    auto has_pending_msg = recv_msg->seg_task->addConsumedMsg();
+    LOG_DEBUG(exc_log,
+              "seg: {} state: {} received: {} pending: {}",
+              recv_msg->seg_task->segment_id,
+              magic_enum::enum_name(recv_msg->seg_task->state),
+              recv_msg->seg_task->num_msg_consumed,
+              recv_msg->seg_task->num_msg_to_consume);
+    if (recv_msg->seg_task->state == DM::SegmentReadTaskState::Receiving
+        && !has_pending_msg)
+    {
+        rpc_context->finishTaskReceive(recv_msg->seg_task);
+    }
     return result;
 }
 
@@ -251,6 +308,8 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
 {
     assert(recv_msg != nullptr);
     PageDecodeDetail detail;
+
+    LOG_DEBUG(exc_log, "decoding msg with {} chunks, {} pages", recv_msg->chunks().size(), recv_msg->pages().size());
 
     if (recv_msg->empty())
         return detail;
@@ -275,7 +334,6 @@ PageDecodeDetail PageReceiverBase<RPCContext>::decodeChunks(
     }
 
     // TODO: Parse the chunks into pages and push to queue
-    // recv_msg->seg_task->receivePage(PageId page_id, Page &&page)
     for (const String & page : recv_msg->pages())
     {
         dtpb::RemotePage remote_page;
@@ -314,7 +372,7 @@ void PageReceiverBase<RPCContext>::readLoop()
             meet_error = true;
             local_err_msg = getCurrentExceptionMessage(false);
         }
-        rpc_context->finishTask(req, meet_error);
+        rpc_context->finishTaskEstablish(req, meet_error);
     }
     connectionDone(meet_error, local_err_msg, exc_log);
 }
@@ -352,13 +410,18 @@ std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Reques
                     req.seg_task,
                     req_info,
                     packet,
-                    msg_channels,
+                    msg_channel,
                     log))
             {
                 meet_error = true;
                 local_err_msg = fmt::format("Push page packet failed. {}", getStatusString());
                 break;
             }
+            LOG_DEBUG(log,
+                      "push packet into channel, chunks: {} pages: {}, msg_size: {}",
+                      packet->chunks_size(),
+                      packet->pages_size(),
+                      msg_channel->size());
         }
         // if meet error, such as decode packet fails, it will not retry.
         if (meet_error)
@@ -444,7 +507,7 @@ void PageReceiverBase<RPCContext>::connectionDone(
 
     if (copy_live_conn == 0)
     {
-        LOG_DEBUG(log, "All threads end in ExchangeReceiver");
+        LOG_DEBUG(log, "All read threads end in PageReceiver");
     }
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
@@ -456,15 +519,15 @@ void PageReceiverBase<RPCContext>::connectionDone(
 template <typename RPCContext>
 void PageReceiverBase<RPCContext>::finishAllMsgChannels()
 {
-    for (auto & msg_channel : msg_channels)
-        msg_channel->finish();
+    // for (auto & msg_channel : msg_channels)
+    msg_channel->finish();
 }
 
 template <typename RPCContext>
 void PageReceiverBase<RPCContext>::cancelAllMsgChannels()
 {
-    for (auto & msg_channel : msg_channels)
-        msg_channel->cancel();
+    // for (auto & msg_channel : msg_channels)
+    msg_channel->cancel();
 }
 
 /// Explicit template instantiations

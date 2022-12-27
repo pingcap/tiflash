@@ -101,7 +101,7 @@ void LocalPageCache::write(
 Page LocalPageCache::getPage(const PageOID & oid, const PageStorage::FieldIndices & indices)
 {
     // TODO
-    auto snapshot = cache_storage->getSnapshot("LocalPageCache.ensurePages");
+    auto snapshot = cache_storage->getSnapshot("LocalPageCache.getPage");
 
     auto cache_id = buildCacheId(oid);
     auto page_map = cache_storage->read({{cache_id, indices}}, /* read_limiter */ nullptr, snapshot);

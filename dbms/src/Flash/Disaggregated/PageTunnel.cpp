@@ -9,6 +9,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <kvproto/mpp.pb.h>
@@ -58,15 +59,10 @@ mpp::PagesPacket PageTunnel::readPacket()
         remote_page.set_page_id(page_id);
         remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
         remote_page.set_checksum(0x0); // TODO do we need to send checksum to remote?
-        size_t idx = 0;
-        auto iter = page.field_offsets.begin();
-        while (iter != page.field_offsets.end())
+        const auto field_sizes = PageUtil::getFieldSizes(page.field_offsets, page.data.size());
+        for (const auto field_sz : field_sizes)
         {
-            RUNTIME_CHECK(iter->index == idx);
-            remote_page.add_field_offsets(iter->offset);
-
-            iter++;
-            idx += 1;
+            remote_page.add_field_sizes(field_sz);
         }
         total_pages_data_size += page.data.size();
         packet.mutable_pages()->Add(remote_page.SerializeAsString());

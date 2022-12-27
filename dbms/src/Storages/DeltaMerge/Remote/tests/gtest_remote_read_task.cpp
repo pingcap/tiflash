@@ -56,7 +56,7 @@ TEST_F(RemoteReadTaskTest, popTasks)
     for (size_t i = 0; i < num_segments; ++i)
     {
         auto seg_task = read_task->nextFetchTask();
-        read_task->updateTaskState(seg_task, false);
+        read_task->updateTaskState(seg_task, SegmentReadTaskState::AllReady, false);
         auto ready_seg_task = read_task->nextReadyTask();
         ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::AllReady);
         ASSERT_EQ(seg_task->segment_id, ready_seg_task->segment_id);
@@ -78,7 +78,7 @@ TEST_F(RemoteReadTaskTest, failTask)
     for (size_t i = 0; i < 3; ++i)
     {
         auto seg_task = read_task->nextFetchTask();
-        read_task->updateTaskState(seg_task, false);
+        read_task->updateTaskState(seg_task, SegmentReadTaskState::AllReady, false);
         auto ready_seg_task = read_task->nextReadyTask();
         ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::AllReady);
         ASSERT_EQ(seg_task->segment_id, ready_seg_task->segment_id);
@@ -86,7 +86,7 @@ TEST_F(RemoteReadTaskTest, failTask)
         ASSERT_EQ(seg_task->table_id, ready_seg_task->table_id);
     }
     auto seg_task = read_task->nextFetchTask();
-    read_task->updateTaskState(seg_task, /*meet_error*/ true);
+    read_task->updateTaskState(seg_task, SegmentReadTaskState::AllReady, /*meet_error*/ true);
     ASSERT_EQ(read_task->nextReadyTask(), nullptr);
 }
 

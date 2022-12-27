@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
@@ -160,9 +161,19 @@ GRPCPagesReceiverContext::Request GRPCPagesReceiverContext::popRequest() const
     return Request(std::move(seg_task));
 }
 
-void GRPCPagesReceiverContext::finishTask(const Request & req, bool meet_error)
+void GRPCPagesReceiverContext::finishTaskEstablish(const Request & req, bool meet_error)
 {
-    remote_read_tasks->updateTaskState(req.seg_task, meet_error);
+    remote_read_tasks->updateTaskState(req.seg_task, DM::SegmentReadTaskState::Receiving, meet_error);
+}
+
+void GRPCPagesReceiverContext::finishTaskReceive(const DM::RemoteSegmentReadTaskPtr & seg_task)
+{
+    remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::AllReady, false);
+}
+
+void GRPCPagesReceiverContext::finishAllReceivingTasks()
+{
+    remote_read_tasks->allDataReceive();
 }
 
 void GRPCPagesReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr /*log*/)

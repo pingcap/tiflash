@@ -109,7 +109,11 @@ public:
     // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
     void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log);
 
-    void finishTask(const Request & req, bool meet_error);
+    void finishTaskEstablish(const Request & req, bool meet_error);
+
+    void finishTaskReceive(const DM::RemoteSegmentReadTaskPtr & seg_task);
+
+    void finishAllReceivingTasks();
 
 private:
     DM::RemoteReadTaskPtr remote_read_tasks;
