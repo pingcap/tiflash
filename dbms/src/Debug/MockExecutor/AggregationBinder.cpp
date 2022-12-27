@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
-#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/FuncSigMap.h>
+#include <Parsers/ASTIdentifier.h>
 #include <fmt/core.h>
 
 namespace DB::mock
@@ -25,6 +28,7 @@ bool AggregationBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t c
 {
     tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
     tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     auto * agg = tipb_executor->mutable_aggregation();
     buildAggExpr(agg, collator_id, context);
     buildGroupBy(agg, collator_id, context);
@@ -77,7 +81,8 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
         false,
         std::move(agg_exprs),
         std::move(gby_exprs),
-        false);
+        false,
+        fine_grained_shuffle_stream_count);
     partial_agg->children.push_back(children[0]);
     std::vector<size_t> partition_keys;
     size_t agg_func_num = partial_agg->agg_exprs.size();
@@ -203,7 +208,7 @@ void AggregationBinder::buildAggFunc(tipb::Expr * agg_func, const ASTFunction * 
         agg_func->set_aggfuncmode(tipb::AggFunctionMode::Partial1Mode);
 }
 
-ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs)
+ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
@@ -273,7 +278,8 @@ ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_
         need_append_project,
         std::move(agg_exprs),
         std::move(gby_exprs),
-        true);
+        true,
+        fine_grained_shuffle_stream_count);
     aggregation->children.push_back(input);
     return aggregation;
 }

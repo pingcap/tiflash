@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Debug/MockStorage.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 
 namespace DB::tests
 {
@@ -22,8 +23,11 @@ void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & 
     addTableInfo(name, columnInfos);
 }
 
-void MockStorage::addTableData(const String & name, const ColumnsWithTypeAndName & columns)
+void MockStorage::addTableData(const String & name, ColumnsWithTypeAndName & columns)
 {
+    for (size_t i = 0; i < columns.size(); ++i)
+        columns[i].column_id = i;
+
     table_columns[getTableId(name)] = columns;
 }
 
@@ -123,11 +127,12 @@ CutColumnInfo getCutColumnInfo(size_t rows, Int64 partition_id, Int64 partition_
     return {start, cur_rows};
 }
 
-ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num)
+ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num)
 {
+    auto table_id = table_scan.getLogicalTableID();
     if (tableExists(table_id))
     {
-        auto columns_with_type_and_name = table_columns[table_id];
+        auto columns_with_type_and_name = table_columns[table_scan.getLogicalTableID()];
         size_t rows = 0;
         for (const auto & col : columns_with_type_and_name)
         {
@@ -141,11 +146,23 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
         ColumnsWithTypeAndName res;
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
-            res.push_back(
-                ColumnWithTypeAndName(
-                    column_with_type_and_name.column->cut(cut_info.first, cut_info.second),
-                    column_with_type_and_name.type,
-                    column_with_type_and_name.name));
+            bool contains = false;
+            for (const auto & column : table_scan.getColumns())
+            {
+                if (column.id == column_with_type_and_name.column_id)
+                {
+                    contains = true;
+                    break;
+                }
+            }
+            if (contains)
+            {
+                res.push_back(
+                    ColumnWithTypeAndName(
+                        column_with_type_and_name.column->cut(cut_info.first, cut_info.second),
+                        column_with_type_and_name.type,
+                        column_with_type_and_name.name));
+            }
         }
         return res;
     }
