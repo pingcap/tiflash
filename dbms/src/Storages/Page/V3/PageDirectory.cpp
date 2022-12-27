@@ -220,7 +220,7 @@ typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(c
         delete_ver = PageVersion(0);
         being_ref_count = 1;
         // return the new created holder to caller to set the page_id
-        external_holder = std::make_shared<typename Trait::PageId>(0, 0);
+        external_holder = std::make_shared<typename Trait::PageId>();
         return external_holder;
     }
 
@@ -236,7 +236,7 @@ typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(c
                 delete_ver = PageVersion(0);
                 being_ref_count = 1;
                 // return the new created holder to caller to set the page_id
-                external_holder = std::make_shared<typename Trait::PageId>(0, 0);
+                external_holder = std::make_shared<typename Trait::PageId>();
                 return external_holder;
             }
             else
@@ -1314,7 +1314,7 @@ typename universal::PageDirectoryTrait::PageIdSet PageDirectory<universal::PageD
          iter != mvcc_table_directory.end();
          ++iter)
     {
-        if (iter->first.rfind(prefix, 0) != 0)
+        if (iter->first.rfind(prefix.asStr(), 0) != 0)
             break;
         page_ids.insert(iter->first);
     }

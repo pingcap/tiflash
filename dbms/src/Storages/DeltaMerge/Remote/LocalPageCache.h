@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageStorage.h>
 
 #include <boost/noncopyable.hpp>
 

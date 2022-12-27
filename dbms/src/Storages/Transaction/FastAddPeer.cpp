@@ -71,7 +71,7 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
 std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id)
 {
     UNUSED(new_peer_id);
-    auto log = &Poco::Logger::get("fast add");
+    auto * log = &Poco::Logger::get("fast add");
 
     Poco::DirectoryIterator it(output_directory);
     Poco::DirectoryIterator end;
@@ -109,7 +109,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     raft_serverpb::RaftApplyState restored_apply_state;
     for (auto iter = records.begin(); iter != records.end(); iter++)
     {
-        std::string page_id = iter->page_id;
+        std::string page_id = iter->page_id.toStr();
         if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id))
         {
             std::string decoded_data;
@@ -164,7 +164,7 @@ std::vector<uint64_t> listAllStores(const std::string & remote_dir)
 
 std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t region_id, uint64_t new_peer_id)
 {
-    auto log = &Poco::Logger::get("fast add");
+    auto * log = &Poco::Logger::get("fast add");
 
     std::vector<RemoteMeta> choices;
     std::map<uint64_t, std::string> reason;

@@ -23,7 +23,6 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <Storages/Page/PageStorage.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>

@@ -83,7 +83,9 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
 
 inline void deserializeUniversalPageIDFrom(ReadBuffer & buf, UniversalPageId & page_id)
 {
-    readStringBinary(page_id, buf);
+    String s_id;
+    readStringBinary(s_id, buf);
+    page_id = std::move(s_id);
 }
 
 inline void deserializeUInt128PageIDFrom(ReadBuffer & buf, PageIdV3Internal & page_id)
@@ -106,7 +108,7 @@ void serializePutTo(const EditRecord & record, WriteBuffer & buf)
     }
     else if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
     {
-        writeStringBinary(record.page_id, buf);
+        writeStringBinary(record.page_id.asStr(), buf);
     }
     serializeVersionTo(record.version, buf);
     writeIntBinary(record.being_ref_count, buf);
@@ -153,8 +155,8 @@ void serializeRefTo(const EditRecord & record, WriteBuffer & buf)
     }
     else if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
     {
-        writeStringBinary(record.page_id, buf);
-        writeStringBinary(record.ori_page_id, buf);
+        writeStringBinary(record.page_id.asStr(), buf);
+        writeStringBinary(record.ori_page_id.asStr(), buf);
     }
     serializeVersionTo(record.version, buf);
     assert(record.entry.file_id == INVALID_BLOBFILE_ID);
@@ -194,7 +196,7 @@ void serializePutExternalTo(const EditRecord & record, WriteBuffer & buf)
     }
     else if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
     {
-        writeStringBinary(record.page_id, buf);
+        writeStringBinary(record.page_id.asStr(), buf);
     }
     serializeVersionTo(record.version, buf);
     writeIntBinary(record.being_ref_count, buf);
@@ -233,7 +235,7 @@ void serializeDelTo(const EditRecord & record, WriteBuffer & buf)
     }
     else if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
     {
-        writeStringBinary(record.page_id, buf);
+        writeStringBinary(record.page_id.asStr(), buf);
     }
     serializeVersionTo(record.version, buf);
 }

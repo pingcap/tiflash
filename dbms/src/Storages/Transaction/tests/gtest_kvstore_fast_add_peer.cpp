@@ -49,7 +49,7 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
 TEST_F(RegionKVStoreTest, FAPRestorePS)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
-    auto log = &Poco::Logger::get("fast add");
+    auto *log = &Poco::Logger::get("fast add");
     {
         auto region_id = 1;
         auto peer_id = 1;
@@ -102,15 +102,15 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             auto records = edit.getRecords();
             ASSERT_EQ(3, records.size());
 
-            for (auto iter = records.begin(); iter != records.end(); iter++)
+            for (auto & record : records)
             {
-                std::string page_id = iter->page_id;
+                std::string page_id = record.page_id.toStr();
                 if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id) || keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
                 {
                 }
                 else
                 {
-                    auto & location = iter->entry.remote_info->data_location;
+                    auto & location = record.entry.remote_info->data_location;
                     auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
                     buf.seek(location.offset_in_file);
 
