@@ -57,19 +57,6 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
         compress_chunk_codec_stream = CompressedCHBlockChunkCodec::newCodecStream(dag_context.result_field_types, method);
     }
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
-
-    // LOG_TRACE(&Poco::Logger::get("tzg"), "using mpp CompressMethod {}, partition_num {}", mpp::CompressMethod_Name(compress_method), partition_num);
-    // {
-    //     size_t local_cnt = 0;
-    //     for (size_t part_id = 0; part_id < partition_num; ++part_id)
-    //     {
-    //         if (writer->getTunnels()[part_id]->isLocal())
-    //         {
-    //             ++local_cnt;
-    //         }
-    //     }
-    //     LOG_TRACE(&Poco::Logger::get("tzg"), "local_cnt is {}", local_cnt);
-    // }
 }
 
 template <class ExchangeWriterPtr>
