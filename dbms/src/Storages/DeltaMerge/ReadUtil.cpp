@@ -72,22 +72,22 @@ bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamP
     }
 }
 
-Block readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter)
+std::pair<Block, bool> readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter)
 {
     if (stable == nullptr && delta == nullptr && filter.empty())
     {
-        return {};
+        return {{}, false};
     }
 
     if (stable == nullptr)
     {
-        return delta->readWithFilter(filter);
+        return {delta->readWithFilter(filter), true};
     }
 
     auto block = stable->readWithFilter(filter);
     if (block)
     {
-        return block;
+        return {block, false};
     }
     else
     {
@@ -96,7 +96,7 @@ Block readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockIn
         {
             block = delta->readWithFilter(filter);
         }
-        return block;
+        return {block, true};
     }
 }
 

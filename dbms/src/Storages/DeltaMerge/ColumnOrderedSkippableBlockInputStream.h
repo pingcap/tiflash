@@ -43,14 +43,7 @@ public:
 
     Block getHeader() const override { return header; }
 
-    bool getSkippedRows(size_t & skip_rows) override
-    {
-        if (cur_read_rows > stable_rows)
-        {
-            return false;
-        }
-        return stable->getSkippedRows(skip_rows);
-    }
+    bool getSkippedRows(size_t & /*skip_rows*/) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
     bool skipNextBlock() override
     {
@@ -59,7 +52,6 @@ public:
 
     Block read() override
     {
-        // auto inner_stable = static_cast<BlockInputStreamPtr>(stable);
         auto [block, from_delta] = readBlock(stable, delta);
         if (block)
         {
@@ -67,14 +59,21 @@ public:
             {
                 block.setStartOffset(block.startOffset() + stable_rows);
             }
-            cur_read_rows += block.rows();
         }
         return block;
     }
 
     Block readWithFilter(const IColumn::Filter & filter) override
     {
-        return readWithFilterImpl(stable, delta, filter);
+        auto [block, from_delta] = readWithFilterImpl(stable, delta, filter);
+        if (block)
+        {
+            if (from_delta)
+            {
+                block.setStartOffset(block.startOffset() + stable_rows);
+            }
+        }
+        return block;
     }
 
 private:
@@ -82,9 +81,7 @@ private:
     SkippableBlockInputStreamPtr stable;
     SkippableBlockInputStreamPtr delta;
     size_t stable_rows;
-    size_t cur_read_rows = 0;
     const LoggerPtr log;
-    IColumn::Filter filter{};
 };
 
 } // namespace DB::DM

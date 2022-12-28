@@ -35,8 +35,9 @@ bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamP
 /** Read the next block with filter.
   * Read from the stable first, then read from the delta.
   * 
-  * Return: The block containing only the rows that pass the filter.
+  * Return: <Block, from_delta>
+  * The block containing only the rows that pass the filter and a flag indicating whether the block is from the delta.
   */
-Block readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter);
+std::pair<Block, bool> readWithFilterImpl(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter);
 
 } // namespace DB::DM

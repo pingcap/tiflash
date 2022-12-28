@@ -143,7 +143,7 @@ private:
     const bool is_common_handle;
 
     // read_one_pack_every_time is used to create info for every pack
-    bool read_one_pack_every_time;
+    const bool read_one_pack_every_time;
 
     const bool single_file_mode = false;
 

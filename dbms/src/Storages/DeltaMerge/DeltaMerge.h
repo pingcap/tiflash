@@ -167,7 +167,7 @@ public:
 
     bool skipNextBlock() override
     {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     Block read() override
@@ -194,7 +194,7 @@ public:
 
     Block readWithFilter(const IColumn::Filter & /*filter*/) override
     {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:

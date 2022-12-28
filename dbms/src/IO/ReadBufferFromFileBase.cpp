@@ -21,10 +21,6 @@ ReadBufferFromFileBase::ReadBufferFromFileBase(size_t buf_size, char * existing_
 {
 }
 
-ReadBufferFromFileBase::~ReadBufferFromFileBase()
-{
-}
-
 off_t ReadBufferFromFileBase::seek(off_t off, int whence)
 {
     return doSeek(off, whence);

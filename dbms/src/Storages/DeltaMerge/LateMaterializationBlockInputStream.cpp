@@ -62,6 +62,7 @@ Block LateMaterializationBlockInputStream::readImpl()
 
         if (size_t passed_count = std::count(filter->cbegin(), filter->cend(), 1); passed_count == 0)
         {
+            // if all rows are filtered, skip the next block of rest_column_stream
             if (!rest_column_stream->skipNextBlock())
             {
                 // if we fail to skip, we need to read the rest of the block and ignore it
@@ -77,11 +78,16 @@ Block LateMaterializationBlockInputStream::readImpl()
             Block rest_column_block;
             if (passed_count != rows)
             {
+                // rest_column_block = rest_column_stream->readWithFilter(*filter);
+                rest_column_block = rest_column_stream->read();
                 for (auto & col : filter_column_block)
                 {
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                rest_column_block = rest_column_stream->readWithFilter(*filter);
+                for (auto & col : rest_column_block)
+                {
+                    col.column = col.column->filter(*filter, passed_count);
+                }
             }
             else
             {
@@ -89,7 +95,7 @@ Block LateMaterializationBlockInputStream::readImpl()
             }
 
             RUNTIME_CHECK_MSG(rest_column_block.rows() == filter_column_block.rows() && rest_column_block.startOffset() == filter_column_block.startOffset(),
-                              "Late materialization meets unexpected size of block unmatched, filter_column_block: [start_offset={}, rows={}], rest_column_block: [start_offset={}, rows={}], pass_count: {}",
+                              "Late materialization meets unexpected size of block unmatched, filter_column_block: [start_offset={}, rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
                               filter_column_block.startOffset(),
                               filter_column_block.rows(),
                               rest_column_block.startOffset(),
