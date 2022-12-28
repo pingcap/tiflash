@@ -36,7 +36,17 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
         for (const auto & event : non_dependent_events)
             event->schedule();
     }
-    status.wait();
+
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 15 seconds to execute.
+        std::chrono::seconds timeout(15);
+        status.waitFor(timeout);
+    }
+    else
+    {
+        status.wait();
+    }
 
     auto err_msg = status.getErrMsg();
     return err_msg.empty()

@@ -28,6 +28,8 @@ void PipelineExecStatus::toError(std::string && err_msg_)
 {
     {
         std::lock_guard lock(mu);
+        if (!err_msg.empty())
+            return;
         err_msg = err_msg_.empty() ? "error without err msg" : std::move(err_msg_);
     }
     cancel();
@@ -35,11 +37,14 @@ void PipelineExecStatus::toError(std::string && err_msg_)
 
 void PipelineExecStatus::wait()
 {
-    while (active_pipeline_count != 0)
-    {
-        std::unique_lock lock(mu);
-        cv.wait(lock);
-    }
+    std::unique_lock lock(mu);
+    cv.wait(lock, [&] { return 0 == active_pipeline_count; });
+}
+
+void PipelineExecStatus::waitFor(std::chrono::seconds timeout)
+{
+    std::unique_lock lock(mu);
+    RUNTIME_CHECK(cv.wait_for(lock, timeout, [&] { return 0 == active_pipeline_count; }));
 }
 
 void PipelineExecStatus::addActivePipeline()

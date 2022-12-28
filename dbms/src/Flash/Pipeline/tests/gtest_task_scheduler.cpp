@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <gtest/gtest.h>
 
@@ -37,9 +38,9 @@ public:
     }
     void wait()
     {
+        std::chrono::seconds timeout(15);
         std::unique_lock lock(mu);
-        while (0 != counter)
-            cv.wait(lock);
+        RUNTIME_CHECK(cv.wait_for(lock, timeout, [&] { return 0 == counter; }));
     }
 
 private:
@@ -164,38 +165,43 @@ class TaskSchedulerTestRunner : public ::testing::Test
 {
 public:
     static constexpr size_t thread_num = 5;
+
+    std::vector<size_t> task_nums{1, 5, 10, 100};
 };
 
 TEST_F(TaskSchedulerTestRunner, simple_task)
 {
-    size_t task_num = 10;
-    Waiter waiter(task_num);
-    std::vector<TaskPtr> tasks;
-    for (size_t i = 0; i < task_num; ++i)
-        tasks.push_back(std::make_unique<SimpleTask>(waiter));
-    TaskSchedulerConfig config{thread_num, 0};
-    TaskScheduler task_scheduler{config};
-    task_scheduler.submit(tasks);
-    waiter.wait();
+    for (auto task_num : task_nums)
+    {
+        Waiter waiter(task_num);
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<SimpleTask>(waiter));
+        TaskSchedulerConfig config{thread_num, 0};
+        TaskScheduler task_scheduler{config};
+        task_scheduler.submit(tasks);
+        waiter.wait();
+    }
 }
 
 TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
 {
-    size_t task_num = 10;
-    Waiter waiter(task_num);
-    std::vector<TaskPtr> tasks;
-    for (size_t i = 0; i < task_num; ++i)
-        tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
-    TaskSchedulerConfig config{thread_num, 0};
-    TaskScheduler task_scheduler{config};
-    task_scheduler.submit(tasks);
-    waiter.wait();
+    for (auto task_num : task_nums)
+    {
+        Waiter waiter(task_num);
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
+        TaskSchedulerConfig config{thread_num, 0};
+        TaskScheduler task_scheduler{config};
+        task_scheduler.submit(tasks);
+        waiter.wait();
+    }
 }
 
 TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
 {
-    auto test = [](size_t spiller_executor_thread_num) {
-        size_t task_num = 10;
+    auto test = [](size_t spiller_executor_thread_num, size_t task_num) {
         Waiter waiter(task_num);
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
@@ -205,8 +211,11 @@ TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
         task_scheduler.submit(tasks);
         waiter.wait();
     };
-    test(0);
-    test(thread_num);
+    for (auto task_num : task_nums)
+    {
+        test(0, task_num);
+        test(thread_num, task_num);
+    }
 }
 
 } // namespace DB::tests

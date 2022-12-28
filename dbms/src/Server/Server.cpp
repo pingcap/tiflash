@@ -1279,6 +1279,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             ? std::thread::hardware_concurrency()
             : static_cast<size_t>(settings.pipeline_spill_executor_threads);
         TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};
+        assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
     SCOPE_EXIT({

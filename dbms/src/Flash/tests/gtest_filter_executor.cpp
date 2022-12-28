@@ -51,6 +51,19 @@ public:
                                  toNullableVec<Float64>("double_col", {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}),
                                  toNullableVec<String>("string_col", {"", "a", "1", "0", "ab", "  ", "\t", "\n"}),
                              });
+
+        // with 200 rows.
+        std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+        std::vector<std::optional<String>> value(200);
+        for (size_t i = 0; i < 200; ++i)
+        {
+            key[i] = i % 15;
+            value[i] = {fmt::format("val_{}", i)};
+        }
+        context.addMockTable(
+            {"test_db", "big_table"},
+            {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
+            {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
     }
 };
 
@@ -251,7 +264,17 @@ try
 }
 CATCH
 
-/// TODO: more functions.
+TEST_F(FilterExecutorTestRunner, BigTable)
+try
+{
+    auto request = context
+                       .scan("test_db", "big_table")
+                       .filter(gt(col("key"), lit(Field(static_cast<UInt64>(7)))))
+                       .build(context);
+    auto expect = executeStreams(request, 1);
+    executeAndAssertColumnsEqual(request, expect);
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

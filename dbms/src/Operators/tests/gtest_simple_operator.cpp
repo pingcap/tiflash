@@ -92,7 +92,7 @@ public:
         while (op_exec->execute() != OperatorStatus::FINISHED)
         {
         }
-        ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(blocks).getColumnsWithTypeAndName());
+        ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     }
 };
 

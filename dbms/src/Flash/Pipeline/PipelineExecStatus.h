@@ -35,6 +35,8 @@ struct PipelineExecStatus
 
     void wait();
 
+    void waitFor(std::chrono::seconds timeout);
+
     void completePipeline();
 
     void cancel();

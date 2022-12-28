@@ -57,19 +57,15 @@ void ExecutorTest::SetUp()
 {
     initializeContext();
     initializeClientInfo();
-    if (!TaskScheduler::instance)
-    {
-        TaskSchedulerConfig config{8, 8};
-        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
-    }
+    TaskSchedulerConfig config{8, 8};
+    assert(!TaskScheduler::instance);
+    TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
 }
 
 void ExecutorTest::TearDown()
 {
-    if (TaskScheduler::instance)
-    {
-        TaskScheduler::instance.reset();
-    }
+    assert(TaskScheduler::instance);
+    TaskScheduler::instance.reset();
 }
 
 DAGContext & ExecutorTest::getDAGContext()

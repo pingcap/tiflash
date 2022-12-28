@@ -25,7 +25,7 @@ public:
     using ColDataType = std::optional<typename TypeTraits<String>::FieldType>;
     using ColumnWithData = std::vector<ColDataType>;
 
-    static constexpr size_t big_table_rows = 100;
+    static constexpr size_t big_table_rows = 200;
 
     void initializeContext() override
     {

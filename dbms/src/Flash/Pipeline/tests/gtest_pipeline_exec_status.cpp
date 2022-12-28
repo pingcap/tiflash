@@ -26,10 +26,12 @@ TEST_F(PipelineExecStatusTestRunner, run)
 {
     PipelineExecStatus status;
     status.addActivePipeline();
-    status.completePipeline();
+    auto thread_manager = newThreadManager();
+    thread_manager->schedule(false, "run", [&status]() mutable { status.completePipeline(); });
     status.wait();
     auto err_msg = status.getErrMsg();
     ASSERT_TRUE(err_msg.empty()) << err_msg;
+    thread_manager->wait();
 }
 
 TEST_F(PipelineExecStatusTestRunner, to_err)
