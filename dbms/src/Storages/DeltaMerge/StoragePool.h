@@ -50,6 +50,8 @@ public:
 
     void restore();
 
+    void shutdown();
+
     friend class StoragePool;
     friend class ::DB::AsynchronousMetrics;
 

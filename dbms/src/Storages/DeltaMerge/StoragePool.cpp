@@ -112,11 +112,7 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
 
 GlobalStoragePool::~GlobalStoragePool()
 {
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
+    shutdown();
 }
 
 void GlobalStoragePool::restore()
@@ -130,6 +126,15 @@ void GlobalStoragePool::restore()
             return this->gc(global_context.getSettingsRef());
         },
         false);
+}
+
+void GlobalStoragePool::shutdown()
+{
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
 }
 
 FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
