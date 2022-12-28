@@ -99,11 +99,13 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
     DMContext & context,
     const PS::V3::CheckpointPageManager & manager,
+    const PS::V3::CheckpointInfo & checkpoint_info,
     const RowKeyRange & segment_range,
     NamespaceId ns_id,
     PageId id,
     WriteBatches & wbs)
 {
+    UNUSED(checkpoint_info);
     auto & storage_pool = context.storage_pool;
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, id);
     auto [buf, buf_size, _] = manager.getReadBuffer(target_id);
@@ -126,6 +128,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
         }
         else if (auto * b = column_file->tryToBigFile(); b)
         {
+            // FIXME: the big file is not in a valid state, so this function doesn't work correctly
             auto delegator = context.path_pool->getStableDiskDelegator();
             auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             wbs.data.putExternal(new_file_id, 0);

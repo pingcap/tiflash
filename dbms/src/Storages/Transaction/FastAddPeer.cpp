@@ -254,10 +254,6 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
 
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
-    UNUSED(server);
-    UNUSED(region_id);
-    UNUSED(new_peer_id);
-
     std::optional<RemoteMeta> maybe_peer = std::nullopt;
     while (true)
     {
@@ -272,20 +268,21 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             break;
     }
     auto & peer = maybe_peer.value();
-    auto checkpoint_file_path = std::get<3>(peer);
-    auto checkpoint_dir = Poco::Path(checkpoint_file_path).parent().toString();
+    auto checkpoint_manifest_path = std::get<3>(peer);
+    auto checkpoint_data_dir = Poco::Path(std::get<3>(peer)).parent().toString();
+    auto checkpoint_store_id = std::get<0>(peer);
 
     auto region = std::get<4>(peer);
     auto & kvstore = server->tmt->getKVStore();
-    kvstore->handleIngestCheckpoint(region, checkpoint_file_path, *server->tmt);
+    kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
 
     // Load data from remote.
     // 3. insert raft log into ps(wait for local pagestorage is better)
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
         CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_file_path
+            .file_path = checkpoint_manifest_path
         });
-    PS::V3::CheckpointPageManager manager(*reader, checkpoint_dir);
+    PS::V3::CheckpointPageManager manager(*reader, checkpoint_data_dir);
     auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()).toStr());
     UniversalWriteBatch wb;
     for (const auto & [buf, size, page_id]: raft_log_data)

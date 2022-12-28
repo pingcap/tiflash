@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/universal/Readers.h>
+#include <Storages/Transaction/TMTContext.cpp>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -126,7 +127,8 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     DMContext & context,
     const PS::V3::CheckpointPageManager & manager,
-    NamespaceId ns_id,
+    const PS::V3::CheckpointInfo & checkpoint_info,
+    TableID ns_id,
     PageId stable_id,
     WriteBatches & wbs)
 {
@@ -150,17 +152,54 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     for (size_t i = 0; i < size; ++i)
     {
         readIntBinary(page_id, *buf);
-        // FIXME: handle ref id here
-        auto file_id = page_id;
-        auto file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
+        auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, page_id);
+        auto remote_orig_file_page_id = manager.getNormalPageId(remote_file_page_id);
+        auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
         auto delegator = context.path_pool->getStableDiskDelegator();
         auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        const auto & db_context = context.db_context;
         wbs.data.putExternal(new_file_id, 0);
-        // FIXME: the target dmfile should be in remote dir
-        auto new_dmfile = DMFile::createByLink(context.db_context.getFileProvider(), file_id, new_file_id, file_parent_path);
-        context.path_pool->getStableDiskDelegator().addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), file_parent_path);
-
-        stable->files.push_back(new_dmfile);
+        if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
+        {
+            auto remote_oid = Remote::DMFileOID{
+                .write_node_id = checkpoint_info.checkpoint_store_id,
+                .table_id = ns_id,
+                .file_id = remote_file_id,
+            };
+            auto data_store = remote_manager->getDataStore();
+            auto parent_path = delegator.choosePath();
+            const auto local_path = DMFile::getPathByStatus(parent_path, new_file_id, DMFile::READABLE);
+            // TODO: check the copy meets expectation
+            // TODO: avoid copy to local
+            data_store->copyDMFileToLocalPath(remote_oid, local_path);
+            auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
+            delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), parent_path);
+            stable->files.push_back(new_dmfile);
+//            auto prepared = data_store->prepareDMFile(remote_oid);
+//            auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+//            stable->files.push_back(dmfile);
+//            UInt64 store_id;
+//            {
+//                auto & tmt = db_context.getTMTContext();
+//                auto kvstore = tmt.getKVStore();
+//                auto store_meta = kvstore->getStoreMeta();
+//                store_id = store_meta.id();
+//            }
+//            auto self_oid = Remote::DMFileOID{
+//                .write_node_id = store_id,
+//                .table_id = ns_id,
+//                .file_id = new_file_id,
+//            };
+//            data_store->linkDMFile(remote_oid, self_oid);
+        }
+        else
+        {
+            // TODO: the path here may be not correct
+            auto file_parent_path = delegator.getDTFilePath(remote_file_id);
+            auto new_dmfile = DMFile::createByLink(context.db_context.getFileProvider(), remote_file_id, new_file_id, file_parent_path);
+            delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), file_parent_path);
+            stable->files.push_back(new_dmfile);
+        }
     }
 
     stable->valid_rows = valid_rows;

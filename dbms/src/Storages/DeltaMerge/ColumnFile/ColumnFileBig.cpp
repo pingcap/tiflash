@@ -76,6 +76,8 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
+    // FIXME: support deserialize from remote checkpoint
+
     auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
     auto file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
 

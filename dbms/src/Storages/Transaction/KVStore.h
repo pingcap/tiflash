@@ -118,7 +118,12 @@ public:
      */
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
-    void handleIngestCheckpoint(RegionPtr new_region, String checkpoint_path, TMTContext & tmt);
+    void handleIngestCheckpoint( //
+        RegionPtr new_region,
+        String checkpoint_manifest_path,
+        String checkpoint_data_dir,
+        UInt64 checkpoint_store_id,
+        TMTContext & tmt);
 
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,

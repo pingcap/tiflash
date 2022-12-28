@@ -50,7 +50,8 @@ public:
     static StableValueSpacePtr restoreFromCheckpoint( //
         DMContext & context,
         const PS::V3::CheckpointPageManager & manager,
-        NamespaceId ns_id,
+        const PS::V3::CheckpointInfo & checkpoint_info,
+        TableID ns_id,
         PageId stable_id,
         WriteBatches & wbs);
 

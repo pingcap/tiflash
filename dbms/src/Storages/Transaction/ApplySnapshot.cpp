@@ -186,9 +186,15 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
                     dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
-                else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointPath>)
+                else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
                 {
-                    dm_storage->ingestSegmentFromCheckpointPath(new_key_range, new_region_wrap.checkpoint_path, context.getSettingsRef());
+                    dm_storage->ingestSegmentFromCheckpointPath(new_key_range,
+                                                                PS::V3::CheckpointInfo{
+                                                                    .checkpoint_manifest_path = new_region_wrap.checkpoint_manifest_path,
+                                                                    .checkpoint_data_dir = new_region_wrap.checkpoint_data_dir,
+                                                                    .checkpoint_store_id = new_region_wrap.checkpoint_store_id,
+                                                                },
+                                                                context.getSettingsRef());
                 }
                 else
                 {
@@ -488,9 +494,14 @@ void KVStore::handleApplySnapshot(
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
-void KVStore::handleIngestCheckpoint(RegionPtr new_region, String checkpoint_path, TMTContext & tmt)
+void KVStore::handleIngestCheckpoint( //
+    RegionPtr new_region,
+    String checkpoint_manifest_path,
+    String checkpoint_data_dir,
+    UInt64 checkpoint_store_id,
+    TMTContext & tmt)
 {
-    applyPreHandledSnapshot(RegionPtrWithCheckpointPath{new_region, std::move(checkpoint_path)}, tmt);
+    applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{new_region, std::move(checkpoint_manifest_path), std::move(checkpoint_data_dir), checkpoint_store_id}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)

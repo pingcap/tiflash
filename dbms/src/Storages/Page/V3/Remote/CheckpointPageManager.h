@@ -6,24 +6,33 @@
 namespace DB::PS::V3
 {
 
+struct CheckpointInfo
+{
+    String checkpoint_manifest_path;
+    String checkpoint_data_dir;
+    UInt64 checkpoint_store_id;
+};
+
 class CheckpointPageManager
 {
 public:
-    explicit CheckpointPageManager(CheckpointManifestFileReader<PS::V3::universal::PageDirectoryTrait> & reader, const String & checkpoint_dir_)
+    explicit CheckpointPageManager(CheckpointManifestFileReader<PS::V3::universal::PageDirectoryTrait> & reader, const String & checkpoint_data_dir_)
         : edit(reader.read())
-        , checkpoint_dir(checkpoint_dir_)
+        , checkpoint_data_dir(checkpoint_data_dir_)
     {
-        RUNTIME_CHECK(endsWith(checkpoint_dir, "/"));
+        RUNTIME_CHECK(endsWith(checkpoint_data_dir, "/"));
     }
 
     // Only used for retrieve raft log, so no need to consider ref id
     std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> getAllPageWithPrefix(const String & prefix) const;
+
+    UniversalPageId getNormalPageId(const UniversalPageId & page_id) const;
 
     // buf, size, size of each fields
     std::tuple<ReadBufferPtr, size_t, PageFieldSizes> getReadBuffer(const UniversalPageId & page_id) const;
 
 private:
     typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit edit;
-    String checkpoint_dir;
+    String checkpoint_data_dir;
 };
 }

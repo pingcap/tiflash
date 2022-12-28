@@ -186,6 +186,7 @@ public:
         const Segment::SegmentMetaInfos & meta_infos,
         const RowKeyRange & range,
         const CheckpointPageManager & manager,
+        const PS::V3::CheckpointInfo & checkpoint_info,
         WriteBatches & wbs);
 
     void serialize(WriteBatch & wb);

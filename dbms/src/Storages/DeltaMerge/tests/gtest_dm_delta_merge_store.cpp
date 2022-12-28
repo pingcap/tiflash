@@ -2976,7 +2976,12 @@ try
         ASSERT_INPUTSTREAM_NROWS(in, 0);
     }
 
-    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), checkpoint_path);
+    PS::V3::CheckpointInfo info{
+        .checkpoint_manifest_path = checkpoint_path,
+        .checkpoint_data_dir = Poco::Path(checkpoint_path).parent().toString(),
+        .checkpoint_store_id = 1,
+    };
+    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), info);
 
     {
         const auto & columns = store->getTableColumns();

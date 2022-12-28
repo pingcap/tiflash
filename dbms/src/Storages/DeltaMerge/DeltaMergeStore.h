@@ -310,15 +310,15 @@ public:
 
     void ingestSegmentFromCheckpointPath(const DMContextPtr & dm_context, //
                                          const DM::RowKeyRange & range,
-                                         const String & checkpoint_path);
+                                         const PS::V3::CheckpointInfo & checkpoint_info);
 
     void ingestSegmentFromCheckpointPath(const Context & db_context, //
                                          const DB::Settings & db_settings,
                                          const DM::RowKeyRange & range,
-                                         const String & checkpoint_path)
+                                         const PS::V3::CheckpointInfo & checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
-        return ingestSegmentFromCheckpointPath(dm_context, range, checkpoint_path);
+        return ingestSegmentFromCheckpointPath(dm_context, range, checkpoint_info);
     }
 
     /// Read all rows without MVCC filtering

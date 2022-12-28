@@ -209,13 +209,19 @@ try
         ++it;
     }
     ASSERT_TRUE(latest_manifest_sequence > 0);
+    auto checkpoint_path = checkpoint_dir + fmt::format("{}.manifest", latest_manifest_sequence);
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
         CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_dir + fmt::format("{}.manifest", latest_manifest_sequence)
+            .file_path = checkpoint_path
         });
     PageId new_segment_id = 0;
     {
-        PS::V3::CheckpointPageManager manager(*reader, checkpoint_dir);
+        PS::V3::CheckpointInfo info{
+            .checkpoint_manifest_path = checkpoint_path,
+            .checkpoint_data_dir = Poco::Path(checkpoint_path).parent().toString(),
+            .checkpoint_store_id = 1,
+        };
+        PS::V3::CheckpointPageManager manager(*reader, info.checkpoint_data_dir);
         WriteBatches wbs{dmContext().storage_pool};
         auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), manager);
         auto new_segments = Segment::restoreSegmentsFromCheckpoint( //
@@ -225,6 +231,7 @@ try
             segment_meta_infos,
             segment->getRowKeyRange(),
             manager,
+            info,
             wbs);
         ASSERT_TRUE(new_segments.size() == 1);
         new_segments[0]->serialize(wbs.meta);

@@ -894,7 +894,7 @@ void StorageDeltaMerge::ingestFiles(
 
 void StorageDeltaMerge::ingestSegmentFromCheckpointPath( //
     const DM::RowKeyRange & range,
-    const String & checkpoint_path,
+    const PS::V3::CheckpointInfo & checkpoint_info,
     const Settings & settings)
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();
@@ -902,7 +902,7 @@ void StorageDeltaMerge::ingestSegmentFromCheckpointPath( //
         global_context,
         settings,
         range,
-        checkpoint_path);
+        checkpoint_info);
 }
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)

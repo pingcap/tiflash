@@ -299,13 +299,15 @@ struct RegionPtrWithSnapshotFiles
 };
 
 // A wrap of RegionPtr, with checkpoint path waitting to be ingested
-struct RegionPtrWithCheckpointPath
+struct RegionPtrWithCheckpointInfo
 {
     using Base = RegionPtr;
 
-    RegionPtrWithCheckpointPath(
+    RegionPtrWithCheckpointInfo(
         const Base & base_,
-        String && checkpoint_path_);
+        String && checkpoint_manifest_path_,
+        String && checkpoint_data_dir_,
+        UInt64 checkpoint_store_id_);
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
@@ -315,7 +317,9 @@ struct RegionPtrWithCheckpointPath
     operator const Base &() const { return base; }
 
     const Base & base;
-    String checkpoint_path;
+    String checkpoint_manifest_path;
+    String checkpoint_data_dir;
+    UInt64 checkpoint_store_id;
 };
 
 } // namespace DB

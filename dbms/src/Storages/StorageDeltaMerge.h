@@ -106,7 +106,7 @@ public:
 
     void ingestSegmentFromCheckpointPath(
         const DM::RowKeyRange & range,
-        const String & checkpoint_path,
+        const PS::V3::CheckpointInfo & checkpoint_info,
         const Settings & settings);
 
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;
