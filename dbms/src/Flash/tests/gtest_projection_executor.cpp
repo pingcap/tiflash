@@ -20,7 +20,7 @@ namespace DB
 namespace tests
 {
 
-class ExecutorProjectionTestRunner : public DB::tests::ExecutorTest
+class ProjectionExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     using ColDataString = std::vector<std::optional<typename TypeTraits<String>::FieldType>>;
@@ -94,7 +94,7 @@ public:
     const String table_name{"projection_test_table"};
 };
 
-TEST_F(ExecutorProjectionTestRunner, Projection)
+TEST_F(ProjectionExecutorTestRunner, Projection)
 try
 {
     /// Check single column
@@ -141,7 +141,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, ProjectionFunction)
+TEST_F(ProjectionExecutorTestRunner, ProjectionFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -231,7 +231,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, MultiFunction)
+TEST_F(ProjectionExecutorTestRunner, MultiFunction)
 try
 {
     MockAstVec functions = {
@@ -308,7 +308,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, MultiProjection)
+TEST_F(ProjectionExecutorTestRunner, MultiProjection)
 try
 {
     auto req = context
@@ -375,7 +375,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, ProjectionThenAgg)
+TEST_F(ProjectionExecutorTestRunner, ProjectionThenAgg)
 try
 {
     auto req = context

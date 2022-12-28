@@ -20,7 +20,7 @@ namespace DB
 namespace tests
 {
 
-class ExecutorTopNTestRunner : public DB::tests::ExecutorTest
+class TopNExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     using ColStringType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -75,7 +75,7 @@ public:
     ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
-TEST_F(ExecutorTopNTestRunner, TopN)
+TEST_F(TopNExecutorTestRunner, TopN)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -142,7 +142,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTopNTestRunner, TopNFunction)
+TEST_F(TopNExecutorTestRunner, TopNFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
