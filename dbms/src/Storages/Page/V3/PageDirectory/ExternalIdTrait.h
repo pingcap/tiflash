@@ -13,10 +13,10 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/StringUtils/StringUtils.h>
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/Page/PageDefines.h>
-#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -45,7 +45,7 @@ struct UniversalPageIdFormat
         return toBigEndian(v);
     }
 };
-}
+} // namespace DB
 
 namespace DB::PS::V3
 {
@@ -90,13 +90,13 @@ struct ExternalIdTrait
 
     static inline PageId getInvalidID()
     {
-        return "";
+        return UniversalPageId{};
     }
     static inline U64PageId getU64ID(const PageId & page_id)
     {
         // Only count id with known prefix
         // TODO: remove hardcode
-        if (startsWith(page_id, "t_l_") || startsWith(page_id, "t_d_") || startsWith(page_id, "t_m_"))
+        if (startsWith(page_id.asStr(), "t_l_") || startsWith(page_id.asStr(), "t_d_") || startsWith(page_id.asStr(), "t_m_"))
         {
             return DB::UniversalPageIdFormat::decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
         }
@@ -107,7 +107,7 @@ struct ExternalIdTrait
     }
     static inline Prefix getPrefix(const PageId & page_id)
     {
-        return page_id.substr(0, page_id.size() - sizeof(UInt64));
+        return page_id.substr(0, page_id.size() - sizeof(UInt64)).toStr();
     }
     static inline PageId getPageMapKey(const PageId & page_id)
     {

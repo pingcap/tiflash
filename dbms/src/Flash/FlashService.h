@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -26,8 +25,8 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#include <grpcpp/server_context.h>
 #include <kvproto/tikvpb.grpc.pb.h>
-
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -50,7 +49,7 @@ class FlashService : public tikvpb::Tikv::Service
 {
 public:
     FlashService();
-    void init(const TiFlashSecurityConfig & security_config_, Context & context_);
+    void init(Context & context_);
 
     ~FlashService() override;
 
@@ -80,6 +79,11 @@ public:
 
     grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
 
+    // Build the disaggregated task
+    grpc::Status EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response) override;
+    // Exchange page data
+    grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * sync_writer) override;
+
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }
@@ -89,7 +93,6 @@ protected:
     std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
     grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
-    const TiFlashSecurityConfig * security_config = nullptr;
     Context * context = nullptr;
     Poco::Logger * log = nullptr;
     bool is_async = false;

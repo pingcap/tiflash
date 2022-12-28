@@ -112,7 +112,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     RegionPtr region;
     for (auto iter = records.begin(); iter != records.end(); iter++)
     {
-        std::string page_id = iter->page_id;
+        std::string page_id = iter->page_id.toStr();
         if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id))
         {
             std::string decoded_data;
@@ -286,7 +286,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             .file_path = checkpoint_file_path
         });
     PS::V3::CheckpointPageManager manager(*reader, checkpoint_dir);
-    auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()));
+    auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()).toStr());
     UniversalWriteBatch wb;
     for (const auto & [buf, size, page_id]: raft_log_data)
     {

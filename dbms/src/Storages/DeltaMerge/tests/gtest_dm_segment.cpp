@@ -100,10 +100,9 @@ protected:
         *table_columns = *columns;
 
         dm_context = std::make_unique<DMContext>(*db_context,
-                                                 *storage_path_pool,
-                                                 *storage_pool,
+                                                 storage_path_pool,
+                                                 storage_pool,
                                                  /*min_version_*/ 0,
-                                                 settings.not_compress_columns,
                                                  false,
                                                  1,
                                                  db_context->getSettingsRef(),
@@ -117,8 +116,8 @@ protected:
 protected:
     const NamespaceId table_id = 100;
     /// all these var lives as ref in dm_context
-    std::unique_ptr<StoragePathPool> storage_path_pool;
-    std::unique_ptr<StoragePool> storage_pool;
+    std::shared_ptr<StoragePathPool> storage_path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
@@ -145,9 +144,9 @@ try
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
         num_rows_write += num_rows_write_per_batch;
-        auto delegator = dmContext().path_pool.getStableDiskDelegator();
+        auto delegator = dmContext().path_pool->getStableDiskDelegator();
         auto file_provider = dmContext().db_context.getFileProvider();
-        auto file_id = dmContext().storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto file_id = dmContext().storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
@@ -157,12 +156,11 @@ try
         delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
         auto file_parent_path = delegator.getDTFilePath(file_id);
         auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-        auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, segment->getRowKeyRange());
-        WriteBatches wbs(*storage_pool);
+        WriteBatches wbs(storage_pool);
         wbs.data.putExternal(file_id, 0);
         wbs.writeLogAndData();
 
-        segment->ingestColumnFiles(dmContext(), segment->getRowKeyRange(), {column_file}, false);
+        segment->ingestDataToDelta(dmContext(), segment->getRowKeyRange(), {file}, false);
     }
 
     // write ColumnFileTiny in delta
@@ -1166,8 +1164,8 @@ public:
 
     std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
     {
-        auto delegator = context.path_pool.getStableDiskDelegator();
-        auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto delegator = context.path_pool->getStableDiskDelegator();
+        auto file_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
@@ -1207,18 +1205,17 @@ try
                 break;
             case SegmentTestMode::V2_FileOnly:
             {
-                auto delegate = dmContext().path_pool.getStableDiskDelegator();
+                auto delegate = dmContext().path_pool->getStableDiskDelegator();
                 auto file_provider = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
-                WriteBatches wbs(*storage_pool);
+                WriteBatches wbs(storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestColumnFiles(dmContext(), range, {column_file}, false);
+                segment->ingestDataToDelta(dmContext(), range, {file}, false);
                 break;
             }
             default:

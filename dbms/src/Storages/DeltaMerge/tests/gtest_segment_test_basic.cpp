@@ -13,23 +13,30 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
+#include <Core/Types.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <magic_enum.hpp>
 
+#include "tipb/expression.pb.h"
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfRead;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -45,6 +52,19 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
 
 namespace tests
 {
+PageIds getCFTinyIds(const ColumnFileSetSnapshotPtr & snapshot)
+{
+    PageIds page_ids;
+    for (const auto & cf : snapshot->getColumnFiles())
+    {
+        if (auto * tiny = cf->tryToTinyFile(); tiny)
+        {
+            page_ids.emplace_back(tiny->getDataPageId());
+        }
+    }
+    return page_ids;
+}
+
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 {
     {
@@ -301,7 +321,34 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         is_deleted);
 }
 
-std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
+Block mergeBlocks(std::vector<Block> && blocks)
+{
+    auto accumulated_block = std::move(blocks[0]);
+
+    for (size_t block_idx = 1; block_idx < blocks.size(); ++block_idx)
+    {
+        auto block = std::move(blocks[block_idx]);
+
+        size_t columns = block.columns();
+        size_t rows = block.rows();
+
+        for (size_t i = 0; i < columns; ++i)
+        {
+            MutableColumnPtr mutable_column = (*std::move(accumulated_block.getByPosition(i).column)).mutate();
+            mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
+            accumulated_block.getByPosition(i).column = std::move(mutable_column);
+        }
+    }
+
+    SortDescription sort;
+    sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
+    sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
+    stableSortBlock(accumulated_block, sort);
+
+    return accumulated_block;
+}
+
+Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
 {
     RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
 
@@ -364,7 +411,7 @@ std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId seg
                   remaining_rows);
     }
 
-    return blocks;
+    return mergeBlocks(std::move(blocks));
 }
 
 void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
@@ -380,69 +427,111 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::o
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
     LOG_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    for (const auto & block : blocks)
-    {
-        segment->write(*dm_context, block, false);
-    }
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+    segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
-    LOG_INFO(logger_op, "ingestDTFileIntoSegment, segment_id={} write_rows={}", segment_id, write_rows);
+    LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
     if (write_rows == 0)
         return;
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
 
-    auto ingest_data = [&](SegmentPtr segment, const Block & block) {
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_DEBUG(logger, "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+
+    {
+        auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
         WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(
-            *dm_context,
-            table_columns,
-            input_stream,
-            file_id,
-            parent_path,
-            flags);
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
-        {
-            WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
-            auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-            wbs.data.putRefPage(ref_id, dm_file->pageId());
-            auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
-            wbs.writeLogAndData();
-            auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
-            ColumnFiles column_files;
-            column_files.push_back(column_file);
-            ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
-        }
+
+        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        wbs.writeLogAndData();
+        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ true));
+
         ingest_wbs.rollbackWrittenLogAndData();
-    };
-
-    auto segment = segments[segment_id];
-    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
-    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
-
-    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    for (const auto & block : blocks)
-    {
-        ingest_data(segment, block);
     }
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["ingest"]++;
+}
+
+void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
+{
+    LOG_INFO(logger_op, "ingestDTFileByReplace, segment_id={} write_rows={}", segment_id, write_rows);
+
+    if (write_rows == 0)
+        return;
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_DEBUG(logger, "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+
+    {
+        auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto delegator = storage_path_pool->getStableDiskDelegator();
+        auto parent_path = delegator.choosePath();
+        auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        DMFileBlockOutputStream::Flags flags;
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
+        ingest_wbs.data.putExternal(file_id, /* tag */ 0);
+        ingest_wbs.writeLogAndData();
+        delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
+
+        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        wbs.writeLogAndData();
+
+        auto apply_result = segment->ingestDataForTest(*dm_context, ref_file, clear);
+
+        ingest_wbs.rollbackWrittenLogAndData();
+
+        if (apply_result.get() != segment.get())
+        {
+            operation_statistics["ingestByReplace_NewSegment"]++;
+            const auto & new_segment = apply_result;
+            segments[new_segment->segmentId()] = new_segment;
+        }
+        else if (apply_result.get() == segment.get())
+        {
+            operation_statistics["ingestByReplace_ReuseSegment"]++;
+        }
+        else
+        {
+            RUNTIME_CHECK(false);
+        }
+    }
+
+    if (clear)
+        EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), write_rows);
+    else
+        EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
 }
 
 void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
@@ -458,11 +547,8 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 wri
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
     LOG_DEBUG(logger, "write deleted pack to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
-    for (const auto & block : blocks)
-    {
-        segment->write(*dm_context, block, false);
-    }
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
+    segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["writeDelete"]++;
@@ -478,9 +564,11 @@ void SegmentTestBasic::deleteRangeSegment(PageId segment_id)
     EXPECT_EQ(getSegmentRowNum(segment_id), 0);
 }
 
-void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block)
+void SegmentTestBasic::replaceSegmentData(PageId segment_id, const Block & block, SegmentSnapshotPtr snapshot)
 {
-    LOG_DEBUG(logger, "replace segment data using block, segments_id={} block_rows={}", fmt::join(segments_id, ","), block.rows());
+    // This function always create a new DTFile for the block.
+
+    LOG_DEBUG(logger, "replace segment data using block, segment_id={} block_rows={}", segment_id, block.rows());
 
     auto delegator = storage_path_pool->getStableDiskDelegator();
     auto parent_path = delegator.choosePath();
@@ -490,37 +578,43 @@ void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_i
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
-    auto dm_file = writeIntoNewDMFile(
-        *dm_context,
-        table_columns,
-        input_stream,
-        file_id,
-        parent_path,
-        {});
+    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, {});
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();
+
     delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-    replaceSegmentData(segments_id, dm_file);
+    replaceSegmentData(segment_id, dm_file, snapshot);
 
     dm_file->enableGC();
-    ingest_wbs.rollbackWrittenLogAndData();
 }
 
-void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_id, const DMFilePtr & file)
+void SegmentTestBasic::replaceSegmentData(PageId segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot)
 {
-    LOG_INFO(logger_op, "replaceSegmentData, segments_id={} file_rows={} file={}", fmt::join(segments_id, ","), file->getRows(), file->path());
+    LOG_INFO(logger_op, "replaceSegmentData, segment_id={} file_rows={} file=dmf_{}", segment_id, file->getRows(), file->fileId());
 
-    for (const auto segment_id : segments_id)
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
     {
-        RUNTIME_CHECK(segments.find(segment_id) != segments.end());
-        auto segment = segments[segment_id];
-        auto new_segment = segment->dangerouslyReplaceDataForTest(*dm_context, file);
-        ASSERT_TRUE(new_segment != nullptr);
-        segments[new_segment->segmentId()] = new_segment;
+        auto lock = segment->mustGetUpdateLock();
+        auto new_segment = segment->replaceData(lock, *dm_context, file, snapshot);
+        if (new_segment != nullptr)
+            segments[new_segment->segmentId()] = new_segment;
     }
-    operation_statistics["replaceData"]++;
+
+    if (snapshot != nullptr)
+        operation_statistics["replaceDataWithSnapshot"]++;
+    else
+        operation_statistics["replaceData"]++;
+}
+
+SegmentReadTaskPtr SegmentTestBasic::genSegmentReadTask(PageId segment_id) const
+{
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments.at(segment_id);
+    auto segment_snap = segment->createSnapshot(*dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfRead);
+    return std::make_shared<SegmentReadTask>(segment, segment_snap);
 }
 
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id) const
@@ -554,8 +648,8 @@ PageId SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
 SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
-    storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-    storage_pool = std::make_unique<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
+    storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+    storage_pool = std::make_shared<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
@@ -566,10 +660,9 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
 void SegmentTestBasic::reloadDMContext()
 {
     dm_context = std::make_unique<DMContext>(*db_context,
-                                             *storage_path_pool,
-                                             *storage_pool,
+                                             storage_path_pool,
+                                             storage_pool,
                                              /*min_version_*/ 0,
-                                             settings.not_compress_columns,
                                              options.is_common_handle,
                                              1,
                                              db_context->getSettingsRef(),
@@ -591,6 +684,220 @@ void SegmentTestBasic::printFinishedOperations() const
         LOG_INFO(logger, "{}: {}", name, n);
     }
     LOG_INFO(logger, "======= End Finished Operations Statistics =======");
+}
+
+class SegmentFrameworkTest : public SegmentTestBasic
+{
+};
+
+TEST_F(SegmentFrameworkTest, PrepareWriteBlock)
+try
+{
+    reloadWithOptions({.is_common_handle = false});
+
+    auto s1_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10);
+    ASSERT_TRUE(s1_id.has_value());
+    auto s2_id = splitSegmentAt(*s1_id, 20);
+    ASSERT_TRUE(s2_id.has_value());
+
+    // s1 has range [10, 20)
+    {
+        auto [begin, end] = getSegmentKeyRange(*s1_id);
+        ASSERT_EQ(10, begin);
+        ASSERT_EQ(20, end);
+    }
+
+    {
+        // write_rows == segment_rows, start_key not specified
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 10);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+    }
+    {
+        // write_rows > segment_rows, start_key not specified
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 13);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1}));
+    }
+    {
+        // start_key specified, end_key - start_key < write_rows
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 2, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 17}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 1}));
+    }
+    {
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 4, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 1, 1, 1}));
+    }
+    {
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 5, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 2, 1, 1, 1}));
+    }
+    {
+        version = 0;
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 10, /* at */ 16);
+        ASSERT_COLUMN_EQ(
+            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            createColumn<Int64>({16, 16, 16, 17, 17, 17, 18, 18, 19, 19}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(VERSION_COLUMN_NAME),
+            createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
+    }
+    {
+        // write rows < segment rows, start key not specified, should choose a random start.
+        auto block = prepareWriteBlockInSegmentRange(*s1_id, 3);
+        ASSERT_EQ(3, block.rows());
+    }
+    {
+        // Let's check whether the generated handles will be starting from 12, for at least once.
+        auto start_from_12 = 0;
+        for (size_t i = 0; i < 100; i++)
+        {
+            auto block = prepareWriteBlockInSegmentRange(*s1_id, 3);
+            if (block.getByName(EXTRA_HANDLE_COLUMN_NAME).column->getInt(0) == 12)
+                start_from_12++;
+        }
+        ASSERT_TRUE(start_from_12 > 0); // We should hit at least 1 times in 100 iters.
+        ASSERT_TRUE(start_from_12 < 50); // We should not hit 50 times in 100 iters :)
+    }
+}
+CATCH
+
+std::vector<tipb::FieldType> reverseGetFieldType(const ColumnDefines & cds)
+{
+    std::vector<tipb::FieldType> field_types;
+    field_types.reserve(cds.size());
+
+    for (const auto & cd : cds)
+    {
+        tipb::FieldType ft;
+        // TODO: set flen and decimal for decimal
+        // TODO: set decimal for date time
+        // TODO: set decimal for duration
+        // TODO: set elems for enum
+        // TODO: set default value
+        UInt32 flags = 0;
+
+        // set nullable flag
+        const IDataType * nested_type = cd.type.get();
+        if (!cd.type->isNullable())
+        {
+            flags |= TiDB::ColumnFlagNotNull;
+        }
+        else
+        {
+            const auto * nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
+            nested_type = nullable_type->getNestedType().get();
+        }
+
+        // TODO: set sign flag
+        if (nested_type->isUnsignedInteger())
+        {
+            flags |= TiDB::ColumnFlagUnsigned;
+        }
+
+        switch (nested_type->getTypeId())
+        {
+        case DB::TypeIndex::Nothing:
+            ft.set_tp(TiDB::TypeNull);
+            break;
+        case DB::TypeIndex::UInt8:
+        case DB::TypeIndex::Int8:
+            ft.set_tp(TiDB::TypeTiny);
+            break;
+        case DB::TypeIndex::UInt16:
+        case DB::TypeIndex::Int16:
+            ft.set_tp(TiDB::TypeShort);
+            break;
+        case DB::TypeIndex::UInt32:
+        case DB::TypeIndex::Int32:
+            ft.set_tp(TiDB::TypeLong);
+            break;
+        case DB::TypeIndex::UInt64:
+        case DB::TypeIndex::Int64:
+            ft.set_tp(TiDB::TypeLongLong);
+            break;
+        case DB::TypeIndex::Float32:
+            ft.set_tp(TiDB::TypeFloat);
+            break;
+        case DB::TypeIndex::Float64:
+            ft.set_tp(TiDB::TypeDouble);
+            break;
+        case DB::TypeIndex::Date:
+        case DB::TypeIndex::MyDate:
+            ft.set_tp(TiDB::TypeDate);
+            break;
+        case DB::TypeIndex::DateTime:
+        case DB::TypeIndex::MyDateTime:
+            ft.set_tp(TiDB::TypeDatetime);
+            break;
+        case DB::TypeIndex::MyTimeStamp:
+            ft.set_tp(TiDB::TypeTimestamp);
+            break;
+        case DB::TypeIndex::MyTime:
+            ft.set_tp(TiDB::TypeTime);
+            break;
+        case DB::TypeIndex::String:
+        case DB::TypeIndex::FixedString:
+            ft.set_tp(TiDB::TypeString);
+            break;
+        case DB::TypeIndex::Enum8:
+        case DB::TypeIndex::Enum16:
+            ft.set_tp(TiDB::TypeEnum);
+            break;
+        case DB::TypeIndex::Decimal32:
+        case DB::TypeIndex::Decimal64:
+        case DB::TypeIndex::Decimal128:
+        case DB::TypeIndex::Decimal256:
+            ft.set_tp(TiDB::TypeNewDecimal);
+            break;
+        case DB::TypeIndex::UInt128:
+        case DB::TypeIndex::Int128:
+        case DB::TypeIndex::Int256:
+        case DB::TypeIndex::UUID:
+        case DB::TypeIndex::Array:
+        case DB::TypeIndex::Tuple:
+        case DB::TypeIndex::Set:
+        case DB::TypeIndex::Interval:
+        case DB::TypeIndex::Nullable:
+        case DB::TypeIndex::Function:
+        case DB::TypeIndex::AggregateFunction:
+        case DB::TypeIndex::LowCardinality:
+            RUNTIME_CHECK(false);
+        }
+
+        ft.set_flag(flags);
+        field_types.emplace_back(ft);
+    }
+
+    return field_types;
 }
 
 } // namespace tests

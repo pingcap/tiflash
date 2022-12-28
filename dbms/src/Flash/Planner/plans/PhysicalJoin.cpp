@@ -76,6 +76,7 @@ void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context 
         restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
     }
 }
+
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -83,6 +84,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Join & join,
+    const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & left,
     const PhysicalPlanNodePtr & right)
 {
@@ -104,7 +106,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const Block & build_side_header = build_plan->getSampleBlock();
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
-    NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_side_header, match_helper_name);
     NamesAndTypes join_output_schema = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
     auto & dag_context = *context.getDAGContext();
@@ -149,6 +150,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
+        fine_grained_shuffle.enable(),
+        fine_grained_shuffle.stream_count,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -167,11 +170,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_plan,
         build_plan,
         join_ptr,
-        columns_added_by_join,
         probe_side_prepare_actions,
         build_side_prepare_actions,
         is_tiflash_right_join,
-        Block(join_output_schema));
+        Block(join_output_schema),
+        fine_grained_shuffle);
     return physical_join;
 }
 
@@ -186,8 +189,6 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     assert(probe_pipeline.streams_with_non_joined_data.empty());
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
-    auto join_probe_actions = PhysicalPlanHelper::newActions(probe_pipeline.firstStream()->getHeader(), context);
-    join_probe_actions->add(ExpressionAction::ordinaryJoin(join_ptr, columns_added_by_join));
     /// add join input stream
     if (has_non_joined)
     {
@@ -205,7 +206,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}", execId());
     for (auto & stream : probe_pipeline.streams)
     {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_probe_actions, log->identifier());
+        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, log->identifier(), settings.max_block_size);
         stream->setExtraInfo(join_probe_extra_info);
     }
 }
@@ -219,6 +220,8 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
+    if (fine_grained_shuffle.enable())
+        join_build_extra_info = fmt::format("{} {}", join_build_extra_info, String(enableFineGrainedShuffleExtraInfo));
     auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
     auto build_streams = [&](BlockInputStreams & streams) {
         size_t build_index = 0;

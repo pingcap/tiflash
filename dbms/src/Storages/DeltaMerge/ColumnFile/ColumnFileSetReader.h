@@ -50,6 +50,11 @@ public:
         const ColumnDefinesPtr & col_defs_,
         const RowKeyRange & segment_range_);
 
+    ColumnFileSetReader(
+        const ColumnFileSetSnapshotPtr & snapshot_,
+        const ColumnDefinesPtr & col_defs_,
+        const RowKeyRange & segment_range_);
+
     // If we need to read columns besides pk and version, a ColumnFileSetReader can NOT be used more than once.
     // This method create a new reader based on the current one. It will reuse some caches in the current reader.
     ColumnFileSetReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
@@ -82,6 +87,14 @@ public:
                              const ColumnDefinesPtr & col_defs_,
                              const RowKeyRange & segment_range_)
         : reader(context_, delta_snap_, col_defs_, segment_range_)
+        , column_files(reader.snapshot->getColumnFiles())
+        , column_files_count(column_files.size())
+    {}
+
+    ColumnFileSetInputStream(const ColumnFileSetSnapshotPtr & delta_snap_,
+                             const ColumnDefinesPtr & col_defs_,
+                             const RowKeyRange & segment_range_)
+        : reader(delta_snap_, col_defs_, segment_range_)
         , column_files(reader.snapshot->getColumnFiles())
         , column_files_count(column_files.size())
     {}

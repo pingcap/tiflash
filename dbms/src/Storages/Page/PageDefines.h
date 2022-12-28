@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/RedactHelpers.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <fmt/format.h>
@@ -42,7 +43,6 @@ static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP shou
 
 // PageStorage V3 define
 static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 256 * MB;
-static constexpr UInt64 BLOBSTORE_CACHED_FD_SIZE = 100;
 static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
 static constexpr UInt64 MAX_PERSISTED_LOG_FILES = 4;
 
@@ -85,8 +85,63 @@ using BlobFileOffset = UInt64;
 static constexpr BlobFileId INVALID_BLOBFILE_ID = 0;
 static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
 
-using UniversalPageId = String;
+class UniversalPageId final
+{
+public:
+    UniversalPageId() = default;
+
+    UniversalPageId(String id_) // NOLINT(google-explicit-constructor)
+        : id(std::move(id_))
+    {}
+    UniversalPageId(const char * id_) // NOLINT(google-explicit-constructor)
+        : id(id_)
+    {}
+    UniversalPageId(const char * id_, size_t sz_)
+        : id(id_, sz_)
+    {}
+
+    UniversalPageId & operator=(String && id_) noexcept
+    {
+        id.swap(id_);
+        return *this;
+    }
+    bool operator==(const UniversalPageId & rhs) const noexcept
+    {
+        return id == rhs.id;
+    }
+    bool operator!=(const UniversalPageId & rhs) const noexcept
+    {
+        return id != rhs.id;
+    }
+    bool operator>=(const UniversalPageId & rhs) const noexcept
+    {
+        return id >= rhs.id;
+    }
+    size_t rfind(const String & str, size_t pos) const noexcept
+    {
+        return id.rfind(str, pos);
+    }
+
+    const char * data() const { return id.data(); }
+    size_t size() const { return id.size(); }
+    bool empty() const { return id.empty(); }
+    UniversalPageId substr(size_t pos, size_t npos) const { return id.substr(pos, npos); }
+    bool operator<(const UniversalPageId & rhs) const { return id < rhs.id; }
+
+    String toStr() const { return id; }
+    const String & asStr() const { return id; }
+
+    friend bool operator==(const String & lhs, const UniversalPageId & rhs);
+
+private:
+    String id;
+};
 using UniversalPageIds = std::vector<UniversalPageId>;
+
+inline bool operator==(const String & lhs, const UniversalPageId & rhs)
+{
+    return lhs == rhs.id;
+}
 
 template <class Pos>
 struct ByteBufferInternal
@@ -118,8 +173,8 @@ struct ByteBuffer : public ByteBufferInternal<char *>
 struct ConstByteBuffer : public ByteBufferInternal<const char *>
 {
     using ByteBufferInternal<const char *>::ByteBufferInternal;
-    
-    ConstByteBuffer(const ByteBuffer & buf)
+
+    explicit ConstByteBuffer(const ByteBuffer & buf)
         : ConstByteBuffer(buf.begin(), buf.end())
     {}
 };
@@ -169,5 +224,24 @@ struct fmt::formatter<DB::PageFileIdAndLevel>
     auto format(const DB::PageFileIdAndLevel & id_lvl, FormatContext & ctx) const -> decltype(ctx.out())
     {
         return format_to(ctx.out(), "{}_{}", id_lvl.first, id_lvl.second);
+    }
+};
+template <>
+struct fmt::formatter<DB::UniversalPageId>
+{
+    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}", Redact::keyToHexString(value.data(), value.size()));
     }
 };

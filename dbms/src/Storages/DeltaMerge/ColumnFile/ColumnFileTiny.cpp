@@ -117,7 +117,6 @@ void ColumnFileTiny::fillColumns(const IColumnFileSetStorageReaderPtr & storage_
 }
 
 ColumnFileReaderPtr ColumnFileTiny::getReader(
-    const DMContext & /*context*/,
     const IColumnFileSetStorageReaderPtr & reader,
     const ColumnDefinesPtr & col_defs) const
 {
@@ -151,45 +150,43 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::deserializeMetadata
     return {std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id), std::move(schema)};
 }
 
-RemoteProtocol::ColumnFile ColumnFileTiny::serializeToRemoteProtocol() const
+dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol() const
 {
     // FIXME: Different dt_compression_method between Read Node and Write Node will lead to surprising results.
 
-    auto ret = RemoteProtocol::ColumnFileTiny{
-        .schema = String(),
-        .page_id = data_page_id,
-        .rows = rows,
-        .bytes = bytes,
-    };
+    dtpb::ColumnFileRemote ret;
+    auto * remote_tiny = ret.mutable_tiny();
+    remote_tiny->set_page_id(data_page_id);
     {
-        auto wb = WriteBufferFromString(ret.schema);
+        auto wb = WriteBufferFromString(*remote_tiny->mutable_schema());
         serializeSchema(wb, schema);
     }
+    remote_tiny->set_rows(rows);
+    remote_tiny->set_bytes(bytes);
 
     return ret;
 }
 
 std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(
-    const RemoteProtocol::ColumnFileTiny & proto,
+    const dtpb::ColumnFileTiny & proto,
     const Remote::PageOID & oid,
-    const DMContext & context)
+    const Remote::LocalPageCachePtr & /*page_cache*/)
 {
-    RUNTIME_CHECK(oid.page_id == proto.page_id);
+    RUNTIME_CHECK(oid.page_id == proto.page_id());
 
-    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid.info(), proto.rows);
+    // LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid.info(), proto.rows());
 
-    auto page_cache = context.db_context.getDMRemoteManager()->getPageCache();
-    page_cache->ensurePagesReady({oid});
+    // page_cache->ensurePagesReady({oid});
 
     BlockPtr schema;
     {
-        auto read_buf = ReadBufferFromString(proto.schema);
+        auto read_buf = ReadBufferFromString(proto.schema());
         schema = deserializeSchema(read_buf);
     }
 
     // TODO: Currently building the Tiny does not rely on oid. oid is required when reading.
     //       This might not be a correct design.
-    return std::make_shared<ColumnFileTiny>(schema, proto.rows, proto.bytes, proto.page_id);
+    return std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
 }
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & reader) const
@@ -207,15 +204,7 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & reader) con
     else
     {
         const auto & schema_ref = *schema;
-
-        PageStorage::PageReadFields fields;
-        fields.first = data_page_id;
-        for (size_t i = 0; i < schema_ref.columns(); ++i)
-            fields.second.push_back(i);
-
-        auto page_map = reader.read({fields});
-        auto page = page_map[data_page_id];
-
+        auto page = reader.read(data_page_id);
         auto columns = schema_ref.cloneEmptyColumns();
 
         if (unlikely(columns.size() != page.fieldSize()))
@@ -243,7 +232,7 @@ ColumnTinyFilePtr ColumnFileTiny::writeColumnFile(DMContext & context, const Blo
 
 PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
-    auto page_id = context.storage_pool.newLogPageId();
+    auto page_id = context.storage_pool->newLogPageId();
 
     MemoryWriteBuffer write_buf;
     PageFieldSizes col_data_sizes;

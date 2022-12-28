@@ -14,14 +14,18 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageStorage.h>
 
 #include <boost/noncopyable.hpp>
 
 namespace DB
 {
 class Context;
+class ReadBuffer;
+using ReadBufferPtr = std::shared_ptr<ReadBuffer>;
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -38,10 +42,20 @@ class LocalPageCache : private boost::noncopyable
 public:
     explicit LocalPageCache(const Context & global_context_);
 
+#if 0
     /**
      * Blocks until all remote pages are available locally.
      */
     void ensurePagesReady(const std::vector<PageOID> & pages);
+#endif
+
+    std::vector<PageOID> getPendingIds(const std::vector<PageOID> & pages);
+
+    void write(
+        const PageOID & oid,
+        ReadBufferPtr && read_buffer,
+        PageSize size,
+        PageFieldSizes && field_sizes);
 
     Page getPage(const PageOID & oid, const PageStorage::FieldIndices & indices);
 

@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
@@ -30,6 +29,7 @@ public:
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
     void close();
+    int getExternalThreadCnt();
 
 private:
     /// two kinds of receiver in MPP

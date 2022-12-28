@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/Config.h>
 
 namespace DB
 {

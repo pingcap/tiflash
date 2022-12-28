@@ -13,12 +13,16 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/DisaggreatedTaskHandler.h>
+#include <Flash/Disaggregated/PageTunnel.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -28,9 +32,12 @@
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
+#include <kvproto/mpp.pb.h>
 
 #include <ext/scope_guard.h>
 
@@ -62,9 +69,8 @@ constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService() = default;
 
-void FlashService::init(const TiFlashSecurityConfig & security_config_, Context & context_)
+void FlashService::init(Context & context_)
 {
-    security_config = &security_config_;
     context = &context_;
     log = &Poco::Logger::get("FlashService");
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
@@ -74,7 +80,7 @@ void FlashService::init(const TiFlashSecurityConfig & security_config_, Context 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
-    const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
+    const size_t default_size = getNumberOfLogicalCPUCores();
 
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
@@ -130,14 +136,38 @@ grpc::Status FlashService::Coprocessor(
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
-        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_cop).Increment(response->ByteSizeLong());
         if (is_remote_read)
             GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Decrement();
     });
 
     context->setMockStorage(mock_storage);
 
+    const auto & settings = context->getSettingsRef();
+    auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+    auto max_queued_duration_seconds = std::min(settings.cop_pool_max_queued_seconds, 20);
+
+    if (handle_limit > 0)
+    {
+        // We use this atomic variable metrics from the prometheus-cpp library to mark the number of queued queries.
+        // TODO: Use grpc asynchronous server and a more fully-featured thread pool.
+        if (auto current = GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Value(); current > handle_limit)
+        {
+            response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("tiflash cop pool queued too much, current = {}, limit = {}", current, handle_limit));
+            return grpc::Status::OK;
+        }
+    }
+
+
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
+        if (max_queued_duration_seconds > 0)
+        {
+            if (auto current = watch.elapsedSeconds(); current > max_queued_duration_seconds)
+            {
+                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {}, limit = {}", current, max_queued_duration_seconds));
+                return grpc::Status::OK;
+            }
+        }
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -217,7 +247,7 @@ grpc::Status FlashService::DispatchMPPTask(
         GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
-        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_dispatch_mpp_task).Increment(response->ByteSizeLong());
     });
 
     auto [db_context, status] = createDBContext(grpc_context);
@@ -336,12 +366,12 @@ grpc::Status FlashService::CancelMPPTask(
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
-        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_cancel_mpp_task).Increment(response->ByteSizeLong());
     });
 
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -383,7 +413,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -392,7 +422,7 @@ grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_con
     // For coprocessor/mpp test, we don't care about security config.
     if likely (!context->isMPPTest() && !context->isCopTest())
     {
-        if (!security_config->checkGrpcContext(grpc_context))
+        if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
         {
             return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
         }
@@ -464,6 +494,88 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
         return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
+}
+grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling disaggregated establish request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+    // TODO metrics
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
+
+    DisaggregatedTaskHandler handler(request, response);
+    grpc::Status ret = handler.execute(db_context);
+    LOG_DEBUG(log, "Handle disaggregated establish request done: {}, {}", ret.error_code(), ret.error_message());
+    return grpc::Status::OK;
+}
+
+grpc::Status FlashService::FetchDisaggregatedPages(
+    grpc::ServerContext * grpc_context,
+    const mpp::FetchDisaggregatedPagesRequest * request,
+    grpc::ServerWriter<::mpp::PagesPacket> * sync_writer)
+{
+    LOG_DEBUG(log, "Handling fetch pages request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+
+    mpp::PagesPacket err_response;
+    auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
+        *err_response.mutable_error()->mutable_msg() = err_msg;
+        sync_writer->Write(err_response);
+
+        return grpc::Status(err_code, err_msg);
+    };
+
+    const DM::DisaggregatedTaskId task_id(request->meta());
+    LOG_DEBUG(log, "Fetching pages, task_id={}", task_id);
+    try
+    {
+        PageIds read_ids;
+        read_ids.reserve(request->pages_size());
+        for (auto page_id : request->pages())
+            read_ids.emplace_back(page_id);
+
+        auto tunnel = PageTunnel::build(
+            *context,
+            task_id,
+            request->table_id(),
+            request->segment_id(),
+            read_ids);
+
+        tunnel->connect(sync_writer);
+
+        return grpc::Status::OK;
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return record_error(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return record_error(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return record_error(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return record_error(grpc::StatusCode::INTERNAL, "other exception");
+    }
 }
 
 void FlashService::setMockStorage(MockStorage & mock_storage_)

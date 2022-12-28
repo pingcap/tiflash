@@ -44,6 +44,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),
+        context.scan_context,
         /*tracing_id*/ context.tracing_id);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
@@ -75,8 +76,8 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id = context.storage_pool.dataReader()->getNormalPageId(file_page_id);
-    auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
+    auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
+    auto file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
@@ -85,18 +86,17 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
 }
 
 std::shared_ptr<ColumnFileBig> ColumnFileBig::deserializeFromRemoteProtocol(
-    const RemoteProtocol::ColumnFileBig & proto,
+    const dtpb::ColumnFileBig & proto,
     const Remote::DMFileOID & oid,
-    const DMContext & context, // MinMaxIndex, ReadLimiter, DMRemoteManager is used.
+    const Remote::IDataStorePtr & data_store,
     const RowKeyRange & segment_range)
 {
-    RUNTIME_CHECK(proto.file_id == oid.file_id);
+    RUNTIME_CHECK(proto.file_id() == oid.file_id);
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, dmf_oid={}", oid.info());
 
-    auto data_store = context.db_context.getDMRemoteManager()->getDataStore();
     auto prepared = data_store->prepareDMFile(oid);
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-    return std::make_shared<ColumnFileBig>(context, dmfile, segment_range);
+    return std::make_shared<ColumnFileBig>(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
 }
 
 void ColumnFileBigReader::initStream()
@@ -107,7 +107,7 @@ void ColumnFileBigReader::initStream()
     DMFileBlockInputStreamBuilder builder(context.db_context);
     file_stream = builder
                       .setTracingID(context.tracing_id)
-                      .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
+                      .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range}, context.scan_context);
 
     header = file_stream->getHeader();
     // If we only need to read pk and version columns, then cache columns data in memory.

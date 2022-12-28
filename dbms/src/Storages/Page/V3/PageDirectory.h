@@ -159,6 +159,8 @@ public:
         , being_ref_count(1)
     {}
 
+    bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
+
     [[nodiscard]] PageLock acquireLock() const
     {
         return std::lock_guard(m);

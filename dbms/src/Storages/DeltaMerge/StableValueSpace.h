@@ -20,7 +20,6 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 #include <Storages/Page/V3/PageDirectory.h>
@@ -66,9 +65,9 @@ public:
     }
 
     // Set DMFiles for this value space.
-    // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
+    // If this value space is logical split, specify `range` and `db_context` so that we can get more precise
     // bytes and rows.
-    void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
+    void setFiles(const DMFiles & files_, const RowKeyRange & range, const Context & db_context);
 
     PageId getId() const { return id; }
     void saveMeta(WriteBatch & meta_wb);
@@ -248,8 +247,6 @@ public:
     };
 
     SnapshotPtr createSnapshot();
-
-    SnapshotPtr createSnapshotFromRemote(const DMContext & context, const RowKeyRange & seg_range);
 
     void drop(const FileProviderPtr & file_provider);
 

@@ -23,6 +23,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -757,6 +758,40 @@ try
         ASSERT_GT(page_maps.count(5), 0);
         ASSERT_EQ(page_maps[5].isValid(), false);
     }
+    {
+        // Read with id can also fetch the fieldOffsets
+        auto page_4 = page_storage->readImpl(TEST_NAMESPACE_ID, 4, nullptr, nullptr, false);
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+        auto page_field_sizes = PageUtil::getFieldSizes(page_4.field_offsets, page_4.data.size());
+        ASSERT_EQ(page_field_sizes.size(), 4);
+        ASSERT_EQ(page_field_sizes[0], 20);
+        ASSERT_EQ(page_field_sizes[1], 20);
+        ASSERT_EQ(page_field_sizes[2], 30);
+        ASSERT_EQ(page_field_sizes[3], 30);
+    }
+    {
+        // Read with ids can also fetch the fieldOffsets
+        PageIds page_ids{4};
+        auto pages = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
+        ASSERT_EQ(pages.size(), 1);
+        ASSERT_GT(pages.count(4), 0);
+        auto page_4 = pages[4];
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+        auto page_field_sizes = PageUtil::getFieldSizes(page_4.field_offsets, page_4.data.size());
+        ASSERT_EQ(page_field_sizes.size(), 4);
+        ASSERT_EQ(page_field_sizes[0], 20);
+        ASSERT_EQ(page_field_sizes[1], 20);
+        ASSERT_EQ(page_field_sizes[2], 30);
+        ASSERT_EQ(page_field_sizes[3], 30);
+    }
 }
 CATCH
 
@@ -1370,6 +1405,57 @@ TEST_F(PageStorageWith2PagesTest, PutCollapseDuplicatedRefPages)
         PageEntry entry_after_del3 = page_storage->getEntry(3);
         ASSERT_FALSE(entry_after_del3.isValid());
     }
+}
+
+TEST_F(PageStorageWith2PagesTest, RemoveReadOnlyFile)
+{
+    PageStorageConfig cfg;
+    cfg.blob_heavy_gc_valid_rate = 1.0;
+    page_storage = reopenWithConfig(cfg);
+
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+
+    // full gc happens, rewrite page from blobfile_1 to blobfile_2
+    bool flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(flag, true);
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), true);
+
+    // cleanup blobfile_1
+    flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(blob_file1.exists(), false);
+    ASSERT_EQ(blob_file2.exists(), true);
+    EXPECT_EQ(flag, true);
+}
+
+TEST_F(PageStorageWith2PagesTest, ReuseEmptyFileAfterRestart)
+{
+    {
+        // delete the pages, the blobfile become "empty"
+        WriteBatch wb;
+        wb.delPage(1);
+        wb.delPage(2);
+        page_storage->write(std::move(wb));
+    }
+
+    PageStorageConfig cfg;
+    cfg.blob_heavy_gc_valid_rate = 1.0;
+    page_storage = reopenWithConfig(cfg);
+
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+
+    // the "empty" blobfile_1 will be reused for later writing,
+    // no full gc happens.
+    bool flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(flag, false);
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
 }
 
 TEST_F(PageStorageWith2PagesTest, DISABLED_AddRefPageToNonExistPage)

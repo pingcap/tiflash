@@ -9,7 +9,7 @@ std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> CheckpointPageMa
     for (const auto & record: edit.getRecords())
     {
         // FIXME: early stop by the order nature of record or use binary search
-        if (startsWith(record.page_id, prefix))
+        if (startsWith(record.page_id.toStr(), prefix))
         {
             const auto & location = record.entry.remote_info->data_location;
             auto buf = std::make_shared<ReadBufferFromFile>(checkpoint_dir + *location.data_file_id);

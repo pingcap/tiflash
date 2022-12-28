@@ -70,19 +70,21 @@ private:
 public:
     inline bool isValid() const { return is_valid; }
 
-    ByteBuffer getFieldData(size_t index) const
+    ConstByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
-        if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [field_index={}] is_valid={} field_offsets.size()={}", index, is_valid, field_offsets.size()),
-                            ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(iter != field_offsets.end(),
+                          "Try to getFieldData with invalid field index, page.is_valid={} field_offsets.size()={} field_index={}",
+                          is_valid,
+                          field_offsets.size(),
+                          index);
 
         PageFieldOffset beg = iter->offset;
         ++iter;
         PageFieldOffset end = (iter == field_offsets.end() ? data.size() : iter->offset);
         assert(beg <= data.size());
         assert(end <= data.size());
-        return ByteBuffer(data.begin() + beg, data.begin() + end);
+        return ConstByteBuffer(data.begin() + beg, data.begin() + end);
     }
 
     inline static PageFieldSizes fieldOffsetsToSizes(const PageFieldOffsetChecksums & field_offsets, size_t data_size)

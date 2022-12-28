@@ -20,7 +20,6 @@ namespace DB
 namespace DM
 {
 ColumnFileReaderPtr ColumnFileDeleteRange::getReader(
-    const DMContext &,
     const IColumnFileSetStorageReaderPtr &,
     const ColumnDefinesPtr &) const
 {

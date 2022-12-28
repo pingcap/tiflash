@@ -40,12 +40,13 @@ public:
         , block_offset(offset_)
     {}
     explicit BlockOrDelete(const RowKeyRange & delete_range_)
-        : delete_range(delete_range_)
+        : block_offset(0)
+        , delete_range(delete_range_)
     {}
 
-    bool isBlock() { return (bool)block; }
+    bool isBlock() { return static_cast<bool>(block); }
     auto & getBlock() { return block; };
-    auto getBlockOffset() { return block_offset; }
+    auto getBlockOffset() const { return block_offset; }
     auto & getDeleteRange() { return delete_range; }
 };
 
@@ -100,21 +101,20 @@ public:
 
     const auto & getStorage() const { return storage; }
 
-    std::vector<RemoteProtocol::ColumnFile> serializeToRemoteProtocol() const
+    google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> serializeToRemoteProtocol() const
     {
-        std::vector<RemoteProtocol::ColumnFile> ret;
-        ret.reserve(column_files.size());
-
+        google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> ret;
+        ret.Reserve(column_files.size());
         for (const auto & file : column_files)
-            ret.push_back(file->serializeToRemoteProtocol());
-
+            ret.Add(file->serializeToRemoteProtocol());
         return ret;
     }
 
     static ColumnFileSetSnapshotPtr deserializeFromRemoteProtocol(
-        const std::vector<RemoteProtocol::ColumnFile> & proto,
+        const google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> & proto,
+        const Remote::ManagerPtr & remote_manager,
         UInt64 remote_write_node_id,
-        const DMContext & context,
+        Int64 table_id,
         const RowKeyRange & segment_range);
 };
 

@@ -17,6 +17,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
@@ -65,7 +66,7 @@ class DeltaValueSpace
     , private boost::noncopyable
 {
 public:
-    using Lock = std::unique_lock<std::mutex>;
+    using Lock = std::unique_lock<std::recursive_mutex>;
 
 private:
     /// column files in `persisted_file_set` are all persisted in disks and can be restored after restart.
@@ -99,7 +100,8 @@ private:
     DeltaIndexPtr delta_index;
 
     // Protects the operations in this instance.
-    mutable std::mutex mutex;
+    // It is a recursive_mutex because the lock may be also used by the parent segment as its update lock.
+    mutable std::recursive_mutex mutex;
 
     LoggerPtr log;
 
@@ -358,11 +360,14 @@ public:
 
     static DeltaSnapshotPtr createSnapshotForRead(CurrentMetrics::Metric type)
     {
+        // read snapshot do nothing with the DeltaVS
         return std::make_shared<DeltaValueSnapshot>(type, /* is_update */ false, nullptr);
     }
 
     static DeltaSnapshotPtr createSnapshotForUpdate(CurrentMetrics::Metric type, DeltaValueSpacePtr delta)
     {
+        // after update snapshot is released, it will change the DeltaVS updating flag
+        assert(delta != nullptr);
         return std::make_shared<DeltaValueSnapshot>(type, /* is_update */ true, delta);
     }
 
@@ -379,7 +384,7 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getSharedDeltaIndex() { return shared_delta_index; }
+    const auto & getSharedDeltaIndex() const { return shared_delta_index; }
 
     bool isForUpdate() const { return is_update; }
 };
@@ -468,6 +473,27 @@ public:
             persisted_files_done = true;
             return mem_table_input_stream.read();
         }
+    }
+};
+
+class DeltaMemTableInputStream : public IBlockInputStream
+{
+private:
+    ColumnFileSetInputStream mem_table_input_stream;
+
+public:
+    DeltaMemTableInputStream(const DeltaSnapshotPtr & delta_snap_,
+                             const ColumnDefinesPtr & col_defs_,
+                             const RowKeyRange & segment_range_)
+        : mem_table_input_stream(delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
+    {}
+
+    String getName() const override { return "DeltaValue"; }
+    Block getHeader() const override { return mem_table_input_stream.getHeader(); }
+
+    Block read() override
+    {
+        return mem_table_input_stream.read();
     }
 };
 

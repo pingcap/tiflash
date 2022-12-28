@@ -338,7 +338,7 @@ CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_
         }
         else
         {
-            auto * s = RawCppString::New(page_ids[0]);
+            auto * s = RawCppString::New(page_ids[0].asStr());
             return CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}};
         }
     }

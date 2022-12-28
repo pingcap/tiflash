@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AstToPB.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Interpreters/Context.h>
 
 namespace DB::mock
 {
@@ -41,6 +46,9 @@ bool ExchangeSenderBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
+        meta.set_query_ts(mpp_info.query_ts);
+        meta.set_server_id(mpp_info.server_id);
+        meta.set_local_query_id(mpp_info.local_query_id);
         meta.set_task_id(task_id);
         meta.set_partition_id(i);
         auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[i++].addr : Debug::LOCAL_HOST;

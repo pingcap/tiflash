@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/Remote/Proto/common.pb.h>
 #include <common/types.h>
 
@@ -35,9 +36,9 @@ PageId toRemote(const PageIdType & id)
         remote_id.mutable_u128()->set_low(id.low);
         remote_id.mutable_u128()->set_high(id.high);
     }
-    else if constexpr (std::is_same_v<DB::String, PageIdType>)
+    else if constexpr (std::is_same_v<DB::UniversalPageId, PageIdType>)
     {
-        remote_id.set_str(id);
+        remote_id.set_str(id.asStr());
     }
     else
     {
@@ -55,7 +56,7 @@ PageIdType fromRemote(const PageId & remote_id)
         id.low = remote_id.u128().low();
         id.high = remote_id.u128().high();
     }
-    else if constexpr (std::is_same_v<DB::String, PageIdType>)
+    else if constexpr (std::is_same_v<DB::UniversalPageId, PageIdType>)
     {
         id = remote_id.str();
     }

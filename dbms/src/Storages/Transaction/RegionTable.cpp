@@ -512,6 +512,17 @@ bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 
     return (*leader_safe_ts > *self_safe_ts) && (*leader_safe_ts - *self_safe_ts > SafeTsDiffThreshold);
 }
 
+UInt64 RegionTable::getSelfSafeTS(UInt64 region_id)
+{
+    std::shared_lock lock(rw_lock);
+    auto it = safe_ts_map.find(region_id);
+    if (it == safe_ts_map.end())
+    {
+        return 0;
+    }
+    return it->second->self_safe_ts.load(std::memory_order_relaxed);
+}
+
 void RegionTable::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts)
 {
     {

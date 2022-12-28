@@ -220,7 +220,7 @@ typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(c
         delete_ver = PageVersion(0);
         being_ref_count = 1;
         // return the new created holder to caller to set the page_id
-        external_holder = std::make_shared<typename Trait::PageId>(0, 0);
+        external_holder = std::make_shared<typename Trait::PageId>();
         return external_holder;
     }
 
@@ -236,7 +236,7 @@ typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(c
                 delete_ver = PageVersion(0);
                 being_ref_count = 1;
                 // return the new created holder to caller to set the page_id
-                external_holder = std::make_shared<typename Trait::PageId>(0, 0);
+                external_holder = std::make_shared<typename Trait::PageId>();
                 return external_holder;
             }
             else
@@ -1314,7 +1314,7 @@ typename universal::PageDirectoryTrait::PageIdSet PageDirectory<universal::PageD
          iter != mvcc_table_directory.end();
          ++iter)
     {
-        if (iter->first.rfind(prefix, 0) != 0)
+        if (iter->first.rfind(prefix.asStr(), 0) != 0)
             break;
         page_ids.insert(iter->first);
     }
@@ -1651,9 +1651,13 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
             RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
         }
         const auto & version_entries = page_iter->second;
+        // After storing all data in one PageStorage instance, we will run full gc
+        // with external pages. Skip rewriting if it is an external pages.
+        if (version_entries->isExternalPage())
+            continue;
         // the latest entry with version.seq <= ref_id.create_ver.seq
         auto entry = version_entries->getLastEntry(ver.sequence);
-        RUNTIME_CHECK(entry.has_value(), ref_id, ori_id, ver);
+        RUNTIME_CHECK_MSG(entry.has_value(), "ref_id={} ori_id={} ver={} entries={}", ref_id, ori_id, ver, version_entries->toDebugString());
         // If the being-ref entry lays on the full gc candidate blobfiles, then we
         // need to rewrite the ref-id to a normal page.
         if (blob_id_set.count(entry->file_id) > 0)

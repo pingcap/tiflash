@@ -168,8 +168,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
     auto dt_file = dt_stream->getFile();
     assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
     // Add the DTFile to StoragePathPool so that we can restore it later
-    const auto bytes_written = dt_file->getBytesOnDisk();
-    storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
+    storage->getStore()->preIngestFile(context, dt_file);
     dt_stream.reset();
 
     LOG_INFO(
@@ -180,7 +179,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
         committed_rows_this_dt_file,
         committed_bytes_this_dt_file,
         ingest_files_range.back().has_value() ? ingest_files_range.back()->toDebugString() : "(null)",
-        bytes_written,
+        dt_file->getBytesOnDisk(),
         dt_file->path());
 
     return true;

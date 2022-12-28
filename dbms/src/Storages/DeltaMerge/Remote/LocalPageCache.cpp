@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/ReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Remote/LocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -32,6 +36,7 @@ LocalPageCache::LocalPageCache(const Context & global_context_)
     RUNTIME_CHECK(cache_storage != nullptr);
 }
 
+#if 0
 void LocalPageCache::ensurePagesReady(const std::vector<PageOID> & pages)
 {
     auto snapshot = cache_storage->getSnapshot("LocalPageCache.ensurePages");
@@ -63,11 +68,40 @@ void LocalPageCache::ensurePagesReady(const std::vector<PageOID> & pages)
         cache_storage->write(std::move(cache_wb));
     }
 }
+#endif
+
+std::vector<PageOID> LocalPageCache::getPendingIds(const std::vector<PageOID> & pages)
+{
+    UNUSED(global_context);
+    std::vector<PageOID> pending_ids;
+    auto snapshot = cache_storage->getSnapshot("LocalPageCache.getPendingIds");
+    for (const auto & page : pages)
+    {
+        auto cache_id = buildCacheId(page);
+        if (const auto & page_entry = cache_storage->getEntry(cache_id, snapshot); page_entry.isValid())
+            continue;
+
+        pending_ids.push_back(page);
+    }
+    return pending_ids;
+}
+
+void LocalPageCache::write(
+    const PageOID & oid,
+    ReadBufferPtr && read_buffer,
+    PageSize size,
+    PageFieldSizes && field_sizes)
+{
+    UniversalWriteBatch cache_wb;
+    auto cache_id = buildCacheId(oid);
+    cache_wb.putPage(cache_id, 0, read_buffer, size, field_sizes);
+    cache_storage->write(std::move(cache_wb));
+}
 
 Page LocalPageCache::getPage(const PageOID & oid, const PageStorage::FieldIndices & indices)
 {
     // TODO
-    auto snapshot = cache_storage->getSnapshot("LocalPageCache.ensurePages");
+    auto snapshot = cache_storage->getSnapshot("LocalPageCache.getPage");
 
     auto cache_id = buildCacheId(oid);
     auto page_map = cache_storage->read({{cache_id, indices}}, /* read_limiter */ nullptr, snapshot);

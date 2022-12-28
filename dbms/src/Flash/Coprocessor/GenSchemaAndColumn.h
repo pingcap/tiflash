@@ -23,7 +23,21 @@
 
 namespace DB
 {
+NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_scan);
+NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan);
+String genNameForExchangeReceiver(Int32 col_index);
+
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
+
+namespace DM
+{
+struct ColumnDefine;
+using ColumnDefinesPtr = std::shared_ptr<std::vector<ColumnDefine>>;
+} // namespace DM
+
+// The column defines and `extra table id index`
+std::tuple<DM::ColumnDefinesPtr, size_t>
+genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
 } // namespace DB

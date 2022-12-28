@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
 #include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -81,15 +82,22 @@ public:
 
     const Context & getContext() const;
 
-    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
+    explicit TMTContext(Context & context_,
+                        const TiFlashRaftConfig & raft_config,
+                        const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
+
+    void updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config);
 
     pingcap::pd::ClientPtr getPDClient() const;
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
     MPPTaskManagerPtr getMPPTaskManager();
+
+    // Return a raw ptr to avoid being cycle reference
+    DM::DisaggregatedSnapshotManager * getDisaggregatedSnapshotManager() const;
 
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
@@ -134,6 +142,7 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
     MPPTaskManagerPtr mpp_task_manager;
+    DM::DisaggregatedSnapshotManagerPtr snapshot_manager;
 
     ::TiDB::StorageEngine engine;
 

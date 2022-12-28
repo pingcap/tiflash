@@ -43,17 +43,17 @@ Int32 MyDuration::hours() const
 
 Int32 MyDuration::minutes() const
 {
-    return std::abs(nanos) / NANOS_PER_MINUTE % 60;
+    return (std::abs(nanos) / NANOS_PER_MINUTE) % 60;
 }
 
 Int32 MyDuration::seconds() const
 {
-    return std::abs(nanos) / NANOS_PER_SECOND % 60;
+    return (std::abs(nanos) / NANOS_PER_SECOND) % 60;
 }
 
 Int32 MyDuration::microSecond() const
 {
-    return std::abs(nanos) / NANOS_PER_MICRO % 1000000;
+    return (std::abs(nanos) / NANOS_PER_MICRO) % 1000000;
 }
 
 String MyDuration::toString() const

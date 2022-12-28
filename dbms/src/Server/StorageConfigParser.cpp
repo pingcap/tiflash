@@ -197,12 +197,23 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
         LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
     }
 
-    if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
+#ifndef NDEBUG
+    if (table->contains_qualified("format_version"))
     {
-        format_version = *version;
+#endif
+        if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
+        {
+            format_version = *version;
+        }
+#ifndef NDEBUG
     }
+#endif
 
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
+#ifndef NDEBUG
+        if (!table->contains_qualified(name))
+            return default_value;
+#endif
         if (auto value = table->get_qualified_as<Int32>(name); value)
         {
             return (*value != 0);

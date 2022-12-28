@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 
 namespace DB
@@ -100,6 +101,13 @@ public:
     ColumnFileReaderPtr getReader(
         const DMContext &,
         const IColumnFileSetStorageReaderPtr & reader,
+        const ColumnDefinesPtr & col_defs) const override
+    {
+        return getReader(reader, col_defs);
+    }
+
+    ColumnFileReaderPtr getReader(
+        const IColumnFileSetStorageReaderPtr & reader,
         const ColumnDefinesPtr & col_defs) const override;
 
     void removeData(WriteBatches & wbs) const override
@@ -109,12 +117,12 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    RemoteProtocol::ColumnFile serializeToRemoteProtocol() const override;
+    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override;
 
     static std::shared_ptr<ColumnFileTiny> deserializeFromRemoteProtocol(
-        const RemoteProtocol::ColumnFileTiny & proto,
+        const dtpb::ColumnFileTiny & proto,
         const Remote::PageOID & oid,
-        const DMContext & context);
+        const Remote::LocalPageCachePtr & page_cache);
 
     PageId getDataPageId() const { return data_page_id; }
 

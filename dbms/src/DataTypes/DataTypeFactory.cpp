@@ -40,22 +40,56 @@ DataTypePtr DataTypeFactory::get(const String & full_name) const
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
     return get(ast);
 }
+// DataTypeFactory is a Singleton, so need to be protected by lock.
+DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
+{
+    {
+        std::shared_lock lock(rw_lock);
+        auto it = fullname_types.find(full_name);
+        if (it != fullname_types.end())
+        {
+            return it->second;
+        }
+    }
+    ParserIdentifierWithOptionalParameters parser;
+    ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
+    DataTypePtr datatype_ptr = get(ast);
+    // avoid big hashmap in rare cases.
+    std::unique_lock lock(rw_lock);
+    if (fullname_types.size() < MAX_FULLNAME_TYPES)
+    {
+        // DataTypeEnum may generate too many full_name, so just skip inserting DataTypeEnum into fullname_types when
+        // the capacity limit is almost reached, which ensures that most datatypes can be cached.
+        if (fullname_types.size() > FULLNAME_TYPES_HIGH_WATER_MARK && (datatype_ptr->getTypeId() == TypeIndex::Enum8 || datatype_ptr->getTypeId() == TypeIndex::Enum16))
+        {
+            return datatype_ptr;
+        }
+        fullname_types.emplace(full_name, datatype_ptr);
+    }
+    return datatype_ptr;
+}
+
+size_t DataTypeFactory::getFullNameCacheSize() const
+{
+    std::shared_lock lock(rw_lock);
+    return fullname_types.size();
+}
 
 DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
 {
-    if (const ASTFunction * func = typeid_cast<const ASTFunction *>(ast.get()))
+    if (const auto * func = typeid_cast<const ASTFunction *>(ast.get()))
     {
         if (func->parameters)
             throw Exception("Data type cannot have multiple parenthesed parameters.", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
         return get(func->name, func->arguments);
     }
 
-    if (const ASTIdentifier * ident = typeid_cast<const ASTIdentifier *>(ast.get()))
+    if (const auto * ident = typeid_cast<const ASTIdentifier *>(ast.get()))
     {
         return get(ident->name, {});
     }
 
-    if (const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(ast.get()))
+    if (const auto * lit = typeid_cast<const ASTLiteral *>(ast.get()))
     {
         if (lit->value.isNull())
             return get("Null", {});
@@ -67,14 +101,14 @@ DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
 DataTypePtr DataTypeFactory::get(const String & family_name, const ASTPtr & parameters) const
 {
     {
-        DataTypesDictionary::const_iterator it = data_types.find(family_name);
+        auto it = data_types.find(family_name);
         if (data_types.end() != it)
             return it->second(parameters);
     }
 
     {
         String family_name_lowercase = Poco::toLower(family_name);
-        DataTypesDictionary::const_iterator it = case_insensitive_data_types.find(family_name_lowercase);
+        auto it = case_insensitive_data_types.find(family_name_lowercase);
         if (case_insensitive_data_types.end() != it)
             return it->second(parameters);
     }

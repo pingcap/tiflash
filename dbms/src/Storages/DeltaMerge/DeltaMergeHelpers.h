@@ -205,6 +205,18 @@ inline Block getNewBlockByHeader(const Block & header, const Block & block)
     return new_block;
 }
 
+inline Block getNewBlockByHeaderId(const Block & header, const std::unordered_map<ColumnID, size_t> & offsets, const Block & block)
+{
+    Block new_block;
+    for (const auto & c : header)
+    {
+        auto ori_c = block.getByPosition(offsets.at(c.column_id));
+        ori_c.name = c.name;
+        new_block.insert(std::move(ori_c));
+    }
+    return new_block;
+}
+
 inline ColumnDefines getColumnDefinesFromBlock(const Block & block)
 {
     ColumnDefines columns;

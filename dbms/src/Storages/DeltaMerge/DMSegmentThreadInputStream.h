@@ -16,6 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/SegmentReadTransformAction.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -49,7 +50,7 @@ public:
         size_t expected_block_size_,
         ReadMode read_mode_,
         const int extra_table_id_index,
-        const TableID physical_table_id_,
+        const TableID physical_table_id,
         const String & req_id)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
@@ -60,8 +61,7 @@ public:
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
         , read_mode(read_mode_)
-        , extra_table_id_index(extra_table_id_index)
-        , physical_table_id(physical_table_id_)
+        , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(req_id))
     {
         if (extra_table_id_index != InvalidColumnID)
@@ -110,21 +110,13 @@ protected:
 
             if (res)
             {
-                if (extra_table_id_index != InvalidColumnID)
+                if (action.transform(res))
                 {
-                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
-                    ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
-                    size_t row_number = res.rows();
-                    auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
-                    col.column = std::move(col_data);
-                    res.insert(extra_table_id_index, std::move(col));
+                    return res;
                 }
-                if (!res.rows())
-                    continue;
                 else
                 {
-                    total_rows += res.rows();
-                    return res;
+                    continue;
                 }
             }
             else
@@ -139,7 +131,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "finish read {} rows from storage", total_rows);
+        LOG_DEBUG(log, "finish read {} rows from storage", action.totalRows());
     }
 
 private:
@@ -152,18 +144,15 @@ private:
     const UInt64 max_version;
     const size_t expected_block_size;
     const ReadMode read_mode;
-    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
-    const int extra_table_id_index;
-    const TableID physical_table_id;
 
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
 
     SegmentPtr cur_segment;
+    SegmentReadTransformAction action;
 
     LoggerPtr log;
-    size_t total_rows = 0;
 };
 
 } // namespace DM

@@ -33,6 +33,11 @@
 
 namespace DB
 {
+namespace DM
+{
+class DisaggregatedTableReadSnapshot;
+using DisaggregatedTableReadSnapshotPtr = std::unique_ptr<DisaggregatedTableReadSnapshot>;
+} // namespace DM
 class TMTContext;
 using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
@@ -70,7 +75,8 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
-    void buildLocalStreamsForPhysicalTable(
+    DM::DisaggregatedTableReadSnapshotPtr
+    buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
@@ -91,16 +97,10 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    std::vector<pingcap::coprocessor::copTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
+    std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
-
-    // before_where, filter_column_name, after_where
-    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter();
-    void executePushedDownFilter(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
 
@@ -118,12 +118,12 @@ private:
     Context & context;
     const TiDBTableScan & table_scan;
     const PushDownFilter & push_down_filter;
-    size_t max_streams;
+    const size_t max_streams;
     LoggerPtr log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
-    TableID logical_table_id;
+    const TableID logical_table_id;
     const Settings & settings;
     TMTContext & tmt;
 

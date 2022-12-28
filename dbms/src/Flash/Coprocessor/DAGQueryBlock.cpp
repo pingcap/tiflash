@@ -17,6 +17,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
@@ -51,6 +52,8 @@ const static String HAVING_NAME("having");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
 const static String EXCHANGE_SENDER_NAME("exchange_sender");
+
+const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
 
 static void assignOrThrowException(const tipb::Executor ** to, const tipb::Executor * from, const String & name)
 {
@@ -93,8 +96,9 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             }
             current = &current->selection().child();
             break;
-        case tipb::ExecType::TypeAggregation:
         case tipb::ExecType::TypeStreamAgg:
+            RUNTIME_CHECK_MSG(current->aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
+        case tipb::ExecType::TypeAggregation:
             GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
             assignOrThrowException(&aggregation, current, AGG_NAME);
             aggregation_name = current->executor_id();
@@ -199,6 +203,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 selection_name = std::to_string(i) + "_selection";
             break;
         case tipb::ExecType::TypeStreamAgg:
+            RUNTIME_CHECK_MSG(executors[i].aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
         case tipb::ExecType::TypeAggregation:
             GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
             assignOrThrowException(&aggregation, &executors[i], AGG_NAME);

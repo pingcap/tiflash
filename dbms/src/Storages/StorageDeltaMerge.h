@@ -19,6 +19,9 @@
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -28,12 +31,14 @@
 
 namespace DB
 {
+struct SelectQueryInfo;
 namespace DM
 {
 struct RowKeyRange;
 struct RowKeyValue;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+using RowKeyRanges = std::vector<RowKeyRange>;
 struct ExternalDTFileInfo;
 struct GCOptions;
 } // namespace DM
@@ -62,6 +67,13 @@ public:
         QueryProcessingStage::Enum & processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
+
+    DM::DisaggregatedTableReadSnapshotPtr
+    buildRemoteReadSnapshot(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        unsigned num_streams);
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
@@ -205,6 +217,17 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
+    /// Get Rough set filter from query
+    DM::RSOperatorPtr parseRoughSetFilter(const SelectQueryInfo & query_info,
+                                          const DM::ColumnDefines & columns_to_read,
+                                          const Context & context,
+                                          const LoggerPtr & tracing_logger);
+
+    DM::RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
+                                        unsigned num_streams,
+                                        const Context & context,
+                                        const String & req_id,
+                                        const LoggerPtr & tracing_logger);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
