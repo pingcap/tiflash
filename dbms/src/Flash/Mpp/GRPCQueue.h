@@ -47,8 +47,8 @@ class GRPCQueue
 {
 public:
     GRPCQueue(grpc_call * call, const LoggerPtr & log_)
-    : log(log_)
-    , kick_tag([this]() { return kickTagAction(); })
+        : log(log_)
+        , kick_tag([this]() { return kickTagAction(); })
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
@@ -61,9 +61,10 @@ public:
 
     // For gtest usage.
     explicit GRPCQueue(GRPCKickFunc func)
-    : log(Logger::get())
-    , kick_func(func)
-    , kick_tag([this]() { return kickTagAction(); }) {}
+        : log(Logger::get())
+        , kick_func(func)
+        , kick_tag([this]() { return kickTagAction(); })
+    {}
 
 protected:
     void * kickTagAction()

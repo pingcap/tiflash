@@ -18,8 +18,8 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/grpcpp.h>
-#include <common/logger_useful.h>
 #include <Flash/Mpp/GRPCQueue.h>
+#include <common/logger_useful.h>
 
 #include <functional>
 #include <magic_enum.hpp>

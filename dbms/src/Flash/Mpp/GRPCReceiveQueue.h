@@ -18,8 +18,8 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/grpcpp.h>
-#include <common/logger_useful.h>
 #include <Flash/Mpp/GRPCQueue.h>
+#include <common/logger_useful.h>
 
 #include <functional>
 #include <magic_enum.hpp>
@@ -36,19 +36,24 @@ enum class GRPCReceiveQueueRes
     CANCELLED,
 };
 
+// When MPMCQueue is full, thread that pushes data into MPMCQueue will be blocked which
+// is unexpected when that's a grpc thread. Because tiflash's grpc threads responsible for
+// receiving data are limited and the available grpc threads will be less and less when more
+// and more push operation are blocked. In order to avoid the above case, we create this
+// non-blocking queue so that push operation will not be blocked when the queue is full.
 template <typename T>
 class GRPCReceiveQueue : public GRPCQueue
 {
 public:
     GRPCReceiveQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log)
         : GRPCQueue(call, log)
-        , send_queue(queue_size)
+        , recv_queue(queue_size)
     {}
 
     // For gtest usage.
     GRPCReceiveQueue(size_t queue_size, GRPCKickFunc func)
         : GRPCQueue(func)
-        , send_queue(queue_size)
+        , recv_queue(queue_size)
     {}
 
     ~GRPCReceiveQueue()
@@ -61,7 +66,7 @@ public:
     // Cancel the send queue, and set the cancel reason
     bool cancelWith(const String & reason)
     {
-        auto ret = send_queue.cancelWith(reason);
+        auto ret = recv_queue.cancelWith(reason);
         if (ret)
             kickCompletionQueue();
         return ret;
@@ -69,12 +74,12 @@ public:
 
     const String & getCancelReason() const
     {
-        return send_queue.getCancelReason();
+        return recv_queue.getCancelReason();
     }
 
     bool finish()
     {
-        auto ret = send_queue.finish();
+        auto ret = recv_queue.finish();
         if (ret)
         {
             kickCompletionQueue();
@@ -82,20 +87,27 @@ public:
         return ret;
     }
 
+    // Pop data from queue and kick the CompletionQueue to re-push the data
+    // if there is data failing to be pushed before because the queue was full.
     template <typename U>
     bool pop(U && data)
     {
-        auto ret = send_queue.pop(std::forward<U>(data)) == MPMCQueueResult::OK;
+        auto ret = recv_queue.pop(std::forward<U>(data)) == MPMCQueueResult::OK;
         if (ret)
             kickCompletionQueue();
         return ret;
     }
 
+    // Push data into the queue.
+    //
+    // Return FULL if the queue is full and `new_tag` is saved.
+    // When the next pop/finish is called, the `new_tag` will be pushed
+    // into grpc completion queue.
     GRPCReceiveQueueRes push(T & data, void * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
 
-        auto res = send_queue.tryPush(data);
+        auto res = recv_queue.tryPush(data);
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -116,7 +128,7 @@ public:
         RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
 
         // Double check if this queue is full.
-        res = send_queue.tryPush(data);
+        res = recv_queue.tryPush(data);
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -136,8 +148,9 @@ public:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
     }
+
 private:
-    MPMCQueue<T> send_queue;
+    MPMCQueue<T> recv_queue;
 };
 
 } // namespace DB
