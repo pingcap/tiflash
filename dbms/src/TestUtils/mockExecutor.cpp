@@ -279,16 +279,16 @@ DAGRequestBuilder & DAGRequestBuilder::join(
     MockAstVec left_conds,
     MockAstVec right_conds,
     MockAstVec other_conds,
-    MockAstVec other_eq_conds_from_in)
+    MockAstVec other_eq_conds_from_in,
+    uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     assert(right.root);
-
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group_by_expr)
+DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group_by_expr, uint64_t fine_grained_shuffle_stream_count)
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
@@ -296,10 +296,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
         agg_funcs->children.push_back(agg_func);
     if (group_by_expr)
         group_by_exprs->children.push_back(group_by_expr);
-    return buildAggregation(agg_funcs, group_by_exprs);
+    return buildAggregation(agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs)
+DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     auto agg_func_list = std::make_shared<ASTExpressionList>();
     auto group_by_expr_list = std::make_shared<ASTExpressionList>();
@@ -307,13 +307,13 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAst
         agg_func_list->children.push_back(func);
     for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-    return buildAggregation(agg_func_list, group_by_expr_list);
+    return buildAggregation(agg_func_list, group_by_expr_list, fine_grained_shuffle_stream_count);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs)
+DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs);
+    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
     return *this;
 }
 

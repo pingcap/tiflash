@@ -15,11 +15,11 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/SquashingHashJoinBlockTransform.h>
 #include <Interpreters/Join.h>
 
 namespace DB
 {
-
 
 /** Executes a certain expression over the block.
   * Basically the same as ExpressionBlockInputStream,
@@ -47,11 +47,13 @@ public:
 
 protected:
     Block readImpl() override;
+    Block getOutputBlock();
 
 private:
     const LoggerPtr log;
     JoinPtr join;
     ProbeProcessInfo probe_process_info;
+    SquashingHashJoinBlockTransform squashing_transform;
 };
 
 } // namespace DB
