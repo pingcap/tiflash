@@ -94,7 +94,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorLimitTestRunner, BigTable)
+TEST_F(LimitExecutorTestRunner, BigTable)
 try
 {
     for (size_t limit = 1; limit < 2 * big_table_rows; limit += 7)
