@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -39,14 +40,7 @@ public:
     StorageDisaggregated(
         Context & context_,
         const TiDBTableScan & table_scan_,
-        const PushDownFilter & push_down_filter_)
-        : IStorage()
-        , context(context_)
-        , table_scan(table_scan_)
-        , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
-        , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
-        , push_down_filter(push_down_filter_)
-    {}
+        const PushDownFilter & push_down_filter_);
 
     std::string getName() const override
     {

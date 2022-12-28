@@ -166,7 +166,7 @@ void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequ
     });
 }
 
-Block mergeBlocks(Blocks blocks)
+Block mergeBlocksForTest(Blocks blocks)
 {
     if (blocks.empty())
         return {};
@@ -214,7 +214,7 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     Blocks actual_blocks;
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
-    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
+    return mergeBlocksForTest(std::move(actual_blocks)).getColumnsWithTypeAndName();
 }
 
 void ExecutorTest::enablePlanner(bool is_enable)
@@ -222,16 +222,23 @@ void ExecutorTest::enablePlanner(bool is_enable)
     context.context.setSetting("enable_planner", is_enable ? "true" : "false");
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
+    return executeStreams(&dag_context);
+}
+
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
+{
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());
-    context.context.setDAGContext(&dag_context);
+    context.context.setDAGContext(dag_context);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
     queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
-    return mergeBlocks(blocks).getColumnsWithTypeAndName();
+    return mergeBlocksForTest(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
 Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)

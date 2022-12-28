@@ -16,32 +16,10 @@
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UniqRawResReformatBlockOutputStream.h>
-#include <Debug/MockExecutor/AggregationBinder.h>
 #include <Debug/MockExecutor/AstToPB.h>
-#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
-#include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
-#include <Debug/MockExecutor/JoinBinder.h>
-#include <Debug/MockExecutor/LimitBinder.h>
-#include <Debug/MockExecutor/ProjectBinder.h>
-#include <Debug/MockExecutor/SelectionBinder.h>
-#include <Debug/MockExecutor/SortBinder.h>
-#include <Debug/MockExecutor/TableScanBinder.h>
-#include <Debug/MockExecutor/TopNBinder.h>
-#include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
-#include <Parsers/ASTAsterisk.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTOrderByElement.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/IAST.h>
-#include <Parsers/ParserSelectQuery.h>
-#include <Parsers/parseQuery.h>
-#include <Server/MockComputeClient.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -49,6 +27,7 @@ namespace DB
 using MakeResOutputStream = std::function<BlockInputStreamPtr(BlockInputStreamPtr)>;
 using ExecutorBinderPtr = mock::ExecutorBinderPtr;
 using TableInfo = TiDB::TableInfo;
+struct ASTTablesInSelectQueryElement;
 
 enum class QueryTaskType
 {

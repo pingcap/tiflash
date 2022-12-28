@@ -21,6 +21,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/NonJoinedBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -84,13 +85,6 @@ bool isLeftSemiFamily(ASTTableJoin::Kind kind)
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
 
-void convertColumnToNullable(ColumnWithTypeAndName & column)
-{
-    column.type = makeNullable(column.type);
-    if (column.column)
-        column.column = makeNullable(column.column);
-}
-
 ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 {
     size_t keys_size = key_names.size();
@@ -112,6 +106,12 @@ ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 
+void convertColumnToNullable(ColumnWithTypeAndName & column)
+{
+    column.type = makeNullable(column.type);
+    if (column.column)
+        column.column = makeNullable(column.column);
+}
 
 Join::Join(
     const Names & key_names_left_,
@@ -1214,7 +1214,10 @@ void NO_INLINE joinBlockImplTypeCase(
                 /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
                 /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
                 auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
-                segment_index = packet_stream_id % segment_size;
+                if likely (fine_grained_shuffle_count == segment_size)
+                    segment_index = packet_stream_id;
+                else
+                    segment_index = packet_stream_id % segment_size;
             }
             else
             {
@@ -2116,276 +2119,6 @@ void Join::joinTotals(Block & block) const
         }
     }
 }
-
-template <ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-struct AdderNonJoined;
-
-template <typename Mapped>
-struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
-{
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right)
-    {
-        for (size_t j = 0; j < num_columns_left; ++j)
-            columns_left[j]->insertDefault();
-
-        for (size_t j = 0; j < num_columns_right; ++j)
-            columns_right[j]->insertFrom(*mapped.block->getByPosition(key_num + j).column.get(), mapped.row_num);
-        return 1;
-    }
-};
-
-template <typename Mapped>
-struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
-{
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right)
-    {
-        size_t rows_added = 0;
-        for (auto current = &static_cast<const typename Mapped::Base_t &>(mapped); current != nullptr; current = current->next)
-        {
-            for (size_t j = 0; j < num_columns_left; ++j)
-                columns_left[j]->insertDefault();
-
-            for (size_t j = 0; j < num_columns_right; ++j)
-                columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
-            rows_added++;
-        }
-        return rows_added;
-    }
-};
-
-
-/// Stream from not joined earlier rows of the right table.
-class NonJoinedBlockInputStream : public IProfilingBlockInputStream
-{
-public:
-    NonJoinedBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
-        : parent(parent_)
-        , index(index_)
-        , step(step_)
-        , max_block_size(max_block_size_)
-        , add_not_mapped_rows(true)
-    {
-        size_t build_concurrency = parent.getBuildConcurrency();
-        if (unlikely(step > build_concurrency || index >= build_concurrency))
-            throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
-
-        /** left_sample_block contains keys and "left" columns.
-          * result_sample_block - keys, "left" columns, and "right" columns.
-          */
-
-        size_t num_columns_left = left_sample_block.columns();
-        size_t num_columns_right = parent.sample_block_with_columns_to_add.columns();
-
-        result_sample_block = materializeBlock(left_sample_block);
-
-        /// Add columns from the right-side table to the block.
-        for (size_t i = 0; i < num_columns_right; ++i)
-        {
-            const ColumnWithTypeAndName & src_column = parent.sample_block_with_columns_to_add.getByPosition(i);
-            result_sample_block.insert(src_column.cloneEmpty());
-        }
-
-        column_indices_left.reserve(num_columns_left);
-        column_indices_right.reserve(num_columns_right);
-        BoolVec is_key_column_in_left_block(num_columns_left, false);
-
-        for (size_t i = 0; i < num_columns_left; ++i)
-        {
-            column_indices_left.push_back(i);
-        }
-
-        for (size_t i = 0; i < num_columns_right; ++i)
-            column_indices_right.push_back(num_columns_left + i);
-
-        /// If use_nulls, convert left columns to Nullable.
-        if (parent.use_nulls)
-        {
-            for (size_t i = 0; i < num_columns_left; ++i)
-            {
-                convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
-            }
-        }
-
-        columns_left.resize(num_columns_left);
-        columns_right.resize(num_columns_right);
-        next_index = index;
-    }
-
-    String getName() const override { return "NonJoined"; }
-
-    Block getHeader() const override { return result_sample_block; };
-
-
-protected:
-    Block readImpl() override
-    {
-        if (parent.blocks.empty())
-            return Block();
-
-        if (add_not_mapped_rows)
-        {
-            setNextCurrentNotMappedRow();
-            add_not_mapped_rows = false;
-        }
-
-        if (parent.strictness == ASTTableJoin::Strictness::Any)
-            return createBlock<ASTTableJoin::Strictness::Any>(parent.maps_any_full);
-        else if (parent.strictness == ASTTableJoin::Strictness::All)
-            return createBlock<ASTTableJoin::Strictness::All>(parent.maps_all_full);
-        else
-            throw Exception("Logical error: unknown JOIN strictness (must be ANY or ALL)", ErrorCodes::LOGICAL_ERROR);
-    }
-
-private:
-    const Join & parent;
-    size_t index;
-    size_t step;
-    size_t max_block_size;
-    bool add_not_mapped_rows;
-    size_t next_index;
-
-    Block result_sample_block;
-    /// Indices of columns in result_sample_block that come from the left-side table (except key columns).
-    ColumnNumbers column_indices_left;
-    /// Indices of columns that come from the right-side table.
-    /// Order is significant: it is the same as the order of columns in the blocks of the right-side table that are saved in parent.blocks.
-    ColumnNumbers column_indices_right;
-    /// Columns of the current output block corresponding to column_indices_left.
-    MutableColumns columns_left;
-    /// Columns of the current output block corresponding to column_indices_right.
-    MutableColumns columns_right;
-
-    std::unique_ptr<void, std::function<void(void *)>> position; /// type erasure
-    size_t current_segment = 0;
-    Join::RowRefList * current_not_mapped_row = nullptr;
-
-    void setNextCurrentNotMappedRow()
-    {
-        while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
-        {
-            current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->next;
-            next_index += step;
-        }
-    }
-
-    template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    Block createBlock(const Maps & maps)
-    {
-        size_t num_columns_left = column_indices_left.size();
-        size_t num_columns_right = column_indices_right.size();
-
-        for (size_t i = 0; i < num_columns_left; ++i)
-        {
-            const auto & src_col = result_sample_block.safeGetByPosition(column_indices_left[i]);
-            columns_left[i] = src_col.type->createColumn();
-        }
-
-        for (size_t i = 0; i < num_columns_right; ++i)
-        {
-            const auto & src_col = result_sample_block.safeGetByPosition(column_indices_right[i]);
-            columns_right[i] = src_col.type->createColumn();
-        }
-
-        size_t rows_added = 0;
-
-        switch (parent.type)
-        {
-#define M(TYPE)                                                                                                             \
-    case Join::Type::TYPE:                                                                                                  \
-        rows_added = fillColumns<STRICTNESS>(*maps.TYPE, num_columns_left, columns_left, num_columns_right, columns_right); \
-        break;
-            APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-
-        default:
-            throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
-        }
-
-        if (!rows_added)
-            return {};
-
-        Block res = result_sample_block.cloneEmpty();
-        for (size_t i = 0; i < num_columns_left; ++i)
-            res.getByPosition(column_indices_left[i]).column = std::move(columns_left[i]);
-        for (size_t i = 0; i < num_columns_right; ++i)
-            res.getByPosition(column_indices_right[i]).column = std::move(columns_right[i]);
-
-        return res;
-    }
-
-
-    template <ASTTableJoin::Strictness STRICTNESS, typename Map>
-    size_t fillColumns(const Map & map,
-                       size_t num_columns_left,
-                       MutableColumns & mutable_columns_left,
-                       size_t num_columns_right,
-                       MutableColumns & mutable_columns_right)
-    {
-        size_t rows_added = 0;
-        size_t key_num = parent.key_names_right.size();
-        while (current_not_mapped_row != nullptr)
-        {
-            rows_added++;
-            for (size_t j = 0; j < num_columns_left; ++j)
-                mutable_columns_left[j]->insertDefault();
-
-            for (size_t j = 0; j < num_columns_right; ++j)
-                mutable_columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(key_num + j).column.get(),
-                                                     current_not_mapped_row->row_num);
-
-            current_not_mapped_row = current_not_mapped_row->next;
-            setNextCurrentNotMappedRow();
-            if (rows_added == max_block_size)
-            {
-                return rows_added;
-            }
-        }
-
-        if (!position)
-        {
-            current_segment = index;
-            position = decltype(position)(
-                static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(map.getSegmentTable(current_segment).begin())),
-                [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
-        }
-
-        /// use pointer instead of reference because `it` need to be re-assigned latter
-        auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
-        auto end = map.getSegmentTable(current_segment).end();
-
-        for (; *it != end || current_segment < map.getSegmentSize() - step; ++(*it))
-        {
-            if (*it == end)
-            {
-                // move to next internal hash table
-                do
-                {
-                    current_segment += step;
-                    position = decltype(position)(
-                        static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
-                            map.getSegmentTable(current_segment).begin())),
-                        [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
-                    it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
-                    end = map.getSegmentTable(current_segment).end();
-                } while (*it == end && current_segment < map.getSegmentSize() - step);
-                if (*it == end)
-                    break;
-            }
-            if ((*it)->getMapped().getUsed())
-                continue;
-
-            rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right);
-
-            if (rows_added >= max_block_size)
-            {
-                ++(*it);
-                break;
-            }
-        }
-        return rows_added;
-    }
-};
-
 
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
 {

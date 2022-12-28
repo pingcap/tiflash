@@ -197,7 +197,6 @@ public:
             new_files.addIfExists(file.path);
 
         bool updated = new_files.isDifferOrNewerThan(cert_files);
-        LOG_DEBUG(log, "Ssl certificate files updated: {}", updated);
         return updated;
     }
 

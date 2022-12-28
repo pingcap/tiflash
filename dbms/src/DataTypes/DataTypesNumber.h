@@ -35,14 +35,6 @@ class DataTypeNumber final : public DataTypeNumberBase<T>
     bool isInteger() const override { return std::is_integral_v<T>; }
     bool isFloatingPoint() const override { return std::is_floating_point_v<T>; }
     bool canBeInsideNullable() const override { return true; }
-
-public:
-    DataTypePtr widen() const override
-    {
-        auto t = std::make_shared<DataTypeNumber<T>>();
-        t->widened = true;
-        return t;
-    }
 };
 
 using DataTypeUInt8 = DataTypeNumber<UInt8>;

@@ -81,6 +81,17 @@ public:
         total_dmfile_read_time_ms += other.total_dmfile_read_time_ms;
         total_create_snapshot_time_ms += other.total_create_snapshot_time_ms;
     }
+
+    void merge(const tipb::TiFlashScanContext & other)
+    {
+        total_dmfile_scanned_packs += other.total_dmfile_scanned_packs();
+        total_dmfile_skipped_packs += other.total_dmfile_skipped_packs();
+        total_dmfile_scanned_rows += other.total_dmfile_scanned_rows();
+        total_dmfile_skipped_rows += other.total_dmfile_skipped_rows();
+        total_dmfile_rough_set_index_load_time_ms += other.total_dmfile_rough_set_index_load_time_ms();
+        total_dmfile_read_time_ms += other.total_dmfile_read_time_ms();
+        total_create_snapshot_time_ms += other.total_create_snapshot_time_ms();
+    }
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

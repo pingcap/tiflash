@@ -219,7 +219,7 @@ LearnerReadSnapshot doLearnerRead(
                 const auto & region_to_query = regions_info[region_idx];
                 const RegionID region_id = region_to_query.region_id;
                 UInt64 physical_tso = read_index_tso >> TsoPhysicalShiftBits;
-                bool can_stale_read = physical_tso < region_table.getSelfSafeTS(region_id);
+                bool can_stale_read = mvcc_query_info->read_tso != std::numeric_limits<uint64_t>::max() && physical_tso < region_table.getSelfSafeTS(region_id);
                 if (!can_stale_read)
                 {
                     if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)

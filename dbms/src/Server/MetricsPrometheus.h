@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashSecurity.h>
 #include <Common/Timer.h>
 #include <Poco/Net/HTTPServer.h>
 #include <common/logger_useful.h>

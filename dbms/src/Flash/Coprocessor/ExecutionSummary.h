@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <common/types.h>
+#include <tipb/select.pb.h>
 
 #include <memory>
 
@@ -29,11 +30,13 @@ struct ExecutionSummary
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
 
-    std::unique_ptr<DB::DM::ScanContext> scan_context = std::make_unique<DB::DM::ScanContext>();
+    DM::ScanContextPtr scan_context = std::make_shared<DB::DM::ScanContext>();
 
     ExecutionSummary() = default;
 
-    void merge(const ExecutionSummary & other, bool streaming_call);
+    void merge(const ExecutionSummary & other);
+    void merge(const tipb::ExecutorExecutionSummary & other);
+    void init(const tipb::ExecutorExecutionSummary & other);
 };
 
 } // namespace DB

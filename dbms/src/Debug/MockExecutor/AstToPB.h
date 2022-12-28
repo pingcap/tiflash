@@ -14,24 +14,8 @@
 
 #pragma once
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <DataTypes/FieldToDataType.h>
-#include <Debug/MockExecutor/AstToPBUtils.h>
-#include <Debug/MockExecutor/FuncSigMap.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Functions/FunctionFactory.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/convertFieldToType.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/TypeMapping.h>
-#include <Storages/Transaction/Types.h>
-#include <common/logger_useful.h>
-#include <common/types.h>
-#include <tipb/executor.pb.h>
-#include <tipb/select.pb.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -41,6 +25,11 @@ extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
 extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
+
+class ASTFunction;
+class ASTIdentifier;
+class Context;
+
 struct MPPCtx
 {
     Timestamp start_ts;
