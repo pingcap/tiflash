@@ -149,6 +149,7 @@ public:
       */
     void updateHash(SipHash & hash) const;
 
+
 private:
     void eraseImpl(size_t position);
     void initializeIndexByName();
@@ -157,6 +158,7 @@ private:
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
 
+Block mergeBlocks(Blocks && blocks);
 
 /// Compare number of columns, data types, column types, column names, and values of constant columns.
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs);
