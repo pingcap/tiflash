@@ -24,6 +24,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/wrapInvocable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/MergingAndConvertingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -32,7 +33,6 @@
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/MergingAndConvertingBlockInputStream.h>
 #include <Storages/Transaction/CollatorUtils.h>
 #include <common/demangle.h>
 

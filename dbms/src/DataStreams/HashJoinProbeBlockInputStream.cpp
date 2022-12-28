@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
@@ -25,6 +24,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     : log(Logger::get(req_id))
     , join(join_)
     , probe_process_info(max_block_size)
+    , squashing_transform(max_block_size)
 {
     children.push_back(input);
 
@@ -67,17 +67,34 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
+    // if join finished, return {} directly.
+    if (squashing_transform.isJoinFinished())
+    {
+        return Block{};
+    }
+
+    while (squashing_transform.needAppendBlock())
+    {
+        Block result_block = getOutputBlock();
+        squashing_transform.appendBlock(result_block);
+    }
+    return squashing_transform.getFinalOutputBlock();
+}
+
+Block HashJoinProbeBlockInputStream::getOutputBlock()
+{
     if (probe_process_info.all_rows_joined_finish)
     {
         Block block = children.back()->read();
         if (!block)
+        {
             return block;
+        }
         join->checkTypes(block);
         probe_process_info.resetBlock(std::move(block));
     }
 
     return join->joinBlock(probe_process_info);
 }
-
 
 } // namespace DB
