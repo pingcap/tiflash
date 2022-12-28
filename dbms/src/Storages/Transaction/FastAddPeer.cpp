@@ -212,7 +212,7 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
         auto store_id = std::get<0>(*it);
         const auto & region_state = std::get<1>(*it);
         const auto & apply_state = std::get<2>(*it);
-        const auto & peers = region_state.region().peers();
+//        const auto & peers = region_state.region().peers();
 //        bool ok = false;
 //        for (auto && pr : peers)
 //        {
