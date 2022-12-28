@@ -97,6 +97,59 @@ try
 }
 CATCH
 
+TEST_F(DeltaMergeStoreTest, ShutdownInMiddleDTFileGC)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    {
+        // check column structure of store
+        const auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3);
+    }
+
+    auto provider = db_context->getFileProvider();
+    const auto paths = getAllStorePaths();
+    auto get_num_stable_files = [&]() -> size_t {
+        size_t total_num_dtfiles = 0;
+        auto options = DMFile::ListOptions{.only_list_can_gc = true, .clean_up = false};
+        for (const auto & root_path : paths)
+        {
+            auto file_ids = DMFile::listAllInPath(provider, root_path, options);
+            total_num_dtfiles += file_ids.size();
+        }
+        return total_num_dtfiles;
+    };
+
+    const size_t num_before_shutdown = get_num_stable_files();
+    ASSERT_GT(num_before_shutdown, 0);
+
+    // shutdown the table in the middle of page storage gc, but not dropped
+    store->shutdown();
+
+    const size_t num_after_shutdown = get_num_stable_files();
+    ASSERT_EQ(num_before_shutdown, num_after_shutdown);
+
+    sp_gc.next(); // continue the page storage gc
+    th_gc.get();
+
+    const size_t num_after_gc = get_num_stable_files();
+    ASSERT_EQ(num_before_shutdown, num_after_gc);
+}
+CATCH
+
 TEST_F(DeltaMergeStoreTest, DroppedInMiddleDTFileGC)
 try
 {
@@ -126,6 +179,8 @@ try
 
     sp_gc.next(); // continue the page storage gc
     th_gc.get();
+
+    // Mark: ensure this test won't run into crash by nullptr
 }
 CATCH
 
