@@ -449,7 +449,7 @@ protected:
     {
         while (!buf[place_value].isZero(*this) && !buf[place_value].keyEquals(x, hash_value, *this))
         {
-            place_value = grower.next(place_value);  // closed hash，线性开放地址寻址法
+            place_value = grower.next(place_value);
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
             ++collisions;
 #endif
@@ -694,7 +694,7 @@ protected:
           * HashMap completely, change all its users to the existing internal
           * iteration interface, and redefine end() to return LookupResult for
           * compatibility with std find(). Unfortunately, now is not the time to
-          * do this.  // 隐式类型转换操作符
+          * do this.
           */
         operator Cell *() const { return nullptr; } // NOLINT(google-explicit-constructor)
     };

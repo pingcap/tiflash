@@ -32,8 +32,6 @@ class WriteBuffer;
 
 struct ColumnWithTypeAndName
 {
-    // column 继承子 intrusive 实现 share ptr 功能，同归继承类的两个实现，mutable ptr 和 immutable ptr 可以相互转化
-    // columnPtr 是一个基类指针
     ColumnPtr column;
     DataTypePtr type;
     String name;

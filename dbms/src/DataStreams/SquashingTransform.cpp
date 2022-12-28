@@ -60,7 +60,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
         return Result(std::move(block));
     }
 
-    append(std::move(block));   // 攒批
+    append(std::move(block));
 
     accumulated_block_rows = accumulated_block.rows();
     accumulated_block_bytes = accumulated_block.bytes();

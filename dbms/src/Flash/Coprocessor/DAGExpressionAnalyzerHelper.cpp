@@ -150,12 +150,12 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
         DataTypePtr type = inferDataType4Literal(child);
         argument_types.push_back(type);
     }
-    //  find common type
+    // find common type
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
     if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
     {
         // Need cast left argument
-        key_name = analyzer->appendCast(resolved_type, actions, key_name); // 对于孩子的输出来说，需要 cast
+        key_name = analyzer->appendCast(resolved_type, actions, key_name);
     }
     analyzer->makeExplicitSet(expr, sample_block, false, key_name);
     argument_names.push_back(key_name);
@@ -402,7 +402,6 @@ String DAGExpressionAnalyzerHelper::buildRegexpFunction(
     return analyzer->applyFunction(func_name, argument_names, actions, collator);
 }
 
-// case when 函数应该走这里
 String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
@@ -412,9 +411,8 @@ String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     Names argument_names;
     for (const auto & child : expr.children())
     {
-        // 函数参数如果还是函数的，这里需要递归生成多个 actions（深度优先）
         String name = analyzer->getActions(child, actions);
-        argument_names.push_back(name);   // 拿到孩子的函数输出之后，再将其作为参数
+        argument_names.push_back(name);
     }
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }

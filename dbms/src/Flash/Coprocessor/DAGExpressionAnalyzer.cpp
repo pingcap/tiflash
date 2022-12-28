@@ -983,7 +983,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
     for (int i = 0; i < keys.size(); ++i)
     {
         const auto & key = keys.at(i);
-        bool has_actions = key.tp() != tipb::ExprType::ColumnRef; // join key 如果不是 column ref 说明是有前序动作帮我把表达式给准备成列
+        bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
 
         String key_name = getActions(key, actions);
         DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
@@ -1048,7 +1048,6 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
-    // build join keys，ck 只输出一个 key，需要 copy 一份，如果是表达式，还需要 append scalar 的 action
     std::tie(ret, key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
 
     if (!filters.empty())
@@ -1057,7 +1056,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         std::vector<const tipb::Expr *> filter_vector;
         for (const auto & c : filters)
             filter_vector.push_back(&c);
-        filter_column_name = appendWhere(chain, filter_vector);  // 构建了 filter 输出的列
+        filter_column_name = appendWhere(chain, filter_vector);
     }
     /// remove useless columns to avoid duplicate columns
     /// as when compiling the key/filter expression, the origin
@@ -1077,18 +1076,18 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     if (ret)
     {
         std::unordered_set<String> needed_columns;
-        for (const auto & c : getCurrentInputColumns()) // 当前进来的列都要
+        for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
-        for (const auto & s : key_names)                // 当前怎加的 key col 也要
+        for (const auto & s : key_names)              
             needed_columns.insert(s);
-        if (!filter_column_name.empty())                // 当前添加的一侧 filter 的 col 也要
+        if (!filter_column_name.empty())
             needed_columns.insert(filter_column_name);
 
         const auto & names = actions->getSampleBlock().getNames();
         for (const auto & name : names)
         {
             if (needed_columns.find(name) == needed_columns.end())
-                actions->add(ExpressionAction::removeColumn(name)); // 增加后续的 action，裁剪掉不要一些 column 列 （这些 immediate 列的最后的结果已经被我 record 了）
+                actions->add(ExpressionAction::removeColumn(name));
         }
     }
     return ret;
@@ -1452,12 +1451,9 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, const Expressi
     if (isLiteralExpr(expr))
     {
         Field value = decodeLiteral(expr);
-        // 主要对 decimal
         DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
         DataTypePtr target_type = inferDataType4Literal(expr);
-        // 表达式的 uniuqe name
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
-        // 表达式如果有这个名字，说明有这列
         if (!actions->getSampleBlock().has(ret))
         {
             ColumnWithTypeAndName column;
@@ -1478,12 +1474,10 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, const Expressi
     }
     else if (isColumnExpr(expr))
     {
-        // 如果是 column ref，直接从 stream input column 里面拿到 name
         ret = getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
     else if (isScalarFunctionExpr(expr))
     {
-        // 根据 expr 构造 function 加入到 actions 里面
         ret = DAGExpressionAnalyzerHelper::buildFunction(this, expr, actions);
     }
     else

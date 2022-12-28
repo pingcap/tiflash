@@ -27,7 +27,7 @@
 
 namespace DB
 {
-/** Container for set of columns for bunch of rows in memory.  // 怎么区分这里 rows 的大小呢？
+/** Container for set of columns for bunch of rows in memory.
   * This is unit of data processing.
   * Also contains metadata - data types of columns and their names
   *  (either original names from a table, or generated names during temporary calculations).
@@ -38,8 +38,7 @@ class Context;
 
 class Block
 {
-private:
-    // 多列的一个数据
+private: 
     using Container = ColumnsWithTypeAndName;
     using IndexByName = std::map<String, size_t>;
 

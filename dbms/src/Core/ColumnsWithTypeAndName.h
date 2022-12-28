@@ -21,7 +21,6 @@
 
 namespace DB
 {
-// 这里是一个多列组合的数据
 using ColumnsWithTypeAndName = std::vector<ColumnWithTypeAndName>;
 
 }

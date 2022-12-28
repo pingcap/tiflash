@@ -26,7 +26,6 @@ void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & nul
             return;
 
         const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*column);
-        // 从 nullable column 中拿到伴随 byte map 和基础 column
         null_map = &column_nullable.getNullMapData();
         null_map_holder = column_nullable.getNullMapColumnPtr();
         column = &column_nullable.getNestedColumn();
@@ -50,7 +49,6 @@ void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & nul
 
                     PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
                     const PaddedPODArray<UInt8> & other_null_map = column_nullable.getNullMapData();
-                    // join key column 来说，一空即空，这里 ｜ 一下
                     for (size_t i = 0, size = mutable_null_map.size(); i < size; ++i)
                         mutable_null_map[i] |= other_null_map[i];
 

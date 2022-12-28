@@ -81,7 +81,6 @@ ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & func
     return a;
 }
 
-// 这个适合 repeat source 来用，adding groupingID column
 ExpressionAction ExpressionAction::addColumn(const ColumnWithTypeAndName & added_column_)
 {
     ExpressionAction a;
@@ -145,7 +144,7 @@ ExpressionAction ExpressionAction::expandSource(std::shared_ptr<const Expand> ex
 }
 
 
-void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶段
+void ExpressionAction::prepare(Block & sample_block)  
 {
     /** Constant expressions should be evaluated, and put the result in sample_block.
       */
@@ -178,7 +177,6 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
             new_column.type = result_type;
             sample_block.insert(std::move(new_column));
 
-            // 执行参数，和执行结果都是 block 中的列
             function->execute(sample_block, arguments, result_position);
 
             /// If the result is not a constant, just in case, we will consider the result as unknown.
@@ -194,12 +192,11 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
                 /// Change the size to 1.
 
                 if (col.column->empty())
-                    col.column = col.column->cloneResized(1);  // 常量列只保留一个值，np
+                    col.column = col.column->cloneResized(1);
             }
         }
         else
         {
-            // 如果不能即时 eval，那么直接插入一个 unknown 的列，附带上类型和名字
             sample_block.insert({nullptr, result_type, result_name});
         }
 
@@ -233,7 +230,7 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
             }
         }
 
-        for (const auto & col : columns_added_by_join)   // 之前的 sample block 是左侧的列，现在才是右侧的
+        for (const auto & col : columns_added_by_join)
             sample_block.insert(ColumnWithTypeAndName(nullptr, col.type, col.name));
 
         break;
@@ -267,7 +264,7 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
             ColumnWithTypeAndName column = sample_block.getByName(name);
             if (!alias.empty())
                 column.name = alias;
-            new_block.insert(std::move(column));  // 相当于直接 move 掉 （因为前面的列可能不要，所以用了个 new block）
+            new_block.insert(std::move(column));
         }
 
         sample_block.swap(new_block);
@@ -302,7 +299,7 @@ void ExpressionAction::prepare(Block & sample_block)    // 这个是 prepare 阶
 }
 
 
-void ExpressionAction::execute(Block & block) const   // 执行阶段
+void ExpressionAction::execute(Block & block) const
 {
     if (type == REMOVE_COLUMN || type == COPY_COLUMN)
         if (!block.has(source_name))
@@ -321,10 +318,10 @@ void ExpressionAction::execute(Block & block) const   // 执行阶段
         {
             if (!block.has(argument_names[i]))
                 throw Exception("Not found column: '" + argument_names[i] + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
-            arguments[i] = block.getPositionByName(argument_names[i]);  // 找到列的 offset
+            arguments[i] = block.getPositionByName(argument_names[i]);
         }
 
-        size_t num_columns_without_result = block.columns();  // 拿到当 result 列的 offset
+        size_t num_columns_without_result = block.columns();
         block.insert({nullptr, result_type, result_name});
 
         function->execute(block, arguments, num_columns_without_result);
@@ -343,7 +340,7 @@ void ExpressionAction::execute(Block & block) const   // 执行阶段
 
     case EXPAND:
     {
-        expand->replicateAndFillNull(block); // repeat 的执行阶段直接 fill block 了
+        expand->replicateAndFillNull(block);
         break;
     }
 
@@ -492,7 +489,6 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
             arguments[i] = sample_block.getByName(action.argument_names[i]);
         }
 
-        // 一般 default 函数使用 default creator 构造器就行了
         action.function = action.function_builder->build(arguments, action.collator);
         action.result_type = action.function->getReturnType();
     }
@@ -751,7 +747,7 @@ BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRigh
     return {};
 }
 
-void ExpressionActionsChain::addStep() // 只会为后者加入 new step 的 input col 准备
+void ExpressionActionsChain::addStep()
 {
     if (steps.empty())
         throw Exception("Cannot add action to empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);

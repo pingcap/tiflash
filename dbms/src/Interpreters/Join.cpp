@@ -539,7 +539,7 @@ void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * s
 {
     elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
     list->next = elem;
-    elem->block = stored_block;  // 因为 map all 所以是 list 结构
+    elem->block = stored_block;
     elem->row_num = index;
 }
 
@@ -579,7 +579,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
             auto elem = reinterpret_cast<MappedType *>(pool.alloc(sizeof(MappedType)));
-            insertRowToList(&emplace_result.getMapped(), elem, stored_block, i); // hash 表中维护的就是到存储的 store block 和其 row number，这个 list 结果作为 hash key 的 value
+            insertRowToList(&emplace_result.getMapped(), elem, stored_block, i);
         }
     }
 };
@@ -834,7 +834,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
 
     const auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
-    for (size_t i = 0, size = nested_column->size(); i < size; ++i) // 伴随 column 如果取 int 取不出来，说明也是个 null？
+    for (size_t i = 0, size = nested_column->size(); i < size; ++i)
         mutable_null_map[i] |= (!nested_column->getInt(i));
 
     null_map_holder = std::move(mutable_null_map_holder);
@@ -1373,9 +1373,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 {
     other_condition_ptr->execute(block);
 
-    auto filter_column = ColumnUInt8::create();    // 创建了一个 u8 表示 true or false 的结果吧
+    auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
-    filter.assign(block.rows(), static_cast<UInt8>(1));  // 直接都给 1？
+    filter.assign(block.rows(), static_cast<UInt8>(1));
     if (!other_filter_column.empty())
     {
         mergeNullAndFilterResult(block, filter, other_filter_column, false);
@@ -1564,7 +1564,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Memoize key columns to work with.
     for (size_t i = 0; i < keys_size; ++i)
     {
-        // 因为 ColumnPtr 是继承 intrusive_ptr，所以 get 函数可以得到这个类型的原始指针（raw column）
         key_columns[i] = block.getByName(key_names_left[i]).column.get();
 
         if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
@@ -1577,12 +1576,10 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Keys with NULL value in any column won't join to anything.
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
-    // 抽取一下 join key 上的 null 或属性
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
 
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
-    // 相当于把 left filter column 上的 null 属性输出也叠加到了 null map 里面
     recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
 
     size_t existing_columns = block.columns();
@@ -1617,12 +1614,12 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
     MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add);   // 创建了几个需要新加的 columns
+    added_columns.reserve(num_columns_to_add); 
 
     std::vector<size_t> right_table_column_indexes;
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
-        right_table_column_indexes.push_back(i + existing_columns);  // 记录插入的 offset 下标
+        right_table_column_indexes.push_back(i + existing_columns);
     }
 
     std::vector<size_t> right_indexes;

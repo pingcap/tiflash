@@ -96,7 +96,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
     else
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
-    for (size_t i = 0; i < root->output_schema.size(); ++i)   // 根据 root 算子的 output schema 设置加 mock dag request 而 output offsets
+    for (size_t i = 0; i < root->output_schema.size(); ++i)
         dag_request.add_output_offsets(i);
 }
 

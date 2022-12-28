@@ -105,7 +105,6 @@ private:
         T && operator*() const && { return const_cast<typename std::remove_const<T>::type &&>(*boost::intrusive_ptr<T>::get()); }
     };
 
-    // 这个地方，COWPtr 继承 counter 之后就自带了 ref count 和 add, release 函数。所以私有类实力化到 T 之后 = IntrusivePtr<T>，里面调用的 add, release 函数就有了，其都是操作 T 继承的 ref count 来操作的
 protected:
     template <typename T>
     class mutable_ptr : public IntrusivePtr<T> // NOLINT(readability-identifier-naming)

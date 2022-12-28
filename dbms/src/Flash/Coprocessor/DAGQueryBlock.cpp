@@ -101,7 +101,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
             assignOrThrowException(&expand, current, EXPAND_NAME);
             expand_name = current->executor_id();
-            current = &current->expand().child();         // 非叶节点，继续孩子递归下去
+            current = &current->expand().child();
             break;
         case tipb::ExecType::TypeStreamAgg:
             RUNTIME_CHECK_MSG(current->aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
@@ -141,7 +141,6 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
 
     assignOrThrowException(&source, current, SOURCE_NAME);
     source_name = current->executor_id();
-    // source 节点，
     if (current->tp() == tipb::ExecType::TypeJoin)
     {
         if (source->join().children_size() != 2)
@@ -157,7 +156,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     else if (current->tp() == tipb::ExecType::TypeProjection)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(source->projection().child(), id_generator)); // 将之后的算子重新算作 children
+        children.push_back(std::make_shared<DAGQueryBlock>(source->projection().child(), id_generator));
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {

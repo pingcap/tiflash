@@ -291,7 +291,7 @@ void filterArraysImplGeneric(
 
     while (filt_pos < filt_end)
     {
-        if (*filt_pos)  // 如果是 0 的话，说名该列该行被 filter 了
+        if (*filt_pos)
             copy_array(offsets_pos);
 
         ++filt_pos;

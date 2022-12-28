@@ -60,14 +60,14 @@ public:
     String having_name;
     const tipb::Executor * limit_or_topn = nullptr;
     String limit_or_topn_name;
-    const tipb::Executor * expand = nullptr;          // expand node can only be before sender
+    const tipb::Executor * expand = nullptr;
     String expand_name;
     const tipb::Executor * exchange_sender = nullptr;
     String exchange_sender_name;
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;
-    std::vector<std::shared_ptr<DAGQueryBlock>> children;   // 这里的 children 是每个 dag 算子构造好之后传入的吗
+    std::vector<std::shared_ptr<DAGQueryBlock>> children;
     bool can_restore_pipeline_concurrency = true;
 
     bool isRootQueryBlock() const { return id == 1; };

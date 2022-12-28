@@ -55,7 +55,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
     }
     DAGQueryBlockInterpreter query_block_interpreter(
         context,
-        input_streams_vec,   // 底层 DAG 的输入源
+        input_streams_vec,  
         query_block,
         max_streams);
     return query_block_interpreter.execute();
