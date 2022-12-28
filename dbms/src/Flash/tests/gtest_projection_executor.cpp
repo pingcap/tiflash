@@ -343,7 +343,7 @@ try
               .scan("test_db", "test_table3")
               .project({lit(Field(String("a")))})
               .build(context);
-    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({createConstColumn<String>(5, "a")})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -351,7 +351,7 @@ try
               .project(MockAstVec{})
               .project({lit(Field(String("a")))})
               .build(context);
-    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({createConstColumn<String>(5, "a")})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -359,7 +359,7 @@ try
               .project(MockAstVec{})
               .project({lit(Field(String("a")))})
               .build(context);
-    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({createConstColumn<String>(5, "a")})});
 
     req = context
               .scan("test_db", "test_table3")

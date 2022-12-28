@@ -19,7 +19,6 @@ namespace DB
 {
 namespace tests
 {
-
 class ExecutorTopNTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -45,6 +44,38 @@ public:
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
                               toNullableVec<Int32>(col_name[3], col_salary)});
+
+        /// table with 200 rows
+        {
+            // with 15 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+            for (size_t i = 0; i < 200; ++i)
+                key[i] = i % 15;
+            context.addMockTable(
+                {"test_db", "big_table_1"},
+                {{"key", TiDB::TP::TypeLong}},
+                {toNullableVec<Int32>("key", key)});
+        }
+        {
+            // with 200 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+            for (size_t i = 0; i < 200; ++i)
+                key[i] = i;
+            context.addMockTable(
+                {"test_db", "big_table_2"},
+                {{"key", TiDB::TP::TypeLong}},
+                {toNullableVec<Int32>("key", key)});
+        }
+        {
+            // with 1 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+            for (size_t i = 0; i < 200; ++i)
+                key[i] = 0;
+            context.addMockTable(
+                {"test_db", "big_table_3"},
+                {{"key", TiDB::TP::TypeLong}},
+                {toNullableVec<Int32>("key", key)});
+        }
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
@@ -211,6 +242,26 @@ try
     }
 
     /// TODO more functions...
+}
+CATCH
+
+TEST_F(ExecutorTopNTestRunner, BigTable)
+try
+{
+    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
+    for (const auto & table : tables)
+    {
+        std::vector<size_t> limits{0, 1, 10, 20, 199, 200, 300};
+        for (auto limit_num : limits)
+        {
+            auto request = context
+                               .scan("test_db", table)
+                               .topN("key", false, limit_num)
+                               .build(context);
+            auto expect = executeStreams(request, 1);
+            executeAndAssertColumnsEqual(request, expect);
+        }
+    }
 }
 CATCH
 
