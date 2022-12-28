@@ -437,7 +437,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, BigTable)
+TEST_F(ProjectionExecutorTestRunner, BigTable)
 try
 {
     auto request = context
