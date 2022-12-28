@@ -30,7 +30,7 @@ namespace tests
         types_col_name[a], types_col_name[b] \
     }
 
-class ExecutorAggTestRunner : public ExecutorTest
+class AggExecutorTestRunner : public ExecutorTest
 {
 public:
     using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -61,7 +61,7 @@ public:
     using ColumnWithFloat64 = std::vector<ColFloat64Type>;
     using ColumnWithString = std::vector<ColStringType>;
 
-    ~ExecutorAggTestRunner() override = default;
+    ~AggExecutorTestRunner() override = default;
 
     void initializeContext() override
     {
@@ -134,6 +134,50 @@ public:
                                  toVec<String>("c4_str", {"1", "2  ", "2 "}),
                                  toVec<MyDateTime>("c5_date_time", {2000000, 12000000, 12000000}),
                              });
+
+        /// agg table with 200 rows
+        {
+            // with 15 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+            std::vector<std::optional<String>> value(200);
+            for (size_t i = 0; i < 200; ++i)
+            {
+                key[i] = i % 15;
+                value[i] = {fmt::format("val_{}", i)};
+            }
+            context.addMockTable(
+                {"test_db", "big_table_1"},
+                {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
+                {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
+        }
+        {
+            // with 200 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+            std::vector<std::optional<String>> value(200);
+            for (size_t i = 0; i < 200; ++i)
+            {
+                key[i] = i;
+                value[i] = {fmt::format("val_{}", i)};
+            }
+            context.addMockTable(
+                {"test_db", "big_table_2"},
+                {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
+                {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
+        }
+        {
+            // with 1 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+            std::vector<std::optional<String>> value(200);
+            for (size_t i = 0; i < 200; ++i)
+            {
+                key[i] = 0;
+                value[i] = {fmt::format("val_{}", i)};
+            }
+            context.addMockTable(
+                {"test_db", "big_table_3"},
+                {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
+                {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
+        }
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
@@ -181,7 +225,7 @@ public:
 };
 
 /// Guarantee the correctness of group by
-TEST_F(ExecutorAggTestRunner, GroupBy)
+TEST_F(AggExecutorTestRunner, GroupBy)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -252,7 +296,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationMaxAndMin)
+TEST_F(AggExecutorTestRunner, AggregationMaxAndMin)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -300,7 +344,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationCount)
+TEST_F(AggExecutorTestRunner, AggregationCount)
 try
 {
     /// Prepare some data
@@ -342,7 +386,9 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationCountGroupByFastPathMultiKeys)
+// TODO support more type of min, max, count.
+//      support more aggregation functions: sum, forst_row, group_concat
+TEST_F(AggExecutorTestRunner, AggregationCountGroupByFastPathMultiKeys)
 try
 {
     /// Prepare some data
@@ -445,7 +491,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggNull)
+TEST_F(AggExecutorTestRunner, AggNull)
 try
 {
     auto request = context
@@ -462,7 +508,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, RepeatedAggregateFunction)
+TEST_F(AggExecutorTestRunner, RepeatedAggregateFunction)
 try
 {
     std::vector<ASTPtr> functions = {Max(col("s1")), Min(col("s1")), Sum(col("s2"))};
@@ -510,8 +556,29 @@ try
 }
 CATCH
 
-// TODO support more type of min, max, count.
-//      support more aggregation functions: sum, forst_row, group_concat
+TEST_F(AggExecutorTestRunner, AggMerge)
+try
+{
+    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
+    for (const auto & table : tables)
+    {
+        auto request = context
+                           .scan("test_db", table)
+                           .aggregation({Max(col("value"))}, {col("key")})
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+        // 0: use one level merge
+        // 1: use two level merge
+        std::vector<UInt64> two_level_thresholds{0, 1};
+        for (auto two_level_threshold : two_level_thresholds)
+        {
+            context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+            executeAndAssertColumnsEqual(request, expect);
+        }
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

@@ -13,17 +13,21 @@
 // limitations under the License.
 
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
+namespace
+{
 /** Remove constant columns from block.
   */
-static void removeConstantsFromBlock(Block & block)
+void removeConstantsFromBlock(Block & block)
 {
     size_t columns = block.columns();
     size_t i = 0;
@@ -39,7 +43,7 @@ static void removeConstantsFromBlock(Block & block)
     }
 }
 
-static void removeConstantsFromSortDescription(const Block & header, SortDescription & description)
+void removeConstantsFromSortDescription(const Block & header, SortDescription & description)
 {
     description.erase(
         std::remove_if(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
@@ -54,7 +58,7 @@ static void removeConstantsFromSortDescription(const Block & header, SortDescrip
 /** Add into block, whose constant columns was removed by previous function,
   *  constant columns from header (which must have structure as before removal of constants from block).
   */
-static void enrichBlockWithConstants(Block & block, const Block & header)
+void enrichBlockWithConstants(Block & block, const Block & header)
 {
     size_t rows = block.rows();
     size_t columns = header.columns();
@@ -66,7 +70,7 @@ static void enrichBlockWithConstants(Block & block, const Block & header)
             block.insert(i, {col_type_name.column->cloneResized(rows), col_type_name.type, col_type_name.name});
     }
 }
-
+} // namespace
 
 MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     const BlockInputStreamPtr & input,
@@ -177,110 +181,8 @@ Block MergeSortingBlockInputStream::readImpl()
     return res;
 }
 
-
-MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
-    Blocks & blocks_,
-    SortDescription & description_,
-    const String & req_id,
-    size_t max_merged_block_size_,
-    size_t limit_)
-    : blocks(blocks_)
-    , header(blocks.at(0).cloneEmpty())
-    , description(description_)
-    , max_merged_block_size(max_merged_block_size_)
-    , limit(limit_)
-    , log(Logger::get(req_id))
-{
-    Blocks nonempty_blocks;
-    for (const auto & block : blocks)
-    {
-        if (block.rows() == 0)
-            continue;
-
-        nonempty_blocks.push_back(block);
-        cursors.emplace_back(block, description);
-        has_collation |= cursors.back().has_collation;
-    }
-
-    blocks.swap(nonempty_blocks);
-
-    if (!has_collation)
-    {
-        for (auto & cursor : cursors)
-            queue.push(SortCursor(&cursor));
-    }
-    else
-    {
-        for (auto & cursor : cursors)
-            queue_with_collation.push(SortCursorWithCollation(&cursor));
-    }
-}
-
-
-Block MergeSortingBlocksBlockInputStream::readImpl()
-{
-    if (blocks.empty())
-        return Block();
-
-    if (blocks.size() == 1)
-    {
-        Block res = blocks[0];
-        blocks.clear();
-        return res;
-    }
-
-    return !has_collation
-        ? mergeImpl<SortCursor>(queue)
-        : mergeImpl<SortCursorWithCollation>(queue_with_collation);
-}
-
-
-template <typename TSortCursor>
-Block MergeSortingBlocksBlockInputStream::mergeImpl(std::priority_queue<TSortCursor> & queue)
-{
-    size_t num_columns = blocks[0].columns();
-
-    MutableColumns merged_columns = blocks[0].cloneEmptyColumns();
-    /// TODO: reserve (in each column)
-
-    /// Take rows from queue in right order and push to 'merged'.
-    size_t merged_rows = 0;
-    while (!queue.empty())
-    {
-        TSortCursor current = queue.top();
-        queue.pop();
-
-        for (size_t i = 0; i < num_columns; ++i)
-            merged_columns[i]->insertFrom(*current->all_columns[i], current->pos);
-
-        if (!current->isLast())
-        {
-            current->next();
-            queue.push(current);
-        }
-
-        ++total_merged_rows;
-        if (limit && total_merged_rows == limit)
-        {
-            auto res = blocks[0].cloneWithColumns(std::move(merged_columns));
-            blocks.clear();
-            return res;
-        }
-
-        ++merged_rows;
-        if (merged_rows == max_merged_block_size)
-            return blocks[0].cloneWithColumns(std::move(merged_columns));
-    }
-
-    if (merged_rows == 0)
-        return {};
-
-    return blocks[0].cloneWithColumns(std::move(merged_columns));
-}
-
 void MergeSortingBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
     buffer.fmtAppend(", limit = {}", limit);
 }
-
 } // namespace DB

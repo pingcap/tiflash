@@ -502,49 +502,6 @@ try
 }
 CATCH
 
-/// For FineGrainedShuffleJoin/Agg test usage, update internal exchange senders/receivers flag
-/// Allow select,agg,join,tableScan,exchangeSender,exchangeReceiver,projection executors only
-void setFineGrainedShuffleForExchange(tipb::Executor & root)
-{
-    tipb::Executor * current = &root;
-    while (current)
-    {
-        switch (current->tp())
-        {
-        case tipb::ExecType::TypeSelection:
-            current = const_cast<tipb::Executor *>(&current->selection().child());
-            break;
-        case tipb::ExecType::TypeAggregation:
-            current = const_cast<tipb::Executor *>(&current->aggregation().child());
-            break;
-        case tipb::ExecType::TypeProjection:
-            current = const_cast<tipb::Executor *>(&current->projection().child());
-            break;
-        case tipb::ExecType::TypeJoin:
-        {
-            /// update build side path
-            JoinInterpreterHelper::TiFlashJoin tiflash_join{current->join()};
-            current = const_cast<tipb::Executor *>(&current->join().children()[tiflash_join.build_side_index]);
-            break;
-        }
-        case tipb::ExecType::TypeExchangeSender:
-            if (current->exchange_sender().tp() == tipb::Hash)
-                current->set_fine_grained_shuffle_stream_count(8);
-            current = const_cast<tipb::Executor *>(&current->exchange_sender().child());
-            break;
-        case tipb::ExecType::TypeExchangeReceiver:
-            current->set_fine_grained_shuffle_stream_count(8);
-            current = nullptr;
-            break;
-        case tipb::ExecType::TypeTableScan:
-            current = nullptr;
-            break;
-        default:
-            throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
-        }
-    }
-}
-
 TEST_F(ComputeServerRunner, runFineGrainedShuffleJoinTest)
 try
 {
@@ -578,10 +535,6 @@ try
                             .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, enable)
                             .project({col("l_table_2.s1"), col("l_table_2.s2"), col("l_table_2.s3")});
         auto tasks = request2.buildMPPTasks(context, properties);
-        for (auto & task : tasks)
-        {
-            setFineGrainedShuffleForExchange(const_cast<tipb::Executor &>(task.dag_request->root_executor()));
-        }
         const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
@@ -606,11 +559,6 @@ try
                             .scan("test_db", "test_table_2")
                             .aggregation({Max(col("s3"))}, {col("s1"), col("s2")}, enable);
         auto tasks = request2.buildMPPTasks(context, properties);
-        for (auto & task : tasks)
-        {
-            setFineGrainedShuffleForExchange(const_cast<tipb::Executor &>(task.dag_request->root_executor()));
-        }
-
         const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
