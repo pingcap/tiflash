@@ -97,6 +97,7 @@ void SquashingTransform::append(Block && block)
     }
 }
 
+
 bool SquashingTransform::isEnoughSize(size_t rows, size_t bytes) const
 {
     return (!min_block_size_rows && !min_block_size_bytes)

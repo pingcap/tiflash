@@ -38,7 +38,7 @@ class Context;
 
 class Block
 {
-private: 
+private:
     using Container = ColumnsWithTypeAndName;
     using IndexByName = std::map<String, size_t>;
 

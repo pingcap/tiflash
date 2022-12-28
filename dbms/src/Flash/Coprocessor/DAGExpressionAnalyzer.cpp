@@ -1078,7 +1078,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
-        for (const auto & s : key_names)              
+        for (const auto & s : key_names)
             needed_columns.insert(s);
         if (!filter_column_name.empty())
             needed_columns.insert(filter_column_name);

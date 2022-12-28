@@ -295,7 +295,7 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     bool make_nullable = build_side_index == 1
         ? join.join_type() == tipb::JoinType::TypeRightOuterJoin
         : join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    append_new_columns(probe_prepare_join_actions->getSampleBlock(), make_nullable); 
+    append_new_columns(probe_prepare_join_actions->getSampleBlock(), make_nullable);
 
     return columns_for_other_join_filter;
 }

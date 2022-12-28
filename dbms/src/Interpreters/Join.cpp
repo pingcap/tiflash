@@ -861,7 +861,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
-    //  物化一个 block 出来
     Block * stored_block = nullptr;
     {
         std::lock_guard lk(blocks_lock);
@@ -1577,7 +1576,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
     recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
@@ -1614,7 +1612,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
     MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add); 
+    added_columns.reserve(num_columns_to_add);
 
     std::vector<size_t> right_table_column_indexes;
     for (size_t i = 0; i < num_columns_to_add; ++i)
@@ -1642,17 +1640,17 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(rows);  // 用来从 right block 中 remove elements
+        filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
     IColumn::Offset current_offset = 0;
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate;
 
     if (strictness == ASTTableJoin::Strictness::All)
-        offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);  // join 的时候暂时标识一下，用来在 left block 中的 replicate rows
+        offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);
 
     switch (type)
-    { // join 完了之后，右侧 join 行都 append 到了 add columns 里面，并且填了一行的 replicate 的 offset = joined rows number
+    {
 #define M(TYPE)                                                                                                                                \
     case Join::Type::TYPE:                                                                                                                     \
         joinBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
@@ -1679,7 +1677,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     for (size_t i = 0; i < num_columns_to_add; ++i)
-    {   // 将 added cols 插入到左侧的 block 中
+    {  
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
@@ -1701,14 +1699,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
         /// If ALL ... JOIN - we replicate all the columns except the new ones.
         if (offsets_to_replicate)
         {
-            /*
-             *   a, b, c, d   offset
-            *   1, y  1  x   2         这个时候右侧的位置已经填好了，但是左侧 block 的位置还没填好，所以 offsets 是给左侧行看的，尽量复制，跟右侧的行对齐
-            *   2, z  1  x
-            *
-            *   1, y  1  x   2
-            *   1, y  1  x
-            */
             for (size_t i = 0; i < existing_columns; ++i)
             {
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicateRange(probe_process_info.start_row, probe_process_info.end_row, *offsets_to_replicate);
@@ -1730,7 +1720,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
         if (!offsets_to_replicate)
-            throw Exception("Should not reach here, the strictness of join with other condition must be ALL");   // 处理 other condition
+            throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
     }
 }

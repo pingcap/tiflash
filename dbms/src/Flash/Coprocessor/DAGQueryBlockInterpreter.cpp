@@ -505,14 +505,14 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
                                                                                    /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream->setExtraInfo(extra_info);
-        pipeline.streams.push_back(stream);                     
+        pipeline.streams.push_back(stream);
     }
     NamesAndTypes source_columns;
     for (const auto & col : pipeline.firstStream()->getHeader())
     {
         source_columns.emplace_back(col.name, col.type);
     }
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context); 
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
@@ -538,12 +538,12 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     UniqueNameGenerator unique_name_generator;
     for (const auto & expr : projection.exprs())
     {
-        auto expr_name = dag_analyzer.getActions(expr, last_step.actions);    
-        last_step.required_output.emplace_back(expr_name);                    
+        auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
+        last_step.required_output.emplace_back(expr_name);
         const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
         String alias = unique_name_generator.toUniqueName(col.name);
         output_columns.emplace_back(alias, col.type);
-        project_cols.emplace_back(col.name, alias);                   
+        project_cols.emplace_back(col.name, alias);
     }
     executeExpression(pipeline, chain.getLastActions(), log, "before projection");
     executeProject(pipeline, project_cols, "projection");
