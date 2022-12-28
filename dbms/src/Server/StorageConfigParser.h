@@ -102,7 +102,8 @@ public:
     std::vector<size_t> latest_capacity_quota;
     Strings kvstore_data_path;
 
-    String remote_source;
+    // FIXME: remove this before submit
+    String remote_source = "/Users/linkmyth/remote_ps/";
 
     UInt64 format_version = 0;
     bool lazily_init_store = true;

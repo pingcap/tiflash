@@ -54,14 +54,18 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
         {
             if (record.page_id == target_id)
             {
-                if (record.ori_page_id == "")
+                if (record.ori_page_id.empty())
                 {
                     const auto & location = record.entry.remote_info->data_location;
                     auto buf = std::make_shared<ReadBufferFromFile>(checkpoint_data_dir + *location.data_file_id);
                     buf->seek(location.offset_in_file);
-                    for (size_t i = 0; i < record.entry.field_offsets.size(); i++)
+                    const auto & field_offsets = record.entry.field_offsets;
+                    for (size_t i = 0; i < field_offsets.size(); i++)
                     {
-                        field_sizes.push_back(record.entry.getFieldSize(i));
+                        if (i == field_offsets.size() - 1)
+                            field_sizes.push_back(location.size_in_file - field_offsets.back().first);
+                        else
+                            field_sizes.push_back(field_offsets[i + 1].first - field_offsets[i].first);
                     }
                     return std::make_tuple(std::move(buf), location.size_in_file, field_sizes);
                 }

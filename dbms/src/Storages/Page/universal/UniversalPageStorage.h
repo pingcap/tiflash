@@ -172,6 +172,15 @@ public:
     GCTimeStatistics doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
     void cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics);
 
+    void doCheckpoint(std::shared_ptr<const PS::V3::Remote::WriterInfo> writer_info)
+    {
+        if (config.ps_remote_directory.get().empty())
+            return;
+        return checkpointImpl(writer_info, config.ps_remote_directory);
+    }
+
+    void checkpointImpl(std::shared_ptr<const PS::V3::Remote::WriterInfo> writer_info, const std::string & remote_directory);
+
     bool isEmpty() const
     {
         return page_directory->numPages() == 0;

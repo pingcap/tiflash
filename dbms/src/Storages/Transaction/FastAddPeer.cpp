@@ -152,6 +152,15 @@ std::string composeOutputDirectory(const std::string & remote_dir, uint64_t stor
         storage_name);
 }
 
+std::string composeOutputDataDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
+{
+    return fmt::format(
+        "{}/store_{}/ps_{}_data/",
+        remote_dir,
+        store_id,
+        storage_name);
+}
+
 std::vector<uint64_t> listAllStores(const std::string & remote_dir)
 {
     Poco::DirectoryIterator it(remote_dir);
@@ -255,10 +264,10 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
     std::optional<RemoteMeta> maybe_peer = std::nullopt;
+    auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
     while (true)
     {
-        auto page_storage = server->tmt->getContext().getWriteNodePageStorage();
-        maybe_peer = selectRemotePeer(page_storage, region_id, new_peer_id, server->proxy_helper);
+        maybe_peer = selectRemotePeer(wn_ps, region_id, new_peer_id, server->proxy_helper);
         if (!maybe_peer.has_value())
         {
             // TODO retry
@@ -268,16 +277,17 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             break;
     }
     auto & peer = maybe_peer.value();
-    auto checkpoint_manifest_path = std::get<3>(peer);
-    auto checkpoint_data_dir = Poco::Path(std::get<3>(peer)).parent().toString();
     auto checkpoint_store_id = std::get<0>(peer);
-
+    auto checkpoint_manifest_path = std::get<3>(peer);
     auto region = std::get<4>(peer);
+
+    const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
+    const auto & storage_name = wn_ps->storage_name;
+    auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
+
     auto & kvstore = server->tmt->getKVStore();
     kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
 
-    // Load data from remote.
-    // 3. insert raft log into ps(wait for local pagestorage is better)
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
         CheckpointManifestFileReader<PageDirectoryTrait>::Options{
             .file_path = checkpoint_manifest_path
@@ -289,8 +299,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     {
         wb.putPage(page_id, 0, buf, size);
     }
-    auto global_uni_ps = server->tmt->getContext().getWriteNodePageStorage();
-    global_uni_ps->write(std::move(wb));
+    wn_ps->write(std::move(wb));
 
     // Generate result.
     return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<1>(peer).SerializeAsString(), std::get<2>(peer).SerializeAsString());

@@ -134,7 +134,7 @@ try
     size_t num_rows_write = 0;
     // write data in stable
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
         num_rows_write += num_rows_write_per_batch;
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
@@ -165,11 +165,11 @@ try
 
     // write ColumnFileTiny in delta
     // FIXME: support it after field offsets in checkpoint
-    //    {
-    //        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
-    //        num_rows_write += num_rows_write_per_batch;
-    //        segment->write(dmContext(), block);
-    //    }
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
+        num_rows_write += num_rows_write_per_batch;
+        segment->write(dmContext(), block);
+    }
 
     // write ColumnFileDeleteRange
     {

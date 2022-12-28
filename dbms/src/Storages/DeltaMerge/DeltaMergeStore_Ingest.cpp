@@ -1008,6 +1008,11 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
+    LOG_INFO(log, "Ingest checkpoint with manifest path {} data dir {} from store {}",
+             checkpoint_info.checkpoint_manifest_path,
+             checkpoint_info.checkpoint_data_dir,
+             checkpoint_info.checkpoint_store_id);
+
     auto reader = PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::create(//
         PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::Options{
             .file_path = checkpoint_info.checkpoint_manifest_path
