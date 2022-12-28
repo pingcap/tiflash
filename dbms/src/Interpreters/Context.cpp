@@ -133,7 +133,7 @@ struct UniversalPageStorageWrapper
                 return this->gc();
             },
             false,
-            /*interval_ms*/ 60 * 1000);
+            /*interval_ms*/ 30 * 1000);
 
         checkpoint_handle = global_context.getBackgroundPool().addTask(
             [this] {
@@ -141,13 +141,13 @@ struct UniversalPageStorageWrapper
                 return false;
             },
             false,
-            /* interval_ms */ 30 * 1000);
+            /* interval_ms */ 10 * 1000);
     }
 
     bool gc()
     {
         Timepoint now = Clock::now();
-        const std::chrono::seconds try_gc_period(60);
+        const std::chrono::seconds try_gc_period(30);
         if (now < (last_try_gc_time.load() + try_gc_period))
             return false;
 
@@ -158,7 +158,7 @@ struct UniversalPageStorageWrapper
     void doCheckpoint()
     {
         Timepoint now = Clock::now();
-        if (now < (last_checkpoint_time.load() + Seconds(30)))
+        if (now < (last_checkpoint_time.load() + Seconds(10)))
             return;
 
         last_checkpoint_time = now;

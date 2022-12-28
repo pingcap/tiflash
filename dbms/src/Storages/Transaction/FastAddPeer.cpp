@@ -212,22 +212,22 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
         auto store_id = std::get<0>(*it);
         const auto & region_state = std::get<1>(*it);
         const auto & apply_state = std::get<2>(*it);
-//        const auto & peers = region_state.region().peers();
-//        bool ok = false;
-//        for (auto && pr : peers)
-//        {
-//            if (pr.id() == new_peer_id)
-//            {
-//                ok = true;
-//                break;
-//            }
-//        }
-//        if (!ok)
-//        {
-//            // Can't use this peer if it has no new_peer_id.
-//            reason[store_id] = fmt::format("has no peer_id {}", region_state.ShortDebugString());
-//            continue;
-//        }
+        const auto & peers = region_state.region().peers();
+        bool ok = false;
+        for (auto && pr : peers)
+        {
+            if (pr.id() == new_peer_id)
+            {
+                ok = true;
+                break;
+            }
+        }
+        if (!ok)
+        {
+            // Can't use this peer if it has no new_peer_id.
+            reason[store_id] = fmt::format("has no peer_id {}", region_state.ShortDebugString());
+            continue;
+        }
         auto peer_state = region_state.state();
         if (peer_state == PeerState::Tombstone || peer_state == PeerState::Applying)
         {
@@ -264,13 +264,16 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 {
     std::optional<RemoteMeta> maybe_peer = std::nullopt;
     auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
+    Timepoint start = Clock::now();
     while (true)
     {
         maybe_peer = selectRemotePeer(wn_ps, region_id, new_peer_id, server->proxy_helper);
         if (!maybe_peer.has_value())
         {
-            // TODO retry
-            return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+            Timepoint now = Clock::now();
+            if (now >= (start + Seconds(60)))
+                return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
         else
             break;
