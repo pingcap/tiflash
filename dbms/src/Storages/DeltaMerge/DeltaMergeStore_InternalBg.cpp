@@ -61,10 +61,11 @@ public:
     {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
 
-        // If the StoragePathPool is invalid, meaning we call `scanner` after dropping the table,
+        // If the StoragePathPool is invalid or shutdown flag is set,
+        // meaning we call `scanner` after shutdowning or dropping the table,
         // simply return an empty list is OK.
         auto path_pool = path_pool_weak_ref.lock();
-        if (!path_pool)
+        if (!path_pool || path_pool->isShutdown())
             return path_and_ids_vec;
 
         // Return the DTFiles on disks.
@@ -105,10 +106,12 @@ public:
 
     void operator()(const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids)
     {
-        // If the StoragePathPool is invalid, meaning we call `remover` after dropping the table,
-        // simply skip is OK.
+        // If the StoragePathPool is invalid or shutdown flag is set,
+        // meaning we call `remover` after shutdowning or dropping the table,
+        // we must skip because the `path_and_ids_vec` is not relyable,
+        // we may run into unexpected removing all dmfiles.
         auto path_pool = path_pool_weak_ref.lock();
-        if (!path_pool)
+        if (!path_pool || path_pool->isShutdown())
             return;
 
         SYNC_FOR("before_DeltaMergeStore::callbacks_remover_remove");
@@ -137,6 +140,7 @@ public:
                     LOG_INFO(logger,
                              "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
                              DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
+                    continue; // next file
                 }
                 else if (dmfile->canGC())
                 {
@@ -161,6 +165,7 @@ public:
                         LOG_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
                     else
                         LOG_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={} err_msg={}", dmfile->path(), err_msg);
+                    continue; // next file
                 }
             }
         }
@@ -170,15 +175,14 @@ public:
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
     // Callbacks for cleaning outdated DTFiles. Note that there is a chance
-    // that callbacks is called after the `DeltaMergeStore` dropped, we must
-    // make the callbacks safe.
+    // that callbacks is called after the `DeltaMergeStore` shutdown or dropped,
+    // we must make the callbacks safe.
     ExternalPageCallbacks callbacks;
     callbacks.ns_id = storage_pool->getNamespaceId();
     callbacks.scanner = LocalDMFileGcScanner(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider());
     callbacks.remover = LocalDMFileGcRemover(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider(), log);
     // remember to unregister it when shutdown
-    storage_pool->dataRegisterExternalPagesCallbacks(callbacks);
-    storage_pool->enableGC();
+    storage_pool->startup(std::move(callbacks));
 
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
 

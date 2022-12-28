@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Poco/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
@@ -36,7 +35,7 @@ namespace DM
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
 
-static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
+static constexpr std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
 class GlobalStoragePool : private boost::noncopyable
 {
@@ -90,7 +89,7 @@ public:
 
     NamespaceId getNamespaceId() const { return ns_id; }
 
-    PageStorageRunMode getPageStorageRunMode()
+    PageStorageRunMode getPageStorageRunMode() const
     {
         return run_mode;
     }
@@ -141,15 +140,14 @@ public:
     PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
     PageReader newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
 
-    void enableGC();
+    // Register the clean up DMFiles callbacks to PageStorage.
+    // The callbacks will be unregister when `shutdown` is called.
+    void startup(ExternalPageCallbacks && callbacks);
 
-    void dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks);
-
-    void dataUnregisterExternalPagesCallbacks(NamespaceId ns_id);
+    // Shutdown the gc handle and DMFile callbacks
+    void shutdown();
 
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
-
-    void shutdown();
 
     // Caller must cancel gc tasks before drop
     void drop();
