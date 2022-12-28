@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -26,8 +25,8 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#include <grpcpp/server_context.h>
 #include <kvproto/tikvpb.grpc.pb.h>
-
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -50,7 +49,7 @@ class FlashService : public tikvpb::Tikv::Service
 {
 public:
     FlashService();
-    void init(const TiFlashSecurityConfig & security_config_, Context & context_);
+    void init(Context & context_);
 
     ~FlashService() override;
 
@@ -89,7 +88,6 @@ protected:
     std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
     grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
-    const TiFlashSecurityConfig * security_config = nullptr;
     Context * context = nullptr;
     Poco::Logger * log = nullptr;
     bool is_async = false;

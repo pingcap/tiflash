@@ -19,7 +19,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -130,7 +129,8 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count);
+        uint64_t fine_grained_shuffle_stream_count,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
 
@@ -189,6 +189,12 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
+    bool isReceiverForTiFlashStorage()
+    {
+        // If not empty, need to send MPPTask to tiflash_storage.
+        return !disaggregated_dispatch_reqs.empty();
+    }
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -213,6 +219,11 @@ private:
 
     bool collected = false;
     int thread_count = 0;
+
+    std::atomic<Int64> data_size_in_queue;
+
+    // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
+    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

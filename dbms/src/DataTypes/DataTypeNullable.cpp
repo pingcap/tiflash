@@ -67,12 +67,12 @@ void DataTypeNullable::serializeBinaryBulkWithMultipleStreams(
     bool position_independent_encoding,
     SubstreamPath & path) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
     col.checkConsistency();
 
     /// First serialize null map.
     path.push_back(Substream::NullMap);
-    if (auto stream = getter(path))
+    if (auto * stream = getter(path))
         DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), *stream, offset, limit);
 
     /// Then serialize contents of arrays.
@@ -89,10 +89,10 @@ void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
     bool position_independent_encoding,
     SubstreamPath & path) const
 {
-    ColumnNullable & col = static_cast<ColumnNullable &>(column);
+    auto & col = static_cast<ColumnNullable &>(column);
 
     path.push_back(Substream::NullMap);
-    if (auto stream = getter(path))
+    if (auto * stream = getter(path))
         DataTypeUInt8().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
 
     path.back() = Substream::NullableElements;
@@ -100,50 +100,9 @@ void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
 }
 
 
-void DataTypeNullable::serializeWidenBinaryBulkWithMultipleStreams(
-    const IColumn & column,
-    const OutputStreamGetter & getter,
-    size_t offset,
-    size_t limit,
-    bool position_independent_encoding,
-    SubstreamPath & path) const
-{
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
-    col.checkConsistency();
-
-    /// First serialize null map.
-    path.push_back(Substream::NullMap);
-    if (auto stream = getter(path))
-        DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), *stream, offset, limit);
-
-    /// Then serialize contents of arrays.
-    path.back() = Substream::NullableElements;
-    nested_data_type->serializeWidenBinaryBulkWithMultipleStreams(col.getNestedColumn(), getter, offset, limit, position_independent_encoding, path);
-}
-
-
-void DataTypeNullable::deserializeWidenBinaryBulkWithMultipleStreams(
-    IColumn & column,
-    const InputStreamGetter & getter,
-    size_t limit,
-    double avg_value_size_hint,
-    bool position_independent_encoding,
-    SubstreamPath & path) const
-{
-    ColumnNullable & col = static_cast<ColumnNullable &>(column);
-
-    path.push_back(Substream::NullMap);
-    if (auto stream = getter(path))
-        DataTypeUInt8().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
-
-    path.back() = Substream::NullableElements;
-    nested_data_type->deserializeWidenBinaryBulkWithMultipleStreams(col.getNestedColumn(), getter, limit, avg_value_size_hint, position_independent_encoding, path);
-}
-
-
 void DataTypeNullable::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     bool is_null = col.isNullAt(row_num);
     writeBinary(is_null, ostr);
@@ -159,7 +118,7 @@ static void safeDeserialize(
     CheckForNull && check_for_null,
     DeserializeNested && deserialize_nested)
 {
-    ColumnNullable & col = static_cast<ColumnNullable &>(column);
+    auto & col = static_cast<ColumnNullable &>(column);
 
     if (check_for_null())
     {
@@ -186,14 +145,14 @@ void DataTypeNullable::deserializeBinary(IColumn & column, ReadBuffer & istr) co
 {
     safeDeserialize(
         column,
-        [&istr] { bool is_null = 0; readBinary(is_null, istr); return is_null; },
+        [&istr] { bool is_null = false; readBinary(is_null, istr); return is_null; },
         [this, &istr](IColumn & nested) { nested_data_type->deserializeBinary(nested, istr); });
 }
 
 
 void DataTypeNullable::serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     if (col.isNullAt(row_num))
         writeCString("\\N", ostr);
@@ -261,7 +220,7 @@ void DataTypeNullable::deserializeTextEscaped(IColumn & column, ReadBuffer & ist
 
 void DataTypeNullable::serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     if (col.isNullAt(row_num))
         writeCString("NULL", ostr);
@@ -280,7 +239,7 @@ void DataTypeNullable::deserializeTextQuoted(IColumn & column, ReadBuffer & istr
 
 void DataTypeNullable::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     if (col.isNullAt(row_num))
         writeCString("\\N", ostr);
@@ -298,7 +257,7 @@ void DataTypeNullable::deserializeTextCSV(IColumn & column, ReadBuffer & istr, c
 
 void DataTypeNullable::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     if (col.isNullAt(row_num))
         writeCString("NULL", ostr);
@@ -308,7 +267,7 @@ void DataTypeNullable::serializeText(const IColumn & column, size_t row_num, Wri
 
 void DataTypeNullable::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON & settings) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     if (col.isNullAt(row_num))
         writeCString("null", ostr);
@@ -326,7 +285,7 @@ void DataTypeNullable::deserializeTextJSON(IColumn & column, ReadBuffer & istr) 
 
 void DataTypeNullable::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    const auto & col = static_cast<const ColumnNullable &>(column);
 
     if (col.isNullAt(row_num))
         writeCString("\\N", ostr);

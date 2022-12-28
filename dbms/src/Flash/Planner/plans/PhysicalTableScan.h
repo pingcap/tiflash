@@ -46,6 +46,7 @@ public:
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildProjection(Context & context, DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
 
 private:
     PushDownFilter push_down_filter;

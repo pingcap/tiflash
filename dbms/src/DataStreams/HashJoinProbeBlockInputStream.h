@@ -15,10 +15,11 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/SquashingHashJoinBlockTransform.h>
+#include <Interpreters/Join.h>
 
 namespace DB
 {
-class ExpressionActions;
 
 /** Executes a certain expression over the block.
   * Basically the same as ExpressionBlockInputStream,
@@ -31,14 +32,14 @@ class ExpressionActions;
 class HashJoinProbeBlockInputStream : public IProfilingBlockInputStream
 {
 private:
-    using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
     static constexpr auto name = "HashJoinProbe";
 
 public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
-        const ExpressionActionsPtr & join_probe_actions_,
-        const String & req_id);
+        const JoinPtr & join_,
+        const String & req_id,
+        UInt64 max_block_size);
 
     String getName() const override { return name; }
     Block getTotals() override;
@@ -46,10 +47,13 @@ public:
 
 protected:
     Block readImpl() override;
+    Block getOutputBlock();
 
 private:
     const LoggerPtr log;
-    ExpressionActionsPtr join_probe_actions;
+    JoinPtr join;
+    ProbeProcessInfo probe_process_info;
+    SquashingHashJoinBlockTransform squashing_transform;
 };
 
 } // namespace DB

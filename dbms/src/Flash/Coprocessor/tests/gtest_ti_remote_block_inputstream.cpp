@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -210,6 +211,16 @@ struct MockReceiverContext
         return std::make_shared<Reader>(queue);
     }
 
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
+    {
+        throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
+    void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
+    {
+        throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
+    }
+
     static Status getStatusOK()
     {
         return ::grpc::Status();
@@ -387,11 +398,10 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        const auto * summary = receiver_stream->getRemoteExecutionSummaries(0);
-        ASSERT_TRUE(summary != nullptr);
-        ASSERT_EQ(summary->size(), 1);
-        ASSERT_EQ(summary->begin()->first, "Executor_0");
-        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary->begin()->second));
+        const auto & summary = receiver_stream->getRemoteExecutionSummary();
+        ASSERT_EQ(summary.execution_summaries.size(), 1);
+        ASSERT_EQ(summary.execution_summaries.begin()->first, "Executor_0");
+        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary.execution_summaries.begin()->second));
 
         /// Check Connection Info
         auto infos = receiver_stream->getConnectionProfileInfos();

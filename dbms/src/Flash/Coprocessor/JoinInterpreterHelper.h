@@ -86,13 +86,6 @@ struct TiFlashJoin
     /// return "" for everything else.
     String genMatchHelperName(const Block & header1, const Block & header2) const;
 
-    /// columns_added_by_join
-    /// = join_output_columns - probe_side_columns
-    /// = build_side_columns + match_helper_name
-    NamesAndTypesList genColumnsAddedByJoin(
-        const Block & build_side_header,
-        const String & match_helper_name) const;
-
     /// The columns output by join will be:
     /// {columns of left_input, columns of right_input, match_helper_name}
     NamesAndTypes genJoinOutputColumns(

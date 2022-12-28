@@ -13,6 +13,17 @@
 // limitations under the License.
 
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
+#include <Debug/MockExecutor/ExchangeSenderBinder.h>
+#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/JoinBinder.h>
+#include <Debug/MockExecutor/LimitBinder.h>
+#include <Debug/MockExecutor/ProjectBinder.h>
+#include <Debug/MockExecutor/SelectionBinder.h>
+#include <Debug/MockExecutor/SortBinder.h>
+#include <Debug/MockExecutor/TableScanBinder.h>
+#include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
@@ -90,7 +101,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context, DAGRequestType type)
 {
     // build tree struct base executor
-    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
+    MPPInfo mpp_info(properties.start_ts, properties.query_ts, properties.server_id, properties.local_query_id, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
@@ -261,22 +272,23 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
-                                            tipb::JoinType tp,
-                                            MockAstVec join_cols,
-                                            MockAstVec left_conds,
-                                            MockAstVec right_conds,
-                                            MockAstVec other_conds,
-                                            MockAstVec other_eq_conds_from_in)
+DAGRequestBuilder & DAGRequestBuilder::join(
+    const DAGRequestBuilder & right,
+    tipb::JoinType tp,
+    MockAstVec join_col_exprs,
+    MockAstVec left_conds,
+    MockAstVec right_conds,
+    MockAstVec other_conds,
+    MockAstVec other_eq_conds_from_in,
+    uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     assert(right.root);
-
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group_by_expr)
+DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group_by_expr, uint64_t fine_grained_shuffle_stream_count)
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
@@ -284,10 +296,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
         agg_funcs->children.push_back(agg_func);
     if (group_by_expr)
         group_by_exprs->children.push_back(group_by_expr);
-    return buildAggregation(agg_funcs, group_by_exprs);
+    return buildAggregation(agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs)
+DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     auto agg_func_list = std::make_shared<ASTExpressionList>();
     auto group_by_expr_list = std::make_shared<ASTExpressionList>();
@@ -295,13 +307,13 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAst
         agg_func_list->children.push_back(func);
     for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-    return buildAggregation(agg_func_list, group_by_expr_list);
+    return buildAggregation(agg_func_list, group_by_expr_list, fine_grained_shuffle_stream_count);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs)
+DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs);
+    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
     return *this;
 }
 
@@ -385,6 +397,7 @@ void MockDAGRequestContext::addMockTable(const String & db, const String & table
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assert(columnInfos.size() == columns.size());
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
 }

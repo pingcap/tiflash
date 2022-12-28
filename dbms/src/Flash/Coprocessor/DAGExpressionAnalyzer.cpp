@@ -842,7 +842,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns)
+    const ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
 
@@ -867,9 +867,9 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 
         if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
         {
-            if (table_scan_columns[i].decimal() > 6)
+            if (table_scan_columns[i].decimal > 6)
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
-            auto fsp = table_scan_columns[i].decimal() < 0 ? 0 : table_scan_columns[i].decimal();
+            const auto fsp = table_scan_columns[i].decimal < 0 ? 0 : table_scan_columns[i].decimal;
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
             fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
@@ -908,16 +908,6 @@ String DAGExpressionAnalyzer::appendDurationCast(
     const ExpressionActionsPtr & actions)
 {
     return applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
-}
-
-void DAGExpressionAnalyzer::appendJoin(
-    ExpressionActionsChain & chain,
-    SubqueryForSet & join_query,
-    const NamesAndTypesList & columns_added_by_join) const
-{
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsPtr actions = chain.getLastActions();
-    actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 
 std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(

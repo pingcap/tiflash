@@ -20,6 +20,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <kvproto/coprocessor.pb.h>
+#include <kvproto/mpp.pb.h>
 
 #include <fstream>
 #include <iostream>
