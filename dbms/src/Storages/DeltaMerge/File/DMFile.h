@@ -190,6 +190,12 @@ public:
     static DMFilePtr
     create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationOpt configuration = std::nullopt);
 
+    static DMFilePtr createByLink(
+        const FileProviderPtr & file_provider,
+        UInt64 target_file_id,
+        UInt64 new_file_id,
+        const String & parent_path);
+
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
         UInt64 file_id,

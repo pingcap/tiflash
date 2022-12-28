@@ -18,6 +18,7 @@
 #include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -101,7 +102,8 @@ TEST_F(UniPageStorageTest, RaftLog)
     }
 
     RaftLogReader raft_log_reader(*page_storage);
-    auto checker = [this](const DB::Page & page) {
+    auto checker = [this](const UniversalPageId & page_id, const DB::Page & page) {
+        UNUSED(page_id);
         LOG_INFO(log, "{}", page.isValid());
     };
     raft_log_reader.traverse(RaftLogReader::toFullPageId(10, 0), RaftLogReader::toFullPageId(101, 0), checker);
@@ -210,8 +212,8 @@ TEST_F(UniPageStorageTest, Scan)
         auto start = RaftLogReader::toRegionMetaPrefixKey(15);
         auto end = RaftLogReader::toRegionMetaPrefixKey(25);
         size_t count = 0;
-        auto checker = [&count](const DB::Page & page) {
-            UNUSED(page);
+        auto checker = [&count](const UniversalPageId & page_id, const DB::Page & page) {
+            UNUSED(page_id, page);
             count++;
         };
         raft_log_reader.traverse(start, end, checker);
@@ -221,8 +223,8 @@ TEST_F(UniPageStorageTest, Scan)
         auto start = RaftLogReader::toRegionMetaPrefixKey(15);
         auto end = "";
         size_t count = 0;
-        auto checker = [&count](const DB::Page & page) {
-            UNUSED(page);
+        auto checker = [&count](const UniversalPageId & page_id, const DB::Page & page) {
+            UNUSED(page_id, page);
             count++;
         };
         raft_log_reader.traverse(start, end, checker);

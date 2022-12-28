@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -116,6 +117,54 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 
     stable->valid_rows = valid_rows;
     stable->valid_bytes = valid_bytes;
+
+    return stable;
+}
+
+StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
+    DMContext & context,
+    const PS::V3::CheckpointPageManager & manager,
+    NamespaceId ns_id,
+    PageId stable_id,
+    WriteBatches & wbs)
+{
+    auto & storage_pool = context.storage_pool;
+    auto new_stable_id = storage_pool.newMetaPageId();
+    auto stable = std::make_shared<StableValueSpace>(new_stable_id);
+
+    auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
+    auto [buf, buf_size, _] = manager.getReadBuffer(target_id);
+
+
+    UInt64 version, valid_rows, valid_bytes, size;
+    readIntBinary(version, *buf);
+    if (version != StableFormat::V1)
+        throw Exception("Unexpected version: " + DB::toString(version));
+
+    readIntBinary(valid_rows, *buf);
+    readIntBinary(valid_bytes, *buf);
+    readIntBinary(size, *buf);
+    UInt64 page_id;
+    for (size_t i = 0; i < size; ++i)
+    {
+        readIntBinary(page_id, *buf);
+        // FIXME: handle ref id here
+        auto file_id = page_id;
+        auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
+        auto delegator = context.path_pool.getStableDiskDelegator();
+        auto new_file_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putExternal(new_file_id, 0);
+        // FIXME: the target dmfile should be in remote dir
+        auto new_dmfile = DMFile::createByLink(context.db_context.getFileProvider(), file_id, new_file_id, file_parent_path);
+        context.path_pool.getStableDiskDelegator().addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), file_parent_path);
+
+        stable->files.push_back(new_dmfile);
+    }
+
+    stable->valid_rows = valid_rows;
+    stable->valid_bytes = valid_bytes;
+
+    stable->saveMeta(wbs.meta);
 
     return stable;
 }

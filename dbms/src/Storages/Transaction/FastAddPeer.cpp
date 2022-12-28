@@ -18,7 +18,9 @@
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+#include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/Transaction/Keys.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
@@ -68,10 +70,10 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
     return ret;
 }
 
-std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id)
+std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
     UNUSED(new_peer_id);
-    auto log = &Poco::Logger::get("fast add");
+    auto * log = &Poco::Logger::get("fast add");
 
     Poco::DirectoryIterator it(output_directory);
     Poco::DirectoryIterator end;
@@ -107,6 +109,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
 
     raft_serverpb::RegionLocalState restored_region_state;
     raft_serverpb::RaftApplyState restored_apply_state;
+    RegionPtr region;
     for (auto iter = records.begin(); iter != records.end(); iter++)
     {
         std::string page_id = iter->page_id;
@@ -124,12 +127,20 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
             std::string ret = readData(output_directory, location);
             restored_region_state.ParseFromArray(ret.data(), ret.size());
         }
+        else if (page_id == KVStoreReader::toFullPageId(region_id))
+        {
+            auto & location = iter->entry.remote_info->data_location;
+            auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
+            buf.seek(location.offset_in_file);
+            region = Region::deserialize(buf, proxy_helper);
+            RUNTIME_CHECK(buf.count() == location.size_in_file);
+        }
         else
         {
             // Other data, such as RegionPersister.
         }
     }
-    return std::make_tuple(store_id, restored_region_state, restored_apply_state, optimal);
+    return std::make_tuple(store_id, restored_region_state, restored_apply_state, optimal, region);
 }
 
 std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
@@ -162,9 +173,9 @@ std::vector<uint64_t> listAllStores(const std::string & remote_dir)
     return res;
 }
 
-std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t region_id, uint64_t new_peer_id)
+std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
-    auto log = &Poco::Logger::get("fast add");
+    auto * log = &Poco::Logger::get("fast add");
 
     std::vector<RemoteMeta> choices;
     std::map<uint64_t, std::string> reason;
@@ -179,7 +190,7 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
     {
         auto store_id = *store_it;
         auto output_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
-        auto maybe_choice = fetchRemotePeerMeta(output_directory, store_id, region_id, new_peer_id);
+        auto maybe_choice = fetchRemotePeerMeta(output_directory, store_id, region_id, new_peer_id, proxy_helper);
         if (maybe_choice.has_value())
         {
             choices.push_back(std::move(maybe_choice.value()));
@@ -251,7 +262,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     while (true)
     {
         auto page_storage = server->tmt->getContext().getWriteNodePageStorage();
-        auto maybe_peer = selectRemotePeer(page_storage, region_id, new_peer_id);
+        maybe_peer = selectRemotePeer(page_storage, region_id, new_peer_id, server->proxy_helper);
         if (!maybe_peer.has_value())
         {
             // TODO retry
@@ -260,11 +271,31 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         else
             break;
     }
+    auto & peer = maybe_peer.value();
+    auto checkpoint_file_path = std::get<3>(peer);
+    auto checkpoint_dir = Poco::Path(checkpoint_file_path).parent().toString();
+
+    auto region = std::get<4>(peer);
+    auto & kvstore = server->tmt->getKVStore();
+    kvstore->handleIngestCheckpoint(region, checkpoint_file_path, *server->tmt);
 
     // Load data from remote.
+    // 3. insert raft log into ps(wait for local pagestorage is better)
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_file_path
+        });
+    PS::V3::CheckpointPageManager manager(*reader, checkpoint_dir);
+    auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()));
+    UniversalWriteBatch wb;
+    for (const auto & [buf, size, page_id]: raft_log_data)
+    {
+        wb.putPage(page_id, 0, buf, size);
+    }
+    auto global_uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+    global_uni_ps->write(std::move(wb));
 
     // Generate result.
-    auto & peer = maybe_peer.value();
     return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<1>(peer).SerializeAsString(), std::get<2>(peer).SerializeAsString());
 }
 } // namespace DB

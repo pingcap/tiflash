@@ -95,7 +95,7 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             ASSERT(!maybe_remote_meta2.has_value());
 
             auto remote_meta = std::move(maybe_remote_meta.value());
-            const auto & [s_id, restored_region_state, restored_apply_state, optimal] = remote_meta;
+            const auto & [s_id, restored_region_state, restored_apply_state, optimal, _] = remote_meta;
 
             auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = output_directory + optimal});
             auto edit = reader->read();

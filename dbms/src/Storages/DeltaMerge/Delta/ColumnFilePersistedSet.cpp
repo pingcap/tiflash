@@ -118,6 +118,58 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
 }
 
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
+    DMContext & context,
+    const PS::V3::CheckpointPageManager & manager,
+    const RowKeyRange & segment_range,
+    NamespaceId ns_id,
+    PageId id,
+    WriteBatches & wbs)
+{
+    auto & storage_pool = context.storage_pool;
+    auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, id);
+    auto [buf, buf_size, _] = manager.getReadBuffer(target_id);
+    auto column_files = deserializeSavedColumnFiles(context, segment_range, *buf);
+    RUNTIME_CHECK(buf->count() == buf_size);
+    ColumnFilePersisteds new_column_files;
+    for (auto & column_file: column_files)
+    {
+        if (auto * t = column_file->tryToTinyFile(); t)
+        {
+            auto target_cf_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Log), ns_id, t->getDataPageId());
+            auto [cf_buf, cf_buf_size, field_sizes] = manager.getReadBuffer(target_cf_id);
+            auto new_cf_id = storage_pool.newLogPageId();
+            wbs.log.putPage(new_cf_id, 0, cf_buf, cf_buf_size, field_sizes);
+            new_column_files.push_back(t->cloneWith(new_cf_id));
+        }
+        else if (auto * d = column_file->tryToDeleteRange(); d)
+        {
+            new_column_files.push_back(column_file);
+        }
+        else if (auto * b = column_file->tryToBigFile(); b)
+        {
+            auto delegator = context.path_pool.getStableDiskDelegator();
+            auto new_file_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            wbs.data.putExternal(new_file_id, 0);
+            auto file_id = b->getFile()->fileId();
+            // FIXME: how to find it's path
+            auto file_parent_path = delegator.getDTFilePath(file_id);
+            auto new_dmfile = DMFile::createByLink(context.db_context.getFileProvider(), file_id, new_file_id, file_parent_path);
+            context.path_pool.getStableDiskDelegator().addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), file_parent_path);
+            auto new_column_file = b->cloneWith(context, new_dmfile, segment_range);
+            new_column_files.push_back(new_column_file);
+        }
+        else
+        {
+            RUNTIME_CHECK_MSG(false, "shouldn't reach here");
+        }
+    }
+    auto new_delta_id = storage_pool.newMetaPageId();
+    auto new_persisted_set = std::make_shared<ColumnFilePersistedSet>(new_delta_id, new_column_files);
+    new_persisted_set->saveMeta(wbs);
+    return new_persisted_set;
+}
+
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
 {
     serializeColumnFilePersistedLevels(wbs, metadata_id, persisted_files_levels);

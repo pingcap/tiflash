@@ -290,4 +290,24 @@ struct RegionPtrWithSnapshotFiles
     const std::vector<DM::ExternalDTFileInfo> external_files;
 };
 
+// A wrap of RegionPtr, with checkpoint path waitting to be ingested
+struct RegionPtrWithCheckpointPath
+{
+    using Base = RegionPtr;
+
+    RegionPtrWithCheckpointPath(
+        const Base & base_,
+        String && checkpoint_path_);
+
+    /// to be compatible with usage as RegionPtr.
+    Base::element_type * operator->() const { return base.operator->(); }
+    const Base::element_type & operator*() const { return base.operator*(); }
+
+    /// make it could be cast into RegionPtr implicitly.
+    operator const Base &() const { return base; }
+
+    const Base & base;
+    String checkpoint_path;
+};
+
 } // namespace DB

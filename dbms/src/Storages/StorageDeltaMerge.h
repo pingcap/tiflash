@@ -92,6 +92,11 @@ public:
         bool clear_data_in_range,
         const Settings & settings);
 
+    void ingestSegmentFromCheckpointPath(
+        const DM::RowKeyRange & range,
+        const String & checkpoint_path,
+        const Settings & settings);
+
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;
 
     void rename(

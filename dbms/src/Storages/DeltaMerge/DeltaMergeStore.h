@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
@@ -290,6 +291,29 @@ public:
         return ingestFiles(dm_context, range, external_files, clear_data_in_range);
     }
 
+    std::vector<SegmentPtr> ingestSegmentsUsingSplit(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & ingest_range,
+        const std::vector<SegmentPtr> & target_segments);
+
+    bool ingestSegmentIntoSegmentUsingSplit(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const SegmentPtr & target_segment);
+
+    void ingestSegmentFromCheckpointPath(const DMContextPtr & dm_context, //
+                                         const DM::RowKeyRange & range,
+                                         const String & checkpoint_path);
+
+    void ingestSegmentFromCheckpointPath(const Context & db_context, //
+                                         const DB::Settings & db_settings,
+                                         const DM::RowKeyRange & range,
+                                         const String & checkpoint_path)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return ingestSegmentFromCheckpointPath(dm_context, range, checkpoint_path);
+    }
+
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context & db_context,
                               const DB::Settings & db_settings,
@@ -529,6 +553,12 @@ private:
         DMContext & dm_context,
         const SegmentPtr & segment,
         const DMFilePtr & data_file);
+
+    SegmentPtr segmentDangerouslyReplaceData2(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const DMFilePtr & data_file,
+        const ColumnFilePersisteds & column_file_persisteds);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
     inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)

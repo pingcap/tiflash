@@ -99,6 +99,18 @@ public:
         // return fmt::format("r_{}_{}", ns_id, page_id);
     }
 
+    // 0x01 0x02 region_id 0x01
+    static UniversalPageId toFullRaftLogPrefix(NamespaceId region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        // BigEndian
+        UniversalPageIdFormat::encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     // 0x01 0x02 region_id 0x01 log_idx
     static UniversalPageId toFullRaftLogKey(NamespaceId region_id, PageId log_index)
     {
@@ -189,6 +201,11 @@ public:
         UniversalPageIdFormat::encodeUInt64(ns_id, buff);
         writeString("_", buff);
         return buff.releaseStr();
+    }
+
+    static UniversalPageId toFullUniversalPageId(const String & prefix, NamespaceId ns_id, PageId page_id)
+    {
+        return buildTableUniversalPageId(prefix, ns_id, page_id);
     }
 
     UniversalPageId toFullPageId(PageId page_id) const

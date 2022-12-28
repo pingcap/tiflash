@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/Path.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 
 namespace ProfileEvents
 {
@@ -596,5 +599,491 @@ void DeltaMergeStore::ingestFiles(
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
+std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
+    const DMContextPtr & dm_context,
+    const RowKeyRange & ingest_range,
+    const std::vector<SegmentPtr> & target_segments)
+{
+    std::set<SegmentPtr> updated_segments;
+
+    // First phase (DeleteRange Phase):
+    // Write DeleteRange to the covered segments to ensure that all data in the `ingest_range` is cleared.
+    {
+        RowKeyRange remaining_delete_range = ingest_range;
+        LOG_INFO(
+            log,
+            "Table ingest using split - delete range phase - begin, remaining_delete_range={}",
+            remaining_delete_range.toDebugString());
+
+        while (!remaining_delete_range.none())
+        {
+            SegmentPtr segment;
+            {
+                std::shared_lock lock(read_write_mutex);
+
+                auto segment_it = segments.upper_bound(remaining_delete_range.getStart());
+                RUNTIME_CHECK(segment_it != segments.end(), remaining_delete_range.toDebugString());
+                segment = segment_it->second;
+            }
+
+            const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
+            RUNTIME_CHECK(
+                !delete_range.none(), // as remaining_delete_range is not none, we expect the shrinked range to be not none.
+                delete_range.toDebugString(),
+                segment->simpleInfo(),
+                remaining_delete_range.toDebugString());
+            LOG_DEBUG(
+                log,
+                "Table ingest using split - delete range phase - Try to delete range in segment, delete_range={} segment={} remaining_delete_range={} updated_segments_n={}",
+                delete_range.toDebugString(),
+                segment->simpleInfo(),
+                remaining_delete_range.toDebugString(),
+                updated_segments.size());
+
+            const bool succeeded = segment->write(*dm_context, delete_range);
+            if (succeeded)
+            {
+                updated_segments.insert(segment);
+                RUNTIME_CHECK(compare(delete_range.getEnd(), remaining_delete_range.getStart()) >= 0);
+                remaining_delete_range.setStart(delete_range.end); // We always move forward
+            }
+            else
+            {
+                // segment may be abandoned, retry current range by finding the segment again.
+            }
+        }
+    }
+
+    LOG_DEBUG(
+        log,
+        "Table ingest using split - delete range phase - finished, updated_segments_n={}",
+        updated_segments.size());
+
+    /*
+     * In second phase (SplitIngest Phase),
+     * we will try to ingest DMFile one by one into the segments in order.
+     *
+     * Consider the following case:
+     * -Inf                                                                         +Inf
+     *  │        │--------------- Ingest Range ---------------│                       │
+     *  │               │-- DMFile --│- DMFile --│---- DMFile ----│- DMFile --│       │
+     *  │- Segment --│-- Seg --│------- Segment -----│- Seg -│------- Segment --------│
+     *
+     * This is what we will ingest:
+     * Iterate 0:
+     * -Inf                                                                         +Inf
+     *  │        │--------------- Ingest Range ---------------│                       │
+     *  │               │-- DMFile --│                                                │
+     *  │            │-- Seg --│------- Segment -----│                                │
+     *                   ↑              ↑ The segment we ingest DMFile into
+     *
+     * Iterate 1:
+     * -Inf                                                                         +Inf
+     *  │        │--------------- Ingest Range ---------------│                       │
+     *  │               │************│- DMFile --│                                    │
+     *  │                      │------- Segment -----│                                │
+     *                                  ↑ The segment we ingest DMFile into
+     */
+
+    LOG_DEBUG(
+        log,
+        "Table ingest using split - split ingest phase - begin, ingest_range={}, files_n={}",
+        ingest_range.toDebugString(),
+        target_segments.size());
+
+    for (size_t file_idx = 0; file_idx < target_segments.size(); file_idx++)
+    {
+        // This should not happen. Just check to be confident.
+        // Even if it happened, we could handle it gracefully here. (but it really means somewhere else is broken)
+        if (target_segments[file_idx]->getEstimatedRows() == 0)
+        {
+            LOG_WARNING(
+                log,
+                "Table ingest using split - split ingest phase - Unexpected empty DMFile, skipped. ingest_range={} file_idx={}",
+                ingest_range.toDebugString(),
+                file_idx);
+            continue;
+        }
+
+        /**
+         * Each DMFile (bounded by the ingest range) may overlap with multiple segments, like:
+         * -Inf                                                                         +Inf
+         *  │        │--------------- Ingest Range ---------------│                       │
+         *  │               │-- DMFile --│                                                │
+         *  │            │-- Seg --│------- Segment -----│                                │
+         * We will try to ingest it into all overlapped segments.
+         */
+        auto file_ingest_range = target_segments[file_idx]->getRowKeyRange();
+        while (!file_ingest_range.none()) // This DMFile has remaining data to ingest
+        {
+            SegmentPtr segment;
+            {
+                std::shared_lock lock(read_write_mutex);
+                auto segment_it = segments.upper_bound(file_ingest_range.getStart());
+                RUNTIME_CHECK(segment_it != segments.end());
+                segment = segment_it->second;
+            }
+
+            if (segment->hasAbandoned())
+                continue; // retry with current range and file
+
+            /**
+             * -Inf                                                                         +Inf
+             *  │        │--------------- Ingest Range ---------------│                       │
+             *  │               │-- DMFile --│                                                │
+             *  │            │-- Seg --│------- Segment -----│                                │
+             *                  ^^^^^^^^ segment_ingest_range
+             */
+            const auto segment_ingest_range = file_ingest_range.shrink(segment->getRowKeyRange());
+            RUNTIME_CHECK(!segment_ingest_range.none());
+
+            LOG_INFO(
+                log,
+                "Table ingest using split - split ingest phase - Try to ingest file into segment, file_idx={} file_id=dmf_{} file_ingest_range={} segment={} segment_ingest_range={}",
+                file_idx,
+                target_segments[file_idx]->segmentId(),
+                file_ingest_range.toDebugString(),
+                segment->simpleInfo(),
+                segment_ingest_range.toDebugString());
+
+            const bool succeeded = ingestSegmentIntoSegmentUsingSplit(*dm_context, segment, target_segments[file_idx]);
+            if (succeeded)
+            {
+                updated_segments.insert(segment);
+                // We have ingested (DTFileRange ∪ ThisSegmentRange), let's try with next overlapped segment.
+                RUNTIME_CHECK(compare(segment_ingest_range.getEnd(), file_ingest_range.getStart()) > 0);
+                file_ingest_range.setStart(segment_ingest_range.end);
+            }
+            else
+            {
+                // this segment is abandoned, or may be split into multiples.
+                // retry with current range and file and find segment again.
+            }
+        }
+    }
+
+    LOG_DEBUG(
+        log,
+        "Table ingest using split - split ingest phase - finished, updated_segments_n={}",
+        updated_segments.size());
+
+    return std::vector<SegmentPtr>(
+        updated_segments.begin(),
+        updated_segments.end());
+}
+
+bool DeltaMergeStore::ingestSegmentIntoSegmentUsingSplit(
+    DMContext & dm_context,
+    const SegmentPtr & segment,
+    const SegmentPtr & target_segment)
+{
+    const auto & segment_range = segment->getRowKeyRange();
+    const auto & ingest_range = target_segment->getRowKeyRange();
+
+    // The ingest_range must fall in segment's range.
+    RUNTIME_CHECK(
+        !ingest_range.none(),
+        ingest_range.toDebugString());
+    RUNTIME_CHECK(
+        compare(segment_range.getStart(), ingest_range.getStart()) <= 0,
+        segment_range.toDebugString(),
+        ingest_range.toDebugString());
+    RUNTIME_CHECK(
+        compare(segment_range.getEnd(), ingest_range.getEnd()) >= 0,
+        segment_range.toDebugString(),
+        ingest_range.toDebugString());
+
+    const bool is_start_matching = (compare(segment_range.getStart(), ingest_range.getStart()) == 0);
+    const bool is_end_matching = (compare(segment_range.getEnd(), ingest_range.getEnd()) == 0);
+
+    if (is_start_matching && is_end_matching)
+    {
+        /*
+         * The segment and the ingest range is perfectly matched. We can
+         * simply replace all of the data from this segment.
+         *
+         * Example:
+         *    │----------- Segment ----------│
+         *    │-------- Ingest Range --------│
+         */
+        WriteBatches wbs{dm_context.storage_pool};
+        auto [in_memory_files, column_file_persisteds] = target_segment->getDelta()->cloneAllColumnFiles(
+            target_segment->mustGetUpdateLock(),
+            dm_context,
+            segment_range,
+            wbs);
+        RUNTIME_CHECK(in_memory_files.empty());
+        wbs.writeLogAndData();
+        auto dm_files = target_segment->getStable()->getDMFiles();
+        RUNTIME_CHECK(dm_files.size() == 1);
+        const auto new_segment_or_null = segmentDangerouslyReplaceData(dm_context, segment, dm_files[0], column_file_persisteds);
+        const bool succeeded = new_segment_or_null != nullptr;
+        if (!succeeded)
+        {
+            wbs.rollbackWrittenLogAndData();
+        }
+        return succeeded;
+    }
+    else if (is_start_matching)
+    {
+        /*
+         * Example:
+         *    │--------------- Segment ---------------│
+         *    │-------- Ingest Range --------│
+         *
+         * We will logical split the segment to form a perfect matching segment:
+         *    │--------------- Segment ------│--------│
+         *    │-------- Ingest Range --------│
+         */
+        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.end, SegmentSplitMode::Logical);
+        if (left == nullptr || right == nullptr)
+        {
+            // Split failed, likely caused by snapshot failed.
+            // Sleep awhile and retry.
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        // Always returning false, because we need to retry to get a new segment (as the old segment is abandoned)
+        // even when split succeeded.
+        return false;
+    }
+    else if (is_end_matching)
+    {
+        /*
+         * Example:
+         *    │--------------- Segment ---------------│
+         *             │-------- Ingest Range --------│
+         *
+         * We will logical split the segment to form a perfect matching segment:
+         *    │--------│------ Segment ---------------│
+         *             │-------- Ingest Range --------│
+         */
+        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
+        if (left == nullptr || right == nullptr)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        return false;
+    }
+    else
+    {
+        /*
+         * Example:
+         *    │--------------- Segment ---------------│
+         *        │-------- Ingest Range --------│
+         *
+         * We invoke a logical split first:
+         *    │---│----------- Segment ---------------│
+         *        │-------- Ingest Range --------│
+         */
+        const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
+        if (left == nullptr || right == nullptr)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        return false;
+    }
+}
+
+void DeltaMergeStore::ingestSegmentFromCheckpointPath(const DMContextPtr & dm_context, //
+                                     const DM::RowKeyRange & range,
+                                     const String & checkpoint_path)
+{
+    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
+    {
+        const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", log->identifier());
+        LOG_WARNING(log, "{}", msg);
+        throw Exception(msg);
+    }
+    auto reader = PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_path
+        });
+    auto checkpoint_dir = Poco::Path(checkpoint_path).parent().toString();
+    PS::V3::CheckpointPageManager manager(*reader, checkpoint_dir);
+    auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, manager);
+    WriteBatches wbs{dm_context->storage_pool};
+    auto restored_segments = Segment::restoreSegmentsFromCheckpoint( //
+        log,
+        *dm_context,
+        physical_table_id,
+        segment_meta_infos,
+        range,
+        manager,
+        wbs);
+    wbs.writeAll();
+
+    RUNTIME_CHECK_MSG(!restored_segments.empty(), "Failed to restore any segment");
+
+    auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
+
+    for (auto & segment : updated_segments)
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+
+//    std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
+//        const DMContextPtr & dm_context,
+//        const RowKeyRange & ingest_range,
+//        const std::vector<SegmentPtr> & target_segments)
+
+//    // begin ingest segments
+//    RowKeyRange cur_range = range;
+//    while (true)
+//    {
+//        SegmentPtr segment_to_split;
+//        {
+//            std::shared_lock lock(read_write_mutex);
+//            /*
+//             *  we want a perfect match which ingest range start and segment range start to avoid hard case like the following:
+//             *     │---------- Range ------------│
+//             *  │-------- Segment Range ------------│
+//             */
+//            auto first_segment_it = segments.upper_bound(cur_range.getStart());
+//            auto first_segment = first_segment_it->second;
+//            auto first_segment_range = first_segment->getRowKeyRange();
+//            if (compare(range.getStart(), first_segment_range.getStart()) == 0)
+//            {
+//                bool found_first_segment;
+//                PageId last_segment_id;
+//                while (!cur_range.none())
+//                {
+//                    auto segment_it = segments.upper_bound(cur_range.getStart());
+//                    auto segment = segment_it->second;
+//                    auto segment_range = segment->getRowKeyRange();
+//                    segments.erase(segment_range.getEnd());
+//                    id_to_segment.erase(segment->segmentId());
+//                    RUNTIME_CHECK(compare(segment_range.getStart(), cur_range.getStart()) == 0);
+//
+//                    // FIXME: handle first segment is deleted.
+//                    if (compare(segment_range.getEnd(), cur_range.getEnd()) <= 0)
+//                    {
+//                        /*
+//                         *        │------------- Range ---------------│
+//                         *        │-------- Segment Range --------│
+//                         *
+//                         *        │------------- Range -----------│
+//                         *        │-------- Segment Range --------│
+//                         */
+//                        if (!found_first_segment)
+//                        {
+//                            auto prev_segment_it = segment_it;
+//                            prev_segment_it--;
+//                            auto prev_segment = prev_segment_it->second;
+//                            auto new_prev_segment = std::make_shared<Segment>(//
+//                                log,
+//                                prev_segment->segmentEpoch() + 1,
+//                                prev_segment->getRowKeyRange(),
+//                                prev_segment->segmentId(),
+//                                restored_segments[0]->segmentId(),
+//                                prev_segment->getDelta(),
+//                                prev_segment->getStable()
+//                            );
+//                            prev_segment->abandon(*dm_context);
+//                            segments[prev_segment->getRowKeyRange().getEnd()] = prev_segment;
+//                            id_to_segment.emplace(prev_segment->segmentId(), prev_segment);
+//                            new_prev_segment->serialize(wbs.meta);
+//                            found_first_segment = true;
+//                        }
+//                        auto next_segment_it = segment_it;
+//                        next_segment_it++;
+//                        last_segment_id = next_segment_it != segments.end() ? next_segment_it->second->segmentId() : 0;
+//                    }
+//                    else if (compare(cur_range.getEnd(), segment_range.getEnd()) <= 0)
+//                    {
+//                        /*
+//                         *        │------------- Range -----------│
+//                         *        │-------- Segment Range --------------│
+//                         */
+//                        if (!found_first_segment)
+//                        {
+//                            auto prev_segment_it = segment_it;
+//                            prev_segment_it--;
+//                            auto prev_segment = prev_segment_it->second;
+//                            auto new_prev_segment = std::make_shared<Segment>(//
+//                                log,
+//                                prev_segment->segmentEpoch() + 1,
+//                                prev_segment->getRowKeyRange(),
+//                                prev_segment->segmentId(),
+//                                restored_segments[0]->segmentId(),
+//                                prev_segment->getDelta(),
+//                                prev_segment->getStable()
+//                            );
+//                            prev_segment->abandon(*dm_context);
+//                            segments[prev_segment->getRowKeyRange().getEnd()] = prev_segment;
+//                            id_to_segment.emplace(prev_segment->segmentId(), prev_segment);
+//                            new_prev_segment->serialize(wbs.meta);
+//                            found_first_segment = true;
+//                        }
+//                        if (compare(cur_range.getEnd(), segment_range.getEnd()) < 0)
+//                        {
+//                            RowKeyRange new_segment_range = segment_range;
+//                            new_segment_range.setStart(cur_range.end);
+//                            auto new_segment = std::make_shared<Segment>(//
+//                                log,
+//                                segment->segmentEpoch() + 1,
+//                                new_segment_range,
+//                                segment->segmentId(),
+//                                segment->nextSegmentId(),
+//                                segment->getDelta(),
+//                                segment->getStable()
+//                            );
+//                            segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
+//                            id_to_segment.emplace(new_segment->segmentId(), new_segment);
+//                            new_segment->serialize(wbs.meta);
+//                            last_segment_id = segment->segmentId();
+//                        }
+//                        else
+//                        {
+//                            auto next_segment_it = segment_it;
+//                            next_segment_it++;
+//                            last_segment_id = next_segment_it != segments.end() ? next_segment_it->second->segmentId() : 0;
+//                        }
+//                    }
+//                    else
+//                    {
+//                        RUNTIME_CHECK_MSG(false, "Shouldn't reach here");
+//                    }
+//
+//                    segment->abandon(*dm_context);
+//                    cur_range.setStart(segment_range.end);
+//                    cur_range.setEnd(range.end);
+//                }
+//
+//                for (size_t i = 0; i < restored_segments.size(); i++)
+//                {
+//                    auto target_segment = restored_segments[i];
+//                    PageId next_segment_id = (i == restored_segments.size() - 1) ? last_segment_id : restored_segments[i + 1]->segmentId();
+//                    auto segment = std::make_shared<Segment>(//
+//                        log,
+//                        target_segment->segmentEpoch() + 1,
+//                        target_segment->getRowKeyRange(),
+//                        target_segment->segmentId(),
+//                        next_segment_id,
+//                        target_segment->getDelta(),
+//                        target_segment->getStable()
+//                    );
+//                    segments[segment->getRowKeyRange().getEnd()] = segment;
+//                    id_to_segment.emplace(segment->segmentId(), segment);
+//                    segment->serialize(wbs.meta);
+//                }
+//
+//                wbs.writeMeta();
+//                return;
+//            }
+//            else
+//            {
+//                RUNTIME_CHECK(compare(range.getStart(), segment_range.getStart()) > 0);
+//                RUNTIME_CHECK(cur_range == range);
+//                segment_to_split = segment;
+//            }
+//        }
+//        if (segment_to_split)
+//        {
+//            const auto [left, right] = segmentSplit(*dm_context, segment_to_split, SegmentSplitReason::IngestBySplit, range.start, SegmentSplitMode::Logical);
+//            if (left == nullptr || right == nullptr)
+//            {
+//                std::this_thread::sleep_for(std::chrono::milliseconds(15));
+//            }
+//        }
+//    }
+}
 } // namespace DM
 } // namespace DB

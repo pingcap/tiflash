@@ -120,7 +120,8 @@ public:
         // For testing remote storage service
         auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME);
         TiFlashTestEnv::tryRemovePath(remote_source, true);
-        TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
+        // FIXME: uncomment this before submit code
+//        TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
 
         TiFlashStorageTestBasic::SetUp();
         store = reload();

@@ -143,6 +143,33 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
+DMFilePtr DMFile::createByLink(
+    const FileProviderPtr & file_provider,
+    UInt64 target_file_id,
+    UInt64 new_file_id,
+    const String & parent_path)
+{
+    String src_path = getPathByStatus(parent_path, target_file_id, DMFile::Status::READABLE);
+    auto poco_file = Poco::File(src_path);
+    RUNTIME_CHECK_MSG(poco_file.exists(), fmt::format("Cannot file file in {}", src_path));
+
+    // FIXME: use link instead of copy and make sure the link semantics match expectation
+    String target_path = getPathByStatus(parent_path, new_file_id, DMFile::Status::READABLE);
+    poco_file.copyTo(target_path);
+
+    DMFilePtr dmfile(new DMFile(
+        new_file_id,
+        new_file_id,
+        parent_path,
+        Mode::FOLDER,
+        Status::READABLE,
+        &Poco::Logger::get("DMFile")));
+    dmfile->readConfiguration(file_provider);
+    dmfile->readMetadata(file_provider, ReadMetaMode::all());
+
+    return dmfile;
+}
+
 DMFilePtr DMFile::restore(
     const FileProviderPtr & file_provider,
     UInt64 file_id,

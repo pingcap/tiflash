@@ -22,6 +22,8 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
+#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
+#include <Storages/Page/V3/PageDirectory.h>
 
 namespace DB
 {
@@ -35,6 +37,7 @@ using RSOperatorPtr = std::shared_ptr<RSOperator>;
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 
+using PS::V3::universal::PageDirectoryTrait;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
@@ -44,6 +47,13 @@ public:
     {}
 
     static StableValueSpacePtr restore(DMContext & context, PageId id);
+
+    static StableValueSpacePtr restoreFromCheckpoint( //
+        DMContext & context,
+        const PS::V3::CheckpointPageManager & manager,
+        NamespaceId ns_id,
+        PageId stable_id,
+        WriteBatches & wbs);
 
     /**
      * Resets the logger by using the one from the segment.
