@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-
+#include <Common/TiFlashMetrics.h>
 namespace DB
 {
 namespace DM
@@ -67,9 +67,12 @@ public:
         : schema(schema_)
         , cache(cache_ ? cache_ : std::make_shared<Cache>(schema_->getSchema()))
     {
-        // colid_to_offset.clear();
-        // for (size_t i = 0; i < schema->columns(); ++i)
-        //     colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
+        GET_METRIC(tiflash_column_file_info, column_file_memory_count).Increment();
+    }
+
+    ~ColumnFileInMemory() override
+    {
+        GET_METRIC(tiflash_column_file_info, column_file_memory_count).Decrement();
     }
 
     Type getType() const override { return Type::INMEMORY_FILE; }

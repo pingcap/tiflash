@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
+#include "Common/TiFlashMetrics.h"
 #include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
 #include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
@@ -85,7 +86,14 @@ public:
         , bytes(bytes_)
         , data_page_id(data_page_id_)
         , cache(cache_)
-    {}
+    {
+        GET_METRIC(tiflash_column_file_info, column_file_tiny_count).Increment();
+    }
+
+    ~ColumnFileTiny() override
+    {
+        GET_METRIC(tiflash_column_file_info, column_file_tiny_count).Decrement();
+    }
 
     Type getType() const override { return Type::TINY_FILE; }
 
