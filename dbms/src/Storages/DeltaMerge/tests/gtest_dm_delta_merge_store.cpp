@@ -175,7 +175,7 @@ try
 
     // drop table in the middle of page storage gc
     store->shutdown();
-    // store = nullptr;
+    store = nullptr;
 
     sp_gc.next(); // continue the page storage gc
     th_gc.get();

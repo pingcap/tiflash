@@ -535,30 +535,31 @@ StoragePool::~StoragePool()
     shutdown();
 }
 
-void StoragePool::enableGC()
-{
-    // The data in V3 will be GCed by `GlobalStoragePool::gc`, only register gc task under only v2/mix mode
-    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
-    {
-        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
-    }
-}
-
-void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
+void StoragePool::startup(ExternalPageCallbacks && callbacks)
 {
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
+        // For V2, we need a per physical table gc handle to perform the gc of its PageStorage instances.
         data_storage_v2->registerExternalPagesCallbacks(callbacks);
+        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
         break;
     }
     case PageStorageRunMode::ONLY_V3:
+    {
+        // For V3, the GCe is handled by `GlobalStoragePool::gc`, just register callbacks is OK.
+        data_storage_v3->registerExternalPagesCallbacks(callbacks);
+        break;
+    }
     case PageStorageRunMode::MIX_MODE:
     {
-        // We have transformed all pages from V2 to V3 in `restore`, so
-        // only need to register callbacks for V3.
+        // For V3, the GCe is handled by `GlobalStoragePool::gc`.
+        // Since we have transformed all external pages from V2 to V3 in `StoragePool::restore`,
+        // just register callbacks to V3 is OK
         data_storage_v3->registerExternalPagesCallbacks(callbacks);
+        // we still need a gc_handle to reclaim the V2 disk space.
+        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
         break;
     }
     default:
@@ -566,19 +567,36 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
     }
 }
 
-void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
+void StoragePool::shutdown()
 {
+    // Note: Should reset the gc_handle before unregistering the pages callbacks
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
+
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
         data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
         break;
     }
     case PageStorageRunMode::ONLY_V3:
+    {
+        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        break;
+    }
     case PageStorageRunMode::MIX_MODE:
     {
-        // We have transformed all pages from V2 to V3 in `restore`, so
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
+        // We have transformed all external pages from V2 to V3 in `restore`, so
         // only need to unregister callbacks for V3.
         data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
         break;
@@ -587,7 +605,6 @@ void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
 }
-
 
 bool StoragePool::doV2Gc(const Settings & settings)
 {
@@ -627,21 +644,6 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 
     // Only do the v2 GC
     return doV2Gc(settings);
-}
-
-void StoragePool::shutdown()
-{
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
-    if (run_mode != PageStorageRunMode::ONLY_V3)
-    {
-        meta_storage_v2->shutdown();
-        log_storage_v2->shutdown();
-        data_storage_v2->shutdown();
-    }
 }
 
 void StoragePool::drop()
