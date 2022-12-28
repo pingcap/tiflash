@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 
 namespace DB::PS::V3
@@ -48,6 +50,8 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
     PageFieldSizes field_sizes;
     // TODO: support seek to target id or use binary search
     UniversalPageId target_id = page_id;
+
+
     while (true)
     {
         for (const auto & record: edit.getRecords())

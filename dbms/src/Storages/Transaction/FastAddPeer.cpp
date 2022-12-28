@@ -103,7 +103,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
 
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = output_directory + optimal});
     auto edit = reader->read();
-    LOG_DEBUG(log, "content is {}", edit.toDebugString());
+//    LOG_DEBUG(log, "content is {}", edit.toDebugString());
 
     auto records = edit.getRecords();
 
@@ -195,11 +195,10 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
     // TODO Fill storage_name
     const auto & storage_name = page_storage->storage_name;
     auto stores = listAllStores(remote_dir);
-    for (auto store_it = stores.begin(); store_it != stores.end(); store_it++)
+    for (const auto & store_id: stores)
     {
-        auto store_id = *store_it;
-        auto output_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
-        auto maybe_choice = fetchRemotePeerMeta(output_directory, store_id, region_id, new_peer_id, proxy_helper);
+        auto remote_manifest_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
+        auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, store_id, region_id, new_peer_id, proxy_helper);
         if (maybe_choice.has_value())
         {
             choices.push_back(std::move(maybe_choice.value()));
@@ -214,21 +213,21 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
         const auto & region_state = std::get<1>(*it);
         const auto & apply_state = std::get<2>(*it);
         const auto & peers = region_state.region().peers();
-        bool ok = false;
-        for (auto && pr : peers)
-        {
-            if (pr.id() == new_peer_id)
-            {
-                ok = true;
-                break;
-            }
-        }
-        if (!ok)
-        {
-            // Can't use this peer if it has no new_peer_id.
-            reason[store_id] = fmt::format("has no peer_id {}", region_state.ShortDebugString());
-            continue;
-        }
+//        bool ok = false;
+//        for (auto && pr : peers)
+//        {
+//            if (pr.id() == new_peer_id)
+//            {
+//                ok = true;
+//                break;
+//            }
+//        }
+//        if (!ok)
+//        {
+//            // Can't use this peer if it has no new_peer_id.
+//            reason[store_id] = fmt::format("has no peer_id {}", region_state.ShortDebugString());
+//            continue;
+//        }
         auto peer_state = region_state.state();
         if (peer_state == PeerState::Tombstone || peer_state == PeerState::Applying)
         {
