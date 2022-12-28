@@ -165,13 +165,11 @@ class TaskSchedulerTestRunner : public ::testing::Test
 {
 public:
     static constexpr size_t thread_num = 5;
-
-    std::vector<size_t> task_nums{1, 5, 10, 100};
 };
 
 TEST_F(TaskSchedulerTestRunner, simple_task)
 {
-    for (auto task_num : task_nums)
+    for (size_t task_num = 1; task_num < 100; ++task_num)
     {
         Waiter waiter(task_num);
         std::vector<TaskPtr> tasks;
@@ -186,7 +184,7 @@ TEST_F(TaskSchedulerTestRunner, simple_task)
 
 TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
 {
-    for (auto task_num : task_nums)
+    for (size_t task_num = 1; task_num < 100; ++task_num)
     {
         Waiter waiter(task_num);
         std::vector<TaskPtr> tasks;
@@ -211,7 +209,7 @@ TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
         task_scheduler.submit(tasks);
         waiter.wait();
     };
-    for (auto task_num : task_nums)
+    for (size_t task_num = 1; task_num < 100; ++task_num)
     {
         test(0, task_num);
         test(thread_num, task_num);

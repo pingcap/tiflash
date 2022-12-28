@@ -22,22 +22,28 @@ namespace DB
 #define HANDLE_CANCELLED                  \
     if (unlikely(event->isCancelled()))   \
     {                                     \
+        op_executor.reset();              \
         event->finishTask();              \
+        event.reset();                    \
         return ExecTaskStatus::CANCELLED; \
     }
 
 #define HANDLE_ERROR                                            \
     catch (...)                                                 \
     {                                                           \
+        op_executor.reset();                                    \
         event->toError(getCurrentExceptionMessage(true, true)); \
         event->finishTask();                                    \
+        event.reset();                                          \
         return ExecTaskStatus::ERROR;                           \
     }
 
 #define HANDLE_FINISHED                  \
     case OperatorStatus::FINISHED:       \
     {                                    \
+        op_executor.reset();             \
         event->finishTask();             \
+        event.reset();                   \
         return ExecTaskStatus::FINISHED; \
     }
 
@@ -107,12 +113,5 @@ ExecTaskStatus PipelineTask::spillImpl()
 #undef HANDLE_CANCELLED
 #undef HANDLE_ERROR
 #undef HANDLE_FINISHED
-
-PipelineTask::~PipelineTask()
-{
-    auto setter = setMemoryTracker();
-    op_executor.reset();
-    event.reset();
-}
 
 } // namespace DB

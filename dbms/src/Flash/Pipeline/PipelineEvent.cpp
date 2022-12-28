@@ -21,7 +21,11 @@ namespace DB
 bool PipelineEvent::scheduleImpl()
 {
     exec_status.addActivePipeline();
+
+    assert(pipeline);
     auto op_groups = pipeline->transform(context, concurrency);
+    pipeline.reset();
+
     assert(op_groups.size() == 1);
     auto group = std::move(op_groups.back());
     if (group.empty())

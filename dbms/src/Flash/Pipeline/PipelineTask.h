@@ -29,12 +29,10 @@ public:
         MemoryTrackerPtr mem_tracker_,
         const EventPtr & event_,
         OperatorExecutorPtr && op_executor_)
-        : Task(mem_tracker_)
+        : Task(std::move(mem_tracker_))
         , event(event_)
         , op_executor(std::move(op_executor_))
     {}
-
-    ~PipelineTask();
 
 protected:
     ExecTaskStatus executeImpl() override;

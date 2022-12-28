@@ -21,10 +21,68 @@ namespace DB::tests
 {
 namespace
 {
-class SimpleTask : public Task
+class BaseTask : public Task
 {
 public:
-    explicit SimpleTask(const EventPtr & event_)
+    explicit BaseTask(const EventPtr & event_, std::atomic_int64_t & counter_)
+        : Task(nullptr)
+        , event(event_)
+        , counter(counter_)
+    {}
+
+    ExecTaskStatus executeImpl() override
+    {
+        --counter;
+        event->finishTask();
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    EventPtr event;
+    std::atomic_int64_t & counter;
+};
+
+class BaseEvent : public Event
+{
+public:
+    BaseEvent(
+        PipelineExecStatus & exec_status_,
+        std::atomic_int64_t & counter_)
+        : Event(exec_status_, nullptr)
+        , counter(counter_)
+    {}
+
+    static constexpr auto task_num = 10;
+
+protected:
+    // Returns true meaning no task is scheduled.
+    bool scheduleImpl() override
+    {
+        exec_status.addActivePipeline();
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<BaseTask>(shared_from_this(), counter));
+        scheduleTask(tasks);
+        return false;
+    }
+
+    // Returns true meaning next_events will be scheduled.
+    bool finishImpl() override { return true; }
+
+    void finalizeFinish() override
+    {
+        --counter;
+        exec_status.completePipeline();
+    }
+
+private:
+    std::atomic_int64_t & counter;
+};
+
+class RunTask : public Task
+{
+public:
+    explicit RunTask(const EventPtr & event_)
         : Task(nullptr)
         , event(event_)
     {}
@@ -42,10 +100,10 @@ private:
     int loop_count = 5;
 };
 
-class SimpleEvent : public Event
+class RunEvent : public Event
 {
 public:
-    SimpleEvent(
+    RunEvent(
         PipelineExecStatus & exec_status_,
         bool with_tasks_)
         : Event(exec_status_, nullptr)
@@ -62,7 +120,7 @@ protected:
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<SimpleTask>(shared_from_this()));
+            tasks.push_back(std::make_unique<RunTask>(shared_from_this()));
         scheduleTask(tasks);
         return false;
     }
@@ -117,7 +175,7 @@ protected:
         if (!with_tasks)
         {
             while (!isCancelled())
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             return true;
         }
 
@@ -185,6 +243,37 @@ protected:
     }
 };
 
+TEST_F(EventTestRunner, base)
+{
+    auto do_test = [](size_t event_num) {
+        assert(event_num > 0);
+        // BaseEvent::finalizeFinish + BaseEvent::task_num * BaseTask::executeImpl
+        std::atomic_int64_t counter{static_cast<int64_t>(event_num * (1 + BaseEvent::task_num))};
+        PipelineExecStatus exec_status;
+        EventPtr start_event;
+        EventPtr cur_event;
+        for (size_t i = 0; i < event_num; ++i)
+        {
+            auto event = std::make_shared<BaseEvent>(exec_status, counter);
+            if (cur_event)
+                event->addDependency(cur_event);
+            cur_event = event;
+            if (!start_event)
+                start_event = event;
+        }
+        cur_event.reset();
+        assert(start_event);
+        start_event->schedule();
+        std::chrono::seconds timeout(15);
+        exec_status.waitFor(timeout);
+        ASSERT_TRUE(0 == counter);
+        auto err_msg = exec_status.getErrMsg();
+        ASSERT_TRUE(err_msg.empty()) << err_msg;
+    };
+    for (size_t i = 1; i < 200; ++i)
+        do_test(i);
+}
+
 TEST_F(EventTestRunner, run)
 {
     auto do_test = [](bool with_tasks, size_t event_num) {
@@ -192,7 +281,7 @@ TEST_F(EventTestRunner, run)
         std::vector<EventPtr> events;
         for (size_t i = 0; i < event_num; ++i)
         {
-            auto event = std::make_shared<SimpleEvent>(exec_status, with_tasks);
+            auto event = std::make_shared<RunEvent>(exec_status, with_tasks);
             assert(event->isNonDependent());
             events.push_back(event);
         }
@@ -203,11 +292,10 @@ TEST_F(EventTestRunner, run)
         auto err_msg = exec_status.getErrMsg();
         ASSERT_TRUE(err_msg.empty()) << err_msg;
     };
-    std::vector<size_t> event_nums{1, 5, 10};
-    for (auto event_num : event_nums)
+    for (size_t i = 1; i < 100; i += 7)
     {
-        do_test(false, event_num);
-        do_test(true, event_num);
+        do_test(false, i);
+        do_test(true, i);
     }
 }
 
@@ -240,7 +328,7 @@ TEST_F(EventTestRunner, cancel)
             }
         }
         // To make sure that all event/task has been scheduled.
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
         exec_status.cancel();
         std::chrono::seconds timeout(15);
         exec_status.waitFor(timeout);
@@ -248,11 +336,10 @@ TEST_F(EventTestRunner, cancel)
         ASSERT_TRUE(err_msg.empty()) << err_msg;
         thread_manager->wait();
     };
-    std::vector<size_t> batch_nums{1, 5, 10};
-    for (auto batch_num : batch_nums)
+    for (size_t i = 1; i < 100; i += 7)
     {
-        do_test(false, batch_num);
-        do_test(true, batch_num);
+        do_test(false, i);
+        do_test(true, i);
     }
 }
 
@@ -282,7 +369,7 @@ TEST_F(EventTestRunner, err)
             }
         }
         // To make sure that all event/task has been scheduled.
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
         {
             auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
             assert(to_err_event->isNonDependent());
@@ -294,11 +381,10 @@ TEST_F(EventTestRunner, err)
         ASSERT_EQ(err_msg, ToErrEvent::err_msg) << err_msg;
         thread_manager->wait();
     };
-    std::vector<size_t> wait_cancel_event_nums{1, 5, 10};
-    for (auto wait_cancel_event_num : wait_cancel_event_nums)
+    for (size_t i = 1; i < 100; i += 7)
     {
-        do_test(false, wait_cancel_event_num);
-        do_test(true, wait_cancel_event_num);
+        do_test(false, i);
+        do_test(true, i);
     }
 }
 

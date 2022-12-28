@@ -71,14 +71,19 @@ void Event::finish()
     {
         // finished processing the event, now we can schedule events that depend on this event
         for (auto & next_event : next_events)
+        {
             next_event->completeDependency();
+            next_event.reset();
+        }
     }
+    next_events.clear();
     finalizeFinish();
 }
 
 void Event::scheduleTask(std::vector<TaskPtr> & tasks)
 {
     assert(!tasks.empty());
+    assert(0 == unfinished_tasks);
     unfinished_tasks = tasks.size();
     assert(status != EventStatus::FINISHED);
     TaskScheduler::instance->submit(tasks);

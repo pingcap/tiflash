@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryTrackerSetter.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/IOReactor.h>
 #include <Flash/Pipeline/TaskScheduler.h>
@@ -26,6 +27,14 @@ namespace
 {
 bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
 {
+    assert(task);
+
+    assert(nullptr == current_memory_tracker);
+    // Hold the shared_ptr of memory tracker.
+    // To avoid the current_memory_tracker being an illegal pointer.
+    auto memory_tracker = task->getMemTracker();
+    MemoryTrackerSetter memory_tracker_setter{true, memory_tracker.get()};
+
     auto status = task->await();
     switch (status)
     {
@@ -37,6 +46,7 @@ bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
     case ExecTaskStatus::FINISHED:
     case ExecTaskStatus::ERROR:
     case ExecTaskStatus::CANCELLED:
+        task.reset();
         return true;
     default:
         __builtin_unreachable();

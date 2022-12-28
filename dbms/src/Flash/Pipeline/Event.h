@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Pipeline/Task.h>
 
@@ -83,7 +84,7 @@ private:
 
     MemoryTrackerSetter setMemoryTracker()
     {
-        return MemoryTrackerSetter{true, mem_tracker ? mem_tracker.get() : nullptr};
+        return MemoryTrackerSetter{true, mem_tracker.get()};
     }
 
 protected:

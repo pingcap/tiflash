@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
-#include <Common/MemoryTrackerSetter.h>
 #include <memory.h>
 
 namespace DB
@@ -49,26 +48,25 @@ public:
 
     virtual ~Task() = default;
 
-    MemoryTrackerSetter setMemoryTracker()
+    MemoryTrackerPtr getMemTracker()
     {
-        return MemoryTrackerSetter{true, getMemTracker()};
+        return mem_tracker;
     }
 
     ExecTaskStatus execute()
     {
-        assert(getMemTracker() == current_memory_tracker);
+        assert(getMemTracker().get() == current_memory_tracker);
         return executeImpl();
     }
     ExecTaskStatus spill()
     {
-        assert(getMemTracker() == current_memory_tracker);
+        assert(getMemTracker().get() == current_memory_tracker);
         return spillImpl();
     }
-    // We do not set the current memory tracker for `await`,
-    // so please avoid allocating memory here.
+    // Avoid allocating memory in here if possible.
     ExecTaskStatus await()
     {
-        assert(nullptr == current_memory_tracker);
+        assert(getMemTracker().get() == current_memory_tracker);
         return awaitImpl();
     }
 
@@ -76,11 +74,6 @@ protected:
     virtual ExecTaskStatus executeImpl() = 0;
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
     virtual ExecTaskStatus spillImpl() { return ExecTaskStatus::RUNNING; }
-
-    MemoryTracker * getMemTracker()
-    {
-        return mem_tracker ? mem_tracker.get() : nullptr;
-    }
 
 private:
     MemoryTrackerPtr mem_tracker;
