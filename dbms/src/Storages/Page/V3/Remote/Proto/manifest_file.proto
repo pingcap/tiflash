@@ -57,4 +57,8 @@ message EditRecord {
     uint64 version_epoch = 5;
     EntryDataLocation entry = 6;
     int64 being_ref_count = 7;
+
+    // The offset to the data (not the offset to the file) for each field.
+    repeated uint64 fields_offset = 8;
+    repeated uint64 fields_checksum = 9;
 }

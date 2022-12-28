@@ -300,6 +300,11 @@ public:
             {
                 RUNTIME_CHECK(entry.remote_info.has_value());
                 *remote_rec.mutable_entry() = entry.remote_info->data_location.toRemote();
+                for (const auto & [offset, checksum] : entry.field_offsets)
+                {
+                    remote_rec.add_fields_offset(offset);
+                    remote_rec.add_fields_checksum(checksum);
+                }
             }
             return remote_rec;
         }
@@ -321,6 +326,14 @@ public:
                     .data_location = RemoteDataLocation::fromRemote(remote_rec.entry()),
                     .is_local_data_reclaimed = true,
                 };
+                RUNTIME_CHECK(remote_rec.fields_offset_size() == remote_rec.fields_checksum_size());
+                auto sz = remote_rec.fields_offset_size();
+                for (int i = 0; i < sz; ++i)
+                {
+                    rec.entry.field_offsets.emplace_back(std::make_pair(
+                        remote_rec.fields_offset(i),
+                        remote_rec.fields_checksum(i)));
+                }
                 // Note: rec.entry.* is untouched, leaving zero value.
                 // We need to take care when restoring the PS instance.
             }
