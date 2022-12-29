@@ -84,7 +84,6 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
     PageFieldSizes field_sizes;
     UniversalPageId target_id = page_id;
     const auto & records = edit.getRecords();
-    bool found = false;
     while (true)
     {
         if (auto iter = lower_bound(records.begin(),
