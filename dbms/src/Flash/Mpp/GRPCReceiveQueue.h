@@ -27,6 +27,10 @@
 
 namespace DB
 {
+namespace tests
+{
+class TestGRPCReceiveQueue;
+} // namespace tests
 
 enum class GRPCReceiveQueueRes
 {
@@ -103,7 +107,8 @@ public:
     // Return FULL if the queue is full and `new_tag` is saved.
     // When the next pop/finish is called, the `new_tag` will be pushed
     // into grpc completion queue.
-    GRPCReceiveQueueRes push(T & data, void * new_tag)
+    template <typename U>
+    GRPCReceiveQueueRes push(U && data, void * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
 
@@ -150,6 +155,8 @@ public:
     }
 
 private:
+    friend class tests::TestGRPCReceiveQueue;
+
     MPMCQueue<T> recv_queue;
 };
 
