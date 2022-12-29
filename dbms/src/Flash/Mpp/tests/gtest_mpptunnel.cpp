@@ -144,15 +144,12 @@ public:
 class MockExchangeReceiver
 {
 public:
-    MockExchangeReceiver(Int32 conn_num, Int32 output_stream_count_, bool enable_fine_grained_shuffle_)
+    explicit MockExchangeReceiver(Int32 conn_num)
         : live_connections(conn_num)
-        , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
-        , output_stream_count(output_stream_count_)
         , data_size_in_queue(0)
         , log(Logger::get())
-        , recv_mem_tracker(MemoryTracker::create(1048576))
     {
-        prepareMsgChannels();
+        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(10));
     }
 
     void connectionDone(bool meet_error, const String & local_err_msg)
@@ -178,7 +175,7 @@ public:
         for (auto & tunnel : tunnels)
         {
             LocalRequestHandler local_request_handler(
-                reinterpret_cast<MemoryTracker *>(recv_mem_tracker->get()),
+                nullptr,
                 [this](bool meet_error, const String & err_msg) {
                     this->connectionDone(meet_error, err_msg);
                 },
@@ -227,30 +224,17 @@ private:
 
     void finishAllMsgChannels()
     {
-        for (auto & msg_channel : msg_channels)
-            msg_channel->finish();
-    }
-
-    void prepareMsgChannels()
-    {
-        if (enable_fine_grained_shuffle)
-            for (Int32 i = 0; i < output_stream_count; ++i)
-                msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(10));
-        else
-            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(10));
+        msg_channels[0]->finish();
     }
 
     std::mutex mu;
     std::condition_variable cv;
     Int32 live_connections;
     std::vector<MsgChannelPtr> msg_channels;
-    bool enable_fine_grained_shuffle;
-    Int32 output_stream_count;
     String err_msg;
     std::vector<std::shared_ptr<ReceivedMessage>> received_msgs;
     std::atomic<Int64> data_size_in_queue;
     LoggerPtr log;
-    MemoryTrackerPtr recv_mem_tracker;
 };
 
 using MockExchangeReceiverPtr = std::shared_ptr<MockExchangeReceiver>;
@@ -312,9 +296,9 @@ public:
         return sender->isConsumerFinished();
     }
 
-    std::pair<MockExchangeReceiverPtr, std::vector<MPPTunnelPtr>> prepareLocal(const size_t tunnel_num, Int32 output_stream_count_, bool enable_fine_grained_shuffle_)
+    std::pair<MockExchangeReceiverPtr, std::vector<MPPTunnelPtr>> prepareLocal(const size_t tunnel_num)
     {
-        MockExchangeReceiverPtr receiver = std::make_shared<MockExchangeReceiver>(tunnel_num, output_stream_count_, enable_fine_grained_shuffle_);
+        MockExchangeReceiverPtr receiver = std::make_shared<MockExchangeReceiver>(tunnel_num);
         std::vector<MPPTunnelPtr> tunnels;
         for (size_t i = 0; i < tunnel_num; ++i)
             tunnels.push_back(constructLocalTunnel());
@@ -592,7 +576,7 @@ try
 {
     const size_t tunnel_num = 3;
     size_t send_data_packet_num = 3;
-    auto [receiver, tunnels] = prepareLocal(tunnel_num, 1, false);
+    auto [receiver, tunnels] = prepareLocal(tunnel_num);
 
     std::vector<std::thread> threads;
     for (size_t i = 0; i < tunnels.size(); ++i)
@@ -618,7 +602,7 @@ TEST_F(TestMPPTunnel, LocalConnectWriteCancel)
 try
 {
     const size_t tunnel_num = 1;
-    auto [receiver, tunnels] = prepareLocal(tunnel_num, 1, false);
+    auto [receiver, tunnels] = prepareLocal(tunnel_num);
 
     std::thread t(&MockExchangeReceiver::run, receiver.get());
 
@@ -638,7 +622,7 @@ TEST_F(TestMPPTunnel, LocalConsumerFinish)
 try
 {
     const size_t tunnel_num = 1;
-    auto [receiver, tunnels] = prepareLocal(tunnel_num, 1, false);
+    auto [receiver, tunnels] = prepareLocal(tunnel_num);
 
     std::thread t(&MockExchangeReceiver::run, receiver.get());
 
