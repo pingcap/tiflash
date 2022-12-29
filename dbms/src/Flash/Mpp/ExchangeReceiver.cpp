@@ -420,7 +420,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 },
                 ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ExchangeMode::Local));
 
-            rpc_context->establishMPPConnectionLocal(req, req.source_index, req_info, local_request_handler, enable_fine_grained_shuffle_flag);
+            rpc_context->establishMPPConnectionLocal(req, req.source_index, local_request_handler, enable_fine_grained_shuffle_flag);
         }
         else
         {

@@ -189,9 +189,9 @@ void MPPTunnel::connectSync(PacketWriter * writer)
 {
     {
         std::unique_lock lk(mu);
-        RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
         RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, "MPPTunnel has connected or finished: {}", statusToString());
         RUNTIME_CHECK_MSG(mode == TunnelSenderMode::SYNC_GRPC, "This should be a sync tunnel");
+        RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
 
         LOG_TRACE(log, "ready to connect sync");
         sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
@@ -204,7 +204,7 @@ void MPPTunnel::connectSync(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocal(size_t source_index, const String & req_info, LocalRequestHandler & local_request_handler, bool is_fine_grained)
+void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained)
 {
     {
         std::unique_lock lk(mu);
@@ -214,12 +214,12 @@ void MPPTunnel::connectLocal(size_t source_index, const String & req_info, Local
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, req_info, local_request_handler, log, mem_tracker, tunnel_id);
+            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_fine_grained_sender;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, req_info, local_request_handler, log, mem_tracker, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_sender;
         }
 

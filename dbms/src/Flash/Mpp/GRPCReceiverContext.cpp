@@ -278,7 +278,6 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
 void GRPCReceiverContext::establishMPPConnectionLocal(
     const ExchangeRecvRequest & request,
     size_t source_index,
-    const String & req_info,
     LocalRequestHandler & local_request_handler,
     bool is_fine_grained)
 {
@@ -286,7 +285,7 @@ void GRPCReceiverContext::establishMPPConnectionLocal(
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
-    tunnel->connectLocal(source_index, req_info, local_request_handler, is_fine_grained);
+    tunnel->connectLocal(source_index, local_request_handler, is_fine_grained);
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const

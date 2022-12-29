@@ -207,7 +207,7 @@ struct MockReceiverContext
         return {index, index, -1};
     }
 
-    std::shared_ptr<Reader> makeReader(const Request &)
+    std::shared_ptr<Reader> makeSyncReader(const Request &)
     {
         return std::make_shared<Reader>(queue);
     }
@@ -227,19 +227,20 @@ struct MockReceiverContext
         return ::grpc::Status();
     }
 
-    bool supportAsync(const Request &) const { return false; }
+    static bool supportAsync(const Request &) { return false; }
+
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
-    void establishMPPConnectionLocal(const Request &, size_t, const String &, ExchangeReceiverBase *, bool) {}
+    void establishMPPConnectionLocal(const MockReceiverContext::Request &, size_t, LocalRequestHandler &, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
 };
-using MockExchangeReceiver = ExchangeReceiverWithRPCContext<MockReceiverContext>;
+using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 using MockWriterPtr = std::shared_ptr<MockWriter>;
 using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
 

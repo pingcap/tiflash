@@ -253,14 +253,12 @@ class LocalTunnelSender : public TunnelSender
 public:
     LocalTunnelSender(
         size_t source_index_,
-        const String & req_info_,
         LocalRequestHandler & local_request_handler_,
         const LoggerPtr & log_,
         MemoryTrackerPtr & memory_tracker_,
         const String & tunnel_id_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, nullptr)
         , source_index(source_index_)
-        , req_info(req_info_)
         , local_request_handler(local_request_handler_)
         , is_done(false)
     {}
@@ -321,7 +319,6 @@ private:
     }
 
     size_t source_index;
-    String req_info;
     LocalRequestHandler local_request_handler;
 
     std::mutex mu;
@@ -400,7 +397,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, const String & req_info, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
