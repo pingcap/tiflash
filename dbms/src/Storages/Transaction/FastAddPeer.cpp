@@ -288,7 +288,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         auto region = std::get<4>(peer);
 
         const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
-        const auto & storage_name = wn_ps->storage_name;
+//        const auto & storage_name = wn_ps->storage_name;
 //        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
         auto checkpoint_data_dir = remote_dir;
 
