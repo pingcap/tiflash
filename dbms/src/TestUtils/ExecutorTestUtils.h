@@ -30,8 +30,6 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
-Block mergeBlocks(Blocks blocks);
-
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
     std::vector<bool> bools{false, true}; \

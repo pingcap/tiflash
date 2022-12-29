@@ -224,16 +224,16 @@ void JoinBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & pro
     }
 
     std::shared_ptr<ExchangeSenderBinder> left_exchange_sender
-        = std::make_shared<ExchangeSenderBinder>(executor_index, children[0]->output_schema, tipb::Hash, left_partition_keys);
+        = std::make_shared<ExchangeSenderBinder>(executor_index, children[0]->output_schema, tipb::Hash, left_partition_keys, fine_grained_shuffle_stream_count);
     left_exchange_sender->children.push_back(children[0]);
     std::shared_ptr<ExchangeSenderBinder> right_exchange_sender
-        = std::make_shared<ExchangeSenderBinder>(executor_index, children[1]->output_schema, tipb::Hash, right_partition_keys);
+        = std::make_shared<ExchangeSenderBinder>(executor_index, children[1]->output_schema, tipb::Hash, right_partition_keys, fine_grained_shuffle_stream_count);
     right_exchange_sender->children.push_back(children[1]);
 
     std::shared_ptr<ExchangeReceiverBinder> left_exchange_receiver
-        = std::make_shared<ExchangeReceiverBinder>(executor_index, children[0]->output_schema);
+        = std::make_shared<ExchangeReceiverBinder>(executor_index, children[0]->output_schema, fine_grained_shuffle_stream_count);
     std::shared_ptr<ExchangeReceiverBinder> right_exchange_receiver
-        = std::make_shared<ExchangeReceiverBinder>(executor_index, children[1]->output_schema);
+        = std::make_shared<ExchangeReceiverBinder>(executor_index, children[1]->output_schema, fine_grained_shuffle_stream_count);
     children[0] = left_exchange_receiver;
     children[1] = right_exchange_receiver;
 
