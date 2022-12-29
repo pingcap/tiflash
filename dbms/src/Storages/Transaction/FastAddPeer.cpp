@@ -49,7 +49,7 @@ using PS::V3::Remote::WriterInfo;
 using PS::V3::universal::BlobStoreTrait;
 using PS::V3::universal::PageDirectoryTrait;
 
-std::string readData(const std::string & output_directory, const RemoteDataLocation & location)
+std::string readData(const std::string & checkpoint_data_dir, const RemoteDataLocation & location)
 {
     RUNTIME_CHECK(location.offset_in_file > 0);
     RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
@@ -62,7 +62,7 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
     // A DataReader will encapsulate this logic.
     // Currently there is no compression, so reading data is rather easy.
 
-    auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
+    auto buf = ReadBufferFromFile(checkpoint_data_dir + *location.data_file_id);
     buf.seek(location.offset_in_file);
     auto n = buf.readBig(ret.data(), location.size_in_file);
     RUNTIME_CHECK(n == location.size_in_file);
@@ -70,7 +70,7 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
     return ret;
 }
 
-std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
+std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, const std::string & checkpoint_data_dir, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
     UNUSED(new_peer_id);
     auto * log = &Poco::Logger::get("fast add");
@@ -117,20 +117,20 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         {
             std::string decoded_data;
             auto & location = iter->entry.remote_info->data_location;
-            std::string ret = readData(output_directory, location);
+            std::string ret = readData(checkpoint_data_dir, location);
             restored_apply_state.ParseFromArray(ret.data(), ret.size());
         }
         else if (keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
         {
             std::string decoded_data;
             auto & location = iter->entry.remote_info->data_location;
-            std::string ret = readData(output_directory, location);
+            std::string ret = readData(checkpoint_data_dir, location);
             restored_region_state.ParseFromArray(ret.data(), ret.size());
         }
         else if (page_id == KVStoreReader::toFullPageId(region_id))
         {
             auto & location = iter->entry.remote_info->data_location;
-            auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
+            auto buf = ReadBufferFromFile(checkpoint_data_dir + *location.data_file_id);
             buf.seek(location.offset_in_file);
             region = Region::deserialize(buf, proxy_helper);
             RUNTIME_CHECK(buf.count() == location.size_in_file);
@@ -198,7 +198,8 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
     for (const auto & store_id: stores)
     {
         auto remote_manifest_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
-        auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, store_id, region_id, new_peer_id, proxy_helper);
+        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, store_id, storage_name);
+        auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, checkpoint_data_dir, store_id, region_id, new_peer_id, proxy_helper);
         if (maybe_choice.has_value())
         {
             choices.push_back(std::move(maybe_choice.value()));
