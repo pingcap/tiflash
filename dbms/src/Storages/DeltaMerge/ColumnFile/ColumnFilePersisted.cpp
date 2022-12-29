@@ -149,7 +149,8 @@ ColumnFilePersisteds deserializeSavedRemoteColumnFiles(//
         column_files = deserializeSavedRemoteColumnFilesInV3Format(context, segment_range, buf, manager, checkpoint_store_id, ns_id, wbs);
         break;
     default:
-        throw Exception("Not supported", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
+                        ErrorCodes::LOGICAL_ERROR);
     }
     return column_files;
 }
