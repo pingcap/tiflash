@@ -92,11 +92,11 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
     }
 
     std::shared_ptr<ExchangeSenderBinder> exchange_sender
-        = std::make_shared<ExchangeSenderBinder>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys);
+        = std::make_shared<ExchangeSenderBinder>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys, fine_grained_shuffle_stream_count);
     exchange_sender->children.push_back(partial_agg);
 
     std::shared_ptr<ExchangeReceiverBinder> exchange_receiver
-        = std::make_shared<ExchangeReceiverBinder>(executor_index, output_schema_for_partial_agg);
+        = std::make_shared<ExchangeReceiverBinder>(executor_index, output_schema_for_partial_agg, fine_grained_shuffle_stream_count);
     exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
 
     /// re-construct agg_exprs and gby_exprs in final_agg

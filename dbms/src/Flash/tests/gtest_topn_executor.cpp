@@ -19,7 +19,8 @@ namespace DB
 {
 namespace tests
 {
-class ExecutorTopNTestRunner : public DB::tests::ExecutorTest
+
+class TopNExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     using ColStringType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -85,7 +86,7 @@ public:
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItemVec order_by_items, int limit, MockAstVec func_proj_ast = {}, MockColumnNameVec out_proj_ast = {})
     {
-        if (func_proj_ast.size() == 0)
+        if (func_proj_ast.empty())
             return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
         else
             return context.scan(db_name, table_name).project(func_proj_ast).topN(order_by_items, limit).project(out_proj_ast).build(context);
@@ -106,7 +107,7 @@ public:
     ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
-TEST_F(ExecutorTopNTestRunner, TopN)
+TEST_F(TopNExecutorTestRunner, TopN)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -173,7 +174,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTopNTestRunner, TopNFunction)
+TEST_F(TopNExecutorTestRunner, TopNFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -245,7 +246,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTopNTestRunner, BigTable)
+TEST_F(TopNExecutorTestRunner, BigTable)
 try
 {
     std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};

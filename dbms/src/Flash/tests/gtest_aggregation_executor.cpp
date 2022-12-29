@@ -30,7 +30,7 @@ namespace tests
         types_col_name[a], types_col_name[b] \
     }
 
-class ExecutorAggTestRunner : public ExecutorTest
+class AggExecutorTestRunner : public ExecutorTest
 {
 public:
     using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -61,7 +61,7 @@ public:
     using ColumnWithFloat64 = std::vector<ColFloat64Type>;
     using ColumnWithString = std::vector<ColStringType>;
 
-    ~ExecutorAggTestRunner() override = default;
+    ~AggExecutorTestRunner() override = default;
 
     void initializeContext() override
     {
@@ -225,7 +225,7 @@ public:
 };
 
 /// Guarantee the correctness of group by
-TEST_F(ExecutorAggTestRunner, GroupBy)
+TEST_F(AggExecutorTestRunner, GroupBy)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -296,7 +296,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationMaxAndMin)
+TEST_F(AggExecutorTestRunner, AggregationMaxAndMin)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -344,7 +344,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationCount)
+TEST_F(AggExecutorTestRunner, AggregationCount)
 try
 {
     /// Prepare some data
@@ -388,8 +388,7 @@ CATCH
 
 // TODO support more type of min, max, count.
 //      support more aggregation functions: sum, forst_row, group_concat
-
-TEST_F(ExecutorAggTestRunner, AggregationCountGroupByFastPathMultiKeys)
+TEST_F(AggExecutorTestRunner, AggregationCountGroupByFastPathMultiKeys)
 try
 {
     /// Prepare some data
@@ -492,7 +491,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggNull)
+TEST_F(AggExecutorTestRunner, AggNull)
 try
 {
     auto request = context
@@ -509,7 +508,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, RepeatedAggregateFunction)
+TEST_F(AggExecutorTestRunner, RepeatedAggregateFunction)
 try
 {
     std::vector<ASTPtr> functions = {Max(col("s1")), Min(col("s1")), Sum(col("s2"))};
@@ -557,7 +556,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggMerge)
+TEST_F(AggExecutorTestRunner, AggMerge)
 try
 {
     std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
