@@ -317,7 +317,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     catch (...)
     {
         DB::tryLogCurrentException("FastAddPeer", "Failed when try to restore from checkpoint");
+        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
-    return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
 }
 } // namespace DB
