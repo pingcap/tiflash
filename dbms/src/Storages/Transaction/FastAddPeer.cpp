@@ -101,7 +101,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         return std::nullopt;
     }
 
-    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = output_directory + optimal});
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = optimal});
     auto edit = reader->read();
 //    LOG_DEBUG(log, "content is {}", edit.toDebugString());
 
@@ -198,8 +198,8 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
     for (const auto & store_id: stores)
     {
         auto remote_manifest_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
-//        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, store_id, storage_name);
-        auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, remote_dir, store_id, region_id, new_peer_id, proxy_helper);
+        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, store_id, storage_name);
+        auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, checkpoint_data_dir, store_id, region_id, new_peer_id, proxy_helper);
         if (maybe_choice.has_value())
         {
             choices.push_back(std::move(maybe_choice.value()));
@@ -288,9 +288,9 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         auto region = std::get<4>(peer);
 
         const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
-//        const auto & storage_name = wn_ps->storage_name;
-//        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
-        auto checkpoint_data_dir = remote_dir;
+        const auto & storage_name = wn_ps->storage_name;
+        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
+//        auto checkpoint_data_dir = remote_dir;
 
         auto & kvstore = server->tmt->getKVStore();
         kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
