@@ -213,6 +213,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     LOG_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                     continue;
                 }
+
+                if (schema_diff->regenerate_schema_map)
+                {
+                    // If `schema_diff.regenerate_schema_map` == true, return `-1` direclty, let TiFlash reload schema info from TiKV.
+                    LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
+                    return -1;
+                }
+
                 builder.applyDiff(*schema_diff);
             }
         }
