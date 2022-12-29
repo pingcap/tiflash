@@ -108,7 +108,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
     }
 }
 
-ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, ColumnFileSchemaPtr & schema)
 {
     // Check binary version
     DeltaFormat::Version version;
@@ -123,7 +123,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
         column_files = deserializeSavedColumnFilesInV2Format(buf, version);
         break;
     case DeltaFormat::V3:
-        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
+        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf, schema);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),

@@ -133,7 +133,7 @@ public:
 
     static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    static std::tuple<ColumnFilePersistedPtr, ColumnFileSchemaPtr> deserializeMetadata(ReadBuffer & buf, const ColumnFileSchemaPtr & last_schema);
+    static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {

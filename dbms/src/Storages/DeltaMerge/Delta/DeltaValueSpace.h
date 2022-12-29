@@ -106,7 +106,7 @@ public:
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id, ColumnFileSchemaPtr & schema);
 
     /**
      * Resets the logger by using the one from the segment.

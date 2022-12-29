@@ -23,6 +23,7 @@
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
 {
@@ -55,9 +56,9 @@ void DeltaValueSpace::abandon(DMContext & context)
         manager->deleteRef(delta_index);
 }
 
-DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
+DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id, ColumnFileSchemaPtr & schema)
 {
-    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
+    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id, schema);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 

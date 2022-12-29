@@ -137,11 +137,14 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-std::tuple<ColumnFilePersistedPtr, ColumnFileSchemaPtr> ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, const ColumnFileSchemaPtr & last_schema)
+ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
         schema = last_schema;
+    else if (last_schema == nullptr){
+        last_schema = schema;
+    }
     if (unlikely(!schema))
         throw Exception("Cannot deserialize DeltaPackBlock's schema", ErrorCodes::LOGICAL_ERROR);
 
@@ -152,7 +155,7 @@ std::tuple<ColumnFilePersistedPtr, ColumnFileSchemaPtr> ColumnFileTiny::deserial
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
 
-    return {std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id), schema};
+    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id);
 }
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader) const

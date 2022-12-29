@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB::DM
 {
@@ -140,7 +141,7 @@ public:
         PageId segment_id,
         PageId next_segment_id);
 
-    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id, ColumnFileSchemaPtr & column_file_schema);
 
     void serialize(WriteBatch & wb);
 

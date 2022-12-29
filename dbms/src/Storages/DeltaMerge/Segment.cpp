@@ -270,7 +270,8 @@ SegmentPtr Segment::newSegment( //
 SegmentPtr Segment::restoreSegment( //
     const LoggerPtr & parent_log,
     DMContext & context,
-    PageId segment_id)
+    PageId segment_id,
+    ColumnFileSchemaPtr & column_file_schema)
 {
     Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
 
@@ -307,7 +308,7 @@ SegmentPtr Segment::restoreSegment( //
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
 
-    auto delta = DeltaValueSpace::restore(context, rowkey_range, delta_id);
+    auto delta = DeltaValueSpace::restore(context, rowkey_range, delta_id, column_file_schema);
     auto stable = StableValueSpace::restore(context, stable_id);
     auto segment = std::make_shared<Segment>(parent_log, epoch, rowkey_range, segment_id, next_segment_id, delta, stable);
 
