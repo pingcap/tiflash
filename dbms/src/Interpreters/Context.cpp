@@ -27,6 +27,7 @@
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockStorage.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
@@ -1894,12 +1895,12 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
-void Context::setMockStorage(MockStorage & mock_storage_)
+void Context::setMockStorage(MockStorage * mock_storage_)
 {
     mock_storage = mock_storage_;
 }
 
-MockStorage Context::mockStorage() const
+MockStorage * Context::mockStorage() const
 {
     return mock_storage;
 }

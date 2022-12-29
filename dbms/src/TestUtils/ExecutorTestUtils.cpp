@@ -15,6 +15,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
@@ -62,6 +63,7 @@ void ExecutorTest::initializeContext()
 {
     dag_context_ptr = std::make_unique<DAGContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
+    context.initMockStorage();
     dag_context_ptr->log = Logger::get("executorTest");
     TiFlashTestEnv::getGlobalContext().setExecutorTest();
 }
@@ -236,7 +238,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, s
         context.context,
         query,
         [&](const String & database_name, const String & table_name) {
-            return context.mockStorage().getTableInfo(database_name + "." + table_name);
+            return context.mockStorage()->getTableInfo(database_name + "." + table_name);
         },
         properties);
 

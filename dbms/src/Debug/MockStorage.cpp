@@ -11,11 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <DataStreams/IBlockOutputStream.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Interpreters/Context.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/StorageDeltaMerge.h>
 
-namespace DB::tests
+
+namespace DB
 {
+/// for table scan
 void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & columnInfos)
 {
     name_to_id_map[name] = MockTableIdGenerator::instance().nextTableId();
@@ -63,6 +72,116 @@ MockColumnInfoVec MockStorage::getTableSchema(const String & name)
     throw Exception(fmt::format("Failed to get table schema by table name '{}'", name));
 }
 
+/// for delta merge
+void MockStorage::addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos)
+{
+    name_to_id_map_for_delta_merge[name] = MockTableIdGenerator::instance().nextTableId();
+    table_schema_for_delta_merge[getTableIdForDeltaMerge(name)] = columnInfos;
+    // addTableInfoForDeltaMerge(name, columnInfos); // todo when to use it?
+}
+
+void MockStorage::addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns)
+{
+    // ywq todo insert into delta merge store...
+    if (storage_delta_merge_map.find(name) == storage_delta_merge_map.end())
+    {
+        // init
+        ASTPtr astptr(new ASTIdentifier(name, ASTIdentifier::Kind::Table));
+        NamesAndTypesList names_and_types_list;
+        for (const auto & column : columns)
+        {
+            names_and_types_list.emplace_back(column.name, column.type);
+            std::cout << "ywq test, column name: " << column.name << ", column type: " << column.type->getName() << std::endl;
+        }
+        astptr->children.emplace_back(new ASTIdentifier(columns[0].name));
+
+        storage_delta_merge_map[name] = StorageDeltaMerge::create("TiFlash",
+                                                                  /* db_name= */ "default", // todo... don't care currently
+                                                                  name,
+                                                                  std::nullopt, // todo if i need table info?
+                                                                  ColumnsDescription{names_and_types_list},
+                                                                  astptr,
+                                                                  0,
+                                                                  context);
+
+        auto storage = storage_delta_merge_map[name];
+        storage->startup();
+
+        // write data to DeltaMergeStorage
+        ASTPtr insertptr(new ASTInsertQuery());
+        BlockOutputStreamPtr output = storage->write(insertptr, context.getSettingsRef());
+
+        Block insert_block{columns};
+
+        output->writePrefix();
+        output->write(insert_block);
+        output->writeSuffix();
+    }
+}
+
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, const String & name)
+{
+    auto storage = storage_delta_merge_map[name];
+    auto column_infos = getTableSchemaForDeltaMerge(name);
+    Names column_names;
+    for (const auto & column_info : column_infos)
+        column_names.push_back(column_info.first);
+
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    QueryProcessingStage::Enum stage2;
+    SelectQueryInfo query_info;
+    query_info.query = std::make_shared<ASTSelectQuery>();
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+    BlockInputStreams ins = storage->read(column_names, query_info, context, stage2, 8192, 1);
+
+    std::cout << "ywq test: ins size:" << ins.size() << std::endl;
+    BlockInputStreamPtr in = ins[0];
+    return in;
+}
+
+// ywq todo refine it.
+void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)
+{
+    TableInfo table_info;
+    table_info.name = name;
+    table_info.id = getTableId(name);
+    int i = 0;
+    for (const auto & column : columns)
+    {
+        TiDB::ColumnInfo ret;
+        std::tie(ret.name, ret.tp) = column;
+        // TODO: find a way to assign decimal field's flen.
+        if (ret.tp == TiDB::TP::TypeNewDecimal)
+            ret.flen = 65;
+        ret.id = i++;
+        table_info.columns.push_back(std::move(ret));
+    }
+    table_infos_for_delta_merge[name] = table_info;
+}
+
+Int64 MockStorage::getTableIdForDeltaMerge(const String & name)
+{
+    if (name_to_id_map_for_delta_merge.find(name) != name_to_id_map_for_delta_merge.end())
+    {
+        return name_to_id_map_for_delta_merge[name];
+    }
+    throw Exception(fmt::format("Failed to get table id by table name '{}'", name));
+}
+
+bool MockStorage::tableExistsForDeltaMerge(Int64 table_id)
+{
+    return table_schema_for_delta_merge.find(table_id) != table_schema_for_delta_merge.end();
+}
+
+MockColumnInfoVec MockStorage::getTableSchemaForDeltaMerge(const String & name)
+{
+    if (tableExistsForDeltaMerge(getTableIdForDeltaMerge(name)))
+    {
+        return table_schema_for_delta_merge[getTableIdForDeltaMerge(name)];
+    }
+    throw Exception(fmt::format("Failed to get table schema by table name '{}'", name));
+}
+
 /// for exchange receiver
 void MockStorage::addExchangeSchema(const String & exchange_name, const MockColumnInfoVec & columnInfos)
 {
@@ -105,6 +224,20 @@ MockColumnInfoVec MockStorage::getExchangeSchema(const String & exchange_name)
         return exchange_schemas[exchange_name];
     }
     throw Exception(fmt::format("Failed to get exchange schema by exchange name '{}'", exchange_name));
+}
+
+void MockStorage::clear()
+{
+    for (auto [_, storage] : storage_delta_merge_map)
+    {
+        storage->drop();
+        storage->removeFromTMTContext();
+    }
+}
+
+void MockStorage::useDeltaMerge()
+{
+    use_storage_delta_merge = true;
 }
 
 // use this function to determine where to cut the columns,
@@ -188,8 +321,9 @@ void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & co
     table_infos[name] = table_info;
 }
 
+// for dbgFuncTiDBQuery
 TableInfo MockStorage::getTableInfo(const String & name)
 {
     return table_infos[name];
 }
-} // namespace DB::tests
+} // namespace DB

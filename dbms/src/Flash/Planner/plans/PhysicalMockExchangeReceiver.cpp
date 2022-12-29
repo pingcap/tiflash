@@ -38,7 +38,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (!context.mockStorage().exchangeExists(executor_id))
+    if (!context.mockStorage()->exchangeExists(executor_id))
     {
         /// build with default blocks.
         for (size_t i = 0; i < max_streams; ++i)
