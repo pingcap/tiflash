@@ -312,7 +312,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         wn_ps->write(std::move(wb));
 
         // Generate result.
-        return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<2>(peer).SerializeAsString(), std::get<1>(peer).SerializeAsString());
+        return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<2>(peer).SerializeAsString(), std::get<1>(peer).region().SerializeAsString());
     }
     catch (...)
     {
