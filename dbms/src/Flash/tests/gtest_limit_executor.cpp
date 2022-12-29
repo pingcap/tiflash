@@ -20,7 +20,7 @@ namespace DB
 namespace tests
 {
 
-class ExecutorLimitTestRunner : public DB::tests::ExecutorTest
+class LimitExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     using ColDataType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -47,7 +47,7 @@ public:
     const ColumnWithData col0{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"};
 };
 
-TEST_F(ExecutorLimitTestRunner, Limit)
+TEST_F(LimitExecutorTestRunner, Limit)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -77,7 +77,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorLimitTestRunner, RawQuery)
+TEST_F(LimitExecutorTestRunner, RawQuery)
 try
 {
     String query = "select * from test_db.projection_test_table limit 1";

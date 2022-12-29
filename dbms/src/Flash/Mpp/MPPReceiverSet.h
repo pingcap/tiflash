@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {

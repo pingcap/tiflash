@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashMetrics.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/ServiceUtils.h>
@@ -68,11 +69,12 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
-            DAGContext dag_context(dag_request);
-            dag_context.is_batch_cop = true;
-            dag_context.tables_regions_info = std::move(tables_regions_info);
-            dag_context.log = Logger::get("BatchCoprocessorHandler");
-            dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
+            DAGContext dag_context(
+                dag_request,
+                std::move(tables_regions_info),
+                cop_context.db_context.getClientInfo().current_address.toString(),
+                /*is_batch_cop=*/true,
+                Logger::get("BatchCoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver<true> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);

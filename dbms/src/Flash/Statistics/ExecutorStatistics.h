@@ -31,6 +31,8 @@
 
 namespace DB
 {
+class DAGContext;
+
 template <typename ExecutorImpl>
 class ExecutorStatistics : public ExecutorStatisticsBase
 {

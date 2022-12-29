@@ -301,24 +301,9 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         is_deleted);
 }
 
-Block mergeBlocks(std::vector<Block> && blocks)
+Block sortMergeBlocks(std::vector<Block> && blocks)
 {
-    auto accumulated_block = std::move(blocks[0]);
-
-    for (size_t block_idx = 1; block_idx < blocks.size(); ++block_idx)
-    {
-        auto block = std::move(blocks[block_idx]);
-
-        size_t columns = block.columns();
-        size_t rows = block.rows();
-
-        for (size_t i = 0; i < columns; ++i)
-        {
-            MutableColumnPtr mutable_column = (*std::move(accumulated_block.getByPosition(i).column)).mutate();
-            mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
-            accumulated_block.getByPosition(i).column = std::move(mutable_column);
-        }
-    }
+    auto accumulated_block = mergeBlocks(std::move(blocks));
 
     SortDescription sort;
     sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
@@ -391,7 +376,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageId segment_id, UInt6
                   remaining_rows);
     }
 
-    return mergeBlocks(std::move(blocks));
+    return sortMergeBlocks(std::move(blocks));
 }
 
 void SegmentTestBasic::writeSegment(PageId segment_id, ColumnFileSchemaPtr & column_file_schema, UInt64 write_rows, std::optional<Int64> start_at)

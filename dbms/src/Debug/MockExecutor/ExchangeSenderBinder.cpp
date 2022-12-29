@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AstToPB.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Interpreters/Context.h>
 
 namespace DB::mock
 {
@@ -23,6 +28,8 @@ bool ExchangeSenderBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_
     tipb_executor->set_executor_id(name);
     tipb::ExchangeSender * exchange_sender = tipb_executor->mutable_exchange_sender();
     exchange_sender->set_tp(type);
+    if (tipb_executor->exchange_sender().tp() == tipb::Hash)
+        tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     for (auto i : partition_keys)
     {
         auto * expr = exchange_sender->add_partition_keys();
