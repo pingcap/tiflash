@@ -198,9 +198,9 @@ struct BlockExtraInfo
 };
 
 /// join blocks by columns
-Block hstackBlocks(const Blocks & blocks, const Block & header);
+Block hstackBlocks(const Blocks && blocks, const Block & header);
 
 /// join blocks by rows
-Block vstackBlocks(const Blocks & blocks);
+Block vstackBlocks(const Blocks && blocks);
 
 } // namespace DB

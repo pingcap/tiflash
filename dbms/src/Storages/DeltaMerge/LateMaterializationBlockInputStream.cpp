@@ -78,16 +78,16 @@ Block LateMaterializationBlockInputStream::readImpl()
             Block rest_column_block;
             if (passed_count != rows)
             {
-                // rest_column_block = rest_column_stream->readWithFilter(*filter);
-                rest_column_block = rest_column_stream->read();
+                rest_column_block = rest_column_stream->readWithFilter(*filter);
+                // rest_column_block = rest_column_stream->read();
                 for (auto & col : filter_column_block)
                 {
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                for (auto & col : rest_column_block)
-                {
-                    col.column = col.column->filter(*filter, passed_count);
-                }
+                // for (auto & col : rest_column_block)
+                // {
+                //     col.column = col.column->filter(*filter, passed_count);
+                // }
             }
             else
             {

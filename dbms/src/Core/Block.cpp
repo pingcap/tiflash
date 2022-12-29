@@ -615,7 +615,7 @@ void Block::updateHash(SipHash & hash) const
             col.column->updateHashWithValue(row_no, hash);
 }
 
-Block hstackBlocks(const Blocks & blocks, const Block & header)
+Block hstackBlocks(const Blocks && blocks, const Block & header)
 {
     if (blocks.empty())
         return {};
@@ -635,7 +635,7 @@ Block hstackBlocks(const Blocks & blocks, const Block & header)
     return res;
 }
 
-Block vstackBlocks(const Blocks & blocks)
+Block vstackBlocks(const Blocks && blocks)
 {
     if (blocks.empty())
         return {};
