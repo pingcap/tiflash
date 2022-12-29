@@ -14,7 +14,7 @@
 
 # test regexp and regexp_like
 mysql> drop table if exists test.t
-mysql> create table test.t (data varchar(30), data_not_null varchar(30) not null, pattern varchar(30), pattern_not_null varchar(30) not null); 
+mysql> create table test.t (data varchar(30), data_not_null varchar(30) not null, pattern varchar(30), pattern_not_null varchar(30) not null);
 mysql> insert into test.t values ('aaaa', 'AAAA', '^a.*', '^A.*'), ('abcd', 'abcd', null, '^a..d$'), (null, 'bbb', 'bb$', 'bb$'),('中文测试','中文测试','中文','^....$'),('中English混合','中English混合','^中English','^..nglish..$');
 mysql> alter table test.t set tiflash replica 1
 func> wait_table test t
@@ -71,7 +71,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; se
 +---------------------+------------------------------+------------------------------+---------------------------------------+
 
 mysql> drop table if exists test.t
-mysql> create table test.t (data varchar(30), pattern varchar(30)); 
+mysql> create table test.t (data varchar(30), pattern varchar(30));
 mysql> insert into test.t values ('abcd', 'abcd');
 mysql> alter table test.t set tiflash replica 1
 func> wait_table test t
@@ -83,7 +83,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; se
 +---------------------+-------------------+
 
 mysql> drop table if exists test.t;
-mysql> create table test.t (data varchar(30), pattern varchar(30), match_type varchar(30)); 
+mysql> create table test.t (data varchar(30), pattern varchar(30), match_type varchar(30));
 mysql> insert into test.t values ('a', 'A', 'i'), ('\n', '.', 's'), ('ab\nabc', '^abc$', 'm');
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
@@ -135,3 +135,23 @@ mysql> set tidb_enforce_mpp=1; select regexp_substr(expr, pattern, 1, 1, match_t
 | Bb   |
 | abc  |
 +------+
+
+# test regexp_replace
+mysql> drop table if exists test.t;
+mysql> create table test.t (expr varchar(30), pattern varchar(30), repl varchar(30), pos int, occur int, match_type varchar(30));
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_replace(_utf8mb4'1', _utf8mb4'1', repl, pos, occur, match_type) as res from test.t;
+mysql> set tidb_enforce_mpp=1; select regexp_replace(_utf8mb4'1', _utf8mb4'', repl, pos, occur, match_type) as res from test.t;
+
+mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', _utf8mb4'233', 1, 1, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', _utf8mb4'xzx', 1, 1, _utf8mb4'i'), (_utf8mb4'ababc', _utf8mb4'^abc$', _utf8mb4'123', 1, 1, _utf8mb4'c');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select regexp_replace(expr, pattern, repl, 1, 1, match_type) as res from test.t;
++-------+
+| res   |
++-------+
+| 233   |
+| axzx  |
+| ababc |
++-------+
