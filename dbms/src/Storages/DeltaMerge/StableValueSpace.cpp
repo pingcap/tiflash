@@ -138,6 +138,7 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
 
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
     auto [buf, buf_size, _] = manager->getReadBuffer(target_id);
+    LOG_DEBUG(&Poco::Logger::get("StableValueSpace"), "checkpoint stable id {} buffer size {}", stable_id, buf_size);
 
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, *buf);

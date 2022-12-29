@@ -481,8 +481,8 @@ Segments Segment::restoreSegmentsFromCheckpoint( //
           segment_info.rowkey_range.toDebugString(),
           segment_info.epoch,
           segment_info.next_segment_id);
-        auto delta = DeltaValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, segment_info.rowkey_range, ns_id, segment_info.delta_id, wbs);
         auto stable = StableValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, ns_id, segment_info.stable_id, wbs);
+        auto delta = DeltaValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, segment_info.rowkey_range, ns_id, segment_info.delta_id, wbs);
 
         auto new_segment_id = context.storage_pool->newMetaPageId();
         auto segment = std::make_shared<Segment>(parent_log, segment_info.epoch, segment_info.rowkey_range.shrink(range), new_segment_id, /* next_segment_id */ 0, delta, stable);
