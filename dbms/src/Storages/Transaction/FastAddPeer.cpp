@@ -89,7 +89,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
             if (p.getExtension() == "manifest" && index > optimal_index)
             {
                 optimal_index = index;
-                optimal = p.getFileName();
+                optimal = p.toString();
             }
         }
         ++it;
