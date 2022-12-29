@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "RaftStoreProxyFFI/ProxyFFI.h"
+
 #include <Common/CurrentMetrics.h>
 #include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
@@ -670,6 +672,37 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
             break;
         default:
             LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+            exit(-1);
+        }
+    }
+}
+
+void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type)
+{
+    UNUSED(hint_size);
+    if (ptr)
+    {
+        switch (static_cast<SpecialCppPtrType>(type))
+        {
+        case SpecialCppPtrType::None:
+            // Do nothing.
+            break;
+        case SpecialCppPtrType::TupleOfRawCppPtr:
+        {
+            auto * special_ptr = reinterpret_cast<RawCppPtrTuple *>(ptr);
+            delete special_ptr->inner;
+            delete special_ptr;
+            break;
+        }
+        case SpecialCppPtrType::ArrayOfRawCppPtr:
+        {
+            auto * special_ptr = reinterpret_cast<RawCppPtrArr *>(ptr);
+            delete special_ptr->inner;
+            delete special_ptr;
+            break;
+        }
+        default:
+            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", static_cast<std::underlying_type_t<SpecialCppPtrType>>(type));
             exit(-1);
         }
     }
