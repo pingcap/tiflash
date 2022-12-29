@@ -14,6 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
+#include <Common/MemoryTracker.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -26,9 +28,6 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-
-#include "Common/MPMCQueue.h"
-#include "Common/MemoryTracker.h"
 
 namespace DB
 {
@@ -156,11 +155,6 @@ public:
         prepareMsgChannels();
     }
 
-    ~MockExchangeReceiver()
-    {
-        waitAllConnectionDone();
-    }
-
     void connectionDone(bool meet_error, const String & local_err_msg)
     {
         Int32 copy_connection = -1;
@@ -173,10 +167,7 @@ public:
         }
 
         if (meet_error || copy_connection == 0)
-        {
             finishAllMsgChannels();
-            cv.notify_all();
-        }
     }
 
     void connectLocalTunnel(std::vector<MPPTunnelPtr> & tunnels)
