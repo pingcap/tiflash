@@ -162,7 +162,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppP
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
-void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, RawCppPtrType type);
+void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type);
 BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
