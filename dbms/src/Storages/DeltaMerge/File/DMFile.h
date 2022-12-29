@@ -218,6 +218,7 @@ public:
 
     bool canGC();
     void enableGC();
+    void disableGC();
     void remove(const FileProviderPtr & file_provider);
 
     // The ID for locating DTFile on disk

@@ -804,6 +804,11 @@ void DMFile::enableGC()
         ngc_file.remove();
 }
 
+void DMFile::disableGC()
+{
+    PageUtil::touchFile(ngcPath());
+}
+
 void DMFile::remove(const FileProviderPtr & file_provider)
 {
     if (isSingleFileMode())

@@ -96,5 +96,47 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, 
     return column_files;
 }
 
+ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format(//
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    const PS::V3::CheckpointPageManagerPtr & manager,
+    UInt64 checkpoint_store_id,
+    TableID ns_id,
+    WriteBatches & wbs)
+{
+    size_t column_file_count;
+    readIntBinary(column_file_count, buf);
+    ColumnFilePersisteds column_files;
+    column_files.reserve(column_file_count);
+    BlockPtr last_schema;
+    for (size_t i = 0; i < column_file_count; ++i)
+    {
+        std::underlying_type<ColumnFile::Type>::type column_file_type;
+        readIntBinary(column_file_type, buf);
+        ColumnFilePersistedPtr column_file;
+        switch (column_file_type)
+        {
+        case ColumnFile::Type::DELETE_RANGE:
+            column_file = ColumnFileDeleteRange::deserializeMetadata(buf);
+            break;
+        case ColumnFile::Type::TINY_FILE:
+        {
+            std::tie(column_file, last_schema) = ColumnFileTiny::deserializeMetadata(buf, last_schema);
+            break;
+        }
+        case ColumnFile::Type::BIG_FILE:
+        {
+            column_file = ColumnFileBig::deserializeMetadataFromRemote(context, segment_range, buf, manager, checkpoint_store_id, ns_id, wbs);
+            break;
+        }
+        default:
+            throw Exception("Unexpected column file type: " + DB::toString(column_file_type), ErrorCodes::LOGICAL_ERROR);
+        }
+        column_files.emplace_back(std::move(column_file));
+    }
+    return column_files;
+}
+
 } // namespace DM
 } // namespace DB

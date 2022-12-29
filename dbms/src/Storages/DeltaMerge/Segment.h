@@ -174,7 +174,7 @@ public:
     static SegmentMetaInfos restoreAllSegmentsMetaInfo( //
         NamespaceId ns_id,
         const RowKeyRange & range,
-        const CheckpointPageManager & manager);
+        const PS::V3::CheckpointPageManagerPtr & manager);
 
     // TODO: use template for CheckpointPageManager
     // 1. The returned segment's range should be in `range`. Actually, Just change the range in segment meta is enough.
@@ -185,7 +185,7 @@ public:
         NamespaceId ns_id,
         const Segment::SegmentMetaInfos & meta_infos,
         const RowKeyRange & range,
-        const CheckpointPageManager & manager,
+        const PS::V3::CheckpointPageManagerPtr & manager,
         const PS::V3::CheckpointInfo & checkpoint_info,
         WriteBatches & wbs);
 

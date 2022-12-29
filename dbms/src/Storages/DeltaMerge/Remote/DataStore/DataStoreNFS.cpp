@@ -14,6 +14,8 @@
 
 #include <unistd.h>
 
+#include <Poco/Path.h>
+
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreNFS.h>
 
 namespace DB::DM::Remote
@@ -53,7 +55,8 @@ void DataStoreNFS::copyDMFileToLocalPath(const DMFileOID & remote_oid, const Str
 void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & self_oid)
 {
     const auto remote_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(remote_oid), remote_oid.file_id, DMFile::READABLE);
-    const auto self_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(self_oid), self_oid.file_id, DMFile::READABLE);
+    const auto self_dmf_parent_dir = buildDMFileParentPathInNFS(self_oid);
+    const auto self_dmf_dir = DMFile::getPathByStatus(self_dmf_parent_dir, self_oid.file_id, DMFile::READABLE);
     auto remote_dmf_dir_poco = Poco::File(remote_dmf_dir);
     if (!remote_dmf_dir_poco.exists())
     {
@@ -65,9 +68,10 @@ void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & se
         LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} remote={}", self_oid.info(), self_dmf_dir);
         self_dmf_dir_poco.remove(true);
     }
+    Poco::File(self_dmf_parent_dir).createDirectories();
     if (symlink(remote_dmf_dir.c_str(), self_dmf_dir.c_str()) != 0)
     {
-        LOG_WARNING(log, "Link from {} to {} failed.", remote_dmf_dir, self_dmf_dir);
+        throw Exception(fmt::format("Link from {} to {} failed.", remote_dmf_dir, self_dmf_dir), ErrorCodes::LOGICAL_ERROR);
     }
 }
 

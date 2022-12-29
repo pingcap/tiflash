@@ -126,7 +126,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 
 StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     DMContext & context,
-    const PS::V3::CheckpointPageManager & manager,
+    const PS::V3::CheckpointPageManagerPtr & manager,
     const PS::V3::CheckpointInfo & checkpoint_info,
     TableID ns_id,
     PageId stable_id,
@@ -137,8 +137,7 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     auto stable = std::make_shared<StableValueSpace>(new_stable_id);
 
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
-    auto [buf, buf_size, _] = manager.getReadBuffer(target_id);
-
+    auto [buf, buf_size, _] = manager->getReadBuffer(target_id);
 
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, *buf);
@@ -153,7 +152,7 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     {
         readIntBinary(page_id, *buf);
         auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, page_id);
-        auto remote_orig_file_page_id = manager.getNormalPageId(remote_file_page_id);
+        auto remote_orig_file_page_id = manager->getNormalPageId(remote_file_page_id);
         auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
         auto delegator = context.path_pool->getStableDiskDelegator();
         auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -161,44 +160,43 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
         wbs.data.putExternal(new_file_id, 0);
         if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
         {
+            // 1. link remote file
             auto remote_oid = Remote::DMFileOID{
                 .write_node_id = checkpoint_info.checkpoint_store_id,
                 .table_id = ns_id,
                 .file_id = remote_file_id,
             };
+            auto & tmt = db_context.getTMTContext();
+            UInt64 store_id = tmt.getKVStore()->getStoreMeta().id();
+            auto self_oid = Remote::DMFileOID{
+                .write_node_id = store_id,
+                .table_id = ns_id,
+                .file_id = new_file_id,
+            };
             auto data_store = remote_manager->getDataStore();
+            data_store->linkDMFile(remote_oid, self_oid);
+
+            // 2. copy to local temporary path and set dmfile no gc
+            auto temporary_path = db_context.getTemporaryPath();
+            data_store->copyDMFileToLocalPath(self_oid, temporary_path);
+            auto temp_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, temporary_path, DMFile::ReadMetaMode::none());
+            temp_dmfile->disableGC();
+
+
+            // 3. copy to storage data path, write file id to data ps and enable gc
             auto parent_path = delegator.choosePath();
             const auto local_path = DMFile::getPathByStatus(parent_path, new_file_id, DMFile::READABLE);
-            // TODO: check the copy meets expectation
-            // TODO: avoid copy to local
-            data_store->copyDMFileToLocalPath(remote_oid, local_path);
+            const auto temp_path = DMFile::getPathByStatus(temporary_path, new_file_id, DMFile::READABLE);
+            Poco::File(temp_path).moveTo(local_path);
             auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
             delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), parent_path);
+            wbs.writeLogAndData();
+            new_dmfile->enableGC();
             stable->files.push_back(new_dmfile);
-//            auto prepared = data_store->prepareDMFile(remote_oid);
-//            auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-//            stable->files.push_back(dmfile);
-//            UInt64 store_id;
-//            {
-//                auto & tmt = db_context.getTMTContext();
-//                auto kvstore = tmt.getKVStore();
-//                auto store_meta = kvstore->getStoreMeta();
-//                store_id = store_meta.id();
-//            }
-//            auto self_oid = Remote::DMFileOID{
-//                .write_node_id = store_id,
-//                .table_id = ns_id,
-//                .file_id = new_file_id,
-//            };
-//            data_store->linkDMFile(remote_oid, self_oid);
         }
         else
         {
-            // TODO: the path here may be not correct
-            auto file_parent_path = delegator.getDTFilePath(remote_file_id);
-            auto new_dmfile = DMFile::createByLink(context.db_context.getFileProvider(), remote_file_id, new_file_id, file_parent_path);
-            delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), file_parent_path);
-            stable->files.push_back(new_dmfile);
+            RUNTIME_CHECK_MSG(false, "Shouldn't reach here");
         }
     }
 

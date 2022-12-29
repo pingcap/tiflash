@@ -437,7 +437,7 @@ SegmentPtr Segment::restoreSegment( //
 Segment::SegmentMetaInfos Segment::restoreAllSegmentsMetaInfo( //
     NamespaceId ns_id,
     const RowKeyRange & range,
-    const CheckpointPageManager & manager)
+    const PS::V3::CheckpointPageManagerPtr & manager)
 {
     PageId target_segment_id = 1;
     SegmentMetaInfos segment_infos;
@@ -445,7 +445,7 @@ Segment::SegmentMetaInfos Segment::restoreAllSegmentsMetaInfo( //
     {
         Segment::SegmentMetaInfo segment_info;
         auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, target_segment_id);
-        auto [buf, buf_size, _] = manager.getReadBuffer(target_id);
+        auto [buf, buf_size, _] = manager->getReadBuffer(target_id);
 
         readSegmentMetaInfo(*buf, segment_info);
 
@@ -468,7 +468,7 @@ Segments Segment::restoreSegmentsFromCheckpoint( //
     NamespaceId ns_id,
     const Segment::SegmentMetaInfos & meta_infos,
     const RowKeyRange & range,
-    const CheckpointPageManager & manager,
+    const PS::V3::CheckpointPageManagerPtr & manager,
     const PS::V3::CheckpointInfo & checkpoint_info,
     WriteBatches & wbs)
 {

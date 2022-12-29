@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -76,6 +77,11 @@ public:
     {
         TiFlashStorageTestBasic::SetUp();
         table_columns = std::make_shared<ColumnDefines>();
+        auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME) + "/";
+        TiFlashTestEnv::tryRemovePath(remote_source, true);
+        TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
+        TiFlashTestEnv::getGlobalContext().initializeReadNodePageStorage(TiFlashTestEnv::getGlobalContext().getPathPool(), TiFlashTestEnv::getGlobalContext().getFileProvider());
+        TiFlashTestEnv::getGlobalContext().initializeDeltaMergeRemoteManager();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -125,6 +131,8 @@ protected:
 
     // the segment we are going to test
     SegmentPtr segment;
+
+    constexpr static const char * TRACING_NAME = "DMSegmentTest";
 };
 
 TEST_F(SegmentTest, RestoreFromRemoteCheckPoint)
@@ -148,13 +156,28 @@ try
         auto file_provider = dmContext().db_context.getFileProvider();
         auto file_id = dmContext().storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto store_path = delegator.choosePath();
+        auto file_parent_path = delegator.choosePath();
 
         auto dmfile
-            = writeIntoNewDMFile(dmContext(), std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, DMFileBlockOutputStream::Flags{});
+            = writeIntoNewDMFile(dmContext(), std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, file_parent_path, DMFileBlockOutputStream::Flags{});
 
-        delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
-        auto file_parent_path = delegator.getDTFilePath(file_id);
+        delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), file_parent_path);
+        if (const auto & remote_manager = dmContext().db_context.getDMRemoteManager(); remote_manager != nullptr)
+        {
+            UInt64 store_id;
+            {
+                auto & tmt = dmContext().db_context.getTMTContext();
+                auto kvstore = tmt.getKVStore();
+                auto store_meta = kvstore->getStoreMeta();
+                store_id = store_meta.id();
+            }
+            auto oid = Remote::DMFileOID{
+                .write_node_id = store_id,
+                .table_id = static_cast<Int64>(table_id),
+                .file_id = file_id,
+            };
+            remote_manager->getDataStore()->putDMFile(dmfile, oid);
+        }
         auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
         WriteBatches wbs(storage_pool);
         wbs.data.putExternal(file_id, 0);
@@ -164,7 +187,6 @@ try
     }
 
     // write ColumnFileTiny in delta
-    // FIXME: support it after field offsets in checkpoint
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
         num_rows_write += num_rows_write_per_batch;
@@ -216,12 +238,19 @@ try
         });
     PageId new_segment_id = 0;
     {
+        auto kvstore = dmContext().db_context.getTMTContext().getKVStore();
+        auto remote_store_id = kvstore->getStoreMeta().id();
         PS::V3::CheckpointInfo info{
             .checkpoint_manifest_path = checkpoint_path,
             .checkpoint_data_dir = Poco::Path(checkpoint_path).parent().toString(),
-            .checkpoint_store_id = 1,
+            .checkpoint_store_id = remote_store_id,
         };
-        PS::V3::CheckpointPageManager manager(*reader, info.checkpoint_data_dir);
+
+        // change current store id before restore
+        auto store = metapb::Store{};
+        store.set_id(2);
+        kvstore->setStore(store);
+        auto manager = std::make_shared<PS::V3::CheckpointPageManager>(*reader, info.checkpoint_data_dir);
         WriteBatches wbs{dmContext().storage_pool};
         auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), manager);
         auto new_segments = Segment::restoreSegmentsFromCheckpoint( //

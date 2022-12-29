@@ -35,4 +35,6 @@ private:
     typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit edit;
     String checkpoint_data_dir;
 };
+
+using CheckpointPageManagerPtr = std::shared_ptr<CheckpointPageManager>;
 }

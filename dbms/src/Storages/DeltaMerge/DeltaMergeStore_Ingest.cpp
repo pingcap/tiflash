@@ -1017,7 +1017,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
         PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::Options{
             .file_path = checkpoint_info.checkpoint_manifest_path
         });
-    PS::V3::CheckpointPageManager manager(*reader, checkpoint_info.checkpoint_data_dir);
+    auto manager = std::make_shared<PS::V3::CheckpointPageManager>(*reader, checkpoint_info.checkpoint_data_dir);
     auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, manager);
     WriteBatches wbs{dm_context->storage_pool};
     auto restored_segments = Segment::restoreSegmentsFromCheckpoint( //

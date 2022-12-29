@@ -63,7 +63,7 @@ DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRan
 
 DeltaValueSpacePtr DeltaValueSpace::restoreFromCheckpoint( //
     DMContext & context,
-    const PS::V3::CheckpointPageManager & manager,
+    const PS::V3::CheckpointPageManagerPtr & manager,
     const PS::V3::CheckpointInfo & checkpoint_info,
     const RowKeyRange & segment_range,
     NamespaceId ns_id,

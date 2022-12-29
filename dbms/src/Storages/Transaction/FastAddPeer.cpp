@@ -264,23 +264,24 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 {
     std::optional<RemoteMeta> maybe_peer = std::nullopt;
     auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
-    Timepoint start = Clock::now();
+    Stopwatch watch;
     while (true)
     {
         maybe_peer = selectRemotePeer(wn_ps, region_id, new_peer_id, server->proxy_helper);
         if (!maybe_peer.has_value())
         {
-            Timepoint now = Clock::now();
-            if (now >= (start + Seconds(60)))
+            if (watch.elapsedSeconds() <= 60)
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
         else
             break;
     }
+    auto * log = &Poco::Logger::get("fast add");
     auto & peer = maybe_peer.value();
     auto checkpoint_store_id = std::get<0>(peer);
     auto checkpoint_manifest_path = std::get<3>(peer);
+    LOG_INFO(log, "select checkpoint path {} from store {} for region {} takes {} seconds", checkpoint_manifest_path, checkpoint_store_id, region_id, watch.elapsedSeconds());
     auto region = std::get<4>(peer);
 
     const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
