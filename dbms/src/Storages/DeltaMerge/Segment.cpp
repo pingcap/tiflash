@@ -475,6 +475,12 @@ Segments Segment::restoreSegmentsFromCheckpoint( //
     Segments segments;
     for (const auto & segment_info : meta_infos)
     {
+        LOG_DEBUG(parent_log, "begin to restore segment delta id {} stable id {} range {} epoch {} next_segment_id {}",
+          segment_info.delta_id,
+          segment_info.stable_id,
+          segment_info.rowkey_range.toDebugString(),
+          segment_info.epoch,
+          segment_info.next_segment_id);
         auto delta = DeltaValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, segment_info.rowkey_range, ns_id, segment_info.delta_id, wbs);
         auto stable = StableValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, ns_id, segment_info.stable_id, wbs);
 
