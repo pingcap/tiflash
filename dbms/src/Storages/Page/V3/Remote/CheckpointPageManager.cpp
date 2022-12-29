@@ -60,6 +60,7 @@ UniversalPageId CheckpointPageManager::getNormalPageId(const UniversalPageId & p
     LOG_WARNING(&Poco::Logger::get("CheckpointPageManager::getNormalPageId"), "Cannot find page id {} by binary search, fallback to linear search", target_id);
     while (true)
     {
+        bool finished = true;
         for (const auto & record : records)
         {
             if (record.page_id == target_id)
@@ -71,9 +72,13 @@ UniversalPageId CheckpointPageManager::getNormalPageId(const UniversalPageId & p
                 else
                 {
                     target_id = record.ori_page_id;
+                    finished = false;
+                    break;
                 }
             }
         }
+        if (finished)
+            break;
     }
     RUNTIME_CHECK_MSG(false, "Cannot find page id {}", page_id);
 }
@@ -129,6 +134,7 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
     LOG_WARNING(&Poco::Logger::get("CheckpointPageManager::getReadBuffer"), "Cannot find page id {} by binary search, fallback to linear search", target_id);
     while (true)
     {
+        bool finished = true;
         for (const auto & record : records)
         {
             if (record.page_id == target_id)
@@ -151,9 +157,13 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
                 else
                 {
                     target_id = record.ori_page_id;
+                    finished = false;
+                    break;
                 }
             }
         }
+        if (finished)
+            break;
     }
     RUNTIME_CHECK_MSG(false, "Cannot find page id {}", page_id);
     return std::make_tuple(nullptr, 0, field_sizes);
