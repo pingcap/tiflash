@@ -617,7 +617,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
         if (!success)
             break;
 
-        auto skipped_byte_size = reinterpret_cast<Int64>(matched_str.data() - (subject + prior_offset));
+        auto skipped_byte_size = static_cast<Int64>(matched_str.data() - (subject + prior_offset));
         res_data.resize(res_data.size() + skipped_byte_size);
         memcpy(&res_data[res_offset], subject + prior_offset, skipped_byte_size); // copy the skipped bytes
         res_offset += skipped_byte_size;
@@ -658,7 +658,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
         --occur;
     }
 
-    auto prefix_byte_size = reinterpret_cast<Int64>(matched_str.data() - subject);
+    auto prefix_byte_size = static_cast<Int64>(matched_str.data() - subject);
     res_data.resize(res_data.size() + prefix_byte_size);
     memcpy(&res_data[res_offset], subject, prefix_byte_size); // Copy prefix string
     res_offset += prefix_byte_size;
