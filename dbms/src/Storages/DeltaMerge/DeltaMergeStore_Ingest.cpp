@@ -725,7 +725,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
         RowKeyRange remaining_delete_range = ingest_range;
         LOG_INFO(
             log,
-            "Table ingest using split - delete range phase - begin, remaining_delete_range={}",
+            "Table ingest checkpoint using split - delete range phase - begin, remaining_delete_range={}",
             remaining_delete_range.toDebugString());
 
         while (!remaining_delete_range.none())
@@ -747,7 +747,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 remaining_delete_range.toDebugString());
             LOG_DEBUG(
                 log,
-                "Table ingest using split - delete range phase - Try to delete range in segment, delete_range={} segment={} remaining_delete_range={} updated_segments_n={}",
+                "Table ingest checkpoint using split - delete range phase - Try to delete range in segment, delete_range={} segment={} remaining_delete_range={} updated_segments_n={}",
                 delete_range.toDebugString(),
                 segment->simpleInfo(),
                 remaining_delete_range.toDebugString(),
@@ -769,7 +769,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 
     LOG_DEBUG(
         log,
-        "Table ingest using split - delete range phase - finished, updated_segments_n={}",
+        "Table ingest checkpoint using split - delete range phase - finished, updated_segments_n={}",
         updated_segments.size());
 
     /*
@@ -800,7 +800,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 
     LOG_DEBUG(
         log,
-        "Table ingest using split - split ingest phase - begin, ingest_range={}, files_n={}",
+        "Table ingest checkpoint using split - split ingest phase - begin, ingest_range={}, files_n={}",
         ingest_range.toDebugString(),
         target_segments.size());
 
@@ -812,7 +812,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
         {
             LOG_WARNING(
                 log,
-                "Table ingest using split - split ingest phase - Unexpected empty DMFile, skipped. ingest_range={} file_idx={}",
+                "Table ingest checkpoint using split - split ingest phase - Unexpected empty DMFile, skipped. ingest_range={} file_idx={}",
                 ingest_range.toDebugString(),
                 file_idx);
             continue;
@@ -852,7 +852,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 
             LOG_INFO(
                 log,
-                "Table ingest using split - split ingest phase - Try to ingest file into segment, file_idx={} file_id=dmf_{} file_ingest_range={} segment={} segment_ingest_range={}",
+                "Table ingest checkpoint using split - split ingest phase - Try to ingest file into segment, file_idx={} file_id=dmf_{} file_ingest_range={} segment={} segment_ingest_range={}",
                 file_idx,
                 target_segments[file_idx]->segmentId(),
                 file_ingest_range.toDebugString(),
@@ -877,7 +877,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 
     LOG_DEBUG(
         log,
-        "Table ingest using split - split ingest phase - finished, updated_segments_n={}",
+        "Table ingest checkpoint using split - split ingest phase - finished, updated_segments_n={}",
         updated_segments.size());
 
     return std::vector<SegmentPtr>(
