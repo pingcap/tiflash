@@ -94,7 +94,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         }
         ++it;
     }
-    LOG_DEBUG(log, "use optimal manifest {}", optimal);
+    LOG_DEBUG(log, "use optimal manifest {} checkpoint_data_dir {}", optimal, checkpoint_data_dir);
 
     if (optimal.empty())
     {
@@ -182,7 +182,7 @@ std::vector<uint64_t> listAllStores(const std::string & remote_dir)
     return res;
 }
 
-std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
+std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t current_store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
     auto * log = &Poco::Logger::get("fast add");
 
@@ -197,6 +197,8 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
     auto stores = listAllStores(remote_dir);
     for (const auto & store_id: stores)
     {
+        if (store_id == current_store_id)
+            continue;
         auto remote_manifest_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
 //        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, store_id, storage_name);
         auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, remote_dir, store_id, region_id, new_peer_id, proxy_helper);
@@ -267,10 +269,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     {
         std::optional<RemoteMeta> maybe_peer = std::nullopt;
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
+        auto kvstore = server->tmt->getKVStore();
+        auto current_store_id = kvstore->getStoreMeta().id();
         Stopwatch watch;
         while (true)
         {
-            maybe_peer = selectRemotePeer(wn_ps, region_id, new_peer_id, server->proxy_helper);
+            maybe_peer = selectRemotePeer(wn_ps, current_store_id, region_id, new_peer_id, server->proxy_helper);
             if (!maybe_peer.has_value())
             {
                 if (watch.elapsedSeconds() >= 60)
@@ -292,7 +296,6 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 //        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
         auto checkpoint_data_dir = remote_dir;
 
-        auto & kvstore = server->tmt->getKVStore();
         kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
 
         auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
