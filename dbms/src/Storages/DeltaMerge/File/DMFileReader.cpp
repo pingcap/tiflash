@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
+
 #include <cstddef>
 
 namespace CurrentMetrics
