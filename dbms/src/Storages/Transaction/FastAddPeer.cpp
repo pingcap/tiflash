@@ -92,7 +92,6 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         }
         ++it;
     }
-    LOG_DEBUG(log, "use optimal manifest {}", optimal);
 
     if (optimal.empty())
     {
