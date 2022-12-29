@@ -38,8 +38,12 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     auto & dag_context = *context.getDAGContext();
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
-
-    if (!context.mockStorage()->tableExists(table_scan.getLogicalTableID()))
+    if (context.mockStorage()->useDeltaMerge())
+    {
+        schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
+        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID()));
+    }
+    else if (!context.mockStorage()->tableExists(table_scan.getLogicalTableID()))
     {
         /// build with default blocks.
         schema = genNamesAndTypes(table_scan, "mock_table_scan");

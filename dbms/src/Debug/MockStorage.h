@@ -68,8 +68,11 @@ public:
     void addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos);
 
     void addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns);
+    MockColumnInfoVec getTableSchemaForDeltaMerge(const String & name);
+    MockColumnInfoVec getTableSchemaForDeltaMerge(Int64 table_id);
+    NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
-    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, const String & name);
+    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id);
 
     /// for exchange receiver
     void addExchangeSchema(const String & exchange_name, const MockColumnInfoVec & columnInfos);
@@ -88,11 +91,14 @@ public:
     ColumnsWithTypeAndName getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num);
 
     TableInfo getTableInfo(const String & name);
+    TableInfo getTableInfoForDeltaMerge(const String & name);
 
     /// clear for StorageDeltaMerge
     void clear();
 
-    void useDeltaMerge();
+    void setUseDeltaMerge();
+
+    bool useDeltaMerge() const;
 
 private:
     /// for mock table scan
@@ -109,8 +115,9 @@ private:
     /// for mock storage delta merge
     std::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>
     std::unordered_map<Int64, MockColumnInfoVec> table_schema_for_delta_merge; /// <table_id, columnInfo>
-    std::unordered_map<String, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_name, StorageDeltaMerge>
+    std::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_name, StorageDeltaMerge>
     std::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
+    std::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
 
     bool use_storage_delta_merge = false;
 
@@ -125,10 +132,9 @@ private:
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 
-    MockColumnInfoVec getTableSchemaForDeltaMerge(const String & name);
-
     void addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns);
 
+    void addNamesAndTypesForDeltaMerge(Int64 table_id, const ColumnsWithTypeAndName & columns);
     /// for exchange receiver
     bool exchangeExistsWithName(const String & name);
 };

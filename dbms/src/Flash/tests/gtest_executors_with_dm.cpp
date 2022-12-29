@@ -21,7 +21,6 @@ namespace DB
 {
 namespace tests
 {
-
 class ExecutorsWithDMTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -39,7 +38,7 @@ public:
                                    {"col1", TiDB::TP::TypeString}},
                                   {{toVec<Int64>("col0", col0)},
                                    {toNullableVec<String>("col1", col1)}});
-        context.mockStorage()->useDeltaMerge();
+        context.mockStorage()->setUseDeltaMerge();
     }
     const ColumnWithString col1{"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"};
     const ColumnWithInt64 col0{0, 1, 2, 3, 4, 5, 6, 7};
@@ -48,18 +47,10 @@ public:
 TEST_F(ExecutorsWithDMTestRunner, DeltaMergeStorageBasic)
 try
 {
-    auto * mock_storage = context.mockStorage();
-    // ywq todo refine scan
-    ColumnsWithTypeAndName columns{toVec<Int64>("col0", col0), toNullableVec<String>("col1", col1)};
-    mock_storage->addTableSchemaForDeltaMerge("test", {{"col0", TiDB::TP::TypeLongLong}, {"col1", TiDB::TP::TypeString}});
-    mock_storage->addTableDataForDeltaMerge(context.context, "test", columns);
-    auto in = mock_storage->getStreamFromDeltaMerge(context.context, "test");
-
-    ASSERT_INPUTSTREAM_BLOCK_UR(
-        in,
-        Block(columns));
-
-    mock_storage->clear();
+    auto request = context
+                       .scan("test_db", "t1")
+                       .build(context);
+    executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}, {toNullableVec<String>("col1", col1)}});
 }
 CATCH
 

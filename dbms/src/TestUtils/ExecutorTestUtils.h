@@ -31,8 +31,9 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
+// ywq todo
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
-    std::vector<bool> bools{false, true}; \
+    std::vector<bool> bools{true, true};  \
     for (auto enable_planner : bools)     \
     {                                     \
         enablePlanner(enable_planner);

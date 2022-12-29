@@ -437,8 +437,16 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
 {
-    auto table_info = mock_storage->getTableInfo(db_name + "." + table_name);
-    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchema(db_name + "." + table_name));
+    if (!mock_storage->useDeltaMerge())
+    {
+        auto table_info = mock_storage->getTableInfo(db_name + "." + table_name);
+        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchema(db_name + "." + table_name));
+    }
+    else
+    {
+        auto table_info = mock_storage->getTableInfoForDeltaMerge(db_name + "." + table_name);
+        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name));
+    }
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
