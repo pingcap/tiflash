@@ -262,49 +262,57 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
 
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
-    std::optional<RemoteMeta> maybe_peer = std::nullopt;
-    auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
-    Stopwatch watch;
-    while (true)
+    try
     {
-        maybe_peer = selectRemotePeer(wn_ps, region_id, new_peer_id, server->proxy_helper);
-        if (!maybe_peer.has_value())
+        std::optional<RemoteMeta> maybe_peer = std::nullopt;
+        auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
+        Stopwatch watch;
+        while (true)
         {
-            if (watch.elapsedSeconds() >= 60)
-                return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            maybe_peer = selectRemotePeer(wn_ps, region_id, new_peer_id, server->proxy_helper);
+            if (!maybe_peer.has_value())
+            {
+                if (watch.elapsedSeconds() >= 60)
+                    return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+            else
+                break;
         }
-        else
-            break;
+        auto * log = &Poco::Logger::get("fast add");
+        auto & peer = maybe_peer.value();
+        auto checkpoint_store_id = std::get<0>(peer);
+        auto checkpoint_manifest_path = std::get<3>(peer);
+        LOG_INFO(log, "select checkpoint path {} from store {} for region {} takes {} seconds", checkpoint_manifest_path, checkpoint_store_id, region_id, watch.elapsedSeconds());
+        auto region = std::get<4>(peer);
+
+        const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
+        const auto & storage_name = wn_ps->storage_name;
+        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
+
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
+
+        auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+            CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+                .file_path = checkpoint_manifest_path
+            });
+        PS::V3::CheckpointPageManager manager(*reader, checkpoint_data_dir);
+        auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()).toStr());
+        UniversalWriteBatch wb;
+        for (const auto & [buf, size, page_id]: raft_log_data)
+        {
+            wb.putPage(page_id, 0, buf, size);
+        }
+        wn_ps->write(std::move(wb));
+
+        // Generate result.
+        return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<1>(peer).SerializeAsString(), std::get<2>(peer).SerializeAsString());
     }
-    auto * log = &Poco::Logger::get("fast add");
-    auto & peer = maybe_peer.value();
-    auto checkpoint_store_id = std::get<0>(peer);
-    auto checkpoint_manifest_path = std::get<3>(peer);
-    LOG_INFO(log, "select checkpoint path {} from store {} for region {} takes {} seconds", checkpoint_manifest_path, checkpoint_store_id, region_id, watch.elapsedSeconds());
-    auto region = std::get<4>(peer);
-
-    const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
-    const auto & storage_name = wn_ps->storage_name;
-    auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
-
-    auto & kvstore = server->tmt->getKVStore();
-    kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
-
-    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
-        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_manifest_path
-        });
-    PS::V3::CheckpointPageManager manager(*reader, checkpoint_data_dir);
-    auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()).toStr());
-    UniversalWriteBatch wb;
-    for (const auto & [buf, size, page_id]: raft_log_data)
+    catch (...)
     {
-        wb.putPage(page_id, 0, buf, size);
+        DB::tryLogCurrentException("FastAddPeer", "Failed when try to restore from checkpoint");
     }
-    wn_ps->write(std::move(wb));
-
-    // Generate result.
-    return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<1>(peer).SerializeAsString(), std::get<2>(peer).SerializeAsString());
+    return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
 }
 } // namespace DB
