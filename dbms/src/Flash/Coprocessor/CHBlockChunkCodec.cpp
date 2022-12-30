@@ -17,6 +17,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecStream.h>
 #include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <IO/CompressedReadBuffer.h>
@@ -28,75 +29,36 @@
 
 namespace DB
 {
-class CHBlockChunkCodecStream : public ChunkCodecStream
+
+CHBlockChunkCodecStream::CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+    : ChunkCodecStream(field_types)
 {
-public:
-    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
-        : ChunkCodecStream(field_types)
+    for (const auto & field_type : field_types)
     {
-        for (const auto & field_type : field_types)
-        {
-            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
-        }
+        expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
     }
+}
 
-    String getString() override
-    {
-        if (output == nullptr)
-        {
-            throw Exception("The output should not be null in getString()");
-        }
-        return output->releaseStr();
-    }
-    virtual WriteBuffer * initOutputBuffer(size_t init_size)
-    {
-        assert(output == nullptr);
-        output = std::make_unique<WriteBufferFromOwnString>(init_size);
-        return output.get();
-    }
-
-    void clear() override { output = nullptr; }
-    void encode(const Block & block, size_t start, size_t end) override;
-    std::unique_ptr<WriteBufferFromOwnString> output;
-    DataTypes expected_types;
-
-    ~CHBlockChunkCodecStream() override = default;
-};
-
-class CompressCHBlockChunkCodecStream final : public CHBlockChunkCodecStream
+String CHBlockChunkCodecStream::getString()
 {
-    using Base = CHBlockChunkCodecStream;
+    if (output == nullptr)
+    {
+        throw Exception("The output should not be null in getString()");
+    }
+    return output->releaseStr();
+}
 
-public:
-    explicit CompressCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method_)
-        : Base(field_types)
-        , compress_method(compress_method_)
-    {
-    }
-    WriteBuffer * initOutputBuffer(size_t init_size) override
-    {
-        assert(compress_write_buffer == nullptr);
-        compress_write_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(*Base::initOutputBuffer(init_size), CompressionSettings(compress_method), init_size);
-        return compress_write_buffer.get();
-    }
-    void clear() override
-    {
-        compress_write_buffer = nullptr;
-        Base::clear();
-    }
-    String getString() override
-    {
-        if (compress_write_buffer == nullptr)
-        {
-            throw Exception("The output should not be null in getString()");
-        }
-        compress_write_buffer->next();
-        return Base::getString();
-    }
-    CompressionMethod compress_method;
-    std::unique_ptr<CompressedCHBlockChunkCodec::CompressedWriteBuffer> compress_write_buffer{};
-    ~CompressCHBlockChunkCodecStream() override = default;
-};
+WriteBuffer * CHBlockChunkCodecStream::initOutputBuffer(size_t init_size)
+{
+    assert(output == nullptr);
+    output = std::make_unique<WriteBufferFromOwnString>(init_size);
+    return output.get();
+}
+
+void CHBlockChunkCodecStream::clear()
+{
+    output = nullptr;
+}
 
 CHBlockChunkCodec::CHBlockChunkCodec(
     const Block & header_)
@@ -175,20 +137,8 @@ void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadB
     type.deserializeBinaryBulkWithMultipleStreams(column, input_stream_getter, rows, 0, false, {});
 }
 
-void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
+void EncodeCHBlockChunk(WriteBuffer * ostr_ptr, const Block & block)
 {
-    /// only check block schema in CHBlock codec because for both
-    /// Default codec and Arrow codec, it implicitly convert the
-    /// input to the target output types.
-    assertBlockSchema(expected_types, block, "CHBlockChunkCodecStream");
-    // Encode data in chunk by chblock encode
-    if (start != 0 || end != block.rows())
-        throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
-
-    size_t init_size = ApproxBlockBytes(block);
-    WriteBuffer * ostr_ptr = initOutputBuffer(init_size);
-
-    block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();
 
@@ -207,9 +157,32 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
+void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
+{
+    /// only check block schema in CHBlock codec because for both
+    /// Default codec and Arrow codec, it implicitly convert the
+    /// input to the target output types.
+    assertBlockSchema(expected_types, block, "CHBlockChunkCodecStream");
+    // Encode data in chunk by chblock encode
+    if (start != 0 || end != block.rows())
+        throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
+
+    block.checkNumberOfRows();
+
+    size_t init_size = ApproxBlockBytes(block);
+    WriteBuffer * ostr_ptr = initOutputBuffer(init_size);
+
+    return EncodeCHBlockChunk(ostr_ptr, block);
+}
+
+std::unique_ptr<CHBlockChunkCodecStream> NewCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
 {
     return std::make_unique<CHBlockChunkCodecStream>(field_types);
+}
+
+std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
+{
+    return NewCHBlockChunkCodecStream(field_types);
 }
 
 Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
@@ -294,8 +267,4 @@ Block CHBlockChunkCodec::decode(const String & str, const Block & header)
     return CHBlockChunkCodec(header).decodeImpl(read_buffer);
 }
 
-std::unique_ptr<ChunkCodecStream> CompressedCHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method)
-{
-    return std::make_unique<CompressCHBlockChunkCodecStream>(field_types, compress_method);
-}
 } // namespace DB

@@ -18,6 +18,8 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CodecUtils.h>
 
+#include <cstddef>
+
 #include "mpp.pb.h"
 
 namespace DB
@@ -28,7 +30,8 @@ class CHBlockChunkDecodeAndSquash
 public:
     CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
     ~CHBlockChunkDecodeAndSquash() = default;
-    std::optional<Block> decodeAndSquash(const String &, mpp::CompressMethod);
+    std::optional<Block> decodeAndSquash(const String &);
+    std::optional<Block> decodeAndSquashWithCompress(std::string_view);
     std::optional<Block> flush();
 
 private:

@@ -23,7 +23,10 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
 
+#include <cstddef>
 #include <magic_enum.hpp>
+
+#include "mpp.pb.h"
 
 namespace DB
 {
@@ -689,13 +692,29 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     if (recv_msg->chunks.empty())
         return detail;
     auto & packet = recv_msg->packet->getPacket();
-    auto compress_method = packet.compress().method();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
+
+    if (packet.mpp_version() && packet.compress().method() != mpp::CompressMethod::NONE)
+    {
+        for (auto && chunk : packet.chunks())
+        {
+            auto && result = decoder_ptr->decodeAndSquashWithCompress(chunk);
+            if (!result)
+                continue;
+            detail.rows += result->rows();
+            if likely (result->rows() > 0)
+            {
+                block_queue.push(std::move(*result));
+            }
+        }
+        return detail;
+    }
+    
     for (const String * chunk : recv_msg->chunks)
     {
-        auto result = decoder_ptr->decodeAndSquash(*chunk, compress_method);
+        auto result = decoder_ptr->decodeAndSquash(*chunk);
         if (!result)
             continue;
         detail.rows += result->rows();

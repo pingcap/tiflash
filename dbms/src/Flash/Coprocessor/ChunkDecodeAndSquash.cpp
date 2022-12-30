@@ -16,6 +16,13 @@
 #include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
 #include <IO/ReadBufferFromString.h>
 
+#include <cstddef>
+#include <string_view>
+
+#include "Flash/Coprocessor/CHBlockChunkCodecStream.h"
+#include "Flash/Coprocessor/CompressCHBlockChunkCodecStream.h"
+#include "Flash/Mpp/TrackedMppDataPacket.h"
+
 namespace DB
 {
 CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
@@ -26,7 +33,44 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 {
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String & str, mpp::CompressMethod compress_method)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompress(std::string_view sv)
+{
+    std::optional<Block> res;
+    ReadBufferFromString istr(sv);
+    auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
+
+    if (compress_buffer.eof())
+    {
+        if (accumulated_block)
+            res.swap(accumulated_block);
+        return res;
+    }
+
+    if (!accumulated_block)
+    {
+        size_t rows{};
+        Block block = DecodeHeader(compress_buffer, codec.header, rows);
+        DecodeColumns(compress_buffer, block, codec.header.columns(), rows, static_cast<size_t>(rows_limit * 1.5));
+        if (block)
+            accumulated_block.emplace(std::move(block));
+    }
+    else
+    {
+        size_t rows{};
+        DecodeHeader(compress_buffer, codec.header, rows);
+        DecodeColumns(compress_buffer, *accumulated_block, codec.header.columns(), rows, 0);
+    }
+
+    if (accumulated_block && accumulated_block->rows() >= rows_limit)
+    {
+        /// Return accumulated data and reset accumulated_block
+        res.swap(accumulated_block);
+        return res;
+    }
+    return res;
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String & str)
 {
     std::optional<Block> res;
     ReadBufferFromString istr(str);
@@ -36,13 +80,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             res.swap(accumulated_block);
         return res;
     }
-    std::unique_ptr<ReadBuffer> compress_buffer{};
     ReadBuffer * istr_ptr = &istr;
-    if (ToInternalCompressionMethod(compress_method) != CompressionMethod::NONE)
-    {
-        compress_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedReadBuffer>(istr);
-        istr_ptr = compress_buffer.get();
-    }
 
     if (!accumulated_block)
     {

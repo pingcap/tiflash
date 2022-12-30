@@ -436,6 +436,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     if (!status.ok())
     {
         auto err = std::make_unique<mpp::Error>();
+        err->set_mpp_version(TiDB::GetMppVersion());
         err->set_msg("error status");
         response->set_allocated_error(err.release());
         return status;

@@ -18,9 +18,13 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
+
+#include "Flash/Coprocessor/CompressCHBlockChunkCodecStream.h"
+#include "Flash/Mpp/HashPartitionWriterV1.h"
 
 namespace DB
 {
@@ -95,4 +99,88 @@ const Block & PhysicalExchangeSender::getSampleBlock() const
 {
     return child->getSampleBlock();
 }
+
+template <>
+std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
+    const MPPTunnelSetPtr & writer,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & partition_col_collators,
+    const tipb::ExchangeType & exchange_type,
+    Int64 records_per_chunk,
+    Int64 batch_send_min_limit,
+    bool should_send_exec_summary_at_last,
+    DAGContext & dag_context,
+    bool enable_fine_grained_shuffle,
+    UInt64 fine_grained_shuffle_stream_count,
+    UInt64 fine_grained_shuffle_batch_size)
+{
+    RUNTIME_CHECK(dag_context.isMPPTask());
+    should_send_exec_summary_at_last = dag_context.collect_execution_summaries && should_send_exec_summary_at_last;
+    if (dag_context.isRootMPPTask())
+    {
+        // No need to use use data compression
+        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
+
+        RUNTIME_CHECK(!enable_fine_grained_shuffle);
+        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
+        return std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
+            writer,
+            records_per_chunk,
+            batch_send_min_limit,
+            should_send_exec_summary_at_last,
+            dag_context);
+    }
+    else
+    {
+        if (exchange_type == tipb::ExchangeType::Hash)
+        {
+            if (enable_fine_grained_shuffle)
+            {
+                // TODO: support data compression if necessary
+                RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
+
+                return std::make_unique<FineGrainedShuffleWriter<MPPTunnelSetPtr>>(
+                    writer,
+                    partition_col_ids,
+                    partition_col_collators,
+                    should_send_exec_summary_at_last,
+                    dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size);
+            }
+            else
+            {
+                auto && compress_method = dag_context.getExchangeSenderMeta().compress();
+                if (compress_method == mpp::CompressMethod::NONE || !dag_context.getMPPTaskMeta().mpp_version())
+                    return std::make_unique<HashPartitionWriter<MPPTunnelSetPtr>>(
+                        writer,
+                        partition_col_ids,
+                        partition_col_collators,
+                        batch_send_min_limit,
+                        should_send_exec_summary_at_last,
+                        dag_context);
+                return std::make_unique<HashPartitionWriterV1<MPPTunnelSetPtr>>(
+                    writer,
+                    partition_col_ids,
+                    partition_col_collators,
+                    batch_send_min_limit,
+                    should_send_exec_summary_at_last,
+                    dag_context);
+            }
+        }
+        else
+        {
+            // TODO: support data compression if necessary
+            RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
+
+            RUNTIME_CHECK(!enable_fine_grained_shuffle);
+            return std::make_unique<BroadcastOrPassThroughWriter<MPPTunnelSetPtr>>(
+                writer,
+                batch_send_min_limit,
+                should_send_exec_summary_at_last,
+                dag_context);
+        }
+    }
+}
+
 } // namespace DB

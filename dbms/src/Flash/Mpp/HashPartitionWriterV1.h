@@ -24,11 +24,14 @@
 
 namespace DB
 {
+
+struct CompressCHBlockChunkCodecStream;
+
 template <class ExchangeWriterPtr>
-class HashPartitionWriter : public DAGResponseWriter
+class HashPartitionWriterV1 : public DAGResponseWriter
 {
 public:
-    HashPartitionWriter(
+    HashPartitionWriterV1(
         ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
@@ -55,10 +58,9 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
-
-    // mpp::CompressMethod compress_method{};
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
-    // std::unique_ptr<ChunkCodecStream> compress_chunk_codec_stream;
+    DataTypes expected_types;
+    mpp::CompressMethod compress_method{};
+    std::unique_ptr<CompressCHBlockChunkCodecStream> compress_chunk_codec_stream;
 };
 
 } // namespace DB

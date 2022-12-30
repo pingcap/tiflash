@@ -31,12 +31,7 @@ class CompressedCHBlockChunkCodec
 public:
     using CompressedReadBuffer = CompressedReadBuffer<false>;
     using CompressedWriteBuffer = CompressedWriteBuffer<false>;
-
-    static std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types, CompressionMethod compress_method);
 };
 
-CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method);
-
-size_t ApproxBlockBytes(const Block & block);
 
 } // namespace DB
