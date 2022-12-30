@@ -41,16 +41,18 @@ public:
 private:
     void loop();
 
+    // return false if the io reactor had been closed.
+    bool take(std::list<TaskPtr> & local_waiting_tasks);
+
 private:
     TaskScheduler & scheduler;
 
     std::thread thread;
 
-    mutable std::mutex mutex;
-    std::condition_variable cond;
+    mutable std::mutex mu;
+    std::condition_variable cv;
     std::list<TaskPtr> waiting_tasks;
-
-    std::atomic<bool> is_shutdown{false};
+    bool is_closed = false;
 
     LoggerPtr logger = Logger::get("IOReactor");
 };

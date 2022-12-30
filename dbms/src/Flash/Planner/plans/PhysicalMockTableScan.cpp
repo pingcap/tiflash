@@ -109,7 +109,7 @@ void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockTableScan::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     op_builder.addGroup(mock_streams.size());
     size_t i = 0;

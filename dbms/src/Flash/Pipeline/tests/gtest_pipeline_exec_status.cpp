@@ -37,15 +37,16 @@ TEST_F(PipelineExecStatusTestRunner, run)
 TEST_F(PipelineExecStatusTestRunner, to_err)
 {
     auto test = [](std::string && err_msg) {
-        auto expect_err_msg = err_msg.empty() ? "error without err msg" : err_msg;
+        auto expect_err_msg = err_msg.empty() ? PipelineExecStatus::empty_err_msg : err_msg;
         PipelineExecStatus status;
         status.addActivePipeline();
         auto thread_manager = newThreadManager();
-        thread_manager->schedule(false, "cancel", [&status, &err_msg]() mutable {
+        thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
             status.toError(std::move(err_msg));
             status.completePipeline();
         });
         status.wait();
+        status.toError("unexpect exception");
         auto actual_err_msg = status.getErrMsg();
         ASSERT_TRUE(!actual_err_msg.empty());
         ASSERT_EQ(actual_err_msg, expect_err_msg);

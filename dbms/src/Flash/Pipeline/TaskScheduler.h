@@ -72,7 +72,7 @@ private:
     LoggerPtr logger = Logger::get("TaskScheduler");
 
     friend class TaskExecutor;
-    friend class SpillExecutor;
     friend class IOReactor;
+    friend class SpillExecutor;
 };
 } // namespace DB

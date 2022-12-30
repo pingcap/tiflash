@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
-#include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Pipeline/Task.h>
 
@@ -81,11 +80,6 @@ private:
     void completeDependency();
 
     void switchStatus(EventStatus from, EventStatus to);
-
-    MemoryTrackerSetter setMemoryTracker()
-    {
-        return MemoryTrackerSetter{true, mem_tracker.get()};
-    }
 
 protected:
     PipelineExecStatus & exec_status;

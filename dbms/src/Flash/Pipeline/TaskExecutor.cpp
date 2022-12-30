@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/MemoryTrackerSetter.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/TaskExecutor.h>
@@ -55,13 +54,7 @@ void TaskExecutor::loop()
 void TaskExecutor::handleTask(TaskPtr & task)
 {
     assert(task);
-
-    assert(nullptr == current_memory_tracker);
-    // Hold the shared_ptr of memory tracker.
-    // To avoid the current_memory_tracker being an illegal pointer.
-    auto memory_tracker = task->getMemTracker();
-    MemoryTrackerSetter memory_tracker_setter{true, memory_tracker.get()};
-
+    TRACE_MEMORY(task);
     int64_t time_spent = 0;
     while (true)
     {

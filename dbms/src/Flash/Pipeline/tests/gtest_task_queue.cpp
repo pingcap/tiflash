@@ -49,7 +49,7 @@ TEST_F(TaskQueueTestRunner, fifo)
         for (size_t i = 0; i < valid_task_num; ++i)
             queue->submit(std::make_unique<IndexTask>(i));
         // Close the queue after all valid tasks have been consumed.
-        while (!queue->isEmpty())
+        while (!queue->empty())
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         queue->close();
     });

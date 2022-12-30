@@ -47,6 +47,7 @@ private:
     template <typename Op>
     OperatorStatus pushSpiller(OperatorStatus status, const Op & op)
     {
+        assert(op);
         if (status == OperatorStatus::SPILLING)
         {
             assert(!spiller);

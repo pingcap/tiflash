@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <assert.h>
-
-#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -59,16 +58,16 @@ void Event::completeDependency()
 
 void Event::schedule()
 {
-    setMemoryTracker();
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
+    MemoryTrackerSetter setter{true, mem_tracker.get()};
     if (scheduleImpl())
         finish();
 }
 
 void Event::finish()
 {
-    setMemoryTracker();
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
+    MemoryTrackerSetter setter{true, mem_tracker.get()};
     if (finishImpl())
     {
         // finished processing the event, now we can schedule events that depend on this event

@@ -54,11 +54,13 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
         case ExecTaskStatus::FINISHED:
         case ExecTaskStatus::ERROR:
         case ExecTaskStatus::CANCELLED:
+            task.reset();
             break;
         default:
             __builtin_unreachable();
         }
     }
+    tasks.clear();
     task_executor.submit(running_tasks);
     io_reactor.submit(waiting_tasks);
 }

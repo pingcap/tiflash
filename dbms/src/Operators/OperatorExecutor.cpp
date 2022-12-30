@@ -70,6 +70,7 @@ OperatorStatus OperatorExecutor::await()
 OperatorStatus OperatorExecutor::spill()
 {
     assert(spiller);
+    assert(*spiller);
     auto status = (*spiller)->spill();
     if (status != OperatorStatus::SPILLING)
         spiller.reset();

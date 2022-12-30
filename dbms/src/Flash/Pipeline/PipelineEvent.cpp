@@ -26,10 +26,12 @@ bool PipelineEvent::scheduleImpl()
     auto op_groups = pipeline->transform(context, concurrency);
     pipeline.reset();
 
+    // Until `non-joined-fetch` and `fine grained shuffle` are supported, the size of op_groups can only be 1.
     assert(op_groups.size() == 1);
     auto group = std::move(op_groups.back());
     if (group.empty())
         return true;
+
     std::vector<TaskPtr> tasks;
     tasks.reserve(group.size());
     for (auto & op_executor : group)

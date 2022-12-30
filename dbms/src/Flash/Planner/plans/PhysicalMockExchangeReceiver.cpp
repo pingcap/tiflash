@@ -103,7 +103,7 @@ void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockExchangeReceiver::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     op_builder.addGroup(mock_streams.size());
     size_t i = 0;

@@ -21,6 +21,7 @@
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Operators/OperatorBuilder.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -73,7 +74,7 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
 OperatorExecutorGroups Pipeline::transform(Context & context, size_t concurrency)
 {
     assert(!plans.empty());
-    OperatorsBuilder builder;
+    OperatorGroupBuilder builder;
     for (auto it = plans.rbegin(); it != plans.rend(); ++it)
         (*it)->transform(builder, context, concurrency);
     return builder.build();

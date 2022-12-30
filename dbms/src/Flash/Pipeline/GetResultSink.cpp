@@ -33,7 +33,7 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
     return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, result_handler);
 }
 
-void PhysicalGetResultSink::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalGetResultSink::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     op_builder.transform([&](auto & builder) {
         builder.setSink(std::make_unique<GetResultSink>(*this));

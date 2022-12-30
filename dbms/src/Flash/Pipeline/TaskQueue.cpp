@@ -20,6 +20,7 @@ namespace DB
 {
 bool FIFOTaskQueue::take(TaskPtr & task)
 {
+    assert(!task);
     {
         std::unique_lock lock(mu);
         while (true)
@@ -32,12 +33,13 @@ bool FIFOTaskQueue::take(TaskPtr & task)
         }
 
         task = std::move(task_queue.front());
+        assert(task);
         task_queue.pop_front();
     }
     return true;
 }
 
-bool FIFOTaskQueue::isEmpty()
+bool FIFOTaskQueue::empty()
 {
     std::lock_guard lock(mu);
     return task_queue.empty();

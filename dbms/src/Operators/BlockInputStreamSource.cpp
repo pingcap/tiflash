@@ -12,32 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/Logger.h>
-#include <Operators/Operator.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Operators/BlockInputStreamSource.h>
 
 namespace DB
 {
-struct GlobalLimitTransformAction;
-using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
-
-class LimitTransform : public Transform
+BlockInputStreamSource::BlockInputStreamSource(
+    const BlockInputStreamPtr & impl_)
+    : impl(impl_)
 {
-public:
-    explicit LimitTransform(
-        const GlobalLimitPtr & action_,
-        const String & req_id)
-        : action(action_)
-        , log(Logger::get(req_id))
-    {}
+    impl->readPrefix();
+}
 
-    OperatorStatus transform(Block & block) override;
+OperatorStatus BlockInputStreamSource::read(Block & block)
+{
+    if (unlikely(finished))
+        return OperatorStatus::PASS;
 
-    void transformHeader(Block & header) override;
+    block = impl->read();
+    if (unlikely(!block))
+    {
+        impl->readSuffix();
+        finished = true;
+    }
+    return OperatorStatus::PASS;
+}
 
-private:
-    GlobalLimitPtr action;
-    const LoggerPtr log;
-};
+Block BlockInputStreamSource::readHeader()
+{
+    return impl->getHeader();
+}
 } // namespace DB

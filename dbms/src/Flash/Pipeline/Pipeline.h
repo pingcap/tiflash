@@ -17,10 +17,14 @@
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Operators/OperatorExecutor.h>
-#include <tipb/select.pb.h>
 
 #include <deque>
 #include <vector>
+
+namespace tipb
+{
+class DAGRequest;
+}
 
 namespace DB
 {

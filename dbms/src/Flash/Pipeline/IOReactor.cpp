@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/MemoryTrackerSetter.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/IOReactor.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <assert.h>
+#include <common/likely.h>
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <immintrin.h>
@@ -28,13 +28,7 @@ namespace
 bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
 {
     assert(task);
-
-    assert(nullptr == current_memory_tracker);
-    // Hold the shared_ptr of memory tracker.
-    // To avoid the current_memory_tracker being an illegal pointer.
-    auto memory_tracker = task->getMemTracker();
-    MemoryTrackerSetter memory_tracker_setter{true, memory_tracker.get()};
-
+    TRACE_MEMORY(task);
     auto status = task->await();
     switch (status)
     {
@@ -62,18 +56,21 @@ IOReactor::IOReactor(TaskScheduler & scheduler_)
 
 void IOReactor::close()
 {
-    is_shutdown = true;
-    cond.notify_one();
+    {
+        std::lock_guard lock(mu);
+        is_closed = true;
+    }
+    cv.notify_one();
 }
 
 void IOReactor::submit(TaskPtr && task)
 {
     assert(task);
     {
-        std::lock_guard lock(mutex);
+        std::lock_guard lock(mu);
         waiting_tasks.emplace_back(std::move(task));
     }
-    cond.notify_one();
+    cv.notify_one();
 }
 
 void IOReactor::submit(std::list<TaskPtr> & tasks)
@@ -81,10 +78,10 @@ void IOReactor::submit(std::list<TaskPtr> & tasks)
     if (tasks.empty())
         return;
     {
-        std::lock_guard lock(mutex);
+        std::lock_guard lock(mu);
         waiting_tasks.splice(waiting_tasks.end(), tasks);
     }
-    cond.notify_one();
+    cv.notify_one();
 }
 
 IOReactor::~IOReactor()
@@ -93,32 +90,36 @@ IOReactor::~IOReactor()
     LOG_INFO(logger, "stop io reactor loop");
 }
 
+bool IOReactor::take(std::list<TaskPtr> & local_waiting_tasks)
+{
+    {
+        std::unique_lock lock(mu);
+        while (true)
+        {
+            if (unlikely(is_closed))
+                return false;
+            if (!waiting_tasks.empty() || !local_waiting_tasks.empty())
+                break;
+            cv.wait(lock);
+        }
+
+        local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
+    }
+    assert(!local_waiting_tasks.empty());
+    return true;
+}
+
 void IOReactor::loop()
 {
     setThreadName("IOReactor");
     LOG_INFO(logger, "start io reactor loop");
+
     std::list<TaskPtr> local_waiting_tasks;
     int spin_count = 0;
     std::vector<TaskPtr> ready_tasks;
-    while (!is_shutdown)
+    while (likely(take(local_waiting_tasks)))
     {
         assert(ready_tasks.empty());
-        if (local_waiting_tasks.empty())
-        {
-            std::unique_lock lock(mutex);
-            while (!is_shutdown && waiting_tasks.empty())
-                cond.wait(lock);
-            if (is_shutdown)
-                break;
-            assert(!waiting_tasks.empty());
-            local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
-        }
-        else
-        {
-            std::lock_guard lock(mutex);
-            if (!waiting_tasks.empty())
-                local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
-        }
 
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
@@ -155,6 +156,7 @@ void IOReactor::loop()
             sched_yield();
         }
     }
+
     LOG_INFO(logger, "io reactor loop finished");
 }
 } // namespace DB

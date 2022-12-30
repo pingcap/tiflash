@@ -22,7 +22,7 @@ class PipelineCompleteEvent : public Event
 {
 public:
     PipelineCompleteEvent(PipelineExecStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
-        : Event(exec_status_, mem_tracker_)
+        : Event(exec_status_, std::move(mem_tracker_))
     {}
 
 protected:

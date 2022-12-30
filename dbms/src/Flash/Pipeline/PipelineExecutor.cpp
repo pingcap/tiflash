@@ -13,11 +13,24 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Event.h>
+#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineExecutor.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
+PipelineExecutor::PipelineExecutor(
+    const ProcessListEntryPtr & process_list_entry_,
+    Context & context_,
+    const Pipelines & pipelines_)
+    : QueryExecutor(process_list_entry_)
+    , context(context_)
+    , pipelines(pipelines_)
+{
+    assert(!pipelines.empty());
+    root_pipeline = pipelines[0];
+}
+
 ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
 {
     assert(root_pipeline);

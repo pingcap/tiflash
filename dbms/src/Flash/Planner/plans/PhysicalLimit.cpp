@@ -53,7 +53,7 @@ void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, siz
     }
 }
 
-void PhysicalLimit::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalLimit::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     auto input_header = op_builder.getHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);

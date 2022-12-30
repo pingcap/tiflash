@@ -15,12 +15,15 @@
 #pragma once
 
 #include <Flash/Executor/QueryExecutor.h>
-#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 
 namespace DB
 {
 class Context;
+
+class Pipeline;
+using PipelinePtr = std::shared_ptr<Pipeline>;
+using Pipelines = std::vector<PipelinePtr>;
 
 /**
  * PipelineExecutor is the implementation of the pipeline-base execution model.
@@ -48,17 +51,10 @@ class Context;
 class PipelineExecutor : public QueryExecutor
 {
 public:
-    explicit PipelineExecutor(
+    PipelineExecutor(
         const ProcessListEntryPtr & process_list_entry_,
         Context & context_,
-        const Pipelines & pipelines_)
-        : QueryExecutor(process_list_entry_)
-        , context(context_)
-        , pipelines(pipelines_)
-    {
-        assert(!pipelines.empty());
-        root_pipeline = pipelines[0];
-    }
+        const Pipelines & pipelines_);
 
     String toString() const override;
 

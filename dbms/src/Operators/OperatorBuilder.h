@@ -16,8 +16,6 @@
 
 #include <Operators/OperatorExecutor.h>
 
-#include <memory>
-
 namespace DB
 {
 struct OperatorBuilder
@@ -28,35 +26,14 @@ struct OperatorBuilder
 
     Block header;
 
-    void setSource(SourcePtr && source_)
-    {
-        assert(!source && source_);
-        source = std::move(source_);
-        header = source->readHeader();
-    }
-    void appendTransform(TransformPtr && transform)
-    {
-        assert(transform);
-        transforms.push_back(std::move(transform));
-        transforms.back()->transformHeader(header);
-    }
-    void setSink(SinkPtr && sink_)
-    {
-        assert(!sink && sink_);
-        sink = std::move(sink_);
-    }
+    void setSource(SourcePtr && source_);
+    void appendTransform(TransformPtr && transform);
+    void setSink(SinkPtr && sink_);
 
-    OperatorExecutorPtr build()
-    {
-        assert(source && sink);
-        return std::make_unique<OperatorExecutor>(
-            std::move(source),
-            std::move(transforms),
-            std::move(sink));
-    }
+    OperatorExecutorPtr build();
 };
 
-struct OperatorsBuilder
+struct OperatorGroupBuilder
 {
     // A Group generates a set of operator executors running in parallel.
     using BuilderGroup = std::vector<OperatorBuilder>;
@@ -66,14 +43,7 @@ struct OperatorsBuilder
 
     size_t max_concurrency_in_groups = 0;
 
-    void addGroup(size_t concurrency)
-    {
-        assert(concurrency > 0);
-        max_concurrency_in_groups = std::max(max_concurrency_in_groups, concurrency);
-        BuilderGroup group;
-        group.resize(concurrency);
-        groups.push_back(std::move(group));
-    }
+    void addGroup(size_t concurrency);
 
     /// ff: [](OperatorBuilder & builder) {}
     template <typename FF>
@@ -89,25 +59,8 @@ struct OperatorsBuilder
         }
     }
 
-    OperatorExecutorGroups build()
-    {
-        assert(max_concurrency_in_groups > 0);
-        OperatorExecutorGroups op_groups;
-        for (auto & group : groups)
-        {
-            OperatorExecutorGroup op_group;
-            for (auto & builder : group)
-                op_group.push_back(builder.build());
-            op_groups.push_back(std::move(op_group));
-        }
-        return op_groups;
-    }
+    OperatorExecutorGroups build();
 
-    Block getHeader()
-    {
-        assert(max_concurrency_in_groups > 0);
-        assert(groups.back().back().header);
-        return groups.back().back().header;
-    }
+    Block getHeader();
 };
 } // namespace DB

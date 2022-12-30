@@ -27,6 +27,8 @@ struct PipelineExecStatus
     std::atomic_bool is_cancelled{false};
     std::string err_msg;
 
+    static constexpr auto empty_err_msg = "error without err msg";
+
     std::string getErrMsg();
 
     void addActivePipeline();

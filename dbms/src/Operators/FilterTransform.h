@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/FilterTransformAction.h>
 #include <Operators/Operator.h>
 

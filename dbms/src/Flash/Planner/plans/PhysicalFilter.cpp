@@ -60,7 +60,7 @@ void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, si
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalFilter::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     auto input_header = op_builder.getHeader();
     op_builder.transform([&](auto & builder) {

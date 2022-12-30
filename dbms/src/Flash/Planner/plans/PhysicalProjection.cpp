@@ -143,7 +143,7 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, Context & context
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::transform(OperatorsBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalProjection::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     if (project_actions && !project_actions->getActions().empty())
     {

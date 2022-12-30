@@ -30,7 +30,7 @@ void PipelineExecStatus::toError(std::string && err_msg_)
         std::lock_guard lock(mu);
         if (!err_msg.empty())
             return;
-        err_msg = err_msg_.empty() ? "error without err msg" : std::move(err_msg_);
+        err_msg = err_msg_.empty() ? empty_err_msg : std::move(err_msg_);
     }
     cancel();
 }

@@ -30,7 +30,7 @@ public:
         Context & context_,
         size_t concurrency_,
         const PipelinePtr & pipeline_)
-        : Event(exec_status_, mem_tracker_)
+        : Event(exec_status_, std::move(mem_tracker_))
         , context(context_)
         , concurrency(concurrency_)
         , pipeline(pipeline_)

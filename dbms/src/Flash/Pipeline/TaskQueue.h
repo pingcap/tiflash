@@ -39,7 +39,7 @@ public:
     // return false if the queue had been closed.
     virtual bool take(TaskPtr & task) = 0;
 
-    virtual bool isEmpty() = 0;
+    virtual bool empty() = 0;
 
     virtual void close() = 0;
 };
@@ -57,7 +57,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    bool isEmpty() override;
+    bool empty() override;
 
     void close() override;
 

@@ -78,7 +78,7 @@ public:
         physical_plan.build(request.get());
         auto plan_tree = physical_plan.outputAndOptimize();
 
-        OperatorsBuilder op_builder;
+        OperatorGroupBuilder op_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
             plan->transform(op_builder, context.context, /*concurrency=*/1);

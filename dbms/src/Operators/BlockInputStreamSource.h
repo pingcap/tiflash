@@ -14,40 +14,23 @@
 
 #pragma once
 
-#include <DataStreams/IBlockInputStream.h>
+#include <Common/Logger.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
+
 // wrap for BlockInputStream
 class BlockInputStreamSource : public Source
 {
 public:
-    explicit BlockInputStreamSource(
-        const BlockInputStreamPtr & impl_)
-        : impl(impl_)
-    {
-        impl->readPrefix();
-    }
+    explicit BlockInputStreamSource(const BlockInputStreamPtr & impl_);
 
-    OperatorStatus read(Block & block) override
-    {
-        if (unlikely(finished))
-            return OperatorStatus::PASS;
+    OperatorStatus read(Block & block) override;
 
-        block = impl->read();
-        if (unlikely(!block))
-        {
-            impl->readSuffix();
-            finished = true;
-        }
-        return OperatorStatus::PASS;
-    }
-
-    Block readHeader() override
-    {
-        return impl->getHeader();
-    }
+    Block readHeader() override;
 
 private:
     BlockInputStreamPtr impl;

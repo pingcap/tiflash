@@ -44,8 +44,8 @@ public:
     }
 
 private:
-    int64_t counter;
     mutable std::mutex mu;
+    int64_t counter;
     std::condition_variable cv;
 };
 
@@ -166,6 +166,20 @@ class TaskSchedulerTestRunner : public ::testing::Test
 public:
     static constexpr size_t thread_num = 5;
 };
+
+TEST_F(TaskSchedulerTestRunner, shutdown)
+{
+    std::vector<size_t> task_executor_thread_nums{1, 5, 10, 100};
+    for (auto task_executor_thread_num : task_executor_thread_nums)
+    {
+        std::vector<size_t> spill_executor_thread_nums{0, 1, 5, 10, 100};
+        for (auto spill_executor_thread_num : spill_executor_thread_nums)
+        {
+            TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};
+            TaskScheduler task_scheduler{config};
+        }
+    }
+}
 
 TEST_F(TaskSchedulerTestRunner, simple_task)
 {
