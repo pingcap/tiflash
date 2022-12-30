@@ -545,7 +545,7 @@ Block mergeBlocks(Blocks && blocks)
     {
         if (likely(blocks[i].rows() > 0))
         {
-            RUNTIME_CHECK_MSG(blocksHaveEqualStructure(first_block, blocks[i]), "Cannot merge different structure blocks.");
+            assert(blocksHaveEqualStructure(first_block, blocks[i]));
             for (size_t column = 0; column < blocks[i].columns(); ++column)
             {
                 dst_columns[column]->insertRangeFrom(*blocks[i].getByPosition(column).column, 0, blocks[i].rows());
