@@ -27,6 +27,7 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+        // note that the first column is pk.
         context.addMockDeltaMerge({"test_db", "t0"},
                                   {{"col0", TiDB::TP::TypeLongLong}},
                                   {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});

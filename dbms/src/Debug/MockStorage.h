@@ -113,11 +113,11 @@ private:
     /// for mock storage delta merge
     std::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>
     std::unordered_map<Int64, MockColumnInfoVec> table_schema_for_delta_merge; /// <table_id, columnInfo>
-    std::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_name, StorageDeltaMerge>
+    std::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_id, StorageDeltaMerge>
     std::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
     std::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
 
-    // storage delta merge can be used in
+    // storage delta merge can be used in executor ut test only.
     bool use_storage_delta_merge = false;
 
 private:
