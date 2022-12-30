@@ -160,7 +160,7 @@ void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColum
 void MockStorage::addNamesAndTypesForDeltaMerge(Int64 table_id, const ColumnsWithTypeAndName & columns)
 {
     NamesAndTypes names_and_types;
-    for (auto column : columns)
+    for (const auto & column : columns)
     {
         names_and_types.emplace_back(column.name, column.type);
     }

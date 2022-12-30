@@ -117,6 +117,7 @@ private:
     std::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
     std::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
 
+    // storage delta merge can be used in
     bool use_storage_delta_merge = false;
 
 private:

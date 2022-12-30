@@ -387,6 +387,9 @@ void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, C
 
 void MockDAGRequestContext::addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns)
 {
+    for (const auto & column : columns)
+        RUNTIME_ASSERT(!column.name.empty(), "mock column must have column name");
+
     mock_storage->addTableDataForDeltaMerge(context, db + "." + table, columns);
 }
 
