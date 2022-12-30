@@ -82,7 +82,6 @@ void MockStorage::addTableSchemaForDeltaMerge(const String & name, const MockCol
 
 void MockStorage::addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns)
 {
-    // ywq todo insert into delta merge store...
     auto id = getTableIdForDeltaMerge(name);
     addNamesAndTypesForDeltaMerge(id, columns);
     if (storage_delta_merge_map.find(id) == storage_delta_merge_map.end())
@@ -90,7 +89,6 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
         // init
         ASTPtr astptr(new ASTIdentifier(name, ASTIdentifier::Kind::Table));
         NamesAndTypesList names_and_types_list;
-        // ywq todo refine
         for (const auto & column : columns)
         {
             names_and_types_list.emplace_back(column.name, column.type);
@@ -98,9 +96,9 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
         astptr->children.emplace_back(new ASTIdentifier(columns[0].name));
 
         storage_delta_merge_map[id] = StorageDeltaMerge::create("TiFlash",
-                                                                /* db_name= */ "default", // todo... don't care currently
+                                                                /* db_name= */ "default",
                                                                 name,
-                                                                std::nullopt, // todo if i need table info?
+                                                                std::nullopt,
                                                                 ColumnsDescription{names_and_types_list},
                                                                 astptr,
                                                                 0,
@@ -140,7 +138,6 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     return in;
 }
 
-// ywq todo refine
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)
 {
     TableInfo table_info;

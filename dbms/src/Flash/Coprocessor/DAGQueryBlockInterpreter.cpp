@@ -164,7 +164,14 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (!context.mockStorage()->tableExists(table_scan.getLogicalTableID()))
+    if (context.mockStorage()->useDeltaMerge())
+    {
+        auto names_and_types = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
+        auto mock_table_scan_stream = context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID());
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+        pipeline.streams.push_back(mock_table_scan_stream);
+    }
+    else if (!context.mockStorage()->tableExists(table_scan.getLogicalTableID()))
     {
         auto names_and_types = genNamesAndTypes(table_scan, "mock_table_scan");
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);

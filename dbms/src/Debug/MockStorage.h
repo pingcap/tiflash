@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 #include <Core/ColumnsWithTypeAndName.h>
-#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
@@ -21,8 +21,6 @@
 #include <atomic>
 #include <memory>
 #include <unordered_map>
-
-#include "DBGInvoker.h"
 
 namespace DB
 {

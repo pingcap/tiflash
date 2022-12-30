@@ -44,7 +44,7 @@ public:
     const ColumnWithInt64 col0{0, 1, 2, 3, 4, 5, 6, 7};
 };
 
-TEST_F(ExecutorsWithDMTestRunner, DeltaMergeStorageBasic)
+TEST_F(ExecutorsWithDMTestRunner, Basic)
 try
 {
     auto request = context
