@@ -139,6 +139,7 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
 
 ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
 {
+    LOG_INFO(&Poco::Logger::get("hyy"), "hyy into deserializeMetadata");
     auto schema = deserializeSchema(buf);
     if (!schema)
         schema = last_schema;

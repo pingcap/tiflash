@@ -50,7 +50,8 @@ ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf)
     UInt32 cols;
     readIntBinary(cols, buf);
     if (!cols){
-        std::cout << " hyy deserializeSchema is nullptr " << std::endl;
+        LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema is nullptr");
+        // std::cout << " hyy deserializeSchema is nullptr " << std::endl;
         return nullptr;
     }
     auto schema = std::make_shared<Block>();
@@ -64,7 +65,8 @@ ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf)
         readStringBinary(type_name, buf);
         schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().getOrSet(type_name), name, column_id));
     }
-    std::cout << " hyy deserializeSchema is not nullptr " << std::endl;
+    LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema is not nullptr");
+    // std::cout << " hyy deserializeSchema is not nullptr " << std::endl;
     return std::make_shared<ColumnFileSchema>(*schema);
 }
 
