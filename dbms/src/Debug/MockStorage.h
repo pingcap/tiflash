@@ -47,6 +47,7 @@ private:
 /** Responsible for mock data for executor tests and mpp tests.
   * 1. Use this class to add mock table schema and table column data.
   * 2. Use this class to add mock exchange schema and exchange column data.
+  * 3. Use this class to add table schema and table column data into StorageDeltaMerge.
   */
 class MockStorage
 {

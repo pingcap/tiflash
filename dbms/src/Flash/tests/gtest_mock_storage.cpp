@@ -21,7 +21,6 @@ namespace DB
 {
 namespace tests
 {
-
 class MockStorageTestRunner : public DB::tests::ExecutorTest
 {
 public:
