@@ -545,6 +545,10 @@ Block mergeBlocks(Blocks && blocks)
     {
         if (likely(blocks[i].rows()) > 0)
         {
+            if (unlikely(!blocksHaveEqualStructure(first_block, blocks[i])))
+            {
+                throw Exception("Cannot merge different structure blocks.", ErrorCodes::LOGICAL_ERROR);
+            }
             for (size_t column = 0; column < blocks[i].columns(); ++column)
             {
                 dst_columns[column]->insertRangeFrom(*blocks[i].getByPosition(column).column, 0, blocks[i].rows());
