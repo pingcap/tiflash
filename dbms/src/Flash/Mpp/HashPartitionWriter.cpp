@@ -186,7 +186,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
             {
             case mpp::NONE:
             {
-                if (writer->getTunnels()[part_id]->isLocal())
+                if (writer->isLocal(part_id))
                 {
                     GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
                 }

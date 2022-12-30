@@ -117,7 +117,7 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
         tracked_packets[part_id]->getPacket().set_mpp_version(TiDB::GetMppVersion());
 
         auto method = compress_method;
-        if (writer->getTunnels()[part_id]->isLocal())
+        if (writer->isLocal(part_id))
         {
             method = mpp::CompressMethod::NONE;
         }
@@ -169,22 +169,18 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
             RUNTIME_CHECK(rows == total_rows, rows, total_rows);
         }
 
-        LOG_DEBUG(&Poco::Logger::get("tzg"), "send total_rows is {}", total_rows);
-
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
             if (tracked_packets[part_id]->getPacket().compress().method() == mpp::NONE)
             {
                 auto * ostr_ptr = compress_chunk_codec_stream->getWriterWithoutCompress();
-                RUNTIME_CHECK(ostr_ptr != nullptr);
-
-                LOG_DEBUG(&Poco::Logger::get("tzg"), "compress().method local");
                 for (auto && columns : dest_columns[part_id])
                 {
                     dest_block_header.setColumns(std::move(columns));
+                    ostr_ptr->init();
                     EncodeCHBlockChunk(ostr_ptr, dest_block_header);
-                    tracked_packets[part_id]->getPacket().add_chunks(compress_chunk_codec_stream->getString());
-                    compress_chunk_codec_stream->clear();
+                    tracked_packets[part_id]->getPacket().add_chunks(ostr_ptr->getString());
+                    ostr_ptr->clear();
 
                     {
                         const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
@@ -200,13 +196,9 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
                         }
                     }
                 }
-
-                LOG_DEBUG(&Poco::Logger::get("tzg"), "compress().method local done");
             }
             else
             {
-                LOG_DEBUG(&Poco::Logger::get("tzg"), "compress().method compress");
-
                 compress_chunk_codec_stream->encodeHeader(dest_block_header, total_rows);
                 for (size_t col_index = 0; col_index < dest_block_header.columns(); ++col_index)
                 {
@@ -216,8 +208,6 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
                         compress_chunk_codec_stream->encodeColumn(std::move(columns[col_index]), col_type_name);
                     }
                 }
-
-                LOG_DEBUG(&Poco::Logger::get("tzg"), "compress().method compress done");
 
                 tracked_packets[part_id]->getPacket().add_chunks(compress_chunk_codec_stream->getString());
                 compress_chunk_codec_stream->clear();
@@ -271,7 +261,7 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::writePackets(const TrackedMppData
             {
             case mpp::NONE:
             {
-                if (writer->getTunnels()[part_id]->isLocal())
+                if (writer->isLocal(part_id))
                 {
                     GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
                 }

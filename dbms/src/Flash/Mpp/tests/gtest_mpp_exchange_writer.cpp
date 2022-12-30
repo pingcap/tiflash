@@ -24,6 +24,10 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
+#include <Flash/Mpp/HashPartitionWriterV1.cpp>
+
+#include "Flash/Mpp/MppVersion.h"
+#include "ext/scope_guard.h"
 
 namespace DB
 {
@@ -39,6 +43,7 @@ protected:
         dag_context_ptr->is_mpp_task = true;
         dag_context_ptr->is_root_mpp_task = false;
         dag_context_ptr->result_field_types = makeFields();
+        dag_context_ptr->mpp_task_meta.set_mpp_version(TiDB::GetMppVersion());
         context.setDAGContext(dag_context_ptr.get());
     }
 
@@ -103,6 +108,11 @@ public:
         return block;
     }
 
+    void setMppExchangeDataCompress(mpp::CompressMethod m) const
+    {
+        dag_context_ptr->exchange_sender_meta.set_compress(m);
+    }
+
     Context context;
     std::vector<Int64> part_col_ids;
     TiDB::TiDBCollators part_col_collators;
@@ -122,7 +132,13 @@ struct MockExchangeWriter
 
     void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet) { checker(packet, 0); }
     void partitionWrite(const TrackedMppDataPacketPtr & packet, uint16_t part_id) { checker(packet, part_id); }
-    void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
+    static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
+    bool isLocal(size_t index) const
+    {
+        assert(getPartitionNum() > index);
+        return true;
+    }
+
     void sendExecutionSummary(tipb::SelectResponse & response)
     {
         auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
@@ -453,6 +469,67 @@ try
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
     ASSERT_EQ(write_report.back()->getPacket().chunks_size(), 0);
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, testHashPartitionWriterV1)
+try
+{
+    setMppExchangeDataCompress(mpp::CompressMethod::LZ4);
+    SCOPE_EXIT({
+        setMppExchangeDataCompress(mpp::CompressMethod::NONE);
+    });
+
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = 108;
+    const uint16_t part_num = 4;
+
+    // 1. Build Blocks.
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+    {
+        blocks.emplace_back(prepareUniformBlock(block_rows));
+        blocks.emplace_back(prepareUniformBlock(0));
+    }
+    Block header = blocks.back();
+
+    // 2. Build MockExchangeWriter.
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(packet);
+    };
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+
+    // 3. Start to write.
+    auto dag_writer = std::make_shared<HashPartitionWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+        mock_writer,
+        part_col_ids,
+        part_col_collators,
+        batch_send_min_limit,
+        /*should_send_exec_summary_at_last=*/false,
+        *dag_context_ptr);
+    for (const auto & block : blocks)
+        dag_writer->write(block);
+    dag_writer->flush();
+    dag_writer->finishWrite();
+
+    // 4. Start to check write_report.
+    size_t per_part_rows = block_rows * block_num / part_num;
+    ASSERT_EQ(write_report.size(), part_num);
+    for (const auto & ele : write_report)
+    {
+        size_t decoded_block_rows = 0;
+        for (const auto & packet : ele.second)
+        {
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
+            {
+                auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
+                decoded_block_rows += decoded_block.rows();
+            }
+        }
+        ASSERT_EQ(decoded_block_rows, per_part_rows);
+    }
 }
 CATCH
 

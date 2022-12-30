@@ -13,7 +13,7 @@
 namespace DB
 {
 
-struct WriteBufferFromOwnStringList
+struct WriteBufferFromOwnStringList final
     : public WriteBuffer
     , public boost::noncopyable
 {
@@ -48,6 +48,12 @@ struct WriteBufferFromOwnStringList
         return res;
     }
 
+    void init()
+    {
+        clear();
+        nextImpl();
+    }
+
     void clear()
     {
         buffs.clear();
@@ -71,7 +77,7 @@ struct CompressCHBlockChunkCodecStream
         output_buffer->clear();
     }
 
-    WriteBuffer * getWriterWithoutCompress() const
+    WriteBufferFromOwnStringList * getWriterWithoutCompress() const
     {
         return output_buffer.get();
     }

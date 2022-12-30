@@ -309,7 +309,7 @@ if (ENABLE_TESTS)
 
     macro(grep_gtest_sources BASE_DIR DST_VAR)
         # Cold match files that are not in tests/ directories
-        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest_mpp_exchange_writer.cpp")
     endmacro()
 
     macro(grep_bench_sources BASE_DIR DST_VAR)
