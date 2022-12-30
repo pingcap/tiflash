@@ -2298,7 +2298,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap, /*default_value*/false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilter total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log, "{} total_rows={} cost={}ms", __func__, total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -2383,11 +2383,13 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                            UInt64 read_version,
                                            [[maybe_unused]]size_t expected_block_size)
 {
+    Stopwatch sw;
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     RUNTIME_CHECK(!dmfiles.empty(), dmfiles.size());
     std::vector<std::vector<PackInfo>> all_packs{dmfiles.size()};
     std::vector<IdSetPtr> some_packs{dmfiles.size()};
     bool all_match = true;
+    size_t some_packs_count = 0;
     for (size_t i = 0; i < dmfiles.size(); i++)
     {
         std::tie(all_packs[i], some_packs[i]) = parseDMFilePackInfo(dmfiles[i],
@@ -2396,10 +2398,13 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                        filter,
                                                        read_version);
         all_match = all_match && (all_packs[i].size() == dmfiles[i]->getPacks());
+        some_packs_count += some_packs[i]->size();
     }
 
     if (all_match)
     {
+        LOG_DEBUG(log, "{} all match, total_rows={}, cost={}ms",
+            __func__, segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), segment_snap, /*default_value*/true);
     }
 
@@ -2441,6 +2446,8 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
+    LOG_DEBUG(log, "{} some_packs={}, total_rows={}, cost={}ms",
+        __func__, some_packs_count, segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
     return bitmap_filter;
 }
 
