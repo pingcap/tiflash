@@ -2314,19 +2314,15 @@ std::pair<std::vector<PackInfo>, IdSetPtr> parseDMFilePackInfo(const DMFilePtr &
                                                                const RSOperatorPtr & filter,
                                                                UInt64 read_version)
 {
-    auto mark_cache = dm_context.db_context.getMarkCache();
-    auto index_cache = dm_context.db_context.getMinMaxIndexCache();
-    auto file_provider = dm_context.db_context.getFileProvider();
-    auto read_limiter = dm_context.db_context.getReadLimiter();
     DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
         dmfile,
-        index_cache,
+        dm_context.db_context.getMinMaxIndexCache(),
         /*set_cache_if_miss*/ true,
         read_ranges,
         filter,
         /*read_pack*/ {},
-        file_provider,
-        read_limiter,
+        dm_context.db_context.getFileProvider(),
+        dm_context.db_context.getReadLimiter(),
         dm_context.scan_context,
         dm_context.tracing_id);
     const auto & use_packs = pack_filter.getUsePacks();
@@ -2420,8 +2416,9 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     }
     static ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
+        getVersionColumnDefine(),
+        getTagColumnDefine(),
     };
-
     BlockInputStreamPtr stream = segment_snap->stable->getInputStream(dm_context,
                                                                       columns_to_read,
                                                                       read_ranges,
@@ -2434,9 +2431,12 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                                       /*read_packs*/ some_packs,
                                                                       /*need_row_id*/ true);
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
+    static ColumnDefines read_columns {
+        getExtraHandleColumnDefine(is_common_handle),
+    };
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
         stream,
-        columns_to_read,
+        read_columns,
         read_version,
         is_common_handle,
         dm_context.tracing_id);
