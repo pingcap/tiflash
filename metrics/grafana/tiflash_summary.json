@@ -3097,24 +3097,21 @@
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99-{{type}}",
-              "refId": "B",
-              "hide": true
+              "refId": "B"
             },
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95-{{type}}",
-              "refId": "C",
-              "hide": true
+              "refId": "C"
             },
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
-              "refId": "D",
-              "hide": true
+              "refId": "D"
             }
           ],
           "thresholds": [],
