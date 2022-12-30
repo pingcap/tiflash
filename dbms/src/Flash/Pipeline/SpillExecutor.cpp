@@ -89,11 +89,7 @@ void SpillExecutor::handleTask(TaskPtr && task)
 
 void SpillExecutor::submitToThreadSharedQueue(TaskPtr && task)
 {
-    {
-        std::lock_guard lock(mu);
-        task_queue.push_back(std::move(task));
-    }
-    cv.notify_one();
+    task_queue->submit(std::move(task));
 }
 
 void SpillExecutor::loop()
@@ -101,38 +97,16 @@ void SpillExecutor::loop()
     setThreadName("SpillExecutor");
     LOG_INFO(logger, "start spill executor loop");
     TaskPtr task;
-    while (likely(popTask(task)))
+    while (likely(task_queue->take(task)))
     {
         handleTask(std::move(task));
+        assert(!task);
     }
     LOG_INFO(logger, "spill executor loop finished");
 }
 
-bool SpillExecutor::popTask(TaskPtr & task)
-{
-    {
-        std::unique_lock lock(mu);
-        while (true)
-        {
-            if (unlikely(is_closed))
-                return false;
-            if (!task_queue.empty())
-                break;
-            cv.wait(lock);
-        }
-
-        task = std::move(task_queue.front());
-        task_queue.pop_front();
-    }
-    return true;
-}
-
 void SpillExecutor::close()
 {
-    {
-        std::lock_guard lock(mu);
-        is_closed = true;
-    }
-    cv.notify_all();
+    task_queue->close();
 }
 } // namespace DB

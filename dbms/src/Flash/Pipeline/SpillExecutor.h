@@ -16,10 +16,8 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Task.h>
+#include <Flash/Pipeline/TaskQueue.h>
 
-#include <deque>
-#include <memory>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -38,8 +36,6 @@ public:
     void close();
 
 private:
-    bool popTask(TaskPtr & task);
-
     void loop();
 
     void handleTask(TaskPtr && task);
@@ -51,10 +47,7 @@ private:
 
     std::vector<std::thread> threads;
 
-    mutable std::mutex mu;
-    std::condition_variable cv;
-    bool is_closed = false;
-    std::deque<TaskPtr> task_queue;
+    TaskQueuePtr task_queue = std::make_unique<FIFOTaskQueue>();
 
     std::function<void(TaskPtr && task)> submit_func;
 

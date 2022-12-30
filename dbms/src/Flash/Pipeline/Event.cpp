@@ -44,6 +44,7 @@ void Event::insertEvent(const EventPtr & replacement)
 {
     assert(replacement && replacement->status == EventStatus::INIT);
     assert(status != EventStatus::FINISHED);
+    assert(replacement->next_events.empty());
     std::swap(replacement->next_events, next_events);
     replacement->addDependency(shared_from_this());
 }
@@ -51,7 +52,8 @@ void Event::insertEvent(const EventPtr & replacement)
 void Event::completeDependency()
 {
     auto cur_value = unfinished_dependencies.fetch_sub(1);
-    if (cur_value <= 1)
+    assert(cur_value >= 1);
+    if (1 == cur_value)
         schedule();
 }
 
@@ -93,7 +95,8 @@ void Event::finishTask()
 {
     assert(status != EventStatus::FINISHED);
     auto cur_value = unfinished_tasks.fetch_sub(1);
-    if (cur_value <= 1)
+    assert(cur_value >= 1);
+    if (1 == cur_value)
         finish();
 }
 

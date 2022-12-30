@@ -20,7 +20,6 @@
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
-#include <errno.h>
 
 namespace DB
 {
@@ -45,9 +44,10 @@ void TaskExecutor::loop()
     setThreadName("TaskExecutor");
     LOG_INFO(logger, "start task executor loop");
     TaskPtr task;
-    while (likely(popTask(task)))
+    while (likely(task_queue->take(task)))
     {
         handleTask(task);
+        assert(!task);
     }
     LOG_INFO(logger, "task executor loop finished");
 }
@@ -98,55 +98,18 @@ void TaskExecutor::handleTask(TaskPtr & task)
     }
 }
 
-bool TaskExecutor::popTask(TaskPtr & task)
-{
-    {
-        std::unique_lock lock(mu);
-        while (true)
-        {
-            if (unlikely(is_closed))
-                return false;
-            if (!task_queue.empty())
-                break;
-            cv.wait(lock);
-        }
-
-        task = std::move(task_queue.front());
-        task_queue.pop_front();
-    }
-    return true;
-}
-
 void TaskExecutor::close()
 {
-    {
-        std::lock_guard lock(mu);
-        is_closed = true;
-    }
-    cv.notify_all();
+    task_queue->close();
 }
 
 void TaskExecutor::submit(TaskPtr && task)
 {
-    assert(task);
-    {
-        std::lock_guard lock(mu);
-        task_queue.push_back(std::move(task));
-    }
-    cv.notify_one();
+    task_queue->submit(std::move(task));
 }
 
 void TaskExecutor::submit(std::vector<TaskPtr> & tasks)
 {
-    if (tasks.empty())
-        return;
-
-    std::lock_guard lock(mu);
-    for (auto & task : tasks)
-    {
-        assert(task);
-        task_queue.push_back(std::move(task));
-        cv.notify_one();
-    }
+    task_queue->submit(tasks);
 }
 } // namespace DB
