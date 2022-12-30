@@ -21,7 +21,6 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 
-
 namespace DB
 {
 /// for table scan
@@ -82,9 +81,9 @@ void MockStorage::addTableSchemaForDeltaMerge(const String & name, const MockCol
 
 void MockStorage::addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns)
 {
-    auto id = getTableIdForDeltaMerge(name);
-    addNamesAndTypesForDeltaMerge(id, columns);
-    if (storage_delta_merge_map.find(id) == storage_delta_merge_map.end())
+    auto table_id = getTableIdForDeltaMerge(name);
+    addNamesAndTypesForDeltaMerge(table_id, columns);
+    if (storage_delta_merge_map.find(table_id) == storage_delta_merge_map.end())
     {
         // init
         ASTPtr astptr(new ASTIdentifier(name, ASTIdentifier::Kind::Table));
@@ -95,16 +94,17 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
         }
         astptr->children.emplace_back(new ASTIdentifier(columns[0].name));
 
-        storage_delta_merge_map[id] = StorageDeltaMerge::create("TiFlash",
-                                                                /* db_name= */ "default",
-                                                                name,
-                                                                std::nullopt,
-                                                                ColumnsDescription{names_and_types_list},
-                                                                astptr,
-                                                                0,
-                                                                context);
+        storage_delta_merge_map[table_id] = StorageDeltaMerge::create("TiFlash",
+                                                                      /* db_name= */ "default",
+                                                                      name,
+                                                                      std::nullopt,
+                                                                      ColumnsDescription{names_and_types_list},
+                                                                      astptr,
+                                                                      0,
+                                                                      context);
 
-        auto storage = storage_delta_merge_map[id];
+        auto storage = storage_delta_merge_map[table_id];
+        assert(storage);
         storage->startup();
 
         // write data to DeltaMergeStorage
@@ -123,16 +123,18 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
 {
     auto storage = storage_delta_merge_map[id];
     auto column_infos = table_schema_for_delta_merge[id];
+    assert(storage);
+    assert(!column_infos.empty());
     Names column_names;
     for (const auto & column_info : column_infos)
         column_names.push_back(column_info.first);
 
     auto scan_context = std::make_shared<DM::ScanContext>();
-    QueryProcessingStage::Enum stage2;
+    QueryProcessingStage::Enum stage;
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
-    BlockInputStreams ins = storage->read(column_names, query_info, context, stage2, 8192, 1);
+    BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // Todo: Should we change the params?
 
     BlockInputStreamPtr in = ins[0];
     return in;
@@ -166,7 +168,6 @@ void MockStorage::addNamesAndTypesForDeltaMerge(Int64 table_id, const ColumnsWit
     }
     names_and_types_map_for_delta_merge[table_id] = names_and_types;
 }
-
 
 Int64 MockStorage::getTableIdForDeltaMerge(const String & name)
 {

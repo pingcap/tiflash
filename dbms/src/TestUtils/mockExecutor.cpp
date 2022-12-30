@@ -420,6 +420,7 @@ void MockDAGRequestContext::addMockDeltaMergeSchema(const String & db, const Str
 void MockDAGRequestContext::addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
     assert(columnInfos.size() == columns.size());
+    assert(context.mockStorage()->useDeltaMerge());
     addMockDeltaMergeSchema(db, table, columnInfos);
     addMockDeltaMergeData(db, table, columns);
 }

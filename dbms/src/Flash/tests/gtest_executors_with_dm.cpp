@@ -27,6 +27,7 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+        context.mockStorage()->setUseDeltaMerge();
         // note that the first column is pk.
         context.addMockDeltaMerge({"test_db", "t0"},
                                   {{"col0", TiDB::TP::TypeLongLong}},
@@ -59,7 +60,6 @@ public:
                                    toNullableVec<MyDate>("col7", col_mydate),
                                    toNullableVec<MyDateTime>("col8", col_mydatetime),
                                    toNullableVec<String>("col9", col_string)});
-        context.mockStorage()->setUseDeltaMerge();
     }
 
     void TearDown() override
