@@ -140,12 +140,12 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
 ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
 {
     LOG_INFO(&Poco::Logger::get("hyy"), "hyy into deserializeMetadata");
-    auto schema = deserializeSchema(buf);
-    if (!schema)
-        schema = last_schema;
-    else if (last_schema == nullptr){
-        last_schema = schema;
-    }
+    auto schema = deserializeSchema(buf, last_schema);
+    // if (!schema)
+    //     schema = last_schema;
+    // else if (last_schema == nullptr){
+    //     last_schema = schema;
+    // }
     if (unlikely(!schema))
         throw Exception("Cannot deserialize DeltaPackBlock's schema", ErrorCodes::LOGICAL_ERROR);
 

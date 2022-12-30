@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
 {
@@ -155,8 +156,8 @@ inline ColumnFileV2Ptr deserializeColumnFile_V2(ReadBuffer & buf, UInt64 version
     }
 
     readIntBinary(column_file->data_page_id, buf);
-
-    column_file->schema = std::make_shared<Block>(deserializeSchema(buf)->getSchema());
+    ColumnFileSchemaPtr schema;
+    column_file->schema = std::make_shared<Block>(deserializeSchema(buf, schema)->getSchema());
     return column_file;
 }
 

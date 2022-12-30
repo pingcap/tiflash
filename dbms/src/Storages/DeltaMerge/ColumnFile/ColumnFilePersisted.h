@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
 {
@@ -36,7 +37,7 @@ public:
 };
 
 void serializeSchema(WriteBuffer & buf, const Block & schema);
-ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf);
+ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
 void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);

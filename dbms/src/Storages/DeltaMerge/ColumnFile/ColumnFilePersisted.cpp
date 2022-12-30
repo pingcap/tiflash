@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
 #include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+#include "Storages/DeltaMerge/DeltaMergeHelpers.h"
 
 namespace DB
 {
@@ -45,14 +46,14 @@ void serializeSchema(WriteBuffer & buf, const Block & schema)
     }
 }
 
-ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf)
+ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
 {
     UInt32 cols;
     readIntBinary(cols, buf);
-    if (!cols){
-        LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema is nullptr");
+    if (!cols && last_schema){
+        //LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema is nullptr");
         // std::cout << " hyy deserializeSchema is nullptr " << std::endl;
-        return nullptr;
+        return last_schema;
     }
     auto schema = std::make_shared<Block>();
     for (size_t i = 0; i < cols; ++i)
@@ -65,9 +66,13 @@ ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf)
         readStringBinary(type_name, buf);
         schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().getOrSet(type_name), name, column_id));
     }
-    LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema is not nullptr");
-    // std::cout << " hyy deserializeSchema is not nullptr " << std::endl;
-    return std::make_shared<ColumnFileSchema>(*schema);
+
+    if (!last_schema || !isSameSchema(*schema, last_schema)) {
+        last_schema = std::make_shared<ColumnFileSchema>(*schema);
+        LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema new schema");
+    }
+
+    return last_schema;
 }
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
