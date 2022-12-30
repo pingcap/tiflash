@@ -30,7 +30,7 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
     for (;;)
     {
         FilterPtr f = nullptr;
-        auto blk = stream->read(f, /*res_filter*/true);
+        auto blk = stream->read(f, /*res_filter*/ true);
         if (likely(blk))
         {
             set(blk.segmentRowIdCol(), f);
@@ -59,7 +59,7 @@ void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr f)
     //RUNTIME_CHECK(max_row_id < filter.size(), max_row_id, filter.size());
     if (f == nullptr)
     {
-         for (UInt32 i = 0; i < size; i++)
+        for (UInt32 i = 0; i < size; i++)
         {
             UInt32 row_id = *(data + i);
             filter[row_id] = true;

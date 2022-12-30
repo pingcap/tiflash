@@ -260,7 +260,7 @@ private:
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
-    ReadMode readModeOfSegment();  // TODO: determine read mode in delta merge
+    ReadMode readModeOfSegment(); // TODO: determine read mode in delta merge
 
     const uint64_t pool_id;
     const int64_t table_id;

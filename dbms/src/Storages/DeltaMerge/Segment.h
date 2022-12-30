@@ -604,17 +604,17 @@ private:
                                       UInt64 max_version,
                                       size_t expected_block_size);
     BitmapFilterPtr buildBitmapFilterNormal(const DMContext & dm_context,
-                                      const SegmentSnapshotPtr & segment_snap,
-                                      const RowKeyRanges & read_ranges,
-                                      const RSOperatorPtr & filter,
-                                      UInt64 max_version,
-                                      size_t expected_block_size);
+                                            const SegmentSnapshotPtr & segment_snap,
+                                            const RowKeyRanges & read_ranges,
+                                            const RSOperatorPtr & filter,
+                                            UInt64 max_version,
+                                            size_t expected_block_size);
     BitmapFilterPtr buildBitmapFilterStableOnly(const DMContext & dm_context,
-                                      const SegmentSnapshotPtr & segment_snap,
-                                      const RowKeyRanges & read_ranges,
-                                      const RSOperatorPtr & filter,
-                                      UInt64 max_version,
-                                      size_t expected_block_size);
+                                                const SegmentSnapshotPtr & segment_snap,
+                                                const RowKeyRanges & read_ranges,
+                                                const RSOperatorPtr & filter,
+                                                UInt64 max_version,
+                                                size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(BitmapFilterPtr && bitmap_filter,
                                                    const DMContext & dm_context,
                                                    const ColumnDefines & columns_to_read,

@@ -154,9 +154,7 @@ bool SegmentReadTasksWrapper::empty() const
 
 ReadMode SegmentReadTaskPool::readModeOfSegment()
 {
-    if (read_mode == ReadMode::Normal &&
-        dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter &&
-        !dm_context->read_delta_only)
+    if (read_mode == ReadMode::Normal && dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter && !dm_context->read_delta_only)
     {
         return ReadMode::Bitmap;
     }

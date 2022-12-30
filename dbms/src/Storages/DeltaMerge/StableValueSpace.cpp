@@ -370,11 +370,11 @@ StableValueSpace::Snapshot::getInputStream(
     }
     if (need_row_id)
     {
-        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/true>>(streams, std::move(rows));
+        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(streams, std::move(rows));
     }
     else
     {
-        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/false>>(streams, std::move(rows));
+        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ false>>(streams, std::move(rows));
     }
 }
 
