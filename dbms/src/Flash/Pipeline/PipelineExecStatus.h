@@ -28,6 +28,7 @@ struct PipelineExecStatus
     std::string err_msg;
 
     static constexpr auto empty_err_msg = "error without err msg";
+    static constexpr auto timeout_err_msg = "error with timeout";
 
     std::string getErrMsg();
 
@@ -37,7 +38,17 @@ struct PipelineExecStatus
 
     void wait();
 
-    void waitFor(std::chrono::seconds timeout);
+    template <typename Duration>
+    void waitFor(const Duration & timeout_duration)
+    {
+        bool is_timeout = false;
+        {
+            std::unique_lock lock(mu);
+            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_pipeline_count; });
+        }
+        if (is_timeout)
+            toError(timeout_err_msg);
+    }
 
     void completePipeline();
 

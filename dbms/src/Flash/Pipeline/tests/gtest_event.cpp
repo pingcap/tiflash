@@ -15,6 +15,7 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/TaskScheduler.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
@@ -244,6 +245,7 @@ protected:
 };
 
 TEST_F(EventTestRunner, base)
+try
 {
     auto do_test = [](size_t event_num) {
         assert(event_num > 0);
@@ -273,8 +275,10 @@ TEST_F(EventTestRunner, base)
     for (size_t i = 1; i < 200; ++i)
         do_test(i);
 }
+CATCH
 
 TEST_F(EventTestRunner, run)
+try
 {
     auto do_test = [](bool with_tasks, size_t event_num) {
         PipelineExecStatus exec_status;
@@ -298,8 +302,10 @@ TEST_F(EventTestRunner, run)
         do_test(true, i);
     }
 }
+CATCH
 
 TEST_F(EventTestRunner, cancel)
+try
 {
     auto do_test = [](bool with_tasks, size_t event_batch_num) {
         PipelineExecStatus exec_status;
@@ -342,8 +348,10 @@ TEST_F(EventTestRunner, cancel)
         do_test(true, i);
     }
 }
+CATCH
 
 TEST_F(EventTestRunner, err)
+try
 {
     auto do_test = [](bool with_tasks, size_t wait_cancel_event_num) {
         PipelineExecStatus exec_status;
@@ -387,5 +395,6 @@ TEST_F(EventTestRunner, err)
         do_test(true, i);
     }
 }
+CATCH
 
 } // namespace DB::tests

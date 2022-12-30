@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <assert.h>
 
@@ -39,12 +38,6 @@ void PipelineExecStatus::wait()
 {
     std::unique_lock lock(mu);
     cv.wait(lock, [&] { return 0 == active_pipeline_count; });
-}
-
-void PipelineExecStatus::waitFor(std::chrono::seconds timeout)
-{
-    std::unique_lock lock(mu);
-    RUNTIME_CHECK(cv.wait_for(lock, timeout, [&] { return 0 == active_pipeline_count; }));
 }
 
 void PipelineExecStatus::addActivePipeline()

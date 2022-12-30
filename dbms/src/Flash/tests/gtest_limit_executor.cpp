@@ -76,9 +76,9 @@ try
         else
             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + limit_num))};
 
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+        WRAP_FOR_TEST_BEGIN
         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
+        WRAP_FOR_TEST_END
 
         executeAndAssertRowsEqual(request, std::min(limit_num, col_data_num));
     }

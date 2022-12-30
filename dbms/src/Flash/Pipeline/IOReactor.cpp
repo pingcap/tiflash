@@ -25,6 +25,7 @@ namespace DB
 {
 namespace
 {
+// return true if the task is not in waiting status.
 bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
 {
     assert(task);
@@ -44,6 +45,24 @@ bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
         return true;
     default:
         __builtin_unreachable();
+    }
+}
+
+void yield(int & spin_count)
+{
+    if (spin_count != 0 && spin_count % 64 == 0)
+    {
+#ifdef __x86_64__
+        _mm_pause();
+#else
+        // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
+        sched_yield();
+#endif
+    }
+    if (spin_count == 640)
+    {
+        spin_count = 0;
+        sched_yield();
     }
 }
 } // namespace
@@ -140,21 +159,7 @@ void IOReactor::loop()
             scheduler.task_executor.submit(ready_tasks);
             ready_tasks.clear();
         }
-
-        if (spin_count != 0 && spin_count % 64 == 0)
-        {
-#ifdef __x86_64__
-            _mm_pause();
-#else
-            // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
-            sched_yield();
-#endif
-        }
-        if (spin_count == 640)
-        {
-            spin_count = 0;
-            sched_yield();
-        }
+        yield(spin_count);
     }
 
     LOG_INFO(logger, "io reactor loop finished");

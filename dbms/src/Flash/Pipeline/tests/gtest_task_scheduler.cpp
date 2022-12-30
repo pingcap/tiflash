@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Flash/Pipeline/TaskScheduler.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
@@ -168,6 +169,7 @@ public:
 };
 
 TEST_F(TaskSchedulerTestRunner, shutdown)
+try
 {
     std::vector<size_t> task_executor_thread_nums{1, 5, 10, 100};
     for (auto task_executor_thread_num : task_executor_thread_nums)
@@ -180,8 +182,10 @@ TEST_F(TaskSchedulerTestRunner, shutdown)
         }
     }
 }
+CATCH
 
 TEST_F(TaskSchedulerTestRunner, simple_task)
+try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
@@ -195,8 +199,10 @@ TEST_F(TaskSchedulerTestRunner, simple_task)
         waiter.wait();
     }
 }
+CATCH
 
 TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
+try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
@@ -210,8 +216,10 @@ TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
         waiter.wait();
     }
 }
+CATCH
 
 TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
+try
 {
     auto test = [](size_t spiller_executor_thread_num, size_t task_num) {
         Waiter waiter(task_num);
@@ -229,5 +237,6 @@ TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
         test(thread_num, task_num);
     }
 }
+CATCH
 
 } // namespace DB::tests

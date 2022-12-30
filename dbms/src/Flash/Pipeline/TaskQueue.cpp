@@ -33,9 +33,9 @@ bool FIFOTaskQueue::take(TaskPtr & task)
         }
 
         task = std::move(task_queue.front());
-        assert(task);
         task_queue.pop_front();
     }
+    assert(task);
     return true;
 }
 
@@ -66,7 +66,7 @@ void FIFOTaskQueue::submit(TaskPtr && task)
 
 void FIFOTaskQueue::submit(std::vector<TaskPtr> & tasks)
 {
-    if (tasks.empty())
+    if (unlikely(tasks.empty()))
         return;
 
     std::lock_guard lock(mu);

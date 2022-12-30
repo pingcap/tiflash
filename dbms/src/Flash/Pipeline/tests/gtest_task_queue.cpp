@@ -14,6 +14,7 @@
 
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/TaskQueue.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <thread>
@@ -38,6 +39,7 @@ public:
 };
 
 TEST_F(TaskQueueTestRunner, fifo)
+try
 {
     TaskQueuePtr queue = std::make_unique<FIFOTaskQueue>();
 
@@ -62,6 +64,7 @@ TEST_F(TaskQueueTestRunner, fifo)
             ASSERT_TRUE(task);
             auto * index_task = static_cast<IndexTask *>(task.get());
             ASSERT_EQ(index_task->index, expect_index++);
+            task.reset();
         }
         ASSERT_EQ(expect_index, valid_task_num);
     });
@@ -72,5 +75,6 @@ TEST_F(TaskQueueTestRunner, fifo)
     TaskPtr task;
     ASSERT_FALSE(queue->take(task));
 }
+CATCH
 
 } // namespace DB::tests

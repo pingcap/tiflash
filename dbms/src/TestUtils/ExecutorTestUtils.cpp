@@ -122,7 +122,7 @@ void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+    WRAP_FOR_TEST_BEGIN
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
@@ -158,7 +158,7 @@ void ExecutorTest::executeExecutor(
             ASSERT_TRUE(assert_func(res)) << test_info_msg();
         }
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
+    WRAP_FOR_TEST_END
 }
 
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)

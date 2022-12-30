@@ -31,20 +31,20 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
-#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN  \
-    std::vector<bool> bools{false, true};  \
-    for (auto enable_planner : bools)      \
-    {                                      \
-        enablePlanner(enable_planner);     \
-        std::vector<bool> bools{false};    \
-        if (enable_planner)                \
-            bools.push_back(true);         \
-        for (auto enable_pipeline : bools) \
-        {                                  \
+#define WRAP_FOR_TEST_BEGIN                         \
+    std::vector<bool> planner_bools{false, true};   \
+    for (auto enable_planner : planner_bools)       \
+    {                                               \
+        enablePlanner(enable_planner);              \
+        std::vector<bool> pipeline_bools{false};    \
+        if (enable_planner)                         \
+            pipeline_bools.push_back(true);         \
+        for (auto enable_pipeline : pipeline_bools) \
+        {                                           \
             enablePipeline(enable_pipeline);
 
-#define WRAP_FOR_DIS_ENABLE_PLANNER_END \
-    }                                   \
+#define WRAP_FOR_TEST_END \
+    }                     \
     }
 
 class ExecutorTest : public ::testing::Test

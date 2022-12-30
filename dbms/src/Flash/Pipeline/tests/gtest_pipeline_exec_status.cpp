@@ -14,6 +14,7 @@
 
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
@@ -22,7 +23,20 @@ class PipelineExecStatusTestRunner : public ::testing::Test
 {
 };
 
+TEST_F(PipelineExecStatusTestRunner, timeout)
+try
+{
+    PipelineExecStatus status;
+    status.addActivePipeline();
+    std::chrono::milliseconds timeout(10);
+    status.waitFor(timeout);
+    auto err_msg = status.getErrMsg();
+    ASSERT_EQ(err_msg, PipelineExecStatus::timeout_err_msg);
+}
+CATCH
+
 TEST_F(PipelineExecStatusTestRunner, run)
+try
 {
     PipelineExecStatus status;
     status.addActivePipeline();
@@ -33,8 +47,10 @@ TEST_F(PipelineExecStatusTestRunner, run)
     ASSERT_TRUE(err_msg.empty()) << err_msg;
     thread_manager->wait();
 }
+CATCH
 
 TEST_F(PipelineExecStatusTestRunner, to_err)
+try
 {
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg.empty() ? PipelineExecStatus::empty_err_msg : err_msg;
@@ -55,5 +71,6 @@ TEST_F(PipelineExecStatusTestRunner, to_err)
     test("throw exception");
     test("");
 }
+CATCH
 
 } // namespace DB::tests
