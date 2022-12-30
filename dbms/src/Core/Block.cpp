@@ -543,7 +543,7 @@ Block mergeBlocks(Blocks && blocks)
 
     for (size_t i = 1; i < blocks.size(); ++i)
     {
-        if (likely(blocks[i].rows()) > 0)
+        if (likely(blocks[i].rows() > 0))
         {
             if (unlikely(!blocksHaveEqualStructure(first_block, blocks[i])))
             {
