@@ -1832,7 +1832,7 @@ size_t Context::getMaxStreams() const
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (isExecutorTest())
+        if (isExecutorTest() || isInterpreterTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {
@@ -1878,6 +1878,16 @@ bool Context::isExecutorTest() const
 void Context::setExecutorTest()
 {
     test_mode = executor_test;
+}
+
+bool Context::isInterpreterTest() const
+{
+    return test_mode == interpreter_test;
+}
+
+void Context::setInterpreterTest()
+{
+    test_mode = interpreter_test;
 }
 
 bool Context::isCopTest() const

@@ -163,6 +163,7 @@ private:
         non_test,
         mpp_test,
         cop_test,
+        interpreter_test,
         executor_test,
         cancel_test
     };
@@ -482,6 +483,8 @@ public:
     void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
+    bool isInterpreterTest() const;
+    void setInterpreterTest();
     void setCopTest();
     bool isCopTest() const;
     bool isTest() const;

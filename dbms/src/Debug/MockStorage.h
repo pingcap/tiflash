@@ -67,11 +67,16 @@ public:
     void addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos);
 
     void addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns);
+    
     MockColumnInfoVec getTableSchemaForDeltaMerge(const String & name);
+    
     MockColumnInfoVec getTableSchemaForDeltaMerge(Int64 table_id);
+    
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
     BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id);
+
+    bool tableExistsForDeltaMerge(Int64 table_id);
 
     /// for exchange receiver
     void addExchangeSchema(const String & exchange_name, const MockColumnInfoVec & columnInfos);
@@ -95,7 +100,7 @@ public:
     /// clear for StorageDeltaMerge
     void clear();
 
-    void setUseDeltaMerge();
+    void setUseDeltaMerge(bool flag);
 
     bool useDeltaMerge() const;
 
@@ -129,8 +134,6 @@ private:
 
     // for storage delta merge table scan
     Int64 getTableIdForDeltaMerge(const String & name);
-
-    bool tableExistsForDeltaMerge(Int64 table_id);
 
     void addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns);
 

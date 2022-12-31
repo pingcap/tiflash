@@ -40,10 +40,12 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     assert(max_streams > 0);
     if (context.mockStorage()->useDeltaMerge())
     {
+        assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
         mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID()));
     }
-    else if (!context.mockStorage()->tableExists(table_scan.getLogicalTableID()))
+    // Interpreter test will not use columns in MockStorage
+    else if (context.isInterpreterTest() || !context.mockStorage()->tableExists(table_scan.getLogicalTableID()))
     {
         /// build with default blocks.
         schema = genNamesAndTypes(table_scan, "mock_table_scan");

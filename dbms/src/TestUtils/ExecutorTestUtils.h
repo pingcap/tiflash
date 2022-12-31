@@ -115,6 +115,7 @@ protected:
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
 
+// nullable type
 using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
 using ColInt8NullableType = std::optional<typename TypeTraits<Int8>::FieldType>;
 using ColInt16NullableType = std::optional<typename TypeTraits<Int16>::FieldType>;
@@ -125,12 +126,14 @@ using ColFloat64NullableType = std::optional<typename TypeTraits<Float64>::Field
 using ColMyDateNullableType = std::optional<typename TypeTraits<MyDate>::FieldType>;
 using ColMyDateTimeNullableType = std::optional<typename TypeTraits<MyDateTime>::FieldType>;
 using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal32>::FieldType>;
-using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
 
+// non nullable tyoe
+using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
 using ColInt64Type = typename TypeTraits<Int64>::FieldType;
 using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
 using ColStringType = typename TypeTraits<String>::FieldType;
 
+// nullable column
 using ColumnWithNullableString = std::vector<ColStringNullableType>;
 using ColumnWithNullableInt8 = std::vector<ColInt8NullableType>;
 using ColumnWithNullableInt16 = std::vector<ColInt16NullableType>;
@@ -141,6 +144,8 @@ using ColumnWithNullableFloat64 = std::vector<ColFloat64NullableType>;
 using ColumnWithNullableMyDate = std::vector<ColMyDateNullableType>;
 using ColumnWithNullableMyDateTime = std::vector<ColMyDateTimeNullableType>;
 using ColumnWithNullableDecimal = std::vector<ColDecimalNullableType>;
+
+// non nullable column
 using ColumnWithInt64 = std::vector<ColInt64Type>;
 using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;

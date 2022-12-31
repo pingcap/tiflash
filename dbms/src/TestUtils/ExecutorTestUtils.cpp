@@ -98,7 +98,8 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
-    context.context.setExecutorTest();
+    context.context.setInterpreterTest();
+    context.context.setMockStorage(context.mockStorage());
     // Currently, don't care about regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));

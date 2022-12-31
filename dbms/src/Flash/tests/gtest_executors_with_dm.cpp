@@ -27,7 +27,7 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-        context.mockStorage()->setUseDeltaMerge();
+        context.mockStorage()->setUseDeltaMerge(true);
         // note that the first column is pk.
         context.addMockDeltaMerge({"test_db", "t0"},
                                   {{"col0", TiDB::TP::TypeLongLong}},

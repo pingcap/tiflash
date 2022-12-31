@@ -263,9 +263,9 @@ void MockStorage::clear()
     }
 }
 
-void MockStorage::setUseDeltaMerge()
+void MockStorage::setUseDeltaMerge(bool flag)
 {
-    use_storage_delta_merge = true;
+    use_storage_delta_merge = flag;
 }
 
 bool MockStorage::useDeltaMerge() const
