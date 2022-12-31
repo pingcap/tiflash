@@ -58,11 +58,11 @@ public:
         RUNTIME_CHECK(!has_read);
         has_read = true;
 
-        std::string json;
-        readStringBinary(json, *file_reader, 512 * 1024 * 1024 /* 512MB */);
+        std::string input;
+        readStringBinary(input, *file_reader, 512 * 1024 * 1024 /* 512MB */);
 
         Remote::ManifestFile file_content;
-        google::protobuf::util::JsonStringToMessage(json, &file_content);
+        file_content.ParseFromString(input);
 
         typename PSDirTrait::PageEntriesEdit edit;
         auto & records = edit.getMutRecords();

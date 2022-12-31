@@ -17,6 +17,7 @@
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+#include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/universal/Readers.h>
@@ -107,6 +108,65 @@ TEST_F(UniPageStorageTest, RaftLog)
         LOG_INFO(log, "{}", page.isValid());
     };
     raft_log_reader.traverse(RaftLogReader::toFullPageId(10, 0), RaftLogReader::toFullPageId(101, 0), checker);
+}
+
+using PS::V3::PageDirectory;
+using PS::V3::RemoteDataLocation;
+using PS::V3::CheckpointManifestFileReader;
+using PS::V3::CheckpointPageManager;
+using PS::V3::Remote::WriterInfo;
+using PS::V3::universal::BlobStoreTrait;
+using PS::V3::universal::PageDirectoryTrait;
+
+TEST_F(UniPageStorageTest, Checkpoint2)
+{
+    UInt64 tag = 0;
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(RaftLogReader::toFullPageId(10, 128), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    std::cout << "temp path " << getTemporaryPath() << std::endl;
+
+    auto writer_info = std::make_shared<WriterInfo>();
+    auto checkpoint_dir = getTemporaryPath() + "/";
+    page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
+        .temp_directory = checkpoint_dir + "temp/",
+        .remote_directory = checkpoint_dir,
+        .data_file_name_pattern = "{sequence}_{sub_file_index}.data",
+        .manifest_file_name_pattern = "{sequence}.manifest",
+        .writer_info = writer_info,
+        .blob_store = *page_storage->blob_store,
+    });
+
+    UInt64 latest_manifest_sequence = 0;
+    Poco::DirectoryIterator it(checkpoint_dir);
+    Poco::DirectoryIterator end;
+    while (it != end)
+    {
+        if (it->isFile())
+        {
+            const Poco::Path & file_path = it->path();
+            if (file_path.getExtension() == "manifest")
+            {
+                auto current_manifest_sequence = UInt64(std::stoul(file_path.getBaseName()));
+                latest_manifest_sequence = std::max(current_manifest_sequence, latest_manifest_sequence);
+            }
+        }
+        ++it;
+    }
+    ASSERT_TRUE(latest_manifest_sequence > 0);
+    auto checkpoint_path = checkpoint_dir + fmt::format("{}.manifest", latest_manifest_sequence);
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_path
+        });
+    auto manager = std::make_shared<CheckpointPageManager>(*reader, checkpoint_dir);
+    ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(10, 128)), RaftLogReader::toFullPageId(10, 128));
 }
 
 TEST_F(UniPageStorageTest, SeekKey)
