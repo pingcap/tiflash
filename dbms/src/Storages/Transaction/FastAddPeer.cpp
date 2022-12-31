@@ -277,7 +277,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             maybe_peer = selectRemotePeer(wn_ps, current_store_id, region_id, new_peer_id, server->proxy_helper);
             if (!maybe_peer.has_value())
             {
-                if (watch.elapsedSeconds() >= 60)
+                if (watch.elapsedSeconds() >= 6000)
                     return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
