@@ -40,6 +40,7 @@ TaskExecutor::~TaskExecutor()
 
 void TaskExecutor::loop()
 {
+    assert(nullptr == current_memory_tracker);
     setThreadName("TaskExecutor");
     LOG_INFO(logger, "start task executor loop");
     TaskPtr task;

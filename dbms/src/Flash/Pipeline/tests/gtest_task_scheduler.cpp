@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
@@ -53,7 +54,7 @@ private:
 class SimpleTask : public Task
 {
 public:
-    SimpleTask(Waiter & waiter_)
+    explicit SimpleTask(Waiter & waiter_)
         : Task(nullptr)
         , waiter(waiter_)
     {}
@@ -74,7 +75,7 @@ private:
 class SimpleWaitingTask : public Task
 {
 public:
-    SimpleWaitingTask(Waiter & waiter_)
+    explicit SimpleWaitingTask(Waiter & waiter_)
         : Task(nullptr)
         , waiter(waiter_)
     {}
@@ -119,7 +120,7 @@ private:
 class SimpleSpillingTask : public Task
 {
 public:
-    SimpleSpillingTask(Waiter & waiter_)
+    explicit SimpleSpillingTask(Waiter & waiter_)
         : Task(nullptr)
         , waiter(waiter_)
     {}
@@ -160,6 +161,62 @@ private:
     int loop_count = 10 + random() % 10;
     Waiter & waiter;
 };
+
+enum class TraceTaskStatus
+{
+    initing,
+    running,
+    waiting,
+    spilling,
+};
+class MemoryTraceTask : public Task
+{
+public:
+    MemoryTraceTask(MemoryTrackerPtr mem_tracker_, Waiter & waiter_)
+        : Task(std::move(mem_tracker_))
+        , waiter(waiter_)
+    {}
+
+    ExecTaskStatus executeImpl() override
+    {
+        switch (status)
+        {
+        case TraceTaskStatus::initing:
+            status = TraceTaskStatus::waiting;
+            return ExecTaskStatus::WAITING;
+        case TraceTaskStatus::waiting:
+            status = TraceTaskStatus::spilling;
+            return ExecTaskStatus::SPILLING;
+        case TraceTaskStatus::spilling:
+        {
+            status = TraceTaskStatus::running;
+            CurrentMemoryTracker::alloc(10);
+            waiter.notify();
+            return ExecTaskStatus::FINISHED;
+        }
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    ExecTaskStatus spillImpl() override
+    {
+        assert(status == TraceTaskStatus::spilling);
+        CurrentMemoryTracker::alloc(10);
+        return ExecTaskStatus::RUNNING;
+    }
+
+    ExecTaskStatus awaitImpl() override
+    {
+        if (status == TraceTaskStatus::waiting)
+            CurrentMemoryTracker::alloc(10);
+        return ExecTaskStatus::RUNNING;
+    }
+
+private:
+    TraceTaskStatus status{TraceTaskStatus::initing};
+    Waiter & waiter;
+};
 } // namespace
 
 class TaskSchedulerTestRunner : public ::testing::Test
@@ -171,11 +228,10 @@ public:
 TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
-    std::vector<size_t> task_executor_thread_nums{1, 5, 10, 100};
-    for (auto task_executor_thread_num : task_executor_thread_nums)
+    std::vector<size_t> thread_nums{1, 5, 10, 100};
+    for (auto task_executor_thread_num : thread_nums)
     {
-        std::vector<size_t> spill_executor_thread_nums{0, 1, 5, 10, 100};
-        for (auto spill_executor_thread_num : spill_executor_thread_nums)
+        for (auto spill_executor_thread_num : thread_nums)
         {
             TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};
             TaskScheduler task_scheduler{config};
@@ -193,7 +249,7 @@ try
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleTask>(waiter));
-        TaskSchedulerConfig config{thread_num, 0};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
@@ -210,7 +266,7 @@ try
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
-        TaskSchedulerConfig config{thread_num, 0};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
@@ -221,20 +277,43 @@ CATCH
 TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
 try
 {
-    auto test = [](size_t spiller_executor_thread_num, size_t task_num) {
+    auto test = [](size_t task_num) {
         Waiter waiter(task_num);
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleSpillingTask>(waiter));
-        TaskSchedulerConfig config{thread_num, spiller_executor_thread_num};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
     };
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        test(0, task_num);
-        test(thread_num, task_num);
+        test(task_num);
+    }
+}
+CATCH
+
+TEST_F(TaskSchedulerTestRunner, test_memory_trace)
+try
+{
+    auto test = [&](size_t task_num) {
+        Waiter waiter(task_num);
+        {
+            auto tracker = MemoryTracker::create();
+            std::vector<TaskPtr> tasks;
+            for (size_t i = 0; i < task_num; ++i)
+                tasks.push_back(std::make_unique<MemoryTraceTask>(tracker, waiter));
+            TaskSchedulerConfig config{thread_num, thread_num};
+            TaskScheduler task_scheduler{config};
+            MemoryTrackerSetter memory_tracker_setter{true, tracker.get()};
+            task_scheduler.submit(tasks);
+        }
+        waiter.wait();
+    };
+    for (size_t task_num = 1; task_num < 100; ++task_num)
+    {
+        test(task_num);
     }
 }
 CATCH

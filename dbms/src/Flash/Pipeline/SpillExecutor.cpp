@@ -26,22 +26,10 @@ namespace DB
 SpillExecutor::SpillExecutor(TaskScheduler & scheduler_, size_t thread_num)
     : scheduler(scheduler_)
 {
-    if (thread_num > 0)
-    {
-        submit_func = [&](TaskPtr && task) {
-            submitToThreadSharedQueue(std::move(task));
-        };
-        threads.reserve(thread_num);
-        for (size_t i = 0; i < thread_num; ++i)
-            threads.emplace_back(&SpillExecutor::loop, this);
-    }
-    else
-    {
-        // If thread_num is 0, we will execute spill in the calling thread.
-        submit_func = [&](TaskPtr && task) {
-            handleTask(std::move(task));
-        };
-    }
+    RUNTIME_CHECK(thread_num > 0);
+    threads.reserve(thread_num);
+    for (size_t i = 0; i < thread_num; ++i)
+        threads.emplace_back(&SpillExecutor::loop, this);
 }
 
 SpillExecutor::~SpillExecutor()
@@ -53,8 +41,7 @@ SpillExecutor::~SpillExecutor()
 
 void SpillExecutor::submit(TaskPtr && task)
 {
-    assert(task);
-    submit_func(std::move(task));
+    task_queue->submit(std::move(task));
 }
 
 void SpillExecutor::handleTask(TaskPtr && task)
@@ -80,13 +67,9 @@ void SpillExecutor::handleTask(TaskPtr && task)
     }
 }
 
-void SpillExecutor::submitToThreadSharedQueue(TaskPtr && task)
-{
-    task_queue->submit(std::move(task));
-}
-
 void SpillExecutor::loop()
 {
+    assert(nullptr == current_memory_tracker);
     setThreadName("SpillExecutor");
     LOG_INFO(logger, "start spill executor loop");
     TaskPtr task;

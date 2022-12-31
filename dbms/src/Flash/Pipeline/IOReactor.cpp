@@ -130,6 +130,7 @@ bool IOReactor::take(std::list<TaskPtr> & local_waiting_tasks)
 
 void IOReactor::loop()
 {
+    assert(nullptr == current_memory_tracker);
     setThreadName("IOReactor");
     LOG_INFO(logger, "start io reactor loop");
 

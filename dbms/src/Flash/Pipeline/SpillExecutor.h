@@ -40,8 +40,6 @@ private:
 
     void handleTask(TaskPtr && task);
 
-    void submitToThreadSharedQueue(TaskPtr && task);
-
 private:
     TaskScheduler & scheduler;
 
