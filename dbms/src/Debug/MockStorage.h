@@ -67,11 +67,11 @@ public:
     void addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos);
 
     void addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns);
-    
+
     MockColumnInfoVec getTableSchemaForDeltaMerge(const String & name);
-    
+
     MockColumnInfoVec getTableSchemaForDeltaMerge(Int64 table_id);
-    
+
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
     BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id);
