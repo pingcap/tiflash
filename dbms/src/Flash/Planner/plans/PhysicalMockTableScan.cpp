@@ -22,9 +22,6 @@
 #include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Interpreters/Context.h>
 
-#include <cstddef>
-#include <utility>
-
 namespace DB
 {
 namespace
