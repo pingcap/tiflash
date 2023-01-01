@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/SpillExecutor.h>
+#include <Flash/Pipeline/TaskHelper.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <assert.h>
 #include <common/likely.h>
@@ -57,9 +58,7 @@ void SpillExecutor::handleTask(TaskPtr && task)
     case ExecTaskStatus::SPILLING:
         submit(std::move(task));
         break;
-    case ExecTaskStatus::FINISHED:
-    case ExecTaskStatus::ERROR:
-    case ExecTaskStatus::CANCELLED:
+    case FINISH_STATUS:
         task.reset();
         break;
     default:

@@ -277,7 +277,8 @@ CATCH
 TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
 try
 {
-    auto test = [](size_t task_num) {
+    for (size_t task_num = 1; task_num < 100; ++task_num)
+    {
         Waiter waiter(task_num);
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
@@ -286,10 +287,6 @@ try
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
-    };
-    for (size_t task_num = 1; task_num < 100; ++task_num)
-    {
-        test(task_num);
     }
 }
 CATCH
@@ -297,23 +294,19 @@ CATCH
 TEST_F(TaskSchedulerTestRunner, test_memory_trace)
 try
 {
-    auto test = [&](size_t task_num) {
-        Waiter waiter(task_num);
-        {
-            auto tracker = MemoryTracker::create();
-            std::vector<TaskPtr> tasks;
-            for (size_t i = 0; i < task_num; ++i)
-                tasks.push_back(std::make_unique<MemoryTraceTask>(tracker, waiter));
-            TaskSchedulerConfig config{thread_num, thread_num};
-            TaskScheduler task_scheduler{config};
-            MemoryTrackerSetter memory_tracker_setter{true, tracker.get()};
-            task_scheduler.submit(tasks);
-        }
-        waiter.wait();
-    };
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        test(task_num);
+        Waiter waiter(task_num);
+        auto tracker = MemoryTracker::create();
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<MemoryTraceTask>(tracker, waiter));
+        TaskSchedulerConfig config{thread_num, thread_num};
+        TaskScheduler task_scheduler{config};
+        MemoryTrackerSetter memory_tracker_setter{true, tracker.get()};
+        task_scheduler.submit(tasks);
+        waiter.wait();
+        // The value of the memory tracer is not checked here because of `std::memory_order_relaxed`.
     }
 }
 CATCH

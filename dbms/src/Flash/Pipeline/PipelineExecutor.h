@@ -39,9 +39,9 @@ using Pipelines = std::vector<PipelinePtr>;
  *                      event2 ─────────────► │ │task executor│  │
  *                                            │ └────▲──┬─────┘  │
  *                        │ trigger           │      │  │        │
- *                        ▼                   │  ┌───┴──▼────┐   │
- *                             submit tasks   │  │io reactor │   │
- *                      event3 ─────────────► │  └───────────┘   │
+ *                        ▼                   │  ┌───┴──▼─────┐  │
+ *                             submit tasks   │  │wait reactor│  │
+ *                      event3 ─────────────► │  └────────────┘  │
  *                                            │                  │
  *                                            └──────────────────┘
  * 

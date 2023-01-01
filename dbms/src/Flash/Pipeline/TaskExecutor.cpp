@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/TaskExecutor.h>
+#include <Flash/Pipeline/TaskHelper.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
@@ -76,14 +77,12 @@ void TaskExecutor::handleTask(TaskPtr & task)
             break;
         }
         case ExecTaskStatus::WAITING:
-            scheduler.io_reactor.submit(std::move(task));
+            scheduler.wait_reactor.submit(std::move(task));
             return;
         case ExecTaskStatus::SPILLING:
             scheduler.spill_executor.submit(std::move(task));
             return;
-        case ExecTaskStatus::FINISHED:
-        case ExecTaskStatus::ERROR:
-        case ExecTaskStatus::CANCELLED:
+        case FINISH_STATUS:
             task.reset();
             return;
         default:

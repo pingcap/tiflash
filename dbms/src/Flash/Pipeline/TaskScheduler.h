@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/IOReactor.h>
 #include <Flash/Pipeline/SpillExecutor.h>
 #include <Flash/Pipeline/Task.h>
 #include <Flash/Pipeline/TaskExecutor.h>
+#include <Flash/Pipeline/WaitReactor.h>
 
 namespace DB
 {
@@ -40,16 +40,16 @@ struct TaskSchedulerConfig
  * │ │task executor│  │
  * │ └────▲──┬─────┘  │
  * │      │  │        │
- * │  ┌───┴──▼────┐   │
- * │  │io reactor │   │
- * │  └───────────┘   │
+ * │  ┌───┴──▼─────┐  │
+ * │  │wait reactor│  │
+ * │  └────────────┘  │
  * │                  │
  * └──────────────────┘
  * 
  * A globally shared execution scheduler, used by pipeline executor.
  * - task executor: for operator compute.
  * - spill executor: for spilling disk.
- * - io reactor: for polling asynchronous io status.
+ * - wait reactor: for polling asynchronous io status, etc.
  */
 class TaskScheduler
 {
@@ -65,14 +65,14 @@ public:
 private:
     TaskExecutor task_executor;
 
-    IOReactor io_reactor;
+    WaitReactor wait_reactor;
 
     SpillExecutor spill_executor;
 
     LoggerPtr logger = Logger::get("TaskScheduler");
 
     friend class TaskExecutor;
-    friend class IOReactor;
+    friend class WaitReactor;
     friend class SpillExecutor;
 };
 } // namespace DB

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
-#include <Flash/Pipeline/IOReactor.h>
+#include <Flash/Pipeline/TaskHelper.h>
 #include <Flash/Pipeline/TaskScheduler.h>
+#include <Flash/Pipeline/WaitReactor.h>
 #include <assert.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
@@ -38,9 +39,7 @@ bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
     case ExecTaskStatus::RUNNING:
         ready_tasks.push_back(std::move(task));
         return true;
-    case ExecTaskStatus::FINISHED:
-    case ExecTaskStatus::ERROR:
-    case ExecTaskStatus::CANCELLED:
+    case FINISH_STATUS:
         task.reset();
         return true;
     default:
@@ -48,32 +47,46 @@ bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
     }
 }
 
-void yield(int & spin_count)
+class Spinner
 {
-    if (spin_count != 0 && spin_count % 64 == 0)
-    {
-#ifdef __x86_64__
-        _mm_pause();
-#else
-        // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
-        sched_yield();
-#endif
-    }
-    if (spin_count == 640)
+public:
+    void reset()
     {
         spin_count = 0;
-        sched_yield();
     }
-}
+
+    void tryYield()
+    {
+        ++spin_count;
+
+        if (spin_count != 0 && spin_count % 64 == 0)
+        {
+#ifdef __x86_64__
+            _mm_pause();
+#else
+            // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
+            sched_yield();
+#endif
+        }
+        if (spin_count == 640)
+        {
+            spin_count = 0;
+            sched_yield();
+        }
+    }
+
+private:
+    int16_t spin_count = 0;
+};
 } // namespace
 
-IOReactor::IOReactor(TaskScheduler & scheduler_)
+WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
 {
-    thread = std::thread(&IOReactor::loop, this);
+    thread = std::thread(&WaitReactor::loop, this);
 }
 
-void IOReactor::close()
+void WaitReactor::close()
 {
     {
         std::lock_guard lock(mu);
@@ -82,7 +95,7 @@ void IOReactor::close()
     cv.notify_one();
 }
 
-void IOReactor::submit(TaskPtr && task)
+void WaitReactor::submit(TaskPtr && task)
 {
     assert(task);
     {
@@ -92,7 +105,7 @@ void IOReactor::submit(TaskPtr && task)
     cv.notify_one();
 }
 
-void IOReactor::submit(std::list<TaskPtr> & tasks)
+void WaitReactor::submit(std::list<TaskPtr> & tasks)
 {
     if (tasks.empty())
         return;
@@ -103,13 +116,13 @@ void IOReactor::submit(std::list<TaskPtr> & tasks)
     cv.notify_one();
 }
 
-IOReactor::~IOReactor()
+WaitReactor::~WaitReactor()
 {
     thread.join();
-    LOG_INFO(logger, "stop io reactor loop");
+    LOG_INFO(logger, "stop wait reactor loop");
 }
 
-bool IOReactor::take(std::list<TaskPtr> & local_waiting_tasks)
+bool WaitReactor::take(std::list<TaskPtr> & local_waiting_tasks)
 {
     {
         std::unique_lock lock(mu);
@@ -128,14 +141,14 @@ bool IOReactor::take(std::list<TaskPtr> & local_waiting_tasks)
     return true;
 }
 
-void IOReactor::loop()
+void WaitReactor::loop()
 {
     assert(nullptr == current_memory_tracker);
-    setThreadName("IOReactor");
-    LOG_INFO(logger, "start io reactor loop");
+    setThreadName("WaitReactor");
+    LOG_INFO(logger, "start wait reactor loop");
 
+    Spinner spinner;
     std::list<TaskPtr> local_waiting_tasks;
-    int spin_count = 0;
     std::vector<TaskPtr> ready_tasks;
     while (likely(take(local_waiting_tasks)))
     {
@@ -152,17 +165,16 @@ void IOReactor::loop()
 
         if (ready_tasks.empty())
         {
-            spin_count += 1;
+            spinner.tryYield();
         }
         else
         {
-            spin_count = 0;
             scheduler.task_executor.submit(ready_tasks);
             ready_tasks.clear();
+            spinner.reset();
         }
-        yield(spin_count);
     }
 
-    LOG_INFO(logger, "io reactor loop finished");
+    LOG_INFO(logger, "wait reactor loop finished");
 }
 } // namespace DB

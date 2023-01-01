@@ -20,7 +20,7 @@ namespace DB
 {
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
     : task_executor(*this, config.task_executor_thread_num)
-    , io_reactor(*this)
+    , wait_reactor(*this)
     , spill_executor(*this, config.spill_executor_thread_num)
 {
 }
@@ -28,7 +28,7 @@ TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
 TaskScheduler::~TaskScheduler()
 {
     task_executor.close();
-    io_reactor.close();
+    wait_reactor.close();
     spill_executor.close();
 }
 
@@ -62,7 +62,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     }
     tasks.clear();
     task_executor.submit(running_tasks);
-    io_reactor.submit(waiting_tasks);
+    wait_reactor.submit(waiting_tasks);
 }
 
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;

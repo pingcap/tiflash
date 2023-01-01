@@ -26,11 +26,11 @@ namespace DB
 {
 class TaskScheduler;
 
-class IOReactor
+class WaitReactor
 {
 public:
-    explicit IOReactor(TaskScheduler & scheduler_);
-    ~IOReactor();
+    explicit WaitReactor(TaskScheduler & scheduler_);
+    ~WaitReactor();
 
     void submit(TaskPtr && task);
 
@@ -41,7 +41,7 @@ public:
 private:
     void loop();
 
-    // return false if the io reactor had been closed.
+    // return false if the wait reactor had been closed.
     bool take(std::list<TaskPtr> & local_waiting_tasks);
 
 private:
@@ -54,6 +54,6 @@ private:
     std::list<TaskPtr> waiting_tasks;
     bool is_closed = false;
 
-    LoggerPtr logger = Logger::get("IOReactor");
+    LoggerPtr logger = Logger::get("WaitReactor");
 };
 } // namespace DB

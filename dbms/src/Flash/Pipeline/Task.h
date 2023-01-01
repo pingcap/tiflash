@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
-#include <Common/MemoryTrackerSetter.h>
 #include <memory.h>
 
 namespace DB
@@ -80,12 +79,5 @@ private:
     MemoryTrackerPtr mem_tracker;
 };
 using TaskPtr = std::unique_ptr<Task>;
-
-// Hold the shared_ptr of memory tracker.
-// To avoid the current_memory_tracker being an illegal pointer.
-#define TRACE_MEMORY(task)                         \
-    assert(nullptr == current_memory_tracker);     \
-    auto memory_tracker = (task)->getMemTracker(); \
-    MemoryTrackerSetter memory_tracker_setter{true, memory_tracker.get()};
 
 } // namespace DB
