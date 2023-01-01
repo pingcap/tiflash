@@ -102,43 +102,34 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     }
 
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = optimal});
-    auto edit = reader->read();
-
-    auto records = edit.getRecords();
+    auto manager = std::make_shared<PS::V3::CheckpointPageManager>(*reader, checkpoint_data_dir);
 
     RemoteMeta remote_meta;
     remote_meta.remote_store_id = store_id;
     remote_meta.checkpoint_path = optimal;
-    // FIXME: get data through point get
-    for (auto iter = records.begin(); iter != records.end(); iter++)
     {
-        std::string page_id = iter->page_id.toStr();
-        if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id))
-        {
-            std::string decoded_data;
-            auto & location = iter->entry.remote_info->data_location;
-            std::string ret = readData(checkpoint_data_dir, location);
-            remote_meta.apply_state.ParseFromArray(ret.data(), ret.size());
-        }
-        else if (keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
-        {
-            std::string decoded_data;
-            auto & location = iter->entry.remote_info->data_location;
-            std::string ret = readData(checkpoint_data_dir, location);
-            remote_meta.region_state.ParseFromArray(ret.data(), ret.size());
-        }
-        else if (page_id == KVStoreReader::toFullPageId(region_id))
-        {
-            auto & location = iter->entry.remote_info->data_location;
-            auto buf = ReadBufferFromFile(checkpoint_data_dir + *location.data_file_id);
-            buf.seek(location.offset_in_file);
-            remote_meta.region = Region::deserialize(buf, proxy_helper);
-            RUNTIME_CHECK(buf.count() == location.size_in_file);
-        }
-        else
-        {
-            // Other data, such as RegionPersister.
-        }
+        auto apply_state_key = RaftLogReader::toRegionApplyStateKey(region_id);
+        auto [buf, buf_size, _] = manager->getReadBuffer(apply_state_key);
+        std::string value;
+        value.resize(buf_size);
+        auto n = buf->readBig(value.data(), buf_size);
+        RUNTIME_CHECK(n == buf_size);
+        remote_meta.apply_state.ParseFromArray(value.data(), value.size());
+    }
+    {
+        auto region_state_key = RaftLogReader::toRegionLocalStateKey(region_id);
+        auto [buf, buf_size, _] = manager->getReadBuffer(region_state_key);
+        std::string value;
+        value.resize(buf_size);
+        auto n = buf->readBig(value.data(), buf_size);
+        RUNTIME_CHECK(n == buf_size);
+        remote_meta.region_state.ParseFromArray(value.data(), value.size());
+    }
+    {
+        auto region_key = KVStoreReader::toFullPageId(region_id);
+        auto [buf, buf_size, _] = manager->getReadBuffer(region_key);
+        remote_meta.region = Region::deserialize(*buf, proxy_helper);
+        RUNTIME_CHECK(buf->count() == buf_size);
     }
     return remote_meta;
 }
