@@ -109,7 +109,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     remote_meta.checkpoint_path = optimal;
     {
         auto apply_state_key = RaftLogReader::toRegionApplyStateKey(region_id);
-        auto maybe_buffer = manager->getReadBuffer(apply_state_key, /* ignore_if_not_exist */true, /* enable_linear_search */ false);
+        auto maybe_buffer = manager->getReadBuffer(apply_state_key, /* ignore_if_not_exist */true);
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();
@@ -126,7 +126,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     }
     {
         auto region_state_key = RaftLogReader::toRegionLocalStateKey(region_id);
-        auto maybe_buffer = manager->getReadBuffer(region_state_key, /* ignore_if_not_exist */true, /* enable_linear_search */ false);
+        auto maybe_buffer = manager->getReadBuffer(region_state_key, /* ignore_if_not_exist */true);
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();
@@ -143,7 +143,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     }
     {
         auto region_key = KVStoreReader::toFullPageId(region_id);
-        auto maybe_buffer = manager->getReadBuffer(region_key, /* ignore_if_not_exist */true, /* enable_linear_search */ false);
+        auto maybe_buffer = manager->getReadBuffer(region_key, /* ignore_if_not_exist */true);
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();

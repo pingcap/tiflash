@@ -27,13 +27,13 @@ public:
     std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> getAllPageWithPrefix(const String & prefix) const;
 
     // TODO: remove `enable_linear_search` when the binary search is gurantee to be correct
-    std::optional<UniversalPageId> getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist = false, bool enable_linear_search = true) const;
+    std::optional<UniversalPageId> getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist = false) const;
 
     // buf, size, size of each fields
-    std::optional<std::tuple<ReadBufferPtr, size_t, PageFieldSizes>> getReadBuffer(const UniversalPageId & page_id, bool ignore_if_not_exist = false, bool enable_linear_search = true) const;
+    std::optional<std::tuple<ReadBufferPtr, size_t, PageFieldSizes>> getReadBuffer(const UniversalPageId & page_id, bool ignore_if_not_exist = false) const;
 
 private:
-    std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> findPageRecord(const UniversalPageId & page_id, bool enable_linear_search) const;
+    std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> findPageRecord(const UniversalPageId & page_id) const;
 
 private:
     typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit edit;

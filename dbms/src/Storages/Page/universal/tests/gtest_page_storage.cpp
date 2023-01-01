@@ -412,29 +412,25 @@ TEST_F(UniPageStorageRemoteCheckpointTest, FindKeyInCheckPoint)
     ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(10, 128)), RaftLogReader::toFullPageId(10, 128));
 }
 
-TEST_F(UniPageStorageRemoteCheckpointTest, DumpManyPage)
+TEST_F(UniPageStorageRemoteCheckpointTest, ScanRaftlogWithPrefix)
 {
     using namespace PS::V3;
     using namespace PS::V3::Remote;
     using namespace PS::V3::universal;
 
     UInt64 tag = 0;
-    for (size_t i = 0; i < 1000; i++)
+    UInt64 region_id = 100;
+    size_t start_index = 100;
+    size_t end_index = 1000;
+    for (size_t i = start_index; i < end_index; i++)
     {
         UniversalWriteBatch wb;
         c_buff[0] = 10;
         c_buff[1] = 1;
-        wb.putPage(RaftLogReader::toFullRaftLogKey(100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(RaftLogReader::toRegionLocalStateKey(100), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(RaftLogReader::toRegionApplyStateKey(100), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(StorageReader::toFullUniversalPageId("t_l_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(StorageReader::toFullUniversalPageId("t_m_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toFullRaftLogKey(region_id, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(region_id), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toFullRaftLogKey(region_id + 1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         wb.putPage(StorageReader::toFullUniversalPageId("t_d_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(StorageReader::toFullUniversalPageId("t_l_", 500, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(StorageReader::toFullUniversalPageId("t_m_", 500, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(StorageReader::toFullUniversalPageId("t_d_", 500, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(KVStoreReader::toFullPageId(100), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-
 
         page_storage->write(std::move(wb));
     }
@@ -449,19 +445,14 @@ TEST_F(UniPageStorageRemoteCheckpointTest, DumpManyPage)
             .file_path = checkpoint_path
         });
     auto manager = std::make_shared<CheckpointPageManager>(*reader, output_directory);
-    for (size_t i = 0; i < 1000; i++)
     {
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullRaftLogKey(100, i), false).value(), RaftLogReader::toFullRaftLogKey(100, i));
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toRegionLocalStateKey(100), false).value(), RaftLogReader::toRegionLocalStateKey(100));
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toRegionApplyStateKey(100), false).value(), RaftLogReader::toRegionApplyStateKey(100));
-        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_l_", 100, i), false).value(), StorageReader::toFullUniversalPageId("t_l_", 100, i));
-        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_m_", 100, i), false).value(), StorageReader::toFullUniversalPageId("t_m_", 100, i));
-        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_d_", 100, i), false).value(), StorageReader::toFullUniversalPageId("t_d_", 100, i));
-        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_l_", 500, i), false).value(), StorageReader::toFullUniversalPageId("t_l_", 500, i));
-        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_m_", 500, i), false).value(), StorageReader::toFullUniversalPageId("t_m_", 500, i));
-        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_d_", 500, i), false).value(), StorageReader::toFullUniversalPageId("t_d_", 500, i));
-        ASSERT_EQ(manager->getNormalPageId(KVStoreReader::toFullPageId(100), false).value(), KVStoreReader::toFullPageId(100));
-
+        auto all_raft_log_page = manager->getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region_id).toStr());
+        ASSERT_EQ(all_raft_log_page.size(), end_index - start_index);
+        UniversalPageId first_page_id, last_page_id;
+        std::tie(std::ignore, std::ignore, first_page_id) = all_raft_log_page[0];
+        std::tie(std::ignore, std::ignore, last_page_id) = all_raft_log_page.back();
+        ASSERT_EQ(first_page_id, RaftLogReader::toFullRaftLogKey(region_id, start_index));
+        ASSERT_EQ(last_page_id, RaftLogReader::toFullRaftLogKey(region_id, end_index - 1));
     }
 }
 

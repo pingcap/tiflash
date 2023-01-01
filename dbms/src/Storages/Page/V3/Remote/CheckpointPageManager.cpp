@@ -8,21 +8,34 @@ namespace DB::PS::V3
 std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> CheckpointPageManager::getAllPageWithPrefix(const String & prefix) const
 {
     std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> results;
-    for (const auto & record: edit.getRecords())
+    auto records = edit.getRecords();
+    auto iter = lower_bound(records.begin(),
+                            records.end(),
+                            prefix,
+                            [](const typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit::EditRecord & record, const String & prefix) {
+                                return record.page_id.toStr() < prefix;
+                            });
+    while (iter != records.end())
     {
-        // FIXME: early stop by the order nature of record or use binary search
+        auto & record = *iter;
         if (startsWith(record.page_id.toStr(), prefix))
         {
+            assert(record.ori_page_id.empty());
             const auto & location = record.entry.remote_info->data_location;
             auto buf = std::make_shared<ReadBufferFromFile>(checkpoint_data_dir + *location.data_file_id);
             buf->seek(location.offset_in_file);
             results.emplace_back(std::move(buf), location.size_in_file, record.page_id);
+            iter++;
+        }
+        else
+        {
+            break;
         }
     }
     return results;
 }
 
-std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> CheckpointPageManager::findPageRecord(const UniversalPageId & page_id, bool enable_linear_search) const
+std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> CheckpointPageManager::findPageRecord(const UniversalPageId & page_id) const
 {
     UniversalPageId target_id = page_id;
     const auto & records = edit.getRecords();
@@ -57,39 +70,12 @@ std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> Checkp
             break;
         }
     }
-    if (!enable_linear_search)
-    {
-        return std::nullopt;
-    }
-    LOG_WARNING(&Poco::Logger::get("CheckpointPageManager::getNormalPageId"), "Cannot find page id {} by binary search, fallback to linear search", target_id);
-    while (true)
-    {
-        bool all_searched = true;
-        for (const auto & record : records)
-        {
-            if (record.page_id == target_id)
-            {
-                if (record.ori_page_id.empty())
-                {
-                    return record;
-                }
-                else
-                {
-                    target_id = record.ori_page_id;
-                    all_searched = false;
-                    break;
-                }
-            }
-        }
-        if (all_searched)
-            break;
-    }
     return std::nullopt;
 }
 
-std::optional<UniversalPageId> CheckpointPageManager::getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist, bool enable_linear_search) const
+std::optional<UniversalPageId> CheckpointPageManager::getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist) const
 {
-    auto maybe_record = findPageRecord(page_id, enable_linear_search);
+    auto maybe_record = findPageRecord(page_id);
     if (maybe_record.has_value())
     {
         auto & record = maybe_record.value();
@@ -106,11 +92,11 @@ std::optional<UniversalPageId> CheckpointPageManager::getNormalPageId(const Univ
 }
 
 // buf, size, size of each fields
-std::optional<std::tuple<ReadBufferPtr, size_t, PageFieldSizes>> CheckpointPageManager::getReadBuffer(const UniversalPageId & page_id, bool ignore_if_not_exist, bool enable_linear_search) const
+std::optional<std::tuple<ReadBufferPtr, size_t, PageFieldSizes>> CheckpointPageManager::getReadBuffer(const UniversalPageId & page_id, bool ignore_if_not_exist) const
 {
     PageFieldSizes field_sizes;
 
-    auto maybe_record = findPageRecord(page_id, enable_linear_search);
+    auto maybe_record = findPageRecord(page_id);
     if (maybe_record.has_value())
     {
         auto & record = maybe_record.value();
