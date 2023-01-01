@@ -118,9 +118,17 @@ public:
     void SetUp() override
     {
         // For testing remote storage service
-        auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME);
+        auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME) + "/";
         TiFlashTestEnv::tryRemovePath(remote_source, true);
         TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
+        if (!TiFlashTestEnv::getGlobalContext().getReadNodePageStorage())
+        {
+            TiFlashTestEnv::getGlobalContext().initializeReadNodePageStorage(TiFlashTestEnv::getGlobalContext().getPathPool(), TiFlashTestEnv::getGlobalContext().getFileProvider());
+        }
+        if (!TiFlashTestEnv::getGlobalContext().getDMRemoteManager())
+        {
+            TiFlashTestEnv::getGlobalContext().initializeDeltaMergeRemoteManager();
+        }
 
         TiFlashStorageTestBasic::SetUp();
         store = reload();

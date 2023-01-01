@@ -179,10 +179,10 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
 
             // 2. copy to local temporary path and set dmfile no gc
             auto temporary_path = db_context.getTemporaryPath();
+            Poco::File(temporary_path).createDirectories();
             data_store->copyDMFileToLocalPath(self_oid, temporary_path);
             auto temp_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, temporary_path, DMFile::ReadMetaMode::none());
             temp_dmfile->disableGC();
-
 
             // 3. copy to storage data path, write file id to data ps and enable gc
             auto parent_path = delegator.choosePath();

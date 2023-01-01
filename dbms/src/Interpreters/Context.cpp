@@ -1801,13 +1801,27 @@ DM::Remote::ManagerPtr Context::getDMRemoteManager() const
 UniversalPageStoragePtr Context::getWriteNodePageStorage() const
 {
     auto lock = getLock();
-    return shared->ps_write->uni_page_storage;
+    if (shared->ps_write)
+    {
+        return shared->ps_write->uni_page_storage;
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UniversalPageStoragePtr Context::getReadNodePageStorage() const
 {
     auto lock = getLock();
-    return shared->ps_read->uni_page_storage;
+    if (shared->ps_read)
+    {
+        return shared->ps_read->uni_page_storage;
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UInt16 Context::getTCPPort() const
