@@ -147,11 +147,8 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();
-            std::string value;
-            value.resize(buf_size);
-            auto n = buf->readBig(value.data(), buf_size);
-            RUNTIME_CHECK(n == buf_size);
             remote_meta.region = Region::deserialize(*buf, proxy_helper);
+            RUNTIME_CHECK(buf_size == buf->count());
         }
         else
         {
