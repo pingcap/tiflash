@@ -80,8 +80,9 @@ public:
         // OutputStreamWrapper ostream{*compressed_writer};
         // file_content.SerializeToOstream(&ostream);
 
-        std::string output = file_content.SerializeAsString();
-        writeStringBinary(output, *file_writer);
+        std::string json;
+        google::protobuf::util::MessageToJsonString(file_content, &json);
+        writeStringBinary(json, *file_writer);
     }
 
     void flush()

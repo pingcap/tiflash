@@ -37,6 +37,6 @@ message PageIdU128 {
 message PageId {
     oneof id {
         PageIdU128 u128 = 1;
-        string str = 2;
+        bytes str = 2;
     }
 }
