@@ -446,7 +446,7 @@ Segment::SegmentMetaInfos Segment::restoreAllSegmentsMetaInfo( //
         LOG_DEBUG(&Poco::Logger::get("Segment::restoreAllSegmentsMetaInfo"), "try to restore table {} segment meta {}", ns_id, target_segment_id);
         Segment::SegmentMetaInfo segment_info;
         auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, target_segment_id);
-        auto [buf, buf_size, _] = manager->getReadBuffer(target_id);
+        auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
 
         readSegmentMetaInfo(*buf, segment_info);
 

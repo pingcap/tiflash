@@ -26,10 +26,14 @@ public:
     // Only used for retrieve raft log, so no need to consider ref id
     std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> getAllPageWithPrefix(const String & prefix) const;
 
-    UniversalPageId getNormalPageId(const UniversalPageId & page_id, bool enable_linear_search = true) const;
+    // TODO: remove `enable_linear_search` when the binary search is gurantee to be correct
+    std::optional<UniversalPageId> getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist = false, bool enable_linear_search = true) const;
 
     // buf, size, size of each fields
-    std::tuple<ReadBufferPtr, size_t, PageFieldSizes> getReadBuffer(const UniversalPageId & page_id, bool enable_linear_search = true) const;
+    std::optional<std::tuple<ReadBufferPtr, size_t, PageFieldSizes>> getReadBuffer(const UniversalPageId & page_id, bool ignore_if_not_exist = false, bool enable_linear_search = true) const;
+
+private:
+    std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> findPageRecord(const UniversalPageId & page_id, bool enable_linear_search) const;
 
 private:
     typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit edit;

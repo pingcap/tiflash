@@ -137,7 +137,7 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     auto stable = std::make_shared<StableValueSpace>(new_stable_id);
 
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
-    auto [buf, buf_size, _] = manager->getReadBuffer(target_id);
+    auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
     LOG_DEBUG(&Poco::Logger::get("StableValueSpace"), "checkpoint stable id {} buffer size {}", stable_id, buf_size);
 
     UInt64 version, valid_rows, valid_bytes, size;
@@ -153,7 +153,7 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     {
         readIntBinary(page_id, *buf);
         auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, page_id);
-        auto remote_orig_file_page_id = manager->getNormalPageId(remote_file_page_id);
+        auto remote_orig_file_page_id = manager->getNormalPageId(remote_file_page_id).value();
         auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
         auto delegator = context.path_pool->getStableDiskDelegator();
         auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
