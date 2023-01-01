@@ -581,7 +581,7 @@ RawCppPtr PreHandleSnapshot(
         {
             auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
             RaftLogReader reader(*uni_ps);
-            auto page_id = RaftLogReader::toRegionMetaKey(new_region->id());
+            auto page_id = RaftLogReader::toRegionLocalStateKey(new_region->id());
             auto value = reader.read(page_id);
             raft_serverpb::RegionLocalState state;
             state.ParseFromArray(value.data.begin(), value.data.size());

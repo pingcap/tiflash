@@ -109,30 +109,51 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     remote_meta.checkpoint_path = optimal;
     {
         auto apply_state_key = RaftLogReader::toRegionApplyStateKey(region_id);
-        auto [buf, buf_size, _] = manager->getReadBuffer(apply_state_key);
-        std::string value;
-        value.resize(buf_size);
-        auto n = buf->readBig(value.data(), buf_size);
-        RUNTIME_CHECK(n == buf_size);
-        remote_meta.apply_state.ParseFromArray(value.data(), value.size());
-        LOG_DEBUG(log, "read apply state size {}", buf_size);
+        try
+        {
+            auto [buf, buf_size, _] = manager->getReadBuffer(apply_state_key);
+            std::string value;
+            value.resize(buf_size);
+            auto n = buf->readBig(value.data(), buf_size);
+            RUNTIME_CHECK(n == buf_size);
+            remote_meta.apply_state.ParseFromArray(value.data(), value.size());
+            LOG_DEBUG(log, "read apply state size {}", buf_size);
+        }
+        catch(...)
+        {
+            LOG_DEBUG(log, "cannot find apply state key {}", Redact::keyToDebugString(apply_state_key.data(), apply_state_key.size()));
+        }
     }
     {
         auto region_state_key = RaftLogReader::toRegionLocalStateKey(region_id);
-        auto [buf, buf_size, _] = manager->getReadBuffer(region_state_key);
-        std::string value;
-        value.resize(buf_size);
-        auto n = buf->readBig(value.data(), buf_size);
-        RUNTIME_CHECK(n == buf_size);
-        remote_meta.region_state.ParseFromArray(value.data(), value.size());
-        LOG_DEBUG(log, "read region state size {}", buf_size);
+        try
+        {
+            auto [buf, buf_size, _] = manager->getReadBuffer(region_state_key);
+            std::string value;
+            value.resize(buf_size);
+            auto n = buf->readBig(value.data(), buf_size);
+            RUNTIME_CHECK(n == buf_size);
+            remote_meta.region_state.ParseFromArray(value.data(), value.size());
+            LOG_DEBUG(log, "read region state size {}", buf_size);
+        }
+        catch(...)
+        {
+            LOG_DEBUG(log, "cannot find region state key {}", Redact::keyToDebugString(region_state_key.data(), region_state_key.size()));
+        }
     }
     {
-        auto region_key = KVStoreReader::toFullPageId(region_id);
-        auto [buf, buf_size, _] = manager->getReadBuffer(region_key);
-        remote_meta.region = Region::deserialize(*buf, proxy_helper);
-        RUNTIME_CHECK(buf->count() == buf_size);
-        LOG_DEBUG(log, "read kvstore region size {}", buf_size);
+        try
+        {
+            auto region_key = KVStoreReader::toFullPageId(region_id);
+            auto [buf, buf_size, _] = manager->getReadBuffer(region_key);
+            remote_meta.region = Region::deserialize(*buf, proxy_helper);
+            RUNTIME_CHECK(buf->count() == buf_size);
+            LOG_DEBUG(log, "read kvstore region size {}", buf_size);
+        }
+        catch(...)
+        {
+            LOG_DEBUG(log, "cannot find region key {}", Redact::keyToDebugString(region_key.data(), region_key.size()));
+        }
     }
     return remote_meta;
 }
