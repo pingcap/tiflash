@@ -103,13 +103,13 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
 
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = optimal});
     auto edit = reader->read();
-//    LOG_DEBUG(log, "content is {}", edit.toDebugString());
 
     auto records = edit.getRecords();
 
-    raft_serverpb::RegionLocalState restored_region_state;
-    raft_serverpb::RaftApplyState restored_apply_state;
-    RegionPtr region;
+    RemoteMeta remote_meta;
+    remote_meta.remote_store_id = store_id;
+    remote_meta.checkpoint_path = optimal;
+    // FIXME: get data through point get
     for (auto iter = records.begin(); iter != records.end(); iter++)
     {
         std::string page_id = iter->page_id.toStr();
@@ -118,21 +118,21 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
             std::string decoded_data;
             auto & location = iter->entry.remote_info->data_location;
             std::string ret = readData(checkpoint_data_dir, location);
-            restored_apply_state.ParseFromArray(ret.data(), ret.size());
+            remote_meta.apply_state.ParseFromArray(ret.data(), ret.size());
         }
         else if (keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
         {
             std::string decoded_data;
             auto & location = iter->entry.remote_info->data_location;
             std::string ret = readData(checkpoint_data_dir, location);
-            restored_region_state.ParseFromArray(ret.data(), ret.size());
+            remote_meta.region_state.ParseFromArray(ret.data(), ret.size());
         }
         else if (page_id == KVStoreReader::toFullPageId(region_id))
         {
             auto & location = iter->entry.remote_info->data_location;
             auto buf = ReadBufferFromFile(checkpoint_data_dir + *location.data_file_id);
             buf.seek(location.offset_in_file);
-            region = Region::deserialize(buf, proxy_helper);
+            remote_meta.region = Region::deserialize(buf, proxy_helper);
             RUNTIME_CHECK(buf.count() == location.size_in_file);
         }
         else
@@ -140,22 +140,13 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
             // Other data, such as RegionPersister.
         }
     }
-    return std::make_tuple(store_id, restored_region_state, restored_apply_state, optimal, region);
+    return remote_meta;
 }
 
 std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
 {
     return fmt::format(
         "{}/store_{}/ps_{}_manifest/",
-        remote_dir,
-        store_id,
-        storage_name);
-}
-
-std::string composeOutputDataDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
-{
-    return fmt::format(
-        "{}/store_{}/ps_{}_data/",
         remote_dir,
         store_id,
         storage_name);
@@ -182,7 +173,7 @@ std::vector<uint64_t> listAllStores(const std::string & remote_dir)
     return res;
 }
 
-std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t current_store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
+std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(UniversalPageStoragePtr page_storage, uint64_t current_store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
     auto * log = &Poco::Logger::get("fast add");
 
@@ -200,7 +191,6 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
         if (store_id == current_store_id)
             continue;
         auto remote_manifest_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
-//        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, store_id, storage_name);
         auto maybe_choice = fetchRemotePeerMeta(remote_manifest_directory, remote_dir, store_id, region_id, new_peer_id, proxy_helper);
         if (maybe_choice.has_value())
         {
@@ -208,15 +198,22 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
         }
     }
 
+    if (choices.empty())
+    {
+        LOG_INFO(log, "No candidate for region {}", region_id);
+        return std::make_pair(false, std::nullopt);
+    }
+
     std::optional<RemoteMeta> choosed = std::nullopt;
     uint64_t largest_applied_index = 0;
     for (auto it = choices.begin(); it != choices.end(); it++)
     {
-        auto store_id = std::get<0>(*it);
-        const auto & region_state = std::get<1>(*it);
-        const auto & apply_state = std::get<2>(*it);
+        auto store_id = it->remote_store_id;
+        const auto & region_state = it->region_state;
+        const auto & apply_state = it->apply_state;
         const auto & peers = region_state.region().peers();
         bool ok = false;
+        LOG_INFO(log, "store {} region_state {} region peers {}", store_id, region_state.DebugString(), region_state.region().DebugString());
         for (auto && pr : peers)
         {
             if (pr.id() == new_peer_id)
@@ -260,7 +257,7 @@ std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr page_storage,
     std::string choice_stat = fmt_buf.toString();
 
     LOG_INFO(log, "fast add result region_id {} new_peer_id {} remote_dir {} storage_name {} total choices {}; failed: {}; candidates: {};", region_id, new_peer_id, remote_dir, storage_name, choices.size(), failed_reason, choice_stat);
-    return choosed;
+    return std::make_pair(true, choosed);
 }
 
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
@@ -274,10 +271,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         Stopwatch watch;
         while (true)
         {
-            maybe_peer = selectRemotePeer(wn_ps, current_store_id, region_id, new_peer_id, server->proxy_helper);
+            bool can_retry = false;
+            std::tie(can_retry, maybe_peer) = selectRemotePeer(wn_ps, current_store_id, region_id, new_peer_id, server->proxy_helper);
             if (!maybe_peer.has_value())
             {
-                if (watch.elapsedSeconds() >= 6000)
+                if (!can_retry || watch.elapsedSeconds() >= 60)
                     return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
@@ -286,14 +284,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         }
         auto * log = &Poco::Logger::get("fast add");
         auto & peer = maybe_peer.value();
-        auto checkpoint_store_id = std::get<0>(peer);
-        auto checkpoint_manifest_path = std::get<3>(peer);
+        auto checkpoint_store_id = peer.remote_store_id;
+        auto checkpoint_manifest_path = peer.checkpoint_path;
         LOG_INFO(log, "select checkpoint path {} from store {} for region {} takes {} seconds", checkpoint_manifest_path, checkpoint_store_id, region_id, watch.elapsedSeconds());
-        auto region = std::get<4>(peer);
+        auto region = peer.region;
 
         const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
-//        const auto & storage_name = wn_ps->storage_name;
-//        auto checkpoint_data_dir = composeOutputDataDirectory(remote_dir, checkpoint_store_id, storage_name);
         auto checkpoint_data_dir = remote_dir;
 
         kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
@@ -312,7 +308,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         wn_ps->write(std::move(wb));
 
         // Generate result.
-        return genFastAddPeerRes(FastAddPeerStatus::Ok, std::get<2>(peer).SerializeAsString(), std::get<1>(peer).region().SerializeAsString());
+        return genFastAddPeerRes(FastAddPeerStatus::Ok, peer.apply_state.SerializeAsString(), peer.region_state.region().SerializeAsString());
     }
     catch (...)
     {
