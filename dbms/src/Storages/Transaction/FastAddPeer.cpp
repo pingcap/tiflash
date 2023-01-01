@@ -142,9 +142,9 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         }
     }
     {
+        auto region_key = KVStoreReader::toFullPageId(region_id);
         try
         {
-            auto region_key = KVStoreReader::toFullPageId(region_id);
             auto [buf, buf_size, _] = manager->getReadBuffer(region_key);
             remote_meta.region = Region::deserialize(*buf, proxy_helper);
             RUNTIME_CHECK(buf->count() == buf_size);
