@@ -115,6 +115,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         auto n = buf->readBig(value.data(), buf_size);
         RUNTIME_CHECK(n == buf_size);
         remote_meta.apply_state.ParseFromArray(value.data(), value.size());
+        LOG_DEBUG(log, "read apply state size {}", buf_size);
     }
     {
         auto region_state_key = RaftLogReader::toRegionLocalStateKey(region_id);
@@ -124,12 +125,14 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         auto n = buf->readBig(value.data(), buf_size);
         RUNTIME_CHECK(n == buf_size);
         remote_meta.region_state.ParseFromArray(value.data(), value.size());
+        LOG_DEBUG(log, "read region state size {}", buf_size);
     }
     {
         auto region_key = KVStoreReader::toFullPageId(region_id);
         auto [buf, buf_size, _] = manager->getReadBuffer(region_key);
         remote_meta.region = Region::deserialize(*buf, proxy_helper);
         RUNTIME_CHECK(buf->count() == buf_size);
+        LOG_DEBUG(log, "read kvstore region size {}", buf_size);
     }
     return remote_meta;
 }
