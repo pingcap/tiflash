@@ -121,7 +121,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         }
         catch(...)
         {
-            LOG_DEBUG(log, "cannot find apply state key {}", Redact::keyToDebugString(apply_state_key.data(), apply_state_key.size()));
+            LOG_WARNING(log, "cannot find apply state key {}", Redact::keyToDebugString(apply_state_key.data(), apply_state_key.size()));
         }
     }
     {
@@ -138,7 +138,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         }
         catch(...)
         {
-            LOG_DEBUG(log, "cannot find region state key {}", Redact::keyToDebugString(region_state_key.data(), region_state_key.size()));
+            LOG_WARNING(log, "cannot find region state key {}", Redact::keyToDebugString(region_state_key.data(), region_state_key.size()));
         }
     }
     {
@@ -152,7 +152,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
         }
         catch(...)
         {
-            LOG_DEBUG(log, "cannot find region key {}", Redact::keyToDebugString(region_key.data(), region_key.size()));
+            LOG_WARNING(log, "cannot find region key {}", Redact::keyToDebugString(region_key.data(), region_key.size()));
         }
     }
     return remote_meta;
