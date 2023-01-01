@@ -26,7 +26,6 @@ public:
     // Only used for retrieve raft log, so no need to consider ref id
     std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> getAllPageWithPrefix(const String & prefix) const;
 
-    // TODO: remove `enable_linear_search` when the binary search is gurantee to be correct
     std::optional<UniversalPageId> getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist = false) const;
 
     // buf, size, size of each fields
