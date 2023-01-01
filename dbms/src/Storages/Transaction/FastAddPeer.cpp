@@ -303,6 +303,8 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         auto checkpoint_manifest_path = peer.checkpoint_path;
         LOG_INFO(log, "select checkpoint path {} from store {} for region {} takes {} seconds", checkpoint_manifest_path, checkpoint_store_id, region_id, watch.elapsedSeconds());
         auto region = peer.region;
+        if (!region)
+            return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
 
         const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
         auto checkpoint_data_dir = remote_dir;

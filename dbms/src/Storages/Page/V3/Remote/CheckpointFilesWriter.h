@@ -114,8 +114,6 @@ public:
                 .data_location = data_location,
                 .is_local_data_reclaimed = false,
             };
-
-            LOG_DEBUG(log, "data_location {} offset {} size {}", *data_location.data_file_id, data_location.offset_in_file, data_location.size_in_file);
         }
 
         // 3. Write down everything to the manifest.

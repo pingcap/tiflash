@@ -412,6 +412,59 @@ TEST_F(UniPageStorageRemoteCheckpointTest, FindKeyInCheckPoint)
     ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(10, 128)), RaftLogReader::toFullPageId(10, 128));
 }
 
+TEST_F(UniPageStorageRemoteCheckpointTest, DumpManyPage)
+{
+    using namespace PS::V3;
+    using namespace PS::V3::Remote;
+    using namespace PS::V3::universal;
+
+    UInt64 tag = 0;
+    for (size_t i = 0; i < 1000; i++)
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(100), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionApplyStateKey(100), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_l_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_m_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_d_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_l_", 500, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_m_", 500, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_d_", 500, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(KVStoreReader::toFullPageId(100), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+
+        page_storage->write(std::move(wb));
+    }
+
+    dumpCheckpoint();
+
+    UInt64 latest_manifest_sequence = getLatestCheckpointSequence();
+    ASSERT_TRUE(latest_manifest_sequence > 0);
+    auto checkpoint_path = output_directory + fmt::format("{}.manifest", latest_manifest_sequence);
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_path
+        });
+    auto manager = std::make_shared<CheckpointPageManager>(*reader, output_directory);
+    for (size_t i = 0; i < 1000; i++)
+    {
+        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullRaftLogKey(100, i), false), RaftLogReader::toFullRaftLogKey(100, i));
+        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toRegionLocalStateKey(100), false), RaftLogReader::toRegionLocalStateKey(100));
+        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toRegionApplyStateKey(100), false), RaftLogReader::toRegionApplyStateKey(100));
+        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_l_", 100, i), false), StorageReader::toFullUniversalPageId("t_l_", 100, i));
+        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_m_", 100, i), false), StorageReader::toFullUniversalPageId("t_m_", 100, i));
+        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_d_", 100, i), false), StorageReader::toFullUniversalPageId("t_d_", 100, i));
+        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_l_", 500, i), false), StorageReader::toFullUniversalPageId("t_l_", 500, i));
+        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_m_", 500, i), false), StorageReader::toFullUniversalPageId("t_m_", 500, i));
+        ASSERT_EQ(manager->getNormalPageId(StorageReader::toFullUniversalPageId("t_d_", 500, i), false), StorageReader::toFullUniversalPageId("t_d_", 500, i));
+        ASSERT_EQ(manager->getNormalPageId(KVStoreReader::toFullPageId(100), false), KVStoreReader::toFullPageId(100));
+
+    }
+}
+
 TEST_F(UniPageStorageRemoteCheckpointTest, ZeroSizedEntry)
 try
 {

@@ -22,7 +22,7 @@ std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> CheckpointPageMa
     return results;
 }
 
-UniversalPageId CheckpointPageManager::getNormalPageId(const UniversalPageId & page_id) const
+UniversalPageId CheckpointPageManager::getNormalPageId(const UniversalPageId & page_id, bool enable_linear_search) const
 {
     UniversalPageId target_id = page_id;
     const auto & records = edit.getRecords();
@@ -57,6 +57,10 @@ UniversalPageId CheckpointPageManager::getNormalPageId(const UniversalPageId & p
             break;
         }
     }
+    if (!enable_linear_search)
+    {
+        RUNTIME_CHECK_MSG(false, "Cannot find page id {}", page_id);
+    }
     LOG_WARNING(&Poco::Logger::get("CheckpointPageManager::getNormalPageId"), "Cannot find page id {} by binary search, fallback to linear search", target_id);
     while (true)
     {
@@ -84,7 +88,7 @@ UniversalPageId CheckpointPageManager::getNormalPageId(const UniversalPageId & p
 }
 
 // buf, size, size of each fields
-std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getReadBuffer(const UniversalPageId & page_id) const
+std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getReadBuffer(const UniversalPageId & page_id, bool enable_linear_search) const
 {
     PageFieldSizes field_sizes;
     UniversalPageId target_id = page_id;
@@ -130,6 +134,10 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
         {
             break;
         }
+    }
+    if (!enable_linear_search)
+    {
+        RUNTIME_CHECK_MSG(false, "Cannot find page id {}", page_id);
     }
     LOG_WARNING(&Poco::Logger::get("CheckpointPageManager::getReadBuffer"), "Cannot find page id {} by binary search, fallback to linear search", target_id);
     while (true)
