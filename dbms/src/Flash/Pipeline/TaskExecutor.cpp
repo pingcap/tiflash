@@ -41,15 +41,18 @@ TaskExecutor::~TaskExecutor()
 
 void TaskExecutor::loop()
 {
-    assert(nullptr == current_memory_tracker);
     setThreadName("TaskExecutor");
     LOG_INFO(logger, "start task executor loop");
+    ASSERT_MEMORY_TRACKER
+
     TaskPtr task;
     while (likely(task_queue->take(task)))
     {
         handleTask(task);
         assert(!task);
+        ASSERT_MEMORY_TRACKER
     }
+
     LOG_INFO(logger, "task executor loop finished");
 }
 

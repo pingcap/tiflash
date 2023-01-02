@@ -47,8 +47,6 @@ private:
 
     TaskQueuePtr task_queue = std::make_unique<FIFOTaskQueue>();
 
-    std::function<void(TaskPtr && task)> submit_func;
-
     LoggerPtr logger = Logger::get("SpillExecutor");
 };
 } // namespace DB

@@ -60,11 +60,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
     {
         status.wait();
     }
-
-    auto err_msg = status.getErrMsg();
-    return err_msg.empty()
-        ? ExecutionResult::success()
-        : ExecutionResult::fail(err_msg);
+    return status.toExecutionResult();
 }
 
 void PipelineExecutor::cancel()

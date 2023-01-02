@@ -14,27 +14,26 @@
 
 #pragma once
 
+#include <Flash/Executor/ExecutionResult.h>
+
 #include <atomic>
 #include <mutex>
 
 namespace DB
 {
-struct PipelineExecStatus
+class PipelineExecStatus
 {
-    std::mutex mu;
-    std::condition_variable cv;
-    std::atomic_int64_t active_pipeline_count{0};
-    std::atomic_bool is_cancelled{false};
-    std::string err_msg;
-
+public:
     static constexpr auto empty_err_msg = "error without err msg";
     static constexpr auto timeout_err_msg = "error with timeout";
 
-    std::string getErrMsg();
+    ExecutionResult toExecutionResult();
+
+    String getErrMsg();
 
     void addActivePipeline();
 
-    void toError(std::string && err_msg_);
+    void toError(String && err_msg_);
 
     void wait();
 
@@ -58,5 +57,12 @@ struct PipelineExecStatus
     {
         return is_cancelled;
     }
+
+private:
+    std::mutex mu;
+    std::condition_variable cv;
+    std::atomic_int32_t active_pipeline_count{0};
+    std::atomic_bool is_cancelled{false};
+    String err_msg;
 };
 } // namespace DB

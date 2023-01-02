@@ -19,12 +19,29 @@
 
 namespace DB
 {
+PipelineTask::PipelineTask(
+    MemoryTrackerPtr mem_tracker_,
+    const EventPtr & event_,
+    OperatorExecutorPtr && op_executor_)
+    : Task(std::move(mem_tracker_))
+    , event(event_)
+    , op_executor(std::move(op_executor_))
+{
+    assert(event);
+    assert(op_executor);
+}
+
+PipelineTask::~PipelineTask()
+{
+    assert(event);
+    event->finishTask();
+    event.reset();
+}
+
 #define HANDLE_CANCELLED                  \
     if (unlikely(event->isCancelled()))   \
     {                                     \
         op_executor.reset();              \
-        event->finishTask();              \
-        event.reset();                    \
         return ExecTaskStatus::CANCELLED; \
     }
 
@@ -32,9 +49,8 @@ namespace DB
     catch (...)                                                 \
     {                                                           \
         op_executor.reset();                                    \
+        assert(event);                                          \
         event->toError(getCurrentExceptionMessage(true, true)); \
-        event->finishTask();                                    \
-        event.reset();                                          \
         return ExecTaskStatus::ERROR;                           \
     }
 
@@ -42,8 +58,6 @@ namespace DB
     case OperatorStatus::FINISHED:       \
     {                                    \
         op_executor.reset();             \
-        event->finishTask();             \
-        event.reset();                   \
         return ExecTaskStatus::FINISHED; \
     }
 
@@ -52,6 +66,7 @@ ExecTaskStatus PipelineTask::executeImpl()
     HANDLE_CANCELLED
     try
     {
+        assert(op_executor);
         auto op_status = op_executor->execute();
         switch (op_status)
         {
@@ -75,6 +90,7 @@ ExecTaskStatus PipelineTask::awaitImpl()
     HANDLE_CANCELLED
     try
     {
+        assert(op_executor);
         auto op_status = op_executor->await();
         switch (op_status)
         {
@@ -95,6 +111,7 @@ ExecTaskStatus PipelineTask::spillImpl()
     HANDLE_CANCELLED
     try
     {
+        assert(op_executor);
         auto op_status = op_executor->spill();
         switch (op_status)
         {

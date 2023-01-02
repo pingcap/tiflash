@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Pipeline/TaskHelper.h>
 #include <Flash/Pipeline/TaskScheduler.h>
 #include <assert.h>
 #include <common/likely.h>
@@ -51,9 +52,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
         case ExecTaskStatus::RUNNING:
             running_tasks.push_back(std::move(task));
             break;
-        case ExecTaskStatus::FINISHED:
-        case ExecTaskStatus::ERROR:
-        case ExecTaskStatus::CANCELLED:
+        case FINISH_STATUS:
             task.reset();
             break;
         default:

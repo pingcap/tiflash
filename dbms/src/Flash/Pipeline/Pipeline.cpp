@@ -19,6 +19,7 @@
 #include <Flash/Pipeline/PipelineCompleteEvent.h>
 #include <Flash/Pipeline/PipelineEvent.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Operators/OperatorBuilder.h>
 #include <tipb/select.pb.h>

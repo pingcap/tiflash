@@ -66,7 +66,7 @@ void FIFOTaskQueue::submit(TaskPtr && task)
 
 void FIFOTaskQueue::submit(std::vector<TaskPtr> & tasks)
 {
-    if (unlikely(tasks.empty()))
+    if (tasks.empty())
         return;
 
     std::lock_guard lock(mu);

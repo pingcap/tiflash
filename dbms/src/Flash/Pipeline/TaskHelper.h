@@ -30,4 +30,8 @@ namespace DB
 #define FINISH_STATUS \
     ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
 
+#define ASSERT_MEMORY_TRACKER                  \
+    assert(nullptr == current_memory_tracker); \
+    assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
+
 } // namespace DB

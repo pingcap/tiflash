@@ -21,10 +21,8 @@
 
 namespace DB::tests
 {
-class TaskQueueTestRunner : public ::testing::Test
+namespace
 {
-};
-
 class IndexTask : public Task
 {
 public:
@@ -36,6 +34,11 @@ public:
     ExecTaskStatus executeImpl() override { return ExecTaskStatus::FINISHED; }
 
     size_t index;
+};
+} // namespace
+
+class TaskQueueTestRunner : public ::testing::Test
+{
 };
 
 TEST_F(TaskQueueTestRunner, fifo)

@@ -89,9 +89,9 @@ protected:
 private:
     std::vector<EventPtr> next_events;
 
-    std::atomic_int64_t unfinished_dependencies{0};
+    std::atomic_int32_t unfinished_dependencies{0};
 
-    std::atomic_int64_t unfinished_tasks{0};
+    std::atomic_int32_t unfinished_tasks{0};
 
     std::atomic<EventStatus> status{EventStatus::INIT};
 };

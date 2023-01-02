@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
-#include <Flash/Planner/PhysicalPlanNode.h>
 #include <Operators/OperatorExecutor.h>
 
 #include <deque>
@@ -36,7 +35,10 @@ class Event;
 using EventPtr = std::shared_ptr<Event>;
 using Events = std::vector<EventPtr>;
 
-struct PipelineExecStatus;
+class PhysicalPlanNode;
+using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
+
+class PipelineExecStatus;
 
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {

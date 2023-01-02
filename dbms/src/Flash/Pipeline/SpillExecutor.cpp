@@ -68,15 +68,18 @@ void SpillExecutor::handleTask(TaskPtr && task)
 
 void SpillExecutor::loop()
 {
-    assert(nullptr == current_memory_tracker);
     setThreadName("SpillExecutor");
     LOG_INFO(logger, "start spill executor loop");
+    ASSERT_MEMORY_TRACKER
+
     TaskPtr task;
     while (likely(task_queue->take(task)))
     {
         handleTask(std::move(task));
         assert(!task);
+        ASSERT_MEMORY_TRACKER
     }
+
     LOG_INFO(logger, "spill executor loop finished");
 }
 

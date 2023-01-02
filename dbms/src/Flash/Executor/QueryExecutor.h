@@ -14,36 +14,14 @@
 
 #pragma once
 
+#include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <common/types.h>
 
 #include <memory>
-#include <utility>
 
 namespace DB
 {
-struct ExecutionResult
-{
-    bool is_success;
-    String err_msg;
-
-    void verify()
-    {
-        RUNTIME_CHECK(is_success, err_msg);
-    }
-
-    static ExecutionResult success()
-    {
-        return {true, ""};
-    }
-
-    static ExecutionResult fail(const String & err_msg)
-    {
-        RUNTIME_CHECK(!err_msg.empty());
-        return {false, err_msg};
-    }
-};
-
 class ProcessListEntry;
 using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
 

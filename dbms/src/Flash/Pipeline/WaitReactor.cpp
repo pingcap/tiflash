@@ -26,37 +26,57 @@ namespace DB
 {
 namespace
 {
-// return true if the task is not in waiting status.
-bool handle(std::vector<TaskPtr> & ready_tasks, TaskPtr && task)
-{
-    assert(task);
-    TRACE_MEMORY(task);
-    auto status = task->await();
-    switch (status)
-    {
-    case ExecTaskStatus::WAITING:
-        return false;
-    case ExecTaskStatus::RUNNING:
-        ready_tasks.push_back(std::move(task));
-        return true;
-    case FINISH_STATUS:
-        task.reset();
-        return true;
-    default:
-        __builtin_unreachable();
-    }
-}
-
 class Spinner
 {
 public:
+    explicit Spinner(TaskExecutor & task_executor_)
+        : task_executor(task_executor_)
+    {}
+
+    // return true if the task is not in waiting status.
+    bool await(TaskPtr && task)
+    {
+        assert(task);
+        TRACE_MEMORY(task);
+        auto status = task->await();
+        switch (status)
+        {
+        case ExecTaskStatus::WAITING:
+            return false;
+        case ExecTaskStatus::RUNNING:
+            ready_tasks.push_back(std::move(task));
+            return true;
+        case FINISH_STATUS:
+            task.reset();
+            return true;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    void submitAndTryYield()
+    {
+        if (ready_tasks.empty())
+        {
+            tryYield();
+        }
+        else
+        {
+            task_executor.submit(ready_tasks);
+            reset();
+        }
+    }
+
+private:
     void reset()
     {
+        ready_tasks.clear();
         spin_count = 0;
     }
 
     void tryYield()
     {
+        assert(ready_tasks.empty());
         ++spin_count;
 
         if (spin_count != 0 && spin_count % 64 == 0)
@@ -76,7 +96,11 @@ public:
     }
 
 private:
+    TaskExecutor & task_executor;
+
     int16_t spin_count = 0;
+
+    std::vector<TaskPtr> ready_tasks;
 };
 } // namespace
 
@@ -143,36 +167,25 @@ bool WaitReactor::take(std::list<TaskPtr> & local_waiting_tasks)
 
 void WaitReactor::loop()
 {
-    assert(nullptr == current_memory_tracker);
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");
+    ASSERT_MEMORY_TRACKER
 
-    Spinner spinner;
+    Spinner spinner{scheduler.task_executor};
     std::list<TaskPtr> local_waiting_tasks;
-    std::vector<TaskPtr> ready_tasks;
     while (likely(take(local_waiting_tasks)))
     {
-        assert(ready_tasks.empty());
-
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
         {
-            if (handle(ready_tasks, std::move(*task_it)))
+            if (spinner.await(std::move(*task_it)))
                 task_it = local_waiting_tasks.erase(task_it);
             else
                 ++task_it;
+            ASSERT_MEMORY_TRACKER
         }
 
-        if (ready_tasks.empty())
-        {
-            spinner.tryYield();
-        }
-        else
-        {
-            scheduler.task_executor.submit(ready_tasks);
-            ready_tasks.clear();
-            spinner.reset();
-        }
+        spinner.submitAndTryYield();
     }
 
     LOG_INFO(logger, "wait reactor loop finished");

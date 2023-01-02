@@ -31,10 +31,16 @@ public:
         , counter(counter_)
     {}
 
+    ~BaseTask()
+    {
+        event->finishTask();
+        event.reset();
+    }
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         --counter;
-        event->finishTask();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -88,11 +94,17 @@ public:
         , event(event_)
     {}
 
+    ~RunTask()
+    {
+        event->finishTask();
+        event.reset();
+    }
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
-        event->finishTask();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -146,11 +158,17 @@ public:
         , event(event_)
     {}
 
+    ~WaitCancelTask()
+    {
+        event->finishTask();
+        event.reset();
+    }
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         while (!event->isCancelled())
             return ExecTaskStatus::RUNNING;
-        event->finishTask();
         return ExecTaskStatus::CANCELLED;
     }
 
@@ -227,9 +245,38 @@ protected:
 class EventTestRunner : public ::testing::Test
 {
 public:
-    static constexpr size_t thread_num = 5;
+    void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
+    {
+        Events non_dependent_events;
+        for (const auto & event : events)
+        {
+            if (event->isNonDependent())
+                non_dependent_events.push_back(event);
+        }
+        for (const auto & event : non_dependent_events)
+        {
+            if (thread_manager)
+                thread_manager->schedule(false, "event", [event]() { event->schedule(); });
+            else
+                event->schedule();
+        }
+    }
+
+    void wait(PipelineExecStatus & exec_status)
+    {
+        std::chrono::seconds timeout(15);
+        exec_status.waitFor(timeout);
+    }
+
+    void assertNoErr(PipelineExecStatus & exec_status)
+    {
+        auto err_msg = exec_status.getErrMsg();
+        ASSERT_TRUE(err_msg.empty()) << err_msg;
+    }
 
 protected:
+    static constexpr size_t thread_num = 5;
+
     void SetUp() override
     {
         TaskSchedulerConfig config{thread_num, thread_num};
@@ -247,54 +294,42 @@ protected:
 TEST_F(EventTestRunner, base)
 try
 {
-    auto do_test = [](size_t event_num) {
-        assert(event_num > 0);
-        // BaseEvent::finalizeFinish + BaseEvent::task_num * BaseTask::executeImpl
+    for (size_t event_num = 1; event_num < 200; ++event_num)
+    {
+        // BaseEvent::finalizeFinish + BaseEvent::task_num * ~BaseTask()
         std::atomic_int64_t counter{static_cast<int64_t>(event_num * (1 + BaseEvent::task_num))};
         PipelineExecStatus exec_status;
-        EventPtr start_event;
-        EventPtr cur_event;
-        for (size_t i = 0; i < event_num; ++i)
         {
-            auto event = std::make_shared<BaseEvent>(exec_status, counter);
-            if (cur_event)
-                event->addDependency(cur_event);
-            cur_event = event;
-            if (!start_event)
-                start_event = event;
+            std::vector<EventPtr> events;
+            for (size_t i = 0; i < event_num; ++i)
+            {
+                auto event = std::make_shared<BaseEvent>(exec_status, counter);
+                if (!events.empty())
+                    event->addDependency(events.back());
+                events.push_back(event);
+            }
+            schedule(events);
         }
-        cur_event.reset();
-        assert(start_event);
-        start_event->schedule();
-        std::chrono::seconds timeout(15);
-        exec_status.waitFor(timeout);
+        wait(exec_status);
         ASSERT_TRUE(0 == counter);
-        auto err_msg = exec_status.getErrMsg();
-        ASSERT_TRUE(err_msg.empty()) << err_msg;
-    };
-    for (size_t i = 1; i < 200; ++i)
-        do_test(i);
+        assertNoErr(exec_status);
+    }
 }
 CATCH
 
 TEST_F(EventTestRunner, run)
 try
 {
-    auto do_test = [](bool with_tasks, size_t event_num) {
+    auto do_test = [&](bool with_tasks, size_t event_num) {
         PipelineExecStatus exec_status;
-        std::vector<EventPtr> events;
-        for (size_t i = 0; i < event_num; ++i)
         {
-            auto event = std::make_shared<RunEvent>(exec_status, with_tasks);
-            assert(event->isNonDependent());
-            events.push_back(event);
+            std::vector<EventPtr> events;
+            for (size_t i = 0; i < event_num; ++i)
+                events.push_back(std::make_shared<RunEvent>(exec_status, with_tasks));
+            schedule(events);
         }
-        for (auto event : events)
-            event->schedule();
-        std::chrono::seconds timeout(15);
-        exec_status.waitFor(timeout);
-        auto err_msg = exec_status.getErrMsg();
-        ASSERT_TRUE(err_msg.empty()) << err_msg;
+        wait(exec_status);
+        assertNoErr(exec_status);
     };
     for (size_t i = 1; i < 100; i += 7)
     {
@@ -307,39 +342,25 @@ CATCH
 TEST_F(EventTestRunner, cancel)
 try
 {
-    auto do_test = [](bool with_tasks, size_t event_batch_num) {
+    auto do_test = [&](bool with_tasks, size_t event_batch_num) {
         PipelineExecStatus exec_status;
         auto thread_manager = newThreadManager();
         {
-            std::vector<EventPtr> wait_cancel_events;
+            std::vector<EventPtr> events;
             for (size_t i = 0; i < event_batch_num; ++i)
             {
                 auto wait_cancel_event = std::make_shared<WaitCancelEvent>(exec_status, with_tasks);
+                events.push_back(wait_cancel_event);
                 // Expected to_err_event will not be triggered.
                 auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
                 to_err_event->addDependency(wait_cancel_event);
-                assert(wait_cancel_event->isNonDependent() && !to_err_event->isNonDependent());
-                wait_cancel_events.push_back(wait_cancel_event);
+                events.push_back(to_err_event);
             }
-
-            if (with_tasks)
-            {
-                for (auto wait_cancel_event : wait_cancel_events)
-                    wait_cancel_event->schedule();
-            }
-            else
-            {
-                for (auto wait_cancel_event : wait_cancel_events)
-                    thread_manager->schedule(false, "cancel event", [wait_cancel_event]() { wait_cancel_event->schedule(); });
-            }
+            schedule(events, with_tasks ? nullptr : thread_manager);
         }
-        // To make sure that all event/task has been scheduled.
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
         exec_status.cancel();
-        std::chrono::seconds timeout(15);
-        exec_status.waitFor(timeout);
-        auto err_msg = exec_status.getErrMsg();
-        ASSERT_TRUE(err_msg.empty()) << err_msg;
+        wait(exec_status);
+        assertNoErr(exec_status);
         thread_manager->wait();
     };
     for (size_t i = 1; i < 100; i += 7)
@@ -353,38 +374,21 @@ CATCH
 TEST_F(EventTestRunner, err)
 try
 {
-    auto do_test = [](bool with_tasks, size_t wait_cancel_event_num) {
+    auto do_test = [&](bool with_tasks, size_t wait_cancel_event_num) {
         PipelineExecStatus exec_status;
         auto thread_manager = newThreadManager();
         {
-            std::vector<EventPtr> wait_cancel_events;
+            std::vector<EventPtr> events;
             for (size_t i = 0; i < wait_cancel_event_num; ++i)
-            {
-                auto wait_cancel_event = std::make_shared<WaitCancelEvent>(exec_status, with_tasks);
-                assert(wait_cancel_event->isNonDependent());
-                wait_cancel_events.push_back(wait_cancel_event);
-            }
-
-            if (with_tasks)
-            {
-                for (auto wait_cancel_event : wait_cancel_events)
-                    wait_cancel_event->schedule();
-            }
-            else
-            {
-                for (auto wait_cancel_event : wait_cancel_events)
-                    thread_manager->schedule(false, "cancel event", [wait_cancel_event]() { wait_cancel_event->schedule(); });
-            }
+                events.push_back(std::make_shared<WaitCancelEvent>(exec_status, with_tasks));
+            schedule(events, with_tasks ? nullptr : thread_manager);
         }
-        // To make sure that all event/task has been scheduled.
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
         {
             auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
             assert(to_err_event->isNonDependent());
             to_err_event->schedule();
         }
-        std::chrono::seconds timeout(15);
-        exec_status.waitFor(timeout);
+        wait(exec_status);
         auto err_msg = exec_status.getErrMsg();
         ASSERT_EQ(err_msg, ToErrEvent::err_msg) << err_msg;
         thread_manager->wait();

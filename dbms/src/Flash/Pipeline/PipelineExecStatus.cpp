@@ -17,13 +17,21 @@
 
 namespace DB
 {
-std::string PipelineExecStatus::getErrMsg()
+ExecutionResult PipelineExecStatus::toExecutionResult()
+{
+    auto get_err_msg = getErrMsg();
+    return get_err_msg.empty()
+        ? ExecutionResult::success()
+        : ExecutionResult::fail(get_err_msg);
+}
+
+String PipelineExecStatus::getErrMsg()
 {
     std::lock_guard lock(mu);
     return err_msg;
 }
 
-void PipelineExecStatus::toError(std::string && err_msg_)
+void PipelineExecStatus::toError(String && err_msg_)
 {
     {
         std::lock_guard lock(mu);

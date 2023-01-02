@@ -14,33 +14,30 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Task.h>
-#include <Operators/OperatorExecutor.h>
+#include <Common/Exception.h>
+#include <common/types.h>
 
 namespace DB
 {
-class Event;
-using EventPtr = std::shared_ptr<Event>;
-
-class PipelineTask : public Task
+struct ExecutionResult
 {
-public:
-    PipelineTask(
-        MemoryTrackerPtr mem_tracker_,
-        const EventPtr & event_,
-        OperatorExecutorPtr && op_executor_);
+    bool is_success;
+    String err_msg;
 
-    ~PipelineTask();
+    void verify()
+    {
+        RUNTIME_CHECK(is_success, err_msg);
+    }
 
-protected:
-    ExecTaskStatus executeImpl() override;
+    static ExecutionResult success()
+    {
+        return {true, ""};
+    }
 
-    ExecTaskStatus awaitImpl() override;
-
-    ExecTaskStatus spillImpl() override;
-
-private:
-    EventPtr event;
-    OperatorExecutorPtr op_executor;
+    static ExecutionResult fail(const String & err_msg)
+    {
+        RUNTIME_CHECK(!err_msg.empty());
+        return {false, err_msg};
+    }
 };
 } // namespace DB

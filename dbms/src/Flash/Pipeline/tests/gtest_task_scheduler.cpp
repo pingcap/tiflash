@@ -59,11 +59,16 @@ public:
         , waiter(waiter_)
     {}
 
+    ~SimpleTask()
+    {
+        waiter.notify();
+    }
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
-        waiter.notify();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -80,6 +85,12 @@ public:
         , waiter(waiter_)
     {}
 
+    ~SimpleWaitingTask()
+    {
+        waiter.notify();
+    }
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         if (loop_count > 0)
@@ -92,7 +103,6 @@ public:
                 return ExecTaskStatus::RUNNING;
             }
         }
-        waiter.notify();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -108,7 +118,6 @@ public:
             else
                 return ExecTaskStatus::RUNNING;
         }
-        waiter.notify();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -125,6 +134,12 @@ public:
         , waiter(waiter_)
     {}
 
+    ~SimpleSpillingTask()
+    {
+        waiter.notify();
+    }
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         if (loop_count > 0)
@@ -137,7 +152,6 @@ public:
                 return ExecTaskStatus::RUNNING;
             }
         }
-        waiter.notify();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -153,7 +167,6 @@ public:
             else
                 return ExecTaskStatus::RUNNING;
         }
-        waiter.notify();
         return ExecTaskStatus::FINISHED;
     }
 
@@ -177,6 +190,15 @@ public:
         , waiter(waiter_)
     {}
 
+    ~MemoryTraceTask()
+    {
+        waiter.notify();
+    }
+
+    // From CurrentMemoryTracker::MEMORY_TRACER_SUBMIT_THRESHOLD
+    static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
+
+protected:
     ExecTaskStatus executeImpl() override
     {
         switch (status)
@@ -190,8 +212,7 @@ public:
         case TraceTaskStatus::spilling:
         {
             status = TraceTaskStatus::running;
-            CurrentMemoryTracker::alloc(10);
-            waiter.notify();
+            CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
             return ExecTaskStatus::FINISHED;
         }
         default:
@@ -202,14 +223,14 @@ public:
     ExecTaskStatus spillImpl() override
     {
         assert(status == TraceTaskStatus::spilling);
-        CurrentMemoryTracker::alloc(10);
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
         return ExecTaskStatus::RUNNING;
     }
 
     ExecTaskStatus awaitImpl() override
     {
         if (status == TraceTaskStatus::waiting)
-            CurrentMemoryTracker::alloc(10);
+            CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
         return ExecTaskStatus::RUNNING;
     }
 
@@ -223,6 +244,14 @@ class TaskSchedulerTestRunner : public ::testing::Test
 {
 public:
     static constexpr size_t thread_num = 5;
+
+    void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
+    {
+        TaskSchedulerConfig config{thread_num, thread_num};
+        TaskScheduler task_scheduler{config};
+        task_scheduler.submit(tasks);
+        waiter.wait();
+    }
 };
 
 TEST_F(TaskSchedulerTestRunner, shutdown)
@@ -249,10 +278,7 @@ try
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleTask>(waiter));
-        TaskSchedulerConfig config{thread_num, thread_num};
-        TaskScheduler task_scheduler{config};
-        task_scheduler.submit(tasks);
-        waiter.wait();
+        submitAndWait(tasks, waiter);
     }
 }
 CATCH
@@ -266,10 +292,7 @@ try
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
-        TaskSchedulerConfig config{thread_num, thread_num};
-        TaskScheduler task_scheduler{config};
-        task_scheduler.submit(tasks);
-        waiter.wait();
+        submitAndWait(tasks, waiter);
     }
 }
 CATCH
@@ -283,10 +306,7 @@ try
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleSpillingTask>(waiter));
-        TaskSchedulerConfig config{thread_num, thread_num};
-        TaskScheduler task_scheduler{config};
-        task_scheduler.submit(tasks);
-        waiter.wait();
+        submitAndWait(tasks, waiter);
     }
 }
 CATCH
@@ -296,16 +316,13 @@ try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        Waiter waiter(task_num);
         auto tracker = MemoryTracker::create();
+        MemoryTrackerSetter memory_tracker_setter{true, tracker.get()};
+        Waiter waiter(task_num);
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<MemoryTraceTask>(tracker, waiter));
-        TaskSchedulerConfig config{thread_num, thread_num};
-        TaskScheduler task_scheduler{config};
-        MemoryTrackerSetter memory_tracker_setter{true, tracker.get()};
-        task_scheduler.submit(tasks);
-        waiter.wait();
+        submitAndWait(tasks, waiter);
         // The value of the memory tracer is not checked here because of `std::memory_order_relaxed`.
     }
 }
