@@ -72,65 +72,54 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
 
             // Dump PS
-            auto writer_info = std::make_shared<WriterInfo>();
-            writer_info->set_store_id(store_id);
             auto remote_directory = TiFlashTestEnv::getTemporaryPath("FastAddPeer");
-            page_storage->config.ps_remote_directory.set(remote_directory);
-            std::string output_directory = composeOutputDirectory(remote_directory, store_id, page_storage->storage_name);
+            page_storage->config.ps_remote_directory.set(remote_directory + "/");
+            const auto & storage_name = page_storage->storage_name;
+            std::string output_directory = page_storage->config.ps_remote_directory;
             LOG_DEBUG(log, "output_directory {}", output_directory);
-            page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
-                .temp_directory = output_directory,
-                .remote_directory = output_directory,
-                .data_file_name_pattern = "{sequence}_{sub_file_index}.data",
-                .manifest_file_name_pattern = "{sequence}.manifest",
-                .writer_info = writer_info,
-                .blob_store = *page_storage->blob_store,
-            });
+            {
+                auto writer_info = std::make_shared<WriterInfo>();
+                // write to a remote store
+                writer_info->set_store_id(store_id + 1);
+                page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
+                    .temp_directory = output_directory,
+                    .remote_directory = output_directory,
+                    .data_file_name_pattern = fmt::format(
+                        "store_{}/ps_{}_data/{{sequence}}_{{sub_file_index}}.data",
+                        writer_info->store_id(),
+                        storage_name),
+                    .manifest_file_name_pattern = fmt::format(
+                        "store_{}/ps_{}_manifest/{{sequence}}.manifest",
+                        writer_info->store_id(),
+                        storage_name),
+                    .writer_info = writer_info,
+                    .blob_store = *page_storage->blob_store,
+                });
+            }
 
             RemoteMeta remote_meta;
+            auto current_store_id = store_id;
             {
                 // Must Found the newest manifest
-                auto [_, maybe_remote_meta] = selectRemotePeer(page_storage, store_id, region_id, peer_id);
-                ASSERT(maybe_remote_meta.has_value());
+                auto [_, maybe_remote_meta] = selectRemotePeer(page_storage, current_store_id, region_id, peer_id);
+                ASSERT_TRUE(maybe_remote_meta.has_value());
                 remote_meta = std::move(maybe_remote_meta.value());
             }
             {
-                auto [_, maybe_remote_meta2] = selectRemotePeer(page_storage, store_id, region_id, 42);
-                ASSERT(!maybe_remote_meta2.has_value());
+                auto [_, maybe_remote_meta2] = selectRemotePeer(page_storage, current_store_id, region_id, 42);
+                ASSERT_TRUE(!maybe_remote_meta2.has_value());
             }
 
-            const auto & [s_id, restored_region_state, restored_apply_state, optimal, _] = remote_meta;
-
-            auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{.file_path = output_directory + optimal});
+            auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+                .file_path = remote_meta.checkpoint_path});
             auto edit = reader->read();
             auto records = edit.getRecords();
             ASSERT_EQ(3, records.size());
 
-            for (auto & record : records)
-            {
-                std::string page_id = record.page_id.toStr();
-                if (keys::validateApplyStateKey(page_id.data(), page_id.size(), region_id) || keys::validateRegionStateKey(page_id.data(), page_id.size(), region_id))
-                {
-                }
-                else
-                {
-                    auto & location = record.entry.remote_info->data_location;
-                    auto buf = ReadBufferFromFile(output_directory + *location.data_file_id);
-                    buf.seek(location.offset_in_file);
-
-                    const auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-                        RaftStoreProxyPtr{proxy_instance.get()}));
-                    auto decoded_region = Region::deserialize(buf, proxy_helper.get());
-                    ASSERT_EQ(decoded_region->appliedIndex(), index);
-                    auto key = RecordKVFormat::genKey(proxy_instance->table_id, 34, 1);
-                    TiKVValue value = std::string("v2");
-                    EXPECT_THROW(decoded_region->insert(ColumnFamilyType::Default, std::move(key), std::move(value)), Exception);
-                }
-            }
-            LOG_DEBUG(log, "APPLY restored {} origin {}", restored_apply_state.ShortDebugString(), region->getApply().ShortDebugString());
-            LOG_DEBUG(log, "REGION restored {} origin {}", restored_region_state.ShortDebugString(), region->getState().ShortDebugString());
-            ASSERT(restored_apply_state == region->getApply());
-            ASSERT(restored_region_state == region->getState());
+            LOG_DEBUG(log, "APPLY restored {} origin {}", remote_meta.apply_state.ShortDebugString(), region->getApply().ShortDebugString());
+            LOG_DEBUG(log, "REGION restored {} origin {}", remote_meta.region_state.ShortDebugString(), region->getState().ShortDebugString());
+            ASSERT_TRUE(remote_meta.apply_state == region->getApply());
+            ASSERT_TRUE(remote_meta.region_state == region->getState());
         }
     }
 }

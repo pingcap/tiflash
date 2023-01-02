@@ -200,6 +200,10 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
     if (auto source = table->get_qualified_as<String>("remote_source"); source)
     {
         remote_source = *source;
+        if (!endsWith(remote_source, "/"))
+        {
+            remote_source = remote_source + "/";
+        }
     }
 
 #ifndef NDEBUG

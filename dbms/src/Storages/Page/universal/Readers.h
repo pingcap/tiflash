@@ -151,7 +151,7 @@ public:
     {
         WriteBufferFromOwnString buff;
         writeChar(0x01, buff);
-        writeChar(0x03, buff);
+        writeChar(0x02, buff);
         // BigEndian
         UniversalPageIdFormat::encodeUInt64(region_id, buff);
         writeChar(0x03, buff);
