@@ -29,13 +29,14 @@ class TaskExecutor
 {
 public:
     TaskExecutor(TaskScheduler & scheduler_, size_t thread_num);
-    ~TaskExecutor();
+
+    void close();
+
+    void waitForStop();
 
     void submit(TaskPtr && task);
 
     void submit(std::vector<TaskPtr> & tasks);
-
-    void close();
 
 private:
     void loop();
@@ -43,12 +44,12 @@ private:
     void handleTask(TaskPtr & task);
 
 private:
-    TaskScheduler & scheduler;
-
-    std::vector<std::thread> threads;
-
     TaskQueuePtr task_queue = std::make_unique<FIFOTaskQueue>();
 
     LoggerPtr logger = Logger::get("TaskExecutor");
+
+    TaskScheduler & scheduler;
+
+    std::vector<std::thread> threads;
 };
 } // namespace DB

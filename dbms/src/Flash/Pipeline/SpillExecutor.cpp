@@ -33,11 +33,16 @@ SpillExecutor::SpillExecutor(TaskScheduler & scheduler_, size_t thread_num)
         threads.emplace_back(&SpillExecutor::loop, this);
 }
 
-SpillExecutor::~SpillExecutor()
+void SpillExecutor::close()
+{
+    task_queue->close();
+}
+
+void SpillExecutor::waitForStop()
 {
     for (auto & thread : threads)
         thread.join();
-    LOG_INFO(logger, "stop spill executor");
+    LOG_INFO(logger, "spill executor is stopped");
 }
 
 void SpillExecutor::submit(TaskPtr && task)
@@ -81,10 +86,5 @@ void SpillExecutor::loop()
     }
 
     LOG_INFO(logger, "spill executor loop finished");
-}
-
-void SpillExecutor::close()
-{
-    task_queue->close();
 }
 } // namespace DB

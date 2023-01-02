@@ -32,11 +32,16 @@ TaskExecutor::TaskExecutor(TaskScheduler & scheduler_, size_t thread_num)
         threads.emplace_back(&TaskExecutor::loop, this);
 }
 
-TaskExecutor::~TaskExecutor()
+void TaskExecutor::close()
+{
+    task_queue->close();
+}
+
+void TaskExecutor::waitForStop()
 {
     for (auto & thread : threads)
         thread.join();
-    LOG_INFO(logger, "stop task executor");
+    LOG_INFO(logger, "task executor is stopped");
 }
 
 void TaskExecutor::loop()
@@ -92,11 +97,6 @@ void TaskExecutor::handleTask(TaskPtr & task)
             __builtin_unreachable();
         }
     }
-}
-
-void TaskExecutor::close()
-{
-    task_queue->close();
 }
 
 void TaskExecutor::submit(TaskPtr && task)

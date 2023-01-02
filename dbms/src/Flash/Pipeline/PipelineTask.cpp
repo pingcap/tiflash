@@ -33,6 +33,7 @@ PipelineTask::PipelineTask(
 
 PipelineTask::~PipelineTask()
 {
+    op_executor.reset();
     assert(event);
     event->finishTask();
     event.reset();

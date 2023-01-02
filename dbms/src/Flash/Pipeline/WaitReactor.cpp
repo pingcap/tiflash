@@ -112,57 +112,23 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
 
 void WaitReactor::close()
 {
-    {
-        std::lock_guard lock(mu);
-        is_closed = true;
-    }
-    cv.notify_one();
+    wait_queue.close();
+}
+
+void WaitReactor::waitForStop()
+{
+    thread.join();
+    LOG_INFO(logger, "wait reactor is stopped");
 }
 
 void WaitReactor::submit(TaskPtr && task)
 {
-    assert(task);
-    {
-        std::lock_guard lock(mu);
-        waiting_tasks.emplace_back(std::move(task));
-    }
-    cv.notify_one();
+    wait_queue.submit(std::move(task));
 }
 
 void WaitReactor::submit(std::list<TaskPtr> & tasks)
 {
-    if (tasks.empty())
-        return;
-    {
-        std::lock_guard lock(mu);
-        waiting_tasks.splice(waiting_tasks.end(), tasks);
-    }
-    cv.notify_one();
-}
-
-WaitReactor::~WaitReactor()
-{
-    thread.join();
-    LOG_INFO(logger, "stop wait reactor loop");
-}
-
-bool WaitReactor::take(std::list<TaskPtr> & local_waiting_tasks)
-{
-    {
-        std::unique_lock lock(mu);
-        while (true)
-        {
-            if (unlikely(is_closed))
-                return false;
-            if (!waiting_tasks.empty() || !local_waiting_tasks.empty())
-                break;
-            cv.wait(lock);
-        }
-
-        local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
-    }
-    assert(!local_waiting_tasks.empty());
-    return true;
+    wait_queue.submit(tasks);
 }
 
 void WaitReactor::loop()
@@ -173,7 +139,7 @@ void WaitReactor::loop()
 
     Spinner spinner{scheduler.task_executor};
     std::list<TaskPtr> local_waiting_tasks;
-    while (likely(take(local_waiting_tasks)))
+    while (likely(wait_queue.take(local_waiting_tasks)))
     {
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())

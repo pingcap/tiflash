@@ -14,40 +14,29 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Flash/Pipeline/Task.h>
-#include <Flash/Pipeline/WaitQueue.h>
 
 #include <list>
-#include <thread>
+#include <mutex>
 
 namespace DB
 {
-class TaskScheduler;
-
-class WaitReactor
+class WaitQueue
 {
 public:
-    explicit WaitReactor(TaskScheduler & scheduler_);
-
-    void close();
-
-    void waitForStop();
+    // return false if the wait queue had been closed.
+    bool take(std::list<TaskPtr> & local_waiting_tasks);
 
     void submit(TaskPtr && task);
 
     void submit(std::list<TaskPtr> & tasks);
 
-private:
-    void loop();
+    void close();
 
 private:
-    WaitQueue wait_queue;
-
-    LoggerPtr logger = Logger::get("WaitReactor");
-
-    TaskScheduler & scheduler;
-
-    std::thread thread;
+    std::mutex mu;
+    std::condition_variable cv;
+    std::list<TaskPtr> waiting_tasks;
+    bool is_closed = false;
 };
 } // namespace DB

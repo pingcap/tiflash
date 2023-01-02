@@ -62,7 +62,7 @@ public:
     void close() override;
 
 private:
-    mutable std::mutex mu;
+    std::mutex mu;
     std::condition_variable cv;
     bool is_closed = false;
     std::deque<TaskPtr> task_queue;

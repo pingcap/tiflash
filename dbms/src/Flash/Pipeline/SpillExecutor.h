@@ -29,11 +29,12 @@ class SpillExecutor
 {
 public:
     SpillExecutor(TaskScheduler & scheduler_, size_t thread_num);
-    ~SpillExecutor();
-
-    void submit(TaskPtr && task);
 
     void close();
+
+    void waitForStop();
+
+    void submit(TaskPtr && task);
 
 private:
     void loop();
@@ -41,12 +42,12 @@ private:
     void handleTask(TaskPtr && task);
 
 private:
-    TaskScheduler & scheduler;
-
-    std::vector<std::thread> threads;
-
     TaskQueuePtr task_queue = std::make_unique<FIFOTaskQueue>();
 
     LoggerPtr logger = Logger::get("SpillExecutor");
+
+    TaskScheduler & scheduler;
+
+    std::vector<std::thread> threads;
 };
 } // namespace DB

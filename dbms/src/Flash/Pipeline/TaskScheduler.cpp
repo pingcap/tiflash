@@ -31,6 +31,10 @@ TaskScheduler::~TaskScheduler()
     task_executor.close();
     wait_reactor.close();
     spill_executor.close();
+
+    task_executor.waitForStop();
+    wait_reactor.waitForStop();
+    spill_executor.waitForStop();
 }
 
 void TaskScheduler::submit(std::vector<TaskPtr> & tasks)

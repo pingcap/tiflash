@@ -238,6 +238,47 @@ private:
     TraceTaskStatus status{TraceTaskStatus::initing};
     Waiter & waiter;
 };
+
+class DeadLoopTask : public Task
+{
+public:
+    DeadLoopTask()
+        : Task(nullptr)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override
+    {
+        switch (status)
+        {
+        case TraceTaskStatus::initing:
+            status = TraceTaskStatus::waiting;
+            return ExecTaskStatus::WAITING;
+        case TraceTaskStatus::waiting:
+            status = TraceTaskStatus::spilling;
+            return ExecTaskStatus::SPILLING;
+        case TraceTaskStatus::spilling:
+            status = TraceTaskStatus::waiting;
+            return ExecTaskStatus::WAITING;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    ExecTaskStatus spillImpl() override
+    {
+        assert(status == TraceTaskStatus::spilling);
+        return ExecTaskStatus::RUNNING;
+    }
+
+    ExecTaskStatus awaitImpl() override
+    {
+        return ExecTaskStatus::RUNNING;
+    }
+
+private:
+    TraceTaskStatus status{TraceTaskStatus::initing};
+};
 } // namespace
 
 class TaskSchedulerTestRunner : public ::testing::Test
@@ -253,21 +294,6 @@ public:
         waiter.wait();
     }
 };
-
-TEST_F(TaskSchedulerTestRunner, shutdown)
-try
-{
-    std::vector<size_t> thread_nums{1, 5, 10, 100};
-    for (auto task_executor_thread_num : thread_nums)
-    {
-        for (auto spill_executor_thread_num : thread_nums)
-        {
-            TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};
-            TaskScheduler task_scheduler{config};
-        }
-    }
-}
-CATCH
 
 TEST_F(TaskSchedulerTestRunner, simple_task)
 try
@@ -324,6 +350,30 @@ try
             tasks.push_back(std::make_unique<MemoryTraceTask>(tracker, waiter));
         submitAndWait(tasks, waiter);
         // The value of the memory tracer is not checked here because of `std::memory_order_relaxed`.
+    }
+}
+CATCH
+
+TEST_F(TaskSchedulerTestRunner, shutdown)
+try
+{
+    auto do_test = [](size_t task_executor_thread_num, size_t spill_executor_thread_num, size_t task_num) {
+        TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};
+        TaskScheduler task_scheduler{config};
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<DeadLoopTask>());
+        task_scheduler.submit(tasks);
+    };
+    std::vector<size_t> thread_nums{1, 5, 10, 100};
+    for (auto task_executor_thread_num : thread_nums)
+    {
+        for (auto spill_executor_thread_num : thread_nums)
+        {
+            std::vector<size_t> task_nums{0, 1, 5, 10, 100, 200};
+            for (auto task_num : task_nums)
+                do_test(task_executor_thread_num, spill_executor_thread_num, task_num);
+        }
     }
 }
 CATCH
