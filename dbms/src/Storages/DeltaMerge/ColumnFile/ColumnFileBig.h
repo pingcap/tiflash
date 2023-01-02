@@ -20,13 +20,17 @@
 
 namespace DB
 {
+namespace PS::V3
+{
+class CheckpointPageManager;
+using CheckpointPageManagerPtr = std::shared_ptr<CheckpointPageManager>;
+}
 namespace DM
 {
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class ColumnFileBig;
 using ColumnBigFilePtr = std::shared_ptr<ColumnFileBig>;
-
 
 /// A column file which contains a DMFile. The DMFile could have many Blocks.
 class ColumnFileBig : public ColumnFilePersisted
@@ -92,6 +96,14 @@ public:
     static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
+
+    static ColumnFilePersistedPtr deserializeMetadataFromRemote(DMContext & context, //
+                                                      const RowKeyRange & segment_range,
+                                                      ReadBuffer & buf,
+                                                    const PS::V3::CheckpointPageManagerPtr & manager,
+                                                    UInt64 checkpoint_store_id,
+                                                    TableID ns_id,
+                                                    WriteBatches & wbs);
 
     dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {

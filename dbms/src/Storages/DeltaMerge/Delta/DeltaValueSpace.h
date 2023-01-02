@@ -34,6 +34,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/Remote/CheckpointPageManager.h>
+#include <Storages/Page/V3/PageDirectory.h>
 
 namespace DB
 {
@@ -56,6 +58,8 @@ using DeltaIndexIterator = DeltaIndexCompacted::Iterator;
 struct DMContext;
 struct WriteBatches;
 class StoragePool;
+
+using PS::V3::universal::PageDirectoryTrait;
 
 class DeltaValueSpace
     : public std::enable_shared_from_this<DeltaValueSpace>
@@ -109,6 +113,15 @@ public:
     /// Restore the metadata of this instance.
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+
+    static DeltaValueSpacePtr restoreFromCheckpoint( //
+        DMContext & context,
+        const PS::V3::CheckpointPageManagerPtr & manager,
+        const PS::V3::CheckpointInfo & checkpoint_info,
+        const RowKeyRange & segment_range,
+        NamespaceId ns_id,
+        PageId delta_id,
+        WriteBatches & wbs);
 
     /**
      * Resets the logger by using the one from the segment.

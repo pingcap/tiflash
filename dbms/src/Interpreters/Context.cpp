@@ -63,6 +63,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/KVStore.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
@@ -119,7 +120,10 @@ struct UniversalPageStorageWrapper
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
+    BackgroundProcessingPool::TaskHandle checkpoint_handle;
+
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
+    std::atomic<Timepoint> last_checkpoint_time = Clock::now();
 
     void restore()
     {
@@ -129,18 +133,50 @@ struct UniversalPageStorageWrapper
                 return this->gc();
             },
             false,
-            /*interval_ms*/ 60 * 1000);
+            /*interval_ms*/ 30 * 1000);
+
+        checkpoint_handle = global_context.getBackgroundPool().addTask(
+            [this] {
+                this->doCheckpoint();
+                return false;
+            },
+            false,
+            /* interval_ms */ 10 * 1000);
     }
 
     bool gc()
     {
         Timepoint now = Clock::now();
-        const std::chrono::seconds try_gc_period(60);
+        const std::chrono::seconds try_gc_period(30);
         if (now < (last_try_gc_time.load() + try_gc_period))
             return false;
 
         last_try_gc_time = now;
         return this->uni_page_storage->gc();
+    }
+
+    void doCheckpoint()
+    {
+        Timepoint now = Clock::now();
+        if (now < (last_checkpoint_time.load() + Seconds(10)))
+            return;
+
+        last_checkpoint_time = now;
+
+        auto wi = std::make_shared<PS::V3::Remote::WriterInfo>();
+        auto store_info = global_context.getTMTContext().getKVStore()->getStoreMeta();
+        if (store_info.id() == 0)
+        {
+            LOG_INFO(Logger::get(), "Skip checkpoint because store meta is not initialized");
+            return;
+        }
+
+        wi->set_store_id(store_info.id());
+        wi->set_version(store_info.version());
+        wi->set_version_git(store_info.git_hash());
+        wi->set_start_at_ms(store_info.start_timestamp() * 1000); // TODO: Check whether * 1000 is correct..
+
+        uni_page_storage->doCheckpoint(wi);
     }
 
     ~UniversalPageStorageWrapper()
@@ -149,6 +185,11 @@ struct UniversalPageStorageWrapper
         {
             global_context.getBackgroundPool().removeTask(gc_handle);
             gc_handle = nullptr;
+        }
+        if (checkpoint_handle)
+        {
+            global_context.getBackgroundPool().removeTask(checkpoint_handle);
+            checkpoint_handle = nullptr;
         }
     }
 };
@@ -1713,7 +1754,13 @@ void Context::initializeWriteNodePageStorage(const PathPool & path_pool, const F
     }
 
     shared->ps_write = std::make_shared<UniversalPageStorageWrapper>(*this);
-    shared->ps_write->uni_page_storage = UniversalPageStorage::create("write", path_pool.getPSDiskDelegatorGlobalMulti("write"), {}, file_provider);
+    PageStorageConfig config;
+    config.ps_remote_directory = remoteDataServiceSource();
+    shared->ps_write->uni_page_storage = UniversalPageStorage::create( //
+        "write",
+        path_pool.getPSDiskDelegatorGlobalMulti("write"),
+        config,
+        file_provider);
     shared->ps_write->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
 }
@@ -1754,13 +1801,27 @@ DM::Remote::ManagerPtr Context::getDMRemoteManager() const
 UniversalPageStoragePtr Context::getWriteNodePageStorage() const
 {
     auto lock = getLock();
-    return shared->ps_write->uni_page_storage;
+    if (shared->ps_write)
+    {
+        return shared->ps_write->uni_page_storage;
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UniversalPageStoragePtr Context::getReadNodePageStorage() const
 {
     auto lock = getLock();
-    return shared->ps_read->uni_page_storage;
+    if (shared->ps_read)
+    {
+        return shared->ps_read->uni_page_storage;
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UInt16 Context::getTCPPort() const

@@ -114,7 +114,7 @@ namespace DB
         F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                           \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
-        F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}))                                               \
+        F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}), F(type_ingest_checkpoint, {"type", "ingest_check_point"}))                                               \
     M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter,                                                       \
         F(type_delta_merge_bg, {"type", "delta_merge_bg"}),                                                                               \
         F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                                                                         \

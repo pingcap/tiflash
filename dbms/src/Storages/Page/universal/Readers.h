@@ -87,9 +87,8 @@ public:
         : uni_storage(storage)
     {}
 
-    static UniversalPageId toFullPageId(NamespaceId ns_id, PageId page_id)
+    static UniversalPageId toFullPageId(UInt64 ns_id, PageId page_id)
     {
-        // TODO: Does it need to be mem comparable?
         WriteBufferFromOwnString buff;
         writeString("r_", buff);
         UniversalPageIdFormat::encodeUInt64(ns_id, buff);
@@ -99,8 +98,20 @@ public:
         // return fmt::format("r_{}_{}", ns_id, page_id);
     }
 
+    // 0x01 0x02 region_id 0x01
+    static UniversalPageId toFullRaftLogPrefix(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        // BigEndian
+        UniversalPageIdFormat::encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     // 0x01 0x02 region_id 0x01 log_idx
-    static UniversalPageId toFullRaftLogKey(NamespaceId region_id, PageId log_index)
+    static UniversalPageId toFullRaftLogKey(UInt64 region_id, PageId log_index)
     {
         WriteBufferFromOwnString buff;
         writeChar(0x01, buff);
@@ -113,7 +124,7 @@ public:
     }
 
     // 0x01 0x03 region_id
-    static UniversalPageId toRegionMetaPrefixKey(NamespaceId region_id)
+    static UniversalPageId toRegionMetaPrefixKey(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
         writeChar(0x01, buff);
@@ -124,7 +135,7 @@ public:
     }
 
     // 0x01 0x03 region_id 0x01
-    static UniversalPageId toRegionMetaKey(NamespaceId region_id)
+    static UniversalPageId toRegionLocalStateKey(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
         writeChar(0x01, buff);
@@ -132,6 +143,18 @@ public:
         // BigEndian
         UniversalPageIdFormat::encodeUInt64(region_id, buff);
         writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
+    // 0x01 0x02 region_id 0x03
+    static UniversalPageId toRegionApplyStateKey(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        // BigEndian
+        UniversalPageIdFormat::encodeUInt64(region_id, buff);
+        writeChar(0x03, buff);
         return buff.releaseStr();
     }
 
@@ -189,6 +212,11 @@ public:
         UniversalPageIdFormat::encodeUInt64(ns_id, buff);
         writeString("_", buff);
         return buff.releaseStr();
+    }
+
+    static UniversalPageId toFullUniversalPageId(const String & prefix, NamespaceId ns_id, PageId page_id)
+    {
+        return buildTableUniversalPageId(prefix, ns_id, page_id);
     }
 
     UniversalPageId toFullPageId(PageId page_id) const

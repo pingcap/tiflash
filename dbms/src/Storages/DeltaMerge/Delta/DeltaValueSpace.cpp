@@ -61,6 +61,19 @@ DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRan
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
+DeltaValueSpacePtr DeltaValueSpace::restoreFromCheckpoint( //
+    DMContext & context,
+    const PS::V3::CheckpointPageManagerPtr & manager,
+    const PS::V3::CheckpointInfo & checkpoint_info,
+    const RowKeyRange & segment_range,
+    NamespaceId ns_id,
+    PageId delta_id,
+    WriteBatches & wbs)
+{
+    auto persisted_file_set = ColumnFilePersistedSet::restoreFromCheckpoint(context, manager, checkpoint_info, segment_range, ns_id, delta_id, wbs);
+    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
+}
+
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
     persisted_file_set->saveMeta(wbs);

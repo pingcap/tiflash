@@ -17,8 +17,10 @@
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+#include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/Page/universal/Readers.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -189,19 +191,19 @@ TEST_F(UniPageStorageTest, Scan)
         UniversalWriteBatch wb;
         c_buff[0] = 10;
         c_buff[1] = 1;
-        wb.putPage(RaftLogReader::toRegionMetaKey(10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 4;
-        wb.putPage(RaftLogReader::toRegionMetaKey(15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 5;
-        wb.putPage(RaftLogReader::toRegionMetaKey(18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 6;
-        wb.putPage(RaftLogReader::toRegionMetaKey(20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 7;
-        wb.putPage(RaftLogReader::toRegionMetaKey(25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
 
         page_storage->write(std::move(wb));
     }
@@ -281,6 +283,27 @@ public:
         });
     }
 
+    UInt64 getLatestCheckpointSequence()
+    {
+        UInt64 latest_manifest_sequence = 0;
+        Poco::DirectoryIterator it(output_directory);
+        Poco::DirectoryIterator end;
+        while (it != end)
+        {
+            if (it->isFile())
+            {
+                const Poco::Path & file_path = it->path();
+                if (file_path.getExtension() == "manifest")
+                {
+                    auto current_manifest_sequence = UInt64(std::stoul(file_path.getBaseName()));
+                    latest_manifest_sequence = std::max(current_manifest_sequence, latest_manifest_sequence);
+                }
+            }
+            ++it;
+        }
+        return latest_manifest_sequence;
+    }
+
 protected:
     std::shared_ptr<V3::Remote::WriterInfo> writer_info;
     std::string output_directory;
@@ -358,6 +381,80 @@ try
     ASSERT_EQ("The flower carriage rocked", readData(iter->entry.remote_info->data_location));
 }
 CATCH
+
+// Note: if dump Checkpoint in json format, this test will fail.
+TEST_F(UniPageStorageRemoteCheckpointTest, FindKeyInCheckPoint)
+{
+    using namespace PS::V3;
+    using namespace PS::V3::Remote;
+    using namespace PS::V3::universal;
+
+    UInt64 tag = 0;
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(RaftLogReader::toFullPageId(10, 128), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    dumpCheckpoint();
+
+    UInt64 latest_manifest_sequence = getLatestCheckpointSequence();
+    ASSERT_TRUE(latest_manifest_sequence > 0);
+    auto checkpoint_path = output_directory + fmt::format("{}.manifest", latest_manifest_sequence);
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_path
+        });
+    auto manager = std::make_shared<CheckpointPageManager>(*reader, output_directory);
+    ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(10, 128)), RaftLogReader::toFullPageId(10, 128));
+}
+
+TEST_F(UniPageStorageRemoteCheckpointTest, ScanRaftlogWithPrefix)
+{
+    using namespace PS::V3;
+    using namespace PS::V3::Remote;
+    using namespace PS::V3::universal;
+
+    UInt64 tag = 0;
+    UInt64 region_id = 100;
+    size_t start_index = 100;
+    size_t end_index = 1000;
+    for (size_t i = start_index; i < end_index; i++)
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(RaftLogReader::toFullRaftLogKey(region_id, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toRegionLocalStateKey(region_id), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(RaftLogReader::toFullRaftLogKey(region_id + 1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(StorageReader::toFullUniversalPageId("t_d_", 100, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    dumpCheckpoint();
+
+    UInt64 latest_manifest_sequence = getLatestCheckpointSequence();
+    ASSERT_TRUE(latest_manifest_sequence > 0);
+    auto checkpoint_path = output_directory + fmt::format("{}.manifest", latest_manifest_sequence);
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_path
+        });
+    auto manager = std::make_shared<CheckpointPageManager>(*reader, output_directory);
+    {
+        auto all_raft_log_page = manager->getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region_id).toStr());
+        ASSERT_EQ(all_raft_log_page.size(), end_index - start_index);
+        UniversalPageId first_page_id, last_page_id;
+        std::tie(std::ignore, std::ignore, first_page_id) = all_raft_log_page[0];
+        std::tie(std::ignore, std::ignore, last_page_id) = all_raft_log_page.back();
+        ASSERT_EQ(first_page_id, RaftLogReader::toFullRaftLogKey(region_id, start_index));
+        ASSERT_EQ(last_page_id, RaftLogReader::toFullRaftLogKey(region_id, end_index - 1));
+    }
+}
 
 TEST_F(UniPageStorageRemoteCheckpointTest, ZeroSizedEntry)
 try

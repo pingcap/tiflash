@@ -319,6 +319,37 @@ void UniversalPageStorage::cleanExternalPage(Stopwatch & /* gc_watch */, GCTimeS
     }
 }
 
+void UniversalPageStorage::checkpointImpl(std::shared_ptr<const PS::V3::Remote::WriterInfo> writer_info, const std::string & remote_directory)
+{
+    if (writer_info->store_id() == 0)
+    {
+        LOG_INFO(log, "Skipped checkpoint because store_id == 0");
+        return;
+    }
+
+    LOG_INFO(log, "Start checkpoint, writer_store_id={}, remote_directory={}", writer_info->store_id(), remote_directory);
+
+    RUNTIME_CHECK(endsWith(remote_directory, "/"));
+
+    // TODO: The List API supports listing up to 1000 keys, not sure whether it would be a limit for us.
+    //   See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+    page_directory->dumpRemoteCheckpoint(PS::V3::PageDirectory<PS::V3::universal::PageDirectoryTrait>::DumpRemoteCheckpointOptions<PS::V3::universal::BlobStoreTrait>{
+        // FIXME: This is a hack. May be better to create a new delegator.
+        .temp_directory = delegator->choosePath({0, 0}) + "/checkpoint_temp/",
+        .remote_directory = remote_directory,
+        .data_file_name_pattern = fmt::format(
+            "store_{}/ps_{}_data/{{sequence}}_{{sub_file_index}}.data",
+            writer_info->store_id(),
+            storage_name),
+        .manifest_file_name_pattern = fmt::format(
+            "store_{}/ps_{}_manifest/{{sequence}}.manifest",
+            writer_info->store_id(),
+            storage_name),
+        .writer_info = writer_info,
+        .blob_store = *blob_store,
+    });
+}
+
 UniversalPageStorage::GCTimeStatistics UniversalPageStorage::doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     Stopwatch gc_watch;

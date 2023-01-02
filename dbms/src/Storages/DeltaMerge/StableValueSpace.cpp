@@ -24,6 +24,8 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/Page/universal/Readers.h>
+#include <Storages/Transaction/TMTContext.cpp>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -118,6 +120,91 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 
     stable->valid_rows = valid_rows;
     stable->valid_bytes = valid_bytes;
+
+    return stable;
+}
+
+StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
+    DMContext & context,
+    const PS::V3::CheckpointPageManagerPtr & manager,
+    const PS::V3::CheckpointInfo & checkpoint_info,
+    TableID ns_id,
+    PageId stable_id,
+    WriteBatches & wbs)
+{
+    auto & storage_pool = context.storage_pool;
+    auto new_stable_id = storage_pool->newMetaPageId();
+    auto stable = std::make_shared<StableValueSpace>(new_stable_id);
+
+    auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
+    auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
+    LOG_DEBUG(&Poco::Logger::get("StableValueSpace"), "checkpoint stable id {} buffer size {}", stable_id, buf_size);
+
+    UInt64 version, valid_rows, valid_bytes, size;
+    readIntBinary(version, *buf);
+    if (version != StableFormat::V1)
+        throw Exception("Unexpected version: " + DB::toString(version));
+
+    readIntBinary(valid_rows, *buf);
+    readIntBinary(valid_bytes, *buf);
+    readIntBinary(size, *buf);
+    UInt64 page_id;
+    for (size_t i = 0; i < size; ++i)
+    {
+        readIntBinary(page_id, *buf);
+        auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, page_id);
+        auto remote_orig_file_page_id = manager->getNormalPageId(remote_file_page_id).value();
+        auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
+        auto delegator = context.path_pool->getStableDiskDelegator();
+        auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        const auto & db_context = context.db_context;
+        wbs.data.putExternal(new_file_id, 0);
+        if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
+        {
+            // 1. link remote file
+            auto remote_oid = Remote::DMFileOID{
+                .write_node_id = checkpoint_info.checkpoint_store_id,
+                .table_id = ns_id,
+                .file_id = remote_file_id,
+            };
+            auto & tmt = db_context.getTMTContext();
+            UInt64 store_id = tmt.getKVStore()->getStoreMeta().id();
+            auto self_oid = Remote::DMFileOID{
+                .write_node_id = store_id,
+                .table_id = ns_id,
+                .file_id = new_file_id,
+            };
+            auto data_store = remote_manager->getDataStore();
+            data_store->linkDMFile(remote_oid, self_oid);
+
+            // 2. copy to local temporary path and set dmfile no gc
+            auto temporary_path = db_context.getTemporaryPath();
+            Poco::File(temporary_path).createDirectories();
+            data_store->copyDMFileToLocalPath(self_oid, temporary_path);
+            auto temp_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, temporary_path, DMFile::ReadMetaMode::none());
+            temp_dmfile->disableGC();
+
+            // 3. copy to storage data path, write file id to data ps and enable gc
+            auto parent_path = delegator.choosePath();
+            const auto local_path = DMFile::getPathByStatus(parent_path, new_file_id, DMFile::READABLE);
+            const auto temp_path = DMFile::getPathByStatus(temporary_path, new_file_id, DMFile::READABLE);
+            Poco::File(temp_path).moveTo(local_path);
+            auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
+            delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), parent_path);
+            wbs.writeLogAndData();
+            new_dmfile->enableGC();
+            stable->files.push_back(new_dmfile);
+        }
+        else
+        {
+            RUNTIME_CHECK_MSG(false, "Shouldn't reach here");
+        }
+    }
+
+    stable->valid_rows = valid_rows;
+    stable->valid_bytes = valid_bytes;
+
+    stable->saveMeta(wbs.meta);
 
     return stable;
 }

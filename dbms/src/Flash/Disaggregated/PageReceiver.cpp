@@ -106,7 +106,7 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
 }
 
 template <typename RPCContext>
-PageReceiverBase<RPCContext>::~PageReceivedMessage()
+PageReceiverBase<RPCContext>::~PageReceiverBase()
 {
     try
     {

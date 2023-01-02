@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -24,9 +26,17 @@ using raft_serverpb::RegionLocalState;
 
 namespace DB
 {
-using RemoteMeta = std::tuple<uint64_t, RegionLocalState, RaftApplyState, std::string>;
+struct RemoteMeta
+{
+    uint64_t remote_store_id;
+    RegionLocalState region_state;
+    RaftApplyState apply_state;
+    std::string checkpoint_path;
+    RegionPtr region;
+};
 
-std::optional<RemoteMeta> selectRemotePeer(UniversalPageStoragePtr, uint64_t region_id, uint64_t new_peer_id);
+// pair<can_retry, remote_meta>
+std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(UniversalPageStoragePtr, uint64_t current_store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper = nullptr);
 std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name);
-std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id);
+std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directory, const std::string & checkpoint_data_dir, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper = nullptr);
 } // namespace DB

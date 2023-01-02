@@ -595,6 +595,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
             {
                 // remove `curr_region` from this node, we can remove its data.
                 removeRegion(curr_region_id, /* remove_data */ true, region_table, task_lock, region_task_lock);
+                persist_and_sync(curr_region);
             }
             else
                 persist_and_sync(curr_region);

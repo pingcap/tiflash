@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <unistd.h>
+
+#include <Poco/Path.h>
+
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreNFS.h>
 
 namespace DB::DM::Remote
@@ -37,8 +41,43 @@ void DataStoreNFS::putDMFile(DMFilePtr local_dmf, const DMFileOID & oid)
     LOG_DEBUG(log, "Upload DMFile finished, oid={}", oid.info());
 }
 
+void DataStoreNFS::copyDMFileToLocalPath(const DMFileOID & remote_oid, const String & local_path)
+{
+    const auto remote_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(remote_oid), remote_oid.file_id, DMFile::READABLE);
+    auto remote_dmf_dir_poco = Poco::File(remote_dmf_dir);
+    if (!remote_dmf_dir_poco.exists())
+    {
+        LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be somethin wrong. oid={} remote={}", remote_oid.info(), remote_dmf_dir);
+    }
+    remote_dmf_dir_poco.copyTo(local_path);
+}
+
+void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & self_oid)
+{
+    const auto remote_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(remote_oid), remote_oid.file_id, DMFile::READABLE);
+    const auto self_dmf_parent_dir = buildDMFileParentPathInNFS(self_oid);
+    const auto self_dmf_dir = DMFile::getPathByStatus(self_dmf_parent_dir, self_oid.file_id, DMFile::READABLE);
+    auto remote_dmf_dir_poco = Poco::File(remote_dmf_dir);
+    if (!remote_dmf_dir_poco.exists())
+    {
+        LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be somethin wrong. oid={} remote={}", remote_oid.info(), remote_dmf_dir);
+    }
+    auto self_dmf_dir_poco = Poco::File(self_dmf_dir);
+    if (self_dmf_dir_poco.exists())
+    {
+        LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} remote={}", self_oid.info(), self_dmf_dir);
+        self_dmf_dir_poco.remove(true);
+    }
+    Poco::File(self_dmf_parent_dir).createDirectories();
+    if (symlink(remote_dmf_dir.c_str(), self_dmf_dir.c_str()) != 0)
+    {
+        throw Exception(fmt::format("Link from {} to {} failed.", remote_dmf_dir, self_dmf_dir), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFile(const DMFileOID & oid)
 {
+    // TODO: if remote_parent_path is a symlink, is there some extra work that need to be done?
     const auto remote_parent_path = buildDMFileParentPathInNFS(oid);
 
     LOG_DEBUG(log, "Download DMFile, oid={} remote_parent={} local_cache=(remote_parent)", oid.info(), remote_parent_path);

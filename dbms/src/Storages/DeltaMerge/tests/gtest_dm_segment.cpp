@@ -22,7 +22,10 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
+#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -47,6 +50,13 @@ namespace DB
 {
 namespace DM
 {
+using PS::V3::CheckpointManifestFileReader;
+using PS::V3::PageDirectory;
+using PS::V3::RemoteDataLocation;
+using PS::V3::Remote::WriterInfo;
+using PS::V3::universal::BlobStoreTrait;
+using PS::V3::universal::PageDirectoryTrait;
+
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
@@ -67,6 +77,11 @@ public:
     {
         TiFlashStorageTestBasic::SetUp();
         table_columns = std::make_shared<ColumnDefines>();
+        auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME) + "/";
+        TiFlashTestEnv::tryRemovePath(remote_source, true);
+        TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
+        TiFlashTestEnv::getGlobalContext().initializeReadNodePageStorage(TiFlashTestEnv::getGlobalContext().getPathPool(), TiFlashTestEnv::getGlobalContext().getFileProvider());
+        TiFlashTestEnv::getGlobalContext().initializeDeltaMergeRemoteManager();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -76,8 +91,8 @@ protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
-        storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, /*ns_id*/ 100, *storage_path_pool, "test.t1");
+        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *storage_path_pool, "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -97,7 +112,7 @@ protected:
                                                  false,
                                                  1,
                                                  db_context->getSettingsRef(),
-                                                 /*table_id*/ 1000);
+                                                 table_id);
     }
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
@@ -105,6 +120,7 @@ protected:
     DMContext & dmContext() { return *dm_context; }
 
 protected:
+    const NamespaceId table_id = 100;
     /// all these var lives as ref in dm_context
     std::shared_ptr<StoragePathPool> storage_path_pool;
     std::shared_ptr<StoragePool> storage_pool;
@@ -115,7 +131,152 @@ protected:
 
     // the segment we are going to test
     SegmentPtr segment;
+
+    constexpr static const char * TRACING_NAME = "DMSegmentTest";
 };
+
+TEST_F(SegmentTest, RestoreFromRemoteCheckPoint)
+try
+{
+    const size_t num_rows_write_per_batch = 100;
+    size_t num_rows_write = 0;
+    // write data in stable
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
+        num_rows_write += num_rows_write_per_batch;
+        segment->write(dmContext(), block);
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+    }
+
+    // write ColumnFileBig
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
+        num_rows_write += num_rows_write_per_batch;
+        auto delegator = dmContext().path_pool->getStableDiskDelegator();
+        auto file_provider = dmContext().db_context.getFileProvider();
+        auto file_id = dmContext().storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        auto file_parent_path = delegator.choosePath();
+
+        auto dmfile
+            = writeIntoNewDMFile(dmContext(), std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, file_parent_path, DMFileBlockOutputStream::Flags{});
+
+        delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), file_parent_path);
+        if (const auto & remote_manager = dmContext().db_context.getDMRemoteManager(); remote_manager != nullptr)
+        {
+            UInt64 store_id;
+            {
+                auto & tmt = dmContext().db_context.getTMTContext();
+                auto kvstore = tmt.getKVStore();
+                auto store_meta = kvstore->getStoreMeta();
+                store_id = store_meta.id();
+            }
+            auto oid = Remote::DMFileOID{
+                .write_node_id = store_id,
+                .table_id = static_cast<Int64>(table_id),
+                .file_id = file_id,
+            };
+            remote_manager->getDataStore()->putDMFile(dmfile, oid);
+        }
+        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
+        WriteBatches wbs(storage_pool);
+        wbs.data.putExternal(file_id, 0);
+        wbs.writeLogAndData();
+
+        segment->ingestDataToDelta(dmContext(), segment->getRowKeyRange(), {file}, false);
+    }
+
+    // write ColumnFileTiny in delta
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_per_batch, false);
+        num_rows_write += num_rows_write_per_batch;
+        segment->write(dmContext(), block);
+    }
+
+    // write ColumnFileDeleteRange
+    {
+        HandleRange handle_range(0, num_rows_write_per_batch / 2);
+        num_rows_write -= num_rows_write_per_batch / 2;
+        segment->write(dmContext(), RowKeyRange::fromHandleRange(handle_range));
+        segment->flushCache(dmContext());
+    }
+
+    // dump checkpoint
+    auto page_storage = dmContext().db_context.getWriteNodePageStorage();
+    auto writer_info = std::make_shared<WriterInfo>();
+    auto checkpoint_dir = getTemporaryPath() + "/";
+    page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
+        .temp_directory = checkpoint_dir + "temp/",
+        .remote_directory = checkpoint_dir,
+        .data_file_name_pattern = "{sequence}_{sub_file_index}.data",
+        .manifest_file_name_pattern = "{sequence}.manifest",
+        .writer_info = writer_info,
+        .blob_store = *page_storage->blob_store,
+    });
+
+    UInt64 latest_manifest_sequence = 0;
+    Poco::DirectoryIterator it(checkpoint_dir);
+    Poco::DirectoryIterator end;
+    while (it != end)
+    {
+        if (it->isFile())
+        {
+            const Poco::Path & file_path = it->path();
+            if (file_path.getExtension() == "manifest")
+            {
+                auto current_manifest_sequence = UInt64(std::stoul(file_path.getBaseName()));
+                latest_manifest_sequence = std::max(current_manifest_sequence, latest_manifest_sequence);
+            }
+        }
+        ++it;
+    }
+    ASSERT_TRUE(latest_manifest_sequence > 0);
+    auto checkpoint_path = checkpoint_dir + fmt::format("{}.manifest", latest_manifest_sequence);
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+            .file_path = checkpoint_path
+        });
+    PageId new_segment_id = 0;
+    {
+        auto kvstore = dmContext().db_context.getTMTContext().getKVStore();
+        auto remote_store_id = kvstore->getStoreMeta().id();
+        PS::V3::CheckpointInfo info{
+            .checkpoint_manifest_path = checkpoint_path,
+            .checkpoint_data_dir = Poco::Path(checkpoint_path).parent().toString(),
+            .checkpoint_store_id = remote_store_id,
+        };
+
+        // change current store id before restore
+        auto store = metapb::Store{};
+        store.set_id(2);
+        kvstore->setStore(store);
+        auto manager = std::make_shared<PS::V3::CheckpointPageManager>(*reader, info.checkpoint_data_dir);
+        WriteBatches wbs{dmContext().storage_pool};
+        auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), manager);
+        auto new_segments = Segment::restoreSegmentsFromCheckpoint( //
+            Logger::get(),
+            dmContext(),
+            table_id,
+            segment_meta_infos,
+            segment->getRowKeyRange(),
+            manager,
+            info,
+            wbs);
+        ASSERT_TRUE(new_segments.size() == 1);
+        new_segments[0]->serialize(wbs.meta);
+        wbs.writeAll();
+        new_segment_id = new_segments[0]->segmentId();
+        auto in = new_segments[0]->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
+    }
+    ASSERT_TRUE(new_segment_id != 0);
+    {
+        auto new_segment = Segment::restoreSegment(Logger::get(), dmContext(), new_segment_id);
+        auto in = new_segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
+    }
+}
+CATCH
 
 TEST_F(SegmentTest, WriteRead)
 try

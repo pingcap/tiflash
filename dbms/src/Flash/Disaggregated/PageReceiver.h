@@ -116,7 +116,7 @@ public:
         const String & req_id,
         const String & executor_id);
 
-    ~PageReceivedMessage();
+    ~PageReceiverBase();
 
     void cancel();
 

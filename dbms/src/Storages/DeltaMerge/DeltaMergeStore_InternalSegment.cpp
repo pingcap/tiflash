@@ -586,6 +586,50 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
     return new_segment;
 }
 
+// TODO: avoid duplicate code
+SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData2(
+    DMContext & dm_context,
+    const SegmentPtr & segment,
+    const DMFilePtr & data_file,
+    const ColumnFilePersisteds & column_file_persisteds)
+{
+    LOG_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
+
+    WriteBatches wbs(storage_pool);
+
+    SegmentPtr new_segment;
+    {
+        std::unique_lock lock(read_write_mutex);
+        if (!isSegmentValid(lock, segment))
+        {
+            LOG_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
+            return {};
+        }
+
+        auto segment_lock = segment->mustGetUpdateLock();
+        new_segment = segment->dangerouslyReplaceData2(segment_lock, dm_context, data_file, wbs, column_file_persisteds);
+
+        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
+        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
+
+        wbs.writeLogAndData();
+        wbs.writeMeta();
+
+        segment->abandon(dm_context);
+        segments[segment->getRowKeyRange().getEnd()] = new_segment;
+        id_to_segment[segment->segmentId()] = new_segment;
+
+        LOG_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
+    }
+
+    wbs.writeRemoves();
+
+    if constexpr (DM_RUN_CHECK)
+        check(dm_context.db_context);
+
+    return new_segment;
+}
+
 bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
 {
     if (segment->hasAbandoned())

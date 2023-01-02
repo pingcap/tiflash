@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB::DM
@@ -76,6 +77,9 @@ struct SegmentSnapshot : private boost::noncopyable
         Int64 table_id,
         const dtpb::DisaggregatedSegment & proto);
 };
+
+using PS::V3::CheckpointPageManager;
+using PS::V3::universal::PageDirectoryTrait;
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
 ///
@@ -153,7 +157,37 @@ public:
         PageId segment_id,
         PageId next_segment_id);
 
+    struct SegmentMetaInfo
+    {
+        SegmentFormat::Version version;
+        UInt64 epoch;
+        RowKeyRange rowkey_range;
+        PageId next_segment_id;
+        PageId delta_id;
+        PageId stable_id;
+    };
+
     static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
+
+    // find all segments in range
+    using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
+    static SegmentMetaInfos restoreAllSegmentsMetaInfo( //
+        NamespaceId ns_id,
+        const RowKeyRange & range,
+        const PS::V3::CheckpointPageManagerPtr & manager);
+
+    // TODO: use template for CheckpointPageManager
+    // 1. The returned segment's range should be in `range`. Actually, Just change the range in segment meta is enough.
+    // 2. Segment meta should not be write in wbs.
+    static Segments restoreSegmentsFromCheckpoint( //
+        const LoggerPtr & parent_log,
+        DMContext & context,
+        NamespaceId ns_id,
+        const Segment::SegmentMetaInfos & meta_infos,
+        const RowKeyRange & range,
+        const PS::V3::CheckpointPageManagerPtr & manager,
+        const PS::V3::CheckpointInfo & checkpoint_info,
+        WriteBatches & wbs);
 
     void serialize(WriteBatch & wb);
 
@@ -448,6 +482,8 @@ public:
      *         to the PageStorage's data.
      */
     [[nodiscard]] SegmentPtr replaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, SegmentSnapshotPtr segment_snap_opt = nullptr) const;
+
+    [[nodiscard]] SegmentPtr dangerouslyReplaceData2(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs, const ColumnFilePersisteds & column_file_persisteds) const;
 
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
