@@ -20,6 +20,7 @@ struct WriteBufferFromOwnStringList final
     WriteBufferFromOwnStringList()
         : WriteBuffer(nullptr, 0)
     {
+        reset();
     }
 
     void nextImpl() override
@@ -33,31 +34,32 @@ struct WriteBufferFromOwnStringList final
         next();
 
         std::string res;
-        size_t sz = std::accumulate(buffs.begin(), buffs.end(), 0, [](const auto r, const auto & s) {
-            return r + s.size();
-        });
-        res.resize(sz);
-        char * start = res.data();
-        std::for_each(buffs.begin(), buffs.end(), [&](auto & s) {
-            std::memcpy(start, s.data(), s.size());
-            start += s.size();
-            s.clear();
-        });
-
-        clear();
+        res.resize(bytes);
+        for (size_t sz = 0; sz < bytes;)
+        {
+            for (auto && s : buffs)
+            {
+                if (sz + s.size() < bytes)
+                {
+                    std::memcpy(res.data() + sz, s.data(), s.size());
+                    sz += s.size();
+                }
+                else
+                {
+                    std::memcpy(res.data() + sz, s.data(), bytes - sz);
+                    sz = bytes;
+                    break;
+                }
+            }
+        }
         return res;
     }
 
-    void init()
-    {
-        clear();
-        nextImpl();
-    }
-
-    void clear()
+    void reset()
     {
         buffs.clear();
-        WriteBuffer::set(nullptr, 0);
+        nextImpl();
+        bytes = 0;
     }
 
     std::vector<std::string> buffs;
@@ -69,12 +71,16 @@ struct CompressCHBlockChunkCodecStream
         : compress_method(compress_method_)
     {
         output_buffer = std::make_unique<WriteBufferFromOwnStringList>();
-        compress_write_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(*output_buffer, CompressionSettings(compress_method));
+        compress_write_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
+            *output_buffer,
+            CompressionSettings(compress_method),
+            DBMS_DEFAULT_BUFFER_SIZE);
     }
-    void clear()
+
+    void reset() const
     {
         compress_write_buffer->next();
-        output_buffer->clear();
+        output_buffer->reset();
     }
 
     WriteBufferFromOwnStringList * getWriterWithoutCompress() const
@@ -82,19 +88,18 @@ struct CompressCHBlockChunkCodecStream
         return output_buffer.get();
     }
 
-    WriteBuffer * getWriter()
+    CompressedCHBlockChunkCodec::CompressedWriteBuffer * getWriter() const
     {
         return compress_write_buffer.get();
     }
 
-    std::string getString()
+    std::string getString() const
     {
         if (compress_write_buffer == nullptr)
         {
             throw Exception("The output should not be null in getString()");
         }
         compress_write_buffer->next();
-        output_buffer->next();
         return output_buffer->getString();
     }
     ~CompressCHBlockChunkCodecStream() = default;

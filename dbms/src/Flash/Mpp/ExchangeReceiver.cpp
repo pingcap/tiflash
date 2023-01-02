@@ -696,7 +696,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
 
-    if (packet.mpp_version() && packet.compress().method() != mpp::CompressMethod::NONE)
+    if (packet.version() && packet.compress().method() != mpp::CompressMethod::NONE)
     {
         for (auto && chunk : packet.chunks())
         {
@@ -711,7 +711,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         }
         return detail;
     }
-    
+
     for (const String * chunk : recv_msg->chunks)
     {
         auto result = decoder_ptr->decodeAndSquash(*chunk);

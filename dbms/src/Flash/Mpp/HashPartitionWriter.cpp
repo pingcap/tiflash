@@ -47,7 +47,6 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
-    // , compress_method(dag_context.getExchangeSenderMeta().compress())
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -116,7 +115,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         //     method = mpp::CompressMethod::NONE;
         // }
         // tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
-        tracked_packets[part_id]->getPacket().set_mpp_version(TiDB::GetMppVersion());
+        // tracked_packets[part_id]->getPacket().set_mpp_version(TiDB::GetMppVersion());
     }
 
     size_t ori_block_mem_size = 0;

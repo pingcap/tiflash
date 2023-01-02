@@ -165,7 +165,8 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
                     partition_col_collators,
                     batch_send_min_limit,
                     should_send_exec_summary_at_last,
-                    dag_context);
+                    dag_context,
+                    compress_method);
             }
         }
         else

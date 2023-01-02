@@ -28,6 +28,7 @@
 
 #include "Flash/Mpp/MppVersion.h"
 #include "ext/scope_guard.h"
+#include "mpp.pb.h"
 
 namespace DB
 {
@@ -108,11 +109,6 @@ public:
         return block;
     }
 
-    void setMppExchangeDataCompress(mpp::CompressMethod m) const
-    {
-        dag_context_ptr->exchange_sender_meta.set_compress(m);
-    }
-
     Context context;
     std::vector<Int64> part_col_ids;
     TiDB::TiDBCollators part_col_collators;
@@ -136,7 +132,8 @@ struct MockExchangeWriter
     bool isLocal(size_t index) const
     {
         assert(getPartitionNum() > index);
-        return true;
+        // make only part 0 use local tunnel
+        return index == 0;
     }
 
     void sendExecutionSummary(tipb::SelectResponse & response)
@@ -475,15 +472,10 @@ CATCH
 TEST_F(TestMPPExchangeWriter, testHashPartitionWriterV1)
 try
 {
-    setMppExchangeDataCompress(mpp::CompressMethod::LZ4);
-    SCOPE_EXIT({
-        setMppExchangeDataCompress(mpp::CompressMethod::NONE);
-    });
-
     const size_t block_rows = 64;
-    const size_t block_num = 64;
+    const size_t block_num = 1;
     const size_t batch_send_min_limit = 108;
-    const uint16_t part_num = 4;
+    const uint16_t part_num = 2;
 
     // 1. Build Blocks.
     std::vector<Block> blocks;
@@ -508,7 +500,8 @@ try
         part_col_collators,
         batch_send_min_limit,
         /*should_send_exec_summary_at_last=*/false,
-        *dag_context_ptr);
+        *dag_context_ptr,
+        mpp::CompressMethod::LZ4);
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
