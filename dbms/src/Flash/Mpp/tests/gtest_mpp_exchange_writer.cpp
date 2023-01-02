@@ -14,7 +14,7 @@
 
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -25,6 +25,7 @@
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriterV1.cpp>
+#include <limits>
 
 #include "Flash/Mpp/MppVersion.h"
 #include "ext/scope_guard.h"
@@ -473,9 +474,9 @@ TEST_F(TestMPPExchangeWriter, testHashPartitionWriterV1)
 try
 {
     const size_t block_rows = 64;
-    const size_t block_num = 1;
-    const size_t batch_send_min_limit = 108;
-    const uint16_t part_num = 2;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = 100;
+    const uint16_t part_num = 4;
 
     // 1. Build Blocks.
     std::vector<Block> blocks;
@@ -510,15 +511,35 @@ try
     // 4. Start to check write_report.
     size_t per_part_rows = block_rows * block_num / part_num;
     ASSERT_EQ(write_report.size(), part_num);
+
+    CHBlockChunkDecodeAndSquash decoder(header, std::numeric_limits<size_t>::max());
+
     for (const auto & ele : write_report)
     {
         size_t decoded_block_rows = 0;
-        for (const auto & packet : ele.second)
+        for (const auto & tracked_packet : ele.second)
         {
-            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
+            auto & packet = tracked_packet->getPacket();
+
+            if (packet.version() && packet.compress().method() != mpp::CompressMethod::NONE)
             {
-                auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
-                decoded_block_rows += decoded_block.rows();
+                for (auto && chunk : packet.chunks())
+                {
+                    auto && result = decoder.decodeAndSquashWithCompress(chunk);
+                    if (!result)
+                        continue;
+                    decoded_block_rows += result->rows();
+                }
+            }
+            else
+            {
+                for (auto && chunk : packet.chunks())
+                {
+                    auto result = decoder.decodeAndSquash(chunk);
+                    if (!result)
+                        continue;
+                    decoded_block_rows += result->rows();
+                }
             }
         }
         ASSERT_EQ(decoded_block_rows, per_part_rows);
