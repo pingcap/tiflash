@@ -55,7 +55,7 @@ cert_allowed_cn="tidb"
                 ++call_times;
             },
             /* already_loaded = */ false);
-    
+
         auto other_config_reloader = std::make_unique<ConfigReloader>(
             path,
             [&](ConfigurationPtr config [[maybe_unused]]) {
@@ -63,7 +63,7 @@ cert_allowed_cn="tidb"
             },
             /* already_loaded = */ false,
             "otherCfgLoader");
-    
+
         main_config_reloader->start();
         other_config_reloader->start();
         std::this_thread::sleep_for(std::chrono::seconds(3));
