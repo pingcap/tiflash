@@ -19,7 +19,7 @@ namespace DB
 {
 namespace details
 {
-String constructStatusString(ExchangeReceiverState state, const String & error_message)
+String constructStatusString(PageReceiverState state, const String & error_message)
 {
     if (error_message.empty())
         return fmt::format("Receiver state: {}", magic_enum::enum_name(state));
@@ -73,8 +73,9 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
     , persist_threads_num(max_streams_)
     , thread_manager(newThreadManager())
     , live_connections(source_num)
-    , state(ExchangeReceiverState::NORMAL)
+    , state(PageReceiverState::NORMAL)
     , live_persisters(persist_threads_num)
+    , persister_state(PageReceiverState::NORMAL)
     , collected(false)
     , thread_count(0)
     , exc_log(Logger::get(req_id, executor_id))
@@ -122,7 +123,7 @@ PageReceiverBase<RPCContext>::~PageReceiverBase()
 template <typename RPCContext>
 void PageReceiverBase<RPCContext>::cancel()
 {
-    if (setEndState(ExchangeReceiverState::CANCELED))
+    if (setEndState(PageReceiverState::CANCELED))
     {
         rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
     }
@@ -132,7 +133,7 @@ void PageReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void PageReceiverBase<RPCContext>::close()
 {
-    setEndState(ExchangeReceiverState::CLOSED);
+    setEndState(PageReceiverState::CLOSED);
     finishAllMsgChannels();
 }
 
@@ -184,9 +185,17 @@ void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
         }
     }
 
+    // persist loop done
     Int32 copy_persister_num = -1;
     {
         std::unique_lock lock(mu);
+        if (meet_error)
+        {
+            if (persister_state == PageReceiverState::NORMAL)
+                persister_state = PageReceiverState::ERROR;
+            if (persister_err_msg.empty())
+                persister_err_msg = local_err_msg;
+        }
         copy_persister_num = --live_persisters;
     }
 
@@ -204,7 +213,12 @@ void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
     else if (copy_persister_num == 0)
     {
         LOG_DEBUG(log, "All persist threads end in PageReceiver");
-        rpc_context->finishAllReceivingTasks();
+        String copy_persister_msg;
+        {
+            std::unique_lock lock(mu);
+            copy_persister_msg = persister_err_msg;
+        }
+        rpc_context->finishAllReceivingTasks(copy_persister_msg);
     }
 }
 
@@ -259,7 +273,7 @@ PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
     if (pop_res != MPMCQueueResult::OK)
     {
         std::unique_lock lock(mu);
-        if (state != DB::ExchangeReceiverState::NORMAL)
+        if (state != PageReceiverState::NORMAL)
         {
             return PageReceiverResult::newError(PageReceiverBase<RPCContext>::name, details::constructStatusString(state, err_msg));
         }
@@ -461,11 +475,11 @@ std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Reques
 }
 
 template <typename RPCContext>
-bool PageReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
+bool PageReceiverBase<RPCContext>::setEndState(PageReceiverState new_state)
 {
-    assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
+    assert(new_state == PageReceiverState::CANCELED || new_state == PageReceiverState::CLOSED);
     std::unique_lock lock(mu);
-    if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
+    if (state == PageReceiverState::CANCELED || state == PageReceiverState::CLOSED)
     {
         return false;
     }
@@ -491,8 +505,8 @@ void PageReceiverBase<RPCContext>::connectionDone(
         std::unique_lock lock(mu);
         if (meet_error)
         {
-            if (state == ExchangeReceiverState::NORMAL)
-                state = ExchangeReceiverState::ERROR;
+            if (state == PageReceiverState::NORMAL)
+                state = PageReceiverState::ERROR;
             if (err_msg.empty())
                 err_msg = local_err_msg;
         }

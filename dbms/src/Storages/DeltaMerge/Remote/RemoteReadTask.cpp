@@ -127,10 +127,14 @@ void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, 
     cv_ready_tasks.notify_one();
 }
 
-void RemoteReadTask::allDataReceive()
+void RemoteReadTask::allDataReceive(const String & end_err_msg)
 {
     {
         std::unique_lock ready_lock(mtx_ready_tasks);
+        // set up the error message
+        if (err_msg.empty() && !end_err_msg.empty())
+            err_msg = end_err_msg;
+
         if (auto state_iter = ready_segment_tasks.find(SegmentReadTaskState::AllReady);
             state_iter == ready_segment_tasks.end())
         {
@@ -203,6 +207,12 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
     });
 
     return seg_task;
+}
+
+const String & RemoteReadTask::getErrorMessage() const
+{
+    std::unique_lock ready_lock(mtx_ready_tasks);
+    return err_msg;
 }
 
 bool RemoteReadTask::doneOrErrorHappen() const

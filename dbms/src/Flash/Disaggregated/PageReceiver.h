@@ -4,7 +4,6 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <kvproto/mpp.pb.h>
 
 namespace DB
@@ -14,6 +13,14 @@ namespace DM
 class RemoteSegmentReadTask;
 using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
 } // namespace DM
+
+enum class PageReceiverState
+{
+    NORMAL,
+    ERROR,
+    CANCELED,
+    CLOSED,
+};
 
 struct PageReceivedMessage
 {
@@ -133,7 +140,7 @@ private:
     void readLoop();
     std::tuple<bool, String> taskReadLoop(const Request & req);
 
-    bool setEndState(ExchangeReceiverState new_state);
+    bool setEndState(PageReceiverState new_state);
     String getStatusString();
 
     void connectionDone(
@@ -170,10 +177,12 @@ private:
     std::mutex mu;
     /// should lock `mu` when visit these members
     Int32 live_connections;
-    ExchangeReceiverState state;
+    PageReceiverState state;
     String err_msg;
 
     Int32 live_persisters;
+    PageReceiverState persister_state;
+    String persister_err_msg;
 
     bool collected;
     int thread_count;
