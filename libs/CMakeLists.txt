@@ -23,7 +23,9 @@ add_subdirectory (libdaemon)
 
 add_subdirectory (libmemcpy)
 
+message("log: here1 ${GLIBC_COMPATIBILITY}")
 if (GLIBC_COMPATIBILITY)
+    message("log: here2 ${GLIBC_COMPATIBILITY}")
     add_subdirectory (libglibc-compatibility)
 endif ()
 
