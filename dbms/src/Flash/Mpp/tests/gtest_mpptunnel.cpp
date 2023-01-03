@@ -28,6 +28,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "Flash/Mpp/ReceiverChannelWriter.h"
 
 namespace DB
 {
@@ -164,7 +165,7 @@ public:
         }
 
         if (meet_error || copy_connection == 0)
-            finishAllMsgChannels();
+            msg_channels[0]->finish();
     }
 
     void connectLocalTunnel(std::vector<MPPTunnelPtr> & tunnels)
@@ -184,49 +185,31 @@ public:
         }
     }
 
-    void run()
+    void receiveAll()
     {
-        auto msg_channel_num = msg_channels.size();
-        size_t closed_num = 0;
         while (true)
         {
-            for (size_t i = 0; i < msg_channel_num; ++i)
+            std::shared_ptr<ReceivedMessage> recv_msg;
+            switch (msg_channels[0]->pop(recv_msg))
             {
-                std::shared_ptr<ReceivedMessage> recv_msg;
-                switch (msg_channels[i]->pop(recv_msg))
-                {
-                case DB::MPMCQueueResult::OK:
-                    received_msgs.push_back(recv_msg);
-                    break;
-                default:
-                    ++closed_num;
-                }
-            }
-
-            if (closed_num == msg_channel_num)
+            case DB::MPMCQueueResult::OK:
+                received_msgs.push_back(recv_msg);
                 break;
+            default:
+                return;
+            }
         };
     }
 
-    std::vector<std::shared_ptr<ReceivedMessage>> & getReceivedMsgs() { return received_msgs; }
+    std::vector<std::shared_ptr<ReceivedMessage>> & getReceivedMsgs(){ return received_msgs; }
 
-    String getErrMsg() const { return err_msg; }
+    String getErrMsg()
+    {
+        std::lock_guard<std::mutex> lock(mu);
+        return err_msg;
+    }
 
 private:
-    void waitAllConnectionDone()
-    {
-        std::unique_lock lock(mu);
-        auto pred = [&] {
-            return live_connections == 0;
-        };
-        cv.wait(lock, pred);
-    }
-
-    void finishAllMsgChannels()
-    {
-        msg_channels[0]->finish();
-    }
-
     std::mutex mu;
     std::condition_variable cv;
     Int32 live_connections;
@@ -589,7 +572,7 @@ try
         threads.push_back(std::thread(tunnelRun<decltype(run_tunnel)>, std::move(run_tunnel)));
     }
 
-    receiver->run();
+    receiver->receiveAll();
 
     for (auto & thread : threads)
         thread.join();
@@ -601,10 +584,9 @@ CATCH
 TEST_F(TestMPPTunnel, LocalConnectWriteCancel)
 try
 {
-    const size_t tunnel_num = 1;
-    auto [receiver, tunnels] = prepareLocal(tunnel_num);
+    auto [receiver, tunnels] = prepareLocal(1);
 
-    std::thread t(&MockExchangeReceiver::run, receiver.get());
+    std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
 
     tunnels[0]->write(newDataPacket("First"));
     tunnels[0]->write(newDataPacket("Second"));
@@ -621,10 +603,8 @@ CATCH
 TEST_F(TestMPPTunnel, LocalConsumerFinish)
 try
 {
-    const size_t tunnel_num = 1;
-    auto [receiver, tunnels] = prepareLocal(tunnel_num);
-
-    std::thread t(&MockExchangeReceiver::run, receiver.get());
+    auto [receiver, tunnels] = prepareLocal(1);
+    std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
 
     tunnels[0]->write(newDataPacket("First"));
     tunnels[0]->write(newDataPacket("Second"));
@@ -639,5 +619,136 @@ try
 }
 CATCH
 
+TEST_F(TestMPPTunnel, LocalConnectWhenFinished)
+try
+{
+    auto [_, tunnels] = prepareLocal(1);
+    setTunnelFinished(tunnels[0]);
+
+    LocalRequestHandler local_req_handler(
+        nullptr,
+        [](bool, const String&) {},
+        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ExchangeMode::Local));
+    tunnels[0]->connectLocal(0, local_req_handler, false);
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Unconnected failed: MPPTunnel has connected or finished: Finished");
+}
+
+TEST_F(TestMPPTunnel, LocalConnectWhenConnected)
+try
+{
+    auto [_, tunnels] = prepareLocal(1);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
+    LocalRequestHandler local_req_handler(
+        nullptr,
+        [](bool, const String&) {},
+        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ExchangeMode::Local));
+    tunnels[0]->connectLocal(0, local_req_handler, false);
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Unconnected failed: MPPTunnel has connected or finished: Connected");
+}
+
+TEST_F(TestMPPTunnel, LocalCloseBeforeConnect)
+try
+{
+    auto [_, tunnels] = prepareLocal(1);
+    tunnels[0]->close("Canceled", true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(tunnels[0]), true);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), false);
+}
+CATCH
+
+TEST_F(TestMPPTunnel, LocalCloseAfterClose)
+try
+{
+    auto [_, tunnels] = prepareLocal(1);
+    tunnels[0]->close("Canceled", true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(tunnels[0]), true);
+    tunnels[0]->close("Canceled", true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(tunnels[0]), true);
+}
+CATCH
+
+TEST_F(TestMPPTunnel, LocalWriteAfterUnconnectFinished)
+try
+{
+    auto tunnel = constructLocalTunnel();
+    setTunnelFinished(tunnel);
+    tunnel->write(newDataPacket("First"));
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel which is already closed.");
+}
+
+TEST_F(TestMPPTunnel, LocalWriteDoneAfterUnconnectFinished)
+try
+{
+    auto tunnel = constructLocalTunnel();
+    setTunnelFinished(tunnel);
+    tunnel->writeDone();
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed.");
+}
+
+TEST_F(TestMPPTunnel, LocalWriteError)
+try
+{
+    auto [_, tunnels] = prepareLocal(1);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
+    auto packet = newDataPacket("First");
+    packet->error_message = "err";
+
+    auto run_tunnel = [tunnel = tunnels[0]]() {
+        try
+        {
+            auto packet = newDataPacket("First");
+            packet->error_message = "err";
+            tunnel->write(std::move(packet));
+        }
+        catch (...)
+        {}
+    };
+    std::thread thd(tunnelRun<decltype(run_tunnel)>, std::move(run_tunnel));
+    thd.join();
+
+    tunnels[0]->waitForFinish();
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, err");
+}
+
+TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
+{
+    MPPTunnelPtr tunnel = nullptr;
+    try
+    {
+        auto [_, tunnels] = prepareLocal(1);
+        tunnel = tunnels[0];
+        GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnel), true);
+        tunnel->close("", false);
+        tunnel->write(newDataPacket("First"));
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+    }
+    if (tunnel != nullptr)
+        tunnel->waitForFinish();
+}
 } // namespace tests
 } // namespace DB
+

@@ -309,10 +309,9 @@ private:
 
     void closeLocalTunnel(bool meet_error, const String & local_err_msg)
     {
-        std::lock_guard lock(mu);
-        if (!is_done)
+        bool expect = false;
+        if (is_done.compare_exchange_strong(expect, true))
         {
-            is_done = true;
             consumer_state.setMsg(local_err_msg);
             local_request_handler.connectionLocalDone(meet_error, local_err_msg);
         }
@@ -320,9 +319,7 @@ private:
 
     size_t source_index;
     LocalRequestHandler local_request_handler;
-
-    std::mutex mu;
-    bool is_done;
+    std::atomic_bool is_done;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
