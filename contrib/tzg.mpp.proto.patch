@@ -1085,7 +1085,7 @@ index fcd4691..783c2eb 100644
  			iNdEx = preIndex
  			skippy, err := skipMpp(dAtA[iNdEx:])
 diff --git a/proto/mpp.proto b/proto/mpp.proto
-index 6739455..d693f8d 100644
+index 6739455..0fdf25d 100644
 --- a/proto/mpp.proto
 +++ b/proto/mpp.proto
 @@ -11,6 +11,17 @@ option (gogoproto.unmarshaler_all) = true;
@@ -1146,7 +1146,7 @@ index 6739455..d693f8d 100644
  	Error error = 2;
  	repeated bytes chunks = 3;
  	repeated uint64 stream_ids = 4;
-+    int64 version = 5; // version of data format
++	int64 version = 5; // version of data format
 +	DataPacketCompressMeta compress = 6; // data compression
  }
  
