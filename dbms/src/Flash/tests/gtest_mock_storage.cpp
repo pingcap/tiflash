@@ -24,19 +24,13 @@ namespace tests
 class MockStorageTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    using ColStringType = std::optional<typename TypeTraits<String>::FieldType>;
-    using ColInt64Type = typename TypeTraits<Int64>::FieldType;
-
-    using ColumnWithString = std::vector<ColStringType>;
-    using ColumnWithInt64 = std::vector<ColInt64Type>;
-
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
     }
 
     // single column table
-    const ColumnWithString col1{"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"};
+    const ColumnWithNullableString col1{"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"};
     const ColumnWithInt64 col0{0, 1, 2, 3, 4, 5, 6, 7};
 
     MockStorage mock_storage;

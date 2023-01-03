@@ -28,7 +28,9 @@ public:
     {
         ExecutorTest::initializeContext();
         context.mockStorage()->setUseDeltaMerge(true);
-        // note that the first column is pk.
+        // note that
+        // 1. the first column is pk.
+        // 2. The decimal type is not supported.
         context.addMockDeltaMerge({"test_db", "t0"},
                                   {{"col0", TiDB::TP::TypeLongLong}},
                                   {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
