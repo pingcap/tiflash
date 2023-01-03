@@ -22,11 +22,6 @@ namespace tests
 class LimitExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    using ColDataType = std::optional<typename TypeTraits<String>::FieldType>;
-    using ColumnWithData = std::vector<ColDataType>;
-
-    static constexpr size_t big_table_rows = 200;
-
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -52,7 +47,7 @@ public:
     const String db_name{"test_db"};
     const String table_name{"projection_test_table"};
     const String col_name{"limit_col"};
-    const ColumnWithData col0{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"};
+    const ColumnWithNullableString col0{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"};
 };
 
 TEST_F(LimitExecutorTestRunner, Limit)
@@ -72,9 +67,9 @@ try
         if (limit_num == 0)
             expect_cols = {};
         else if (limit_num > col_data_num)
-            expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.end()))};
+            expect_cols = {toNullableVec<String>(col_name, ColumnWithNullableString(col0.begin(), col0.end()))};
         else
-            expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + limit_num))};
+            expect_cols = {toNullableVec<String>(col_name, ColumnWithNullableString(col0.begin(), col0.begin() + limit_num))};
 
         WRAP_FOR_TEST_BEGIN
         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
@@ -89,7 +84,7 @@ TEST_F(LimitExecutorTestRunner, RawQuery)
 try
 {
     String query = "select * from test_db.projection_test_table limit 1";
-    auto cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + 1))};
+    auto cols = {toNullableVec<String>(col_name, ColumnWithNullableString(col0.begin(), col0.begin() + 1))};
     ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
 }
 CATCH

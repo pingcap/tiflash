@@ -5956,6 +5956,143 @@ private:
     }
 };
 
+class FunctionTiDBUnHex : public IFunction
+{
+public:
+    static constexpr auto name = "tidbUnHex";
+    FunctionTiDBUnHex() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionTiDBUnHex>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+
+        size_t size = block.rows();
+        auto col_res = ColumnString::create();
+        auto result_null_map = ColumnUInt8::create(size, 0);
+
+        if (executeUnHexString(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData()))
+        {
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    static bool executeUnHexString(const ColumnPtr & column,
+                                   ColumnString::Chars_t & res_data,
+                                   ColumnString::Offsets & res_offsets,
+                                   ColumnUInt8::Container & res_null_map)
+    {
+        const auto * const col = checkAndGetColumn<ColumnString>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        const size_t size = col->size();
+        const ColumnString::Chars_t & data = col->getChars();
+        const ColumnString::Offsets & offsets = col->getOffsets();
+        res_data.resize(data.size() / 2 + size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset pos = 0;
+        ColumnString::Offset prev_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t begin = prev_offset;
+            size_t length = offsets[i] - prev_offset - 1;
+            unhexOne(data, length, i, begin, pos, res_data, res_offsets, res_null_map);
+            pos = res_offsets[i];
+            prev_offset = offsets[i];
+        }
+        res_data.resize(pos);
+
+        return true;
+    }
+
+    static void unhexOne(const ColumnString::Chars_t & data,
+                         const size_t length,
+                         const size_t idx,
+                         size_t begin,
+                         size_t pos,
+                         ColumnString::Chars_t & res_data,
+                         ColumnString::Offsets & res_offsets,
+                         ColumnUInt8::Container & res_null_map)
+    {
+        char low;
+        char high;
+        size_t end = begin + length;
+        res_offsets[idx] = pos + 1;
+
+        if (length % 2 != 0)
+        {
+            const char * byte = reinterpret_cast<const char *>(&data[begin]);
+            if (!fromHexChar(byte, low))
+            {
+                res_null_map[idx] = 1;
+                return;
+            }
+            res_data[pos] = low;
+            pos++;
+            begin++;
+        }
+        for (size_t i = begin; i < end; i += 2)
+        {
+            const char * byte1 = reinterpret_cast<const char *>(&data[i]);
+            const char * byte2 = reinterpret_cast<const char *>(&data[i + 1]);
+            if (!fromHexChar(byte1, high) || !fromHexChar(byte2, low))
+            {
+                res_null_map[idx] = 1;
+                return;
+            }
+            res_data[pos] = (high << 4) | low;
+            pos++;
+        }
+        res_offsets[idx] = pos + 1;
+    }
+
+    static bool fromHexChar(const char * in, char & out)
+    {
+        if (*in >= '0' && *in <= '9')
+        {
+            out = *in - '0';
+        }
+        else if (*in >= 'a' && *in <= 'f')
+        {
+            out = *in - 'a' + 10;
+        }
+        else if (*in >= 'A' && *in <= 'F')
+        {
+            out = *in - 'A' + 10;
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -6047,5 +6184,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
     factory.registerFunction<FunctionFormatDecimal>();
+    factory.registerFunction<FunctionTiDBUnHex>();
 }
 } // namespace DB

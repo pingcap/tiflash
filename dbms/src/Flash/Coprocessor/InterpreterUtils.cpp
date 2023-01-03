@@ -176,7 +176,7 @@ void executeCreatingSets(
 {
     DAGContext & dag_context = *context.getDAGContext();
     /// add union to run in parallel if needed
-    if (unlikely(context.isExecutorTest()))
+    if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
     else if (context.isMPPTest())
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp test");

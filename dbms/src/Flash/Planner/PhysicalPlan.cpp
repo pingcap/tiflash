@@ -127,7 +127,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
         buildFinalProjection(fmt::format("{}_", executor_id), true);
-        if (unlikely(context.isExecutorTest()))
+        if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
         {
@@ -140,7 +140,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeExchangeReceiver:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
-        if (unlikely(context.isExecutorTest()))
+        if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver()));
         else
         {

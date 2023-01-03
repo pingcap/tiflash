@@ -102,7 +102,7 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, and_or)
+TEST_F(FilterExecutorTestRunner, andOr)
 try
 {
     auto test_one = [&](const ASTPtr & condition, const ColumnsWithTypeAndName & expect_columns) {
@@ -210,7 +210,7 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, convert_bool)
+TEST_F(FilterExecutorTestRunner, convertBool)
 try
 {
     {
