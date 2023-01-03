@@ -11,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Columns/ColumnNullable.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <TestUtils/ColumnGenerator.h>
 
 namespace DB::tests
@@ -23,6 +26,15 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         type = createDecimalType();
     else
         type = DataTypeFactory::instance().get(opts.type_name);
+
+    if (type->isNullable())
+    {
+        auto nested_column_generator_opts = opts;
+        nested_column_generator_opts.type_name = removeNullable(type)->getName();
+        auto null_map_column_generator_opts = opts;
+        null_map_column_generator_opts.type_name = "UInt8";
+        return {ColumnNullable::create(generate(nested_column_generator_opts).column, generate(null_map_column_generator_opts).column), type};
+    }
 
     auto col = type->createColumn();
     col->reserve(opts.size);
@@ -69,6 +81,17 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         for (size_t i = 0; i < opts.size; ++i)
             genDateTime(col);
         break;
+    case TypeIndex::MyTime:
+        for (size_t i = 0; i < opts.size; ++i)
+            genDuration(col);
+        break;
+    case TypeIndex::Enum8:
+    case TypeIndex::Enum16:
+        for (size_t i = 0; i < opts.size; ++i)
+            genEnumValue(col, type);
+        break;
+        {
+        }
     default:
         throw std::invalid_argument("RandomColumnGenerator invalid type");
     }
@@ -122,6 +145,12 @@ String ColumnGenerator::randomDate()
     return fmt::format("{}-{}-{}", res.tm_year + 1900, res.tm_mon + 1, res.tm_mday);
 }
 
+String ColumnGenerator::randomDuration()
+{
+    auto res = randomLocalTime();
+    return fmt::format("{}:{}:{}", res.tm_hour, res.tm_min, res.tm_sec);
+}
+
 String ColumnGenerator::randomDateTime()
 {
     auto res = randomLocalTime();
@@ -144,9 +173,29 @@ void ColumnGenerator::genInt(MutableColumnPtr & col)
     col->insert(f);
 }
 
+void ColumnGenerator::genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_type)
+{
+    size_t value_count = 0;
+    const auto & enum8_type = static_cast<const DataTypeEnum8 *>(enum_type.get());
+    const auto & enum16_type = static_cast<const DataTypeEnum16 *>(enum_type.get());
+    if (enum8_type != nullptr)
+        value_count = enum8_type->getValues().size();
+    else
+        value_count = enum16_type->getValues().size();
+    auto value_index = static_cast<Int64>(static_cast<Int64>(rand_gen()) % value_count);
+    Int64 enum_value = enum8_type == nullptr ? enum16_type->getValues()[value_index].second : enum8_type->getValues()[value_index].second;
+    col->insert(enum_value);
+}
+
 void ColumnGenerator::genUInt(MutableColumnPtr & col)
 {
     Field f = static_cast<UInt64>(rand_gen());
+    col->insert(f);
+}
+
+void ColumnGenerator::genBool(MutableColumnPtr & col)
+{
+    Field f = static_cast<UInt64>(static_cast<UInt64>(rand_gen()) == 0);
     col->insert(f);
 }
 
@@ -171,6 +220,12 @@ void ColumnGenerator::genDate(MutableColumnPtr & col)
 void ColumnGenerator::genDateTime(MutableColumnPtr & col)
 {
     Field f = parseMyDateTime(randomDateTime());
+    col->insert(f);
+}
+
+void ColumnGenerator::genDuration(MutableColumnPtr & col)
+{
+    Field f = parseMyDuration(randomDuration());
     col->insert(f);
 }
 
