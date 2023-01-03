@@ -15,6 +15,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
@@ -62,6 +63,7 @@ void ExecutorTest::initializeContext()
 {
     dag_context_ptr = std::make_unique<DAGContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
+    context.initMockStorage();
     dag_context_ptr->log = Logger::get("executorTest");
     TiFlashTestEnv::getGlobalContext().setExecutorTest();
 }
@@ -96,8 +98,8 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
-    context.context.setExecutorTest();
-    // Currently, don't care about regions information in interpreter tests.
+    context.context.setInterpreterTest();
+    // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
@@ -236,7 +238,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, s
         context.context,
         query,
         [&](const String & database_name, const String & table_name) {
-            return context.mockStorage().getTableInfo(database_name + "." + table_name);
+            return context.mockStorage()->getTableInfo(database_name + "." + table_name);
         },
         properties);
 
