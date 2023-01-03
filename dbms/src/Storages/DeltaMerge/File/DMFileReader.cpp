@@ -621,11 +621,8 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     Blocks blocks;
     blocks.reserve(next_pack_id_cp - next_pack_id);
-    IColumn::Filter block_filter;
-    block_filter.resize(filter.size());
 
     read_rows = 0;
-    size_t read_and_skipped_rows = 0;
     for (size_t i = next_pack_id; i < next_pack_id_cp; ++i)
     {
         // When the next pack is not used or the pack is the last pack, call read() to read theses packs and filter them
@@ -638,32 +635,28 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         {
             Block block = read();
 
-            std::copy(filter.cbegin() + read_and_skipped_rows, filter.cbegin() + read_and_skipped_rows + block.rows(), block_filter.begin() + read_rows);
+            IColumn::Filter block_filter;
+            block_filter.resize(block.rows());
+            std::copy(filter.cbegin() + read_rows, filter.cbegin() + read_rows + block.rows(), block_filter.begin());
             read_rows += block.rows();
-            read_and_skipped_rows += block.rows();
+
+            size_t passed_count = std::count(block_filter.cbegin(), block_filter.cend(), 1);
+            for (auto & col : block)
+            {
+                col.column = col.column->filter(block_filter, passed_count);
+            }
 
             blocks.emplace_back(std::move(block));
         }
         else if (!use_packs[i])
         {
-            read_and_skipped_rows += pack_stats[i].rows;
+            read_rows += pack_stats[i].rows;
         }
     }
-
-    // TODO: merge blocks and then filter or filter and then merge blocks
 
     // merge blocks
     Block res = vstackBlocks(std::move(blocks));
     res.setStartOffset(start_row_offset);
-
-    // filter
-    RUNTIME_CHECK(read_rows == res.rows());
-    block_filter.resize(read_rows);
-    size_t passed_count = std::count(block_filter.cbegin(), block_filter.cend(), 1);
-    for (auto & col : res)
-    {
-        col.column = col.column->filter(block_filter, passed_count);
-    }
 
     // restore the use_packs of next pack after next read
     if (next_pack_id_cp < use_packs.size())
