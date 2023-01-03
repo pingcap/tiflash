@@ -25,6 +25,7 @@
 
 #include "Flash/Coprocessor/CompressCHBlockChunkCodecStream.h"
 #include "Flash/Mpp/HashPartitionWriterV1.h"
+#include "Flash/Mpp/MppVersion.h"
 
 namespace DB
 {
@@ -151,7 +152,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
             else
             {
                 auto && compress_method = dag_context.getExchangeSenderMeta().compress();
-                if (compress_method == mpp::CompressMethod::NONE || !dag_context.getMPPTaskMeta().mpp_version())
+                if (TiDB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
                     return std::make_unique<HashPartitionWriter<MPPTunnelSetPtr>>(
                         writer,
                         partition_col_ids,

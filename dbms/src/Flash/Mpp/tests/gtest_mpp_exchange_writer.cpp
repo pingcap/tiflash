@@ -521,7 +521,7 @@ try
         {
             auto & packet = tracked_packet->getPacket();
 
-            ASSERT_EQ(packet.version(), TiDB::MppVersion::MppVersionV1);
+            ASSERT_EQ(packet.version(), 1);
 
             for (auto && chunk : packet.chunks())
             {

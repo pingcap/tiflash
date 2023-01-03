@@ -696,7 +696,24 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
 
-    if (packet.version())
+    switch (packet.version())
+    {
+    case 0:
+    {
+        for (const String * chunk : recv_msg->chunks)
+        {
+            auto result = decoder_ptr->decodeAndSquash(*chunk);
+            if (!result)
+                continue;
+            detail.rows += result->rows();
+            if likely (result->rows() > 0)
+            {
+                block_queue.push(std::move(result.value()));
+            }
+        }
+        return detail;
+    }
+    case 1:
     {
         for (auto && chunk : packet.chunks())
         {
@@ -711,17 +728,11 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         }
         return detail;
     }
-
-    for (const String * chunk : recv_msg->chunks)
+    default:
     {
-        auto result = decoder_ptr->decodeAndSquash(*chunk);
-        if (!result)
-            continue;
-        detail.rows += result->rows();
-        if likely (result->rows() > 0)
-        {
-            block_queue.push(std::move(result.value()));
-        }
+        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}", packet.version());
+        break;
+    }
     }
     return detail;
 }
