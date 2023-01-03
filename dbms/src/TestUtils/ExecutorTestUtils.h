@@ -127,7 +127,7 @@ using ColMyDateNullableType = std::optional<typename TypeTraits<MyDate>::FieldTy
 using ColMyDateTimeNullableType = std::optional<typename TypeTraits<MyDateTime>::FieldType>;
 using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal32>::FieldType>;
 
-// non nullable tyoe
+// non nullable type
 using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
 using ColInt64Type = typename TypeTraits<Int64>::FieldType;
 using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
