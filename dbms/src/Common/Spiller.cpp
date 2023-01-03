@@ -42,7 +42,7 @@ SpilledFilesInputStream::SpilledFilesInputStream(const std::vector<String> & spi
     : spilled_files(spilled_files_)
     , header(header_)
 {
-    RUNTIME_ASSERT(!spilled_files.empty(), "Spilled files must not be empty");
+    RUNTIME_CHECK_MSG(!spilled_files.empty(), "Spilled files must not be empty");
     current_reading_file_index = 0;
     current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[0], header);
 }
