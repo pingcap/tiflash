@@ -677,7 +677,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Trim3Args, "tidbTrim"},
     {tipb::ScalarFuncSig::LTrim, "tidbLTrim"},
     {tipb::ScalarFuncSig::RTrim, "tidbRTrim"},
-    //{tipb::ScalarFuncSig::UnHex, "cast"},
+    {tipb::ScalarFuncSig::UnHex, "tidbUnHex"},
     {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
