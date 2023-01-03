@@ -159,6 +159,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // Return Values
     // - if latest schema diff is not empty, return the (latest_version)
     // - if latest schema diff is empty, return the (latest_version - 1)
+    // - if schema_diff.regenerate_schema_map == true, return (-1)
     // - if error happend, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 latest_version, Context & context)
     {
