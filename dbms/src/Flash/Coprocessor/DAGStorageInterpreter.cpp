@@ -815,6 +815,12 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
     }
 
+    LOG_INFO(
+        log,
+        "DAGStorageInterpreter::buildLocalStreams, is_disaggregated_task={} snap_id={}",
+        dag_context.is_disaggregated_task,
+        *dag_context.getDisaggregatedTaskId());
+
     if (dag_context.is_disaggregated_task)
     {
         // register the snapshot to manager
