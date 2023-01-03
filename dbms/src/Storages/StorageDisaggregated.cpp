@@ -95,6 +95,7 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
         auto * meta = establish_req->mutable_meta();
         meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
         meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
+        meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
         meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
