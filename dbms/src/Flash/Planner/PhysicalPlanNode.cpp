@@ -82,7 +82,7 @@ void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size
     }
 }
 
-void PhysicalPlanNode::transform(OperatorGroupBuilder & /*op_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::transform(OperatorPipelineGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
 {
     throw Exception("Unsupport");
 }

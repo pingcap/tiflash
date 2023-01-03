@@ -59,6 +59,8 @@ public:
 
     void toError(std::string && err_msg);
 
+    PipelineExecStatus & getExecStatus() { return exec_status; }
+
 protected:
     void insertEvent(const EventPtr & replacement);
 

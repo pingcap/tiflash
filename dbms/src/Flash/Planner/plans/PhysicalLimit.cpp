@@ -21,7 +21,7 @@
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
 #include <Operators/LimitTransform.h>
-#include <Operators/OperatorBuilder.h>
+#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -53,11 +53,11 @@ void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, siz
     }
 }
 
-void PhysicalLimit::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalLimit::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    auto input_header = op_builder.getHeader();
+    auto input_header = group_builder.getHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
-    op_builder.transform([&](auto & builder) {
+    group_builder.transform([&](auto & builder) {
         builder.appendTransform(std::make_unique<LimitTransform>(global_limit, log->identifier()));
     });
 }

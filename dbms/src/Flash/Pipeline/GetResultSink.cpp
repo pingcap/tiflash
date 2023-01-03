@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/GetResultSink.h>
-#include <Operators/OperatorBuilder.h>
+#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -33,9 +33,9 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
     return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, result_handler);
 }
 
-void PhysicalGetResultSink::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalGetResultSink::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    op_builder.transform([&](auto & builder) {
+    group_builder.transform([&](auto & builder) {
         builder.setSink(std::make_unique<GetResultSink>(*this));
     });
 }

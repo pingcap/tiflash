@@ -20,12 +20,14 @@
 
 namespace DB
 {
-// push model operator executor.
+class PipelineExecStatus;
+
+// push model operator pipeline.
 // data flow: source --> transform --> .. --> transform --> sink
-class OperatorExecutor
+class OperatorPipeline
 {
 public:
-    OperatorExecutor(
+    OperatorPipeline(
         SourcePtr && source_,
         std::vector<TransformPtr> && transforms_,
         SinkPtr && sink_)
@@ -34,15 +36,14 @@ public:
         , sink(std::move(sink_))
     {}
 
-    OperatorStatus execute();
+    OperatorStatus execute(PipelineExecStatus & exec_status);
 
-    OperatorStatus await();
+    OperatorStatus await(PipelineExecStatus & exec_status);
 
-    OperatorStatus spill();
+    OperatorStatus spill(PipelineExecStatus & exec_status);
 
 private:
-    // status, next_transform_index
-    std::tuple<OperatorStatus, size_t> fetchBlock(Block & block);
+    OperatorStatus fetchBlock(Block & block, size_t & transform_index, PipelineExecStatus & exec_status);
 
     template <typename Op>
     OperatorStatus pushSpiller(OperatorStatus status, const Op & op)
@@ -61,9 +62,10 @@ private:
     std::vector<TransformPtr> transforms;
     SinkPtr sink;
 
+    // hold the operator which is ready for spilling.
     std::optional<Spiller *> spiller;
 };
-using OperatorExecutorPtr = std::unique_ptr<OperatorExecutor>;
-using OperatorExecutorGroup = std::vector<OperatorExecutorPtr>;
-using OperatorExecutorGroups = std::vector<OperatorExecutorGroup>;
+using OperatorPipelinePtr = std::unique_ptr<OperatorPipeline>;
+using OperatorPipelineGroup = std::vector<OperatorPipelinePtr>;
+using OperatorPipelineGroups = std::vector<OperatorPipelineGroup>;
 } // namespace DB

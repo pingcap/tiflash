@@ -23,19 +23,19 @@ bool PipelineEvent::scheduleImpl()
     exec_status.addActivePipeline();
 
     assert(pipeline);
-    auto op_groups = pipeline->transform(context, concurrency);
+    auto op_pipeline_groups = pipeline->transform(context, concurrency);
     pipeline.reset();
 
-    // Until `non-joined-fetch` and `fine grained shuffle` are supported, the size of op_groups can only be 1.
-    assert(op_groups.size() == 1);
-    auto group = std::move(op_groups.back());
-    if (group.empty())
+    // Until `non-joined-fetch` and `fine grained shuffle` are supported, the size of op_pipeline_groups can only be 1.
+    assert(op_pipeline_groups.size() == 1);
+    auto op_pipeline_group = std::move(op_pipeline_groups.back());
+    if (op_pipeline_group.empty())
         return true;
 
     std::vector<TaskPtr> tasks;
-    tasks.reserve(group.size());
-    for (auto & op_executor : group)
-        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, shared_from_this(), std::move(op_executor)));
+    tasks.reserve(op_pipeline_group.size());
+    for (auto & op_pipeline : op_pipeline_group)
+        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, shared_from_this(), std::move(op_pipeline)));
     scheduleTask(tasks);
     return false;
 }

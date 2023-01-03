@@ -48,7 +48,7 @@ public:
 
     size_t getSourceNum() const { return source_num; };
 
-    void transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;

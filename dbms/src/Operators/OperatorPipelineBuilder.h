@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <Operators/OperatorExecutor.h>
+#include <Operators/OperatorPipeline.h>
 
 namespace DB
 {
-struct OperatorBuilder
+struct OperatorPipelineBuilder
 {
     SourcePtr source;
     std::vector<TransformPtr> transforms;
@@ -30,13 +30,13 @@ struct OperatorBuilder
     void appendTransform(TransformPtr && transform);
     void setSink(SinkPtr && sink_);
 
-    OperatorExecutorPtr build();
+    OperatorPipelinePtr build();
 };
 
-struct OperatorGroupBuilder
+struct OperatorPipelineGroupBuilder
 {
-    // A Group generates a set of operator executors running in parallel.
-    using BuilderGroup = std::vector<OperatorBuilder>;
+    // A Group generates a set of operator pipelines running in parallel.
+    using BuilderGroup = std::vector<OperatorPipelineBuilder>;
     // The relationship between different BuilderGroups is similar to
     // the relationship between `streams` and `streams_with_non_joined_data` in `DAGPipeline`.
     std::vector<BuilderGroup> groups;
@@ -45,7 +45,7 @@ struct OperatorGroupBuilder
 
     void addGroup(size_t concurrency);
 
-    /// ff: [](OperatorBuilder & builder) {}
+    /// ff: [](OperatorPipelineBuilder & builder) {}
     template <typename FF>
     void transform(FF && ff)
     {
@@ -59,7 +59,7 @@ struct OperatorGroupBuilder
         }
     }
 
-    OperatorExecutorGroups build();
+    OperatorPipelineGroups build();
 
     Block getHeader();
 };

@@ -33,6 +33,7 @@ enum class OperatorStatus
     MORE_INPUT,
     // finish status
     FINISHED,
+    CANCELLED,
 };
 
 class Spiller

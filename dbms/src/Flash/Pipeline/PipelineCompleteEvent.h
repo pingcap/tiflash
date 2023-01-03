@@ -33,6 +33,10 @@ protected:
 
     void finalizeFinish() override
     {
+        // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
+        // we have to call `exec_status.completePipeline()` at finalizeFinish,
+        // since `exec_status.addActivePipeline()` will have been called by the next events.
+        // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
         exec_status.completePipeline();
     }
 };

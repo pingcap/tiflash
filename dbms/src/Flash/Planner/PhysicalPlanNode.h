@@ -28,7 +28,7 @@ struct DAGPipeline;
 class Context;
 class DAGContext;
 
-struct OperatorGroupBuilder;
+struct OperatorPipelineGroupBuilder;
 
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
@@ -62,7 +62,7 @@ public:
 
     virtual void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void transform(OperatorGroupBuilder & /*op_builder*/, Context & /*context*/, size_t /*concurrency*/);
+    virtual void transform(OperatorPipelineGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
 
     virtual void buildPipeline(PipelineBuilder & pipeline_builder, const PipelinePtr & pipeline);
 

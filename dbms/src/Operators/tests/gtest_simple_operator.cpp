@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
-#include <Operators/OperatorBuilder.h>
+#include <Operators/OperatorPipelineBuilder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -78,18 +79,19 @@ public:
         physical_plan.build(request.get());
         auto plan_tree = physical_plan.outputAndOptimize();
 
-        OperatorGroupBuilder op_builder;
+        OperatorPipelineGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            plan->transform(op_builder, context.context, /*concurrency=*/1);
+            plan->transform(group_builder, context.context, /*concurrency=*/1);
         });
 
         std::vector<Block> blocks;
-        op_builder.transform([&blocks](auto & builder) { builder.setSink(std::make_unique<GetResultSink>(blocks)); });
-        auto result = op_builder.build();
+        group_builder.transform([&blocks](auto & builder) { builder.setSink(std::make_unique<GetResultSink>(blocks)); });
+        auto result = group_builder.build();
         assert(result.size() == 1 && result.back().size() == 1);
         const auto & op_exec = result.back().back();
-        while (op_exec->execute() != OperatorStatus::FINISHED)
+        PipelineExecStatus exec_status;
+        while (op_exec->execute(exec_status) != OperatorStatus::FINISHED)
         {
         }
         ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());

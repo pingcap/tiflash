@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/GetResultSink.h>
 #include <Flash/Pipeline/Pipeline.h>
@@ -21,7 +22,7 @@
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Operators/OperatorBuilder.h>
+#include <Operators/OperatorPipelineBuilder.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -72,10 +73,10 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
     plans.push_front(get_result_sink);
 }
 
-OperatorExecutorGroups Pipeline::transform(Context & context, size_t concurrency)
+OperatorPipelineGroups Pipeline::transform(Context & context, size_t concurrency)
 {
     assert(!plans.empty());
-    OperatorGroupBuilder builder;
+    OperatorPipelineGroupBuilder builder;
     for (auto it = plans.rbegin(); it != plans.rend(); ++it)
         (*it)->transform(builder, context, concurrency);
     return builder.build();
@@ -127,6 +128,11 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
     traverseExecutors(
         &dag_request,
         [&](const tipb::Executor & executor) {
+            if (FineGrainedShuffle(&executor).enable())
+            {
+                is_supported = false;
+                return false;
+            }
             switch (executor.tp())
             {
             case tipb::ExecType::TypeProjection:

@@ -65,6 +65,9 @@ void ExecutorTest::SetUp()
 
 void ExecutorTest::TearDown()
 {
+    if (context.mockStorage())
+        context.mockStorage()->clear();
+
     assert(TaskScheduler::instance);
     TaskScheduler::instance.reset();
 }

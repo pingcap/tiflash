@@ -50,6 +50,7 @@ void SpillExecutor::submit(TaskPtr && task)
     task_queue->submit(std::move(task));
 }
 
+// TODO ensure that the task is executed more than 100 ms at a time like `TaskExecutor::handleTask`.
 void SpillExecutor::handleTask(TaskPtr && task)
 {
     assert(task);

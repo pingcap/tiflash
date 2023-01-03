@@ -22,18 +22,18 @@ namespace DB
 PipelineTask::PipelineTask(
     MemoryTrackerPtr mem_tracker_,
     const EventPtr & event_,
-    OperatorExecutorPtr && op_executor_)
+    OperatorPipelinePtr && op_pipeline_)
     : Task(std::move(mem_tracker_))
     , event(event_)
-    , op_executor(std::move(op_executor_))
+    , op_pipeline(std::move(op_pipeline_))
 {
     assert(event);
-    assert(op_executor);
+    assert(op_pipeline);
 }
 
 PipelineTask::~PipelineTask()
 {
-    op_executor.reset();
+    op_pipeline.reset();
     assert(event);
     event->finishTask();
     event.reset();
@@ -42,24 +42,29 @@ PipelineTask::~PipelineTask()
 #define HANDLE_CANCELLED                  \
     if (unlikely(event->isCancelled()))   \
     {                                     \
-        op_executor.reset();              \
+        op_pipeline.reset();              \
         return ExecTaskStatus::CANCELLED; \
     }
 
 #define HANDLE_ERROR                                            \
     catch (...)                                                 \
     {                                                           \
-        op_executor.reset();                                    \
+        op_pipeline.reset();                                    \
         assert(event);                                          \
         event->toError(getCurrentExceptionMessage(true, true)); \
         return ExecTaskStatus::ERROR;                           \
     }
 
-#define HANDLE_FINISHED                  \
-    case OperatorStatus::FINISHED:       \
-    {                                    \
-        op_executor.reset();             \
-        return ExecTaskStatus::FINISHED; \
+#define HANDLE_FINISHED_STATUS            \
+    case OperatorStatus::FINISHED:        \
+    {                                     \
+        op_pipeline.reset();              \
+        return ExecTaskStatus::FINISHED;  \
+    }                                     \
+    case OperatorStatus::CANCELLED:       \
+    {                                     \
+        op_pipeline.reset();              \
+        return ExecTaskStatus::CANCELLED; \
     }
 
 ExecTaskStatus PipelineTask::executeImpl()
@@ -67,11 +72,12 @@ ExecTaskStatus PipelineTask::executeImpl()
     HANDLE_CANCELLED
     try
     {
-        assert(op_executor);
-        auto op_status = op_executor->execute();
+        assert(event);
+        assert(op_pipeline);
+        auto op_status = op_pipeline->execute(event->getExecStatus());
         switch (op_status)
         {
-            HANDLE_FINISHED
+            HANDLE_FINISHED_STATUS
         case OperatorStatus::WAITING:
             return ExecTaskStatus::WAITING;
         case OperatorStatus::SPILLING:
@@ -91,11 +97,12 @@ ExecTaskStatus PipelineTask::awaitImpl()
     HANDLE_CANCELLED
     try
     {
-        assert(op_executor);
-        auto op_status = op_executor->await();
+        assert(event);
+        assert(op_pipeline);
+        auto op_status = op_pipeline->await(event->getExecStatus());
         switch (op_status)
         {
-            HANDLE_FINISHED
+            HANDLE_FINISHED_STATUS
         case OperatorStatus::WAITING:
             return ExecTaskStatus::WAITING;
         case OperatorStatus::PASS:
@@ -112,11 +119,12 @@ ExecTaskStatus PipelineTask::spillImpl()
     HANDLE_CANCELLED
     try
     {
-        assert(op_executor);
-        auto op_status = op_executor->spill();
+        assert(event);
+        assert(op_pipeline);
+        auto op_status = op_pipeline->spill(event->getExecStatus());
         switch (op_status)
         {
-            HANDLE_FINISHED
+            HANDLE_FINISHED_STATUS
         case OperatorStatus::SPILLING:
             return ExecTaskStatus::SPILLING;
         case OperatorStatus::PASS:
@@ -130,6 +138,6 @@ ExecTaskStatus PipelineTask::spillImpl()
 
 #undef HANDLE_CANCELLED
 #undef HANDLE_ERROR
-#undef HANDLE_FINISHED
+#undef HANDLE_FINISHED_STATUS
 
 } // namespace DB

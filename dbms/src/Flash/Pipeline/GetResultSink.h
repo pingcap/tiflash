@@ -65,7 +65,7 @@ public:
         throw Exception("Unsupport");
     }
 
-    void transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 
 public:
     std::mutex mu;

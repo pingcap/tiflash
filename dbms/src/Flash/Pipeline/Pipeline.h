@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
-#include <Operators/OperatorExecutor.h>
+#include <Operators/OperatorPipeline.h>
 
 #include <deque>
 #include <vector>
@@ -52,7 +52,7 @@ public:
     // only used for test.
     void addGetResultSink(ResultHandler result_handler);
 
-    OperatorExecutorGroups transform(Context & context, size_t concurrency);
+    OperatorPipelineGroups transform(Context & context, size_t concurrency);
 
     Events toEvents(PipelineExecStatus & status, Context & context, size_t concurrency);
 
@@ -65,7 +65,6 @@ private:
     // data flow: plans.begin() <-- plans.end()
     std::deque<PhysicalPlanNodePtr> plans;
 
-    // use weak_ptr to avoid circular references.
     std::vector<std::weak_ptr<Pipeline>> dependencies;
 };
 

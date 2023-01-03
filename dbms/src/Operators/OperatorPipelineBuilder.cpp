@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/OperatorBuilder.h>
+#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
-void OperatorBuilder::setSource(SourcePtr && source_)
+void OperatorPipelineBuilder::setSource(SourcePtr && source_)
 {
     assert(!source && source_);
     source = std::move(source_);
@@ -24,29 +24,29 @@ void OperatorBuilder::setSource(SourcePtr && source_)
     header = source->readHeader();
     assert(header);
 }
-void OperatorBuilder::appendTransform(TransformPtr && transform)
+void OperatorPipelineBuilder::appendTransform(TransformPtr && transform)
 {
     assert(source && transform);
     transforms.push_back(std::move(transform));
     transforms.back()->transformHeader(header);
     assert(header);
 }
-void OperatorBuilder::setSink(SinkPtr && sink_)
+void OperatorPipelineBuilder::setSink(SinkPtr && sink_)
 {
     assert(header && !sink && sink_);
     sink = std::move(sink_);
 }
 
-OperatorExecutorPtr OperatorBuilder::build()
+OperatorPipelinePtr OperatorPipelineBuilder::build()
 {
     assert(source && sink);
-    return std::make_unique<OperatorExecutor>(
+    return std::make_unique<OperatorPipeline>(
         std::move(source),
         std::move(transforms),
         std::move(sink));
 }
 
-void OperatorGroupBuilder::addGroup(size_t concurrency)
+void OperatorPipelineGroupBuilder::addGroup(size_t concurrency)
 {
     assert(concurrency > 0);
     max_concurrency_in_groups = std::max(max_concurrency_in_groups, concurrency);
@@ -55,21 +55,21 @@ void OperatorGroupBuilder::addGroup(size_t concurrency)
     groups.push_back(std::move(group));
 }
 
-OperatorExecutorGroups OperatorGroupBuilder::build()
+OperatorPipelineGroups OperatorPipelineGroupBuilder::build()
 {
     assert(max_concurrency_in_groups > 0);
-    OperatorExecutorGroups op_groups;
+    OperatorPipelineGroups op_pipeline_groups;
     for (auto & group : groups)
     {
-        OperatorExecutorGroup op_group;
+        OperatorPipelineGroup op_pipeline_group;
         for (auto & builder : group)
-            op_group.push_back(builder.build());
-        op_groups.push_back(std::move(op_group));
+            op_pipeline_group.push_back(builder.build());
+        op_pipeline_groups.push_back(std::move(op_pipeline_group));
     }
-    return op_groups;
+    return op_pipeline_groups;
 }
 
-Block OperatorGroupBuilder::getHeader()
+Block OperatorPipelineGroupBuilder::getHeader()
 {
     assert(max_concurrency_in_groups > 0);
     assert(groups.back().back().header);

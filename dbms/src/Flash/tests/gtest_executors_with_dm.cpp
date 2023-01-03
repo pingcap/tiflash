@@ -64,11 +64,6 @@ public:
                                    toNullableVec<String>("col9", col_string)});
     }
 
-    void TearDown() override
-    {
-        context.mockStorage()->clear();
-    }
-
     ColumnWithInt64 col_id{1, 2, 3, 4, 5, 6, 7, 8, 9};
     ColumnWithNullableInt8 col_tinyint{1, 2, 3, {}, {}, 0, 0, -1, -2};
     ColumnWithNullableInt16 col_smallint{2, 3, {}, {}, 0, -1, -2, 4, 0};

@@ -25,7 +25,7 @@ namespace
 class BaseTask : public Task
 {
 public:
-    explicit BaseTask(const EventPtr & event_, std::atomic_int64_t & counter_)
+    BaseTask(const EventPtr & event_, std::atomic_int64_t & counter_)
         : Task(nullptr)
         , event(event_)
         , counter(counter_)
@@ -294,25 +294,35 @@ protected:
 TEST_F(EventTestRunner, base)
 try
 {
-    for (size_t event_num = 1; event_num < 200; ++event_num)
-    {
-        // BaseEvent::finalizeFinish + BaseEvent::task_num * ~BaseTask()
-        std::atomic_int64_t counter{static_cast<int64_t>(event_num * (1 + BaseEvent::task_num))};
+    auto do_test = [&](size_t group_num, size_t event_num) {
+        // group_num * (evnet_num * (`BaseEvent::finalizeFinish + BaseEvent::task_num * ~BaseTask()`))
+        std::atomic_int64_t counter{static_cast<int64_t>(group_num * (event_num * (1 + BaseEvent::task_num)))};
         PipelineExecStatus exec_status;
         {
-            std::vector<EventPtr> events;
-            for (size_t i = 0; i < event_num; ++i)
+            std::vector<EventPtr> all_events;
+            for (size_t i = 0; i < group_num; ++i)
             {
-                auto event = std::make_shared<BaseEvent>(exec_status, counter);
-                if (!events.empty())
-                    event->addDependency(events.back());
-                events.push_back(event);
+                std::vector<EventPtr> events;
+                EventPtr start;
+                for (size_t j = 0; j < event_num; ++j)
+                {
+                    auto event = std::make_shared<BaseEvent>(exec_status, counter);
+                    if (!events.empty())
+                        event->addDependency(events.back());
+                    events.push_back(event);
+                }
+                all_events.insert(all_events.end(), events.begin(), events.end());
             }
-            schedule(events);
+            schedule(all_events);
         }
         wait(exec_status);
         ASSERT_TRUE(0 == counter);
         assertNoErr(exec_status);
+    };
+    for (size_t group_num = 1; group_num < 50; group_num += 11)
+    {
+        for (size_t event_num = 1; event_num < 50; event_num += 11)
+            do_test(group_num, event_num);
     }
 }
 CATCH

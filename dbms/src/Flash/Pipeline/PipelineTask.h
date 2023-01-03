@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Task.h>
-#include <Operators/OperatorExecutor.h>
+#include <Operators/OperatorPipeline.h>
 
 namespace DB
 {
@@ -28,7 +28,7 @@ public:
     PipelineTask(
         MemoryTrackerPtr mem_tracker_,
         const EventPtr & event_,
-        OperatorExecutorPtr && op_executor_);
+        OperatorPipelinePtr && op_pipeline_);
 
     ~PipelineTask();
 
@@ -41,6 +41,6 @@ protected:
 
 private:
     EventPtr event;
-    OperatorExecutorPtr op_executor;
+    OperatorPipelinePtr op_pipeline;
 };
 } // namespace DB

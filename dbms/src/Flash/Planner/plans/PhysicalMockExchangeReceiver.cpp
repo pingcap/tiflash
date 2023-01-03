@@ -21,7 +21,7 @@
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSource.h>
-#include <Operators/OperatorBuilder.h>
+#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -102,11 +102,11 @@ void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::transform(OperatorGroupBuilder & op_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockExchangeReceiver::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    op_builder.addGroup(mock_streams.size());
+    group_builder.addGroup(mock_streams.size());
     size_t i = 0;
-    op_builder.transform([&](auto & builder) {
+    group_builder.transform([&](auto & builder) {
         builder.setSource(std::make_unique<BlockInputStreamSource>(mock_streams[i++]));
     });
 }

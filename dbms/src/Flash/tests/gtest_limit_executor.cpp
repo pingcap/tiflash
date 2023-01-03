@@ -22,6 +22,8 @@ namespace tests
 class LimitExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
+    static constexpr size_t big_table_rows = 200;
+
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -30,7 +32,7 @@ public:
                              {{col_name, TiDB::TP::TypeString}},
                              {toNullableVec<String>(col_name, col0)});
 
-        ColumnWithData col;
+        ColumnWithNullableString col;
         for (size_t i = 0; i < big_table_rows; ++i)
             col.emplace_back("a");
         context.addMockTable({"test", "bigtable"},
