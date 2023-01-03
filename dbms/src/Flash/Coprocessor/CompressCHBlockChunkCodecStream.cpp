@@ -10,30 +10,28 @@
 namespace DB
 {
 
-void CompressCHBlockChunkCodecStream::encodeHeader(const Block & header, size_t rows)
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
 {
-    WriteBuffer * ostr_ptr = getWriter();
-
     size_t columns = header.columns();
-    writeVarUInt(columns, *ostr_ptr);
-    writeVarUInt(rows, *ostr_ptr);
+    writeVarUInt(columns, ostr);
+    writeVarUInt(rows, ostr);
 
     for (size_t i = 0; i < columns; i++)
     {
         const ColumnWithTypeAndName & column = header.safeGetByPosition(i);
-        writeStringBinary(column.name, *ostr_ptr);
-        writeStringBinary(column.type->getName(), *ostr_ptr);
+        writeStringBinary(column.name, ostr);
+        writeStringBinary(column.type->getName(), ostr);
     }
 }
 
 extern void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 
-void CompressCHBlockChunkCodecStream::encodeColumn(const ColumnPtr & column, const ColumnWithTypeAndName & type_name)
+void EncodeColumn(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name)
 {
-    WriteBuffer * ostr_ptr = getWriter();
-    writeVarUInt(column->size(), *ostr_ptr);
-    writeData(*type_name.type, column, *ostr_ptr, 0, 0);
+    writeVarUInt(column->size(), ostr);
+    writeData(*type_name.type, column, ostr, 0, 0);
 }
+
 std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compress_method)
 {
     return std::make_unique<CompressCHBlockChunkCodecStream>(compress_method);

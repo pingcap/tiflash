@@ -46,7 +46,8 @@ HashPartitionWriterV1<ExchangeWriterPtr>::HashPartitionWriterV1(
     DAGContext & dag_context_,
     mpp::CompressMethod compress_method_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
-    , batch_send_min_limit(batch_send_min_limit_)
+    , partition_num(writer_->getPartitionNum())
+    , batch_send_min_limit(batch_send_min_limit_ * partition_num)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
@@ -57,7 +58,6 @@ HashPartitionWriterV1<ExchangeWriterPtr>::HashPartitionWriterV1(
     assert(dag_context.getMPPTaskMeta().mpp_version() > 0);
 
     rows_in_blocks = 0;
-    partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
     for (const auto & field_type : dag_context.result_field_types)
@@ -120,7 +120,6 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
         if (writer->isLocal(part_id))
         {
             method = mpp::CompressMethod::NONE;
-            tracked_packets[part_id]->getPacket().set_version(0);
         }
         tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
     }
@@ -161,70 +160,75 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
 
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
+            WriteBuffer * ostr_ptr{};
             if (tracked_packets[part_id]->getPacket().compress().method() == mpp::NONE)
             {
-                auto * ostr_ptr = compress_chunk_codec_stream->getWriterWithoutCompress();
-                for (auto && columns : dest_columns[part_id])
-                {
-                    dest_block_header.setColumns(std::move(columns));
-                    encoded_rows += dest_block_header.rows();
+                ostr_ptr = compress_chunk_codec_stream->getWriterWithoutCompress();
+                // for (auto && columns : dest_columns[part_id])
+                // {
+                //     dest_block_header.setColumns(std::move(columns));
+                //     encoded_rows += dest_block_header.rows();
 
-                    EncodeCHBlockChunk(ostr_ptr, dest_block_header);
-                    tracked_packets[part_id]->getPacket().add_chunks(ostr_ptr->getString());
-                    ostr_ptr->reset();
+                //     EncodeCHBlockChunk(ostr_ptr, dest_block_header);
+                //     tracked_packets[part_id]->getPacket().add_chunks(ostr_ptr->getString());
+                //     ostr_ptr->reset();
 
-                    {
-                        const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
-                        const auto & dd = chunks[chunks.size() - 1];
+                //     // {
+                //     //     const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
+                //     //     const auto & dd = chunks[chunks.size() - 1];
 
-                        auto res = CHBlockChunkCodec::decode(dd, dest_block_header);
-                        RUNTIME_CHECK(res.rows() == dest_block_header.rows(), res.rows(), dest_block_header.rows());
-                        RUNTIME_CHECK(res.columns() == dest_block_header.columns(), res.columns(), dest_block_header.columns());
-                        res.checkNumberOfRows();
-                        for (size_t i = 0; i < res.columns(); ++i)
-                        {
-                            RUNTIME_CHECK(dest_block_header.getByPosition(i) == res.getByPosition(i));
-                        }
-                    }
-                }
+                //     //     auto res = CHBlockChunkCodec::decode(dd, dest_block_header);
+                //     //     RUNTIME_CHECK(res.rows() == dest_block_header.rows(), res.rows(), dest_block_header.rows());
+                //     //     RUNTIME_CHECK(res.columns() == dest_block_header.columns(), res.columns(), dest_block_header.columns());
+                //     //     res.checkNumberOfRows();
+                //     //     for (size_t i = 0; i < res.columns(); ++i)
+                //     //     {
+                //     //         RUNTIME_CHECK(dest_block_header.getByPosition(i) == res.getByPosition(i));
+                //     //     }
+                //     // }
+                // }
             }
             else
+            {
+                ostr_ptr = compress_chunk_codec_stream->getWriter();
+            }
+
             {
                 size_t part_rows = std::accumulate(dest_columns[part_id].begin(), dest_columns[part_id].end(), 0, [](const auto & r, const auto & columns) { return r + columns[0]->size(); });
                 encoded_rows += part_rows;
 
-                compress_chunk_codec_stream->encodeHeader(dest_block_header, part_rows);
+                EncodeHeader(*ostr_ptr, dest_block_header, part_rows);
                 for (size_t col_index = 0; col_index < dest_block_header.columns(); ++col_index)
                 {
                     auto && col_type_name = dest_block_header.getByPosition(col_index);
                     for (auto && columns : dest_columns[part_id])
                     {
-                        compress_chunk_codec_stream->encodeColumn(std::move(columns[col_index]), col_type_name);
+                        EncodeColumn(*ostr_ptr, std::move(columns[col_index]), col_type_name);
                     }
                 }
 
                 tracked_packets[part_id]->getPacket().add_chunks(compress_chunk_codec_stream->getString());
                 compress_chunk_codec_stream->reset();
 
-                {
-                    // decode
-                    const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
-                    const auto & dd = chunks[chunks.size() - 1];
+                // {
+                //     // decode
+                //     const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
+                //     const auto & dd = chunks[chunks.size() - 1];
 
-                    ReadBufferFromString istr(dd);
-                    auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
+                //     ReadBufferFromString istr(dd);
+                //     auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
 
-                    size_t rows{};
-                    Block res = DecodeHeader(compress_buffer, dest_block_header, rows);
-                    DecodeColumns(compress_buffer, res, res.columns(), rows);
-                    RUNTIME_CHECK(res.rows() == part_rows, res.rows(), part_rows);
-                    RUNTIME_CHECK(res.columns() == dest_block_header.columns(), res.columns(), dest_block_header.columns());
-                    res.checkNumberOfRows();
-                    for (size_t i = 0; i < res.columns(); ++i)
-                    {
-                        RUNTIME_CHECK(dest_block_header.getByPosition(i) == res.getByPosition(i));
-                    }
-                }
+                //     size_t rows{};
+                //     Block res = DecodeHeader(compress_buffer, dest_block_header, rows);
+                //     DecodeColumns(compress_buffer, res, res.columns(), rows);
+                //     RUNTIME_CHECK(res.rows() == part_rows, res.rows(), part_rows);
+                //     RUNTIME_CHECK(res.columns() == dest_block_header.columns(), res.columns(), dest_block_header.columns());
+                //     res.checkNumberOfRows();
+                //     for (size_t i = 0; i < res.columns(); ++i)
+                //     {
+                //         RUNTIME_CHECK(dest_block_header.getByPosition(i) == res.getByPosition(i));
+                //     }
+                // }
             }
         }
 

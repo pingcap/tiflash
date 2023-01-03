@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include "Columns/IColumn.h"
@@ -32,6 +33,12 @@ struct WriteBufferFromOwnStringList final
     std::string getString()
     {
         next();
+
+        if (!buffs.empty() && buffs[0].size() >= bytes)
+        {
+            buffs[0].resize(bytes);
+            return std::move(buffs[0]);
+        }
 
         std::string res;
         res.resize(bytes);
@@ -104,18 +111,14 @@ struct CompressCHBlockChunkCodecStream
     }
     ~CompressCHBlockChunkCodecStream() = default;
 
-    // void disableCompress() { enable_compress = false; }
-    // void enableCompress() { enable_compress = true; }
-
-    void encodeHeader(const Block & header, size_t rows);
-    void encodeColumn(const ColumnPtr & column, const ColumnWithTypeAndName & type_name);
-
     // bool enable_compress{true};
     CompressionMethod compress_method;
     std::unique_ptr<WriteBufferFromOwnStringList> output_buffer{};
     std::unique_ptr<CompressedCHBlockChunkCodec::CompressedWriteBuffer> compress_write_buffer{};
 };
 
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
+void EncodeColumn(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name);
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t columns, size_t rows, size_t reserve_size = 0);
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 

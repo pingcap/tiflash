@@ -475,7 +475,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const size_t batch_send_min_limit = 100;
+    const size_t batch_send_min_limit = 16;
     const uint16_t part_num = 4;
 
     // 1. Build Blocks.
@@ -512,7 +512,7 @@ try
     size_t per_part_rows = block_rows * block_num / part_num;
     ASSERT_EQ(write_report.size(), part_num);
 
-    CHBlockChunkDecodeAndSquash decoder(header, std::numeric_limits<size_t>::max());
+    CHBlockChunkDecodeAndSquash decoder(header, 512);
 
     for (const auto & ele : write_report)
     {
@@ -520,27 +520,20 @@ try
         for (const auto & tracked_packet : ele.second)
         {
             auto & packet = tracked_packet->getPacket();
+            ASSERT_EQ(packet.version(), TiDB::MppVersion::MppVersionV1);
 
-            if (packet.version() && packet.compress().method() != mpp::CompressMethod::NONE)
+            for (auto && chunk : packet.chunks())
             {
-                for (auto && chunk : packet.chunks())
-                {
-                    auto && result = decoder.decodeAndSquashWithCompress(chunk);
-                    if (!result)
-                        continue;
-                    decoded_block_rows += result->rows();
-                }
+                auto && result = decoder.decodeAndSquash(chunk, packet.compress().method() != mpp::CompressMethod::NONE);
+                if (!result)
+                    continue;
+                decoded_block_rows += result->rows();
             }
-            else
-            {
-                for (auto && chunk : packet.chunks())
-                {
-                    auto result = decoder.decodeAndSquash(chunk);
-                    if (!result)
-                        continue;
-                    decoded_block_rows += result->rows();
-                }
-            }
+        }
+        {
+            auto result = decoder.flush();
+            if (result)
+                decoded_block_rows += result->rows();
         }
         ASSERT_EQ(decoded_block_rows, per_part_rows);
     }

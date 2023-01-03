@@ -33,13 +33,20 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 {
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompress(std::string_view sv)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(std::string_view sv, bool compress)
+{
+    ReadBufferFromString istr(sv);
+    if (!compress)
+        return decodeAndSquashWithCompressImpl(istr);
+    auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
+    return decodeAndSquashWithCompressImpl(compress_buffer);
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressImpl(ReadBuffer & istr)
 {
     std::optional<Block> res;
-    ReadBufferFromString istr(sv);
-    auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
 
-    if (compress_buffer.eof())
+    if (istr.eof())
     {
         if (accumulated_block)
             res.swap(accumulated_block);
@@ -49,16 +56,16 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompress(st
     if (!accumulated_block)
     {
         size_t rows{};
-        Block block = DecodeHeader(compress_buffer, codec.header, rows);
-        DecodeColumns(compress_buffer, block, codec.header.columns(), rows, static_cast<size_t>(rows_limit * 1.5));
+        Block block = DecodeHeader(istr, codec.header, rows);
+        DecodeColumns(istr, block, codec.header.columns(), rows, static_cast<size_t>(rows_limit * 1.5));
         if (block)
             accumulated_block.emplace(std::move(block));
     }
     else
     {
         size_t rows{};
-        DecodeHeader(compress_buffer, codec.header, rows);
-        DecodeColumns(compress_buffer, *accumulated_block, codec.header.columns(), rows, 0);
+        DecodeHeader(istr, codec.header, rows);
+        DecodeColumns(istr, *accumulated_block, codec.header.columns(), rows, 0);
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)

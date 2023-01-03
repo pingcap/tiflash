@@ -47,45 +47,32 @@ void trimStackTrace(String & message)
 
 namespace TiDB
 {
-
-enum class MppVersion : int64_t
-{
-    V0 = 0,
-    V1,
-    MAX,
-};
-
-static constexpr int64_t toInt64(MppVersion v)
-{
-    return static_cast<int64_t>(v);
-}
-
 // Latest mpp-version supported by TiFlash
-constexpr MppVersion MPP_VERSION = MppVersion(toInt64(MppVersion::MAX) - 1);
+constexpr MppVersion MPP_VERSION = MppVersion((MppVersion::MppVersionMAX)-1);
 
 // TODO: set version after committed
-constexpr std::array<const char *, toInt64(MppVersion::MAX)> MPP_TIFLASH_RELEASE_VERSION = {"", "?"};
+constexpr std::array<const char *, (MppVersion::MppVersionMAX)> MPP_TIFLASH_RELEASE_VERSION = {"", "?"};
 
 // Check mpp-version is illegal
 bool CheckMppVersion(int64_t mpp_version)
 {
-    return mpp_version >= toInt64(MppVersion::V0) && mpp_version < toInt64(MppVersion::MAX);
+    return mpp_version >= (MppVersion::MppVersionV0) && mpp_version < (MppVersion::MppVersionMAX);
 }
 
 std::string GenMppVersionErrorMessage(int64_t mpp_version)
 {
     auto err_msg = fmt::format("invalid mpp version `{}`, expect version: min `{}`, max `{}` release version `{}`",
                                mpp_version,
-                               toInt64(MppVersion::V0),
-                               toInt64(MPP_VERSION),
-                               MPP_TIFLASH_RELEASE_VERSION[toInt64(MPP_VERSION)]);
+                               (MppVersion::MppVersionV0),
+                               (MPP_VERSION),
+                               MPP_TIFLASH_RELEASE_VERSION[(MPP_VERSION)]);
     return err_msg;
 }
 
 // Get latest mpp-version supported by TiFlash
 int64_t GetMppVersion()
 {
-    return toInt64(MPP_VERSION);
+    return (MPP_VERSION);
 }
 
 std::string GetMppVersionReleaseInfo(int64_t mpp_version)

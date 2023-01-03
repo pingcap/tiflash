@@ -51,6 +51,7 @@ private:
     void sendExecutionSummary();
 
 private:
+    uint16_t partition_num;
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;
     ExchangeWriterPtr writer;
@@ -58,7 +59,6 @@ private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
-    uint16_t partition_num;
     DataTypes expected_types;
     mpp::CompressMethod compress_method{};
     std::unique_ptr<CompressCHBlockChunkCodecStream> compress_chunk_codec_stream;
