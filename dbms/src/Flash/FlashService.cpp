@@ -458,18 +458,22 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
         client_info.interface = ClientInfo::Interface::GRPC;
 
-        /// Set DAG parameters.
-        std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
-        if (!dag_records_per_chunk_str.empty())
-        {
-            tmp_context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
-        }
+        /// Set config from metadata, format: name of meta name, name of tiflash config, default value of meta item.
+        static const std::string meta_config[][3] = {
+            {"dag_records_per_chunk", "dag_records_per_chunk", ""},
+            {"tidb_max_tiflash_threads", "max_threads", ""},
+            {"tidb_tiflash_max_memory_usage", "max_memory_usage", ""},
+            {"tidb_tiflash_max_memory_usage_for_all_queries", "max_memory_usage_for_all_queries", ""},
+        };
 
-        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
-        if (!max_threads.empty())
+        for (const auto & [meta_name, config_name, default_value] : meta_config)
         {
-            tmp_context->setSetting("max_threads", max_threads);
-            LOG_INFO(log, "set context setting max_threads to {}", max_threads);
+            String value = getClientMetaVarWithDefault(grpc_context, meta_name, default_value);
+            if (!value.empty())
+            {
+                tmp_context->setSetting(config_name, value);
+                LOG_INFO(log, "from grpc metadata set context setting {} to {}", config_name, value);
+            }
         }
 
         tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
