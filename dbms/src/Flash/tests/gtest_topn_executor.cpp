@@ -23,11 +23,6 @@ namespace tests
 class TopNExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    using ColStringType = std::optional<typename TypeTraits<String>::FieldType>;
-    using ColInt32Type = std::optional<typename TypeTraits<Int32>::FieldType>;
-    using ColumnWithString = std::vector<ColStringType>;
-    using ColumnWithInt32 = std::vector<ColInt32Type>;
-
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -97,14 +92,14 @@ public:
 
     const String table_single_name{"topn_single_table"}; /// For single column test
     const String single_col_name{"single_col"};
-    ColumnWithString col0{"col0-0", "col0-1", "col0-2", {}, "col0-4", {}, "col0-6", "col0-7"};
+    ColumnWithNullableString col0{"col0-0", "col0-1", "col0-2", {}, "col0-4", {}, "col0-6", "col0-7"};
 
     const String table_name{"clerk"};
     const std::vector<String> col_name{"age", "gender", "country", "salary"};
-    ColumnWithInt32 col_age{{}, 27, 32, 36, {}, 34};
-    ColumnWithString col_gender{"female", "female", "male", "female", "male", "male"};
-    ColumnWithString col_country{"korea", "usa", "usa", "china", "china", "china"};
-    ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
+    ColumnWithNullableInt32 col_age{{}, 27, 32, 36, {}, 34};
+    ColumnWithNullableString col_gender{"female", "female", "male", "female", "male", "male"};
+    ColumnWithNullableString col_country{"korea", "usa", "usa", "china", "china", "china"};
+    ColumnWithNullableInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
 TEST_F(TopNExecutorTestRunner, TopN)
@@ -121,7 +116,7 @@ try
             bool is_desc;
             is_desc = static_cast<bool>(i); /// Set descent or ascent
             if (is_desc)
-                sort(col0.begin(), col0.end(), std::greater<ColStringType>()); /// Sort col0 for the following comparison
+                sort(col0.begin(), col0.end(), std::greater<ColStringNullableType>()); /// Sort col0 for the following comparison
             else
                 sort(col0.begin(), col0.end());
 
@@ -131,9 +126,9 @@ try
 
                 expect_cols.clear();
                 if (limit_num == 0 || limit_num > col_data_num)
-                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.end()))});
+                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithNullableString(col0.begin(), col0.end()))});
                 else
-                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
+                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithNullableString(col0.begin(), col0.begin() + limit_num))});
 
                 executeAndAssertColumnsEqual(request, expect_cols.back());
             }
@@ -142,18 +137,18 @@ try
 
     {
         /// Test multi-columns
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{36, 34, 32, 27, {}, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "male", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "usa", "china", "korea"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{900, -300, {}, 0, {}, 1300})},
-                       {toNullableVec<Int32>(col_name[0], ColumnWithInt32{32, {}, 34, 27, 36, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "china", "korea"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{{}, {}, -300, 0, 900, 1300})},
-                       {toNullableVec<Int32>(col_name[0], ColumnWithInt32{34, {}, 32, 36, {}, 27}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{36, 34, 32, 27, {}, {}}),
+                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "male", "male", "female", "male", "female"}),
+                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"china", "china", "usa", "usa", "china", "korea"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{900, -300, {}, 0, {}, 1300})},
+                       {toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{32, {}, 34, 27, 36, {}}),
+                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"male", "male", "male", "female", "female", "female"}),
+                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"usa", "china", "china", "usa", "china", "korea"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{{}, {}, -300, 0, 900, 1300})},
+                       {toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{34, {}, 32, 36, {}, 27}),
+                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"male", "male", "male", "female", "female", "female"}),
+                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"china", "china", "usa", "china", "korea", "usa"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{-300, {}, {}, 900, 1300, 0})}};
 
         std::vector<MockOrderByItemVec> order_by_items{
             /// select * from clerk order by age DESC, gender DESC;
@@ -190,10 +185,10 @@ try
 
     {
         /// "and" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "china", "usa", "usa", "china", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 0, 900, -300})}};
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{{}, {}, 32, 27, 36, 34}),
+                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "male", "male", "female", "female", "male"}),
+                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"korea", "china", "usa", "usa", "china", "china"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{1300, {}, {}, 0, 900, -300})}};
 
         {
             /// select * from clerk order by age and salary ASC limit 100;
@@ -208,10 +203,10 @@ try
 
     {
         /// "equal" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{27, 36, 34, 32, {}, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "female", "male", "male", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "korea", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{0, 900, -300, {}, 1300, {}})}};
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{27, 36, 34, 32, {}, {}}),
+                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "female", "male", "male", "female", "male"}),
+                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"usa", "china", "china", "usa", "korea", "china"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{0, 900, -300, {}, 1300, {}})}};
 
         {
             /// select age, salary from clerk order by age = salary DESC limit 100;
@@ -226,10 +221,10 @@ try
 
     {
         /// "greater" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, 32, {}, 36, 27, 34}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "usa", "china", "china", "usa", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 900, 0, -300})}};
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{{}, 32, {}, 36, 27, 34}),
+                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "male", "male", "female", "female", "male"}),
+                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"korea", "usa", "china", "china", "usa", "china"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{1300, {}, {}, 900, 0, -300})}};
 
         {
             /// select age, gender, country, salary from clerk order by age > salary ASC limit 100;

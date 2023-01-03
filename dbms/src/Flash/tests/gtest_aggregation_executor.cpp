@@ -33,34 +33,6 @@ namespace tests
 class AggExecutorTestRunner : public ExecutorTest
 {
 public:
-    using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
-    using ColInt8NullableType = std::optional<typename TypeTraits<Int8>::FieldType>;
-    using ColInt16NullableType = std::optional<typename TypeTraits<Int16>::FieldType>;
-    using ColInt32NullableType = std::optional<typename TypeTraits<Int32>::FieldType>;
-    using ColInt64NullableType = std::optional<typename TypeTraits<Int64>::FieldType>;
-    using ColFloat32NullableType = std::optional<typename TypeTraits<Float32>::FieldType>;
-    using ColFloat64NullableType = std::optional<typename TypeTraits<Float64>::FieldType>;
-    using ColMyDateNullableType = std::optional<typename TypeTraits<MyDate>::FieldType>;
-    using ColMyDateTimeNullableType = std::optional<typename TypeTraits<MyDateTime>::FieldType>;
-    using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal32>::FieldType>;
-    using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
-    using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
-    using ColStringType = typename TypeTraits<String>::FieldType;
-
-    using ColumnWithNullableString = std::vector<ColStringNullableType>;
-    using ColumnWithNullableInt8 = std::vector<ColInt8NullableType>;
-    using ColumnWithNullableInt16 = std::vector<ColInt16NullableType>;
-    using ColumnWithNullableInt32 = std::vector<ColInt32NullableType>;
-    using ColumnWithNullableInt64 = std::vector<ColInt64NullableType>;
-    using ColumnWithNullableFloat32 = std::vector<ColFloat32NullableType>;
-    using ColumnWithNullableFloat64 = std::vector<ColFloat64NullableType>;
-    using ColumnWithNullableMyDate = std::vector<ColMyDateNullableType>;
-    using ColumnWithNullableMyDateTime = std::vector<ColMyDateTimeNullableType>;
-    using ColumnWithNullableDecimal = std::vector<ColDecimalNullableType>;
-    using ColumnWithUInt64 = std::vector<ColUInt64Type>;
-    using ColumnWithFloat64 = std::vector<ColFloat64Type>;
-    using ColumnWithString = std::vector<ColStringType>;
-
     ~AggExecutorTestRunner() override = default;
 
     void initializeContext() override
