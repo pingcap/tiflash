@@ -39,7 +39,7 @@ public:
     void submit(std::vector<TaskPtr> & tasks);
 
 private:
-    void loop();
+    void loop() noexcept;
 
     void handleTask(TaskPtr & task);
 

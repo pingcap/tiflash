@@ -44,7 +44,7 @@ void TaskExecutor::waitForStop()
     LOG_INFO(logger, "task executor is stopped");
 }
 
-void TaskExecutor::loop()
+void TaskExecutor::loop() noexcept
 {
     setThreadName("TaskExecutor");
     LOG_INFO(logger, "start task executor loop");

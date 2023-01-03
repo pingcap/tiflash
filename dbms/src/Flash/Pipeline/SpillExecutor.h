@@ -37,7 +37,7 @@ public:
     void submit(TaskPtr && task);
 
 private:
-    void loop();
+    void loop() noexcept;
 
     void handleTask(TaskPtr && task);
 

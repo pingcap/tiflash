@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
+#include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>

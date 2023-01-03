@@ -131,7 +131,7 @@ void WaitReactor::submit(std::list<TaskPtr> & tasks)
     wait_queue.submit(tasks);
 }
 
-void WaitReactor::loop()
+void WaitReactor::loop() noexcept
 {
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");

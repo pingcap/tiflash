@@ -53,18 +53,18 @@ public:
         return mem_tracker;
     }
 
-    ExecTaskStatus execute()
+    ExecTaskStatus execute() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
         return executeImpl();
     }
-    ExecTaskStatus spill()
+    ExecTaskStatus spill() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
         return spillImpl();
     }
     // Avoid allocating memory in `await` if possible.
-    ExecTaskStatus await()
+    ExecTaskStatus await() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
         return awaitImpl();

@@ -39,7 +39,7 @@ public:
     void submit(std::list<TaskPtr> & tasks);
 
 private:
-    void loop();
+    void loop() noexcept;
 
 private:
     WaitQueue wait_queue;

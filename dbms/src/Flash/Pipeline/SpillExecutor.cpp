@@ -71,7 +71,7 @@ void SpillExecutor::handleTask(TaskPtr && task)
     }
 }
 
-void SpillExecutor::loop()
+void SpillExecutor::loop() noexcept
 {
     setThreadName("SpillExecutor");
     LOG_INFO(logger, "start spill executor loop");
