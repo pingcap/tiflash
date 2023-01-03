@@ -128,7 +128,7 @@ struct SchemaDiff
 
     TableID old_table_id;
     DatabaseID old_schema_id;
-    bool regenerate_schema_map;
+    bool regenerate_schema_map {false};
 
     std::vector<AffectedOption> affected_opts;
 
