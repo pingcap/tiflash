@@ -26,7 +26,7 @@ struct WriteBufferFromOwnStringList final
 
     void nextImpl() override
     {
-        buffs.emplace_back(std::string(DBMS_DEFAULT_BUFFER_SIZE, 0));
+        buffs.emplace_back(std::string(128 * 1024, 0)); // 128KB
         WriteBuffer::set(buffs.back().data(), buffs.back().size());
     };
 

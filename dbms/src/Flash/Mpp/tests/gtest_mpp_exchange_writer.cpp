@@ -520,6 +520,7 @@ try
         for (const auto & tracked_packet : ele.second)
         {
             auto & packet = tracked_packet->getPacket();
+
             ASSERT_EQ(packet.version(), TiDB::MppVersion::MppVersionV1);
 
             for (auto && chunk : packet.chunks())
