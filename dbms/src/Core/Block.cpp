@@ -640,9 +640,6 @@ Block vstackBlocks(const Blocks && blocks)
     if (blocks.empty())
         return {};
 
-    if (blocks.size() == 1)
-        return blocks.front();
-
     size_t num_rows = 0;
     for (const auto & block : blocks)
         num_rows += block.rows();

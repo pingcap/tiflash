@@ -53,10 +53,9 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         }
         else if (!all_match)
         {
-            size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1);
             for (auto & col : block)
             {
-                col.column = col.column->filter(filter, passed_count);
+                col.column = col.column->filter(filter, block.rows());
             }
         }
     }

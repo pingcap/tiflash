@@ -640,10 +640,12 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
             std::copy(filter.cbegin() + read_rows, filter.cbegin() + read_rows + block.rows(), block_filter.begin());
             read_rows += block.rows();
 
-            size_t passed_count = std::count(block_filter.cbegin(), block_filter.cend(), 1);
-            for (auto & col : block)
+            if (size_t passed_count = std::count(block_filter.cbegin(), block_filter.cend(), 1); passed_count != block.rows())
             {
-                col.column = col.column->filter(block_filter, passed_count);
+                for (auto & col : block)
+                {
+                    col.column = col.column->filter(block_filter, passed_count);
+                }
             }
 
             blocks.emplace_back(std::move(block));
@@ -654,13 +656,19 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         }
     }
 
-    // merge blocks
-    Block res = vstackBlocks(std::move(blocks));
-    res.setStartOffset(start_row_offset);
-
     // restore the use_packs of next pack after next read
     if (next_pack_id_cp < use_packs.size())
         use_packs[next_pack_id_cp] = next_pack_id_use_packs_cp;
+
+    if (blocks.size() == 1)
+    {
+        blocks[0].setStartOffset(start_row_offset);
+        return blocks[0];
+    }
+
+    // merge blocks
+    Block res = vstackBlocks(std::move(blocks));
+    res.setStartOffset(start_row_offset);
     return res;
 }
 

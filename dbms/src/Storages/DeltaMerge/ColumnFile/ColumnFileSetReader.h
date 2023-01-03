@@ -164,10 +164,12 @@ public:
             Block block = cur_column_file_reader->readNextBlock();
             if (block)
             {
-                size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1);
-                for (auto & col : block)
+                if (size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1); passed_count != block.rows())
                 {
-                    col.column = col.column->filter(filter, passed_count);
+                    for (auto & col : block)
+                    {
+                        col.column = col.column->filter(filter, passed_count);
+                    }
                 }
                 return block;
             }
