@@ -51,14 +51,14 @@ cert_allowed_cn="tidb"
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         path,
         [&](ConfigurationPtr config [[maybe_unused]]) {
-            call_times++;
+            ++call_times;
         },
         /* already_loaded = */ false);
 
     auto other_config_reloader = std::make_unique<ConfigReloader>(
         path,
         [&](ConfigurationPtr config [[maybe_unused]]) {
-            call_times++;
+            ++call_times;
         },
         /* already_loaded = */ false,
         "otherCfgLoader");
@@ -104,7 +104,7 @@ max_memory_usage = 0
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         path,
         [&](ConfigurationPtr config [[maybe_unused]]) {
-            call_times++;
+            ++call_times;
         },
         /* already_loaded = */ false);
     main_config_reloader->addConfigObject(std::make_shared<TestConfigObject>());
