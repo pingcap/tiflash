@@ -144,16 +144,13 @@ if (USE_STATIC_LIBRARIES)
     list(REVERSE CMAKE_FIND_LIBRARY_SUFFIXES)
 endif ()
 
-message("log: 1 ${GLIBC_COMPATIBILITY}")
 if (ARCH_AMD64 OR ARCH_AARCH64)
     option (USE_INTERNAL_MEMCPY "Use internal implementation of 'memcpy' function instead of provided by libc. Only for x86_64." ON)
 
     if (OS_LINUX)
-        message("log: here")
         option (GLIBC_COMPATIBILITY "Set to TRUE to enable compatibility with older glibc libraries. Only for x86_64, Linux. Implies USE_INTERNAL_MEMCPY." ON)
     endif()
 endif ()
-message("log: 2 ${GLIBC_COMPATIBILITY}")
 
 if (GLIBC_COMPATIBILITY)
     set (USE_INTERNAL_MEMCPY ON)
