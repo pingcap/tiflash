@@ -295,7 +295,7 @@ TEST_F(EventTestRunner, base)
 try
 {
     auto do_test = [&](size_t group_num, size_t event_num) {
-        // group_num * (evnet_num * (`BaseEvent::finalizeFinish + BaseEvent::task_num * ~BaseTask()`))
+        // group_num * (event_num * (`BaseEvent::finalizeFinish + BaseEvent::task_num * ~BaseTask()`))
         std::atomic_int64_t counter{static_cast<int64_t>(group_num * (event_num * (1 + BaseEvent::task_num)))};
         PipelineExecStatus exec_status;
         {
