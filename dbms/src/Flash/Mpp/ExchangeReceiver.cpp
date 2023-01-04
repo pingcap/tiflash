@@ -80,7 +80,7 @@ public:
         , msg_channels(msg_channels_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
-        , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ExchangeMode::Async)
+        , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ReceiverMode::Async)
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -418,7 +418,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 [this](bool meet_error, const String & local_err_msg) {
                     this->connectionDone(meet_error, local_err_msg, exc_log);
                 },
-                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ExchangeMode::Local));
+                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
             rpc_context->establishMPPConnectionLocal(req, req.source_index, local_request_handler, enable_fine_grained_shuffle_flag);
         }
@@ -508,7 +508,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, ExchangeMode::Sync);
+        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, ReceiverMode::Sync);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeSyncReader(req);

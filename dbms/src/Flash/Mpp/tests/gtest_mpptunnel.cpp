@@ -181,7 +181,7 @@ public:
                 [this](bool meet_error, const String & err_msg) {
                     this->connectionDone(meet_error, err_msg);
                 },
-                ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ExchangeMode::Local));
+                ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
             tunnel->connectLocal(0, local_request_handler, false);
         }
     }
@@ -630,7 +630,7 @@ try
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ExchangeMode::Local));
+        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
     tunnels[0]->connectLocal(0, local_req_handler, false);
     GTEST_FAIL();
 }
@@ -647,7 +647,7 @@ try
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ExchangeMode::Local));
+        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
     tunnels[0]->connectLocal(0, local_req_handler, false);
     GTEST_FAIL();
 }

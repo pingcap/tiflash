@@ -79,7 +79,7 @@ struct ReceivedMessage
     }
 };
 
-enum class ExchangeMode
+enum class ReceiverMode
 {
     Local = 0,
     Sync,
@@ -91,7 +91,7 @@ using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>
 class ReceiverChannelWriter
 {
 public:
-    ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ExchangeMode mode_)
+    ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
         : data_size_in_queue(data_size_in_queue_)
         , msg_channels(msg_channels_)
         , req_info(req_info_)
@@ -147,6 +147,6 @@ private:
     std::vector<MsgChannelPtr> * msg_channels;
     String req_info;
     const LoggerPtr log;
-    ExchangeMode mode;
+    ReceiverMode mode;
 };
 } // namespace DB

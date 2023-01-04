@@ -18,21 +18,21 @@ namespace DB
 {
 namespace
 {
-inline void injectFailPointReceiverPushFail(bool & push_succeed, ExchangeMode mode)
+inline void injectFailPointReceiverPushFail(bool & push_succeed, ReceiverMode mode)
 {
     switch (mode)
     {
-    case ExchangeMode::Local:
+    case ReceiverMode::Local:
         fiu_do_on(FailPoints::random_receiver_local_msg_push_failure_failpoint, push_succeed = false);
         break;
-    case ExchangeMode::Sync:
+    case ReceiverMode::Sync:
         fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false);
         break;
-    case ExchangeMode::Async:
+    case ReceiverMode::Async:
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false);
         break;
     default:
-        throw Exception("Unsupported ExchangeMode");
+        throw Exception("Unsupported ReceiverMode");
     }
 }
 } // namespace
