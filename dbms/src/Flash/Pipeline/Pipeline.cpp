@@ -83,13 +83,9 @@ OperatorPipelineGroups Pipeline::transform(Context & context, size_t concurrency
 
 Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t concurrency)
 {
-    // TODO
-    // - support fetching unmatched rows from join hash table (non-joined)
-    //     - create a new event `NonJoinedEvent `to execute non-joined data flow.
-    //     - event flow will be `NonJoinedEvent <-- PipelineEvent`
-    // - support fine grained partition by
-    //     - a partition maps to an event
-    //     - event flow will be
+    // TODO support fine grained shuffle
+    //     - a fine grained partition maps to an event
+    //     - the event flow will be
     //     ```
     //     disable fine grained partition pipeline   enable fine grained partition pipeline   enable fine grained partition pipeline
     //                                       ┌───────────────────PipelineEvent<────────────────────────PipelineEvent

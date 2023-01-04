@@ -37,8 +37,7 @@ struct OperatorPipelineGroupBuilder
 {
     // A Group generates a set of operator pipelines running in parallel.
     using BuilderGroup = std::vector<OperatorPipelineBuilder>;
-    // The relationship between different BuilderGroups is similar to
-    // the relationship between `streams` and `streams_with_non_joined_data` in `DAGPipeline`.
+    // A BuildGroup represents a partition of fine-grained shuffle.
     std::vector<BuilderGroup> groups;
 
     size_t max_concurrency_in_groups = 0;
