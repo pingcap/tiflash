@@ -415,6 +415,8 @@ try
     auto tracker = MemoryTracker::create();
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
     event->schedule();
+    wait(exec_status);
+    assertNoErr(exec_status);
 }
 CATCH
 
