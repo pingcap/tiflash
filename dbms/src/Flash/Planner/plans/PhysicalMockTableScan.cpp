@@ -72,7 +72,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
 
     assert(!schema.empty());
     assert(!mock_streams.empty());
-    
+
     return {std::move(schema), std::move(mock_streams)};
 }
 } // namespace
