@@ -17,7 +17,6 @@
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/GetResultSink.h>
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/PipelineCompleteEvent.h>
 #include <Flash/Pipeline/PipelineEvent.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
@@ -87,20 +86,20 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
     // TODO
     // - support fetching unmatched rows from join hash table (non-joined)
     //     - create a new event `NonJoinedEvent `to execute non-joined data flow.
-    //     - event flow will be `PipelineCompleteEvent <-- NonJoinedEvent <-- PipelineEvent`
+    //     - event flow will be `NonJoinedEvent <-- PipelineEvent`
     // - support fine grained partition by
     //     - a partition maps to an event
     //     - event flow will be
     //     ```
-    //     disable fine grained partition pipeline        enable fine grained partition pipeline          enable fine grained partition pipeline
-    //                                                  ┌──PipelineCompleteEvent <-- PipelineEvent <────── PipelineCompleteEvent <-- PipelineEvent
-    //     PipelineCompleteEvent <-- PipelineEvent <────┼──PipelineCompleteEvent <-- PipelineEvent <────── PipelineCompleteEvent <-- PipelineEvent
-    //                                                  ├──PipelineCompleteEvent <-- PipelineEvent <────── PipelineCompleteEvent <-- PipelineEvent
-    //                                                  └──PipelineCompleteEvent <-- PipelineEvent <────── PipelineCompleteEvent <-- PipelineEvent
+    //     disable fine grained partition pipeline   enable fine grained partition pipeline   enable fine grained partition pipeline
+    //                                       ┌───────────────────PipelineEvent<────────────────────────PipelineEvent
+    //               PipelineEvent<──────────┼───────────────────PipelineEvent<────────────────────────PipelineEvent
+    //                                       ├───────────────────PipelineEvent<────────────────────────PipelineEvent
+    //                                       └───────────────────PipelineEvent<────────────────────────PipelineEvent
     //     ```
-    Events events;
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 
+    Events events;
     auto pipeline_event = std::make_shared<PipelineEvent>(status, memory_tracker, context, concurrency, shared_from_this());
     for (const auto & dependency : dependencies)
     {
@@ -114,11 +113,6 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
         }
     }
     events.push_back(pipeline_event);
-
-    auto complete_event = std::make_shared<PipelineCompleteEvent>(status, memory_tracker);
-    complete_event->addDependency(pipeline_event);
-    events.push_back(complete_event);
-
     return events;
 }
 

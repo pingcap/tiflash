@@ -31,7 +31,7 @@ public:
 
     String getErrMsg();
 
-    void addActivePipeline();
+    void addActiveEvent();
 
     void toError(String && err_msg_);
 
@@ -43,13 +43,13 @@ public:
         bool is_timeout = false;
         {
             std::unique_lock lock(mu);
-            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_pipeline_count; });
+            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_event_count; });
         }
         if (is_timeout)
             toError(timeout_err_msg);
     }
 
-    void completePipeline();
+    void completeEvent();
 
     void cancel();
 
@@ -61,7 +61,7 @@ public:
 private:
     std::mutex mu;
     std::condition_variable cv;
-    std::atomic_int32_t active_pipeline_count{0};
+    std::atomic_int32_t active_event_count{0};
     std::atomic_bool is_cancelled{false};
     String err_msg;
 };

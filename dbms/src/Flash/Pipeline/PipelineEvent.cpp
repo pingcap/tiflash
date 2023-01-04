@@ -20,8 +20,6 @@ namespace DB
 {
 bool PipelineEvent::scheduleImpl()
 {
-    exec_status.addActivePipeline();
-
     assert(pipeline);
     auto op_pipeline_groups = pipeline->transform(context, concurrency);
     pipeline.reset();

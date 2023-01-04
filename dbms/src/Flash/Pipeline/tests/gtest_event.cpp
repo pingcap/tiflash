@@ -65,7 +65,6 @@ protected:
     // Returns true meaning no task is scheduled.
     bool scheduleImpl() override
     {
-        exec_status.addActivePipeline();
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<BaseTask>(shared_from_this(), counter));
@@ -73,13 +72,9 @@ protected:
         return false;
     }
 
-    // Returns true meaning next_events will be scheduled.
-    bool finishImpl() override { return true; }
-
     void finalizeFinish() override
     {
         --counter;
-        exec_status.completePipeline();
     }
 
 private:
@@ -127,7 +122,6 @@ protected:
     // Returns true meaning no task is scheduled.
     bool scheduleImpl() override
     {
-        exec_status.addActivePipeline();
         if (!with_tasks)
             return true;
 
@@ -136,14 +130,6 @@ protected:
             tasks.push_back(std::make_unique<RunTask>(shared_from_this()));
         scheduleTask(tasks);
         return false;
-    }
-
-    // Returns true meaning next_events will be scheduled.
-    bool finishImpl() override { return true; }
-
-    void finalizeFinish() override
-    {
-        exec_status.completePipeline();
     }
 
 private:
@@ -190,7 +176,6 @@ protected:
     // Returns true meaning no task is scheduled.
     bool scheduleImpl() override
     {
-        exec_status.addActivePipeline();
         if (!with_tasks)
         {
             while (!isCancelled())
@@ -203,14 +188,6 @@ protected:
             tasks.push_back(std::make_unique<WaitCancelTask>(shared_from_this()));
         scheduleTask(tasks);
         return false;
-    }
-
-    // Returns true meaning next_events will be scheduled.
-    bool finishImpl() override { return !isCancelled(); }
-
-    void finalizeFinish() override
-    {
-        exec_status.completePipeline();
     }
 
 private:
@@ -230,14 +207,34 @@ protected:
     // Returns true meaning no task is scheduled.
     bool scheduleImpl() override
     {
-        exec_status.addActivePipeline();
         exec_status.toError(err_msg);
         return true;
+    }
+};
+
+class AssertMemoryTraceEvent : public Event
+{
+public:
+    AssertMemoryTraceEvent(PipelineExecStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
+        : Event(exec_status_, std::move(mem_tracker_))
+    {}
+
+protected:
+    // Returns true meaning no task is scheduled.
+    bool scheduleImpl() override
+    {
+        assert(mem_tracker.get() == current_memory_tracker);
+        return true;
+    }
+
+    void finishImpl() override
+    {
+        assert(mem_tracker.get() == current_memory_tracker);
     }
 
     void finalizeFinish() override
     {
-        exec_status.completePipeline();
+        assert(mem_tracker.get() == current_memory_tracker);
     }
 };
 } // namespace
@@ -408,6 +405,16 @@ try
         do_test(false, i);
         do_test(true, i);
     }
+}
+CATCH
+
+TEST_F(EventTestRunner, memory_trace)
+try
+{
+    PipelineExecStatus exec_status;
+    auto tracker = MemoryTracker::create();
+    auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
+    event->schedule();
 }
 CATCH
 

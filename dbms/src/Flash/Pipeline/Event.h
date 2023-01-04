@@ -67,8 +67,7 @@ protected:
     // Returns true meaning no task is scheduled.
     virtual bool scheduleImpl() { return true; }
 
-    // Returns true meaning next_events will be scheduled.
-    virtual bool finishImpl() { return true; }
+    virtual void finishImpl() {}
 
     virtual void finalizeFinish() {}
 

@@ -37,6 +37,7 @@ public:
     {}
 
 protected:
+    // Returns true meaning no task is scheduled.
     bool scheduleImpl() override;
 
 private:

@@ -27,7 +27,7 @@ TEST_F(PipelineExecStatusTestRunner, timeout)
 try
 {
     PipelineExecStatus status;
-    status.addActivePipeline();
+    status.addActiveEvent();
     std::chrono::milliseconds timeout(10);
     status.waitFor(timeout);
     auto err_msg = status.getErrMsg();
@@ -39,9 +39,9 @@ TEST_F(PipelineExecStatusTestRunner, run)
 try
 {
     PipelineExecStatus status;
-    status.addActivePipeline();
+    status.addActiveEvent();
     auto thread_manager = newThreadManager();
-    thread_manager->schedule(false, "run", [&status]() mutable { status.completePipeline(); });
+    thread_manager->schedule(false, "run", [&status]() mutable { status.completeEvent(); });
     status.wait();
     auto err_msg = status.getErrMsg();
     ASSERT_TRUE(err_msg.empty()) << err_msg;
@@ -55,11 +55,11 @@ try
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg.empty() ? PipelineExecStatus::empty_err_msg : err_msg;
         PipelineExecStatus status;
-        status.addActivePipeline();
+        status.addActiveEvent();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
             status.toError(std::move(err_msg));
-            status.completePipeline();
+            status.completeEvent();
         });
         status.wait();
         status.toError("unexpect exception");

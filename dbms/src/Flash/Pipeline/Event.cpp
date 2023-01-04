@@ -59,6 +59,7 @@ void Event::completeDependency()
 void Event::schedule()
 {
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
+    exec_status.addActiveEvent();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     if (scheduleImpl())
         finish();
@@ -68,7 +69,9 @@ void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    if (finishImpl())
+    finishImpl();
+    // If query has already been cancelled, it will not trigger the next events.
+    if (likely(!isCancelled()))
     {
         // finished processing the event, now we can schedule events that depend on this event
         for (auto & next_event : next_events)
@@ -79,6 +82,11 @@ void Event::finish()
     }
     next_events.clear();
     finalizeFinish();
+    // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
+    // we have to call `exec_status.completeEvent()` here,
+    // since `exec_status.addActiveEvent()` will have been called by the next events.
+    // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
+    exec_status.completeEvent();
 }
 
 void Event::scheduleTask(std::vector<TaskPtr> & tasks)

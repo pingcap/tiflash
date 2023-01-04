@@ -45,17 +45,17 @@ void PipelineExecStatus::toError(String && err_msg_)
 void PipelineExecStatus::wait()
 {
     std::unique_lock lock(mu);
-    cv.wait(lock, [&] { return 0 == active_pipeline_count; });
+    cv.wait(lock, [&] { return 0 == active_event_count; });
 }
 
-void PipelineExecStatus::addActivePipeline()
+void PipelineExecStatus::addActiveEvent()
 {
-    ++active_pipeline_count;
+    ++active_event_count;
 }
 
-void PipelineExecStatus::completePipeline()
+void PipelineExecStatus::completeEvent()
 {
-    auto pre_sub_count = active_pipeline_count.fetch_sub(1);
+    auto pre_sub_count = active_event_count.fetch_sub(1);
     assert(pre_sub_count >= 1);
     if (1 == pre_sub_count)
         cv.notify_one();
