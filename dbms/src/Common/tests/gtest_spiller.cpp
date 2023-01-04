@@ -85,7 +85,7 @@ protected:
     LoggerPtr logger;
 };
 
-String SpillerTest::spiller_test_tmp_dir = "/tmp/spiller_test/";
+String SpillerTest::spiller_test_tmp_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("spiller_test");
 
 TEST_F(SpillerTest, SpilledFileAutoRemove)
 try

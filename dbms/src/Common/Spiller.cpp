@@ -51,7 +51,8 @@ Spiller::Spiller(const String & id_, bool is_input_sorted_, size_t partition_num
     {
         spill_dir += Poco::Path::separator();
     }
-    spilled_files.resize(partition_num);
+    for (size_t i = 0; i < partition_num; i++)
+        spilled_files.push_back(std::make_unique<SpilledFiles>());
 }
 
 bool Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
@@ -76,8 +77,8 @@ bool Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
             spilled_file->addSpilledDataSize(block_bytes_size);
         }
         {
-            std::lock_guard lock(spilled_files_mutex);
-            spilled_files[partition_id].emplace_back(std::move(spilled_file));
+            std::lock_guard lock(spilled_files[partition_id]->spilled_files_mutex);
+            spilled_files[partition_id]->spilled_files.emplace_back(std::move(spilled_file));
         }
         return true;
     }
@@ -92,12 +93,12 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
 {
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(spill_finished, "{}: restore before the spiller is finished.", id);
-    if (is_input_sorted && spilled_files[partition_id].size() > max_stream_size)
+    if (is_input_sorted && spilled_files[partition_id]->spilled_files.size() > max_stream_size)
         LOG_WARNING(logger, "sorted spilled data restore does not take max_stream_size into account");
     BlockInputStreams ret;
     if (is_input_sorted)
     {
-        for (const auto & file : spilled_files[partition_id])
+        for (const auto & file : spilled_files[partition_id]->spilled_files)
         {
             if (likely(file->exists()))
             {
@@ -112,14 +113,14 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
     }
     else
     {
-        size_t return_stream_num = std::min(max_stream_size, spilled_files[partition_id].size());
+        size_t return_stream_num = std::min(max_stream_size, spilled_files[partition_id]->spilled_files.size());
         std::vector<std::vector<String>> files(return_stream_num);
-        for (size_t i = 0; i < spilled_files[partition_id].size(); ++i)
+        for (size_t i = 0; i < spilled_files[partition_id]->spilled_files.size(); ++i)
         {
-            if (likely(spilled_files[partition_id][i]->exists()))
-                files[i % return_stream_num].push_back(spilled_files[partition_id][i]->path());
+            if (likely(spilled_files[partition_id]->spilled_files[i]->exists()))
+                files[i % return_stream_num].push_back(spilled_files[partition_id]->spilled_files[i]->path());
             else
-                LOG_WARNING(logger, "Spill file {} does not exists", spilled_files[partition_id][i]->path());
+                LOG_WARNING(logger, "Spill file {} does not exists", spilled_files[partition_id]->spilled_files[i]->path());
         }
         for (size_t i = 0; i < return_stream_num; ++i)
         {
@@ -137,7 +138,7 @@ size_t Spiller::spilledBlockDataSize(size_t partition_id)
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(spill_finished, "{}: spilledBlockDataSize must be called when the spiller is finished.", id);
     size_t ret = 0;
-    for (auto & file : spilled_files[partition_id])
+    for (auto & file : spilled_files[partition_id]->spilled_files)
         ret += file->getSpilledDataSize();
     return ret;
 }

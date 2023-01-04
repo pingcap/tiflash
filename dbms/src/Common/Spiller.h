@@ -15,11 +15,15 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Poco/File.h>
 
 namespace DB
 {
+
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
+using BlockInputStreams = std::vector<BlockInputStreamPtr>;
+
 class SpilledFile : public Poco::File
 {
 public:
@@ -30,6 +34,12 @@ public:
 
 private:
     size_t spilled_data_size = 0;
+};
+
+struct SpilledFiles
+{
+    std::mutex spilled_files_mutex;
+    std::vector<std::unique_ptr<SpilledFile>> spilled_files;
 };
 
 class Spiller
@@ -53,8 +63,7 @@ private:
     LoggerPtr logger;
     bool spill_finished = false;
     static std::atomic<Int64> tmp_file_index;
-    std::mutex spilled_files_mutex;
-    std::vector<std::vector<std::unique_ptr<SpilledFile>>> spilled_files;
+    std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
 };
 
 } // namespace DB
