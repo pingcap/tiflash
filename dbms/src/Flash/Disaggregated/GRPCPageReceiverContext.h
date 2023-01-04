@@ -113,7 +113,7 @@ public:
 
     void finishTaskReceive(const DM::RemoteSegmentReadTaskPtr & seg_task);
 
-    void finishAllReceivingTasks();
+    void finishAllReceivingTasks(const String & err_msg);
 
 private:
     DM::RemoteReadTaskPtr remote_read_tasks;

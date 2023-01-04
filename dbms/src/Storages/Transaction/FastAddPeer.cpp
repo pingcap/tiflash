@@ -19,8 +19,8 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
-#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/universal/Readers.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Transaction/Keys.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
@@ -110,7 +110,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     remote_meta.checkpoint_path = optimal;
     {
         auto apply_state_key = RaftLogReader::toRegionApplyStateKey(region_id);
-        auto maybe_buffer = manager->getReadBuffer(apply_state_key, /* ignore_if_not_exist */true);
+        auto maybe_buffer = manager->getReadBuffer(apply_state_key, /* ignore_if_not_exist */ true);
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();
@@ -127,7 +127,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     }
     {
         auto region_state_key = RaftLogReader::toRegionLocalStateKey(region_id);
-        auto maybe_buffer = manager->getReadBuffer(region_state_key, /* ignore_if_not_exist */true);
+        auto maybe_buffer = manager->getReadBuffer(region_state_key, /* ignore_if_not_exist */ true);
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();
@@ -144,7 +144,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(const std::string & output_directo
     }
     {
         auto region_key = KVStoreReader::toFullPageId(region_id);
-        auto maybe_buffer = manager->getReadBuffer(region_key, /* ignore_if_not_exist */true);
+        auto maybe_buffer = manager->getReadBuffer(region_key, /* ignore_if_not_exist */ true);
         if (maybe_buffer.has_value())
         {
             auto [buf, buf_size, _] = maybe_buffer.value();
@@ -202,7 +202,7 @@ std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(UniversalPageStorage
     // TODO Fill storage_name
     const auto & storage_name = page_storage->storage_name;
     auto stores = listAllStores(remote_dir);
-    for (const auto & store_id: stores)
+    for (const auto & store_id : stores)
     {
         if (store_id == current_store_id)
             continue;
@@ -310,16 +310,39 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         const auto & remote_dir = wn_ps->config.ps_remote_directory.toString();
         auto checkpoint_data_dir = remote_dir;
 
+        {
+            bool hit = false;
+            const auto & region_pb = peer.region_state.region();
+            for (auto && pr : region_pb.peers())
+            {
+                if (pr.id() == new_peer_id)
+                {
+                    auto cpr = pr;
+                    peer.region->mutMeta().setPeer(std::move(cpr));
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit)
+            {
+                LOG_ERROR(log, "selected remote peer of {} has no new_peer_id {}", region_id, new_peer_id);
+                return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+            }
+            else
+            {
+                LOG_INFO(log, "reset selected remote peer of {} to peer {}", region_id, new_peer_id);
+            }
+        }
+
         kvstore->handleIngestCheckpoint(region, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
 
-        auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+        auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create( //
             CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-                .file_path = checkpoint_manifest_path
-            });
+                .file_path = checkpoint_manifest_path});
         PS::V3::CheckpointPageManager manager(*reader, checkpoint_data_dir);
         auto raft_log_data = manager.getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region->id()).toStr());
         UniversalWriteBatch wb;
-        for (const auto & [buf, size, page_id]: raft_log_data)
+        for (const auto & [buf, size, page_id] : raft_log_data)
         {
             wb.putPage(page_id, 0, buf, size);
         }
