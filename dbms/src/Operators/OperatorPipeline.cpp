@@ -41,10 +41,10 @@ OperatorStatus OperatorPipeline::execute(PipelineExecStatus & exec_status)
         CHECK_IS_CANCELLED(exec_status);
         auto status = transforms[transform_index]->transform(block);
         if (status != OperatorStatus::PASS)
-            return pushSpiller(status, transforms[transform_index]);
+            return pushSpillOp(status, transforms[transform_index]);
     }
     CHECK_IS_CANCELLED(exec_status);
-    return pushSpiller(sink->write(std::move(block)), sink);
+    return pushSpillOp(sink->write(std::move(block)), sink);
 }
 
 OperatorStatus OperatorPipeline::fetchBlock(Block & block, size_t & transform_index, PipelineExecStatus & exec_status)
@@ -52,7 +52,7 @@ OperatorStatus OperatorPipeline::fetchBlock(Block & block, size_t & transform_in
     CHECK_IS_CANCELLED(exec_status);
     auto status = sink->prepare();
     if (status != OperatorStatus::PASS)
-        return pushSpiller(status, sink);
+        return pushSpillOp(status, sink);
     for (int64_t index = transforms.size() - 1; index >= 0; --index)
     {
         CHECK_IS_CANCELLED(exec_status);
@@ -60,12 +60,12 @@ OperatorStatus OperatorPipeline::fetchBlock(Block & block, size_t & transform_in
         if (status != OperatorStatus::NO_OUTPUT)
         {
             transform_index = index + 1;
-            return pushSpiller(status, transforms[index]);
+            return pushSpillOp(status, transforms[index]);
         }
     }
     CHECK_IS_CANCELLED(exec_status);
     transform_index = 0;
-    return pushSpiller(source->read(block), source);
+    return pushSpillOp(source->read(block), source);
 }
 
 OperatorStatus OperatorPipeline::await(PipelineExecStatus & exec_status)
@@ -88,11 +88,11 @@ OperatorStatus OperatorPipeline::spill(PipelineExecStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
 
-    assert(spiller);
-    assert(*spiller);
-    auto status = (*spiller)->spill();
+    assert(spill_op);
+    assert(*spill_op);
+    auto status = (*spill_op)->spill();
     if (status != OperatorStatus::SPILLING)
-        spiller.reset();
+        spill_op.reset();
     return status;
 }
 

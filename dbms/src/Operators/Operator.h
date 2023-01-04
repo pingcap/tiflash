@@ -36,17 +36,17 @@ enum class OperatorStatus
     CANCELLED,
 };
 
-class Spiller
+class SpillOp
 {
 public:
-    virtual ~Spiller() = default;
+    virtual ~SpillOp() = default;
 
     virtual OperatorStatus spill() { throw Exception("Unsupport"); }
 };
 
 // TODO support profile info like `BlockStreamProfileInfo`.
 
-class Source : public Spiller
+class Source : public SpillOp
 {
 public:
     virtual ~Source() = default;
@@ -59,7 +59,7 @@ public:
 };
 using SourcePtr = std::unique_ptr<Source>;
 
-class Transform : public Spiller
+class Transform : public SpillOp
 {
 public:
     virtual ~Transform() = default;
@@ -74,7 +74,7 @@ public:
 };
 using TransformPtr = std::unique_ptr<Transform>;
 
-class Sink : public Spiller
+class Sink : public SpillOp
 {
 public:
     virtual ~Sink() = default;

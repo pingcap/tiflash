@@ -46,13 +46,13 @@ private:
     OperatorStatus fetchBlock(Block & block, size_t & transform_index, PipelineExecStatus & exec_status);
 
     template <typename Op>
-    OperatorStatus pushSpiller(OperatorStatus status, const Op & op)
+    OperatorStatus pushSpillOp(OperatorStatus status, const Op & op)
     {
         assert(op);
         if (status == OperatorStatus::SPILLING)
         {
-            assert(!spiller);
-            spiller.emplace(op.get());
+            assert(!spill_op);
+            spill_op.emplace(op.get());
         }
         return status;
     }
@@ -63,7 +63,7 @@ private:
     SinkPtr sink;
 
     // hold the operator which is ready for spilling.
-    std::optional<Spiller *> spiller;
+    std::optional<SpillOp *> spill_op;
 };
 using OperatorPipelinePtr = std::unique_ptr<OperatorPipeline>;
 using OperatorPipelineGroup = std::vector<OperatorPipelinePtr>;
