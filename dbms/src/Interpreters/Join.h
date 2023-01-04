@@ -150,6 +150,31 @@ public:
     bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
+    size_t getProbeConcurrency() const
+    {
+        std::unique_lock lock(probe_mutex);
+        return probe_concurrency;
+    }
+    void setProbeConcurrency(size_t concurrency)
+    {
+        std::unique_lock lock(probe_mutex);
+        probe_concurrency = concurrency;
+        active_probe_concurrency = probe_concurrency;
+    }
+    void finishOneProbe()
+    {
+        std::unique_lock lock(probe_mutex);
+        active_probe_concurrency--;
+        probe_cv.notify_all();
+    }
+    void waitUntilAllProbeFinished()
+    {
+        std::unique_lock lock(probe_mutex);
+        probe_cv.wait(lock, [&]() {
+            return active_probe_concurrency == 0;
+        });
+    }
+
     size_t getBuildConcurrency() const
     {
         std::shared_lock lock(rwlock);
@@ -290,6 +315,11 @@ private:
     bool use_nulls;
 
     size_t build_concurrency;
+
+    mutable std::mutex probe_mutex;
+    std::condition_variable probe_cv;
+    size_t probe_concurrency;
+    size_t active_probe_concurrency;
 
 private:
     /// collators for the join key

@@ -38,12 +38,15 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
+        size_t probe_index,
+        bool has_non_joined_data,
         const String & req_id,
         UInt64 max_block_size);
 
     String getName() const override { return name; }
     Block getTotals() override;
     Block getHeader() const override;
+    void cancel(bool kill) override;
 
 protected:
     Block readImpl() override;
@@ -52,8 +55,14 @@ protected:
 private:
     const LoggerPtr log;
     JoinPtr join;
+    size_t probe_index;
+    size_t max_block_size;
+    bool has_non_joined_data = false;
+    bool reading_non_joined_data = false;
     ProbeProcessInfo probe_process_info;
+    BlockInputStreamPtr non_joined_stream;
     SquashingHashJoinBlockTransform squashing_transform;
+    Block child_header;
 };
 
 } // namespace DB
