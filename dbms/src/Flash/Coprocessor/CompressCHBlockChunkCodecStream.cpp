@@ -6,9 +6,11 @@
 
 #include <cassert>
 #include <cstddef>
+#include <vector>
 
 namespace DB
 {
+extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
 {
@@ -24,12 +26,10 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
     }
 }
 
-extern void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
-
-void EncodeColumn(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name)
+void EncodeColumn__(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name)
 {
     writeVarUInt(column->size(), ostr);
-    writeData(*type_name.type, column, ostr, 0, 0);
+    WriteColumnData(*type_name.type, column, ostr, 0, 0);
 }
 
 std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compress_method)
@@ -37,20 +37,19 @@ std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStr
     return std::make_unique<CompressCHBlockChunkCodecStream>(compress_method);
 }
 
-Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows)
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
 {
     Block res;
 
-    if (istr.eof())
-    {
-        return res;
-    }
+    assert(!istr.eof());
 
     size_t columns = 0;
     {
         readVarUInt(columns, istr);
-        readVarUInt(rows, istr);
+        readVarUInt(total_rows, istr);
     }
+    if (header)
+        CodecUtils::checkColumnSize(header.columns(), columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -78,7 +77,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows)
     return res;
 }
 
-void DecodeColumns(ReadBuffer & istr, Block & res, size_t columns, size_t rows, size_t reserve_size)
+void DecodeColumns___(ReadBuffer & istr, Block & res, size_t columns, size_t rows, size_t reserve_size)
 {
     if (!rows)
         return;
@@ -111,6 +110,92 @@ void DecodeColumns(ReadBuffer & istr, Block & res, size_t columns, size_t rows, 
                 {});
         }
         assert(read_rows == rows);
+    }
+
+    res.setColumns(std::move(mutable_columns));
+}
+
+
+void DecodeColumns_bb(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+{
+    if (!rows_to_read)
+        return;
+
+    auto && mutable_columns = res.mutateColumns();
+    for (auto && column : mutable_columns)
+    {
+        if (reserve_size > 0)
+            column->reserve(std::max(rows_to_read, reserve_size));
+        else
+            column->reserve(rows_to_read + column->size());
+    }
+
+    size_t decode_rows = 0;
+    for (size_t sz = 0; decode_rows < rows_to_read; decode_rows += sz)
+    {
+        readVarUInt(sz, istr);
+
+        for (size_t i = 0; i < res.columns(); ++i)
+        {
+            /// Data
+            res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
+                *mutable_columns[i],
+                [&](const IDataType::SubstreamPath &) {
+                    return &istr;
+                },
+                sz,
+                0,
+                {},
+                {});
+        }
+    }
+
+    assert(decode_rows == rows_to_read);
+
+    res.setColumns(std::move(mutable_columns));
+}
+
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+{
+    if (!rows_to_read)
+        return;
+
+    auto && mutable_columns = res.mutateColumns();
+    for (auto && column : mutable_columns)
+    {
+        if (reserve_size > 0)
+            column->reserve(std::max(rows_to_read, reserve_size));
+        else
+            column->reserve(rows_to_read + column->size());
+    }
+
+    std::vector<size_t> column_batch;
+    {
+        size_t sz{};
+        readVarUInt(sz, istr);
+        column_batch.resize(sz);
+        for (size_t i = 0; i < sz; ++i)
+        {
+            readVarUInt(column_batch[i], istr);
+        }
+        assert(std::accumulate(column_batch.begin(), column_batch.end(), 0, [](auto c, auto & e) { return c + e; }) == int(rows_to_read));
+    }
+
+    for (size_t i = 0; i < res.columns(); ++i)
+    {
+        for (const auto & sz : column_batch)
+        {
+            /// Data
+            res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
+                *mutable_columns[i],
+                [&](const IDataType::SubstreamPath &) {
+                    return &istr;
+                },
+                sz,
+                0,
+                {},
+                {});
+        }
     }
 
     res.setColumns(std::move(mutable_columns));

@@ -74,15 +74,17 @@ CHBlockChunkCodec::CHBlockChunkCodec(const DAGSchema & schema)
         output_names.push_back(c.first);
 }
 
-size_t getExtraInfoSize(const Block & block)
+size_t GetExtraInfoSize(const Block & block)
 {
-    size_t size = 64; /// to hold some length of structures, such as column number, row number...
+    size_t size = 8 + 8; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
     for (size_t i = 0; i < columns; ++i)
     {
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
         size += column.name.size();
+        size += 8;
         size += column.type->getName().size();
+        size += 8;
         if (column.column->isColumnConst())
         {
             size += column.column->byteSize() * column.column->size();
@@ -93,7 +95,7 @@ size_t getExtraInfoSize(const Block & block)
 
 size_t ApproxBlockBytes(const Block & block)
 {
-    return block.bytes() + getExtraInfoSize(block);
+    return block.bytes() + GetExtraInfoSize(block);
 }
 
 CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method)
@@ -111,7 +113,7 @@ CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_metho
     }
 }
 
-void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
+void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -153,7 +155,7 @@ void EncodeCHBlockChunk(WriteBuffer * ostr_ptr, const Block & block)
         writeStringBinary(column.type->getName(), *ostr_ptr);
 
         if (rows)
-            writeData(*column.type, column.column, *ostr_ptr, 0, 0);
+            WriteColumnData(*column.type, column.column, *ostr_ptr, 0, 0);
     }
 }
 

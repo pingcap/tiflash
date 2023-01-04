@@ -180,33 +180,15 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
         {
             writer->partitionWrite(packet, part_id);
 
-            auto sz = inner_packet.ByteSizeLong();
-            switch (inner_packet.compress().method())
+            assert(inner_packet.compress().method() == mpp::CompressMethod::NONE);
+
+            if (auto sz = inner_packet.ByteSizeLong(); writer->isLocal(part_id))
             {
-            case mpp::NONE:
-            {
-                if (writer->isLocal(part_id))
-                {
-                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
-                }
-                else
-                {
-                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
-                }
-                break;
+                GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
             }
-            case mpp::LZ4:
+            else
             {
-                GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
-                break;
-            }
-            case mpp::ZSTD:
-            {
-                GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
-                break;
-            }
-            default:
-                break;
+                GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
             }
         }
     }

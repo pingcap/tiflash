@@ -27,15 +27,22 @@ namespace DB
 
 struct CompressCHBlockChunkCodecStream;
 
+enum HashPartitionWriterVersion : int64_t
+{
+    HashPartitionWriterV0 = 0,
+    HashPartitionWriterV1,
+    HashPartitionWriterVersionMax,
+};
+
 template <class ExchangeWriterPtr>
-class HashPartitionWriterV1 : public DAGResponseWriter
+class HashPartitionWriterImplV1 : public DAGResponseWriter
 {
 public:
-    HashPartitionWriterV1(
+    HashPartitionWriterImplV1(
         ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
-        Int64 batch_send_min_limit_,
+        Int64 partition_batch_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         mpp::CompressMethod compress_method_);
@@ -45,14 +52,15 @@ public:
 
 private:
     void partitionAndEncodeThenWriteBlocks();
+    void partitionAndEncodeThenWriteBlocksTest();
 
-    void writePackets(const TrackedMppDataPacketPtrs & packets);
+    void writePackets(TrackedMppDataPacketPtrs && packets);
 
     void sendExecutionSummary();
 
 private:
     uint16_t partition_num;
-    Int64 batch_send_min_limit;
+    Int64 partition_batch_limit;
     bool should_send_exec_summary_at_last;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;

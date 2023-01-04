@@ -118,8 +118,8 @@ struct CompressCHBlockChunkCodecStream
 };
 
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
-void EncodeColumn(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name);
-void DecodeColumns(ReadBuffer & istr, Block & res, size_t columns, size_t rows, size_t reserve_size = 0);
+void EncodeColumn__(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name);
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 
 std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compress_method);

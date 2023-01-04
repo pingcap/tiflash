@@ -43,7 +43,7 @@ private:
     DataTypes expected_types;
 };
 
-size_t getExtraInfoSize(const Block & block);
+size_t GetExtraInfoSize(const Block & block);
 size_t ApproxBlockBytes(const Block & block);
 CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method);
 std::unique_ptr<CHBlockChunkCodecStream> NewCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types);

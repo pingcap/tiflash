@@ -57,7 +57,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressImp
     {
         size_t rows{};
         Block block = DecodeHeader(istr, codec.header, rows);
-        DecodeColumns(istr, block, codec.header.columns(), rows, static_cast<size_t>(rows_limit * 1.5));
+        DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
         if (block)
             accumulated_block.emplace(std::move(block));
     }
@@ -65,7 +65,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressImp
     {
         size_t rows{};
         DecodeHeader(istr, codec.header, rows);
-        DecodeColumns(istr, *accumulated_block, codec.header.columns(), rows, 0);
+        DecodeColumns(istr, *accumulated_block, rows, 0);
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)

@@ -160,11 +160,11 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
                         batch_send_min_limit,
                         should_send_exec_summary_at_last,
                         dag_context);
-                return std::make_unique<HashPartitionWriterV1<MPPTunnelSetPtr>>(
+                return std::make_unique<HashPartitionWriterImplV1<MPPTunnelSetPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
-                    batch_send_min_limit,
+                    8192,
                     should_send_exec_summary_at_last,
                     dag_context,
                     compress_method);

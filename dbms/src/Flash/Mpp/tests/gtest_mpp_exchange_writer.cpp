@@ -495,7 +495,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<HashPartitionWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+    auto dag_writer = std::make_shared<HashPartitionWriterImplV1<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -521,7 +521,7 @@ try
         {
             auto & packet = tracked_packet->getPacket();
 
-            ASSERT_EQ(packet.version(), 1);
+            ASSERT_EQ(packet.version(), HashPartitionWriterV1);
 
             for (auto && chunk : packet.chunks())
             {

@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <magic_enum.hpp>
 
+#include "Flash/Mpp/HashPartitionWriterV1.h"
 #include "mpp.pb.h"
 
 namespace DB
@@ -698,7 +699,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     switch (packet.version())
     {
-    case 0:
+    case HashPartitionWriterV0:
     {
         for (const String * chunk : recv_msg->chunks)
         {
@@ -713,24 +714,25 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         }
         return detail;
     }
-    case 1:
+    case HashPartitionWriterV1:
     {
+        RUNTIME_CHECK(packet.chunks().size() == int(recv_msg->chunks.size()),
+                      packet.chunks().size(),
+                      recv_msg->chunks.size());
+
         for (auto && chunk : packet.chunks())
         {
             auto && result = decoder_ptr->decodeAndSquash(chunk, packet.compress().method() != mpp::CompressMethod::NONE);
-            if (!result)
+            if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();
-            if likely (result->rows() > 0)
-            {
-                block_queue.push(std::move(*result));
-            }
+            block_queue.push(std::move(*result));
         }
         return detail;
     }
     default:
     {
-        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}", packet.version());
+        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", packet.version());
         break;
     }
     }

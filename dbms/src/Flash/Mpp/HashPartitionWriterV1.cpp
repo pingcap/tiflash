@@ -22,6 +22,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <memory>
 #include <numeric>
 
 #include "Common/Exception.h"
@@ -31,23 +32,24 @@
 #include "Flash/Coprocessor/CompressedCHBlockChunkCodec.h"
 #include "Flash/Mpp/MppVersion.h"
 #include "IO/CompressedStream.h"
+#include "IO/CompressionSettings.h"
 #include "common/logger_useful.h"
 #include "ext/scope_guard.h"
 
 namespace DB
 {
 template <class ExchangeWriterPtr>
-HashPartitionWriterV1<ExchangeWriterPtr>::HashPartitionWriterV1(
+HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
-    Int64 batch_send_min_limit_,
+    Int64 partition_batch_limit_,
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
     mpp::CompressMethod compress_method_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , partition_num(writer_->getPartitionNum())
-    , batch_send_min_limit(batch_send_min_limit_ * partition_num)
+    , partition_batch_limit(partition_batch_limit_ * partition_num)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
@@ -68,7 +70,7 @@ HashPartitionWriterV1<ExchangeWriterPtr>::HashPartitionWriterV1(
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::finishWrite()
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::finishWrite()
 {
     assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
@@ -76,7 +78,7 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::finishWrite()
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::sendExecutionSummary()
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::sendExecutionSummary()
 {
     tipb::SelectResponse response;
     summary_collector.addExecuteSummaries(response);
@@ -84,14 +86,14 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::sendExecutionSummary()
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::flush()
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
         partitionAndEncodeThenWriteBlocks();
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::write(const Block & block)
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -103,27 +105,30 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    if (static_cast<Int64>(rows_in_blocks) > partition_batch_limit)
         partitionAndEncodeThenWriteBlocks();
 }
 
+extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
+
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
+    return partitionAndEncodeThenWriteBlocksTest();
+
     assert(compress_chunk_codec_stream);
 
-    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, 1);
+    // Set mpp packet data version to `1`
+    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, HashPartitionWriterV1);
 
+    // Do NOT enable data compression when using local tunnel
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        auto method = compress_method;
-        if (writer->isLocal(part_id))
-        {
-            method = mpp::CompressMethod::NONE;
-        }
+        auto method = writer->isLocal(part_id) ? mpp::CompressMethod::NONE : compress_method;
         tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
     }
 
+    // Sum of all approximate block data memory size
     size_t ori_block_mem_size = 0;
 
     if (!blocks.empty())
@@ -131,8 +136,133 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
         assert(rows_in_blocks > 0);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
-        Block dest_block_header = blocks[0].cloneEmpty();
-        assertBlockSchema(expected_types, dest_block_header, "HashPartitionWriterV1");
+
+        // All blocks are same, use one block's meta info as header
+        Block dest_block_header = blocks.back().cloneEmpty();
+
+        std::vector<String> partition_key_containers(collators.size());
+        std::vector<std::vector<MutableColumns>> dest_columns(partition_num);
+        [[maybe_unused]] size_t total_rows = 0, encoded_rows = 0;
+
+        while (!blocks.empty())
+        {
+            const auto & block = blocks.back();
+            block.checkNumberOfRows();
+            assertBlockSchema(expected_types, block, "HashPartitionWriterV1");
+
+            ori_block_mem_size += ApproxBlockBytes(block);
+            total_rows += block.rows();
+
+            auto && dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
+            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            blocks.pop_back();
+
+            for (size_t part_id = 0; part_id < partition_num; ++part_id)
+            {
+                auto & columns = dest_tbl_cols[part_id];
+                dest_columns[part_id].emplace_back(std::move(columns));
+            }
+        }
+
+        size_t header_size = GetExtraInfoSize(dest_block_header);
+
+        for (size_t part_id = 0; part_id < partition_num; ++part_id)
+        {
+            size_t part_rows = std::accumulate(dest_columns[part_id].begin(), dest_columns[part_id].end(), 0, [](const auto & r, const auto & columns) { return r + columns[0]->size(); });
+
+            if (!part_rows)
+                continue;
+
+            size_t part_column_bytes = std::accumulate(dest_columns[part_id].begin(), dest_columns[part_id].end(), 0, [](auto res, const auto & columns) {
+                for (const auto & elem : columns)
+                    res += elem->byteSize();
+                return res + 8;
+            });
+
+            // Each partition encode format:
+            //  header meta(include all row count of the partition);
+            //  repeated:
+            //      row count;
+            //      columns data;
+            size_t init_size = part_column_bytes + header_size;
+
+            // Reserve enough memory buffer size
+            auto output_buffer = std::make_unique<WriteBufferFromOwnString>(init_size);
+            std::unique_ptr<CompressedCHBlockChunkCodec::CompressedWriteBuffer> compress_codec{};
+            WriteBuffer * ostr_ptr = output_buffer.get();
+
+            // Init compression writer
+            if (tracked_packets[part_id]->getPacket().compress().method() != mpp::NONE)
+            {
+                compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
+                    *output_buffer,
+                    CompressionSettings(ToInternalCompressionMethod(compress_method)),
+                    init_size);
+                ostr_ptr = compress_codec.get();
+            }
+
+            // Encode header
+            EncodeHeader(*ostr_ptr, dest_block_header, part_rows);
+
+            for (auto && columns : dest_columns[part_id])
+            {
+                size_t rows = columns[0]->size();
+                if (!rows)
+                    continue;
+
+                // Encode row count for next columns
+                writeVarUInt(rows, *ostr_ptr);
+                encoded_rows += rows;
+
+                // Encode columns data
+                for (size_t col_index = 0; col_index < dest_block_header.columns(); ++col_index)
+                {
+                    auto && col_type_name = dest_block_header.getByPosition(col_index);
+                    WriteColumnData(*col_type_name.type, std::move(columns[col_index]), *ostr_ptr, 0, 0);
+                }
+
+                columns.clear();
+            }
+
+            // Flush rest buffer
+            if (compress_codec)
+                compress_codec->next();
+
+            tracked_packets[part_id]->getPacket().add_chunks(output_buffer->releaseStr());
+        }
+        assert(encoded_rows == total_rows);
+        assert(blocks.empty());
+        rows_in_blocks = 0;
+    }
+
+    writePackets(std::move(tracked_packets));
+
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
+}
+
+
+template <class ExchangeWriterPtr>
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocksTest()
+{
+    // Set mpp packet data version to `1`
+    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, HashPartitionWriterV1);
+
+    // Do NOT enable data compression when using local tunnel
+    for (size_t part_id = 0; part_id < partition_num; ++part_id)
+    {
+        auto method = writer->isLocal(part_id) ? mpp::CompressMethod::NONE : compress_method;
+        tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
+    }
+
+    // Sum of all approximate block data memory size
+    size_t ori_block_mem_size = 0;
+
+    if (!blocks.empty())
+    {
+        assert(rows_in_blocks > 0);
+
+        HashBaseWriterHelper::materializeBlocks(blocks);
+        Block dest_block_header = blocks.back().cloneEmpty();
 
         std::vector<String> partition_key_containers(collators.size());
         std::vector<std::vector<MutableColumns>> dest_columns(partition_num);
@@ -158,78 +288,67 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
             }
         }
 
+        size_t header_size = GetExtraInfoSize(dest_block_header) + 8;
+
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
-            WriteBuffer * ostr_ptr{};
-            if (tracked_packets[part_id]->getPacket().compress().method() == mpp::NONE)
+            auto & part_columns = dest_columns[part_id];
+            size_t part_rows = std::accumulate(part_columns.begin(), part_columns.end(), 0, [](const auto & r, const auto & columns) { return r + columns.front()->size(); });
+
+            if (!part_rows)
+                continue;
+
+            encoded_rows += part_rows;
+
+            size_t part_column_bytes = std::accumulate(
+                part_columns.begin(),
+                part_columns.end(),
+                0,
+                [](auto res, const auto & columns) {
+                    for (const auto & elem : columns)
+                        res += elem->byteSize();
+                    return res + 8;
+                });
+
+            size_t init_size = part_column_bytes + header_size;
+
+            // Reserve enough memory buffer size
+            auto output_buffer = std::make_unique<WriteBufferFromOwnString>(init_size);
+            std::unique_ptr<CompressedCHBlockChunkCodec::CompressedWriteBuffer> compress_codec{};
+            WriteBuffer * ostr_ptr = output_buffer.get();
+
+            // Init compression writer
+            if (tracked_packets[part_id]->getPacket().compress().method() != mpp::NONE)
             {
-                ostr_ptr = compress_chunk_codec_stream->getWriterWithoutCompress();
-                // for (auto && columns : dest_columns[part_id])
-                // {
-                //     dest_block_header.setColumns(std::move(columns));
-                //     encoded_rows += dest_block_header.rows();
-
-                //     EncodeCHBlockChunk(ostr_ptr, dest_block_header);
-                //     tracked_packets[part_id]->getPacket().add_chunks(ostr_ptr->getString());
-                //     ostr_ptr->reset();
-
-                //     // {
-                //     //     const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
-                //     //     const auto & dd = chunks[chunks.size() - 1];
-
-                //     //     auto res = CHBlockChunkCodec::decode(dd, dest_block_header);
-                //     //     RUNTIME_CHECK(res.rows() == dest_block_header.rows(), res.rows(), dest_block_header.rows());
-                //     //     RUNTIME_CHECK(res.columns() == dest_block_header.columns(), res.columns(), dest_block_header.columns());
-                //     //     res.checkNumberOfRows();
-                //     //     for (size_t i = 0; i < res.columns(); ++i)
-                //     //     {
-                //     //         RUNTIME_CHECK(dest_block_header.getByPosition(i) == res.getByPosition(i));
-                //     //     }
-                //     // }
-                // }
+                compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
+                    *output_buffer,
+                    CompressionSettings(ToInternalCompressionMethod(compress_method)),
+                    init_size);
+                ostr_ptr = compress_codec.get();
             }
-            else
+
+            // Encode header
+            EncodeHeader(*ostr_ptr, dest_block_header, part_rows);
+            writeVarUInt(part_columns.size(), *ostr_ptr);
+            for (auto && columns : part_columns)
             {
-                ostr_ptr = compress_chunk_codec_stream->getWriter();
+                writeVarUInt(columns.front()->size(), *ostr_ptr);
             }
 
+            for (size_t col_index = 0; col_index < dest_block_header.columns(); ++col_index)
             {
-                size_t part_rows = std::accumulate(dest_columns[part_id].begin(), dest_columns[part_id].end(), 0, [](const auto & r, const auto & columns) { return r + columns[0]->size(); });
-                encoded_rows += part_rows;
-
-                EncodeHeader(*ostr_ptr, dest_block_header, part_rows);
-                for (size_t col_index = 0; col_index < dest_block_header.columns(); ++col_index)
+                auto && col_type_name = dest_block_header.getByPosition(col_index);
+                for (auto && columns : part_columns)
                 {
-                    auto && col_type_name = dest_block_header.getByPosition(col_index);
-                    for (auto && columns : dest_columns[part_id])
-                    {
-                        EncodeColumn(*ostr_ptr, std::move(columns[col_index]), col_type_name);
-                    }
+                    WriteColumnData(*col_type_name.type, std::move(columns[col_index]), *ostr_ptr, 0, 0);
                 }
-
-                tracked_packets[part_id]->getPacket().add_chunks(compress_chunk_codec_stream->getString());
-                compress_chunk_codec_stream->reset();
-
-                // {
-                //     // decode
-                //     const auto & chunks = tracked_packets[part_id]->getPacket().chunks();
-                //     const auto & dd = chunks[chunks.size() - 1];
-
-                //     ReadBufferFromString istr(dd);
-                //     auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
-
-                //     size_t rows{};
-                //     Block res = DecodeHeader(compress_buffer, dest_block_header, rows);
-                //     DecodeColumns(compress_buffer, res, res.columns(), rows);
-                //     RUNTIME_CHECK(res.rows() == part_rows, res.rows(), part_rows);
-                //     RUNTIME_CHECK(res.columns() == dest_block_header.columns(), res.columns(), dest_block_header.columns());
-                //     res.checkNumberOfRows();
-                //     for (size_t i = 0; i < res.columns(); ++i)
-                //     {
-                //         RUNTIME_CHECK(dest_block_header.getByPosition(i) == res.getByPosition(i));
-                //     }
-                // }
             }
+
+            // Flush rest buffer
+            if (compress_codec)
+                compress_codec->next();
+
+            tracked_packets[part_id]->getPacket().add_chunks(output_buffer->releaseStr());
         }
 
         RUNTIME_CHECK(encoded_rows == total_rows, encoded_rows, total_rows);
@@ -238,56 +357,61 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
         rows_in_blocks = 0;
     }
 
-    writePackets(tracked_packets);
+    writePackets(std::move(tracked_packets));
 
     GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
 }
 
+static void updateHashPartitionWriterMetrics(mpp::CompressMethod method, size_t sz, bool is_local)
+{
+    switch (method)
+    {
+    case mpp::NONE:
+    {
+        if (is_local)
+        {
+            GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+        }
+        else
+        {
+            GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
+        }
+        break;
+    }
+    case mpp::LZ4:
+    {
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
+        break;
+    }
+    case mpp::ZSTD:
+    {
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+void HashPartitionWriterImplV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs && packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
-        const auto & packet = packets[part_id];
+        auto & packet = packets[part_id];
         assert(packet);
 
         auto & inner_packet = packet->getPacket();
-        if (likely(inner_packet.chunks_size() > 0))
-        {
-            writer->partitionWrite(packet, part_id);
 
-            auto sz = inner_packet.ByteSizeLong();
-            switch (inner_packet.compress().method())
-            {
-            case mpp::NONE:
-            {
-                if (writer->isLocal(part_id))
-                {
-                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
-                }
-                else
-                {
-                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
-                }
-                break;
-            }
-            case mpp::LZ4:
-            {
-                GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
-                break;
-            }
-            case mpp::ZSTD:
-            {
-                GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
-                break;
-            }
-            default:
-                break;
-            }
+        if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
+        {
+            auto method = inner_packet.compress().method();
+            writer->partitionWrite(std::move(packet), part_id);
+            updateHashPartitionWriterMetrics(method, sz, writer->isLocal(part_id));
         }
     }
 }
 
-template class HashPartitionWriterV1<MPPTunnelSetPtr>;
+template class HashPartitionWriterImplV1<MPPTunnelSetPtr>;
 
 } // namespace DB
