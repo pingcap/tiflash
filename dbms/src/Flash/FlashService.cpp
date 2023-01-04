@@ -462,8 +462,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         static const std::string meta_config[][3] = {
             {"dag_records_per_chunk", "dag_records_per_chunk", ""},
             {"tidb_max_tiflash_threads", "max_threads", ""},
-            {"tidb_tiflash_max_memory_usage", "max_memory_usage", ""},
-            {"tidb_tiflash_max_memory_usage_for_all_queries", "max_memory_usage_for_all_queries", ""},
         };
 
         for (const auto & [meta_name, config_name, default_value] : meta_config)
