@@ -43,13 +43,13 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
     stream->readSuffix();
 }
 
-void BitmapFilter::set(const ColumnPtr & col, const FilterPtr f)
+void BitmapFilter::set(const ColumnPtr & col, const FilterPtr & f)
 {
     const auto * v = toColumnVectorDataPtr<UInt32>(col);
     set(v->data(), v->size(), f);
 }
 
-void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr f)
+void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr & f)
 {
     if (size == 0)
     {
@@ -57,7 +57,7 @@ void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr f)
     }
     //size_t max_row_id = *std::max_element(data, data + size);
     //RUNTIME_CHECK(max_row_id < filter.size(), max_row_id, filter.size());
-    if (f == nullptr)
+    if (!f)
     {
         for (UInt32 i = 0; i < size; i++)
         {
