@@ -15,9 +15,11 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
+
 
 namespace DB
 {
@@ -40,17 +42,35 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const Block & sample_block_,
-        const BlockInputStreams & mock_streams_);
+        const BlockInputStreams & mock_streams_,
+        Int64 table_id_);
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
+    void initStreams(Context & context);
+
+    // for delta-merge test
+    bool pushDownFilter(Context & context, const String & filter_executor_id, const tipb::Selection & selection);
+
+    bool hasPushDownFilter() const;
+
+    const String & getPushDownFilterId() const;
+
+    Int64 getLogicalTableID() const;
+
+    void updateStreams(Context & context);
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
+private:
+    PushDownFilter push_down_filter;
     Block sample_block;
 
     BlockInputStreams mock_streams;
+
+    const Int64 table_id;
 };
 } // namespace DB

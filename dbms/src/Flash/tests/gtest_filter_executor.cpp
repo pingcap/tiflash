@@ -29,6 +29,7 @@ public:
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
         context.addExchangeReceiver("exchange1",
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
@@ -248,6 +249,30 @@ try
                            .build(context);
         executeAndAssertColumnsEqual(request, {toNullableVec<String>({"1"})});
     }
+}
+CATCH
+
+TEST_F(FilterExecutorTestRunner, PushDownFilter)
+try
+{
+    context.mockStorage()->setUseDeltaMerge(true);
+
+    // ywq todo check column name..
+    context.addMockDeltaMerge({"test_db", "test_table1"},
+                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}},
+                              {toVec<Int64>("i1", {1, 2, 3}),
+                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+    auto request = context
+                       .scan("test_db", "test_table1")
+                       .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
+                       .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1}),
+         toNullableVec<String>({"apple"})});
+
+    context.mockStorage()->setUseDeltaMerge(false);
 }
 CATCH
 

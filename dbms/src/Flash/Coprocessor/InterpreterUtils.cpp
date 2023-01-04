@@ -204,7 +204,13 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
 
     ExpressionActionsChain chain;
     analyzer.initChain(chain, analyzer.getCurrentInputColumns());
+    std::cout << "size: " << analyzer.getCurrentInputColumns().size() << std::endl;
+    for (const auto & column : analyzer.getCurrentInputColumns())
+    {
+        std::cout << "column name: " << column.name << std::endl;
+    }
     String filter_column_name = analyzer.appendWhere(chain, push_down_filter.conditions);
+    std::cout << "ywq test filter column name: " << filter_column_name << std::endl;
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
