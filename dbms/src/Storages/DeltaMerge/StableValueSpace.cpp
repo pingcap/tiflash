@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/Transaction/TMTContext.cpp>
+#include <Storages/DeltaMerge/File/DMFileWriterRemote.h>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -138,7 +139,6 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
 
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
     auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
-    LOG_DEBUG(&Poco::Logger::get("StableValueSpace"), "checkpoint stable id {} buffer size {}", stable_id, buf_size);
 
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, *buf);
@@ -177,19 +177,14 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
             auto data_store = remote_manager->getDataStore();
             data_store->linkDMFile(remote_oid, self_oid);
 
-            // 2. copy to local temporary path and set dmfile no gc
-            auto temporary_path = db_context.getTemporaryPath();
-            Poco::File(temporary_path).createDirectories();
-            data_store->copyDMFileToLocalPath(self_oid, temporary_path);
-            auto temp_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, temporary_path, DMFile::ReadMetaMode::none());
-            temp_dmfile->disableGC();
-
-            // 3. copy to storage data path, write file id to data ps and enable gc
+            // 2. create a local file with only needed metadata
             auto parent_path = delegator.choosePath();
-            const auto local_path = DMFile::getPathByStatus(parent_path, new_file_id, DMFile::READABLE);
-            const auto temp_path = DMFile::getPathByStatus(temporary_path, new_file_id, DMFile::READABLE);
-            Poco::File(temp_path).moveTo(local_path);
-            auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
+            auto new_dmfile = DMFile::create(new_file_id, parent_path, false, context.createChecksumConfig(false));
+            new_dmfile->setRemote();
+            DMFileWriterRemote remote_writer(new_dmfile, context.db_context.getFileProvider(), self_oid, data_store);
+            remote_writer.write();
+            remote_writer.finalize();
+            // TODO: bytes on disk is not correct
             delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), parent_path);
             wbs.writeLogAndData();
             new_dmfile->enableGC();
@@ -402,7 +397,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
 using Snapshot = StableValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-SnapshotPtr StableValueSpace::createSnapshot()
+SnapshotPtr StableValueSpace::createSnapshot(const Context & db_context, TableID table_id)
 {
     auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
@@ -413,6 +408,30 @@ SnapshotPtr StableValueSpace::createSnapshot()
     {
         auto column_cache = std::make_shared<ColumnCache>();
         snap->column_caches.emplace_back(column_cache);
+    }
+    for (const auto & dmfile: files)
+    {
+        if (dmfile->isRemote())
+        {
+            // Just for unit test on WN, should not be used in real env
+            assert(table_id != -1);
+            UInt64 store_id = db_context.getTMTContext().getKVStore()->getStoreMeta().id();
+            UInt64 file_id = dmfile->fileId();
+            const auto & remote_manager = db_context.getDMRemoteManager();
+            auto data_store = remote_manager->getDataStore();
+            auto self_oid = Remote::DMFileOID{
+                .write_node_id = store_id,
+                .table_id = table_id,
+                .file_id = file_id,
+            };
+            auto prepared = data_store->prepareDMFile(self_oid);
+            auto new_dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            snap->dm_files.push_back(new_dmfile);
+        }
+        else
+        {
+            snap->dm_files.push_back(dmfile);
+        }
     }
 
     return snap;
@@ -441,7 +460,7 @@ StableValueSpace::Snapshot::getInputStream(
     LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
 
     SkippableBlockInputStreams streams;
-    for (size_t i = 0; i < stable->files.size(); i++)
+    for (size_t i = 0; i < dm_files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
         builder
@@ -450,7 +469,7 @@ StableValueSpace::Snapshot::getInputStream(
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
-        streams.emplace_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        streams.emplace_back(builder.build(dm_files[i], read_columns, rowkey_ranges, context.scan_context));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
@@ -467,7 +486,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     // Usually, this method will be called for some "cold" key ranges.
     // Loading the index into cache may pollute the cache and make the hot index cache invalid.
     // So don't refill the cache if the index does not exist.
-    for (auto & f : stable->files)
+    for (auto & f : dm_files)
     {
         auto filter = DMFilePackFilter::loadFrom(
             f,
@@ -511,9 +530,9 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
     // Usually, this method will be called for some "cold" key ranges.
     // Loading the index into cache may pollute the cache and make the hot index cache invalid.
     // So don't refill the cache if the index does not exist.
-    for (size_t file_idx = 0; file_idx < stable->files.size(); ++file_idx)
+    for (size_t file_idx = 0; file_idx < dm_files.size(); ++file_idx)
     {
-        const auto & file = stable->files[file_idx];
+        const auto & file = dm_files[file_idx];
         auto filter = DMFilePackFilter::loadFrom(
             file,
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
@@ -534,7 +553,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             else
                 ret.first_pack_intersection = handle_filter_result.front();
         }
-        if (file_idx == stable->files.size() - 1)
+        if (file_idx == dm_files.size() - 1)
         {
             // TODO: this check may not be correct when support multiple files in a stable, let's just keep it now for simplicity
             if (handle_filter_result.empty())

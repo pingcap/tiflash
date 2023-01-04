@@ -54,7 +54,7 @@ public:
 
     void putDMFile(DMFilePtr local_dmf, const DMFileOID & oid) override;
 
-    void copyDMFileToLocalPath(const DMFileOID & remote_oid, const String & local_path) override;
+    void copyDMFileMetaToLocalPath(const DMFileOID & remote_oid, const String & local_path) override;
 
     void linkDMFile(const DMFileOID & remote_oid, const DMFileOID & self_oid) override;
 

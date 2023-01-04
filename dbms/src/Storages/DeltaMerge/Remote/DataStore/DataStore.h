@@ -81,8 +81,7 @@ public:
      */
     virtual void putDMFile(DMFilePtr local_dm_file, const DMFileOID & oid) = 0;
 
-    // TODO: remove this method after support register remote dmfile in stablevaluespace
-    virtual void copyDMFileToLocalPath(const DMFileOID & remote_oid, const String & local_path) = 0;
+    virtual void copyDMFileMetaToLocalPath(const DMFileOID & remote_oid, const String & local_path) = 0;
 
     virtual void linkDMFile(const DMFileOID & remote_oid, const DMFileOID & self_oid) = 0;
 

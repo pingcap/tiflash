@@ -190,12 +190,6 @@ public:
     static DMFilePtr
     create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationOpt configuration = std::nullopt);
 
-    static DMFilePtr createByLink(
-        const FileProviderPtr & file_provider,
-        UInt64 target_file_id,
-        UInt64 new_file_id,
-        const String & parent_path);
-
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
         UInt64 file_id,
@@ -218,8 +212,12 @@ public:
 
     bool canGC();
     void enableGC();
-    void disableGC();
     void remove(const FileProviderPtr & file_provider);
+
+    String remotePath() const;
+    void clearRemote();
+    void setRemote();
+    bool isRemote();
 
     // The ID for locating DTFile on disk
     UInt64 fileId() const { return file_id; }
@@ -390,6 +388,7 @@ private:
     Status getStatus() const { return status; }
     void setStatus(Status status_) { status = status_; }
 
+    void finalizeForRemote(const FileProviderPtr & file_provider);
     void finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void finalizeForSingleFileMode(WriteBuffer & buffer);
 
@@ -431,6 +430,7 @@ private:
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
+    friend class DMFileWriterRemote;
     friend int ::DTTool::Migrate::migrateServiceMain(DB::Context & context, const ::DTTool::Migrate::MigrateArgs & args);
     friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, const std::string & target);
     friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
