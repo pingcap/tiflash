@@ -357,7 +357,7 @@ try
     context.addMockTable("cast", "t1", {{"datetime", TiDB::TP::TypeDatetime}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
     context.addMockTable("cast", "t2", {{"datetime", TiDB::TP::TypeTimestamp}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
-    
+
     auto cast_request_1 = [&]() {
         return context.scan("cast", "t1")
             .join(context.scan("cast", "t2"), tipb::JoinType::TypeInnerJoin, {col("datetime")})
