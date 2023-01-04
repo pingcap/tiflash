@@ -133,7 +133,7 @@ void GlobalStoragePool::shutdown()
     if (gc_handle)
     {
         global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
+        gc_handle = {};
     }
 }
 
@@ -553,13 +553,13 @@ void StoragePool::startup(ExternalPageCallbacks && callbacks)
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        // For V3, the GCe is handled by `GlobalStoragePool::gc`, just register callbacks is OK.
+        // For V3, the GC is handled by `GlobalStoragePool::gc`, just register callbacks is OK.
         data_storage_v3->registerExternalPagesCallbacks(callbacks);
         break;
     }
     case PageStorageRunMode::MIX_MODE:
     {
-        // For V3, the GCe is handled by `GlobalStoragePool::gc`.
+        // For V3, the GC is handled by `GlobalStoragePool::gc`.
         // Since we have transformed all external pages from V2 to V3 in `StoragePool::restore`,
         // just register callbacks to V3 is OK
         data_storage_v3->registerExternalPagesCallbacks(callbacks);
