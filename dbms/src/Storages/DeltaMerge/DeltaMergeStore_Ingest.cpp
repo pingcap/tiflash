@@ -1033,7 +1033,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
 
     if (restored_segments.empty())
     {
-        LOG_DEBUG(log, "No segments to ingest.")
+        LOG_DEBUG(log, "No segments to ingest.");
         return;
     }
 
