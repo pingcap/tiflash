@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
-#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 
 namespace DB
@@ -27,6 +26,11 @@ using CheckpointPageManagerPtr = std::shared_ptr<CheckpointPageManager>;
 } // namespace PS::V3
 namespace DM
 {
+namespace Remote
+{
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
+} // namespace Remote
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class ColumnFileBig;

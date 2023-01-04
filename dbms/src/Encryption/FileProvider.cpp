@@ -17,6 +17,7 @@
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Encryption/PosixWriteReadableFile.h>
@@ -230,4 +231,8 @@ void FileProvider::renameFile(
         key_manager->deleteFile(src_encryption_path_.full_path, false);
 }
 
+FileProviderPtr FileProvider::createForTest()
+{
+    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(false), false);
+}
 } // namespace DB

@@ -19,6 +19,8 @@
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
 
+#include "Storages/Page/WriteBatch.h"
+
 namespace DB
 {
 PageStoragePtr PageStorage::create(

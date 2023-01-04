@@ -13,13 +13,17 @@
 // limitations under the License.
 
 #include <IO/ReadBufferFromFile.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/S3/S3Filename.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -35,7 +39,8 @@ public:
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        auto & global_ctx = DB::tests::TiFlashTestEnv::getGlobalContext();
+        file_provider = global_ctx.getFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create("test.t", delegator, config, file_provider);
         page_storage->restore();
@@ -243,13 +248,19 @@ public:
     UniPageStorageRemoteCheckpointTest()
     {
         writer_info = std::make_shared<V3::Remote::WriterInfo>();
-        writer_info->set_store_id(1027);
+        writer_info->set_store_id(store_id);
 
         output_directory = DB::tests::TiFlashTestEnv::getTemporaryPath("UniPSRemoteCheckpointTest/");
         DB::tests::TiFlashTestEnv::tryRemovePath(output_directory);
     }
 
-    std::string readData(const V3::RemoteDataLocation & location)
+    void SetUp() override
+    {
+        UniPageStorageTest::SetUp();
+        page_storage->checkpoint_manager->initStoreInfo(store_id);
+    }
+
+    std::string readData(const RemoteDataLocation & location)
     {
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
@@ -272,13 +283,9 @@ public:
 
     void dumpCheckpoint()
     {
-        page_storage->page_directory->dumpRemoteCheckpoint(V3::PageDirectory<V3::universal::PageDirectoryTrait>::DumpRemoteCheckpointOptions<V3::universal::BlobStoreTrait>{
+        page_storage->checkpoint_manager->dumpRemoteCheckpoint(V3::CheckpointUploadManager::DumpRemoteCheckpointOptions{
             .temp_directory = output_directory,
-            .remote_directory = output_directory,
-            .data_file_name_pattern = "{sequence}_{sub_file_index}.data",
-            .manifest_file_name_pattern = "{sequence}.manifest",
             .writer_info = writer_info,
-            .blob_store = *page_storage->blob_store,
         });
     }
 
@@ -304,6 +311,7 @@ public:
     }
 
 protected:
+    const UInt64 store_id = 1027;
     std::shared_ptr<V3::Remote::WriterInfo> writer_info;
     std::string output_directory;
 };
@@ -490,6 +498,22 @@ try
     ASSERT_EQ("", readData(iter->entry.remote_info->data_location));
 }
 CATCH
+
+TEST_F(UniPageStorageRemoteCheckpointTest, PutExternalFiles)
+try
+{
+    const UInt64 tag = 0;
+    {
+        UniversalWriteBatch batch;
+        auto s3fullpath = S3::S3Filename::fromDMFileOID(DM::Remote::DMFileOID{.write_node_id = store_id, .table_id = 100, .file_id = 1}).toFullKey();
+        RemoteDataLocation location{.data_file_id = std::make_shared<String>(s3fullpath)};
+        batch.putRemoteExternal("1", tag, location);
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint();
+}
+CATCH
+
 
 TEST_F(UniPageStorageRemoteCheckpointTest, PutAndDelete)
 try

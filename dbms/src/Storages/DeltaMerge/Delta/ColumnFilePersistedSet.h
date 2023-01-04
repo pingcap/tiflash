@@ -34,7 +34,6 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V3/PageDirectory.h>
 #include <fmt/format.h>
 
 #include "Storages/Page/V3/Remote/CheckpointPageManager.h"
@@ -44,7 +43,6 @@ namespace DB
 {
 namespace DM
 {
-using PS::V3::universal::PageDirectoryTrait;
 
 class ColumnFilePersistedSet;
 using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;

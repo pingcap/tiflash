@@ -18,13 +18,17 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <magic_enum.hpp>
+
+#include "Storages/Page/RemoteDataLocation.h"
 
 namespace CurrentMetrics
 {
@@ -643,11 +647,41 @@ void DeltaMergeStore::ingestFiles(
     // TODO: If tiflash crash during the middle of ingesting, we may leave some DTFiles on disk and
     // they can not be deleted. We should find a way to cleanup those files.
     WriteBatches ingest_wbs(storage_pool, dm_context->getWriteLimiter());
+    const auto & remote_manager = dm_context->db_context.getDMRemoteManager();
+    UInt64 store_id = 0;
+    if (remote_manager)
+    {
+        auto & tmt = dm_context->db_context.getTMTContext();
+        auto kvstore = tmt.getKVStore();
+        auto store_meta = kvstore->getStoreMeta();
+        store_id = store_meta.id();
+    }
+
     if (!files.empty())
     {
         for (const auto & file : files)
         {
-            ingest_wbs.data.putExternal(file->fileId(), 0);
+            if (remote_manager)
+            {
+                auto s3key = S3::S3Filename::fromDMFileOID(
+                                 Remote::DMFileOID{
+                                     .write_node_id = store_id,
+                                     .table_id = physical_table_id,
+                                     .file_id = file->fileId(),
+                                 })
+                                 .toFullKey();
+                PS::RemoteDataLocation remote_loc;
+                remote_loc = PS::RemoteDataLocation{
+                    .data_file_id = std::make_shared<String>(s3key),
+                    .offset_in_file = 0,
+                    .size_in_file = 0,
+                };
+                ingest_wbs.data.putRemoteExternal(file->fileId(), 0, remote_loc);
+            }
+            else
+            {
+                ingest_wbs.data.putExternal(file->fileId(), 0);
+            }
         }
         ingest_wbs.writeLogAndData();
         ingest_wbs.setRollback(); // rollback if exception thrown

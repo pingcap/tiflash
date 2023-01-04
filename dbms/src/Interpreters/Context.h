@@ -452,7 +452,6 @@ public:
     void initializeDeltaMergeRemoteManager();
     DM::Remote::ManagerPtr getDMRemoteManager() const;
 
-
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
 

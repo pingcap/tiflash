@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriterRemote.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -24,6 +25,9 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include "Storages/Page/RemoteDataLocation.h"
+#include "Storages/S3/S3Filename.h"
 
 namespace DB
 {
@@ -64,7 +68,7 @@ ColumnFileReaderPtr ColumnFileBig::getReader(
     {
         if (!remote_dm_file)
         {
-            auto & db_context = context.db_context;
+            const auto & db_context = context.db_context;
             UInt64 store_id = db_context.getTMTContext().getKVStore()->getStoreMeta().id();
             UInt64 file_id = file->fileId();
             const auto & remote_manager = db_context.getDMRemoteManager();
@@ -134,7 +138,6 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadataFromRemote(DMContext & 
     auto delegator = context.path_pool->getStableDiskDelegator();
     auto new_file_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     const auto & db_context = context.db_context;
-    wbs.data.putExternal(new_file_id, 0);
     if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
     {
         // 1. link remote file
@@ -143,6 +146,13 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadataFromRemote(DMContext & 
             .table_id = ns_id,
             .file_id = remote_file_id,
         };
+        auto s3key = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
+        auto remote_loc = PS::RemoteDataLocation{
+            .data_file_id = std::make_shared<String>(s3key),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        wbs.data.putRemoteExternal(new_file_id, 0, remote_loc);
         auto & tmt = db_context.getTMTContext();
         UInt64 store_id = tmt.getKVStore()->getStoreMeta().id();
         auto self_oid = Remote::DMFileOID{

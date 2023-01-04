@@ -197,11 +197,18 @@ public:
         records.emplace_back(record);
     }
 
-    void putExternal(const PageId & page_id)
+    void putExternal(const PageId & page_id, const std::optional<RemoteDataLocation> & location = std::nullopt)
     {
         EditRecord record{};
         record.type = EditRecordType::PUT_EXTERNAL;
         record.page_id = page_id;
+        if (location)
+        {
+            record.entry.remote_info = RemoteDataInfo{
+                .data_location = location.value(),
+                .is_local_data_reclaimed = false,
+            };
+        }
         records.emplace_back(record);
     }
 
@@ -242,13 +249,17 @@ public:
         records.emplace_back(record);
     }
 
-    void varExternal(const PageId & page_id, const PageVersion & create_ver, Int64 being_ref_count)
+    void varExternal(const PageId & page_id, const PageVersion & create_ver, Int64 being_ref_count, const std::optional<RemoteDataLocation> & remote_location)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_EXTERNAL;
         record.page_id = page_id;
         record.version = create_ver;
         record.being_ref_count = being_ref_count;
+        if (remote_location)
+        {
+            record.entry.remote_info = RemoteDataInfo{.data_location = remote_location.value(), .is_local_data_reclaimed = false};
+        }
         records.emplace_back(record);
     }
 

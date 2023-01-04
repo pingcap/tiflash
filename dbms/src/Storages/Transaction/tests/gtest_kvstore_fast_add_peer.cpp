@@ -36,9 +36,9 @@ extern const char fast_add_peer_sleep[];
 namespace tests
 {
 
+using PS::RemoteDataLocation;
 using PS::V3::CheckpointManifestFileReader;
 using PS::V3::PageDirectory;
-using PS::V3::RemoteDataLocation;
 using PS::V3::Remote::WriterInfo;
 using PS::V3::universal::BlobStoreTrait;
 using PS::V3::universal::PageDirectoryTrait;
@@ -189,26 +189,15 @@ void dumpPageStorage(UniversalPageStoragePtr page_storage, uint64_t store_id)
     auto * log = &Poco::Logger::get("fast add");
     auto remote_directory = TiFlashTestEnv::getTemporaryPath("FastAddPeer");
     page_storage->config.ps_remote_directory.set(remote_directory + "/");
-    const auto & storage_name = page_storage->storage_name;
     std::string output_directory = page_storage->config.ps_remote_directory;
     LOG_DEBUG(log, "output_directory {}", output_directory);
     {
         auto writer_info = std::make_shared<WriterInfo>();
         // write to a remote store
         writer_info->set_store_id(store_id + 1);
-        page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
+        page_storage->checkpoint_manager->dumpRemoteCheckpoint(PS::V3::CheckpointUploadManager::DumpRemoteCheckpointOptions{
             .temp_directory = output_directory,
-            .remote_directory = output_directory,
-            .data_file_name_pattern = fmt::format(
-                "store_{}/ps_{}_data/{{sequence}}_{{sub_file_index}}.data",
-                writer_info->store_id(),
-                storage_name),
-            .manifest_file_name_pattern = fmt::format(
-                "store_{}/ps_{}_manifest/{{sequence}}.manifest",
-                writer_info->store_id(),
-                storage_name),
             .writer_info = writer_info,
-            .blob_store = *page_storage->blob_store,
         });
     }
 }

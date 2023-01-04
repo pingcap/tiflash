@@ -25,7 +25,6 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
-#include <Storages/Page/V3/Remote/CheckpointFilesWriter.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -209,7 +208,7 @@ typename Trait::PageId VersionedPageEntries<Trait>::createUpsertEntry(const Page
 // If create success, then return a shared_ptr as a holder for page_id. The holder
 // will be release when this external version is totally removed.
 template <typename Trait>
-typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver)
+typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver, const std::optional<RemoteDataInfo> & remote_info)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -221,6 +220,10 @@ typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(c
         being_ref_count = 1;
         // return the new created holder to caller to set the page_id
         external_holder = std::make_shared<typename Trait::PageId>();
+        if (remote_info)
+        {
+            remote_location = remote_info->data_location;
+        }
         return external_holder;
     }
 
@@ -237,6 +240,10 @@ typename Trait::PageIdSharedPtr VersionedPageEntries<Trait>::createNewExternal(c
                 being_ref_count = 1;
                 // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<typename Trait::PageId>();
+                if (remote_info)
+                {
+                    remote_location = remote_info->data_location;
+                }
                 return external_holder;
             }
             else
@@ -899,7 +906,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const typename Tr
     {
         if (create_ver.sequence > seq)
             return;
-        edit.varExternal(page_id, create_ver, being_ref_count);
+        edit.varExternal(page_id, create_ver, being_ref_count, remote_location);
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -1443,7 +1450,7 @@ typename Trait::PageIds PageDirectory<Trait>::getLowerBound(const typename Trait
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
+std::unordered_set<String> PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
@@ -1476,6 +1483,7 @@ void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
+    std::unordered_set<String> applied_s3files;
     {
         std::unique_lock table_lock(table_rw_mutex);
 
@@ -1498,7 +1506,7 @@ void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const 
                 {
                 case EditRecordType::PUT_EXTERNAL:
                 {
-                    auto holder = version_list->createNewExternal(r.version);
+                    auto holder = version_list->createNewExternal(r.version, r.entry.remote_info);
                     if (holder)
                     {
                         // put the new created holder into `external_ids`
@@ -1523,6 +1531,11 @@ void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const 
                 case EditRecordType::VAR_REF:
                     throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
                 }
+                // collect the applied remote filepaths
+                if (r.entry.remote_info)
+                {
+                    applied_s3files.emplace(*r.entry.remote_info->data_location.data_file_id);
+                }
             }
             catch (DB::Exception & e)
             {
@@ -1534,6 +1547,7 @@ void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
+    return applied_s3files;
 }
 
 template <typename Trait>
@@ -1724,145 +1738,6 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
     return done_any_io;
 }
-
-template <typename Trait>
-template <typename PSBlobTrait>
-typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<PSBlobTrait> options)
-{
-    std::scoped_lock lock(checkpoint_mu);
-
-    RUNTIME_CHECK(endsWith(options.temp_directory, "/"));
-    RUNTIME_CHECK(endsWith(options.remote_directory, "/"));
-    RUNTIME_CHECK(!options.data_file_name_pattern.empty());
-    RUNTIME_CHECK(!options.manifest_file_name_pattern.empty());
-
-    // FIXME: We need to dump snapshot from files, in order to get a correct `being_ref_count`.
-    //  Note that, snapshots from files does not have a correct remote info, so we cannot simply
-    //  copy logic from `tryDumpSnapshot`.
-    //  Currently this is fine, because we will not reclaim data from the PageStorage.
-
-    LOG_INFO(log, "Start dumpRemoteCheckpoint");
-
-    // Let's keep this snapshot until all finished, so that blob data will not be GCed.
-    auto snap = createSnapshot(/*tracing_id*/ "");
-
-    if (snap->sequence == last_checkpoint_sequence)
-    {
-        LOG_INFO(log, "Skipped dump checkpoint because sequence is unchanged, last_seq={} this_seq={}", last_checkpoint_sequence, snap->sequence);
-        return {};
-    }
-
-    auto edit_from_mem = dumpSnapshotToEdit(snap);
-    LOG_DEBUG(log, "Dumped edit from PageDirectory, seq={} n_edits={}", snap->sequence, edit_from_mem.size());
-
-    // As a checkpoint, we write both entries (in manifest) and its data.
-    // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
-
-    // TODO: Check temp file exists.
-
-    auto data_file_name = fmt::format(
-        options.data_file_name_pattern,
-        fmt::arg("sequence", snap->sequence),
-        fmt::arg("sub_file_index", 0));
-    auto remote_data_file_path = options.remote_directory + data_file_name;
-    auto remote_data_file_path_tmp = remote_data_file_path + ".tmp";
-    // Always append a suffix, in case of remote_directory == temp_directory
-    auto local_data_file_path_temp = options.temp_directory + data_file_name + ".tmp";
-
-    auto manifest_file_name = fmt::format(
-        options.manifest_file_name_pattern,
-        fmt::arg("sequence", snap->sequence));
-    auto remote_manifest_file_path = options.remote_directory + manifest_file_name;
-    auto remote_manifest_file_path_temp = remote_manifest_file_path + ".tmp";
-    // Always append a suffix, in case of remote_directory == temp_directory
-    auto local_manifest_file_path_temp = options.temp_directory + manifest_file_name + ".tmp";
-
-    Poco::File(Poco::Path(local_data_file_path_temp).parent()).createDirectories();
-    Poco::File(Poco::Path(local_manifest_file_path_temp).parent()).createDirectories();
-
-    LOG_DEBUG(log, "data_file_path_temp={} manifest_file_path_temp={}", local_data_file_path_temp, local_manifest_file_path_temp);
-
-    auto data_writer = CheckpointDataFileWriter<Trait>::create(
-        typename CheckpointDataFileWriter<Trait>::Options{
-            .file_path = local_data_file_path_temp,
-            .file_id = data_file_name,
-        });
-    auto manifest_writer = CheckpointManifestFileWriter<Trait>::create(
-        typename CheckpointManifestFileWriter<Trait>::Options{
-            .file_path = local_manifest_file_path_temp,
-            .file_id = manifest_file_name,
-        });
-    auto writer = CheckpointFilesWriter<Trait, PSBlobTrait>::create(
-        typename CheckpointFilesWriter<Trait, PSBlobTrait>::Options{
-            .info = typename CheckpointFilesWriter<Trait, PSBlobTrait>::Info{
-                .writer = options.writer_info,
-                .sequence = snap->sequence,
-                .last_sequence = 0,
-            },
-            .data_writer = std::move(data_writer),
-            .manifest_writer = std::move(manifest_writer),
-            .blob_store = options.blob_store,
-            .log = log,
-        });
-
-    writer->writePrefix();
-    bool has_new_data = writer->writeEditsAndApplyRemoteInfo(edit_from_mem);
-    writer->writeSuffix();
-
-    writer.reset();
-
-    if (has_new_data)
-    {
-        // Copy back the remote info to the current PageStorage. New remote infos are attached in `writeEditsAndApplyRemoteInfo`.
-        // Snapshot cannot prevent obsolete entries from being deleted.
-        // For example, if there is a `Put 1` with sequence 10, `Del 1` with sequence 11,
-        // and the snapshot sequence is 12, Page with id 1 may be deleted by the gc process.
-        copyRemoteInfoFromEdit(edit_from_mem, /* allow_missing */ true);
-    }
-
-    // NOTE: The following IO may be very slow, because the output directory should be mounted as S3.
-    Poco::File(Poco::Path(remote_data_file_path).parent()).createDirectories();
-    Poco::File(Poco::Path(remote_manifest_file_path).parent()).createDirectories();
-
-    auto data_file = Poco::File{local_data_file_path_temp};
-    RUNTIME_CHECK(data_file.exists());
-
-    if (has_new_data)
-    {
-        // Upload in two steps to avoid other store read incomplete file
-        if (remote_data_file_path_tmp != local_data_file_path_temp)
-        {
-            data_file.moveTo(remote_data_file_path_tmp);
-        }
-        auto remote_data_file_temp = Poco::File{remote_data_file_path_tmp};
-        RUNTIME_CHECK(remote_data_file_temp.exists());
-        remote_data_file_temp.renameTo(remote_data_file_path);
-    }
-    else
-        data_file.remove();
-
-    auto manifest_file = Poco::File{local_manifest_file_path_temp};
-    RUNTIME_CHECK(manifest_file.exists());
-    if (remote_manifest_file_path_temp != local_manifest_file_path_temp)
-    {
-        manifest_file.moveTo(remote_manifest_file_path_temp);
-    }
-    auto remote_manifest_file_temp = Poco::File{remote_manifest_file_path_temp};
-    RUNTIME_CHECK(remote_manifest_file_temp.exists());
-    remote_manifest_file_temp.renameTo(remote_manifest_file_path);
-
-    last_checkpoint_sequence = snap->sequence;
-    LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);
-
-    return DumpRemoteCheckpointResult{
-        .data_file = data_file, // Note: when has_new_data == false, this field will be pointing to a file not exist. To be fixed.
-        .manifest_file = manifest_file,
-    };
-}
-
-template PageDirectory<u128::PageDirectoryTrait>::DumpRemoteCheckpointResult PageDirectory<u128::PageDirectoryTrait>::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<u128::BlobStoreTrait> options);
-
-template PageDirectory<universal::PageDirectoryTrait>::DumpRemoteCheckpointResult PageDirectory<universal::PageDirectoryTrait>::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<universal::BlobStoreTrait> options);
 
 template <typename Trait>
 void PageDirectory<Trait>::copyRemoteInfoFromEdit(typename Trait::PageEntriesEdit & edit, bool allow_missing)

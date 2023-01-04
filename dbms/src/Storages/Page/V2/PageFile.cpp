@@ -94,7 +94,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
 
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         meta_write_bytes += sizeof(IsPut);
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
@@ -138,7 +138,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
         if (write.type == WriteBatchWriteType::PUT_EXTERNAL)

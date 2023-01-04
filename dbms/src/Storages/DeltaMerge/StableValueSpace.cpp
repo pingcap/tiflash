@@ -30,6 +30,9 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include "Storages/Page/RemoteDataLocation.h"
+#include "Storages/S3/S3Filename.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -160,7 +163,6 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
         auto delegator = context.path_pool->getStableDiskDelegator();
         auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         const auto & db_context = context.db_context;
-        wbs.data.putExternal(new_file_id, 0);
         if (const auto & remote_manager = db_context.getDMRemoteManager(); remote_manager != nullptr)
         {
             // 1. link remote file
@@ -169,6 +171,12 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
                 .table_id = ns_id,
                 .file_id = remote_file_id,
             };
+            auto remote_loc = PS::RemoteDataLocation{
+                .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(remote_oid).toFullKey()),
+                .offset_in_file = 0,
+                .size_in_file = 0,
+            };
+            wbs.data.putRemoteExternal(new_file_id, 0, remote_loc);
             auto & tmt = db_context.getTMTContext();
             UInt64 store_id = tmt.getKVStore()->getStoreMeta().id();
             auto self_oid = Remote::DMFileOID{

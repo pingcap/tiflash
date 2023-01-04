@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 
 namespace DB::PS::V3

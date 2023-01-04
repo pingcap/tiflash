@@ -16,13 +16,17 @@
 
 #include <IO/IOSWrapper.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Remote/Proto/Helper.h>
 #include <Storages/Page/V3/Remote/Proto/data_file.pb.h>
 #include <google/protobuf/util/json_util.h>
 
 #include <string>
+
+#include "Storages/Page/V3/PageEntriesEdit.h"
 
 namespace DB::PS::V3
 {

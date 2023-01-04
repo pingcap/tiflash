@@ -22,6 +22,7 @@ message ManifestFile {
     // WARN: this struct is subject to change!
     ManifestFilePrefix file_prefix = 1;
     repeated EditRecord records = 2;
+    repeated LockFile locks = 3;
 }
 
 message ManifestFilePrefix {
@@ -61,4 +62,8 @@ message EditRecord {
     // The offset to the data (not the offset to the file) for each field.
     repeated uint64 fields_offset = 8;
     repeated uint64 fields_checksum = 9;
+}
+
+message LockFile {
+    string name = 1;
 }

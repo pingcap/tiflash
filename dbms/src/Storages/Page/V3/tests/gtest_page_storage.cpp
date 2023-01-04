@@ -93,7 +93,8 @@ public:
 
     void dumpCheckpoint()
     {
-        page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<u128::PageDirectoryTrait>::DumpRemoteCheckpointOptions<u128::BlobStoreTrait>{
+#if 0
+        page_storage->checkpoint_manager->dumpRemoteCheckpoint(CheckpointUploadManager::DumpRemoteCheckpointOptions{
             .temp_directory = output_directory,
             .remote_directory = output_directory,
             .data_file_name_pattern = "{sequence}_{sub_file_index}.data",
@@ -101,6 +102,7 @@ public:
             .writer_info = writer_info,
             .blob_store = page_storage->blob_store,
         });
+#endif
     }
 
 protected:

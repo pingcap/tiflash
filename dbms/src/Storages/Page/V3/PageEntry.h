@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V3/Remote/Proto/manifest_file.pb.h>
+#include <Storages/Page/RemoteDataLocation.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -29,34 +29,6 @@ extern const int CHECKSUM_DOESNT_MATCH;
 namespace PS::V3
 {
 
-struct RemoteDataLocation
-{
-    // This struct is highly coupled with manifest_file.proto -> EditEntry.
-
-    std::shared_ptr<const std::string> data_file_id;
-
-    uint64_t offset_in_file;
-    uint64_t size_in_file;
-
-    Remote::EntryDataLocation toRemote() const
-    {
-        Remote::EntryDataLocation remote_val;
-        remote_val.set_data_file_id(*data_file_id);
-        remote_val.set_offset_in_file(offset_in_file);
-        remote_val.set_size_in_file(size_in_file);
-        return remote_val;
-    }
-
-    static RemoteDataLocation fromRemote(const Remote::EntryDataLocation & remote_rec)
-    {
-        RemoteDataLocation val;
-        // TODO: This does not share the same memory for identical data files, wasting memory usage.
-        val.data_file_id = std::make_shared<std::string>(remote_rec.data_file_id());
-        val.offset_in_file = remote_rec.offset_in_file();
-        val.size_in_file = remote_rec.size_in_file();
-        return val;
-    }
-};
 
 struct RemoteDataInfo
 {

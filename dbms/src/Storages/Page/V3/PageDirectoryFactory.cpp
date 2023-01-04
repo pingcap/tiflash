@@ -188,7 +188,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
             break;
         case EditRecordType::PUT_EXTERNAL:
         {
-            auto holder = version_list->createNewExternal(restored_version);
+            auto holder = version_list->createNewExternal(restored_version, std::nullopt); // TODO: restore the remote info
             if (holder)
             {
                 *holder = r.page_id;

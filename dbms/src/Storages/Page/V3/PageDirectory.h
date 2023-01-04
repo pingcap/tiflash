@@ -176,7 +176,7 @@ public:
 
     bool createNewRef(const PageVersion & ver, const typename Trait::PageId & ori_page_id);
 
-    typename Trait::PageIdSharedPtr createNewExternal(const PageVersion & ver);
+    typename Trait::PageIdSharedPtr createNewExternal(const PageVersion & ver, const std::optional<RemoteDataInfo> & remote_info);
 
     void createDelete(const PageVersion & ver);
 
@@ -289,6 +289,8 @@ private:
     Int64 being_ref_count;
     // A shared ptr to a holder, valid when type == VAR_EXTERNAL
     typename Trait::PageIdSharedPtr external_holder;
+    // Remote location, valid when type == VAR_EXTERNAL
+    std::optional<RemoteDataLocation> remote_location;
 };
 
 // `PageDirectory` store multi-versions entries for the same
@@ -338,7 +340,10 @@ public:
 
     typename Trait::PageIds getLowerBound(const typename Trait::PageId & start);
 
-    void apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+    // Apply the edit into PageDirectory.
+    // If there are remote info along with the applied edit, this function will
+    // returns the remote filepaths.
+    std::unordered_set<String> apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<typename Trait::GcEntriesMap, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
@@ -349,53 +354,6 @@ public:
     /// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
-
-    template <typename PSBlobTrait>
-    struct DumpRemoteCheckpointOptions
-    {
-        /**
-         * The directory where temporary files are generated.
-         * Files are first generated in the temporary directory, then copied into the remote directory.
-         */
-        const std::string & temp_directory;
-
-        /**
-         * Final files are always named according to `data_file_name_pattern` and `manifest_file_name_pattern`.
-         * When we support different remote endpoints, the definition of remote_directory will change.
-         */
-        const std::string & remote_directory;
-
-        /**
-         * The data file name. Available placeholders: {sequence}, {sub_file_index}.
-         * We accept "/" in the file name.
-         */
-        const std::string & data_file_name_pattern;
-
-        /**
-         * The manifest file name. Available placeholders: {sequence}.
-         * We accept "/" in the file name.
-         */
-        const std::string & manifest_file_name_pattern;
-
-        /**
-         * The writer info field in the dumped files.
-         */
-        const std::shared_ptr<const Remote::WriterInfo> writer_info;
-
-        BlobStore<PSBlobTrait> & blob_store;
-
-        const ReadLimiterPtr read_limiter = nullptr;
-        const WriteLimiterPtr write_limiter = nullptr;
-    };
-
-    struct DumpRemoteCheckpointResult
-    {
-        Poco::File data_file;
-        Poco::File manifest_file;
-    };
-
-    template <typename PSBlobTrait> // TODO: PSBlobTrait should be associated with Trait, instead of defining a new one. We may resolve it when moving everything out.
-    DumpRemoteCheckpointResult dumpRemoteCheckpoint(DumpRemoteCheckpointOptions<PSBlobTrait> options);
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
@@ -494,10 +452,6 @@ private:
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;
     LoggerPtr log;
-
-    // Checkpoint related. To be moved to a standalone manager.
-    std::mutex checkpoint_mu;
-    UInt64 last_checkpoint_sequence = 0;
 };
 
 namespace universal

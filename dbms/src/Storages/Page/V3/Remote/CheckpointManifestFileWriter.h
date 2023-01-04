@@ -21,6 +21,7 @@
 #include <IO/WriteBufferFromOStream.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/Remote/Proto/manifest_file.pb.h>
+#include <google/protobuf/util/json_util.h>
 
 #include <memory>
 #include <string>
@@ -60,7 +61,7 @@ public:
     // Note: Currently you cannot call write multiple times.
     // You must feed everything you want to write all at once.
     // But we definitely want to change it to some streaming thing.
-    void write(const Remote::ManifestFilePrefix & prefix, const typename PSDirTrait::PageEntriesEdit & edit)
+    void write(const Remote::ManifestFilePrefix & prefix, const typename PSDirTrait::PageEntriesEdit & edit, const std::unordered_set<String> & lock_files)
     {
         RUNTIME_CHECK(!has_written);
         has_written = true;
@@ -72,6 +73,12 @@ public:
         {
             auto * out_record = file_content.add_records();
             *out_record = edit_record.toRemote();
+        }
+
+        // The data files that should not be deleted
+        for (const auto & lock_file : lock_files)
+        {
+            file_content.add_locks()->set_name(lock_file);
         }
 
         // To be changed: Currently we write out JSON instead of a binary data,

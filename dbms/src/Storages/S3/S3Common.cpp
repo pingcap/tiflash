@@ -5,10 +5,13 @@
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
+#include <aws/core/utils/memory/stl/AWSStringStream.h>
 #include <aws/s3/S3Client.h>
+#include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <common/logger_useful.h>
 
@@ -206,12 +209,33 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
                     bucket,
                     error.GetMessage());
 }
+
+void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & remote_fname)
+{
+    Stopwatch sw;
+    Aws::S3::Model::PutObjectRequest req;
+    req.WithBucket(bucket).WithKey(remote_fname);
+    auto istr = Aws::MakeShared<Aws::StringStream>("EmptyObjectInputStream", "", std::ios_base::in | std::ios_base::binary);
+    req.SetBody(istr);
+    req.SetContentType("binary/octet-stream");
+    auto result = client.PutObject(req);
+    if (!result.IsSuccess())
+    {
+        throw Exception(ErrorCodes::S3_ERROR,
+                        "S3 PutEmptyObject failed, remote_fname={}, exception={}, message={}",
+                        remote_fname,
+                        result.GetError().GetExceptionName(),
+                        result.GetError().GetMessage());
+    }
+    static auto * log = &Poco::Logger::get("S3UploadFile");
+    LOG_DEBUG(log, "remote_fname={}, cost={}ms", remote_fname, sw.elapsedMilliseconds());
+}
+
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(remote_fname);
+    req.WithBucket(bucket).WithKey(remote_fname);
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     req.SetBody(istr);
     req.SetContentType("binary/octet-stream");
@@ -251,31 +275,101 @@ void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const
     LOG_DEBUG(log, "local_fname={}, remote_fname={}, cost={}ms", local_fname, remote_fname, sw.elapsedMilliseconds());
 }
 
-std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, const String & bucket, const String & prefix)
+void listPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    const String & delimiter,
+    std::function<size_t(const Aws::S3::Model::ListObjectsV2Result & result)> pager)
 {
     Stopwatch sw;
-    Aws::S3::Model::ListObjectsRequest req;
-    req.SetBucket(bucket);
-    req.SetPrefix(prefix);
-    auto result = client.ListObjects(req);
-    if (!result.IsSuccess())
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(bucket).WithPrefix(prefix);
+    if (!delimiter.empty())
     {
-        throw Exception(ErrorCodes::S3_ERROR,
-                        "S3 ListObjects failed, prefix={}, exception={}, message={}",
-                        prefix,
-                        result.GetError().GetExceptionName(),
-                        result.GetError().GetMessage());
+        req.SetDelimiter(delimiter);
     }
-    const auto & objects = result.GetResult().GetContents();
+
+    static auto log = Logger::get("S3ListPrefix");
+
+    bool done = false;
+    size_t num_keys = 0;
+    while (!done)
+    {
+        auto outcome = client.ListObjectsV2(req);
+        if (!outcome.IsSuccess())
+        {
+            throw Exception(ErrorCodes::S3_ERROR,
+                            "S3 ListObjects failed, prefix={}, exception={}, message={}",
+                            prefix,
+                            outcome.GetError().GetExceptionName(),
+                            outcome.GetError().GetMessage());
+        }
+
+        const auto & result = outcome.GetResult();
+        size_t page_nkeys = pager(result);
+        num_keys += page_nkeys;
+
+        // handle the result size over max size
+        done = !result.GetIsTruncated();
+        if (!done)
+        {
+            const auto & next_token = result.GetNextContinuationToken();
+            req.SetContinuationToken(next_token);
+            LOG_DEBUG(log, "prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_nkeys, num_keys, next_token);
+        }
+    }
+
+    LOG_DEBUG(log, "prefix={}, total_keys={}, cost={}", prefix, num_keys, sw.elapsedMilliseconds());
+}
+
+std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix)
+{
     std::unordered_map<String, size_t> keys_with_size;
-    keys_with_size.reserve(objects.size());
-    for (const auto & object : objects)
-    {
-        keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
-    }
-    static auto * log = &Poco::Logger::get("S3ListPrefix");
-    LOG_DEBUG(log, "prefix={}, keys={}, cost={}", prefix, keys_with_size, sw.elapsedMilliseconds());
+    listPrefix(client, bucket, prefix, "", [&](const Aws::S3::Model::ListObjectsV2Result & result) {
+        const auto & objects = result.GetContents();
+        keys_with_size.reserve(keys_with_size.size() + objects.size());
+        for (const auto & object : objects)
+        {
+            keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
+        }
+        return objects.size();
+    });
+
     return keys_with_size;
+}
+
+std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & key)
+{
+    auto o = headObject(client, bucket, key);
+    if (!o.IsSuccess())
+    {
+        if (const auto & err = o.GetError(); isNotFoundError(err.GetErrorType()))
+        {
+            return {false, {}};
+        }
+        throw Exception(ErrorCodes::S3_ERROR, "Failed to check existence. bucket={} key={}", bucket, key);
+    }
+    // Else the object still exist
+    const auto & res = o.GetResult();
+    // "DeleteMark" of S3 service, don't know what will lead to this
+    RUNTIME_CHECK(!res.GetDeleteMarker(), bucket, key);
+    return {true, res.GetLastModified()};
+}
+
+void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key)
+{
+    Aws::S3::Model::DeleteObjectRequest req;
+    req.SetBucket(bucket);
+    req.SetKey(key);
+    auto o = client.DeleteObject(req);
+    RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
+    const auto & res = o.GetResult();
+    // "DeleteMark" of S3 service, don't know what will lead to this
+    RUNTIME_CHECK(!res.GetDeleteMarker(), bucket, key);
 }
 
 } // namespace S3

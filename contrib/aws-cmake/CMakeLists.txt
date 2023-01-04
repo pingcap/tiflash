@@ -349,6 +349,7 @@ target_compile_definitions(_aws PUBLIC ${AWS_PUBLIC_COMPILE_DEFS})
 target_compile_definitions(_aws PRIVATE ${AWS_PRIVATE_COMPILE_DEFS})
 target_link_libraries(_aws PRIVATE ${AWS_PRIVATE_LIBS})
 target_no_warning(_aws implicit-function-declaration)
+target_no_warning(_aws deprecated-declarations)
 
 aws_set_thread_affinity_method(_aws)
 aws_set_thread_name_method(_aws)

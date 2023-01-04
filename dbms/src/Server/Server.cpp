@@ -909,7 +909,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
 
-    S3::ClientFactory::instance().init(/*enable_s3_log*/ true);
+    S3::ClientFactory::instance().init(/*enable_s3_log*/ false);
 
     GlobalThreadPool::initialize(
         10000,

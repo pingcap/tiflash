@@ -2,6 +2,7 @@
 #include <Storages/Page/universal/UniversalPageStorage.h>
 
 #include <algorithm>
+#include "Storages/Page/RemoteDataLocation.h"
 
 namespace DB::PS::V3
 {
@@ -58,7 +59,10 @@ UniversalPageStoragePtr CheckpointPageManager::createTempPageStorage(Context & c
         }
         else if (record.type == EditRecordType::VAR_EXTERNAL)
         {
-            wb.putExternal(record.page_id, record.entry.tag);
+            // TODO: set the remote location
+            auto remote_loc = RemoteDataLocation {
+            };
+            wb.putRemoteExternal(record.page_id, record.entry.tag, remote_loc);
         }
         else
         {

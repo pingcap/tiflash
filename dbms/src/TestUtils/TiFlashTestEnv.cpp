@@ -25,6 +25,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <memory>
+#include "Storages/S3/S3Common.h"
 
 namespace DB::tests
 {
@@ -86,6 +87,8 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
+
+    // S3::ClientFactory::instance().init(false);
 
     // initialize background & blockable background thread pool
     Settings & settings = global_context->getSettingsRef();

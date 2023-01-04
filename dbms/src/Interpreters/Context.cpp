@@ -174,6 +174,8 @@ struct UniversalPageStorageWrapper
             return;
         }
 
+        // TODO try init gc owner with store id
+
         wi->set_store_id(store_info.id());
         wi->set_version(store_info.version());
         wi->set_version_git(store_info.git_hash());
@@ -264,7 +266,7 @@ struct ContextShared
     /// Cached local cache of remote checkpoint manifest file.
     LocalPageStorageCache<UniversalPageStoragePtr> local_ps_cache{1};
 
-    FastAddPeerContext * fast_add_peer_ctx;
+    FastAddPeerContext * fast_add_peer_ctx{};
 
     DM::Remote::ManagerPtr dm_remote_manager;
 
@@ -1773,6 +1775,8 @@ void Context::initializeWriteNodePageStorage(const PathPool & path_pool, const F
         file_provider);
     shared->ps_write->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
+
+    // shared->s3_gc_manager = std::make_unique<S3::S3GCManagerService>(*this, 60);
 }
 
 void Context::initializeReadNodePageStorage(const PathPool & path_pool, const FileProviderPtr & file_provider)

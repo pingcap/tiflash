@@ -26,7 +26,10 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
+#include <Storages/Page/V3/Remote/CheckpointUploadManager.h>
 #include <common/defines.h>
+
+#include "common/types.h"
 
 namespace DB
 {
@@ -129,6 +132,8 @@ public:
 
     void restore();
 
+    void initStoreInfo(UInt64 store_id) const;
+
     SnapshotPtr getSnapshot(const String & tracing_id) const
     {
         return page_directory->createSnapshot(tracing_id);
@@ -200,6 +205,8 @@ public:
 
     PS::V3::universal::PageDirectoryPtr page_directory;
     PS::V3::universal::BlobStorePtr blob_store;
+
+    PS::V3::CheckpointUploadManagerPtr checkpoint_manager;
 
     std::atomic<bool> gc_is_running = false;
 

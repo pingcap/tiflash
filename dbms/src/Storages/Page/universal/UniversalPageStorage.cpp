@@ -14,12 +14,19 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreNFS.h>
+#include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+
+#include "Encryption/FileProvider.h"
 
 namespace DB
 {
@@ -47,6 +54,20 @@ void UniversalPageStorage::restore()
     page_directory = factory
                          .setBlobStore(*blob_store)
                          .create(storage_name, file_provider, delegator, PS::V3::WALConfig::from(config));
+
+    // TODO: only init storage->checkpoint_manager if need
+    {
+        UInt64 store_id = 0;
+        checkpoint_manager = PS::V3::CheckpointUploadManager::createForDebug(store_id, page_directory, blob_store);
+    }
+}
+
+void UniversalPageStorage::initStoreInfo(UInt64 store_id) const
+{
+    if (checkpoint_manager)
+    {
+        checkpoint_manager->initStoreInfo(store_id);
+    }
 }
 
 void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
@@ -56,8 +77,17 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
+    if (write_batch.hasRemoteWrite())
+    {
+        checkpoint_manager->createS3LockForWriteBatch(write_batch);
+    }
     auto edit = blob_store->write(write_batch, write_limiter);
-    page_directory->apply(std::move(edit), write_limiter);
+    auto applied_s3files = page_directory->apply(std::move(edit), write_limiter);
+    // Remove the applied locks from checkpoint_manager.pre_lock_files
+    if (write_batch.hasRemoteWrite())
+    {
+        checkpoint_manager->cleanAppliedS3ExternalFiles(std::move(applied_s3files));
+    }
 }
 
 Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
@@ -340,26 +370,18 @@ void UniversalPageStorage::checkpointImpl(std::shared_ptr<const PS::V3::Remote::
         return;
     }
 
+    initStoreInfo(writer_info->store_id());
+
     LOG_INFO(log, "Start checkpoint, writer_store_id={}, remote_directory={}", writer_info->store_id(), remote_directory);
 
     RUNTIME_CHECK(endsWith(remote_directory, "/"));
 
     // TODO: The List API supports listing up to 1000 keys, not sure whether it would be a limit for us.
     //   See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
-    page_directory->dumpRemoteCheckpoint(PS::V3::PageDirectory<PS::V3::universal::PageDirectoryTrait>::DumpRemoteCheckpointOptions<PS::V3::universal::BlobStoreTrait>{
+    checkpoint_manager->dumpRemoteCheckpoint(PS::V3::CheckpointUploadManager::DumpRemoteCheckpointOptions{
         // FIXME: This is a hack. May be better to create a new delegator.
         .temp_directory = delegator->choosePath({0, 0}) + "/checkpoint_temp/",
-        .remote_directory = remote_directory,
-        .data_file_name_pattern = fmt::format(
-            "store_{}/ps_{}_data/{{sequence}}_{{sub_file_index}}.data",
-            writer_info->store_id(),
-            storage_name),
-        .manifest_file_name_pattern = fmt::format(
-            "store_{}/ps_{}_manifest/{{sequence}}.manifest",
-            writer_info->store_id(),
-            storage_name),
         .writer_info = writer_info,
-        .blob_store = *blob_store,
     });
 }
 

@@ -80,7 +80,6 @@ struct SegmentSnapshot : private boost::noncopyable
 };
 
 using PS::V3::CheckpointPageManager;
-using PS::V3::universal::PageDirectoryTrait;
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
 ///

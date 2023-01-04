@@ -34,7 +34,6 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 
 namespace DB
@@ -58,8 +57,6 @@ using DeltaIndexIterator = DeltaIndexCompacted::Iterator;
 struct DMContext;
 struct WriteBatches;
 class StoragePool;
-
-using PS::V3::universal::PageDirectoryTrait;
 
 class DeltaValueSpace
     : public std::enable_shared_from_this<DeltaValueSpace>

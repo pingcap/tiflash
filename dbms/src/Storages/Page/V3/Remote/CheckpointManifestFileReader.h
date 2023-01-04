@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 namespace DB::PS::V3
 {
@@ -72,6 +73,23 @@ public:
         }
 
         return edit;
+    }
+
+    std::unordered_set<String> readLocks()
+    {
+        RUNTIME_CHECK(!has_read);
+        has_read = true;
+
+        String json;
+        readStringBinary(json, *file_reader, 512 * 1024 * 1024 /* 512MB */);
+        Remote::ManifestFile file_content;
+        google::protobuf::util::JsonStringToMessage(json, &file_content);
+
+        std::unordered_set<String> locks;
+        locks.reserve(file_content.locks_size());
+        for (const auto & lock : file_content.locks())
+            locks.emplace(lock.name());
+        return locks;
     }
 
 private:

@@ -25,13 +25,13 @@
 namespace DB::PS::V3
 {
 
-template <typename PSDirTrait, typename PSBlobTrait>
+template <typename PSDirTrait>
 class CheckpointFilesWriter;
 
-template <typename PSDirTrait, typename PSBlobTrait>
-using CheckpointFilesWriterPtr = std::unique_ptr<CheckpointFilesWriter<PSDirTrait, PSBlobTrait>>;
+template <typename PSDirTrait>
+using CheckpointFilesWriterPtr = std::unique_ptr<CheckpointFilesWriter<PSDirTrait>>;
 
-template <typename PSDirTrait, typename PSBlobTrait>
+template <typename PSDirTrait>
 class CheckpointFilesWriter
 {
 public:
@@ -52,12 +52,12 @@ public:
         /**
          * The caller must ensure `blob_store` is valid when using the CheckpointFilesWriter.
          */
-        BlobStore<PSBlobTrait> & blob_store;
+        universal::BlobStorePtr & blob_store;
 
         const LoggerPtr & log;
     };
 
-    static CheckpointFilesWriterPtr<PSDirTrait, PSBlobTrait> create(Options options)
+    static CheckpointFilesWriterPtr<PSDirTrait> create(Options options)
     {
         return std::make_unique<CheckpointFilesWriter>(std::move(options));
     }
@@ -87,7 +87,7 @@ public:
         data_writer->writeSuffix();
     }
 
-    bool /* has_new_data */ writeEditsAndApplyRemoteInfo(typename PSDirTrait::PageEntriesEdit & edit)
+    bool /* has_new_data */ writeEditsAndApplyRemoteInfo(typename PSDirTrait::PageEntriesEdit & edit, const std::unordered_set<String> & pre_lock_files)
     {
         LOG_DEBUG(log, "Begin writeEditsAndApplyRemoteInfo, edit_n={}", edit.size());
 
@@ -95,25 +95,43 @@ public:
         if (records.empty())
             return false;
 
+        // Copy the pre-defined lock files
+        std::unordered_set<String> lock_files(pre_lock_files);
+
         // 1. Iterate all edits, find these entry edits without the remote info.
+        //    And collect the lock files from applied entries.
         for (auto & rec_edit : records)
         {
+            if (rec_edit.type == EditRecordType::VAR_EXTERNAL)
+            {
+                // TODO: the s3 fullpath of external id
+                RUNTIME_CHECK(rec_edit.entry.remote_info.has_value() && rec_edit.entry.remote_info->data_location.data_file_id && !rec_edit.entry.remote_info->data_location.data_file_id->empty());
+                lock_files.emplace(*rec_edit.entry.remote_info->data_location.data_file_id);
+                continue;
+            }
+
             if (rec_edit.type != EditRecordType::VAR_ENTRY)
                 continue;
             if (rec_edit.entry.remote_info.has_value())
+            {
+                // TODO: the s3 fullpath that is written in the previous uploaded CheckpointDataFile
+                lock_files.emplace(*rec_edit.entry.remote_info->data_location.data_file_id);
                 continue;
+            }
 
             LOG_DEBUG(log, "Processing edit={}", rec_edit.toDebugString());
 
             // 2. For entry edits without the remote info, write them to the data file, and assign a new remote info.
             typename PSDirTrait::PageIdAndEntry id_and_entry{rec_edit.page_id, rec_edit.entry};
-            auto page = blob_store.read(id_and_entry);
+            auto page = blob_store->read(id_and_entry);
             RUNTIME_CHECK(page.isValid());
             auto data_location = data_writer->write(rec_edit.page_id, rec_edit.version, page.data.begin(), page.data.size());
             rec_edit.entry.remote_info = RemoteDataInfo{
                 .data_location = data_location,
                 .is_local_data_reclaimed = false,
             };
+            // TODO: the s3 fullpath from remote_info
+            lock_files.emplace(*data_location.data_file_id);
         }
 
         // 3. Write down everything to the manifest.
@@ -122,7 +140,7 @@ public:
         manifest_prefix.set_local_sequence(info.sequence);
         manifest_prefix.set_last_local_sequence(info.last_sequence);
         manifest_prefix.set_create_at_ms(Poco::Timestamp().epochMicroseconds() / 1000);
-        manifest_writer->write(manifest_prefix, edit);
+        manifest_writer->write(manifest_prefix, edit, lock_files);
 
         return data_writer->writtenRecords() > 0;
     }
@@ -131,7 +149,7 @@ private:
     const Info info;
     const CheckpointDataFileWriterPtr<PSDirTrait> data_writer;
     const CheckpointManifestFileWriterPtr<PSDirTrait> manifest_writer;
-    BlobStore<PSBlobTrait> & blob_store;
+    universal::BlobStorePtr blob_store;
 
     LoggerPtr log;
 };

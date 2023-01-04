@@ -37,7 +37,10 @@
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
+#include <type_traits>
 #include <unordered_map>
+
+#include "Storages/Page/UniversalWriteBatch.h"
 
 namespace ProfileEvents
 {
@@ -168,7 +171,7 @@ typename Trait::PageEntriesEdit
 BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     typename Trait::PageEntriesEdit edit;
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         switch (write.type)
         {
@@ -235,7 +238,14 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(wb.getFullPageId(write.page_id));
+            if constexpr (std::is_same_v<typename Trait::WriteBatch, UniversalWriteBatch>)
+            {
+                edit.putExternal(wb.getFullPageId(write.page_id), write.remote);
+            }
+            else
+            {
+                edit.putExternal(wb.getFullPageId(write.page_id));
+            }
             break;
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
@@ -275,7 +285,14 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             case WriteBatchWriteType::PUT_EXTERNAL:
             {
                 // putExternal won't have data.
-                edit.putExternal(wb.getFullPageId(write.page_id));
+                if constexpr (std::is_same_v<typename Trait::WriteBatch, UniversalWriteBatch>)
+                {
+                    edit.putExternal(wb.getFullPageId(write.page_id), write.remote);
+                }
+                else if constexpr (std::is_same_v<typename Trait::WriteBatch, WriteBatch>)
+                {
+                    edit.putExternal(wb.getFullPageId(write.page_id));
+                }
                 break;
             }
             case WriteBatchWriteType::PUT:
@@ -315,7 +332,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
 
     size_t offset_in_allocated = 0;
 
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         switch (write.type)
         {
@@ -374,8 +391,17 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(wb.getFullPageId(write.page_id));
+        {
+            if constexpr (std::is_same_v<typename Trait::WriteBatch, UniversalWriteBatch>)
+            {
+                edit.putExternal(wb.getFullPageId(write.page_id), write.remote);
+            }
+            else if constexpr (std::is_same_v<typename Trait::WriteBatch, WriteBatch>)
+            {
+                edit.putExternal(wb.getFullPageId(write.page_id));
+            }
             break;
+        }
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }

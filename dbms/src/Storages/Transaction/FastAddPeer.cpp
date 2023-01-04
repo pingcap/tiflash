@@ -54,9 +54,9 @@ FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_
     };
 }
 
+using PS::RemoteDataLocation;
 using PS::V3::CheckpointManifestFileReader;
 using PS::V3::PageDirectory;
-using PS::V3::RemoteDataLocation;
 using PS::V3::Remote::WriterInfo;
 using PS::V3::universal::BlobStoreTrait;
 using PS::V3::universal::PageDirectoryTrait;
@@ -411,9 +411,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             auto res = fap_ctx.tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
                 return FastAddPeerImpl(server, region_id, new_peer_id);
             });
-            if (res) {
+            if (res)
+            {
                 LOG_INFO(log, "add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
-            } else {
+            }
+            else
+            {
                 LOG_INFO(log, "add new task fail(queue full) [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
             }
