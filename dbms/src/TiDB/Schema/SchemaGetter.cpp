@@ -166,6 +166,8 @@ void SchemaDiff::deserialize(const String & data)
     old_table_id = obj->getValue<Int64>("old_table_id");
     old_schema_id = obj->getValue<Int64>("old_schema_id");
 
+    regenerate_schema_map = obj->getValue<bool>("regenerate_schema_map");
+
     affected_opts.clear();
     auto affected_arr = obj->getArray("affected_options");
     if (!affected_arr.isNull())
