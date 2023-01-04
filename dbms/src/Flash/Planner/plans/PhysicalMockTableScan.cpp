@@ -34,22 +34,28 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
 {
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
-
     auto & dag_context = *context.getDAGContext();
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (!context.mockStorage().tableExists(table_scan.getLogicalTableID()))
+    // Interpreter test will not use columns in MockStorage
+    if (context.isInterpreterTest())
     {
-        /// build with default blocks.
         schema = genNamesAndTypes(table_scan, "mock_table_scan");
         auto columns_with_type_and_name = getColumnWithTypeAndName(schema);
         for (size_t i = 0; i < max_streams; ++i)
             mock_streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size));
     }
+    else if (context.mockStorage()->useDeltaMerge())
+    {
+        assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
+        schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
+        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID()));
+    }
     else
     {
         /// build from user input blocks.
+        assert(context.mockStorage()->tableExists(table_scan.getLogicalTableID()));
         NamesAndTypes names_and_types;
         std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
         if (context.isMPPTest())

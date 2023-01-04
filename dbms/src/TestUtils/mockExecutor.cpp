@@ -37,6 +37,7 @@
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
+#include <memory>
 #include <unordered_set>
 
 namespace DB::tests
@@ -361,36 +362,45 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
-    mock_storage.addTableSchema(db + "." + table, columnInfos);
+    mock_storage->addTableSchema(db + "." + table, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
-    mock_storage.addTableSchema(name.first + "." + name.second, columnInfos);
+    mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
 {
-    mock_storage.addExchangeSchema(name, columnInfos);
+    mock_storage->addExchangeSchema(name, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
 {
-    mock_storage.addTableData(db + "." + table, columns);
+    mock_storage->addTableData(db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
 {
-    mock_storage.addTableData(name.first + "." + name.second, columns);
+    mock_storage->addTableData(name.first + "." + name.second, columns);
+}
+
+void MockDAGRequestContext::addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns)
+{
+    for (const auto & column : columns)
+        RUNTIME_ASSERT(!column.name.empty(), "mock column must have column name");
+
+    mock_storage->addTableDataForDeltaMerge(context, db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
 {
-    mock_storage.addExchangeData(name, columns);
+    mock_storage->addExchangeData(name, columns);
 }
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assert(columnInfos.size() == columns.size());
     addMockTable(db, table, columnInfos);
     addMockTableColumnData(db, table, columns);
 }
@@ -402,23 +412,57 @@ void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockC
     addMockTableColumnData(name, columns);
 }
 
+void MockDAGRequestContext::addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
+{
+    mock_storage->addTableSchemaForDeltaMerge(db + "." + table, columnInfos);
+}
+
+void MockDAGRequestContext::addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+{
+    assert(columnInfos.size() == columns.size());
+    assert(context.mockStorage()->useDeltaMerge());
+    addMockDeltaMergeSchema(db, table, columnInfos);
+    addMockDeltaMergeData(db, table, columns);
+}
+
+void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+{
+    assert(columnInfos.size() == columns.size());
+    addMockDeltaMergeSchema(name.first, name.second, columnInfos);
+    addMockDeltaMergeData(name.first, name.second, columns);
+}
+
 void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns)
 {
+    assert(columnInfos.size() == columns.size());
     addExchangeRelationSchema(name, columnInfos);
     addExchangeReceiverColumnData(name, columns);
 }
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
 {
-    auto table_info = mock_storage.getTableInfo(db_name + "." + table_name);
-    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage.getTableSchema(db_name + "." + table_name));
+    if (!mock_storage->useDeltaMerge())
+    {
+        auto table_info = mock_storage->getTableInfo(db_name + "." + table_name);
+        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchema(db_name + "." + table_name));
+    }
+    else
+    {
+        auto table_info = mock_storage->getTableInfoForDeltaMerge(db_name + "." + table_name);
+        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name));
+    }
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage.getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage->getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
-    mock_storage.addExchangeRelation(builder.getRoot()->name, exchange_name);
+    mock_storage->addExchangeRelation(builder.getRoot()->name, exchange_name);
     return builder;
+}
+
+void MockDAGRequestContext::initMockStorage()
+{
+    mock_storage = std::make_unique<MockStorage>();
 }
 } // namespace DB::tests

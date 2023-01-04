@@ -245,7 +245,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     }
 }
 
-void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
+void FlashGrpcServerHolder::setMockStorage(MockStorage * mock_storage)
 {
     flash_service->setMockStorage(mock_storage);
 }
