@@ -108,8 +108,7 @@ public:
     {
         // If the StoragePathPool is invalid or shutdown flag is set,
         // meaning we call `remover` after shutdowning or dropping the table,
-        // we must skip because the `path_and_ids_vec` is not relyable,
-        // we may run into unexpected removing all dmfiles.
+        // we must skip because the `valid_ids` is not reliable!
         auto path_pool = path_pool_weak_ref.lock();
         if (!path_pool || path_pool->isShutdown())
             return;
