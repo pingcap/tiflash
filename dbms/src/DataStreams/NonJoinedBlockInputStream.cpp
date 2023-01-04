@@ -69,7 +69,7 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 {
     size_t build_concurrency = parent.getBuildConcurrency();
     if (unlikely(step > build_concurrency || index >= build_concurrency))
-        throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
+        LOG_WARNING(parent.log, "The concurrency of NonJoinedBlockInputStream is larger than join build concurrency");
 
     /** left_sample_block contains keys and "left" columns.
           * result_sample_block - keys, "left" columns, and "right" columns.
@@ -115,6 +115,10 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 
 Block NonJoinedBlockInputStream::readImpl()
 {
+    /// build concurrency is less than non join concurrency,
+    /// just return empty block for extra non joined block input stream read
+    if (index > parent.getBuildConcurrency())
+        return Block();
     if (parent.blocks.empty())
         return Block();
 
@@ -196,6 +200,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
 {
     size_t rows_added = 0;
     size_t key_num = parent.key_names_right.size();
+    /// first add rows that is not in the hash table
     while (current_not_mapped_row != nullptr)
     {
         rows_added++;
@@ -214,6 +219,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         }
     }
 
+    /// then add rows that in hash table, but not joined
     if (!position)
     {
         current_segment = index;

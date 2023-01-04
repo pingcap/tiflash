@@ -472,7 +472,7 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
     // init for non-joined-streams.
     if (getFullness(kind))
     {
-        for (size_t i = 0; i < getNotJoinedStreamConcurrencyInternal(); ++i)
+        for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
             rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
 }

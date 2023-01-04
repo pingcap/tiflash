@@ -180,11 +180,6 @@ public:
         std::shared_lock lock(rwlock);
         return getBuildConcurrencyInternal();
     }
-    size_t getNotJoinedStreamConcurrency() const
-    {
-        std::shared_lock lock(rwlock);
-        return getNotJoinedStreamConcurrencyInternal();
-    }
 
     enum BuildTableState
     {
