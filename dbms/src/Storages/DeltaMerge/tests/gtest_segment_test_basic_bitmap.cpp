@@ -34,7 +34,6 @@ extern const Metric DT_SnapshotOfBitmapFilter;
 
 namespace DB::DM::tests
 {
-Block mergeBlocks(std::vector<Block> && blocks);
 
 Block mergeSegmentRowIds(std::vector<Block> && blocks)
 {
