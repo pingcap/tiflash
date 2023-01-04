@@ -19,6 +19,7 @@
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -28,7 +29,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-#include "Flash/Mpp/ReceiverChannelWriter.h"
+
 
 namespace DB
 {
@@ -201,7 +202,7 @@ public:
         };
     }
 
-    std::vector<std::shared_ptr<ReceivedMessage>> & getReceivedMsgs(){ return received_msgs; }
+    std::vector<std::shared_ptr<ReceivedMessage>> & getReceivedMsgs() { return received_msgs; }
 
     String getErrMsg()
     {
@@ -441,6 +442,7 @@ TEST_F(TestMPPTunnel, SyncWriteError)
     }
 }
 
+// TODO remove try-catch and get where throws the exception
 TEST_F(TestMPPTunnel, SyncWriteAfterFinished)
 {
     std::unique_ptr<PacketWriter> writer_ptr = nullptr;
@@ -627,7 +629,7 @@ try
 
     LocalRequestHandler local_req_handler(
         nullptr,
-        [](bool, const String&) {},
+        [](bool, const String &) {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ExchangeMode::Local));
     tunnels[0]->connectLocal(0, local_req_handler, false);
     GTEST_FAIL();
@@ -644,7 +646,7 @@ try
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
     LocalRequestHandler local_req_handler(
         nullptr,
-        [](bool, const String&) {},
+        [](bool, const String &) {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ExchangeMode::Local));
     tunnels[0]->connectLocal(0, local_req_handler, false);
     GTEST_FAIL();
@@ -717,7 +719,8 @@ try
             tunnel->write(std::move(packet));
         }
         catch (...)
-        {}
+        {
+        }
     };
     std::thread thd(tunnelRun<decltype(run_tunnel)>, std::move(run_tunnel));
     thd.join();
@@ -751,4 +754,3 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
 }
 } // namespace tests
 } // namespace DB
-
