@@ -50,7 +50,6 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     {
         assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
-        // with filter pushdown, don't init it
         mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID()));
     }
     else
@@ -72,8 +71,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     }
 
     assert(!schema.empty());
-    // assert(!mock_streams.empty());
-
+    assert(!mock_streams.empty());
+    
     return {std::move(schema), std::move(mock_streams)};
 }
 } // namespace
