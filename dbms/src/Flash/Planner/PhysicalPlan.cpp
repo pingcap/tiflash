@@ -48,7 +48,7 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->pushDownFilter(executor_id, selection);
     }
-    if (plan->tp() == PlanType::MockTableScan)
+    if (plan->tp() == PlanType::MockTableScan && context.isExecutorTest())
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
         if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))

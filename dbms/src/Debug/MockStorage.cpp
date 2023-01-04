@@ -124,10 +124,11 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
     }
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 id, const PushDownFilter * push_down_filter)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter)
 {
-    auto storage = storage_delta_merge_map[id];
-    auto column_infos = table_schema_for_delta_merge[id];
+    assert(tableExistsForDeltaMerge(table_id));
+    auto storage = storage_delta_merge_map[table_id];
+    auto column_infos = table_schema_for_delta_merge[table_id];
     assert(storage);
     assert(!column_infos.empty());
     Names column_names;
@@ -141,7 +142,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
     if (push_down_filter && push_down_filter->hasValue())
     {
-        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[id], context);
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             push_down_filter->conditions,
             analyzer->getPreparedSets(),

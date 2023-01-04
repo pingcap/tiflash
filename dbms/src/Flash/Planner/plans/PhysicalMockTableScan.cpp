@@ -128,7 +128,6 @@ const Block & PhysicalMockTableScan::getSampleBlock() const
 
 void PhysicalMockTableScan::updateStreams(Context & context)
 {
-    std::cout << "ywq tes update streams" << std::endl;
     mock_streams.clear();
     assert(context.mockStorage()->tableExistsForDeltaMerge(table_id));
     mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &push_down_filter));

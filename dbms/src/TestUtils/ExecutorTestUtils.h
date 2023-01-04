@@ -31,9 +31,8 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
-// ywq todo
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
-    std::vector<bool> bools{true, true};  \
+    std::vector<bool> bools{false, true}; \
     for (auto enable_planner : bools)     \
     {                                     \
         enablePlanner(enable_planner);
@@ -67,6 +66,8 @@ public:
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
+    void executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
+
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);

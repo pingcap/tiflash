@@ -267,6 +267,16 @@ try
                        .scan("test_db", "test_table1")
                        .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
                        .build(context);
+
+    {
+        String expected = R"(
+Expression: <final projection>
+ Expression: <projection after push down filter>
+  Filter: <push down filter>
+   DeltaMergeSegmentThread)";
+        executeInterpreterWithDeltaMerge(expected, request, 10);
+        // Do not support push down filter test for DAGQueryBlock
+    }
     executeAndAssertColumnsEqual(
         request,
         {toNullableVec<Int64>({1}),
