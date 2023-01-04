@@ -43,7 +43,7 @@ void WaitQueue::close()
         std::lock_guard lock(mu);
         is_closed = true;
     }
-    cv.notify_one();
+    cv.notify_all();
 }
 
 void WaitQueue::submit(TaskPtr && task)

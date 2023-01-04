@@ -61,8 +61,9 @@ public:
 private:
     std::mutex mu;
     std::condition_variable cv;
-    std::atomic_int32_t active_event_count{0};
-    std::atomic_bool is_cancelled{false};
     String err_msg;
+    UInt32 active_event_count{0};
+
+    std::atomic_bool is_cancelled{false};
 };
 } // namespace DB

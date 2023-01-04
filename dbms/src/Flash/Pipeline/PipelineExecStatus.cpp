@@ -50,15 +50,19 @@ void PipelineExecStatus::wait()
 
 void PipelineExecStatus::addActiveEvent()
 {
+    std::lock_guard lock(mu);
     ++active_event_count;
 }
 
 void PipelineExecStatus::completeEvent()
 {
-    auto pre_sub_count = active_event_count.fetch_sub(1);
-    assert(pre_sub_count >= 1);
-    if (1 == pre_sub_count)
-        cv.notify_one();
+    bool notify = false;
+    {
+        std::lock_guard lock(mu);
+        notify = (0 == --active_event_count);
+    }
+    if (notify)
+        cv.notify_all();
 }
 
 void PipelineExecStatus::cancel()
