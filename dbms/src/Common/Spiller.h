@@ -16,9 +16,6 @@
 
 #include <Core/Block.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromFile.h>
 #include <Poco/File.h>
 
 namespace DB
@@ -33,36 +30,6 @@ public:
 
 private:
     size_t spilled_data_size = 0;
-};
-
-struct SpilledFileStream
-{
-    ReadBufferFromFile file_in;
-    CompressedReadBuffer<> compressed_in;
-    BlockInputStreamPtr block_in;
-
-    explicit SpilledFileStream(const std::string & path, const Block & header)
-        : file_in(path)
-        , compressed_in(file_in)
-        , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, header, 0))
-    {}
-};
-
-class SpilledFilesInputStream : public IProfilingBlockInputStream
-{
-public:
-    SpilledFilesInputStream(const std::vector<String> & spilled_files, const Block & header_);
-    Block getHeader() const override;
-    String getName() const override;
-
-protected:
-    Block readImpl() override;
-
-private:
-    std::vector<String> spilled_files;
-    size_t current_reading_file_index;
-    Block header;
-    std::unique_ptr<SpilledFileStream> current_file_stream;
 };
 
 class Spiller
