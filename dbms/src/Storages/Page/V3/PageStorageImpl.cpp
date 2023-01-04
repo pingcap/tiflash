@@ -115,6 +115,7 @@ size_t PageStorageImpl::getNumberOfPages()
     return page_directory->numPages();
 }
 
+// For debugging purpose
 std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
 {
     // Keep backward compatibility of this functions with v2
