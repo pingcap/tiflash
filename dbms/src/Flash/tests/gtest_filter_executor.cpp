@@ -272,13 +272,63 @@ Expression: <final projection>
  Expression: <projection after push down filter>
   Filter: <push down filter>
    DeltaMergeSegmentThread)";
-        // Do not support push down filter test for DAGQueryBlock
+        // Do not support push down filter test for DAGQueryBlockInterpreter
         executeInterpreterWithDeltaMerge(expected, request, 10);
     }
     executeAndAssertColumnsEqual(
         request,
         {toNullableVec<Int64>({1}),
          toNullableVec<String>({"apple"})});
+
+
+    request = context
+                  .scan("test_db", "test_table1")
+                  .filter(lt(col("i1"), lit(Field(static_cast<Int64>(3)))))
+                  .build(context);
+
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1, 2}),
+         toNullableVec<String>({"apple", {}})});
+
+    for (size_t i = 4; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(lt(col("i1"), lit(Field(static_cast<Int64>(i)))))
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3}),
+             toNullableVec<String>({"apple", {}, "banana"})});
+    }
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(gt(col("i1"), lit(Field(static_cast<Int64>(-i)))))
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3}),
+             toNullableVec<String>({"apple", {}, "banana"})});
+    }
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(gt(col("i1"), lit(Field(static_cast<Int64>(-i)))))
+                      .project({col("i1")})
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3})});
+    }
 
     context.mockStorage()->setUseDeltaMerge(false);
 }

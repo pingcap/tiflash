@@ -150,6 +150,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
             context.getTimezoneInfo());
         auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*push_down_filter, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
+        // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];
         in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
         in->setExtraInfo("push down filter");
