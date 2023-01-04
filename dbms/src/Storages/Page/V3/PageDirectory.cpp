@@ -1821,13 +1821,13 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     RUNTIME_CHECK(data_file.exists());
 
     if (has_new_data)
-        data_file.moveTo(data_file_path);
+        data_file.renameTo(data_file_path);
     else
         data_file.remove();
 
     auto manifest_file = Poco::File{manifest_file_path_temp};
     RUNTIME_CHECK(manifest_file.exists());
-    manifest_file.moveTo(manifest_file_path);
+    manifest_file.renameTo(manifest_file_path);
 
     last_checkpoint_sequence = snap->sequence;
     LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);

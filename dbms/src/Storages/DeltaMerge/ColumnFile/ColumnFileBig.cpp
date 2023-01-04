@@ -23,6 +23,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
+#include <Storages/DeltaMerge/File/DMFileWriterRemote.h>
 
 namespace DB
 {
@@ -59,7 +60,30 @@ ColumnFileReaderPtr ColumnFileBig::getReader(
     const IColumnFileSetStorageReaderPtr &,
     const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
+    if (file->isRemote())
+    {
+        if (!remote_dm_file)
+        {
+            auto & db_context = context.db_context;
+            UInt64 store_id = db_context.getTMTContext().getKVStore()->getStoreMeta().id();
+            UInt64 file_id = file->fileId();
+            const auto & remote_manager = db_context.getDMRemoteManager();
+            auto data_store = remote_manager->getDataStore();
+            auto self_oid = Remote::DMFileOID{
+                .write_node_id = store_id,
+                .table_id = context.table_id,
+                .file_id = file_id,
+            };
+            auto prepared = data_store->prepareDMFile(self_oid);
+            auto new_dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            remote_dm_file = std::make_shared<ColumnFileBig>(context, new_dmfile, segment_range);
+        }
+        return std::make_shared<ColumnFileBigReader>(context, *remote_dm_file, col_defs);
+    }
+    else
+    {
+        return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
+    }
 }
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -129,19 +153,14 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
          auto data_store = remote_manager->getDataStore();
          data_store->linkDMFile(remote_oid, self_oid);
 
-         // 2. copy to local temporary path and set dmfile no gc
-         auto temporary_path = db_context.getTemporaryPath();
-         data_store->copyDMFileToLocalPath(self_oid, temporary_path);
-         auto temp_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, temporary_path, DMFile::ReadMetaMode::none());
-         temp_dmfile->disableGC();
-
-
-         // 3. copy to storage data path, write file id to data ps and enable gc
+         // 2. create a local file with only needed metadata
          auto parent_path = delegator.choosePath();
-         const auto local_path = DMFile::getPathByStatus(parent_path, new_file_id, DMFile::READABLE);
-         const auto temp_path = DMFile::getPathByStatus(temporary_path, new_file_id, DMFile::READABLE);
-         Poco::File(temp_path).moveTo(local_path);
-         auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), new_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
+         auto new_dmfile = DMFile::create(new_file_id, parent_path, false, context.createChecksumConfig(false));
+         new_dmfile->setRemote();
+         DMFileWriterRemote remote_writer(new_dmfile, context.db_context.getFileProvider(), self_oid, data_store);
+         remote_writer.write();
+         remote_writer.finalize();
+         // TODO: bytes on disk is not correct
          delegator.addDTFile(new_file_id, new_dmfile->getBytesOnDisk(), parent_path);
          wbs.writeLogAndData();
          new_dmfile->enableGC();
