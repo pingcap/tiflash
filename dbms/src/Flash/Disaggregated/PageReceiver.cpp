@@ -3,6 +3,7 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <Flash/Disaggregated/PageReceiver.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -219,6 +220,8 @@ void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
             copy_persister_msg = persister_err_msg;
         }
         rpc_context->finishAllReceivingTasks(copy_persister_msg);
+
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_fetch_page).Observe(watch.elapsedSeconds());
     }
 }
 

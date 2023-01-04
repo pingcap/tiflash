@@ -2,6 +2,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <kvproto/mpp.pb.h>
@@ -169,6 +170,8 @@ private:
     const size_t source_num;
     const size_t max_buffer_size;
     const size_t persist_threads_num;
+
+    Stopwatch watch;
 
     std::shared_ptr<ThreadManager> thread_manager;
     // std::vector<std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>>> msg_channels;

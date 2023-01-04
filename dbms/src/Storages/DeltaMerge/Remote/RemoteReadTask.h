@@ -179,6 +179,8 @@ public:
     // The page ids that is absent from local cache
     const std::vector<UInt64> & pendingPageIds() const { return pending_page_ids; }
 
+    size_t totalCFTinys() const { return total_num_cftiny; }
+
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
     BlockInputStreamPtr getInputStream(
@@ -237,6 +239,7 @@ private:
 
     // The page ids need to fetch from write node
     std::vector<UInt64> pending_page_ids;
+    size_t total_num_cftiny;
 
 public:
     std::atomic<size_t> num_msg_to_consume;
