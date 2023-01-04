@@ -1031,7 +1031,11 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
         wbs);
     wbs.writeAll();
 
-    RUNTIME_CHECK_MSG(!restored_segments.empty(), "Failed to restore any segment");
+    if (restored_segments.empty())
+    {
+        LOG_DEBUG(log, "No segments to ingest.")
+        return;
+    }
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
 

@@ -629,6 +629,7 @@ void DMFile::finalizeForRemote(const FileProviderPtr & file_provider)
         LOG_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
     }
     old_file.renameTo(new_path);
+    readConfiguration(file_provider);
     readMetadata(file_provider, ReadMetaMode::all());
 }
 
