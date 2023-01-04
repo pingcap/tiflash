@@ -755,15 +755,15 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         copy_live_conn);
 
     if (copy_live_conn == 0)
+    {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
+        cv.notify_all();
+    }
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
 
     if (meet_error || copy_live_conn == 0)
-    {
         finishAllMsgChannels();
-        cv.notify_all();
-    }
 }
 
 template <typename RPCContext>
