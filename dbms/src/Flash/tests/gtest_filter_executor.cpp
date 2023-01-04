@@ -256,8 +256,6 @@ TEST_F(FilterExecutorTestRunner, PushDownFilter)
 try
 {
     context.mockStorage()->setUseDeltaMerge(true);
-
-    // ywq todo check column name..
     context.addMockDeltaMerge({"test_db", "test_table1"},
                               {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}},
                               {toVec<Int64>("i1", {1, 2, 3}),
@@ -274,8 +272,8 @@ Expression: <final projection>
  Expression: <projection after push down filter>
   Filter: <push down filter>
    DeltaMergeSegmentThread)";
-        executeInterpreterWithDeltaMerge(expected, request, 10);
         // Do not support push down filter test for DAGQueryBlock
+        executeInterpreterWithDeltaMerge(expected, request, 10);
     }
     executeAndAssertColumnsEqual(
         request,
