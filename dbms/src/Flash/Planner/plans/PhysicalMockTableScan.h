@@ -20,7 +20,6 @@
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
-
 namespace DB
 {
 /**
