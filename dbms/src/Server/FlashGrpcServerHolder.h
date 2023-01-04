@@ -27,7 +27,6 @@
 
 namespace DB
 {
-using MockStorage = tests::MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
 class FlashGrpcServerHolder
@@ -40,7 +39,7 @@ public:
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();
 
-    void setMockStorage(MockStorage & mock_storage);
+    void setMockStorage(MockStorage * mock_storage);
     void setMockMPPServerInfo(MockMPPServerInfo info);
 
     std::unique_ptr<FlashService> & flashService();

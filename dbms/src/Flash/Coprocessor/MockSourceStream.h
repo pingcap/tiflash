@@ -18,6 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/MockExchangeReceiverInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
+#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 
@@ -70,9 +71,9 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
     if constexpr (std::is_same_v<SourceType, MockExchangeReceiverInputStream>)
-        columns_with_type_and_name = context.mockStorage().getExchangeColumns(executor_id);
+        columns_with_type_and_name = context.mockStorage()->getExchangeColumns(executor_id);
     else
-        columns_with_type_and_name = context.mockStorage().getColumns(table_id);
+        columns_with_type_and_name = context.mockStorage()->getColumns(table_id);
 
     return cutStreams<SourceType>(context, columns_with_type_and_name, max_streams, log);
 }
