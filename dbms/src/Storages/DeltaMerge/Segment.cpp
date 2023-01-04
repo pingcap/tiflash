@@ -2312,7 +2312,7 @@ std::pair<std::vector<PackInfo>, IdSetPtr> parseDMFilePackInfo(const DMFilePtr &
                                                                const DMContext & dm_context,
                                                                const RowKeyRanges & read_ranges,
                                                                const RSOperatorPtr & filter,
-                                                               UInt64 read_version)
+                                                               UInt64 max_version)
 {
     DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
         dmfile,
@@ -2364,8 +2364,7 @@ std::pair<std::vector<PackInfo>, IdSetPtr> parseDMFilePackInfo(const DMFilePtr &
             continue;
         }
 
-        auto max_version = pack_filter.getMaxVersion(pack_id);
-        if (max_version > read_version)
+        if (pack_filter.getMaxVersion(pack_id) > max_version)
         {
             // We need to read this pack to do MVCC filter.
             some_packs->insert(pack_id);
@@ -2380,8 +2379,8 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                      const SegmentSnapshotPtr & segment_snap,
                                                      const RowKeyRanges & read_ranges,
                                                      const RSOperatorPtr & filter,
-                                                     UInt64 read_version,
-                                                     [[maybe_unused]] size_t expected_block_size)
+                                                     UInt64 max_version,
+                                                     size_t expected_block_size)
 {
     Stopwatch sw;
     const auto & dmfiles = segment_snap->stable->getDMFiles();
@@ -2396,7 +2395,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                                     dm_context,
                                                                     read_ranges,
                                                                     filter,
-                                                                    read_version);
+                                                                    max_version);
         all_match = all_match && (all_packs[i].size() == dmfiles[i]->getPacks());
         some_packs_count += some_packs[i]->size();
     }
@@ -2427,7 +2426,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                                       columns_to_read,
                                                                       read_ranges,
                                                                       filter,
-                                                                      read_version,
+                                                                      max_version,
                                                                       expected_block_size,
                                                                       /*enable_handle_clean_read*/ false,
                                                                       /*is_fast_scan*/ false,
@@ -2441,7 +2440,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
         stream,
         read_columns,
-        read_version,
+        max_version,
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
