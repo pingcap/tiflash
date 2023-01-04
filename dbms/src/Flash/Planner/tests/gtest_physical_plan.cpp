@@ -55,11 +55,11 @@ public:
                                      toNullableVec<Int64>("s4", {1, 1, {}})});
 
         context.addExchangeReceiver("exchange_r_table",
-                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
         context.addExchangeReceiver("exchange_l_table",
-                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
 
