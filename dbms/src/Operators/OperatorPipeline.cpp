@@ -17,8 +17,8 @@
 
 namespace DB
 {
-#define CHECK_IS_CANCELLED(exec_status)          \
-    if (unlikely((exec_status).isCancelled()))   \
+#define CHECK_IS_CANCELLED(exec_status)        \
+    if (unlikely((exec_status).isCancelled())) \
         return OperatorStatus::CANCELLED;
 
 /**

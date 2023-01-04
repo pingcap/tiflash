@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Pipeline/GetResultSink.h>
 #include <Flash/Pipeline/PipelineExecStatus.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -21,27 +22,6 @@
 
 namespace DB::tests
 {
-namespace
-{
-class GetResultSink : public Sink
-{
-public:
-    explicit GetResultSink(std::vector<Block> & blocks_)
-        : blocks(blocks_)
-    {}
-
-    OperatorStatus write(Block && block) override
-    {
-        if (!block)
-            return OperatorStatus::FINISHED;
-        blocks.push_back(std::move(block));
-        return OperatorStatus::PASS;
-    }
-
-    std::vector<Block> & blocks;
-};
-} // namespace
-
 class SimpleOperatorTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -67,9 +47,7 @@ public:
                                      toNullableVec<Int64>("s4", {1, 1, {}})});
     }
 
-    void executeAndAssert(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & expect_columns)
+    std::pair<PhysicalPlanNodePtr, OperatorPipelinePtr> build(const std::shared_ptr<tipb::DAGRequest> & request, ResultHandler result_handler)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
         context.context.setDAGContext(&dag_context);
@@ -77,26 +55,53 @@ public:
 
         PhysicalPlan physical_plan{context.context, ""};
         physical_plan.build(request.get());
-        auto plan_tree = physical_plan.outputAndOptimize();
+        assert(!result_handler.isIgnored());
+        auto plan_tree = PhysicalGetResultSink::build(result_handler, physical_plan.outputAndOptimize());
 
         OperatorPipelineGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
             plan->transform(group_builder, context.context, /*concurrency=*/1);
         });
-
-        std::vector<Block> blocks;
-        group_builder.transform([&blocks](auto & builder) { builder.setSink(std::make_unique<GetResultSink>(blocks)); });
         auto result = group_builder.build();
         assert(result.size() == 1 && result.back().size() == 1);
-        const auto & op_exec = result.back().back();
+        return {std::move(plan_tree), std::move(result.back().back())};
+    }
+
+    void executeAndAssert(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & expect_columns)
+    {
+        Blocks blocks;
+        ResultHandler result_handler{[&blocks](const Block & block) {
+            blocks.push_back(block);
+        }};
+        auto [plan, op_pipeline] = build(request, result_handler);
         PipelineExecStatus exec_status;
-        while (op_exec->execute(exec_status) != OperatorStatus::FINISHED)
+        while (op_pipeline->execute(exec_status) != OperatorStatus::FINISHED)
         {
         }
         ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     }
 };
+
+TEST_F(SimpleOperatorTestRunner, cancel)
+try
+{
+    auto request = context.receive("exchange1")
+                       .project({col("s1"), col("s2")})
+                       .filter(eq(col("s1"), col("s2")))
+                       .limit(1)
+                       .build(context);
+
+    ResultHandler result_handler{[](const Block &) {
+    }};
+    auto [_, op_pipeline] = build(request, result_handler);
+    PipelineExecStatus exec_status;
+    exec_status.cancel();
+    ASSERT_EQ(op_pipeline->execute(exec_status), OperatorStatus::CANCELLED);
+}
+CATCH
 
 TEST_F(SimpleOperatorTestRunner, Filter)
 try
