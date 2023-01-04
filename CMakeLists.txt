@@ -152,10 +152,6 @@ if ((ARCH_AMD64 OR ARCH_AARCH64) AND OS_LINUX)
     option (GLIBC_COMPATIBILITY "Set to TRUE to enable compatibility with older glibc libraries. Only for x86_64, Linux. Implies USE_INTERNAL_MEMCPY." ON)
 endif ()
 
-if (GLIBC_COMPATIBILITY)
-    set (USE_INTERNAL_MEMCPY ON)
-endif ()
-
 option (PIPE "-pipe compiler option [less /tmp usage, more ram usage]" ON)
 if (PIPE)
     set (COMPILER_FLAGS                  "${COMPILER_FLAGS} -pipe")
