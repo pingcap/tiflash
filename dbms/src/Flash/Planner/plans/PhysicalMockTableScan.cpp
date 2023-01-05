@@ -40,15 +40,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     max_streams = concurrency_hint == 0 ? max_streams : std::min(max_streams, concurrency_hint);
     assert(max_streams > 0);
 
-    // Interpreter test will not use columns in MockStorage
-    if (context.isInterpreterTest())
-    {
-        schema = genNamesAndTypes(table_scan, "mock_table_scan");
-        auto columns_with_type_and_name = getColumnWithTypeAndName(schema);
-        for (size_t i = 0; i < max_streams; ++i)
-            mock_streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size));
-    }
-    else if (context.mockStorage()->useDeltaMerge())
+    if (context.mockStorage()->useDeltaMerge())
     {
         assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());

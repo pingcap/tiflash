@@ -164,19 +164,7 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    // Interpreter test will not use columns in MockStorage
-    if (context.isInterpreterTest())
-    {
-        auto names_and_types = genNamesAndTypes(table_scan, "mock_table_scan");
-        auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
-        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
-        for (size_t i = 0; i < max_streams; ++i)
-        {
-            auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
-            pipeline.streams.emplace_back(mock_table_scan_stream);
-        }
-    }
-    else if (context.mockStorage()->useDeltaMerge())
+    if (context.mockStorage()->useDeltaMerge())
     {
         assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         auto names_and_types = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
@@ -187,16 +175,19 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     else
     {
         /// build from user input blocks.
+        size_t scan_concurrency = max_streams;
+        size_t concurrency_hint = context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID());
+        scan_concurrency = concurrency_hint == 0 ? scan_concurrency : std::min(scan_concurrency, concurrency_hint);
         assert(context.mockStorage()->tableExists(table_scan.getLogicalTableID()));
         NamesAndTypes names_and_types;
         std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
         if (context.isMPPTest())
         {
-            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStreamForMpp(context, max_streams, log, table_scan);
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStreamForMpp(context, scan_concurrency, log, table_scan);
         }
         else
         {
-            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID(), table_scan.getLogicalTableID());
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, scan_concurrency, log, table_scan.getTableScanExecutorID(), table_scan.getLogicalTableID());
         }
 
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);

@@ -360,14 +360,25 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos)
+{
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
+    addMockTable(db, table, mock_column_infos, columns);
+}
+
+void MockDAGRequestContext::addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(db + "." + table, columnInfos);
 }
-
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos)
+void MockDAGRequestContext::addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
+}
+
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos)
+{
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
+    addMockTable(name, mock_column_infos, columns);
 }
 
 void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint)
@@ -412,7 +423,7 @@ void MockDAGRequestContext::addMockTable(const String & db, const String & table
 {
     assertMockInput(columnInfos, columns);
 
-    addMockTable(db, table, columnInfos);
+    addMockTableSchema(db, table, columnInfos);
     addMockTableColumnData(db, table, columns);
     addMockTableConcurrencyHint(db, table, concurrency_hint);
 }
@@ -421,7 +432,7 @@ void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockC
 {
     assertMockInput(columnInfos, columns);
 
-    addMockTable(name, columnInfos);
+    addMockTableSchema(name, columnInfos);
     addMockTableColumnData(name, columns);
     addMockTableConcurrencyHint(name, concurrency_hint);
 }

@@ -180,6 +180,8 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos);
     void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
     void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
+    void addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
+    void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
     void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
     void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
 
