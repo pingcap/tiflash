@@ -27,11 +27,19 @@ TEST_F(PipelineExecStatusTestRunner, timeout)
 try
 {
     PipelineExecStatus status;
-    status.addActiveEvent();
-    std::chrono::milliseconds timeout(10);
-    status.waitFor(timeout);
-    auto err_msg = status.getErrMsg();
-    ASSERT_EQ(err_msg, PipelineExecStatus::timeout_err_msg);
+    try
+    {
+        status.addActiveEvent();
+        std::chrono::milliseconds timeout(10);
+        status.waitFor(timeout);
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), PipelineExecStatus::timeout_err_msg);
+        auto err_msg = status.getErrMsg();
+        ASSERT_EQ(err_msg, PipelineExecStatus::timeout_err_msg);
+    }
 }
 CATCH
 
