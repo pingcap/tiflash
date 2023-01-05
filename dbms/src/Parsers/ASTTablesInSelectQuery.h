@@ -105,6 +105,9 @@ struct ASTTableJoin : public IAST
         Cross_Anti, /// cartesian anti join, used by TiFlash
         Cross_LeftSemi, /// cartesian version of left semi join, used by TiFlash.
         Cross_LeftAnti, /// cartesian version of left anti semi join, used by TiFlash.
+        NullAware_Anti, /// null-aware version of anti semi join, used by TiFlash.
+        NullAware_LeftSemi, /// null-aware version of left semi join, used by TiFlash.
+        NullAware_LeftAnti, /// null-aware version of left anti semi join, used by TiFlash.
     };
 
     Locality locality = Locality::Unspecified;

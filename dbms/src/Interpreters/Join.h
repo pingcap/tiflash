@@ -300,6 +300,7 @@ private:
     String other_filter_column;
     String other_eq_filter_from_in_column;
     ExpressionActionsPtr other_condition_ptr;
+
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size_for_cross_join;
     /** Blocks of "right" table.
@@ -307,8 +308,6 @@ private:
     BlocksList blocks;
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
-    /// keep original block for concurrent build
-    Blocks original_blocks;
 
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
@@ -318,6 +317,7 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
+    /// For null aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
@@ -402,6 +402,9 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    void joinBlockImplNullAware(Block & block, const Maps & maps) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;

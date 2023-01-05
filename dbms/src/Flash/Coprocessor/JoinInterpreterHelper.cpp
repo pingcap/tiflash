@@ -56,8 +56,20 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
         {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftSemi},
         {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftAnti}};
+    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> null_aware_join_type_map{
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::NullAware_Anti},
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftAnti}};
 
-    const auto & join_type_map = join.left_join_keys_size() == 0 ? cartesian_join_type_map : equal_join_type_map;
+    const auto & join_type_map = [join]() {
+        if (join.left_join_keys_size() > 0)
+            return equal_join_type_map;
+        else if (join.left_null_aware_join_keys_size() > 0)
+            return null_aware_join_type_map;
+        else
+            return cartesian_join_type_map;
+    }();
+
     auto join_type_it = join_type_map.find(join.join_type());
     if (unlikely(join_type_it == join_type_map.end()))
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);

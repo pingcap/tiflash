@@ -59,11 +59,15 @@ struct TiFlashJoin
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getBuildJoinKeys() const
     {
+        if (join.left_null_aware_join_keys_size() > 0)
+            return build_side_index == 1 ? join.right_null_aware_join_keys() : join.left_null_aware_join_keys();
         return build_side_index == 1 ? join.right_join_keys() : join.left_join_keys();
     }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getProbeJoinKeys() const
     {
+        if (join.left_null_aware_join_keys_size() > 0)
+            return build_side_index == 0 ? join.right_null_aware_join_keys() : join.left_null_aware_join_keys();
         return build_side_index == 0 ? join.right_join_keys() : join.left_join_keys();
     }
 
@@ -97,8 +101,8 @@ struct TiFlashJoin
     /// @other_filter_column_name: column name of `and(other_cond1, other_cond2, ...)`
     /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1_from_in, other_eq_cond2_from_in, ...)`
     /// such as
-    ///   `select * from t1 where col1 in (select col2 from t2 where t1.col2 = t2.col3)`
-    ///   - other_filter is `t1.col2 = t2.col3`
+    ///   `select * from t1 where col1 in (select col2 from t2 where t1.col2 > t2.col3)`
+    ///   - other_filter is `t1.col2 > t2.col3`
     ///   - other_eq_filter_from_in_column is `t1.col1 = t2.col2`
     ///
     /// new columns from build side prepare join actions cannot be appended.
