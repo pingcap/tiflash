@@ -85,7 +85,7 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
     if (rowkey_ranges.empty())
         return {};
 
-    RUNTIME_CHECK(handle_pos < block.columns());
+    RUNTIME_CHECK(handle_pos < block.columns(), handle_pos, block.columns());
 
     std::vector<std::pair<size_t, size_t>> offset_and_limits;
     offset_and_limits.reserve(rowkey_ranges.size());
