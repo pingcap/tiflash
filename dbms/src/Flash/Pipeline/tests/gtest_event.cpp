@@ -453,6 +453,8 @@ try
     PipelineExecStatus exec_status;
     std::vector<EventPtr> events;
     // crash_event <-- run_event should run first,
+    // otherwise the thread pool will be filled up by WaitCancelEvent/WaitCancelTask,
+    // resulting in a period of time before RunEvent/RunTask/CrashEvent will run.
     auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
     events.push_back(run_event);
     auto crash_event = std::make_shared<CrashEvent>(exec_status);
