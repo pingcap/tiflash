@@ -19,6 +19,8 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace DM
@@ -32,7 +34,7 @@ getPosRangeOfSorted(const RowKeyRange & rowkey_range, const ColumnPtr & rowkey_c
     return rowkey_range.getPosRange(rowkey_column, offset, limit);
 }
 
-inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> & offset_and_limits)
+inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t>> & offset_and_limits)
 {
     size_t rows = block.rows();
     if (offset_and_limits.size() == 1)
@@ -88,11 +90,13 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
     if (rowkey_ranges.empty())
         return {};
 
+    RUNTIME_CHECK(handle_pos < block.columns());
+
     std::vector<std::pair<size_t, size_t>> offset_and_limits;
     offset_and_limits.reserve(rowkey_ranges.size());
     for (const auto & rowkey_range : rowkey_ranges)
     {
-        offset_and_limits.emplace_back(getPosRangeOfSorted(rowkey_range, block.safeGetByPosition(handle_pos).column, 0, block.rows()));
+        offset_and_limits.emplace_back(getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_pos).column, 0, block.rows()));
     }
     if (offset_and_limits.empty())
         return {};
@@ -151,7 +155,7 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
 
     for (size_t i = 0; i < block.columns(); ++i)
     {
-        auto & column = block.safeGetByPosition(i);
+        auto & column = block.getByPosition(i);
         column.column = column.column->filter(filter, passed_count);
     }
     return std::move(block);

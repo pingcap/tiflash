@@ -220,7 +220,7 @@ private:
     // First calculate the gc_hint_version of every pk according to the following rules,
     //     see the comments in `calculateRowGcHintVersion` to see how to calculate it for every pk
     // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
-    UInt64 gc_hint_version{};
+    UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
 
     // auxiliary variable for the calculation of gc_hint_version
     bool is_first_oldest_version = true;
