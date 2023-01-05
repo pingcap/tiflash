@@ -25,6 +25,7 @@
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriterV1.cpp>
+#include <cstddef>
 #include <limits>
 
 #include "Flash/Mpp/MppVersion.h"
@@ -514,10 +515,10 @@ try
 
     CHBlockChunkDecodeAndSquash decoder(header, 512);
 
-    for (const auto & ele : write_report)
+    for (size_t part_index = 0; part_index < part_num; ++part_index)
     {
         size_t decoded_block_rows = 0;
-        for (const auto & tracked_packet : ele.second)
+        for (const auto & tracked_packet : write_report[part_index])
         {
             auto & packet = tracked_packet->getPacket();
 
@@ -525,6 +526,15 @@ try
 
             for (auto && chunk : packet.chunks())
             {
+                if (part_index == 0)
+                {
+                    ASSERT_EQ(packet.compress().method(), mpp::CompressMethod::NONE);
+                }
+                else
+                {
+                    ASSERT_NE(packet.compress().method(), mpp::CompressMethod::NONE);
+                }
+
                 auto && result = decoder.decodeAndSquash(chunk, packet.compress().method() != mpp::CompressMethod::NONE);
                 if (!result)
                     continue;

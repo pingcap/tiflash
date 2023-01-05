@@ -56,7 +56,6 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     , collators(std::move(collators_))
     , compress_method(compress_method_)
 {
-    assert(compress_method != mpp::CompressMethod::NONE);
     assert(dag_context.getMPPTaskMeta().mpp_version() > 0);
 
     rows_in_blocks = 0;
@@ -66,7 +65,6 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     {
         expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
     }
-    compress_chunk_codec_stream = NewCompressCHBlockChunkCodecStream(ToInternalCompressionMethod(compress_method));
 }
 
 template <class ExchangeWriterPtr>
@@ -114,9 +112,10 @@ extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, Wr
 template <class ExchangeWriterPtr>
 void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
-    return partitionAndEncodeThenWriteBlocksTest();
+    // return partitionAndEncodeThenWriteBlocksTest();
 
-    assert(compress_chunk_codec_stream);
+    if (blocks.empty())
+        return;
 
     // Set mpp packet data version to `1`
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, HashPartitionWriterV1);
@@ -131,7 +130,6 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     // Sum of all approximate block data memory size
     size_t ori_block_mem_size = 0;
 
-    if (!blocks.empty())
     {
         assert(rows_in_blocks > 0);
 
@@ -168,15 +166,16 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
 
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
-            size_t part_rows = std::accumulate(dest_columns[part_id].begin(), dest_columns[part_id].end(), 0, [](const auto & r, const auto & columns) { return r + columns[0]->size(); });
+            auto & part_columns = dest_columns[part_id];
+            size_t part_rows = std::accumulate(part_columns.begin(), part_columns.end(), 0, [](const auto & r, const auto & columns) { return r + columns.front()->size(); });
 
             if (!part_rows)
                 continue;
 
-            size_t part_column_bytes = std::accumulate(dest_columns[part_id].begin(), dest_columns[part_id].end(), 0, [](auto res, const auto & columns) {
+            size_t part_column_bytes = std::accumulate(part_columns.begin(), part_columns.end(), 0, [](auto res, const auto & columns) {
                 for (const auto & elem : columns)
                     res += elem->byteSize();
-                return res + 8;
+                return res + 8 /*partition rows*/;
             });
 
             // Each partition encode format:
@@ -204,9 +203,9 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             // Encode header
             EncodeHeader(*ostr_ptr, dest_block_header, part_rows);
 
-            for (auto && columns : dest_columns[part_id])
+            for (auto && columns : part_columns)
             {
-                size_t rows = columns[0]->size();
+                size_t rows = columns.front()->size();
                 if (!rows)
                     continue;
 
@@ -244,6 +243,9 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
 template <class ExchangeWriterPtr>
 void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocksTest()
 {
+    if (blocks.empty())
+        return;
+
     // Set mpp packet data version to `1`
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, HashPartitionWriterV1);
 
@@ -257,7 +259,6 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     // Sum of all approximate block data memory size
     size_t ori_block_mem_size = 0;
 
-    if (!blocks.empty())
     {
         assert(rows_in_blocks > 0);
 
@@ -266,7 +267,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
 
         std::vector<String> partition_key_containers(collators.size());
         std::vector<std::vector<MutableColumns>> dest_columns(partition_num);
-        size_t total_rows = 0, encoded_rows = 0;
+        [[maybe_unused]] size_t total_rows = 0, encoded_rows = 0;
 
         while (!blocks.empty())
         {
@@ -340,6 +341,8 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
                 auto && col_type_name = dest_block_header.getByPosition(col_index);
                 for (auto && columns : part_columns)
                 {
+                    if (columns[col_index]->empty())
+                        continue;
                     WriteColumnData(*col_type_name.type, std::move(columns[col_index]), *ostr_ptr, 0, 0);
                 }
             }
@@ -351,8 +354,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             tracked_packets[part_id]->getPacket().add_chunks(output_buffer->releaseStr());
         }
 
-        RUNTIME_CHECK(encoded_rows == total_rows, encoded_rows, total_rows);
-
+        assert(encoded_rows == total_rows);
         assert(blocks.empty());
         rows_in_blocks = 0;
     }

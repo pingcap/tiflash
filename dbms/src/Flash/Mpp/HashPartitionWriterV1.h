@@ -69,7 +69,6 @@ private:
     size_t rows_in_blocks;
     DataTypes expected_types;
     mpp::CompressMethod compress_method{};
-    std::unique_ptr<CompressCHBlockChunkCodecStream> compress_chunk_codec_stream;
 };
 
 } // namespace DB

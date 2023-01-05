@@ -77,46 +77,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
     return res;
 }
 
-void DecodeColumns___(ReadBuffer & istr, Block & res, size_t columns, size_t rows, size_t reserve_size)
-{
-    if (!rows)
-        return;
-
-    auto && mutable_columns = res.mutateColumns();
-
-    for (size_t i = 0; i < columns; ++i)
-    {
-        /// Data
-        auto && read_column = mutable_columns[i];
-        if (reserve_size > 0)
-            read_column->reserve(std::max(rows, reserve_size) + read_column->size());
-        else
-            read_column->reserve(rows + read_column->size());
-
-        size_t read_rows = 0;
-        for (size_t sz = 0; read_rows < rows; read_rows += sz)
-        {
-            readVarUInt(sz, istr);
-            if (!sz)
-                continue;
-            res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
-                *read_column,
-                [&](const IDataType::SubstreamPath &) {
-                    return &istr;
-                },
-                sz,
-                0,
-                {},
-                {});
-        }
-        assert(read_rows == rows);
-    }
-
-    res.setColumns(std::move(mutable_columns));
-}
-
-
-void DecodeColumns_bb(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+[[maybe_unused]] static inline void DecodeColumns_by_block(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
     if (!rows_to_read)
         return;
@@ -130,11 +91,15 @@ void DecodeColumns_bb(ReadBuffer & istr, Block & res, size_t rows_to_read, size_
             column->reserve(rows_to_read + column->size());
     }
 
+    // Contain columns of multi blocks
     size_t decode_rows = 0;
     for (size_t sz = 0; decode_rows < rows_to_read; decode_rows += sz)
     {
         readVarUInt(sz, istr);
 
+        assert(sz > 0);
+
+        // Decode columns of one block
         for (size_t i = 0; i < res.columns(); ++i)
         {
             /// Data
@@ -155,7 +120,7 @@ void DecodeColumns_bb(ReadBuffer & istr, Block & res, size_t rows_to_read, size_
     res.setColumns(std::move(mutable_columns));
 }
 
-void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+[[maybe_unused]] static inline void DecodeColumns_by_col(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
     if (!rows_to_read)
         return;
@@ -185,6 +150,8 @@ void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t r
     {
         for (const auto & sz : column_batch)
         {
+            if (!sz)
+                continue;
             /// Data
             res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
                 *mutable_columns[i],
@@ -199,6 +166,11 @@ void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t r
     }
 
     res.setColumns(std::move(mutable_columns));
+}
+
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+{
+    return DecodeColumns_by_block(istr, res, rows_to_read, reserve_size);
 }
 
 } // namespace DB
