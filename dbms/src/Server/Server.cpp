@@ -247,6 +247,10 @@ struct TiFlashProxyConfig
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
+        auto disaggregated_mode = getDisaggregatedMode(config);
+        // tiflash_compute doesn't need proxy.
+        if (disaggregated_mode == DisaggregatedMode::Compute)
+            return;
         if (!config.has(config_prefix))
             return;
 
@@ -267,7 +271,6 @@ struct TiFlashProxyConfig
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
-            auto disaggregated_mode = getDisaggregatedMode(config);
             args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
 
             for (auto && [k, v] : args_map)
@@ -842,10 +845,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
-    proxy_runner.run();
-
     if (proxy_conf.is_proxy_runnable)
     {
+        proxy_runner.run();
+
         LOG_INFO(log, "wait for tiflash proxy initializing");
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1347,6 +1350,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
         SCOPE_EXIT({
+            if (!proxy_conf.is_proxy_runnable)
+            {
+                tmt_context.setStatusTerminated();
+                return;
+            }
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
             {
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");

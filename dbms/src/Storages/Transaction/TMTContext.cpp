@@ -67,7 +67,7 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
-    , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
+    , kvstore(context_.isDisaggregatedComputeMode() ? nullptr : std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
@@ -96,6 +96,10 @@ void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, con
 
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
+    // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
+    if (context.isDisaggregatedComputeMode())
+        return;
+
     kvstore->restore(path_pool, proxy_helper);
     region_table.restore();
     store_status = StoreStatus::Ready;
