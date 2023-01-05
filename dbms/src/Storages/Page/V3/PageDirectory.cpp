@@ -1764,30 +1764,32 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
         options.data_file_name_pattern,
         fmt::arg("sequence", snap->sequence),
         fmt::arg("sub_file_index", 0));
-    auto data_file_path = options.remote_directory + data_file_name;
+    auto remote_data_file_path = options.remote_directory + data_file_name;
+    auto remote_data_file_path_tmp = remote_data_file_path + ".tmp";
     // Always append a suffix, in case of remote_directory == temp_directory
-    auto data_file_path_temp = options.temp_directory + data_file_name + ".tmp";
+    auto local_data_file_path_temp = options.temp_directory + data_file_name + ".tmp";
 
     auto manifest_file_name = fmt::format(
         options.manifest_file_name_pattern,
         fmt::arg("sequence", snap->sequence));
-    auto manifest_file_path = options.remote_directory + manifest_file_name;
+    auto remote_manifest_file_path = options.remote_directory + manifest_file_name;
+    auto remote_manifest_file_path_temp = remote_manifest_file_path + ".tmp";
     // Always append a suffix, in case of remote_directory == temp_directory
-    auto manifest_file_path_temp = options.temp_directory + manifest_file_name + ".tmp";
+    auto local_manifest_file_path_temp = options.temp_directory + manifest_file_name + ".tmp";
 
-    Poco::File(Poco::Path(data_file_path_temp).parent()).createDirectories();
-    Poco::File(Poco::Path(manifest_file_path_temp).parent()).createDirectories();
+    Poco::File(Poco::Path(local_data_file_path_temp).parent()).createDirectories();
+    Poco::File(Poco::Path(local_manifest_file_path_temp).parent()).createDirectories();
 
-    LOG_DEBUG(log, "data_file_path_temp={} manifest_file_path_temp={}", data_file_path_temp, manifest_file_path_temp);
+    LOG_DEBUG(log, "data_file_path_temp={} manifest_file_path_temp={}", local_data_file_path_temp, local_manifest_file_path_temp);
 
     auto data_writer = CheckpointDataFileWriter<Trait>::create(
         typename CheckpointDataFileWriter<Trait>::Options{
-            .file_path = data_file_path_temp,
+            .file_path = local_data_file_path_temp,
             .file_id = data_file_name,
         });
     auto manifest_writer = CheckpointManifestFileWriter<Trait>::create(
         typename CheckpointManifestFileWriter<Trait>::Options{
-            .file_path = manifest_file_path_temp,
+            .file_path = local_manifest_file_path_temp,
             .file_id = manifest_file_name,
         });
     auto writer = CheckpointFilesWriter<Trait, PSBlobTrait>::create(
@@ -1819,20 +1821,35 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     }
 
     // NOTE: The following IO may be very slow, because the output directory should be mounted as S3.
-    Poco::File(Poco::Path(data_file_path).parent()).createDirectories();
-    Poco::File(Poco::Path(manifest_file_path).parent()).createDirectories();
+    Poco::File(Poco::Path(remote_data_file_path).parent()).createDirectories();
+    Poco::File(Poco::Path(remote_manifest_file_path).parent()).createDirectories();
 
-    auto data_file = Poco::File{data_file_path_temp};
+    auto data_file = Poco::File{local_data_file_path_temp};
     RUNTIME_CHECK(data_file.exists());
 
     if (has_new_data)
-        data_file.renameTo(data_file_path);
+    {
+        // Upload in two steps to avoid other store read incomplete file
+        if (remote_data_file_path_tmp != local_data_file_path_temp)
+        {
+            data_file.moveTo(remote_data_file_path_tmp);
+        }
+        auto remote_data_file_temp = Poco::File{remote_data_file_path_tmp};
+        RUNTIME_CHECK(remote_data_file_temp.exists());
+        remote_data_file_temp.renameTo(remote_data_file_path);
+    }
     else
         data_file.remove();
 
-    auto manifest_file = Poco::File{manifest_file_path_temp};
+    auto manifest_file = Poco::File{local_manifest_file_path_temp};
     RUNTIME_CHECK(manifest_file.exists());
-    manifest_file.renameTo(manifest_file_path);
+    if (remote_manifest_file_path_temp != local_manifest_file_path_temp)
+    {
+        manifest_file.moveTo(remote_manifest_file_path_temp);
+    }
+    auto remote_manifest_file_temp = Poco::File{remote_manifest_file_path_temp};
+    RUNTIME_CHECK(remote_manifest_file_temp.exists());
+    remote_manifest_file_temp.renameTo(remote_manifest_file_path);
 
     last_checkpoint_sequence = snap->sequence;
     LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);
