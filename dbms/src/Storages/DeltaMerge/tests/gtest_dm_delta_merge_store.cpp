@@ -3163,7 +3163,6 @@ try
     }
 
     store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)), info);
-
     {
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(*db_context,

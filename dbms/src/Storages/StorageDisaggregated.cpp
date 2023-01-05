@@ -95,6 +95,7 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
         auto * meta = establish_req->mutable_meta();
         meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
         meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
+        meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
         meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
@@ -175,7 +176,9 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(fmt::format("EstablishDisaggregated get resp with error={}", resp->error().msg()));
-                summary.establish_rpc_ms += watch.elapsedMillisecondsFromLastTime();
+                auto this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
+                summary.establish_rpc_ms += this_elapse_ms;
+                GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_establish).Observe(this_elapse_ms / 1000.0);
                 // Parse the resp and gen tasks on read node
                 // The number of tasks is equal to number of write nodes
                 for (const auto & physical_table : resp->tables())
@@ -195,7 +198,9 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         log);
                 }
                 // TODO: update region cache by `resp->retry_regions`
-                summary.build_remote_task_ms += watch.elapsedMillisecondsFromLastTime();
+                this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
+                summary.build_remote_task_ms += this_elapse_ms;
+                GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_task).Observe(this_elapse_ms / 1000.0);
             });
     }
     thread_manager->wait();

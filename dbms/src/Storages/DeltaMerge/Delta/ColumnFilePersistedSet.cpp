@@ -108,7 +108,6 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
     auto & storage_pool = context.storage_pool;
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, id);
     auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
-    LOG_DEBUG(&Poco::Logger::get("ColumnFilePersistedSet"), "checkpoint delta id {} buffer size {}", id, buf_size);
     auto column_files = deserializeSavedRemoteColumnFiles(
         context,
         segment_range,

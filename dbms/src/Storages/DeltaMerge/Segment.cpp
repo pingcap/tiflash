@@ -191,7 +191,7 @@ SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
         dmfiles.emplace_back(std::move(dmfile));
     }
     new_stable->setFiles(dmfiles, segment_range, db_context);
-    auto stable_snap = new_stable->createSnapshot();
+    auto stable_snap = new_stable->createSnapshot(db_context);
 
     return std::make_shared<SegmentSnapshot>(
         std::move(delta_snap),
@@ -443,7 +443,6 @@ Segment::SegmentMetaInfos Segment::restoreAllSegmentsMetaInfo( //
     SegmentMetaInfos segment_infos;
     while (target_segment_id != 0)
     {
-        LOG_DEBUG(&Poco::Logger::get("Segment::restoreAllSegmentsMetaInfo"), "try to restore table {} segment meta {}", ns_id, target_segment_id);
         Segment::SegmentMetaInfo segment_info;
         auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, target_segment_id);
         auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
@@ -476,7 +475,7 @@ Segments Segment::restoreSegmentsFromCheckpoint( //
     Segments segments;
     for (const auto & segment_info : meta_infos)
     {
-        LOG_DEBUG(parent_log, "begin to restore segment delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.rowkey_range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
+        LOG_DEBUG(parent_log, "Begin to restore segment delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.rowkey_range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
         auto stable = StableValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, ns_id, segment_info.stable_id, wbs);
         auto delta = DeltaValueSpace::restoreFromCheckpoint(context, manager, checkpoint_info, segment_info.rowkey_range, ns_id, segment_info.delta_id, wbs);
 
@@ -740,7 +739,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     SCOPE_EXIT(
         dm_context.scan_context->total_create_snapshot_time_ms += watch.elapsedMilliseconds(););
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
-    auto stable_snap = stable->createSnapshot();
+    auto stable_snap = stable->createSnapshot(dm_context.db_context, dm_context.table_id);
     if (!delta_snap || !stable_snap)
         return {};
     return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));

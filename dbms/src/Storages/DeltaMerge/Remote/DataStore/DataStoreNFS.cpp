@@ -39,7 +39,7 @@ void DataStoreNFS::putDMFile(DMFilePtr local_dmf, const DMFileOID & oid)
     LOG_DEBUG(log, "Upload DMFile finished, oid={}", oid.info());
 }
 
-void DataStoreNFS::copyDMFileToLocalPath(const DMFileOID & remote_oid, const String & local_path)
+void DataStoreNFS::copyDMFileMetaToLocalPath(const DMFileOID & remote_oid, const String & local_path)
 {
     const auto remote_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(remote_oid), remote_oid.file_id, DMFile::READABLE);
     auto remote_dmf_dir_poco = Poco::File(remote_dmf_dir);
@@ -47,7 +47,22 @@ void DataStoreNFS::copyDMFileToLocalPath(const DMFileOID & remote_oid, const Str
     {
         LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be somethin wrong. oid={} remote={}", remote_oid.info(), remote_dmf_dir);
     }
-    remote_dmf_dir_poco.copyTo(local_path);
+    // TODO: remote hardcode
+    std::vector<String> target_files = {"meta.txt", "config", "pack", "property", IDataType::getFileNameForStream(DB::toString(-1), {}) + ".idx"};
+    for (const auto & name : target_files)
+    {
+        String sub_file_path = remote_dmf_dir + "/" + name;
+        Poco::File sub_file(sub_file_path);
+        if (sub_file.exists())
+        {
+            LOG_DEBUG(log, "Copy file from {} to {}", sub_file_path, local_path);
+            sub_file.copyTo(local_path);
+        }
+        else
+        {
+            LOG_WARNING(log, "Target DMFile subfile doesn't exists in the remote directory. oid={} remote={}", remote_oid.info(), sub_file_path);
+        }
+    }
 }
 
 void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & self_oid)

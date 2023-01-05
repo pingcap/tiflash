@@ -252,6 +252,7 @@ DMFileReader::DMFileReader(
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
 {
+    assert(!dmfile->isRemote());
     for (const auto & cd : read_columns)
     {
         // New inserted column, will be filled with default value later
