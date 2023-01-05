@@ -2,6 +2,7 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <memory>
@@ -22,6 +23,8 @@ class DisaggregatedSnapshotManager
 public:
     std::tuple<bool, String> registerSnapshot(const DisaggregatedTaskId & task_id, DisaggregatedReadSnapshotPtr && snap)
     {
+        LOG_DEBUG(Logger::get(), "Register Disaggregated Snapshot, task_id={}", task_id);
+
         std::unique_lock lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
             return {false, "disaggregated task has been registered"};
@@ -38,10 +41,12 @@ public:
         return nullptr;
     }
 
-    bool unregisterSnapshot(const DisaggregatedTaskId & snap_id)
+    bool unregisterSnapshot(const DisaggregatedTaskId & task_id)
     {
+        LOG_DEBUG(Logger::get(), "Unregister Disaggregated Snapshot, task_id={}", task_id);
+
         std::unique_lock lock(mtx);
-        if (auto iter = snapshots.find(snap_id); iter != snapshots.end())
+        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
         {
             snapshots.erase(iter);
             return true;

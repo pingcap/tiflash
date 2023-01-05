@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
@@ -29,7 +30,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncer.h>
-#include <common/ThreadPool.h>
 
 #include <future>
 #include <iomanip>

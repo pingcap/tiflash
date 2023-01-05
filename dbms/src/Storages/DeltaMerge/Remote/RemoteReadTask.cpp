@@ -1,8 +1,10 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/ThreadPool.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <IO/IOThreadPool.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -22,6 +24,7 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
+#include <future>
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
@@ -256,18 +259,37 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
         remote_table.table_id(),
         snapshot_id,
         address);
-    for (const auto & remote_seg : remote_table.segments())
+
+    std::vector<std::future<RemoteSegmentReadTaskPtr>> futures;
+
+    size_t size = static_cast<size_t>(remote_table.segments().size());
+    for (size_t idx = 0; idx < size; ++idx)
     {
-        auto seg_task = RemoteSegmentReadTask::buildFrom(
-            db_context,
-            remote_seg,
-            snapshot_id,
-            table_task->store_id,
-            table_task->table_id,
-            table_task->address,
-            log);
-        table_task->tasks.emplace_back(std::move(seg_task));
+        const auto & remote_seg = remote_table.segments(idx);
+
+        auto task = std::make_shared<std::packaged_task<RemoteSegmentReadTaskPtr()>>([&, idx, size] {
+            Stopwatch watch;
+            SCOPE_EXIT({
+                LOG_DEBUG(log, "Build RemoteSegmentReadTask finished, elapsed={}s task_idx={} task_total={} segment_id={}", watch.elapsedSeconds(), idx, size, remote_seg.segment_id());
+            });
+
+            return RemoteSegmentReadTask::buildFrom(
+                db_context,
+                remote_seg,
+                snapshot_id,
+                table_task->store_id,
+                table_task->table_id,
+                table_task->address,
+                log);
+        });
+
+        futures.emplace_back(task->get_future());
+        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
+
+    for (auto & f : futures)
+        table_task->tasks.push_back(f.get());
+
     return table_task;
 }
 

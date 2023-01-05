@@ -189,7 +189,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
         {
             auto & child = children[i];
 
-            reading_pool->schedule(
+            reading_pool->scheduleOrThrowOnError(
                 wrapInvocable(true, [&child] {
                     child->readPrefix();
                 }));
@@ -479,7 +479,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] {
+                reading_pool->scheduleOrThrowOnError(wrapInvocable(true, [&input, &read_from_input] {
                     read_from_input(input);
                 }));
             }

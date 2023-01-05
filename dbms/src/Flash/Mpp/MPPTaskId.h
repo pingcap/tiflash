@@ -45,7 +45,7 @@ struct MPPQueryId
     bool operator<=(const MPPQueryId & rid) const;
     String toString() const
     {
-        return fmt::format("<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>", query_ts, local_query_id, server_id, start_ts);
+        return fmt::format("MPPQueryId<query_ts={},local_id={},server_id={},start_ts={}>", query_ts, local_query_id, server_id, start_ts);
     }
 };
 

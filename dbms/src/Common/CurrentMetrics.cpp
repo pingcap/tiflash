@@ -17,6 +17,10 @@
 
 /// Available metrics. Add something here as you wish.
 #define APPLY_FOR_METRICS(M)                    \
+    M(GlobalThread)                             \
+    M(GlobalThreadActive)                       \
+    M(LocalThread)                              \
+    M(LocalThreadActive)                        \
     M(OpenFileForRead)                          \
     M(OpenFileForWrite)                         \
     M(OpenFileForReadWrite)                     \

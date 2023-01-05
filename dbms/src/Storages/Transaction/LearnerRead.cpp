@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadPool.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
@@ -27,7 +28,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
-#include <common/ThreadPool.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -432,7 +432,7 @@ LearnerReadSnapshot doLearnerRead(
         ::ThreadPool pool(concurrent_num);
         for (size_t region_begin_idx = 0; region_begin_idx < num_regions; region_begin_idx += batch_size)
         {
-            pool.schedule([&batch_wait_index, region_begin_idx] { batch_wait_index(region_begin_idx); });
+            pool.scheduleOrThrowOnError([&batch_wait_index, region_begin_idx] { batch_wait_index(region_begin_idx); });
         }
         pool.wait();
     }

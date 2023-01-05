@@ -23,6 +23,7 @@
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
+#include <Common/ThreadPool.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
@@ -44,6 +45,7 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
+#include <IO/IOThreadPool.h>
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -905,6 +907,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
+
+    GlobalThreadPool::initialize(
+        10000,
+        1000,
+        10000);
+
+    IOThreadPool::initialize(
+        100,
+        0,
+        10000);
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)

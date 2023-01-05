@@ -385,6 +385,7 @@ extern const int QUERY_WAS_CANCELLED = 394;
 extern const int FUNCTION_THROW_IF_VALUE_IS_NON_ZERO = 395;
 extern const int TOO_MANY_ROWS_OR_BYTES = 396;
 extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW = 397;
+extern const int CANNOT_SCHEDULE_TASK = 439;
 extern const int CANNOT_MPROTECT = 445;
 extern const int DECIMAL_OVERFLOW = 446;
 extern const int CANNOT_PARSE_BOOL = 447;

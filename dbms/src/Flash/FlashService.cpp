@@ -85,12 +85,12 @@ void FlashService::init(Context & context_)
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
-    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+    cop_pool = std::make_unique<ThreadPool>(cop_pool_size);
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
-    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size);
 }
 
 FlashService::~FlashService() = default;
@@ -100,7 +100,7 @@ grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
-    pool.schedule([&task] { task(); });
+    pool.scheduleOrThrowOnError([&task] { task(); });
     return future.get();
 }
 
@@ -144,7 +144,7 @@ grpc::Status FlashService::Coprocessor(
     context->setMockStorage(mock_storage);
 
     const auto & settings = context->getSettingsRef();
-    auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+    auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->getMaxThreads();
     auto max_queued_duration_seconds = std::min(settings.cop_pool_max_queued_seconds, 20);
 
     if (handle_limit > 0)

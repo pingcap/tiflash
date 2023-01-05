@@ -88,7 +88,7 @@ size_t MPPQueryIdHash::operator()(MPPQueryId const & mpp_query_id) const noexcep
 
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP<query_id:N/A,task_id:N/A>" : fmt::format("MPP<query:{},task_id:{}>", query_id.toString(), task_id);
+    return isUnknown() ? "MPPTaskId<N/A>" : fmt::format("MPPTaskId<{},task_id={}>", query_id.toString(), task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};

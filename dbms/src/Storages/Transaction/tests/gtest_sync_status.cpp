@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/ThreadPool.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -33,7 +34,6 @@
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 namespace DB

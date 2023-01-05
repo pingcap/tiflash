@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <common/ThreadPool.h>
+#include <Common/ThreadPool.h>
 
 /** Reproduces bug in ThreadPool.
   * It get stuck if we call 'wait' many times from many other threads simultaneously.

@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOrdinary.h>
@@ -28,7 +29,6 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
@@ -130,7 +130,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
         };
 
         if (thread_pool)
-            thread_pool->schedule(task);
+            thread_pool->scheduleOrThrowOnError(task);
         else
             task();
     }
