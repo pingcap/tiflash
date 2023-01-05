@@ -25,8 +25,9 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/universal/Readers.h>
-#include <Storages/Transaction/TMTContext.cpp>
 #include <Storages/PathPool.h>
+
+#include <Storages/Transaction/TMTContext.cpp>
 
 namespace DB
 {

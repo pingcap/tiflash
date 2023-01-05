@@ -119,7 +119,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
         wbs);
     RUNTIME_CHECK(buf->count() == buf_size);
     ColumnFilePersisteds new_column_files;
-    for (auto & column_file: column_files)
+    for (auto & column_file : column_files)
     {
         if (auto * t = column_file->tryToTinyFile(); t)
         {
@@ -138,7 +138,8 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
             auto old_page_id = b->getDataPageId();
             auto old_file_id = b->getFile()->fileId();
             auto delegator = context.path_pool->getStableDiskDelegator();
-            auto parent_path = delegator.getDTFilePath(old_file_id);;
+            auto parent_path = delegator.getDTFilePath(old_file_id);
+            ;
             auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), old_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
             wbs.data.putRefPage(new_file_id, old_page_id);

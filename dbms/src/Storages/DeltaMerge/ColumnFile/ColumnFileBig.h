@@ -24,7 +24,7 @@ namespace PS::V3
 {
 class CheckpointPageManager;
 using CheckpointPageManagerPtr = std::shared_ptr<CheckpointPageManager>;
-}
+} // namespace PS::V3
 namespace DM
 {
 class DMFileBlockInputStream;
@@ -98,12 +98,12 @@ public:
                                                       ReadBuffer & buf);
 
     static ColumnFilePersistedPtr deserializeMetadataFromRemote(DMContext & context, //
-                                                      const RowKeyRange & segment_range,
-                                                      ReadBuffer & buf,
-                                                    const PS::V3::CheckpointPageManagerPtr & manager,
-                                                    UInt64 checkpoint_store_id,
-                                                    TableID ns_id,
-                                                    WriteBatches & wbs);
+                                                                const RowKeyRange & segment_range,
+                                                                ReadBuffer & buf,
+                                                                const PS::V3::CheckpointPageManagerPtr & manager,
+                                                                UInt64 checkpoint_store_id,
+                                                                TableID ns_id,
+                                                                WriteBatches & wbs);
 
     dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {

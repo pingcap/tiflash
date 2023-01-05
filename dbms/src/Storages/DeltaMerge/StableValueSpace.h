@@ -20,9 +20,10 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/WriteBatch.h>
-#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/WriteBatch.h>
+
+#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 
 namespace DB
 {
