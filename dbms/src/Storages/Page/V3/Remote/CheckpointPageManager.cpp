@@ -6,10 +6,6 @@
 namespace DB::PS::V3
 {
 using PS::V3::CheckpointManifestFileReader;
-using PS::V3::PageDirectory;
-using PS::V3::RemoteDataLocation;
-using PS::V3::Remote::WriterInfo;
-using PS::V3::universal::BlobStoreTrait;
 using PS::V3::universal::PageDirectoryTrait;
 
 static std::atomic<int64_t> local_ps_num = 0;
@@ -33,6 +29,8 @@ UniversalPageStoragePtr CheckpointPageManager::createTempPageStorage(Context & c
     auto t_edit = reader->read();
     const auto & records = t_edit.getRecords();
     UniversalWriteBatch wb;
+    // insert delete records at last
+    PageEntriesEdit<UniversalPageId>::EditRecords delete_records;
     for (const auto & record: records)
     {
         if (record.type == EditRecordType::VAR_ENTRY)
@@ -48,7 +46,7 @@ UniversalPageStoragePtr CheckpointPageManager::createTempPageStorage(Context & c
         }
         else if (record.type == EditRecordType::VAR_DELETE)
         {
-            wb.delPage(record.page_id);
+            delete_records.emplace_back(record);
         }
         else if (record.type == EditRecordType::VAR_EXTERNAL)
         {
@@ -60,6 +58,13 @@ UniversalPageStoragePtr CheckpointPageManager::createTempPageStorage(Context & c
         }
     }
     local_ps->write(std::move(wb));
+    UniversalWriteBatch delete_wb;
+    for (const auto & record: delete_records)
+    {
+        RUNTIME_CHECK(record.type == EditRecordType::VAR_DELETE);
+        delete_wb.delPage(record.page_id);
+    }
+    local_ps->write(std::move(delete_wb));
     return local_ps;
 }
 }
