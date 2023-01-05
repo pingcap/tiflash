@@ -50,12 +50,11 @@ struct fmt::formatter<DB::DM::DisaggregatedTaskId>
     auto format(const DB::DM::DisaggregatedTaskId & task_id, FormatContext & ctx) const -> decltype(ctx.out())
     {
         if (task_id.mpp_task_id.isUnknown())
-            return format_to(ctx.out(), "Dis<query:N/A,task_id:N/A,executor:N/A>");
+            return format_to(ctx.out(), "DisTaskId<N/A>");
         return format_to(
             ctx.out(),
-            "Dis<query:{},task_id:{},executor:{}>",
-            task_id.mpp_task_id.query_id.toString(),
-            task_id.mpp_task_id.task_id,
+            "DisTaskId<{},executor={}>",
+            task_id.mpp_task_id.toString(),
             task_id.executor_id);
     }
 };

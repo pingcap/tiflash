@@ -185,9 +185,13 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     auto parse_ok = table.ParseFromString(physical_table);
                     RUNTIME_CHECK(parse_ok); // TODO: handle error
 
+                    // TODO: Build in Parallel?
+
+                    Stopwatch watch_table;
+
                     LOG_DEBUG(
                         log,
-                        "Build remoteTableReadTask, store={}, addr={}, task_id={}, table_segments={}",
+                        "Building RemoteTableReadTask, store={} addr={} task_id={} segments={}",
                         resp->store_id(),
                         req->address(),
                         task_id,
@@ -200,6 +204,15 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         task_id,
                         table,
                         log);
+
+                    LOG_DEBUG(
+                        log,
+                        "Build RemoteTableReadTask finished, elapsed={}s store={} addr={} task_id={} segments={}",
+                        watch_table.elapsedSeconds(),
+                        resp->store_id(),
+                        req->address(),
+                        task_id,
+                        table.segments().size());
                 }
                 // TODO: update region cache by `resp->retry_regions`
                 summary.build_remote_task_ms += watch.elapsedMillisecondsFromLastTime();

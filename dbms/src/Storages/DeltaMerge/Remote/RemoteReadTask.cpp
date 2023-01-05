@@ -238,11 +238,23 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
         snapshot_id,
         address);
 
-    std::vector<std::packaged_task<RemoteSegmentReadTaskPtr()>> build_tasks;
+    std::vector<std::future<RemoteSegmentReadTaskPtr>> futures;
 
-    for (const auto & remote_seg : remote_table.segments())
+    size_t size = static_cast<size_t>(remote_table.segments().size());
+    for (size_t idx = 0; idx < size; ++idx)
     {
-        build_tasks.emplace_back([&] {
+        const auto & remote_seg = remote_table.segments(idx);
+
+        auto task = std::make_shared<std::packaged_task<RemoteSegmentReadTaskPtr()>>([&, idx, size] {
+            Stopwatch watch;
+            SCOPE_EXIT({
+                LOG_DEBUG(log, "Build RemoteSegmentReadTask finished, elapsed={}s task_idx={} task_total={} segment_id={}",
+                          watch.elapsedSeconds(),
+                          idx,
+                          size,
+                          remote_seg.segment_id());
+            });
+
             return RemoteSegmentReadTask::buildFrom(
                 db_context,
                 remote_seg,
@@ -253,12 +265,12 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
                 log);
         });
 
-        auto & task = build_tasks.back();
-        IOThreadPool::get().scheduleOrThrowOnError([&task] { task(); });
+        futures.emplace_back(task->get_future());
+        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
 
-    for (auto & build_task : build_tasks)
-        table_task->tasks.push_back(build_task.get_future().get());
+    for (auto & f : futures)
+        table_task->tasks.push_back(f.get());
 
     return table_task;
 }
