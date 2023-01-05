@@ -324,29 +324,23 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
         }
-        std::cout << " size is " << dmContext().db_context.column_file_schema_map_with_lock->size() << std::endl;
         {
             appendColumnFileTinyToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, wbs);
             total_rows_write += num_rows_write_per_batch;
         }
-        std::cout << " size is " << dmContext().db_context.column_file_schema_map_with_lock->size() << std::endl;
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
         }
-        std::cout << " size is " << dmContext().db_context.column_file_schema_map_with_lock->size() << std::endl;
         {
             delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch)));
         }
-        std::cout << " size is " << dmContext().db_context.column_file_schema_map_with_lock->size() << std::endl;
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
         }
-        std::cout << " size is " << dmContext().db_context.column_file_schema_map_with_lock->size() << std::endl;
         delta->flush(dmContext());
     }
-    std::cout << " size is " << dmContext().db_context.column_file_schema_map_with_lock->size() << std::endl;
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {

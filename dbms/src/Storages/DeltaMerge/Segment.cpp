@@ -45,9 +45,6 @@
 #include <memory>
 #include <numeric>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -2177,7 +2174,7 @@ bool Segment::placeDelete(const DMContext & dm_context,
     {
         auto compacted_index = update_delta_tree.getCompactedEntries();
 
-        BlockInputStreamPtr delete_stream = getPlacedStream(
+        BlockInputStreamPtr delete_stream = getPlacedStream( //
             dm_context,
             {handle, getVersionColumnDefine()},
             delete_ranges,

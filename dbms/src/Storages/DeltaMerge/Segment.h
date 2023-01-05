@@ -29,8 +29,6 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
 namespace DB::DM
 {
 class Segment;
@@ -149,7 +147,7 @@ public:
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
     /// The block data of the passed in ColumnFile should be placed on disk before calling this function.
     /// To write new block data, you can use `writeToCache`.
-    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file); // todo 看一下这个函数的调用
+    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
 
     /// Write a block of data into the MemTableSet part of the Segment. The data will be flushed to disk later.
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
