@@ -398,11 +398,10 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        const auto * summary = receiver_stream->getRemoteExecutionSummaries(0);
-        ASSERT_TRUE(summary != nullptr);
-        ASSERT_EQ(summary->size(), 1);
-        ASSERT_EQ(summary->begin()->first, "Executor_0");
-        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary->begin()->second));
+        const auto & summary = receiver_stream->getRemoteExecutionSummary();
+        ASSERT_EQ(summary.execution_summaries.size(), 1);
+        ASSERT_EQ(summary.execution_summaries.begin()->first, "Executor_0");
+        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary.execution_summaries.begin()->second));
 
         /// Check Connection Info
         auto infos = receiver_stream->getConnectionProfileInfos();

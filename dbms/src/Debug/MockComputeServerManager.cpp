@@ -13,6 +13,9 @@
 // limitations under the License.
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockStorage.h>
+#include <Flash/Mpp/MPPTaskManager.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <chrono>
@@ -69,7 +72,7 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, int start
     prepareMockMPPServerInfo();
 }
 
-void MockComputeServerManager::setMockStorage(MockStorage & mock_storage)
+void MockComputeServerManager::setMockStorage(MockStorage * mock_storage)
 {
     for (const auto & server : server_map)
     {

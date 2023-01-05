@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
 #include <Parsers/makeDummyQuery.h>
@@ -38,6 +39,11 @@ String PlanQuerySource::str(size_t)
 std::unique_ptr<IInterpreter> PlanQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
     return std::make_unique<Planner>(context, *this);
+}
+
+const tipb::DAGRequest & PlanQuerySource::getDAGRequest() const
+{
+    return *getDAGContext().dag_request;
 }
 
 } // namespace DB

@@ -18,6 +18,11 @@
 
 namespace DB
 {
+inline constexpr bool isLittleEndian()
+{
+    return (boost::endian::order::native == boost::endian::order::little);
+}
+
 /// Requires:
 ///   T is non-bool integral or scoped enumeration type
 template <typename T>

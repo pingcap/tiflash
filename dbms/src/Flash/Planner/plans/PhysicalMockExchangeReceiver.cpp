@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/MockExchangeReceiverInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -37,7 +38,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (!context.mockStorage().exchangeExists(executor_id))
+    // Interpreter test will not use columns in MockStorage
+    if (context.isInterpreterTest() || !context.mockStorage()->exchangeExists(executor_id))
     {
         /// build with default blocks.
         for (size_t i = 0; i < max_streams; ++i)
@@ -80,8 +82,6 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     const LoggerPtr & log,
     const tipb::ExchangeReceiver & exchange_receiver)
 {
-    assert(context.isExecutorTest());
-
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver);
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(

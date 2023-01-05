@@ -17,6 +17,7 @@
 #include <Common/Config/ConfigObject.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/FileChangesTracker.h>
+#include <Common/Logger.h>
 #include <time.h>
 
 #include <condition_variable>
@@ -27,12 +28,6 @@
 #include <set>
 #include <string>
 #include <thread>
-
-
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
@@ -78,7 +73,10 @@ protected:
 private:
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Poco::Logger::get(name);
+    LoggerPtr log = Logger::get(name);
+
+    /// Locked inside reloadIfNewer.
+    std::mutex reload_mutex;
 
     std::string path;
     FilesChangesTracker files;
@@ -89,11 +87,8 @@ private:
     // If they are updated, the reloadIfNewer will be called.
     std::vector<std::shared_ptr<ConfigObject>> config_objects;
 
-    std::atomic<bool> quit{false};
+    std::atomic_bool quit{false};
     std::thread thread;
-
-    /// Locked inside reloadIfNewer.
-    std::mutex reload_mutex;
 };
 
 } // namespace DB

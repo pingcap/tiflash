@@ -32,6 +32,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -163,7 +164,8 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (!context.mockStorage().tableExists(table_scan.getLogicalTableID()))
+    // Interpreter test will not use columns in MockStorage
+    if (context.isInterpreterTest())
     {
         auto names_and_types = genNamesAndTypes(table_scan, "mock_table_scan");
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
@@ -174,9 +176,29 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
             pipeline.streams.emplace_back(mock_table_scan_stream);
         }
     }
+    else if (context.mockStorage()->useDeltaMerge())
+    {
+        assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
+        auto names_and_types = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
+        auto mock_table_scan_stream = context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID());
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+        pipeline.streams.push_back(mock_table_scan_stream);
+    }
     else
     {
-        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID(), table_scan.getLogicalTableID());
+        /// build from user input blocks.
+        assert(context.mockStorage()->tableExists(table_scan.getLogicalTableID()));
+        NamesAndTypes names_and_types;
+        std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
+        if (context.isMPPTest())
+        {
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStreamForMpp(context, max_streams, log, table_scan);
+        }
+        else
+        {
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID(), table_scan.getLogicalTableID());
+        }
+
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
@@ -526,7 +548,8 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    if (!context.mockStorage().exchangeExists(query_block.source_name))
+    // Interpreter test will not use columns in MockStorage
+    if (context.isInterpreterTest() || !context.mockStorage()->exchangeExists(query_block.source_name))
     {
         for (size_t i = 0; i < max_streams; ++i)
         {
@@ -625,7 +648,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        if (unlikely(context.isExecutorTest()))
+        if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             handleMockExchangeReceiver(pipeline);
         else
         {
@@ -724,7 +747,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        if (unlikely(context.isExecutorTest()))
+        if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             handleMockExchangeSender(pipeline);
         else
         {

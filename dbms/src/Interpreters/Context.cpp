@@ -19,6 +19,7 @@
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/TiFlashSecurity.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
 #include <Common/randomSeed.h>
@@ -26,6 +27,7 @@
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockStorage.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
@@ -1830,7 +1832,7 @@ size_t Context::getMaxStreams() const
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (isExecutorTest())
+        if (isExecutorTest() || isInterpreterTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {
@@ -1878,6 +1880,16 @@ void Context::setExecutorTest()
     test_mode = executor_test;
 }
 
+bool Context::isInterpreterTest() const
+{
+    return test_mode == interpreter_test;
+}
+
+void Context::setInterpreterTest()
+{
+    test_mode = interpreter_test;
+}
+
 bool Context::isCopTest() const
 {
     return test_mode == cop_test;
@@ -1893,12 +1905,12 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
-void Context::setMockStorage(MockStorage & mock_storage_)
+void Context::setMockStorage(MockStorage * mock_storage_)
 {
     mock_storage = mock_storage_;
 }
 
-MockStorage Context::mockStorage() const
+MockStorage * Context::mockStorage() const
 {
     return mock_storage;
 }
