@@ -16,11 +16,11 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
+#include <Common/ThreadPool.h>
 #include <Common/setThreadName.h>
 #include <Common/wrapInvocable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Poco/Event.h>
-#include <common/ThreadPool.h>
 
 namespace DB
 {
@@ -128,7 +128,7 @@ protected:
     void next()
     {
         ready.reset();
-        pool.schedule(wrapInvocable(true, [this] { calculate(); }));
+        pool.scheduleOrThrowOnError(wrapInvocable(true, [this] { calculate(); }));
     }
 
 

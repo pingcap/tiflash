@@ -1,7 +1,9 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/ThreadPool.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <IO/IOThreadPool.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -21,6 +23,7 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
+#include <future>
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
@@ -234,18 +237,29 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
         remote_table.table_id(),
         snapshot_id,
         address);
+
+    std::vector<std::packaged_task<RemoteSegmentReadTaskPtr()>> build_tasks;
+
     for (const auto & remote_seg : remote_table.segments())
     {
-        auto seg_task = RemoteSegmentReadTask::buildFrom(
-            db_context,
-            remote_seg,
-            snapshot_id,
-            table_task->store_id,
-            table_task->table_id,
-            table_task->address,
-            log);
-        table_task->tasks.emplace_back(std::move(seg_task));
+        build_tasks.emplace_back([&] {
+            return RemoteSegmentReadTask::buildFrom(
+                db_context,
+                remote_seg,
+                snapshot_id,
+                table_task->store_id,
+                table_task->table_id,
+                table_task->address,
+                log);
+        });
+
+        auto & task = build_tasks.back();
+        IOThreadPool::get().scheduleOrThrowOnError([&task] { task(); });
     }
+
+    for (auto & build_task : build_tasks)
+        table_task->tasks.push_back(build_task.get_future().get());
+
     return table_task;
 }
 

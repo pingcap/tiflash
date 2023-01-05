@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/ThreadPool.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
@@ -52,7 +53,6 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-#include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 
