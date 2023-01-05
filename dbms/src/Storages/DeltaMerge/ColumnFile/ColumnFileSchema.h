@@ -17,7 +17,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
-#include <_types/_uint64_t.h>
 #include <openssl/base.h>
 #include <openssl/sha.h>
 
