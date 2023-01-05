@@ -28,9 +28,8 @@
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
-#include <Storages/Page/universal/UniversalPageStorage.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -3074,7 +3073,7 @@ try
     {
         ASSERT_GT(store->getSegmentsStats().size(), 1);
     }
-//    store->mergeDeltaAll(*db_context);
+    //    store->mergeDeltaAll(*db_context);
 
     // dump checkpoint
     auto page_storage = db_context->getWriteNodePageStorage();

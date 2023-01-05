@@ -60,6 +60,7 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
     WakerNotifier,
     WriteBatch,
     UniversalPage,
+    PageAndCppStr,
 };
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
@@ -142,7 +143,6 @@ void WriteBatchClear(RawVoidPtr ptr);
 void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr);
 PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
 PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
-void GcPageAndCppStrWithViewVec(PageAndCppStrWithView * inner, uint64_t len);
 void PurgePageStorage(const EngineStoreServerWrap * server);
 CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_page_id);
 uint8_t IsPSEmpty(const EngineStoreServerWrap * server);
@@ -162,6 +162,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppP
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
+void GcRawCppPtrCArr(RawVoidPtr ptr, RawCppPtrType type, uint64_t len);
 void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type);
 BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
@@ -194,7 +195,6 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_consume_write_batch = ConsumeWriteBatch,
         .fn_handle_read_page = HandleReadPage,
         .fn_handle_scan_page = HandleScanPage,
-        .fn_gc_page_and_cpp_str_with_view_vec = GcPageAndCppStrWithViewVec,
         .fn_handle_purge_pagestorage = PurgePageStorage,
         .fn_handle_seek_ps_key = SeekPSKey,
         .fn_ps_is_empty = IsPSEmpty,
@@ -208,6 +208,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
+        .fn_gc_raw_cpp_ptr_carr = GcRawCppPtrCArr,
         .fn_gc_special_raw_cpp_ptr = GcSpecialRawCppPtr,
         .fn_get_config = GetConfig,
         .fn_set_store = SetStore,

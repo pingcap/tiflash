@@ -476,12 +476,7 @@ Segments Segment::restoreSegmentsFromCheckpoint( //
     Segments segments;
     for (const auto & segment_info : meta_infos)
     {
-        LOG_DEBUG(parent_log, "Begin to restore segment delta id {} stable id {} range {} epoch {} next_segment_id {}",
-          segment_info.delta_id,
-          segment_info.stable_id,
-          segment_info.rowkey_range.toDebugString(),
-          segment_info.epoch,
-          segment_info.next_segment_id);
+        LOG_DEBUG(parent_log, "Begin to restore segment delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.rowkey_range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
         auto stable = StableValueSpace::restoreFromCheckpoint(context, temp_ps, checkpoint_info, ns_id, segment_info.stable_id, wbs);
         auto delta = DeltaValueSpace::restoreFromCheckpoint(context, temp_ps, checkpoint_info, segment_info.rowkey_range, ns_id, segment_info.delta_id, wbs);
 
@@ -1213,10 +1208,10 @@ SegmentPtr Segment::replaceData(const Segment::Lock & lock, //
 
 // TODO: avoid duplicate code
 SegmentPtr Segment::dangerouslyReplaceData2(const Segment::Lock &, //
-                                           DMContext & dm_context,
-                                           const DMFilePtr & data_file,
-                                           WriteBatches & wbs,
-                                           const ColumnFilePersisteds & column_file_persisteds) const
+                                            DMContext & dm_context,
+                                            const DMFilePtr & data_file,
+                                            WriteBatches & wbs,
+                                            const ColumnFilePersisteds & column_file_persisteds) const
 {
     LOG_DEBUG(log, "ReplaceData - Begin, data_file={}", data_file->path());
 
@@ -1241,7 +1236,8 @@ SegmentPtr Segment::dangerouslyReplaceData2(const Segment::Lock &, //
     new_stable->saveMeta(wbs.meta);
 
     auto new_delta = std::make_shared<DeltaValueSpace>(
-        delta->getId(), column_file_persisteds);
+        delta->getId(),
+        column_file_persisteds);
     new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>( //

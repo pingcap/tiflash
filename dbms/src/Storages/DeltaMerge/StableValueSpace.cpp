@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFileWriterRemote.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -25,9 +26,9 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/universal/Readers.h>
-#include <Storages/Transaction/TMTContext.cpp>
-#include <Storages/DeltaMerge/File/DMFileWriterRemote.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -411,7 +412,7 @@ SnapshotPtr StableValueSpace::createSnapshot(const Context & db_context, TableID
         auto column_cache = std::make_shared<ColumnCache>();
         snap->column_caches.emplace_back(column_cache);
     }
-    for (const auto & dmfile: files)
+    for (const auto & dmfile : files)
     {
         if (dmfile->isRemote())
         {

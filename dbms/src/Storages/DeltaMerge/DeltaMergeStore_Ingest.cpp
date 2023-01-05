@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Poco/Path.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Poco/Path.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -1009,10 +1009,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
-    LOG_INFO(log, "Ingest checkpoint with manifest path {} data dir {} from store {}",
-             checkpoint_info.checkpoint_manifest_path,
-             checkpoint_info.checkpoint_data_dir,
-             checkpoint_info.checkpoint_store_id);
+    LOG_INFO(log, "Ingest checkpoint with manifest path {} data dir {} from store {}", checkpoint_info.checkpoint_manifest_path, checkpoint_info.checkpoint_data_dir, checkpoint_info.checkpoint_store_id);
 
     auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, temp_ps);
     WriteBatches wbs{dm_context->storage_pool};
@@ -1035,7 +1032,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
 
-    for (auto & segment: restored_segments)
+    for (auto & segment : restored_segments)
     {
         auto delta = segment->getDelta();
         auto stable = segment->getStable();

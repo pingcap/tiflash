@@ -20,9 +20,10 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/WriteBatch.h>
-#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/WriteBatch.h>
+
+#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 
 namespace DB
 {
@@ -181,7 +182,7 @@ public:
                 auto column_cache = std::make_shared<ColumnCache>();
                 c->column_caches.emplace_back(column_cache);
             }
-            for (const auto & dmfile: dm_files)
+            for (const auto & dmfile : dm_files)
             {
                 c->dm_files.push_back(dmfile);
             }

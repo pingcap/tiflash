@@ -119,7 +119,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
         ns_id,
         wbs);
     ColumnFilePersisteds new_column_files;
-    for (auto & column_file: column_files)
+    for (auto & column_file : column_files)
     {
         if (auto * t = column_file->tryToTinyFile(); t)
         {
