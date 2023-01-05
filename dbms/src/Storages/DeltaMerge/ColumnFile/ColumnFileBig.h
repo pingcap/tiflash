@@ -24,13 +24,13 @@ namespace PS::V3
 {
 class CheckpointPageManager;
 using CheckpointPageManagerPtr = std::shared_ptr<CheckpointPageManager>;
-}
+} // namespace PS::V3
 namespace DM
 {
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class ColumnFileBig;
-using ColumnBigFilePtr = std::shared_ptr<ColumnFileBig>;
+using ColumnFileBigPtr = std::shared_ptr<ColumnFileBig>;
 
 /// A column file which contains a DMFile. The DMFile could have many Blocks.
 class ColumnFileBig : public ColumnFilePersisted
@@ -41,6 +41,9 @@ private:
     DMFilePtr file;
     size_t valid_rows = 0;
     size_t valid_bytes = 0;
+
+    // just for unit test on WN
+    mutable ColumnFileBigPtr remote_dm_file;
 
     RowKeyRange segment_range;
 
@@ -59,7 +62,7 @@ public:
 
     ColumnFileBig(const ColumnFileBig &) = default;
 
-    ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
+    ColumnFileBigPtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
         auto * new_column_file = new ColumnFileBig(*this);
         new_column_file->file = new_file;
@@ -98,12 +101,12 @@ public:
                                                       ReadBuffer & buf);
 
     static ColumnFilePersistedPtr deserializeMetadataFromRemote(DMContext & context, //
-                                                      const RowKeyRange & segment_range,
-                                                      ReadBuffer & buf,
-                                                    const PS::V3::CheckpointPageManagerPtr & manager,
-                                                    UInt64 checkpoint_store_id,
-                                                    TableID ns_id,
-                                                    WriteBatches & wbs);
+                                                                const RowKeyRange & segment_range,
+                                                                ReadBuffer & buf,
+                                                                UniversalPageStoragePtr temp_ps,
+                                                                UInt64 checkpoint_store_id,
+                                                                TableID ns_id,
+                                                                WriteBatches & wbs);
 
     dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
     {

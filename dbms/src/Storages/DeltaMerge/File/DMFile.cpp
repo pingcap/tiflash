@@ -143,33 +143,6 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
-DMFilePtr DMFile::createByLink(
-    const FileProviderPtr & file_provider,
-    UInt64 target_file_id,
-    UInt64 new_file_id,
-    const String & parent_path)
-{
-    String src_path = getPathByStatus(parent_path, target_file_id, DMFile::Status::READABLE);
-    auto poco_file = Poco::File(src_path);
-    RUNTIME_CHECK_MSG(poco_file.exists(), fmt::format("Cannot file file in {}", src_path));
-
-    // FIXME: use link instead of copy and make sure the link semantics match expectation
-    String target_path = getPathByStatus(parent_path, new_file_id, DMFile::Status::READABLE);
-    poco_file.copyTo(target_path);
-
-    DMFilePtr dmfile(new DMFile(
-        new_file_id,
-        new_file_id,
-        parent_path,
-        Mode::FOLDER,
-        Status::READABLE,
-        &Poco::Logger::get("DMFile")));
-    dmfile->readConfiguration(file_provider);
-    dmfile->readMetadata(file_provider, ReadMetaMode::all());
-
-    return dmfile;
-}
-
 DMFilePtr DMFile::restore(
     const FileProviderPtr & file_provider,
     UInt64 file_id,
@@ -636,6 +609,30 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         readPackStat(file_provider, footer.meta_pack_info);
 }
 
+void DMFile::finalizeForRemote(const FileProviderPtr & file_provider)
+{
+    if (unlikely(status != Status::WRITING))
+        throw Exception("Expected WRITING status, now " + statusString(status));
+    Poco::File old_file(path());
+    setStatus(Status::READABLE);
+    auto new_path = path();
+
+    Poco::File file(new_path);
+    if (file.exists())
+    {
+        LOG_WARNING(log, "Existing dmfile, removing: {}", new_path);
+        const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
+        // no need to delete the encryption info associated with the dmfile path here.
+        // because this dmfile path is still a valid path and no obsolete encryption info will be left.
+        file.renameTo(deleted_path);
+        file.remove(true);
+        LOG_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
+    }
+    old_file.renameTo(new_path);
+    readConfiguration(file_provider);
+    readMetadata(file_provider, ReadMetaMode::all());
+}
+
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
     if (STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 && !configuration)
@@ -804,9 +801,27 @@ void DMFile::enableGC()
         ngc_file.remove();
 }
 
-void DMFile::disableGC()
+String DMFile::remotePath() const
 {
-    PageUtil::touchFile(ngcPath());
+    return getPathByStatus(parent_path, file_id, status) + "/REMOTE";
+}
+
+
+void DMFile::clearRemote()
+{
+    Poco::File remote_file(remotePath());
+    if (remote_file.exists())
+        remote_file.remove();
+}
+
+void DMFile::setRemote()
+{
+    PageUtil::touchFile(remotePath());
+}
+
+bool DMFile::isRemote()
+{
+    return Poco::File(remotePath()).exists();
 }
 
 void DMFile::remove(const FileProviderPtr & file_provider)

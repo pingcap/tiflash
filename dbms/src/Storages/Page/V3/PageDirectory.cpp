@@ -1287,13 +1287,16 @@ typename Trait::PageIdSet PageDirectory<Trait>::getRangePageIds(const typename T
     typename Trait::PageIdSet page_ids;
 
     std::shared_lock read_lock(table_rw_mutex);
+    const auto seq = sequence.load();
     for (auto iter = mvcc_table_directory.lower_bound(start);
          iter != mvcc_table_directory.end();
          ++iter)
     {
         if (!Trait::ExternalIdTrait::isInvalidPageId(end) && iter->first >= end)
             break;
-        page_ids.insert(iter->first);
+        // Only return the page_id that is visible
+        if (iter->second->isVisible(seq))
+            page_ids.insert(iter->first);
     }
     return page_ids;
 }
@@ -1809,8 +1812,10 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     if (has_new_data)
     {
         // Copy back the remote info to the current PageStorage. New remote infos are attached in `writeEditsAndApplyRemoteInfo`.
-        // As a snapshot is kept, we expect there should be no missing page.
-        copyRemoteInfoFromEdit(edit_from_mem, /* allow_missing */ false);
+        // Snapshot cannot prevent obsolete entries from being deleted.
+        // For example, if there is a `Put 1` with sequence 10, `Del 1` with sequence 11,
+        // and the snapshot sequence is 12, Page with id 1 may be deleted by the gc process.
+        copyRemoteInfoFromEdit(edit_from_mem, /* allow_missing */ true);
     }
 
     // NOTE: The following IO may be very slow, because the output directory should be mounted as S3.
@@ -1821,13 +1826,13 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     RUNTIME_CHECK(data_file.exists());
 
     if (has_new_data)
-        data_file.moveTo(data_file_path);
+        data_file.renameTo(data_file_path);
     else
         data_file.remove();
 
     auto manifest_file = Poco::File{manifest_file_path_temp};
     RUNTIME_CHECK(manifest_file.exists());
-    manifest_file.moveTo(manifest_file_path);
+    manifest_file.renameTo(manifest_file_path);
 
     last_checkpoint_sequence = snap->sequence;
     LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);

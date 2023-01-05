@@ -171,9 +171,9 @@ void GRPCPagesReceiverContext::finishTaskReceive(const DM::RemoteSegmentReadTask
     remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::AllReady, false);
 }
 
-void GRPCPagesReceiverContext::finishAllReceivingTasks()
+void GRPCPagesReceiverContext::finishAllReceivingTasks(const String & err_msg)
 {
-    remote_read_tasks->allDataReceive();
+    remote_read_tasks->allDataReceive(err_msg);
 }
 
 void GRPCPagesReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr /*log*/)

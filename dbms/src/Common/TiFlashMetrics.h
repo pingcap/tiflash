@@ -90,6 +90,13 @@ namespace DB
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                             \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                 \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                           \
+    M(tiflash_disaggregated_breakdown_duration_seconds, "", Histogram,                                                                      \
+        F(type_establish, {{"type", "establish"}}, ExpBuckets{0.001, 2, 20}),   \
+        F(type_build_task, {{"type", "build_task"}}, ExpBuckets{0.001, 2, 20}), \
+        F(type_fetch_page, {{"type", "fetch_page"}}, ExpBuckets{0.001, 2, 20})) \
+    M(tiflash_disaggregated_details, "", Counter,                                                                                         \
+        F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                   \
+        F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                 \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \

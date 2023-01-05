@@ -67,10 +67,12 @@ public:
         SegmentReadTaskState target_state,
         bool meet_error);
 
-    void allDataReceive();
+    void allDataReceive(const String & end_err_msg);
 
     // Return a segment read task that is ready for reading.
     RemoteSegmentReadTaskPtr nextReadyTask();
+
+    const String & getErrorMessage() const;
 
     friend class tests::RemoteReadTaskTest;
 
@@ -90,9 +92,10 @@ private:
     std::unordered_map<UInt64, RemoteTableReadTaskPtr>::iterator curr_store;
 
     // A task pool for segment tasks
-    // The tasks are sorted by the ready state of segments
-    std::mutex mtx_ready_tasks;
+    // The tasks are sorted by the ready state of segment tasks
+    mutable std::mutex mtx_ready_tasks;
     std::condition_variable cv_ready_tasks;
+    String err_msg;
     std::map<SegmentReadTaskState, std::list<RemoteSegmentReadTaskPtr>> ready_segment_tasks;
 };
 
@@ -176,6 +179,8 @@ public:
     // The page ids that is absent from local cache
     const std::vector<UInt64> & pendingPageIds() const { return pending_page_ids; }
 
+    size_t totalCFTinys() const { return total_num_cftiny; }
+
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
     BlockInputStreamPtr getInputStream(
@@ -234,6 +239,7 @@ private:
 
     // The page ids need to fetch from write node
     std::vector<UInt64> pending_page_ids;
+    size_t total_num_cftiny;
 
 public:
     std::atomic<size_t> num_msg_to_consume;

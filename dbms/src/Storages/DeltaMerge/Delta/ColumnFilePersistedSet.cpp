@@ -98,7 +98,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
 
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
     DMContext & context,
-    const PS::V3::CheckpointPageManagerPtr & manager,
+    UniversalPageStoragePtr temp_ps,
     const PS::V3::CheckpointInfo & checkpoint_info,
     const RowKeyRange & segment_range,
     NamespaceId ns_id,
@@ -107,26 +107,35 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
 {
     auto & storage_pool = context.storage_pool;
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, id);
-    auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
-    LOG_DEBUG(&Poco::Logger::get("ColumnFilePersistedSet"), "checkpoint delta id {} buffer size {}", id, buf_size);
+    auto meta_page = temp_ps->read(target_id);
+    RUNTIME_CHECK(meta_page.isValid());
+    ReadBufferFromMemory buf(meta_page.data.begin(), meta_page.data.size());
     auto column_files = deserializeSavedRemoteColumnFiles(
         context,
         segment_range,
-        *buf,
-        manager,
+        buf,
+        temp_ps,
         checkpoint_info.checkpoint_store_id,
         ns_id,
         wbs);
-    RUNTIME_CHECK(buf->count() == buf_size);
     ColumnFilePersisteds new_column_files;
-    for (auto & column_file: column_files)
+    for (auto & column_file : column_files)
     {
         if (auto * t = column_file->tryToTinyFile(); t)
         {
             auto target_cf_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Log), ns_id, t->getDataPageId());
-            auto [cf_buf, cf_buf_size, field_sizes] = manager->getReadBuffer(target_cf_id).value();
+            auto cf_page = temp_ps->read(target_cf_id);
+            RUNTIME_CHECK(cf_page.isValid());
+            MemoryWriteBuffer cf_buf(0, cf_page.data.size());
+            cf_buf.write(cf_page.data.begin(), cf_page.data.size());
             auto new_cf_id = storage_pool->newLogPageId();
-            wbs.log.putPage(new_cf_id, 0, cf_buf, cf_buf_size, field_sizes);
+
+            PageFieldSizes field_sizes;
+            for (size_t i = 0; i < cf_page.fieldSize(); i++)
+            {
+                field_sizes.push_back(cf_page.getFieldData(i).size());
+            }
+            wbs.log.putPage(new_cf_id, 0, cf_buf.tryGetReadBuffer(), cf_page.data.size(), field_sizes);
             new_column_files.push_back(t->cloneWith(new_cf_id));
         }
         else if (auto * d = column_file->tryToDeleteRange(); d)
@@ -138,7 +147,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
             auto old_page_id = b->getDataPageId();
             auto old_file_id = b->getFile()->fileId();
             auto delegator = context.path_pool->getStableDiskDelegator();
-            auto parent_path = delegator.getDTFilePath(old_file_id);;
+            auto parent_path = delegator.getDTFilePath(old_file_id);
             auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), old_file_id, new_file_id, parent_path, DMFile::ReadMetaMode::all());
             wbs.data.putRefPage(new_file_id, old_page_id);

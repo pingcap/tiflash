@@ -106,6 +106,7 @@ public:
 
     void ingestSegmentFromCheckpointPath(
         const DM::RowKeyRange & range,
+        UniversalPageStoragePtr temp_ps,
         const PS::V3::CheckpointInfo & checkpoint_info,
         const Settings & settings);
 

@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Disaggregated/PageReceiver.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -87,8 +88,12 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
             auto task = read_tasks->nextReadyTask();
             if (!task)
             {
-                // There is no task left
+                // There is no task left or error happen
                 done = true;
+                if (!read_tasks->getErrorMessage().empty())
+                {
+                    throw Exception(read_tasks->getErrorMessage(), ErrorCodes::LOGICAL_ERROR);
+                }
                 LOG_DEBUG(log, "Read from remote segment done");
                 return {};
             }

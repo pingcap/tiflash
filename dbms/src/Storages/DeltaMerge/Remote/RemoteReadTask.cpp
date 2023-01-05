@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/ThreadPool.h>
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <IO/IOThreadPool.h>
@@ -34,6 +35,8 @@ namespace DB::DM
 RemoteReadTask::RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_)
     : num_segments(0)
 {
+    size_t total_num_cftiny = 0;
+    size_t total_num_cftiny_to_fetch = 0;
     for (const auto & table_task : tasks_)
     {
         if (!table_task)
@@ -50,6 +53,8 @@ RemoteReadTask::RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_)
             // blocks on write node's mem-table, then we
             // can simply skip the fetch page pharse and
             // push it into ready queue
+            total_num_cftiny += task->totalCFTinys();
+            total_num_cftiny_to_fetch += task->pendingPageIds().size();
 
             if (auto iter = ready_segment_tasks.find(task->state); iter != ready_segment_tasks.end())
             {
@@ -62,6 +67,13 @@ RemoteReadTask::RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_)
         }
     }
     curr_store = tasks.begin();
+
+    LOG_INFO(
+        Logger::get(),
+        "read task local cache hit rate: {}",
+        total_num_cftiny == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * total_num_cftiny_to_fetch / total_num_cftiny));
+    GET_METRIC(tiflash_disaggregated_details, type_cftiny_read).Increment(total_num_cftiny);
+    GET_METRIC(tiflash_disaggregated_details, type_cftiny_fetch).Increment(total_num_cftiny_to_fetch);
 }
 
 size_t RemoteReadTask::numSegments() const
@@ -130,10 +142,14 @@ void RemoteReadTask::updateTaskState(const RemoteSegmentReadTaskPtr & seg_task, 
     cv_ready_tasks.notify_one();
 }
 
-void RemoteReadTask::allDataReceive()
+void RemoteReadTask::allDataReceive(const String & end_err_msg)
 {
     {
         std::unique_lock ready_lock(mtx_ready_tasks);
+        // set up the error message
+        if (err_msg.empty() && !end_err_msg.empty())
+            err_msg = end_err_msg;
+
         if (auto state_iter = ready_segment_tasks.find(SegmentReadTaskState::AllReady);
             state_iter == ready_segment_tasks.end())
         {
@@ -208,6 +224,12 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
     return seg_task;
 }
 
+const String & RemoteReadTask::getErrorMessage() const
+{
+    std::unique_lock ready_lock(mtx_ready_tasks);
+    return err_msg;
+}
+
 bool RemoteReadTask::doneOrErrorHappen() const
 {
     // All finished
@@ -248,11 +270,7 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
         auto task = std::make_shared<std::packaged_task<RemoteSegmentReadTaskPtr()>>([&, idx, size] {
             Stopwatch watch;
             SCOPE_EXIT({
-                LOG_DEBUG(log, "Build RemoteSegmentReadTask finished, elapsed={}s task_idx={} task_total={} segment_id={}",
-                          watch.elapsedSeconds(),
-                          idx,
-                          size,
-                          remote_seg.segment_id());
+                LOG_DEBUG(log, "Build RemoteSegmentReadTask finished, elapsed={}s task_idx={} task_total={} segment_id={}", watch.elapsedSeconds(), idx, size, remote_seg.segment_id());
             });
 
             return RemoteSegmentReadTask::buildFrom(
@@ -292,6 +310,7 @@ RemoteSegmentReadTask::RemoteSegmentReadTask(
     , table_id(table_id_)
     , segment_id(segment_id_)
     , address(std::move(address_))
+    , total_num_cftiny(0)
     , num_msg_to_consume(0)
     , num_msg_consumed(0)
 {
@@ -356,6 +375,7 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
                     .page_id = tiny->getDataPageId(),
                 };
                 all_persisted_ids.emplace_back(page_oid);
+                task->total_num_cftiny += 1;
             }
         }
 

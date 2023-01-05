@@ -28,9 +28,8 @@
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
-#include <Storages/Page/universal/UniversalPageStorage.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -2999,7 +2998,8 @@ try
         kvstore->setStore(store);
     }
 
-    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), info);
+    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, info.checkpoint_manifest_path, info.checkpoint_data_dir);
+    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), local_ps, info);
 
     {
         const auto & columns = store->getTableColumns();
@@ -3073,7 +3073,7 @@ try
     {
         ASSERT_GT(store->getSegmentsStats().size(), 1);
     }
-//    store->mergeDeltaAll(*db_context);
+    //    store->mergeDeltaAll(*db_context);
 
     // dump checkpoint
     auto page_storage = db_context->getWriteNodePageStorage();
@@ -3163,8 +3163,8 @@ try
         kvstore->setStore(store);
     }
 
-    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)), info);
-
+    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, info.checkpoint_manifest_path, info.checkpoint_data_dir);
+    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)), local_ps, info);
     {
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(*db_context,
@@ -3181,7 +3181,7 @@ try
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write / 2);
     }
 
-    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)), info);
+    store->ingestSegmentFromCheckpointPath(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)), local_ps, info);
     {
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(*db_context,

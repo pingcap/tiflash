@@ -1,125 +1,70 @@
 #include <algorithm>
 
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 
 namespace DB::PS::V3
 {
+using PS::V3::CheckpointManifestFileReader;
+using PS::V3::universal::PageDirectoryTrait;
 
-std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> CheckpointPageManager::getAllPageWithPrefix(const String & prefix) const
+static std::atomic<int64_t> local_ps_num = 0;
+
+UniversalPageStoragePtr CheckpointPageManager::createTempPageStorage(Context & context, const String & checkpoint_manifest_path, const String & data_dir)
 {
-    std::vector<std::tuple<ReadBufferPtr, size_t, UniversalPageId>> results;
-    auto records = edit.getRecords();
-    auto iter = lower_bound(records.begin(),
-                            records.end(),
-                            prefix,
-                            [](const typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit::EditRecord & record, const String & prefix) {
-                                return record.page_id.toStr() < prefix;
-                            });
-    while (iter != records.end())
+    RUNTIME_CHECK(endsWith(data_dir, "/"));
+    auto file_provider = context.getFileProvider();
+    PageStorageConfig config;
+    auto num = local_ps_num.fetch_add(1, std::memory_order_relaxed);
+    auto local_ps = UniversalPageStorage::create( //
+        "local",
+        context.getPathPool().getPSDiskDelegatorGlobalMulti(fmt::format("local_{}", num)),
+        config,
+        file_provider);
+    local_ps->restore();
+
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{
+        .file_path = checkpoint_manifest_path
+    });
+    auto t_edit = reader->read();
+    const auto & records = t_edit.getRecords();
+    UniversalWriteBatch wb;
+    // insert delete records at last
+    PageEntriesEdit<UniversalPageId>::EditRecords delete_records;
+    for (const auto & record: records)
     {
-        auto & record = *iter;
-        if (startsWith(record.page_id.toStr(), prefix))
+        if (record.type == EditRecordType::VAR_ENTRY)
         {
-            assert(record.ori_page_id.empty());
             const auto & location = record.entry.remote_info->data_location;
-            auto buf = std::make_shared<ReadBufferFromFile>(checkpoint_data_dir + *location.data_file_id);
+            auto buf = std::make_shared<ReadBufferFromFile>(data_dir + *location.data_file_id);
             buf->seek(location.offset_in_file);
-            results.emplace_back(std::move(buf), location.size_in_file, record.page_id);
-            iter++;
+            wb.putPage(record.page_id, record.entry.tag, buf, location.size_in_file, Page::fieldOffsetsToSizes(record.entry.field_offsets, location.size_in_file));
+        }
+        else if (record.type == EditRecordType::VAR_REF)
+        {
+            wb.putRefPage(record.page_id, record.ori_page_id);
+        }
+        else if (record.type == EditRecordType::VAR_DELETE)
+        {
+            delete_records.emplace_back(record);
+        }
+        else if (record.type == EditRecordType::VAR_EXTERNAL)
+        {
+            wb.putExternal(record.page_id, record.entry.tag);
         }
         else
         {
-            break;
+            RUNTIME_CHECK_MSG(false, fmt::format("Unknown record type {}", typeToString(record.type)));
         }
     }
-    return results;
-}
-
-std::optional<typename PS::V3::universal::PageDirectoryTrait::EditRecord> CheckpointPageManager::findPageRecord(const UniversalPageId & page_id) const
-{
-    UniversalPageId target_id = page_id;
-    const auto & records = edit.getRecords();
-    while (true)
+    local_ps->write(std::move(wb));
+    UniversalWriteBatch delete_wb;
+    for (const auto & record: delete_records)
     {
-        if (auto iter = lower_bound(records.begin(),
-                                    records.end(),
-                                    target_id,
-                                    [](const typename PS::V3::universal::PageDirectoryTrait::PageEntriesEdit::EditRecord & record, const UniversalPageId & id) {
-                                        return record.page_id < id;
-                                    }); iter != records.end())
-        {
-            auto record = *iter;
-            if (record.page_id == target_id)
-            {
-                if (record.ori_page_id.empty())
-                {
-                    return record;
-                }
-                else
-                {
-                    target_id = record.ori_page_id;
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
-        else
-        {
-            break;
-        }
+        RUNTIME_CHECK(record.type == EditRecordType::VAR_DELETE);
+        delete_wb.delPage(record.page_id);
     }
-    return std::nullopt;
-}
-
-std::optional<UniversalPageId> CheckpointPageManager::getNormalPageId(const UniversalPageId & page_id, bool ignore_if_not_exist) const
-{
-    auto maybe_record = findPageRecord(page_id);
-    if (maybe_record.has_value())
-    {
-        auto & record = maybe_record.value();
-        return record.page_id;
-    }
-    else if (!ignore_if_not_exist)
-    {
-        RUNTIME_CHECK_MSG(false, "Cannot find page id {}", page_id);
-    }
-    else
-    {
-        return std::nullopt;
-    }
-}
-
-// buf, size, size of each fields
-std::optional<std::tuple<ReadBufferPtr, size_t, PageFieldSizes>> CheckpointPageManager::getReadBuffer(const UniversalPageId & page_id, bool ignore_if_not_exist) const
-{
-    PageFieldSizes field_sizes;
-
-    auto maybe_record = findPageRecord(page_id);
-    if (maybe_record.has_value())
-    {
-        auto & record = maybe_record.value();
-        const auto & location = record.entry.remote_info->data_location;
-        auto buf = std::make_shared<ReadBufferFromFile>(checkpoint_data_dir + *location.data_file_id);
-        buf->seek(location.offset_in_file);
-        const auto & field_offsets = record.entry.field_offsets;
-        for (size_t i = 0; i < field_offsets.size(); i++)
-        {
-            if (i == field_offsets.size() - 1)
-                field_sizes.push_back(location.size_in_file - field_offsets.back().first);
-            else
-                field_sizes.push_back(field_offsets[i + 1].first - field_offsets[i].first);
-        }
-        return std::make_tuple(std::move(buf), location.size_in_file, field_sizes);
-    }
-    else if (!ignore_if_not_exist)
-    {
-        RUNTIME_CHECK_MSG(false, "Cannot find page id {}", page_id);
-    }
-    else
-    {
-        return std::nullopt;
-    }
+    local_ps->write(std::move(delete_wb));
+    return local_ps;
 }
 }

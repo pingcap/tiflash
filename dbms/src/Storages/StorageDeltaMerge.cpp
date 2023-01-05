@@ -894,6 +894,7 @@ void StorageDeltaMerge::ingestFiles(
 
 void StorageDeltaMerge::ingestSegmentFromCheckpointPath( //
     const DM::RowKeyRange & range,
+    UniversalPageStoragePtr temp_ps,
     const PS::V3::CheckpointInfo & checkpoint_info,
     const Settings & settings)
 {
@@ -902,6 +903,7 @@ void StorageDeltaMerge::ingestSegmentFromCheckpointPath( //
         global_context,
         settings,
         range,
+        temp_ps,
         checkpoint_info);
 }
 
