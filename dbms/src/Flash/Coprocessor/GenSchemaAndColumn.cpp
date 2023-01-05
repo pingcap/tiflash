@@ -72,7 +72,7 @@ NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef
             names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
             break;
         default:
-            names_and_types.emplace_back(fmt::format("{}_{}", column_prefix, i), getDataTypeByColumnInfoForComputingLayer(column_info));
+            names_and_types.emplace_back(column_info.name.empty() ? fmt::format("{}_{}", column_prefix, i) : column_info.name, getDataTypeByColumnInfoForComputingLayer(column_info));
         }
     }
     return names_and_types;
