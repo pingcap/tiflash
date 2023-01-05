@@ -176,7 +176,7 @@ private:
 
     struct ParallelMergeData
     {
-        std::map<Int32, Block> ready_blocks;
+        std::map<Int32, Blocks> ready_blocks;
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
@@ -206,7 +206,7 @@ private:
 
             auto & merged_data = *data[0];
             auto method = merged_data.type;
-            Block block;
+            Blocks blocks;
 
             /// Select Arena to avoid race conditions
             size_t thread_number = static_cast<size_t>(bucket_num) % threads;
@@ -216,7 +216,7 @@ private:
     case AggregationMethodType(NAME):                                                     \
     {                                                                                     \
         aggregator.mergeBucketImpl<AggregationMethodName(NAME)>(data, bucket_num, arena); \
-        block = aggregator.convertOneBucketToBlock(                                       \
+        blocks = aggregator.convertOneBucketToBlock(                                      \
             merged_data,                                                                  \
             *ToAggregationMethodPtr(NAME, merged_data.aggregation_method_impl),           \
             arena,                                                                        \
@@ -233,7 +233,7 @@ private:
 #undef M
 
             std::lock_guard lock(parallel_merge_data->mutex);
-            parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
+            parallel_merge_data->ready_blocks[bucket_num] = std::move(blocks);
         }
         catch (...)
         {

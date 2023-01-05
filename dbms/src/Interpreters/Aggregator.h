@@ -932,6 +932,8 @@ public:
 
         const std::string tmp_path;
 
+        UInt64 max_block_size;
+
         TiDB::TiDBCollators collators;
 
         Params(
@@ -946,6 +948,7 @@ public:
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
             const std::string & tmp_path_,
+            UInt64 max_block_size_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
@@ -960,6 +963,7 @@ public:
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
             , tmp_path(tmp_path_)
+            , max_block_size(max_block_size_)
             , collators(collators_)
         {
         }
@@ -970,7 +974,7 @@ public:
                const AggregateDescriptions & aggregates_,
                bool overflow_row_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", 0, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1212,9 +1216,9 @@ protected:
     void convertToBlockImpl(
         Method & method,
         Table & data,
-        MutableColumns & key_columns,
-        AggregateColumnsData & aggregate_columns,
-        MutableColumns & final_aggregate_columns,
+        std::vector<MutableColumns> & key_columns_vec,
+        std::vector<AggregateColumnsData> & aggregate_columns_vec,
+        std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena,
         bool final) const;
 
@@ -1222,8 +1226,8 @@ protected:
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
-        std::vector<IColumn *> key_columns,
-        MutableColumns & final_aggregate_columns,
+        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
     template <typename Method, typename Table>
@@ -1234,14 +1238,14 @@ protected:
         AggregateColumnsData & aggregate_columns) const;
 
     template <typename Filler>
-    Block prepareBlockAndFill(
+    BlocksList prepareBlockAndFill(
         AggregatedDataVariants & data_variants,
         bool final,
         size_t rows,
         Filler && filler) const;
 
     template <typename Method>
-    Block convertOneBucketToBlock(
+    BlocksList convertOneBucketToBlock(
         AggregatedDataVariants & data_variants,
         Method & method,
         Arena * arena,
@@ -1261,7 +1265,7 @@ protected:
         AggregateFunctionInstructions & instructions);
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
-    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    Blocks prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillTwoLevel(
         AggregatedDataVariants & data_variants,
         bool final,
