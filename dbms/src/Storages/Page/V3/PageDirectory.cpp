@@ -1287,13 +1287,16 @@ typename Trait::PageIdSet PageDirectory<Trait>::getRangePageIds(const typename T
     typename Trait::PageIdSet page_ids;
 
     std::shared_lock read_lock(table_rw_mutex);
+    const auto seq = sequence.load();
     for (auto iter = mvcc_table_directory.lower_bound(start);
          iter != mvcc_table_directory.end();
          ++iter)
     {
         if (!Trait::ExternalIdTrait::isInvalidPageId(end) && iter->first >= end)
             break;
-        page_ids.insert(iter->first);
+        // Only return the page_id that is visible
+        if (iter->second->isVisible(seq))
+            page_ids.insert(iter->first);
     }
     return page_ids;
 }
