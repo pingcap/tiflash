@@ -46,33 +46,27 @@ OperatorPipelinePtr OperatorPipelineBuilder::build()
         std::move(sink));
 }
 
-void OperatorPipelineGroupBuilder::addGroup(size_t concurrency)
+void OperatorPipelineGroupBuilder::init(size_t init_concurrency)
 {
-    assert(concurrency > 0);
-    max_concurrency_in_groups = std::max(max_concurrency_in_groups, concurrency);
-    BuilderGroup group;
+    assert(concurrency == 0);
+    assert(init_concurrency > 0);
+    concurrency = init_concurrency;
     group.resize(concurrency);
-    groups.push_back(std::move(group));
 }
 
-OperatorPipelineGroups OperatorPipelineGroupBuilder::build()
+OperatorPipelineGroup OperatorPipelineGroupBuilder::build()
 {
-    assert(max_concurrency_in_groups > 0);
-    OperatorPipelineGroups op_pipeline_groups;
-    for (auto & group : groups)
-    {
-        OperatorPipelineGroup op_pipeline_group;
-        for (auto & builder : group)
-            op_pipeline_group.push_back(builder.build());
-        op_pipeline_groups.push_back(std::move(op_pipeline_group));
-    }
-    return op_pipeline_groups;
+    assert(concurrency > 0);
+    OperatorPipelineGroup op_pipeline_group;
+    for (auto & builder : group)
+        op_pipeline_group.push_back(builder.build());
+    return op_pipeline_group;
 }
 
 Block OperatorPipelineGroupBuilder::getHeader()
 {
-    assert(max_concurrency_in_groups > 0);
-    assert(groups.back().back().header);
-    return groups.back().back().header;
+    assert(concurrency > 0);
+    assert(group.back().header);
+    return group.back().header;
 }
 } // namespace DB

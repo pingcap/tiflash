@@ -72,7 +72,7 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
     plans.push_front(get_result_sink);
 }
 
-OperatorPipelineGroups Pipeline::transform(Context & context, size_t concurrency)
+OperatorPipelineGroup Pipeline::transform(Context & context, size_t concurrency)
 {
     assert(!plans.empty());
     OperatorPipelineGroupBuilder builder;

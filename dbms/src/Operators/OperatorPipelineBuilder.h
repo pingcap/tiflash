@@ -37,28 +37,24 @@ struct OperatorPipelineGroupBuilder
 {
     // A Group generates a set of operator pipelines running in parallel.
     using BuilderGroup = std::vector<OperatorPipelineBuilder>;
-    // A BuildGroup represents a partition of fine-grained shuffle.
-    std::vector<BuilderGroup> groups;
+    BuilderGroup group;
 
-    size_t max_concurrency_in_groups = 0;
+    size_t concurrency = 0;
 
-    void addGroup(size_t concurrency);
+    void init(size_t init_concurrency);
 
     /// ff: [](OperatorPipelineBuilder & builder) {}
     template <typename FF>
     void transform(FF && ff)
     {
-        assert(max_concurrency_in_groups > 0);
-        for (auto & group : groups)
+        assert(concurrency > 0);
+        for (auto & builder : group)
         {
-            for (auto & builder : group)
-            {
-                ff(builder);
-            }
+            ff(builder);
         }
     }
 
-    OperatorPipelineGroups build();
+    OperatorPipelineGroup build();
 
     Block getHeader();
 };

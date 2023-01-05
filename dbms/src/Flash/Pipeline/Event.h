@@ -46,9 +46,11 @@ public:
 
     void addDependency(const EventPtr & dependency);
 
-    void schedule();
+    // schedule, finishTask and finish maybe called directly in TaskScheduler,
+    // so these functions must be noexcept.
+    void schedule() noexcept;
 
-    void finishTask();
+    void finishTask() noexcept;
 
     bool isNonDependent();
 
@@ -72,7 +74,7 @@ protected:
     void scheduleTask(std::vector<TaskPtr> & tasks);
 
 private:
-    void finish();
+    void finish() noexcept;
 
     void addNext(const EventPtr & next);
 

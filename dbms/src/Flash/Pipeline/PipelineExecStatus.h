@@ -46,7 +46,10 @@ public:
             is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_event_count; });
         }
         if (is_timeout)
+        {
             toError(timeout_err_msg);
+            throw Exception(timeout_err_msg);
+        }
     }
 
     void completeEvent();

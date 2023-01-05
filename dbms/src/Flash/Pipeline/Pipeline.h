@@ -52,7 +52,7 @@ public:
     // only used for test.
     void addGetResultSink(ResultHandler result_handler);
 
-    OperatorPipelineGroups transform(Context & context, size_t concurrency);
+    OperatorPipelineGroup transform(Context & context, size_t concurrency);
 
     Events toEvents(PipelineExecStatus & status, Context & context, size_t concurrency);
 

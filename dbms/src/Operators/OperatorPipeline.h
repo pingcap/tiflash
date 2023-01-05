@@ -67,5 +67,4 @@ private:
 };
 using OperatorPipelinePtr = std::unique_ptr<OperatorPipeline>;
 using OperatorPipelineGroup = std::vector<OperatorPipelinePtr>;
-using OperatorPipelineGroups = std::vector<OperatorPipelineGroup>;
 } // namespace DB

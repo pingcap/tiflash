@@ -20,6 +20,13 @@
 
 namespace DB
 {
+// if any exception throw here, we should pass err msg and cancel the query.
+#define CATCH                                            \
+    catch (...)                                          \
+    {                                                    \
+        toError(getCurrentExceptionMessage(true, true)); \
+    }
+
 void Event::addDependency(const EventPtr & dependency)
 {
     assert(status == EventStatus::INIT);
@@ -47,20 +54,32 @@ void Event::completeDependency()
         schedule();
 }
 
-void Event::schedule()
+void Event::schedule() noexcept
 {
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
     exec_status.addActiveEvent();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    if (scheduleImpl())
+    // if err throw here, we shoud call finish directly.
+    bool direct_finish = true;
+    try
+    {
+        // if no task is scheduled here, we can call finish directly.
+        direct_finish = scheduleImpl();
+    }
+    CATCH
+    if (direct_finish)
         finish();
 }
 
-void Event::finish()
+void Event::finish() noexcept
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    finishImpl();
+    try
+    {
+        finishImpl();
+    }
+    CATCH
     // If query has already been cancelled, it will not trigger the next events.
     if (likely(!isCancelled()))
     {
@@ -72,7 +91,11 @@ void Event::finish()
         }
     }
     next_events.clear();
-    finalizeFinish();
+    try
+    {
+        finalizeFinish();
+    }
+    CATCH
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
     // we have to call `exec_status.completeEvent()` here,
     // since `exec_status.addActiveEvent()` will have been called by the next events.
@@ -89,7 +112,7 @@ void Event::scheduleTask(std::vector<TaskPtr> & tasks)
     TaskScheduler::instance->submit(tasks);
 }
 
-void Event::finishTask()
+void Event::finishTask() noexcept
 {
     assert(status != EventStatus::FINISHED);
     auto cur_value = unfinished_tasks.fetch_sub(1);
@@ -107,4 +130,7 @@ void Event::switchStatus(EventStatus from, EventStatus to)
 {
     RUNTIME_CHECK(status.compare_exchange_strong(from, to));
 }
+
+#undef CATCH
+
 } // namespace DB

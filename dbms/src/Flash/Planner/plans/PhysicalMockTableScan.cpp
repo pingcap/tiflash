@@ -119,7 +119,7 @@ void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*co
 
 void PhysicalMockTableScan::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    group_builder.addGroup(mock_streams.size());
+    group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSource(std::make_unique<BlockInputStreamSource>(mock_streams[i++]));

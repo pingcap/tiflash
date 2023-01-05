@@ -21,12 +21,9 @@ namespace DB
 bool PipelineEvent::scheduleImpl()
 {
     assert(pipeline);
-    auto op_pipeline_groups = pipeline->transform(context, concurrency);
+    auto op_pipeline_group = pipeline->transform(context, concurrency);
     pipeline.reset();
 
-    // Until `fine grained shuffle` is supported, the size of op_pipeline_groups can only be 1.
-    assert(op_pipeline_groups.size() == 1);
-    auto op_pipeline_group = std::move(op_pipeline_groups.back());
     if (op_pipeline_group.empty())
         return true;
 

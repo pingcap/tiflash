@@ -64,8 +64,8 @@ public:
             plan->transform(group_builder, context.context, /*concurrency=*/1);
         });
         auto result = group_builder.build();
-        assert(result.size() == 1 && result.back().size() == 1);
-        return {std::move(plan_tree), std::move(result.back().back())};
+        assert(result.size() == 1);
+        return {std::move(plan_tree), std::move(result.back())};
     }
 
     void executeAndAssert(
