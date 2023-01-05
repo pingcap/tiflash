@@ -47,6 +47,8 @@ class TMTContext;
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 class Block;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 // for debug
 struct MockTiDBTable;
 class RegionRangeKeys;
@@ -305,6 +307,7 @@ struct RegionPtrWithCheckpointInfo
 
     RegionPtrWithCheckpointInfo(
         const Base & base_,
+        UniversalPageStoragePtr && temp_ps_,
         String && checkpoint_manifest_path_,
         String && checkpoint_data_dir_,
         UInt64 checkpoint_store_id_);
@@ -317,6 +320,7 @@ struct RegionPtrWithCheckpointInfo
     operator const Base &() const { return base; }
 
     const Base & base;
+    UniversalPageStoragePtr temp_ps;
     String checkpoint_manifest_path;
     String checkpoint_data_dir;
     UInt64 checkpoint_store_id;

@@ -128,7 +128,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 
 StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     DMContext & context,
-    const PS::V3::CheckpointPageManagerPtr & manager,
+    UniversalPageStoragePtr temp_ps,
     const PS::V3::CheckpointInfo & checkpoint_info,
     TableID ns_id,
     PageId stable_id,
@@ -139,22 +139,24 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     auto stable = std::make_shared<StableValueSpace>(new_stable_id);
 
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
-    auto [buf, buf_size, _] = manager->getReadBuffer(target_id).value();
+    auto page = temp_ps->read(target_id);
+    RUNTIME_CHECK(page.isValid());
+    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
     UInt64 version, valid_rows, valid_bytes, size;
-    readIntBinary(version, *buf);
+    readIntBinary(version, buf);
     if (version != StableFormat::V1)
         throw Exception("Unexpected version: " + DB::toString(version));
 
-    readIntBinary(valid_rows, *buf);
-    readIntBinary(valid_bytes, *buf);
-    readIntBinary(size, *buf);
+    readIntBinary(valid_rows, buf);
+    readIntBinary(valid_bytes, buf);
+    readIntBinary(size, buf);
     UInt64 page_id;
     for (size_t i = 0; i < size; ++i)
     {
-        readIntBinary(page_id, *buf);
+        readIntBinary(page_id, buf);
         auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, page_id);
-        auto remote_orig_file_page_id = manager->getNormalPageId(remote_file_page_id).value();
+        auto remote_orig_file_page_id = temp_ps->getNormalPageId(remote_file_page_id);
         auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
         auto delegator = context.path_pool->getStableDiskDelegator();
         auto new_file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -414,7 +416,6 @@ SnapshotPtr StableValueSpace::createSnapshot(const Context & db_context, TableID
     {
         if (dmfile->isRemote())
         {
-            // Just for unit test on WN, should not be used in real env
             assert(table_id != -1);
             UInt64 store_id = db_context.getTMTContext().getKVStore()->getStoreMeta().id();
             UInt64 file_id = dmfile->fileId();

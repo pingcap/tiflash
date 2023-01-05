@@ -103,7 +103,7 @@ public:
     static ColumnFilePersistedPtr deserializeMetadataFromRemote(DMContext & context, //
                                                                 const RowKeyRange & segment_range,
                                                                 ReadBuffer & buf,
-                                                                const PS::V3::CheckpointPageManagerPtr & manager,
+                                                                UniversalPageStoragePtr temp_ps,
                                                                 UInt64 checkpoint_store_id,
                                                                 TableID ns_id,
                                                                 WriteBatches & wbs);

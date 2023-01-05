@@ -382,7 +382,6 @@ try
 }
 CATCH
 
-// Note: if dump Checkpoint in json format, this test will fail.
 TEST_F(UniPageStorageRemoteCheckpointTest, FindKeyInCheckPoint)
 {
     using namespace PS::V3;
@@ -404,12 +403,8 @@ TEST_F(UniPageStorageRemoteCheckpointTest, FindKeyInCheckPoint)
     UInt64 latest_manifest_sequence = getLatestCheckpointSequence();
     ASSERT_TRUE(latest_manifest_sequence > 0);
     auto checkpoint_path = output_directory + fmt::format("{}.manifest", latest_manifest_sequence);
-    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
-        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_path
-        });
-    auto manager = std::make_shared<CheckpointPageManager>(*reader, output_directory);
-    ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(10, 128)), RaftLogReader::toFullPageId(10, 128));
+    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, checkpoint_path, output_directory);
+    ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(10, 128)), RaftLogReader::toFullPageId(10, 128));
 }
 
 TEST_F(UniPageStorageRemoteCheckpointTest, ScanRaftlogWithPrefix)
@@ -440,19 +435,18 @@ TEST_F(UniPageStorageRemoteCheckpointTest, ScanRaftlogWithPrefix)
     UInt64 latest_manifest_sequence = getLatestCheckpointSequence();
     ASSERT_TRUE(latest_manifest_sequence > 0);
     auto checkpoint_path = output_directory + fmt::format("{}.manifest", latest_manifest_sequence);
-    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
-        CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_path
-        });
-    auto manager = std::make_shared<CheckpointPageManager>(*reader, output_directory);
+    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(DB::tests::TiFlashTestEnv::getGlobalContext(), checkpoint_path, output_directory);
+    RaftLogReader raft_log_reader(*local_ps);
+    std::vector<UniversalPageId> all_raft_log_page_ids;
+    raft_log_reader.traverseRaftLogForRegion(region_id, [&](const UniversalPageId & page_id, const DB::Page & page) {
+        all_raft_log_page_ids.emplace_back(page_id);
+        UNUSED(page);
+    });
     {
-        auto all_raft_log_page = manager->getAllPageWithPrefix(RaftLogReader::toFullRaftLogPrefix(region_id).toStr());
-        ASSERT_EQ(all_raft_log_page.size(), end_index - start_index);
-        UniversalPageId first_page_id, last_page_id;
-        std::tie(std::ignore, std::ignore, first_page_id) = all_raft_log_page[0];
-        std::tie(std::ignore, std::ignore, last_page_id) = all_raft_log_page.back();
-        ASSERT_EQ(first_page_id, RaftLogReader::toFullRaftLogKey(region_id, start_index));
-        ASSERT_EQ(last_page_id, RaftLogReader::toFullRaftLogKey(region_id, end_index - 1));
+        ASSERT_EQ(all_raft_log_page_ids.size(), end_index - start_index);
+        ASSERT_GT(all_raft_log_page_ids.size(), 0);
+        ASSERT_EQ(all_raft_log_page_ids[0], RaftLogReader::toFullRaftLogKey(region_id, start_index));
+        ASSERT_EQ(all_raft_log_page_ids.back(), RaftLogReader::toFullRaftLogKey(region_id, end_index - 1));
     }
 }
 

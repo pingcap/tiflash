@@ -171,6 +171,19 @@ public:
         }
     }
 
+    void traverseRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor)
+    {
+        // always traverse with the latest snapshot
+        auto start = RaftLogReader::toFullRaftLogPrefix(region_id);
+        auto end = RaftLogReader::toFullRaftLogPrefix(region_id + 1);
+        traverse(start, end, [&](const UniversalPageId & page_id, const DB::Page & page) {
+            if (startsWith(page_id.toStr(), start.toStr()))
+            {
+                acceptor(page_id, page);
+            }
+        });
+    }
+
     Page read(const UniversalPageId & page_id)
     {
         // always traverse with the latest snapshot
