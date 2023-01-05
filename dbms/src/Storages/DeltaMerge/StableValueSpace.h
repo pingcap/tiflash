@@ -49,7 +49,7 @@ public:
 
     static StableValueSpacePtr restoreFromCheckpoint( //
         DMContext & context,
-        const PS::V3::CheckpointPageManagerPtr & manager,
+        UniversalPageStoragePtr temp_ps,
         const PS::V3::CheckpointInfo & checkpoint_info,
         TableID ns_id,
         PageId stable_id,

@@ -1809,8 +1809,10 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     if (has_new_data)
     {
         // Copy back the remote info to the current PageStorage. New remote infos are attached in `writeEditsAndApplyRemoteInfo`.
-        // As a snapshot is kept, we expect there should be no missing page.
-        copyRemoteInfoFromEdit(edit_from_mem, /* allow_missing */ false);
+        // Snapshot cannot prevent obsolete entries from being deleted.
+        // For example, if there is a `Put 1` with sequence 10, `Del 1` with sequence 11,
+        // and the snapshot sequence is 12, Page with id 1 may be deleted by the gc process.
+        copyRemoteInfoFromEdit(edit_from_mem, /* allow_missing */ true);
     }
 
     // NOTE: The following IO may be very slow, because the output directory should be mounted as S3.

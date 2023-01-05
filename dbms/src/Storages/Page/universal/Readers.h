@@ -171,6 +171,21 @@ public:
         }
     }
 
+    void traverseRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor)
+    {
+        // always traverse with the latest snapshot
+        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_region_{}", region_id));
+        auto start = RaftLogReader::toFullRaftLogPrefix(region_id);
+        auto end = RaftLogReader::toFullRaftLogPrefix(region_id + 1);
+        std::vector<UniversalPageId> all_raft_log_page_ids;
+        traverse(start, end, [&](const UniversalPageId & page_id, const DB::Page & page) {
+            if (startsWith(page_id.toStr(), start.toStr()))
+            {
+                acceptor(page_id, page);
+            }
+        });
+    }
+
     Page read(const UniversalPageId & page_id)
     {
         // always traverse with the latest snapshot

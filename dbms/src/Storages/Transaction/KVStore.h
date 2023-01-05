@@ -25,6 +25,8 @@ struct TableInfo;
 namespace DB
 {
 class Context;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 namespace RegionBench
 {
 extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
@@ -120,6 +122,7 @@ public:
 
     void handleIngestCheckpoint( //
         RegionPtr new_region,
+        UniversalPageStoragePtr temp_ps,
         String checkpoint_manifest_path,
         String checkpoint_data_dir,
         UInt64 checkpoint_store_id,

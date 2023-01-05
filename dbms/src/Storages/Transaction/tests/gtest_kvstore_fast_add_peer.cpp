@@ -101,12 +101,12 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
             auto current_store_id = store_id;
             {
                 // Must Found the newest manifest
-                auto [_, maybe_remote_meta] = selectRemotePeer(page_storage, current_store_id, region_id, peer_id);
+                auto [_, maybe_remote_meta] = selectRemotePeer(ctx, page_storage, current_store_id, region_id, peer_id);
                 ASSERT_TRUE(maybe_remote_meta.has_value());
                 remote_meta = std::move(maybe_remote_meta.value());
             }
             {
-                auto [_, maybe_remote_meta2] = selectRemotePeer(page_storage, current_store_id, region_id, 42);
+                auto [_, maybe_remote_meta2] = selectRemotePeer(ctx, page_storage, current_store_id, region_id, 42);
                 ASSERT_TRUE(!maybe_remote_meta2.has_value());
             }
 

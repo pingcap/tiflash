@@ -1000,6 +1000,7 @@ bool DeltaMergeStore::ingestSegmentIntoSegmentUsingSplit(
 void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
+    UniversalPageStoragePtr temp_ps,
     const PS::V3::CheckpointInfo & checkpoint_info)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
@@ -1013,12 +1014,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
              checkpoint_info.checkpoint_data_dir,
              checkpoint_info.checkpoint_store_id);
 
-    auto reader = PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::create(//
-        PS::V3::CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_info.checkpoint_manifest_path
-        });
-    auto manager = std::make_shared<PS::V3::CheckpointPageManager>(*reader, checkpoint_info.checkpoint_data_dir);
-    auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, manager);
+    auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, temp_ps);
     WriteBatches wbs{dm_context->storage_pool};
     auto restored_segments = Segment::restoreSegmentsFromCheckpoint( //
         log,
@@ -1026,7 +1022,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
         physical_table_id,
         segment_meta_infos,
         range,
-        manager,
+        temp_ps,
         checkpoint_info,
         wbs);
     wbs.writeAll();

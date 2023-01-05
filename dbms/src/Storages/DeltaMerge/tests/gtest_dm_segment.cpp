@@ -250,16 +250,16 @@ try
         auto store = metapb::Store{};
         store.set_id(2);
         kvstore->setStore(store);
-        auto manager = std::make_shared<PS::V3::CheckpointPageManager>(*reader, info.checkpoint_data_dir);
         WriteBatches wbs{dmContext().storage_pool};
-        auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), manager);
+        auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, info.checkpoint_manifest_path, info.checkpoint_data_dir);
+        auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), local_ps);
         auto new_segments = Segment::restoreSegmentsFromCheckpoint( //
             Logger::get(),
             dmContext(),
             table_id,
             segment_meta_infos,
             segment->getRowKeyRange(),
-            manager,
+            local_ps,
             info,
             wbs);
         ASSERT_TRUE(new_segments.size() == 1);

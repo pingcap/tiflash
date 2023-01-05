@@ -133,7 +133,7 @@ ColumnFilePersisteds deserializeSavedRemoteColumnFiles(//
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
-    const PS::V3::CheckpointPageManagerPtr & manager,
+    UniversalPageStoragePtr temp_ps,
     UInt64 checkpoint_store_id,
     TableID ns_id,
     WriteBatches & wbs)
@@ -146,7 +146,7 @@ ColumnFilePersisteds deserializeSavedRemoteColumnFiles(//
     switch (version)
     {
     case DeltaFormat::V3:
-        column_files = deserializeSavedRemoteColumnFilesInV3Format(context, segment_range, buf, manager, checkpoint_store_id, ns_id, wbs);
+        column_files = deserializeSavedRemoteColumnFilesInV3Format(context, segment_range, buf, temp_ps, checkpoint_store_id, ns_id, wbs);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
