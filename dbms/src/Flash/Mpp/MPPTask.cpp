@@ -283,10 +283,10 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     //     switch (tzg::SnappyStatistic::globalInstance().getMethod())
     //     {
     //     case tzg::SnappyStatistic::CompressMethod::LZ4:
-    //         compress_method = mpp::CompressMethod::LZ4;
+    //         compress_method = mpp::CompressMethod::FAST;
     //         break;
     //     case tzg::SnappyStatistic::CompressMethod::ZSTD:
-    //         compress_method = mpp::CompressMethod::ZSTD;
+    //         compress_method = mpp::CompressMethod::HIGH_COMPRESSION;
     //         break;
     //     default:
     //         compress_method = mpp::CompressMethod::NONE;

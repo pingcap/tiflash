@@ -503,7 +503,7 @@ try
         batch_send_min_limit,
         /*should_send_exec_summary_at_last=*/false,
         *dag_context_ptr,
-        mpp::CompressMethod::LZ4);
+        mpp::CompressMethod::FAST);
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();

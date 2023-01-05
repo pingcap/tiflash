@@ -104,9 +104,9 @@ CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_metho
     {
     case mpp::NONE:
         return CompressionMethod::NONE;
-    case mpp::LZ4:
+    case mpp::CompressMethod::FAST:
         return CompressionMethod::LZ4;
-    case mpp::ZSTD:
+    case mpp::CompressMethod::HIGH_COMPRESSION:
         return CompressionMethod::ZSTD;
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compress method {}", mpp::CompressMethod_Name(compress_method));

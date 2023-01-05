@@ -380,12 +380,12 @@ static void updateHashPartitionWriterMetrics(mpp::CompressMethod method, size_t 
         }
         break;
     }
-    case mpp::LZ4:
+    case mpp::CompressMethod::FAST:
     {
         GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
         break;
     }
-    case mpp::ZSTD:
+    case mpp::CompressMethod::HIGH_COMPRESSION:
     {
         GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
         break;
