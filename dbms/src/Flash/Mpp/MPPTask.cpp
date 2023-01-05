@@ -276,7 +276,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         is_root_mpp_task = task_meta.task_id() == -1;
     }
 
-    LOG_TRACE(log, "DAGContext use compression mode {}", mpp::CompressionMode_Name(task_request.exchange_sender_meta().compress()));
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), task_request.exchange_sender_meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
