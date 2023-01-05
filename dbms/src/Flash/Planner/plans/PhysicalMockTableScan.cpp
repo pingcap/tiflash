@@ -36,6 +36,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     BlockInputStreams mock_streams;
     auto & dag_context = *context.getDAGContext();
     size_t max_streams = dag_context.initialize_concurrency;
+    size_t concurrency_hint = context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID());
+    max_streams = concurrency_hint == 0 ? max_streams : std::min(max_streams, concurrency_hint);
     assert(max_streams > 0);
 
     // Interpreter test will not use columns in MockStorage

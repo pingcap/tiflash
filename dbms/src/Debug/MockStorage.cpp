@@ -44,6 +44,11 @@ void MockStorage::addTableData(const String & name, ColumnsWithTypeAndName & col
     table_columns[getTableId(name)] = columns;
 }
 
+void MockStorage::addTableScanConcurrencyHint(const String & name, size_t concurrency_hint)
+{
+    table_scan_concurrency_hint[getTableId(name)] = concurrency_hint;
+}
+
 Int64 MockStorage::getTableId(const String & name)
 {
     if (name_to_id_map.find(name) != name_to_id_map.end())
@@ -65,6 +70,15 @@ ColumnsWithTypeAndName MockStorage::getColumns(Int64 table_id)
         return table_columns[table_id];
     }
     throw Exception(fmt::format("Failed to get columns by table_id '{}'", table_id));
+}
+
+size_t MockStorage::getScanConcurrencyHint(Int64 table_id)
+{
+    if (tableExists(table_id))
+    {
+        return table_scan_concurrency_hint[table_id];
+    }
+    return 0;
 }
 
 MockColumnInfoVec MockStorage::getTableSchema(const String & name)

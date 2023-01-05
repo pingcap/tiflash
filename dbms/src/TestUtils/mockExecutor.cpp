@@ -370,6 +370,16 @@ void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockC
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
+void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint)
+{
+    mock_storage->addTableScanConcurrencyHint(db + "." + table, concurrency_hint);
+}
+
+void MockDAGRequestContext::addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint)
+{
+    mock_storage->addTableScanConcurrencyHint(name.first + "." + name.second, concurrency_hint);
+}
+
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addExchangeSchema(name, columnInfos);
@@ -398,20 +408,22 @@ void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, C
     mock_storage->addExchangeData(name, columns);
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
     assertMockInput(columnInfos, columns);
 
     addMockTable(db, table, columnInfos);
     addMockTableColumnData(db, table, columns);
+    addMockTableConcurrencyHint(db, table, concurrency_hint);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
     assertMockInput(columnInfos, columns);
 
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
+    addMockTableConcurrencyHint(name, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
