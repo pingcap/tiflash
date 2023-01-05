@@ -1035,6 +1035,19 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
 
+    for (auto & segment: restored_segments)
+    {
+        auto delta = segment->getDelta();
+        auto stable = segment->getStable();
+        delta->recordRemoveColumnFilesPages(wbs);
+        stable->recordRemovePacksPages(wbs);
+
+        wbs.removed_meta.delPage(segment->segmentId());
+        wbs.removed_meta.delPage(delta->getId());
+        wbs.removed_meta.delPage(stable->getId());
+        wbs.writeAll();
+    }
+
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
