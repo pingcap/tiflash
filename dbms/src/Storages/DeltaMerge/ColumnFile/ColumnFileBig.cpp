@@ -23,6 +23,7 @@
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
