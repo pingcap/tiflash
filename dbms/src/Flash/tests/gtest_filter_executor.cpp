@@ -261,6 +261,9 @@ try
                               {toVec<Int64>("i1", {1, 2, 3}),
                                toNullableVec<String>("s2", {"apple", {}, "banana"})});
 
+    // Do not support push down filter test for DAGQueryBlockInterpreter
+    enablePlanner(true);
+
     auto request = context
                        .scan("test_db", "test_table1")
                        .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
@@ -272,7 +275,6 @@ Expression: <final projection>
  Expression: <projection after push down filter>
   Filter: <push down filter>
    DeltaMergeSegmentThread)";
-        // Do not support push down filter test for DAGQueryBlockInterpreter
         executeInterpreterWithDeltaMerge(expected, request, 10);
     }
     executeAndAssertColumnsEqual(
