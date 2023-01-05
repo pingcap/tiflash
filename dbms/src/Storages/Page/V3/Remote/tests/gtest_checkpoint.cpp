@@ -128,18 +128,15 @@ TEST_F(CheckpointTest, CheckpointManagerGetNormalPageId)
         }
         ASSERT_TRUE(latest_manifest_sequence > 0);
         auto checkpoint_path = checkpoint_dir + fmt::format("{}.manifest", latest_manifest_sequence);
-        auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
-            CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-                .file_path = checkpoint_path
-            });
         auto checkpoint_data_dir = Poco::Path(checkpoint_path).parent().toString();
-        auto manager = std::make_shared<CheckpointPageManager>(*reader, checkpoint_data_dir);
+        auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, checkpoint_path, checkpoint_data_dir);
 
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(100, 100)), RaftLogReader::toFullPageId(100, 100));
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(10, 4)), RaftLogReader::toFullPageId(100, 100));
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(102, 4)), RaftLogReader::toFullPageId(100, 100));
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(202, 4)), RaftLogReader::toFullPageId(100, 100));
-        ASSERT_EQ(manager->getNormalPageId(RaftLogReader::toFullPageId(302, 4)), RaftLogReader::toFullPageId(100, 100));
+
+        ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(100, 100)), RaftLogReader::toFullPageId(100, 100));
+        ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(10, 4)), RaftLogReader::toFullPageId(100, 100));
+        ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(102, 4)), RaftLogReader::toFullPageId(100, 100));
+        ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(202, 4)), RaftLogReader::toFullPageId(100, 100));
+        ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(302, 4)), RaftLogReader::toFullPageId(100, 100));
     }
 }
 

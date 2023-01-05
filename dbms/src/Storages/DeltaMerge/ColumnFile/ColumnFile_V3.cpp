@@ -100,7 +100,7 @@ ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format(//
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
-    const PS::V3::CheckpointPageManagerPtr & manager,
+    UniversalPageStoragePtr temp_ps,
     UInt64 checkpoint_store_id,
     TableID ns_id,
     WriteBatches & wbs)
@@ -127,7 +127,7 @@ ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format(//
         }
         case ColumnFile::Type::BIG_FILE:
         {
-            column_file = ColumnFileBig::deserializeMetadataFromRemote(context, segment_range, buf, manager, checkpoint_store_id, ns_id, wbs);
+            column_file = ColumnFileBig::deserializeMetadataFromRemote(context, segment_range, buf, temp_ps, checkpoint_store_id, ns_id, wbs);
             break;
         }
         default:

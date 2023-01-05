@@ -295,7 +295,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
             if (!isSegmentValid(lock, seg))
             {
                 LOG_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
-                wbs.setRollback();
+                wbs.rollbackWrittenLogAndData();
                 return {};
             }
         }

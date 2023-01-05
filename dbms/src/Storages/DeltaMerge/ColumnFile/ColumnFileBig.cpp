@@ -116,7 +116,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
  ColumnFilePersistedPtr ColumnFileBig::deserializeMetadataFromRemote(DMContext & context, //
                                                             const RowKeyRange & target_range,
                                                             ReadBuffer & buf,
-                                                            const PS::V3::CheckpointPageManagerPtr & manager,
+                                                                    UniversalPageStoragePtr temp_ps,
                                                             UInt64 checkpoint_store_id,
                                                             TableID ns_id,
                                                             WriteBatches & wbs)
@@ -129,7 +129,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
      readIntBinary(valid_bytes, buf);
 
      auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, file_page_id);
-     auto remote_orig_file_page_id = manager->getNormalPageId(remote_file_page_id).value();
+     auto remote_orig_file_page_id = temp_ps->getNormalPageId(remote_file_page_id);
      auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
      auto delegator = context.path_pool->getStableDiskDelegator();
      auto new_file_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);

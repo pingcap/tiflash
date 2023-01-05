@@ -491,10 +491,12 @@ RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
 
 RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(
     const Base & base_,
+    UniversalPageStoragePtr && temp_ps_,
     String && checkpoint_manifest_path_,
     String && checkpoint_data_dir_,
     UInt64 checkpoint_store_id_)
     : base(base_)
+    , temp_ps(std::move(temp_ps_))
     , checkpoint_manifest_path(std::move(checkpoint_manifest_path_))
     , checkpoint_data_dir(std::move(checkpoint_data_dir_))
     , checkpoint_store_id(checkpoint_store_id_)
