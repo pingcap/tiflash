@@ -44,24 +44,9 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
         if (offset == 0 && limit == rows)
             return std::move(block);
 
-        if (offset == 0)
+        for (auto & col : block)
         {
-            size_t pop_size = rows - limit;
-            for (auto & col : block)
-            {
-                auto mutate_col = (*std::move(col.column)).mutate();
-                mutate_col->popBack(pop_size);
-                col.column = std::move(mutate_col);
-            }
-        }
-        else
-        {
-            for (auto & col : block)
-            {
-                auto new_column = col.column->cloneEmpty();
-                new_column->insertRangeFrom(*col.column, offset, limit);
-                col.column = std::move(new_column);
-            }
+            col.column = col.column->cut(offset, limit);
         }
         return std::move(block);
     }
