@@ -45,13 +45,13 @@ public:
         for (size_t i = 0; i < schema.columns(); ++i)
             colid_to_offset.emplace(schema.getByPosition(i).column_id, i);
 
-        GET_METRIC(tiflash_column_file_info, column_file_schema_count).Increment();
+        //GET_METRIC(tiflash_column_file_info, column_file_schema_count).Increment();
     }
 
-    ~ColumnFileSchema()
-    {
-        GET_METRIC(tiflash_column_file_info, column_file_schema_count).Decrement();
-    }
+    // ~ColumnFileSchema()
+    // {
+    //     //GET_METRIC(tiflash_column_file_info, column_file_schema_count).Decrement();
+    // }
 
     const DataTypePtr & getDataType(ColId column_id) const
     {

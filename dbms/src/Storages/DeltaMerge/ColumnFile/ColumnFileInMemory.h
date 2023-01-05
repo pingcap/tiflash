@@ -53,13 +53,13 @@ public:
         : schema(schema_)
         , cache(cache_ ? cache_ : std::make_shared<Cache>(schema_->getSchema()))
     {
-        GET_METRIC(tiflash_column_file_info, column_file_memory_count).Increment();
+        //GET_METRIC(tiflash_column_file_info, column_file_memory_count).Increment();
     }
 
-    ~ColumnFileInMemory() override
-    {
-        GET_METRIC(tiflash_column_file_info, column_file_memory_count).Decrement();
-    }
+    // ~ColumnFileInMemory() override
+    // {
+    //     GET_METRIC(tiflash_column_file_info, column_file_memory_count).Decrement();
+    // }
 
     Type getType() const override { return Type::INMEMORY_FILE; }
 
