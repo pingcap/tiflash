@@ -151,7 +151,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
             }
             else
             {
-                auto && compress_method = dag_context.getExchangeSenderMeta().compress();
+                auto && compression_mode = dag_context.getExchangeSenderMeta().compress();
                 if (TiDB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
                     return std::make_unique<HashPartitionWriter<MPPTunnelSetPtr>>(
                         writer,
@@ -167,7 +167,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
                     8192,
                     should_send_exec_summary_at_last,
                     dag_context,
-                    compress_method);
+                    compression_mode);
             }
         }
         else

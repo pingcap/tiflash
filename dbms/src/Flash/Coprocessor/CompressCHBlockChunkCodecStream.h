@@ -74,13 +74,13 @@ struct WriteBufferFromOwnStringList final
 
 struct CompressCHBlockChunkCodecStream
 {
-    explicit CompressCHBlockChunkCodecStream(CompressionMethod compress_method_)
-        : compress_method(compress_method_)
+    explicit CompressCHBlockChunkCodecStream(CompressionMethod compression_method_)
+        : compression_method(compression_method_)
     {
         output_buffer = std::make_unique<WriteBufferFromOwnStringList>();
         compress_write_buffer = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
             *output_buffer,
-            CompressionSettings(compress_method),
+            CompressionSettings(compression_method),
             DBMS_DEFAULT_BUFFER_SIZE);
     }
 
@@ -112,7 +112,7 @@ struct CompressCHBlockChunkCodecStream
     ~CompressCHBlockChunkCodecStream() = default;
 
     // bool enable_compress{true};
-    CompressionMethod compress_method;
+    CompressionMethod compression_method;
     std::unique_ptr<WriteBufferFromOwnStringList> output_buffer{};
     std::unique_ptr<CompressedCHBlockChunkCodec::CompressedWriteBuffer> compress_write_buffer{};
 };
@@ -122,5 +122,5 @@ void EncodeColumn__(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWi
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 
-std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compress_method);
+std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compression_method);
 } // namespace DB

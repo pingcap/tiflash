@@ -45,7 +45,7 @@ public:
         Int64 partition_batch_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
-        mpp::CompressionMode compress_method_);
+        mpp::CompressionMode compression_mode_);
     void write(const Block & block) override;
     void flush() override;
     void finishWrite() override;
@@ -68,7 +68,7 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     DataTypes expected_types;
-    mpp::CompressionMode compress_method{};
+    mpp::CompressionMode compression_mode{};
 };
 
 } // namespace DB

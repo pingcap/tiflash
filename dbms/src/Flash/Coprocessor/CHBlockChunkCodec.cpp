@@ -98,9 +98,9 @@ size_t ApproxBlockBytes(const Block & block)
     return block.bytes() + GetExtraInfoSize(block);
 }
 
-CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compress_method)
+CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compression_mode)
 {
-    switch (compress_method)
+    switch (compression_mode)
     {
     case mpp::CompressionMode::NONE:
         return CompressionMethod::NONE;
@@ -109,7 +109,7 @@ CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compress_meth
     case mpp::CompressionMode::HIGH_COMPRESSION:
         return CompressionMethod::ZSTD; // use ZSTD method as HC mode
     default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compresssion mode {}", mpp::CompressionMode_Name(compress_method));
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compresssion mode {}", mpp::CompressionMode_Name(compression_mode));
     }
 }
 

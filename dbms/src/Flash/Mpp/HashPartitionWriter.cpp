@@ -52,11 +52,6 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-
-    // if (auto method = ToInternalCompressionMethod(compress_method); method != CompressionMethod::NONE)
-    // {
-    //     compress_chunk_codec_stream = CompressedCHBlockChunkCodec::newCodecStream(dag_context.result_field_types, method);
-    // }
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 

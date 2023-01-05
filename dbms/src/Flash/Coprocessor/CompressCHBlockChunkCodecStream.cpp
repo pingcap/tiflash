@@ -32,9 +32,9 @@ void EncodeColumn__(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWi
     WriteColumnData(*type_name.type, column, ostr, 0, 0);
 }
 
-std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compress_method)
+std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compression_method)
 {
-    return std::make_unique<CompressCHBlockChunkCodecStream>(compress_method);
+    return std::make_unique<CompressCHBlockChunkCodecStream>(compression_method);
 }
 
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)

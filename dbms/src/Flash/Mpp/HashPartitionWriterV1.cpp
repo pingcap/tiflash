@@ -46,7 +46,7 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     Int64 partition_batch_limit_,
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
-    mpp::CompressionMode compress_method_)
+    mpp::CompressionMode compression_mode_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , partition_num(writer_->getPartitionNum())
     , partition_batch_limit(partition_batch_limit_ * partition_num)
@@ -54,7 +54,7 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
-    , compress_method(compress_method_)
+    , compression_mode(compression_mode_)
 {
     assert(dag_context.getMPPTaskMeta().mpp_version() > 0);
 
@@ -123,7 +123,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     // Do NOT enable data compression when using local tunnel
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compress_method;
+        auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compression_mode;
         tracked_packets[part_id]->getPacket().mutable_compress()->set_mode(mode);
     }
 
@@ -195,7 +195,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             {
                 compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
                     *output_buffer,
-                    CompressionSettings(ToInternalCompressionMethod(compress_method)),
+                    CompressionSettings(ToInternalCompressionMethod(compression_mode)),
                     init_size);
                 ostr_ptr = compress_codec.get();
             }
@@ -252,7 +252,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     // Do NOT enable data compression when using local tunnel
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compress_method;
+        auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compression_mode;
         tracked_packets[part_id]->getPacket().mutable_compress()->set_mode(mode);
     }
 
@@ -323,7 +323,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             {
                 compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
                     *output_buffer,
-                    CompressionSettings(ToInternalCompressionMethod(compress_method)),
+                    CompressionSettings(ToInternalCompressionMethod(compression_mode)),
                     init_size);
                 ostr_ptr = compress_codec.get();
             }
