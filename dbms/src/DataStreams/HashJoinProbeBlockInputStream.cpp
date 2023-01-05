@@ -22,11 +22,10 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     size_t probe_index_,
     bool has_non_joined_data_,
     const String & req_id,
-    UInt64 max_block_size_)
+    UInt64 max_block_size)
     : log(Logger::get(req_id))
     , join(join_)
     , probe_index(probe_index_)
-    , max_block_size(max_block_size_)
     , has_non_joined_data(has_non_joined_data_)
     , probe_process_info(max_block_size)
     , squashing_transform(max_block_size)
@@ -34,6 +33,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     children.push_back(input);
 
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
+    RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
     if (has_non_joined_data)
         non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), probe_index, join->getProbeConcurrency(), max_block_size);
 }

@@ -165,7 +165,8 @@ public:
     {
         std::unique_lock lock(probe_mutex);
         active_probe_concurrency--;
-        probe_cv.notify_all();
+        if (active_probe_concurrency == 0)
+            probe_cv.notify_all();
     }
     void waitUntilAllProbeFinished()
     {

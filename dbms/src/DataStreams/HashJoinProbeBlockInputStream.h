@@ -56,7 +56,6 @@ private:
     const LoggerPtr log;
     JoinPtr join;
     size_t probe_index;
-    size_t max_block_size;
     bool has_non_joined_data = false;
     bool reading_non_joined_data = false;
     ProbeProcessInfo probe_process_info;
