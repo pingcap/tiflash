@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 namespace DB
 {
 namespace DM
@@ -30,7 +30,6 @@ class ColumnFileInMemory : public ColumnFile
 
 private:
     ColumnFileSchemaPtr schema;
-    //BlockPtr schema;
 
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -40,29 +39,16 @@ private:
 
     // The cache data in memory.
     CachePtr cache;
-    // Used to map column id to column instance in a Block.
-    //ColIdToOffset colid_to_offset;
 
 private:
     void fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
 
     const DataTypePtr & getDataType(ColId column_id) const
     {
-        // // Note that column_id must exist
-        // auto index = colid_to_offset.at(column_id);
-        // return schema->getByPosition(index).type;
         return schema->getDataType(column_id);
     }
 
 public:
-    // explicit ColumnFileInMemory(const BlockPtr & schema_, const CachePtr & cache_ = nullptr)
-    //     : schema(schema_)
-    //     , cache(cache_ ? cache_ : std::make_shared<Cache>(*schema_))
-    // {
-    //     colid_to_offset.clear();
-    //     for (size_t i = 0; i < schema->columns(); ++i)
-    //         colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
-    // }
     explicit ColumnFileInMemory(const ColumnFileSchemaPtr & schema_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , cache(cache_ ? cache_ : std::make_shared<Cache>(schema_->getSchema()))
@@ -84,8 +70,6 @@ public:
 
     /// The schema of this pack.
     ColumnFileSchemaPtr getSchema() const { return schema; }
-    /// Replace the schema with a new schema, and the new schema instance should be exactly the same as the previous one.
-    // void resetIdenticalSchema(ColumnFileSchemaPtr schema_) { schema = schema_; }
 
     ColumnInMemoryFilePtr clone()
     {

@@ -905,6 +905,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
+    global_context->column_file_schema_map_with_lock = std::make_shared<DM::ColumnFileSchemaMapWithLock>();
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)

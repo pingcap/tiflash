@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
+
 #include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB::DM
@@ -141,7 +142,7 @@ public:
         PageId segment_id,
         PageId next_segment_id);
 
-    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id, ColumnFileSchemaPtr & column_file_schema);
+    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
 
     void serialize(WriteBatch & wb);
 
@@ -151,10 +152,10 @@ public:
     bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file); // todo 看一下这个函数的调用
 
     /// Write a block of data into the MemTableSet part of the Segment. The data will be flushed to disk later.
-    bool writeToCache(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit);
+    bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
 
     /// For test only.
-    bool write(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, bool flush_cache = true);
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
 
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
 

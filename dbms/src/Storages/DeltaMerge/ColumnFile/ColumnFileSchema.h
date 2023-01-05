@@ -14,15 +14,23 @@
 
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
-#include <Common/TiFlashMetrics.h>
+#include <_types/_uint64_t.h>
+#include <openssl/base.h>
+#include <openssl/sha.h>
+
 #include "Storages/DeltaMerge/DeltaMergeDefines.h"
+#include "common/types.h"
 
 namespace DB
 {
 namespace DM
 {
+using Digest = UInt256;
+
+Digest calcDigest(const Block & schema);
 class ColumnFileSchema
 {
 private:
@@ -37,7 +45,7 @@ public:
     {
         for (size_t i = 0; i < schema.columns(); ++i)
             colid_to_offset.emplace(schema.getByPosition(i).column_id, i);
-        
+
         GET_METRIC(tiflash_column_file_info, column_file_schema_count).Increment();
     }
 
@@ -64,5 +72,43 @@ public:
 
 using ColumnFileSchemaPtr = std::shared_ptr<ColumnFileSchema>;
 
+
+struct HashForDigest
+{
+    size_t operator()(const Digest & k) const
+    {
+        return k.a ^ k.b ^ k.c ^ k.d;
+    }
+};
+
+class ColumnFileSchemaMapWithLock
+{ // 应该做成一个单例么？
+private:
+    std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>, HashForDigest> column_file_schema_map;
+    std::mutex mutex;
+
+public:
+    //  做成访问的时候都要先拿锁
+    ColumnFileSchemaPtr find(const Digest & digest)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto it = column_file_schema_map.find(digest);
+        if (it == column_file_schema_map.end())
+            return nullptr;
+        return it->second.lock();
+    }
+
+    void insert(const Digest & digest, const ColumnFileSchemaPtr & schema)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        column_file_schema_map.emplace(digest, schema);
+    }
+
+    size_t size()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return column_file_schema_map.size();
+    }
+};
 } // namespace DM
 } // namespace DB

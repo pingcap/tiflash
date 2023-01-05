@@ -265,7 +265,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             while (segment_id)
             {
-                auto segment = Segment::restoreSegment(log, *dm_context, segment_id, column_file_schema);
+                auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
                 segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                 id_to_segment.emplace(segment_id, segment);
 
@@ -571,7 +571,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // For large column files, data is directly written to PageStorage, while the ColumnFile entry is appended to MemTableSet.
             if (is_small)
             {
-                if (segment->writeToCache(*dm_context, block, column_file_schema, offset, limit))
+                if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
                     updated_segments.push_back(segment);
                     break;
@@ -588,7 +588,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
                     // In this case we will construct a ColumnFile that does not contain block data in the memory.
                     // The block data has been written to PageStorage in wbs.
-                    write_column_file = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs, column_file_schema);
+                    write_column_file = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = rowkey_range;
                 }

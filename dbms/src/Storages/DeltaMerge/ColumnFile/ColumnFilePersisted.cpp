@@ -46,14 +46,13 @@ void serializeSchema(WriteBuffer & buf, const Block & schema)
     }
 }
 
-ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
+BlockPtr deserializeSchema(ReadBuffer & buf)
 {
     UInt32 cols;
     readIntBinary(cols, buf);
-    if (!cols && last_schema){
-        //LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema is nullptr");
-        // std::cout << " hyy deserializeSchema is nullptr " << std::endl;
-        return last_schema;
+    if (!cols)
+    {
+        return {};
     }
     auto schema = std::make_shared<Block>();
     for (size_t i = 0; i < cols; ++i)
@@ -67,12 +66,7 @@ ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf, ColumnFileSchemaPtr & la
         schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().getOrSet(type_name), name, column_id));
     }
 
-    if (!last_schema || !isSameSchema(*schema, last_schema)) {
-        last_schema = std::make_shared<ColumnFileSchema>(*schema);
-        LOG_INFO(&Poco::Logger::get("hyy"), "hyy deserializeSchema new schema");
-    }
-
-    return last_schema;
+    return schema;
 }
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
@@ -117,7 +111,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
     }
 }
 
-ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, ColumnFileSchemaPtr & schema)
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
@@ -132,7 +126,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
         column_files = deserializeSavedColumnFilesInV2Format(buf, version);
         break;
     case DeltaFormat::V3:
-        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf, schema);
+        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),

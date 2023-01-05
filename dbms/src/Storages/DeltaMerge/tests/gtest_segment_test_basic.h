@@ -24,8 +24,6 @@
 #include <random>
 #include <vector>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
 namespace DB
 {
 namespace DM
@@ -64,7 +62,7 @@ public:
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
-    void writeSegment(PageId segment_id, ColumnFileSchemaPtr & column_file_schema, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void ingestDTFileByReplace(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
     void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
@@ -130,8 +128,6 @@ protected:
     SegmentPtr root_segment;
     UInt64 version = 0;
     SegmentTestOptions options;
-
-    ColumnFileSchemaPtr schema;
 
     LoggerPtr logger_op;
     LoggerPtr logger;

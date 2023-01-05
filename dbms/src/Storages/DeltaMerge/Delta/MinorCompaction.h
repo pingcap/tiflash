@@ -71,14 +71,12 @@ public:
     // Add new task and return whether this task is a trivial move
     inline bool packUpTask(Task && task)
     {
-        std::cout << " into packupTask " << std::endl;
         if (task.to_compact.empty())
             return true;
 
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
         {
-            std::cout << " to compact size is 1" << std::endl;
             // Maybe this column file is small, but it cannot be merged with other column files, so also remove it's cache if possible.
             for (auto & f : task.to_compact)
             {
@@ -90,7 +88,6 @@ public:
             is_trivial_move = true;
         }
 
-        std::cout << " packUpTask is_trivial_move " << is_trivial_move << std::endl;
         task.is_trivial_move = is_trivial_move;
         tasks.push_back(std::move(task));
         if (!is_trivial_move)

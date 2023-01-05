@@ -117,7 +117,7 @@ public:
 
     /// Append the block data into a ColumnFileInMemory (may be reused).
     /// The ColumnFileInMemory will be stored in this MemTableSet and flushed later.
-    void appendToCache(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit);
+    void appendToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
 
     void appendDeleteRange(const RowKeyRange & delete_range);
 

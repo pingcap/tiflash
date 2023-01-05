@@ -77,7 +77,7 @@ public:
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id, ColumnFileSchemaPtr & schema);
+    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
     /**
      * Resets the logger by using the one from the segment.

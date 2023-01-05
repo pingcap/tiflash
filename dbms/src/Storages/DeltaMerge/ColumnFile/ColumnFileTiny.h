@@ -129,11 +129,11 @@ public:
 
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
-    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, ColumnFileSchemaPtr & schema, const CachePtr & cache = nullptr);
+    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache = nullptr);
 
     static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
+    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {

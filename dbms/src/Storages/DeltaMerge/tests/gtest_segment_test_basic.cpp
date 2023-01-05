@@ -379,7 +379,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageId segment_id, UInt6
     return sortMergeBlocks(std::move(blocks));
 }
 
-void SegmentTestBasic::writeSegment(PageId segment_id, ColumnFileSchemaPtr & column_file_schema, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
     LOG_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -393,7 +393,7 @@ void SegmentTestBasic::writeSegment(PageId segment_id, ColumnFileSchemaPtr & col
     LOG_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
     auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    segment->write(*dm_context, block, column_file_schema, false);
+    segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["write"]++;
@@ -513,7 +513,7 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 wri
     LOG_DEBUG(logger, "write deleted pack to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
     auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
-    segment->write(*dm_context, block, schema, false);
+    segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["writeDelete"]++;

@@ -23,6 +23,7 @@
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
+
 #include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
@@ -56,9 +57,9 @@ void DeltaValueSpace::abandon(DMContext & context)
         manager->deleteRef(delta_index);
 }
 
-DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id, ColumnFileSchemaPtr & schema)
+DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id, schema);
+    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
@@ -239,13 +240,13 @@ bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFile
     return true;
 }
 
-bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit)
+bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    mem_table_set->appendToCache(context, block, column_file_schema, offset, limit);
+    mem_table_set->appendToCache(context, block, offset, limit);
     return true;
 }
 

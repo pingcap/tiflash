@@ -56,7 +56,7 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
         auto compact_rows = compact_block.rows();
         auto column_file_schema = task.to_compact.front()->tryToTinyFile()->getSchema();
-        auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, column_file_schema);
+        auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs);
         wbs.writeLogAndData();
         task.result = compact_column_file;
 

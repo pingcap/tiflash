@@ -106,7 +106,7 @@ public:
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id, ColumnFileSchemaPtr & schema);
+    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
     /**
      * Resets the logger by using the one from the segment.
@@ -255,7 +255,7 @@ public:
 
     bool appendColumnFile(DMContext & context, const ColumnFilePtr & column_file);
 
-    bool appendToCache(DMContext & context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit);
+    bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 
     bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 

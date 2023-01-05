@@ -22,6 +22,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -182,6 +183,7 @@ private:
     Context();
 
 public:
+    std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> column_file_schema_map_with_lock;
     /// Create initial Context with ContextShared and etc.
     static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
     static Context createGlobal();

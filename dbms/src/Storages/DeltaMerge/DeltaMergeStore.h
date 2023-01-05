@@ -31,8 +31,6 @@
 
 #include <queue>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
-
 namespace DB
 {
 class Logger;
@@ -632,8 +630,6 @@ public:
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
-
-    ColumnFileSchemaPtr column_file_schema; // 想一想这个会不会有多线程调用的问题
 
     LoggerPtr log;
 }; // namespace DM

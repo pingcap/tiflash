@@ -179,7 +179,7 @@ void MemTableSet::appendColumnFile(const ColumnFilePtr & column_file)
     appendColumnFileInner(column_file);
 }
 
-void MemTableSet::appendToCache(DMContext & context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit)
+void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
 {
     // If the `column_files` is not empty, and the last `column_file` is a `ColumnInMemoryFile`, we will merge the newly block into the last `column_file`.
     // Otherwise, create a new `ColumnInMemoryFile` and write into it.
@@ -194,13 +194,18 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, Column
 
     if (!success)
     {
+        auto new_digest = calcDigest(block);
+        auto schema = context.db_context.column_file_schema_map_with_lock->find(new_digest);
+
+        std::shared_ptr<ColumnFileInMemory> new_column_file;
         // Create a new column file.
-        if (column_file_schema == nullptr || !isSameSchema(block, column_file_schema))
+        if (schema == nullptr)
         {
             // 说明 schema 调整，更新最新的 schema
-            column_file_schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
+            schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
+            context.db_context.column_file_schema_map_with_lock->insert(new_digest, schema);
         }
-        auto new_column_file = std::make_shared<ColumnFileInMemory>(column_file_schema);
+        new_column_file = std::make_shared<ColumnFileInMemory>(schema);
         // Must append the empty `new_column_file` to `column_files` before appending data to it,
         // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);

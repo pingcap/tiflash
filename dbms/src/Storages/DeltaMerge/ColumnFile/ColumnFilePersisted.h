@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+
 #include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
@@ -37,7 +38,7 @@ public:
 };
 
 void serializeSchema(WriteBuffer & buf, const Block & schema);
-ColumnFileSchemaPtr deserializeSchema(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
+BlockPtr deserializeSchema(ReadBuffer & buf);
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
 void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);
@@ -45,13 +46,13 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
 /// Serialize those column files' metadata into buf.
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 /// Recreate column file instances from buf.
-ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, ColumnFileSchemaPtr & schema);
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
 void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(ReadBuffer & buf, UInt64 version);
 
 void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
-ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, ColumnFileSchemaPtr & schema);
+ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
 } // namespace DM
 } // namespace DB

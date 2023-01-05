@@ -270,8 +270,7 @@ SegmentPtr Segment::newSegment( //
 SegmentPtr Segment::restoreSegment( //
     const LoggerPtr & parent_log,
     DMContext & context,
-    PageId segment_id,
-    ColumnFileSchemaPtr & column_file_schema)
+    PageId segment_id)
 {
     Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
 
@@ -308,7 +307,7 @@ SegmentPtr Segment::restoreSegment( //
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
 
-    auto delta = DeltaValueSpace::restore(context, rowkey_range, delta_id, column_file_schema);
+    auto delta = DeltaValueSpace::restore(context, rowkey_range, delta_id);
     auto stable = StableValueSpace::restore(context, stable_id);
     auto segment = std::make_shared<Segment>(parent_log, epoch, rowkey_range, segment_id, next_segment_id, delta, stable);
 
@@ -335,20 +334,20 @@ bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_f
     return delta->appendColumnFile(dm_context, column_file);
 }
 
-bool Segment::writeToCache(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, size_t offset, size_t limit)
+bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
 {
     LOG_TRACE(log, "Segment write to cache, rows={}", limit);
     if (unlikely(limit == 0))
         return true;
-    return delta->appendToCache(dm_context, block, column_file_schema, offset, limit);
+    return delta->appendToCache(dm_context, block, offset, limit);
 }
 
-bool Segment::write(DMContext & dm_context, const Block & block, ColumnFileSchemaPtr & column_file_schema, bool flush_cache)
+bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
     LOG_TRACE(log, "Segment write to disk, rows={}", block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs, column_file_schema);
+    auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
     if (delta->appendColumnFile(dm_context, column_file))

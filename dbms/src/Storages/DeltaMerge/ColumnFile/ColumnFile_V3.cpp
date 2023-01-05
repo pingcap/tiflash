@@ -63,12 +63,13 @@ void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePers
     }
 }
 
-ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
+ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     size_t column_file_count;
     readIntBinary(column_file_count, buf);
     ColumnFilePersisteds column_files;
     column_files.reserve(column_file_count);
+    ColumnFileSchemaPtr last_schema;
     for (size_t i = 0; i < column_file_count; ++i)
     {
         std::underlying_type<ColumnFile::Type>::type column_file_type;
@@ -81,7 +82,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, 
             break;
         case ColumnFile::Type::TINY_FILE:
         {
-            column_file = ColumnFileTiny::deserializeMetadata(buf, last_schema);
+            column_file = ColumnFileTiny::deserializeMetadata(context, buf, last_schema);
             break;
         }
         case ColumnFile::Type::BIG_FILE:

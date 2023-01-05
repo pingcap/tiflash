@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
+#include <memory>
+
 #include "Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h"
 #include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
@@ -137,15 +139,28 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
+ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
 {
-    LOG_INFO(&Poco::Logger::get("hyy"), "hyy into deserializeMetadata");
-    auto schema = deserializeSchema(buf, last_schema);
-    // if (!schema)
-    //     schema = last_schema;
-    // else if (last_schema == nullptr){
-    //     last_schema = schema;
-    // }
+    auto schema_block = deserializeSchema(buf);
+    std::shared_ptr<ColumnFileSchema> schema;
+
+    if (!schema_block)
+    {
+        schema = last_schema;
+    }
+    else
+    {
+        auto new_digest = calcDigest(*schema_block);
+        schema = context.db_context.column_file_schema_map_with_lock->find(new_digest);
+
+        if (schema == nullptr)
+        {
+            schema = std::make_shared<ColumnFileSchema>(*schema_block);
+            context.db_context.column_file_schema_map_with_lock->insert(new_digest, schema);
+        }
+        last_schema = schema;
+    }
+
     if (unlikely(!schema))
         throw Exception("Cannot deserialize DeltaPackBlock's schema", ErrorCodes::LOGICAL_ERROR);
 
@@ -192,17 +207,24 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
     }
 }
 
-ColumnTinyFilePtr ColumnFileTiny::writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, ColumnFileSchemaPtr & column_file_schema, const CachePtr & cache)
+ColumnTinyFilePtr ColumnFileTiny::writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache)
 {
     auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
 
-    if (column_file_schema == nullptr || !isSameSchema(block, column_file_schema))
+    auto new_digest = calcDigest(block);
+    auto schema = context.db_context.column_file_schema_map_with_lock->find(new_digest);
+
+    std::shared_ptr<ColumnFileInMemory> new_column_file;
+    // Create a new column file.
+    if (schema == nullptr)
     {
         // 说明 schema 调整，更新最新的 schema
-        column_file_schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
+        schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
+        context.db_context.column_file_schema_map_with_lock->insert(new_digest, schema);
     }
+
     auto bytes = block.bytes(offset, limit);
-    return std::make_shared<ColumnFileTiny>(column_file_schema, limit, bytes, page_id, cache);
+    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, cache);
 }
 
 PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)

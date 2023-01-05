@@ -17,7 +17,6 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/WriteBatches.h>

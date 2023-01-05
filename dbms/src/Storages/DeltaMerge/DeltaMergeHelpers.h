@@ -247,28 +247,6 @@ inline bool isSameSchema(const Block & a, const Block & b)
     return true;
 }
 
-template <bool check_default_value = false>
-inline bool isSameSchema(const Block & cur_block, const ColumnFileSchemaPtr & column_file_schema)
-{
-    const auto & schema = column_file_schema->getSchema();
-    if (cur_block.columns() != schema.columns())
-        return false;
-    for (size_t i = 0; i < cur_block.columns(); ++i)
-    {
-        const auto & cur_block_col = cur_block.getByPosition(i);
-        const auto & schema_col = schema.getByPosition(i);
-
-        bool col_ok = cur_block_col.column_id == schema_col.column_id;
-        bool name_ok = cur_block_col.name == schema_col.name;
-        bool type_ok = cur_block_col.type->equals(*(schema_col.type));
-        bool value_ok = !check_default_value || cur_block_col.default_value == schema_col.default_value;
-
-        if (!col_ok || !name_ok || !type_ok || !value_ok)
-            return false;
-    }
-    return true;
-}
-
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)
 {
