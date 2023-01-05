@@ -36,6 +36,7 @@ OperatorStatus OperatorPipeline::execute(PipelineExecStatus & exec_status)
     if (status != OperatorStatus::PASS)
         return status;
 
+    // start from the next transform after fetch block transform.
     for (; transform_index < transforms.size(); ++transform_index)
     {
         CHECK_IS_CANCELLED(exec_status);
@@ -47,6 +48,7 @@ OperatorStatus OperatorPipeline::execute(PipelineExecStatus & exec_status)
     return pushSpillOp(sink->write(std::move(block)), sink);
 }
 
+// try fetch block from transforms and source.
 OperatorStatus OperatorPipeline::fetchBlock(Block & block, size_t & transform_index, PipelineExecStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
@@ -59,6 +61,7 @@ OperatorStatus OperatorPipeline::fetchBlock(Block & block, size_t & transform_in
         auto status = transforms[index]->fetchBlock(block);
         if (status != OperatorStatus::NO_OUTPUT)
         {
+            // Once the transform fetch block has succeeded, execution will begin with the next transform.
             transform_index = index + 1;
             return pushSpillOp(status, transforms[index]);
         }
@@ -77,6 +80,7 @@ OperatorStatus OperatorPipeline::await(PipelineExecStatus & exec_status)
         return status;
     for (auto it = transforms.rbegin(); it != transforms.rend(); ++it)
     {
+        // if one of the transform return ready status, we don't need to check the upstream operator.
         auto status = (*it)->await();
         if (status != OperatorStatus::SKIP)
             return status;

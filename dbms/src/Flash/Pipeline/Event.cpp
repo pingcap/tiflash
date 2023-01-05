@@ -22,7 +22,7 @@ namespace DB
 {
 void Event::addDependency(const EventPtr & dependency)
 {
-    assert(status != EventStatus::FINISHED);
+    assert(status == EventStatus::INIT);
     dependency->addNext(shared_from_this());
     ++unfinished_dependencies;
 }
@@ -35,17 +35,8 @@ bool Event::isNonDependent()
 
 void Event::addNext(const EventPtr & next)
 {
-    assert(status != EventStatus::FINISHED);
+    assert(status == EventStatus::INIT);
     next_events.push_back(next);
-}
-
-void Event::insertEvent(const EventPtr & replacement)
-{
-    assert(replacement && replacement->status == EventStatus::INIT);
-    assert(status != EventStatus::FINISHED);
-    assert(replacement->next_events.empty());
-    std::swap(replacement->next_events, next_events);
-    replacement->addDependency(shared_from_this());
 }
 
 void Event::completeDependency()

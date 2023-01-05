@@ -83,6 +83,14 @@ OperatorPipelineGroups Pipeline::transform(Context & context, size_t concurrency
 
 Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t concurrency)
 {
+    Events all_events;
+    toEvent(status, context, concurrency, all_events);
+    assert(!all_events.empty());
+    return all_events;
+}
+
+EventPtr Pipeline::toEvent(PipelineExecStatus & status, Context & context, size_t concurrency, Events & all_events)
+{
     // TODO support fine grained shuffle
     //     - a fine grained partition maps to an event
     //     - the event flow will be
@@ -95,21 +103,17 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
     //     ```
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 
-    Events events;
     auto pipeline_event = std::make_shared<PipelineEvent>(status, memory_tracker, context, concurrency, shared_from_this());
     for (const auto & dependency : dependencies)
     {
         auto dependency_ptr = dependency.lock();
         assert(dependency_ptr);
-        auto dependency_events = dependency_ptr->toEvents(status, context, concurrency);
-        if (!dependency_events.empty())
-        {
-            pipeline_event->addDependency(dependency_events.back());
-            events.insert(events.end(), dependency_events.begin(), dependency_events.end());
-        }
+        auto dependency_event = dependency_ptr->toEvent(status, context, concurrency, all_events);
+        assert(dependency_event);
+        pipeline_event->addDependency(dependency_event);
     }
-    events.push_back(pipeline_event);
-    return events;
+    all_events.push_back(pipeline_event);
+    return pipeline_event;
 }
 
 bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)

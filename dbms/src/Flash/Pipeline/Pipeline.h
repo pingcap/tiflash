@@ -61,6 +61,8 @@ public:
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
+    EventPtr toEvent(PipelineExecStatus & status, Context & context, size_t concurrency, Events & all_events);
+
 private:
     // data flow: plans.begin() <-- plans.end()
     std::deque<PhysicalPlanNodePtr> plans;

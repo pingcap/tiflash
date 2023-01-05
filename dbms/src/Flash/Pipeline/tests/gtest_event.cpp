@@ -154,7 +154,10 @@ protected:
     ExecTaskStatus executeImpl() override
     {
         while (!event->isCancelled())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             return ExecTaskStatus::RUNNING;
+        }
         return ExecTaskStatus::CANCELLED;
     }
 

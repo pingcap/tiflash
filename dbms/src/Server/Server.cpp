@@ -1272,10 +1272,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
     if (enable_pipeline)
     {
-        size_t task_executor_thread_num = settings.pipeline_task_executor_threads < 0
+        size_t task_executor_thread_num = settings.pipeline_task_executor_threads == 0
             ? std::thread::hardware_concurrency()
             : static_cast<size_t>(settings.pipeline_task_executor_threads);
-        size_t spill_executor_thread_num = settings.pipeline_spill_executor_threads < 0
+        size_t spill_executor_thread_num = settings.pipeline_spill_executor_threads == 0
             ? std::thread::hardware_concurrency()
             : static_cast<size_t>(settings.pipeline_spill_executor_threads);
         TaskSchedulerConfig config{task_executor_thread_num, spill_executor_thread_num};

@@ -62,8 +62,6 @@ public:
     PipelineExecStatus & getExecStatus() { return exec_status; }
 
 protected:
-    void insertEvent(const EventPtr & replacement);
-
     // Returns true meaning no task is scheduled.
     virtual bool scheduleImpl() { return true; }
 

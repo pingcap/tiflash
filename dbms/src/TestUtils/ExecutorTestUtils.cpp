@@ -121,7 +121,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 
     // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
 }
 
 void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)

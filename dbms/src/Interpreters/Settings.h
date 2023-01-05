@@ -368,8 +368,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
-    M(SettingInt64, pipeline_task_executor_threads, -1, "The thread num of task executor. -1 means using hardware_concurrency.")                                                                                                        \
-    M(SettingInt64, pipeline_spill_executor_threads, -1, "The thread num of spill executor. -1 means using hardware_concurrency.")
+    M(SettingUInt64, pipeline_task_executor_threads, 0, "The thread num of task executor. 0 means using hardware_concurrency.")                                                                                                        \
+    M(SettingUInt64, pipeline_spill_executor_threads, 0, "The thread num of spill executor. 0 means using hardware_concurrency.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
