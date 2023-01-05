@@ -1834,7 +1834,9 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
         {
             data_file.moveTo(remote_data_file_path_tmp);
         }
-        Poco::File{remote_data_file_path_tmp}.renameTo(remote_data_file_path);
+        auto remote_data_file_temp = Poco::File{remote_data_file_path_tmp};
+        RUNTIME_CHECK(remote_data_file_temp.exists());
+        remote_data_file_temp.renameTo(remote_data_file_path);
     }
     else
         data_file.remove();
@@ -1845,7 +1847,9 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     {
         manifest_file.moveTo(remote_manifest_file_path_temp);
     }
-    Poco::File{remote_manifest_file_path_temp}.renameTo(remote_manifest_file_path);
+    auto remote_manifest_file_temp = Poco::File{remote_manifest_file_path_temp};
+    RUNTIME_CHECK(remote_manifest_file_temp.exists());
+    remote_manifest_file_temp.renameTo(remote_manifest_file_path);
 
     last_checkpoint_sequence = snap->sequence;
     LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);
