@@ -71,4 +71,6 @@ private:
     mpp::CompressionMode compression_mode{};
 };
 
+CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compression_mode);
+
 } // namespace DB

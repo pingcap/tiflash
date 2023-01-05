@@ -98,21 +98,6 @@ size_t ApproxBlockBytes(const Block & block)
     return block.bytes() + GetExtraInfoSize(block);
 }
 
-CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compression_mode)
-{
-    switch (compression_mode)
-    {
-    case mpp::CompressionMode::NONE:
-        return CompressionMethod::NONE;
-    case mpp::CompressionMode::FAST:
-        return CompressionMethod::LZ4; // use LZ4 method as fast mode
-    case mpp::CompressionMode::HIGH_COMPRESSION:
-        return CompressionMethod::ZSTD; // use ZSTD method as HC mode
-    default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unkown compresssion mode {}", mpp::CompressionMode_Name(compression_mode));
-    }
-}
-
 void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
     /** If there are columns-constants - then we materialize them.

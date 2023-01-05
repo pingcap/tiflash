@@ -38,6 +38,22 @@
 
 namespace DB
 {
+
+CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compression_mode)
+{
+    switch (compression_mode)
+    {
+    case mpp::CompressionMode::NONE:
+        return CompressionMethod::NONE;
+    case mpp::CompressionMode::FAST:
+        return CompressionMethod::LZ4; // use LZ4 method as fast mode
+    case mpp::CompressionMode::HIGH_COMPRESSION:
+        return CompressionMethod::ZSTD; // use ZSTD method as HC mode
+    default:
+        return CompressionMethod::NONE;
+    }
+}
+
 template <class ExchangeWriterPtr>
 HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     ExchangeWriterPtr writer_,
@@ -366,9 +382,9 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
 
 static void updateHashPartitionWriterMetrics(mpp::CompressionMode mode, size_t sz, bool is_local)
 {
-    switch (mode)
+    switch (ToInternalCompressionMethod(mode))
     {
-    case mpp::CompressionMode::NONE:
+    case CompressionMethod::NONE:
     {
         if (is_local)
         {
@@ -380,12 +396,12 @@ static void updateHashPartitionWriterMetrics(mpp::CompressionMode mode, size_t s
         }
         break;
     }
-    case mpp::CompressionMode::FAST:
+    case CompressionMethod::LZ4:
     {
         GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
         break;
     }
-    case mpp::CompressionMode::HIGH_COMPRESSION:
+    case CompressionMethod::ZSTD:
     {
         GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
         break;
