@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Pipeline/Pipeline.h>
@@ -41,12 +42,20 @@ namespace DB
 {
 namespace
 {
-bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor_id, const tipb::Selection & selection)
+bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, const String & executor_id, const tipb::Selection & selection)
 {
     if (plan->tp() == PlanType::TableScan)
     {
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->pushDownFilter(executor_id, selection);
+    }
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
+    {
+        auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
+        if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
+        {
+            return physical_mock_table_scan->pushDownFilter(context, executor_id, selection);
+        }
     }
     return false;
 }
@@ -111,7 +120,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
         auto child = popBack();
-        if (pushDownSelection(child, executor_id, executor->selection()))
+        if (pushDownSelection(context, child, executor_id, executor->selection()))
             pushBack(child);
         else
             pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));

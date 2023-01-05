@@ -118,6 +118,18 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
     context.context.setInterpreterTest();
+
+    // Don't care regions information in interpreter tests.
+    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
+}
+
+void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+{
+    DAGContext dag_context(*request, "interpreter_test_with_delta_merge", concurrency);
+    context.context.setDAGContext(&dag_context);
+    context.context.setExecutorTest();
+    context.context.setMockStorage(context.mockStorage());
     // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));

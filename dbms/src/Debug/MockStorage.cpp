@@ -11,8 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Debug/MockStorage.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
@@ -119,10 +124,11 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
     }
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 id)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter)
 {
-    auto storage = storage_delta_merge_map[id];
-    auto column_infos = table_schema_for_delta_merge[id];
+    assert(tableExistsForDeltaMerge(table_id));
+    auto storage = storage_delta_merge_map[table_id];
+    auto column_infos = table_schema_for_delta_merge[table_id];
     assert(storage);
     assert(!column_infos.empty());
     Names column_names;
@@ -134,10 +140,30 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
-    BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
-
-    BlockInputStreamPtr in = ins[0];
-    return in;
+    if (push_down_filter && push_down_filter->hasValue())
+    {
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            push_down_filter->conditions,
+            analyzer->getPreparedSets(),
+            analyzer->getCurrentInputColumns(),
+            context.getTimezoneInfo());
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*push_down_filter, *analyzer);
+        BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
+        // TODO: set num_streams, then ins.size() != 1
+        BlockInputStreamPtr in = ins[0];
+        in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
+        in->setExtraInfo("push down filter");
+        in = std::make_shared<ExpressionBlockInputStream>(in, project_after_where, "test");
+        in->setExtraInfo("projection after push down filter");
+        return in;
+    }
+    else
+    {
+        BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1);
+        BlockInputStreamPtr in = ins[0];
+        return in;
+    }
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)

@@ -206,6 +206,9 @@ public:
     void initMockStorage();
 
 private:
+    static void assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+
+private:
     size_t index;
     std::unique_ptr<MockStorage> mock_storage = nullptr;
 
