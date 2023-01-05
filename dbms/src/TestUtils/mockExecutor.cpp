@@ -400,14 +400,16 @@ void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, C
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
-    assert(columnInfos.size() == columns.size());
+    assertMockInput(columnInfos, columns);
+
     addMockTable(db, table, columnInfos);
     addMockTableColumnData(db, table, columns);
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
-    assert(columnInfos.size() == columns.size());
+    assertMockInput(columnInfos, columns);
+
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
 }
@@ -419,22 +421,25 @@ void MockDAGRequestContext::addMockDeltaMergeSchema(const String & db, const Str
 
 void MockDAGRequestContext::addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
-    assert(columnInfos.size() == columns.size());
-    assert(context.mockStorage()->useDeltaMerge());
+    assert(mock_storage->useDeltaMerge());
+    assertMockInput(columnInfos, columns);
+
     addMockDeltaMergeSchema(db, table, columnInfos);
     addMockDeltaMergeData(db, table, columns);
 }
 
 void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
-    assert(columnInfos.size() == columns.size());
+    assert(mock_storage->useDeltaMerge());
+    assertMockInput(columnInfos, columns);
+
     addMockDeltaMergeSchema(name.first, name.second, columnInfos);
     addMockDeltaMergeData(name.first, name.second, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns)
 {
-    assert(columnInfos.size() == columns.size());
+    assertMockInput(columnInfos, columns);
     addExchangeRelationSchema(name, columnInfos);
     addExchangeReceiverColumnData(name, columns);
 }
@@ -465,4 +470,12 @@ void MockDAGRequestContext::initMockStorage()
 {
     mock_storage = std::make_unique<MockStorage>();
 }
+
+void MockDAGRequestContext::assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+{
+    assert(columnInfos.size() == columns.size());
+    for (size_t i = 0; i < columns.size(); ++i)
+        assert(columnInfos[i].first == columns[i].name);
+}
+
 } // namespace DB::tests
