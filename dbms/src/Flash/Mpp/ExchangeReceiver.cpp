@@ -722,7 +722,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
         for (auto && chunk : packet.chunks())
         {
-            auto && result = decoder_ptr->decodeAndSquash(chunk, packet.compress().method() != mpp::CompressMethod::NONE);
+            auto && result = decoder_ptr->decodeAndSquash(chunk, packet.compress().mode() != mpp::CompressionMode::NONE);
             if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();

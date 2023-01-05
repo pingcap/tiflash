@@ -503,7 +503,7 @@ try
         batch_send_min_limit,
         /*should_send_exec_summary_at_last=*/false,
         *dag_context_ptr,
-        mpp::CompressMethod::FAST);
+        mpp::CompressionMode::FAST);
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
@@ -528,14 +528,14 @@ try
             {
                 if (part_index == 0)
                 {
-                    ASSERT_EQ(packet.compress().method(), mpp::CompressMethod::NONE);
+                    ASSERT_EQ(packet.compress().mode(), mpp::CompressionMode::NONE);
                 }
                 else
                 {
-                    ASSERT_NE(packet.compress().method(), mpp::CompressMethod::NONE);
+                    ASSERT_NE(packet.compress().mode(), mpp::CompressionMode::NONE);
                 }
 
-                auto && result = decoder.decodeAndSquash(chunk, packet.compress().method() != mpp::CompressMethod::NONE);
+                auto && result = decoder.decodeAndSquash(chunk, packet.compress().mode() != mpp::CompressionMode::NONE);
                 if (!result)
                     continue;
                 decoded_block_rows += result->rows();

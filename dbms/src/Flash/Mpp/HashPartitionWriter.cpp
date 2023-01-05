@@ -107,19 +107,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
-    for (size_t part_id = 0; part_id < partition_num; ++part_id)
-    {
-        // auto method = compress_method;
-        // if (writer->getTunnels()[part_id]->isLocal())
-        // {
-        //     method = mpp::CompressMethod::NONE;
-        // }
-        // tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
-        // tracked_packets[part_id]->getPacket().set_mpp_version(TiDB::GetMppVersion());
-    }
-
     size_t ori_block_mem_size = 0;
-
 
     if (!blocks.empty())
     {
@@ -145,14 +133,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 if (dest_block_rows > 0)
                 {
                     auto * codec_stream = chunk_codec_stream.get();
-                    // if (tracked_packets[part_id]->getPacket().compress().method() != mpp::CompressMethod::NONE)
-                    // {
-                    //     assert(compress_chunk_codec_stream);
-                    //     // no need compress
-                    //     codec_stream = compress_chunk_codec_stream.get();
-                    // }
                     codec_stream->encode(dest_block, 0, dest_block_rows);
-                    // ori_block_mem_size += ApproxBlockBytes(dest_block);
                     tracked_packets[part_id]->addChunk(codec_stream->getString());
                     codec_stream->clear();
                 }
@@ -180,15 +161,18 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
         {
             writer->partitionWrite(packet, part_id);
 
-            assert(inner_packet.compress().method() == mpp::CompressMethod::NONE);
+            // Update metrics about exchange hash partition
+            {
+                assert(inner_packet.compress().mode() == mpp::CompressionMode::NONE);
 
-            if (auto sz = inner_packet.ByteSizeLong(); writer->isLocal(part_id))
-            {
-                GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
-            }
-            else
-            {
-                GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
+                if (auto sz = inner_packet.ByteSizeLong(); writer->isLocal(part_id))
+                {
+                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+                }
+                else
+                {
+                    GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
+                }
             }
         }
     }

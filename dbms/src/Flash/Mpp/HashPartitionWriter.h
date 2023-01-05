@@ -56,7 +56,7 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
 
-    // mpp::CompressMethod compress_method{};
+    // mpp::CompressionMode compress_method{};
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     // std::unique_ptr<ChunkCodecStream> compress_chunk_codec_stream;
 };

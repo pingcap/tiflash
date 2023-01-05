@@ -45,7 +45,7 @@ private:
 
 size_t GetExtraInfoSize(const Block & block);
 size_t ApproxBlockBytes(const Block & block);
-CompressionMethod ToInternalCompressionMethod(mpp::CompressMethod compress_method);
+CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compress_method);
 std::unique_ptr<CHBlockChunkCodecStream> NewCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types);
 void EncodeCHBlockChunk(WriteBuffer * ostr_ptr, const Block & block);
 

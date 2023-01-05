@@ -120,7 +120,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
     if (dag_context.isRootMPPTask())
     {
         // No need to use use data compression
-        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
+        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressionMode::NONE);
 
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
@@ -138,7 +138,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
             if (enable_fine_grained_shuffle)
             {
                 // TODO: support data compression if necessary
-                RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
+                RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressionMode::NONE);
 
                 return std::make_unique<FineGrainedShuffleWriter<MPPTunnelSetPtr>>(
                     writer,
@@ -173,7 +173,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
         else
         {
             // TODO: support data compression if necessary
-            RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressMethod::NONE);
+            RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compress() == mpp::CompressionMode::NONE);
 
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
             return std::make_unique<BroadcastOrPassThroughWriter<MPPTunnelSetPtr>>(

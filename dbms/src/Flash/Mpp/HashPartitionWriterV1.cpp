@@ -46,7 +46,7 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     Int64 partition_batch_limit_,
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
-    mpp::CompressMethod compress_method_)
+    mpp::CompressionMode compress_method_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , partition_num(writer_->getPartitionNum())
     , partition_batch_limit(partition_batch_limit_ * partition_num)
@@ -123,8 +123,8 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     // Do NOT enable data compression when using local tunnel
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        auto method = writer->isLocal(part_id) ? mpp::CompressMethod::NONE : compress_method;
-        tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
+        auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compress_method;
+        tracked_packets[part_id]->getPacket().mutable_compress()->set_mode(mode);
     }
 
     // Sum of all approximate block data memory size
@@ -191,7 +191,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             WriteBuffer * ostr_ptr = output_buffer.get();
 
             // Init compression writer
-            if (tracked_packets[part_id]->getPacket().compress().method() != mpp::NONE)
+            if (tracked_packets[part_id]->getPacket().compress().mode() != mpp::CompressionMode::NONE)
             {
                 compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
                     *output_buffer,
@@ -252,8 +252,8 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     // Do NOT enable data compression when using local tunnel
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        auto method = writer->isLocal(part_id) ? mpp::CompressMethod::NONE : compress_method;
-        tracked_packets[part_id]->getPacket().mutable_compress()->set_method(method);
+        auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compress_method;
+        tracked_packets[part_id]->getPacket().mutable_compress()->set_mode(mode);
     }
 
     // Sum of all approximate block data memory size
@@ -319,7 +319,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             WriteBuffer * ostr_ptr = output_buffer.get();
 
             // Init compression writer
-            if (tracked_packets[part_id]->getPacket().compress().method() != mpp::NONE)
+            if (tracked_packets[part_id]->getPacket().compress().mode() != mpp::CompressionMode::NONE)
             {
                 compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
                     *output_buffer,
@@ -364,11 +364,11 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
 }
 
-static void updateHashPartitionWriterMetrics(mpp::CompressMethod method, size_t sz, bool is_local)
+static void updateHashPartitionWriterMetrics(mpp::CompressionMode mode, size_t sz, bool is_local)
 {
-    switch (method)
+    switch (mode)
     {
-    case mpp::NONE:
+    case mpp::CompressionMode::NONE:
     {
         if (is_local)
         {
@@ -380,12 +380,12 @@ static void updateHashPartitionWriterMetrics(mpp::CompressMethod method, size_t 
         }
         break;
     }
-    case mpp::CompressMethod::FAST:
+    case mpp::CompressionMode::FAST:
     {
         GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
         break;
     }
-    case mpp::CompressMethod::HIGH_COMPRESSION:
+    case mpp::CompressionMode::HIGH_COMPRESSION:
     {
         GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
         break;
@@ -407,9 +407,9 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPa
 
         if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
         {
-            auto method = inner_packet.compress().method();
+            auto mode = inner_packet.compress().mode();
             writer->partitionWrite(std::move(packet), part_id);
-            updateHashPartitionWriterMetrics(method, sz, writer->isLocal(part_id));
+            updateHashPartitionWriterMetrics(mode, sz, writer->isLocal(part_id));
         }
     }
 }

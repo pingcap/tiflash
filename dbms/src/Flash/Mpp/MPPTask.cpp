@@ -279,26 +279,26 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     // if (true) // nolint
     // {
     //     auto exchange_sender_meta = task_request.exchange_sender_meta();
-    //     mpp::CompressMethod compress_method{};
+    //     mpp::CompressionMode compress_method{};
     //     switch (tzg::SnappyStatistic::globalInstance().getMethod())
     //     {
     //     case tzg::SnappyStatistic::CompressMethod::LZ4:
-    //         compress_method = mpp::CompressMethod::FAST;
+    //         compress_method = mpp::CompressionMode::FAST;
     //         break;
     //     case tzg::SnappyStatistic::CompressMethod::ZSTD:
-    //         compress_method = mpp::CompressMethod::HIGH_COMPRESSION;
+    //         compress_method = mpp::CompressionMode::HIGH_COMPRESSION;
     //         break;
     //     default:
-    //         compress_method = mpp::CompressMethod::NONE;
+    //         compress_method = mpp::CompressionMode::NONE;
     //         break;
     //     }
     //     exchange_sender_meta.set_compress(compress_method);
-    //     LOG_DEBUG(log, "DAGContext use compress method {}", mpp::CompressMethod_Name(compress_method));
+    //     LOG_DEBUG(log, "DAGContext use compress method {}", mpp::CompressionMode_Name(compress_method));
     //     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), exchange_sender_meta, is_root_mpp_task);
     // }
     // else
     {
-        LOG_DEBUG(log, "DAGContext use compress method {}", mpp::CompressMethod_Name(task_request.exchange_sender_meta().compress()));
+        LOG_DEBUG(log, "DAGContext use compress method {}", mpp::CompressionMode_Name(task_request.exchange_sender_meta().compress()));
         dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), task_request.exchange_sender_meta(), is_root_mpp_task);
     }
 
