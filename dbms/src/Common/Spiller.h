@@ -45,7 +45,7 @@ struct SpilledFiles
 class Spiller
 {
 public:
-    Spiller(const String & id, bool is_input_sorted, size_t partition_num, const String & spill_dir, const Block & input_schema, LoggerPtr logger);
+    Spiller(const String & id, bool is_input_sorted, size_t partition_num, const String & spill_dir, const Block & input_schema, const LoggerPtr & logger);
     bool spillBlocks(const Blocks & blocks, size_t partition_id);
     BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size);
     size_t spilledBlockDataSize(size_t partition_id);
@@ -61,7 +61,7 @@ private:
     /// todo remove input_schema if spiller does not rely on BlockInputStream
     Block input_schema;
     LoggerPtr logger;
-    bool spill_finished = false;
+    std::atomic<bool> spill_finished{false};
     static std::atomic<Int64> tmp_file_index;
     std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
 };

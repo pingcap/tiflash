@@ -39,7 +39,7 @@ SpilledFile::~SpilledFile()
     }
 }
 
-Spiller::Spiller(const String & id_, bool is_input_sorted_, size_t partition_num_, const String & spill_dir_, const Block & input_schema_, LoggerPtr logger_)
+Spiller::Spiller(const String & id_, bool is_input_sorted_, size_t partition_num_, const String & spill_dir_, const Block & input_schema_, const LoggerPtr & logger_)
     : id(id_)
     , is_input_sorted(is_input_sorted_)
     , partition_num(partition_num_)
@@ -51,7 +51,7 @@ Spiller::Spiller(const String & id_, bool is_input_sorted_, size_t partition_num
     {
         spill_dir += Poco::Path::separator();
     }
-    for (size_t i = 0; i < partition_num; i++)
+    for (size_t i = 0; i < partition_num; ++i)
         spilled_files.push_back(std::make_unique<SpilledFiles>());
 }
 
@@ -60,12 +60,13 @@ bool Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(spill_finished == false, "{}: spill after the spiller is finished.", id);
     /// todo append to existing file
+    if (unlikely(blocks.empty()))
+        return true;
     auto spilled_file_name = nextSpillFileName(partition_id);
     try
     {
         auto spilled_file = std::make_unique<SpilledFile>(spilled_file_name);
-        if (spilled_file->exists())
-            throw Exception("Duplicated spilled files, should not happens");
+        RUNTIME_CHECK_MSG(!spilled_file->exists(), "Duplicated spilled file: {}, should not happens", spilled_file_name);
         WriteBufferFromFile file_buf(spilled_file_name);
         CompressedWriteBuffer compressed_buf(file_buf);
         NativeBlockOutputStream block_out(compressed_buf, 0, blocks[0].cloneEmpty());
@@ -100,15 +101,9 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
     {
         for (const auto & file : spilled_files[partition_id]->spilled_files)
         {
-            if (likely(file->exists()))
-            {
-                std::vector<String> files{file->path()};
-                ret.push_back(std::make_shared<SpilledFilesInputStream>(files, input_schema));
-            }
-            else
-            {
-                LOG_WARNING(logger, "Spill file {} does not exists", file->path());
-            }
+            RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
+            std::vector<String> files{file->path()};
+            ret.push_back(std::make_shared<SpilledFilesInputStream>(files, input_schema));
         }
     }
     else
@@ -117,10 +112,9 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
         std::vector<std::vector<String>> files(return_stream_num);
         for (size_t i = 0; i < spilled_files[partition_id]->spilled_files.size(); ++i)
         {
-            if (likely(spilled_files[partition_id]->spilled_files[i]->exists()))
-                files[i % return_stream_num].push_back(spilled_files[partition_id]->spilled_files[i]->path());
-            else
-                LOG_WARNING(logger, "Spill file {} does not exists", spilled_files[partition_id]->spilled_files[i]->path());
+            const auto & file = spilled_files[partition_id]->spilled_files[i];
+            RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
+            files[i % return_stream_num].push_back(file->path());
         }
         for (size_t i = 0; i < return_stream_num; ++i)
         {

@@ -27,18 +27,20 @@ SpilledFilesInputStream::SpilledFilesInputStream(const std::vector<String> & spi
 
 Block SpilledFilesInputStream::readImpl()
 {
-    Block ret;
-    ret = current_file_stream->block_in->read();
+    if (unlikely(current_file_stream == nullptr))
+        return {};
+    Block ret = current_file_stream->block_in->read();
     if (ret)
         return ret;
-    current_reading_file_index++;
-    for (; current_reading_file_index < spilled_files.size(); current_reading_file_index++)
+
+    for (++current_reading_file_index; current_reading_file_index < spilled_files.size(); ++current_reading_file_index)
     {
         current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[current_reading_file_index], header);
         ret = current_file_stream->block_in->read();
         if (ret)
             return ret;
     }
+    current_file_stream.reset();
     return ret;
 }
 

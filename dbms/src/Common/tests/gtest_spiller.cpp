@@ -49,13 +49,13 @@ protected:
     Blocks generateBlocks(size_t block_num)
     {
         Blocks ret;
-        for (size_t i = 0; i < block_num; i++)
+        for (size_t i = 0; i < block_num; ++i)
         {
             ColumnsWithTypeAndName data;
             for (const auto & type_and_name : spiller_test_header)
             {
                 auto column = type_and_name.type->createColumn();
-                for (size_t k = 0; k < 100; k++)
+                for (size_t k = 0; k < 100; ++k)
                     column->insert(k);
                 data.push_back(ColumnWithTypeAndName(std::move(column), type_and_name.type, type_and_name.name));
             }
@@ -66,13 +66,13 @@ protected:
     Blocks generateSortedBlocks(size_t block_num)
     {
         Blocks ret;
-        for (size_t i = 0; i < block_num; i++)
+        for (size_t i = 0; i < block_num; ++i)
         {
             ColumnsWithTypeAndName data;
             for (const auto & type_and_name : spiller_test_header)
             {
                 auto column = type_and_name.type->createColumn();
-                for (size_t k = 0; k < 100; k++)
+                for (size_t k = 0; k < 100; ++k)
                     column->insert(k + i * 100);
                 data.push_back(ColumnWithTypeAndName(std::move(column), type_and_name.type, type_and_name.name));
             }
@@ -98,11 +98,7 @@ try
     }
     ASSERT(!Poco::File(file_name).exists());
 }
-catch (Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, InvalidPartitionIdInSpill)
 try
@@ -160,7 +156,7 @@ try
     Spiller spiller("test", false, 1, spiller_test_tmp_dir, spiller_test_header, logger);
     size_t spill_num = 5;
     size_t ref = 0;
-    for (size_t spill_time = 0; spill_time < spill_num; spill_time++)
+    for (size_t spill_time = 0; spill_time < spill_num; ++spill_time)
     {
         auto blocks = generateBlocks(3);
         for (const auto & block : blocks)
@@ -170,10 +166,7 @@ try
     spiller.finishSpill();
     GTEST_ASSERT_EQ(ref, spiller.spilledBlockDataSize(0));
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreUnorderedBlocks)
 try
@@ -182,9 +175,9 @@ try
     size_t partition_num = 2;
     size_t spill_num = 5;
     std::vector<Blocks> all_blocks(partition_num);
-    for (size_t partition_id = 0; partition_id < partition_num; partition_id++)
+    for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
-        for (size_t spill_time = 0; spill_time < spill_num; spill_time++)
+        for (size_t spill_time = 0; spill_time < spill_num; ++spill_time)
         {
             auto blocks = generateBlocks(3);
             all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
@@ -192,7 +185,7 @@ try
         }
     }
     spiller.finishSpill();
-    for (size_t partition_id = 0; partition_id < partition_num; partition_id++)
+    for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
         auto restore_block_streams = spiller.restoreBlocks(partition_id, max_restore_streams);
@@ -207,16 +200,13 @@ try
             }
         }
         GTEST_ASSERT_EQ(all_restored_blocks.size(), all_blocks[partition_id].size());
-        for (size_t i = 0; i < all_restored_blocks.size(); i++)
+        for (size_t i = 0; i < all_restored_blocks.size(); ++i)
         {
             blockEqual(all_blocks[partition_id][i], all_restored_blocks[i]);
         }
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreOrderedBlocks)
 try
@@ -225,9 +215,9 @@ try
     size_t partition_num = 2;
     size_t spill_num = 5;
     std::vector<Blocks> all_blocks(partition_num);
-    for (size_t partition_id = 0; partition_id < partition_num; partition_id++)
+    for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
-        for (size_t spill_time = 0; spill_time < spill_num; spill_time++)
+        for (size_t spill_time = 0; spill_time < spill_num; ++spill_time)
         {
             auto blocks = generateSortedBlocks(3);
             all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
@@ -235,7 +225,7 @@ try
         }
     }
     spiller.finishSpill();
-    for (size_t partition_id = 0; partition_id < partition_num; partition_id++)
+    for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
         auto restore_block_streams = spiller.restoreBlocks(partition_id, max_restore_streams);
@@ -251,16 +241,13 @@ try
             }
         }
         GTEST_ASSERT_EQ(all_restored_blocks.size(), all_blocks[partition_id].size());
-        for (size_t i = 0; i < all_restored_blocks.size(); i++)
+        for (size_t i = 0; i < all_restored_blocks.size(); ++i)
         {
             blockEqual(all_blocks[partition_id][i], all_restored_blocks[i]);
         }
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreConstantData)
 try
@@ -285,15 +272,12 @@ try
             restored_blocks.push_back(block);
     }
     GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); i++)
+    for (size_t i = 0; i < ret.size(); ++i)
     {
         blockEqual(materializeBlock(ret[i]), restored_blocks[i]);
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreNumericData)
 try
@@ -344,15 +328,12 @@ try
             restored_blocks.push_back(block);
     }
     GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); i++)
+    for (size_t i = 0; i < ret.size(); ++i)
     {
         blockEqual(ret[i], restored_blocks[i]);
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreDecimalData)
 try
@@ -396,15 +377,12 @@ try
             restored_blocks.push_back(block);
     }
     GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); i++)
+    for (size_t i = 0; i < ret.size(); ++i)
     {
         blockEqual(ret[i], restored_blocks[i]);
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreDateTimeData)
 try
@@ -446,15 +424,12 @@ try
             restored_blocks.push_back(block);
     }
     GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); i++)
+    for (size_t i = 0; i < ret.size(); ++i)
     {
         blockEqual(ret[i], restored_blocks[i]);
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 TEST_F(SpillerTest, SpillAndRestoreStringEnumData)
 try
@@ -492,15 +467,12 @@ try
             restored_blocks.push_back(block);
     }
     GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); i++)
+    for (size_t i = 0; i < ret.size(); ++i)
     {
         blockEqual(ret[i], restored_blocks[i]);
     }
 }
-catch (Exception & e)
-{
-    GTEST_FAIL();
-}
+CATCH
 
 } // namespace tests
 } // namespace DB
