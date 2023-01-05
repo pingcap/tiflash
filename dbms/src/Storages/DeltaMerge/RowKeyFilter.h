@@ -19,7 +19,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
-#include "Common/Exception.h"
 
 namespace DB
 {
@@ -48,22 +47,20 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
         if (offset == 0)
         {
             size_t pop_size = rows - limit;
-            for (size_t i = 0; i < block.columns(); ++i)
+            for (auto & col : block)
             {
-                auto & column = block.getByPosition(i);
-                auto mutate_col = (*std::move(column.column)).mutate();
+                auto mutate_col = (*std::move(col.column)).mutate();
                 mutate_col->popBack(pop_size);
-                column.column = std::move(mutate_col);
+                col.column = std::move(mutate_col);
             }
         }
         else
         {
-            for (size_t i = 0; i < block.columns(); ++i)
+            for (auto & col : block)
             {
-                auto & column = block.getByPosition(i);
-                auto new_column = column.column->cloneEmpty();
-                new_column->insertRangeFrom(*column.column, offset, limit);
-                column.column = std::move(new_column);
+                auto new_column = col.column->cloneEmpty();
+                new_column->insertRangeFrom(*col.column, offset, limit);
+                col.column = std::move(new_column);
             }
         }
         return std::move(block);
@@ -71,7 +68,7 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
     else
     {
         auto new_columns = block.cloneEmptyColumns();
-        for (auto & [offset, limit] : offset_and_limits)
+        for (const auto & [offset, limit] : offset_and_limits)
         {
             if (!limit)
                 continue;
@@ -121,7 +118,7 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
             current_limit = limit;
         }
     }
-    combined_offset_and_limits.emplace_back(std::make_pair(current_offset, current_limit));
+    combined_offset_and_limits.emplace_back(current_offset, current_limit);
 
     if (combined_offset_and_limits.empty())
         return {};
@@ -146,17 +143,16 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
             }
         }
     }
-    size_t passed_count = std::count(filter.begin(), filter.end(), 1);
+    size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1);
 
     if (!passed_count)
         return {};
     if (passed_count == rows)
         return std::move(block);
 
-    for (size_t i = 0; i < block.columns(); ++i)
+    for (auto & col : block)
     {
-        auto & column = block.getByPosition(i);
-        column.column = column.column->filter(filter, passed_count);
+        col.column = col.column->filter(filter, passed_count);
     }
     return std::move(block);
 }
