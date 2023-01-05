@@ -1830,7 +1830,10 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
     if (has_new_data)
     {
         // Upload in two steps to avoid other store read incomplete file
-        data_file.moveTo(remote_data_file_path_tmp);
+        if (remote_data_file_path_tmp != local_data_file_path_temp)
+        {
+            data_file.moveTo(remote_data_file_path_tmp);
+        }
         Poco::File{remote_data_file_path_tmp}.renameTo(remote_data_file_path);
     }
     else
@@ -1838,8 +1841,11 @@ typename PageDirectory<Trait>::DumpRemoteCheckpointResult PageDirectory<Trait>::
 
     auto manifest_file = Poco::File{local_manifest_file_path_temp};
     RUNTIME_CHECK(manifest_file.exists());
-    manifest_file.moveTo(remote_manifest_file_path_temp);
-    Poco::File{remote_manifest_file_path_temp}.renameTo(remote_data_file_path);
+    if (remote_manifest_file_path_temp != local_manifest_file_path_temp)
+    {
+        manifest_file.moveTo(remote_manifest_file_path_temp);
+    }
+    Poco::File{remote_manifest_file_path_temp}.renameTo(remote_manifest_file_path);
 
     last_checkpoint_sequence = snap->sequence;
     LOG_DEBUG(log, "Update last_checkpoint_sequence to {}", last_checkpoint_sequence);
