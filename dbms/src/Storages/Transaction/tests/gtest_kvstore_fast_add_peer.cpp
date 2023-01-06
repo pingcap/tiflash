@@ -55,22 +55,22 @@ TEST_F(RegionKVStoreTest, FAPPSCache)
         cache.insert(1, 10, 1);
         cache.guardedMaybeEvict(1);
         cache.guardedMaybeEvict(2);
-        ASSERT_TRUE(cache.maybe_get(1, 10) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 10) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
         cache.insert(1, 0, 1);
         cache.guardedMaybeEvict(1);
         cache.guardedMaybeEvict(2);
-        ASSERT_TRUE(cache.maybe_get(1, 0) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 0) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
         cache.insert(1, 10, 1);
         cache.insert(1, 11, 1);
         cache.guardedMaybeEvict(1);
-        ASSERT_TRUE(cache.maybe_get(1, 10) == std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(1, 11) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 10) == std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 11) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
@@ -78,8 +78,8 @@ TEST_F(RegionKVStoreTest, FAPPSCache)
         cache.insert(1, 11, 1);
         cache.insert(2, 0, 1);
         cache.guardedMaybeEvict(1);
-        ASSERT_TRUE(cache.maybe_get(1, 10) == std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(1, 11) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 10) == std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 11) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
@@ -87,9 +87,9 @@ TEST_F(RegionKVStoreTest, FAPPSCache)
         cache.insert(1, 10, 1);
         cache.insert(1, 11, 1);
         cache.guardedMaybeEvict(1);
-        ASSERT_TRUE(cache.maybe_get(1, 0) == std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(1, 10) == std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(1, 11) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 0) == std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 10) == std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 11) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
@@ -98,9 +98,9 @@ TEST_F(RegionKVStoreTest, FAPPSCache)
         cache.insert(2, 11, 1);
         cache.guardedMaybeEvict(1);
         cache.guardedMaybeEvict(3);
-        ASSERT_TRUE(cache.maybe_get(2, 0) != std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(2, 10) != std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(2, 11) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(2, 0) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(2, 10) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(2, 11) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
@@ -113,12 +113,12 @@ TEST_F(RegionKVStoreTest, FAPPSCache)
         cache.insert(3, 10, 1);
         cache.guardedMaybeEvict(1);
         cache.guardedMaybeEvict(3);
-        ASSERT_TRUE(cache.maybe_get(2, 10) != std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(2, 11) != std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(1, 10) != std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(3, 10) != std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(1, 0) == std::nullopt);
-        ASSERT_TRUE(cache.maybe_get(3, 0) == std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(2, 10) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(2, 11) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 10) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(3, 10) != std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(1, 0) == std::nullopt);
+        ASSERT_TRUE(cache.maybeGet(3, 0) == std::nullopt);
     }
 }
 
@@ -193,7 +193,7 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
                 remote_meta = std::move(maybe_remote_meta.value());
                 auto & local_ps = ctx.getLocalPageStorageCache();
                 LOG_DEBUG(log, "try get {}.{}", remote_meta.remote_store_id, remote_meta.version);
-                ASSERT_TRUE(local_ps.maybe_get(remote_meta.remote_store_id, remote_meta.version) != std::nullopt);
+                ASSERT_TRUE(local_ps.maybeGet(remote_meta.remote_store_id, remote_meta.version) != std::nullopt);
             }
             {
                 auto [_, maybe_remote_meta2] = selectRemotePeer(ctx, page_storage, current_store_id, region_id, 42);
@@ -222,8 +222,8 @@ TEST_F(RegionKVStoreTest, FAPRestorePS)
                 RemoteMeta remote_meta2;
                 remote_meta2 = maybe_remote_meta.value();
                 auto & local_ps = ctx.getLocalPageStorageCache();
-                ASSERT_TRUE(local_ps.maybe_get(remote_meta.remote_store_id, remote_meta.version) == std::nullopt);
-                ASSERT_TRUE(local_ps.maybe_get(remote_meta2.remote_store_id, remote_meta2.version) != std::nullopt);
+                ASSERT_TRUE(local_ps.maybeGet(remote_meta.remote_store_id, remote_meta.version) == std::nullopt);
+                ASSERT_TRUE(local_ps.maybeGet(remote_meta2.remote_store_id, remote_meta2.version) != std::nullopt);
             }
         }
     }

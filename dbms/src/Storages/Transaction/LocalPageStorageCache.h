@@ -44,7 +44,7 @@ struct LocalPageStorageCache
     {
     }
 
-    std::optional<T> maybe_get(uint64_t store_id, uint64_t version) const
+    std::optional<T> maybeGet(uint64_t store_id, uint64_t version) const
     {
         std::scoped_lock lock(this->mtx);
 

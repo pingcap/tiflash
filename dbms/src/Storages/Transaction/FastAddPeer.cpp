@@ -82,7 +82,7 @@ UniversalPageStoragePtr reuseOrCreatePageStorage(Context & context, uint64_t sto
     UNUSED(store_id, version);
     auto * log = &Poco::Logger::get("fast add");
     auto & local_ps_cache = context.getLocalPageStorageCache();
-    auto maybe_cached_ps = local_ps_cache.maybe_get(store_id, version);
+    auto maybe_cached_ps = local_ps_cache.maybeGet(store_id, version);
     if (maybe_cached_ps.has_value())
     {
         LOG_DEBUG(log, "use cache for remote ps [store_id={}] [version={}]", store_id, version);
