@@ -17,6 +17,7 @@
 #include <Common/ThreadManager.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -239,7 +240,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    LOG_DEBUG(log, "build streams with {} segment tasks", remote_read_tasks->numSegments());
+    LOG_DEBUG(log, "build streams with {} segment tasks, num_streams={}", remote_read_tasks->numSegments(), num_streams);
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a PageReceiver to fetch the pages from all write nodes
     auto * kv_cluster = db_context.getTMTContext().getKVCluster();
@@ -257,18 +258,30 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
-    auto streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
-        db_context,
-        remote_read_tasks,
-        page_receiver,
-        column_defines,
-        read_tso,
-        num_streams,
-        extra_table_id_index,
-        extra_info,
-        /*tracing_id*/ log->identifier());
-    RUNTIME_CHECK(!streams.empty(), streams.size(), num_streams);
-    pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
+
+    auto io_concurrency = std::max(50, num_streams * 10);
+    auto sub_streams_size = io_concurrency / num_streams;
+
+    for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
+    {
+        // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
+        // As a result, we will have N * M IO concurrency (N = num_streams, M = sub_streams_size).
+
+        auto sub_streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
+            db_context,
+            remote_read_tasks,
+            page_receiver,
+            column_defines,
+            read_tso,
+            sub_streams_size,
+            extra_table_id_index,
+            extra_info,
+            /*tracing_id*/ log->identifier());
+        RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
+
+        auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
+        pipeline.streams.emplace_back(std::move(union_stream));
+    }
 
     auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
     auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
