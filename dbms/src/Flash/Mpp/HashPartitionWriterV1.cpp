@@ -75,10 +75,6 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     rows_in_blocks = 0;
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-    for (const auto & field_type : dag_context.result_field_types)
-    {
-        expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
-    }
 }
 
 template <class ExchangeWriterPtr>
@@ -144,7 +140,6 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
         {
             const auto & block = blocks.back();
             block.checkNumberOfRows();
-            assertBlockSchema(expected_types, block, "HashPartitionWriterV1");
 
             ori_block_mem_size += ApproxBlockBytes(block);
             total_rows += block.rows();
@@ -271,7 +266,6 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
         {
             const auto & block = blocks.back();
             block.checkNumberOfRows();
-            assertBlockSchema(expected_types, block, "HashPartitionWriterV1");
 
             ori_block_mem_size += ApproxBlockBytes(block);
             total_rows += block.rows();

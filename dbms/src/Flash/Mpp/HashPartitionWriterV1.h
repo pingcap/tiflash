@@ -62,7 +62,6 @@ private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
-    DataTypes expected_types;
     mpp::CompressionMode compression_mode{};
 };
 

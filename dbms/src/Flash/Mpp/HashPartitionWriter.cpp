@@ -13,25 +13,11 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
-#include <cassert>
-#include <cstddef>
-
-#include "Common/Exception.h"
-#include "Common/Stopwatch.h"
-#include "Flash/Coprocessor/CHBlockChunkCodecStream.h"
-#include "Flash/Coprocessor/CompressedCHBlockChunkCodec.h"
-#include "Flash/Mpp/MppVersion.h"
-#include "IO/CompressedStream.h"
-#include "common/logger_useful.h"
-#include "ext/scope_guard.h"
-#include "mpp.pb.h"
 namespace DB
 {
 template <class ExchangeWriterPtr>
@@ -78,11 +64,11 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
         partitionAndEncodeThenWriteBlocks();
 }
 
+extern size_t ApproxBlockBytes(const Block & block);
+
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
-    assert(chunk_codec_stream);
-
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
     size_t ori_block_mem_size = 0;
@@ -110,10 +96,9 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 size_t dest_block_rows = dest_block.rows();
                 if (dest_block_rows > 0)
                 {
-                    auto * codec_stream = chunk_codec_stream.get();
-                    codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id]->addChunk(codec_stream->getString());
-                    codec_stream->clear();
+                    chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
+                    tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
+                    chunk_codec_stream->clear();
                 }
             }
         }
