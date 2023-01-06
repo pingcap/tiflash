@@ -30,7 +30,7 @@ std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, Skippabl
 /** Skip the next block.
   * Return false if meets the end of both stable and delta.
   */
-bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
+bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, size_t skip_rows);
 
 /** Read the next block with filter.
   * Read from the stable first, then read from the delta.

@@ -45,9 +45,9 @@ public:
 
     bool getSkippedRows(size_t & /*skip_rows*/) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
-    bool skipNextBlock() override
+    bool skipNextBlock(size_t skip_rows) override
     {
-        return skipBlock(stable, delta);
+        return skipBlock(stable, delta, skip_rows);
     }
 
     Block read() override

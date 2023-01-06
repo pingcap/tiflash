@@ -47,7 +47,7 @@ public:
     {
         if (extra_table_id_index != InvalidColumnID)
         {
-            auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
+            const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
@@ -55,7 +55,7 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
-    ~UnorderedInputStream()
+    ~UnorderedInputStream() override
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
@@ -89,7 +89,7 @@ protected:
             {
                 if (extra_table_id_index != InvalidColumnID)
                 {
-                    auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
+                    const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
                     ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
                     size_t row_number = res.rows();
                     auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));

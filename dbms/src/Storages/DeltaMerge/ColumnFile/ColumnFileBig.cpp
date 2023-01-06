@@ -259,7 +259,7 @@ Block ColumnFileBigReader::readNextBlock()
     }
 }
 
-bool ColumnFileBigReader::skipNextBlock()
+bool ColumnFileBigReader::skipNextBlock(size_t skip_rows)
 {
     initStream();
 
@@ -269,12 +269,13 @@ bool ColumnFileBigReader::skipNextBlock()
         {
             return false;
         }
+        // RUNTIME_CHECK(cached_pk_ver_columns[next_block_index_in_cache].front()->size() == skip_rows);
         next_block_index_in_cache += 1;
         return true;
     }
     else
     {
-        return file_stream->skipNextBlock();
+        return file_stream->skipNextBlock(skip_rows);
     }
 }
 

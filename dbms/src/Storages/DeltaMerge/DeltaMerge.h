@@ -165,7 +165,7 @@ public:
         return true;
     }
 
-    bool skipNextBlock() override
+    bool skipNextBlock(size_t /*skip_rows*/) override
     {
         throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }

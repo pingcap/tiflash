@@ -63,7 +63,7 @@ Block LateMaterializationBlockInputStream::readImpl()
         if (size_t passed_count = std::count(filter->cbegin(), filter->cend(), 1); passed_count == 0)
         {
             // if all rows are filtered, skip the next block of rest_column_stream
-            if (!rest_column_stream->skipNextBlock())
+            if (!rest_column_stream->skipNextBlock(rows))
             {
                 // if we fail to skip, we need to read the rest of the block and ignore it
                 rest_column_stream->read();
@@ -76,18 +76,27 @@ Block LateMaterializationBlockInputStream::readImpl()
         else
         {
             Block rest_column_block;
-            if (passed_count != rows)
+            if (rows - passed_count >= DEFAULT_MERGE_BLOCK_SIZE * 2)
             {
+                // if the number of rows left after filtering out is large enough, we can skip some packs of the next block
+                // so we call readWithFilter to get the next block.
                 rest_column_block = rest_column_stream->readWithFilter(*filter);
-                // rest_column_block = rest_column_stream->read();
                 for (auto & col : filter_column_block)
                 {
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                // for (auto & col : rest_column_block)
-                // {
-                //     col.column = col.column->filter(*filter, passed_count);
-                // }
+            }
+            else if (rows - passed_count > 0)
+            {
+                rest_column_block = rest_column_stream->read();
+                for (auto & col : filter_column_block)
+                {
+                    col.column = col.column->filter(*filter, passed_count);
+                }
+                for (auto & col : rest_column_block)
+                {
+                    col.column = col.column->filter(*filter, passed_count);
+                }
             }
             else
             {

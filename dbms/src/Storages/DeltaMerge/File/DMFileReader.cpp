@@ -30,7 +30,6 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
-#include <cstddef>
 
 namespace CurrentMetrics
 {
@@ -307,11 +306,11 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_pack_id < use_packs.size();
 }
 
-bool DMFileReader::skipNextBlock()
+bool DMFileReader::skipNextBlock(size_t /*skip_rows*/)
 {
     // Go to next available pack.
-    size_t skip_rows;
-    if (!getSkippedRows(skip_rows))
+    size_t skip;
+    if (!getSkippedRows(skip))
         return false;
 
     // The next contiguous packs will be read in one read, mark them as not used.
@@ -334,6 +333,7 @@ bool DMFileReader::skipNextBlock()
         use_packs[next_pack_id] = false;
     }
 
+    // RUNTIME_CHECK(skip_rows == read_rows);
     scan_context->total_dmfile_skipped_rows += read_rows;
     next_row_offset += read_rows;
     return true;

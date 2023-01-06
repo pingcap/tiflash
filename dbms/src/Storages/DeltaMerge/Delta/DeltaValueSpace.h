@@ -439,19 +439,20 @@ public:
 
     /// Skip next block in the stream.
     /// Return false if failed to skip or the end of stream.
-    bool skipNextBlock() override
+    bool skipNextBlock(size_t skip_rows) override
     {
+        read_rows += skip_rows;
         if (persisted_files_done)
-            return mem_table_input_stream.skipNextBlock();
+            return mem_table_input_stream.skipNextBlock(skip_rows);
 
-        if (persisted_files_input_stream.skipNextBlock())
+        if (persisted_files_input_stream.skipNextBlock(skip_rows))
         {
             return true;
         }
         else
         {
             persisted_files_done = true;
-            return mem_table_input_stream.skipNextBlock();
+            return mem_table_input_stream.skipNextBlock(skip_rows);
         }
     }
 
@@ -467,7 +468,9 @@ public:
     {
         auto block = doReadWithFilter(filter);
         block.setStartOffset(read_rows);
-        read_rows += block.rows();
+        // Here, the returned block has been filtered, so we can not use block.rows() to get the number of rows.
+        // We use filter.size() instead.
+        read_rows += filter.size();
         return block;
     }
 

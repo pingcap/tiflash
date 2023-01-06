@@ -92,7 +92,7 @@ public:
     /// Not used, always return false
     bool getSkippedRows(size_t & /*skip_rows*/) override { return false; }
 
-    bool skipNextBlock() override
+    bool skipNextBlock(size_t skip_rows) override
     {
         while (cur_column_file_reader || next_file_index < column_files_count)
         {
@@ -109,7 +109,7 @@ public:
                     ++next_file_index;
                 }
             }
-            bool skipped = cur_column_file_reader->skipNextBlock();
+            bool skipped = cur_column_file_reader->skipNextBlock(skip_rows);
             if (skipped)
                 return true;
             else

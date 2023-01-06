@@ -177,7 +177,7 @@ public:
     std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
-    bool skipNextBlock() override;
+    bool skipNextBlock(size_t skip_rows) override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };

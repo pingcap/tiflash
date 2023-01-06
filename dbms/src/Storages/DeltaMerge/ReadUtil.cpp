@@ -45,7 +45,7 @@ std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, Skippabl
     }
 }
 
-bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta)
+bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, size_t skip_rows)
 {
     if (stable == nullptr && delta == nullptr)
     {
@@ -54,10 +54,10 @@ bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamP
 
     if (stable == nullptr)
     {
-        return delta->skipNextBlock();
+        return delta->skipNextBlock(skip_rows);
     }
 
-    if (stable->skipNextBlock())
+    if (stable->skipNextBlock(skip_rows))
     {
         return true;
     }
@@ -66,7 +66,7 @@ bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamP
         stable = nullptr;
         if (delta != nullptr)
         {
-            return delta->skipNextBlock();
+            return delta->skipNextBlock(skip_rows);
         }
         return false;
     }

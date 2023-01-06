@@ -132,11 +132,12 @@ Block ColumnFileInMemoryReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
-bool ColumnFileInMemoryReader::skipNextBlock()
+bool ColumnFileInMemoryReader::skipNextBlock(size_t /*skip_rows*/)
 {
     if (read_done)
         return false;
 
+    // RUNTIME_CHECK(memory_file.getRows() == skip_rows);
     read_done = true;
     return true;
 }

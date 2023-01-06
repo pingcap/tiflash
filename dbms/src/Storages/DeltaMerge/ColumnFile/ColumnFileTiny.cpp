@@ -245,11 +245,12 @@ Block ColumnFileTinyReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
-bool ColumnFileTinyReader::skipNextBlock()
+bool ColumnFileTinyReader::skipNextBlock(size_t /*skip_rows*/)
 {
     if (read_done)
         return false;
 
+    // RUNTIME_CHECK(tiny_file.getRows() == skip_rows);
     read_done = true;
     return true;
 }

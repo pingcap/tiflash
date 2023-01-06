@@ -33,7 +33,7 @@ public:
 
     /// Skip next block in the stream.
     /// Return false if failed to skip or the end of stream.
-    virtual bool skipNextBlock() = 0;
+    virtual bool skipNextBlock(size_t skip_rows) = 0;
 
     /// Read specific rows of next block in the stream according to the filter.
     /// Return empty block if failed to read or the end of stream.
@@ -58,7 +58,7 @@ public:
 
     bool getSkippedRows(size_t &) override { return false; }
 
-    bool skipNextBlock() override { return false; }
+    bool skipNextBlock(size_t /*skip_rows*/) override { return false; }
 
     Block read() override { return {}; }
 
@@ -117,13 +117,13 @@ public:
         return false;
     }
 
-    bool skipNextBlock() override
+    bool skipNextBlock(size_t skip_rows) override
     {
         while (current_stream != children.end())
         {
             auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
 
-            bool skipped = skippable_stream->skipNextBlock();
+            bool skipped = skippable_stream->skipNextBlock(skip_rows);
 
             if (skipped)
             {
