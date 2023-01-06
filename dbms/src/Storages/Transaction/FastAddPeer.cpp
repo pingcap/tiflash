@@ -27,6 +27,13 @@
 #include <Storages/Transaction/TMTContext.h>
 
 #include <cstdio>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <utility>
+
+#include "common/defines.h"
+#include "common/logger_useful.h"
 
 
 namespace DB
@@ -70,6 +77,26 @@ std::string readData(const std::string & checkpoint_data_dir, const RemoteDataLo
     return ret;
 }
 
+UniversalPageStoragePtr reuseOrCreatePageStorage(Context & context, uint64_t store_id, uint64_t version, const std::string & optimal, const std::string & checkpoint_data_dir)
+{
+    UNUSED(store_id, version);
+    auto * log = &Poco::Logger::get("fast add");
+    auto & local_ps_cache = context.getLocalPageStorageCache();
+    auto maybe_cached_ps = local_ps_cache.maybe_get(store_id, version);
+    if (maybe_cached_ps.has_value())
+    {
+        LOG_DEBUG(log, "use cache for remote ps [store_id={}] [version={}]", store_id, version);
+        return maybe_cached_ps.value();
+    }
+    else
+    {
+        LOG_DEBUG(log, "no cache found for remote ps [store_id={}] [version={}]", store_id, version);
+    }
+    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(context, optimal, checkpoint_data_dir);
+    local_ps_cache.insert(store_id, version, local_ps);
+    return local_ps;
+}
+
 std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::string & output_directory, const std::string & checkpoint_data_dir, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
     UNUSED(new_peer_id);
@@ -102,38 +129,41 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
         return std::nullopt;
     }
 
-    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(context, optimal, checkpoint_data_dir);
+    auto local_ps = reuseOrCreatePageStorage(context, store_id, optimal_index, optimal, checkpoint_data_dir);
 
     RemoteMeta remote_meta;
     remote_meta.remote_store_id = store_id;
     remote_meta.checkpoint_path = optimal;
+    remote_meta.version = optimal_index;
     {
         auto apply_state_key = RaftLogReader::toRegionApplyStateKey(region_id);
-        auto page = local_ps->read(apply_state_key, nullptr, {}, /* throw_on_not_exist */false);
+        auto page = local_ps->read(apply_state_key, nullptr, {}, /* throw_on_not_exist */ false);
         if (page.isValid())
         {
             remote_meta.apply_state.ParseFromArray(page.data.begin(), page.data.size());
         }
         else
         {
-            LOG_DEBUG(log, "cannot find apply state key {}", Redact::keyToDebugString(apply_state_key.data(), apply_state_key.size()));
+            LOG_DEBUG(log, "in remote cannot find apply state key {} [region_id={}]", Redact::keyToDebugString(apply_state_key.data(), apply_state_key.size()), region_id);
+            return std::nullopt;
         }
     }
     {
         auto region_state_key = RaftLogReader::toRegionLocalStateKey(region_id);
-        auto page = local_ps->read(region_state_key, nullptr, {}, /* throw_on_not_exist */false);
+        auto page = local_ps->read(region_state_key, nullptr, {}, /* throw_on_not_exist */ false);
         if (page.isValid())
         {
             remote_meta.region_state.ParseFromArray(page.data.begin(), page.data.size());
         }
         else
         {
-            LOG_DEBUG(log, "cannot find region state key {}", Redact::keyToDebugString(region_state_key.data(), region_state_key.size()));
+            LOG_DEBUG(log, "in remote cannot find region state key {} [region_id={}]", Redact::keyToDebugString(region_state_key.data(), region_state_key.size()), region_id);
+            return std::nullopt;
         }
     }
     {
         auto region_key = KVStoreReader::toFullPageId(region_id);
-        auto page = local_ps->read(region_key, nullptr, {}, /* throw_on_not_exist */false);
+        auto page = local_ps->read(region_key, nullptr, {}, /* throw_on_not_exist */ false);
         if (page.isValid())
         {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -141,7 +171,8 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
         }
         else
         {
-            LOG_DEBUG(log, "cannot find region key {}", Redact::keyToDebugString(region_key.data(), region_key.size()));
+            LOG_DEBUG(log, "in remote cannot find region key {} [region_id={}]", Redact::keyToDebugString(region_key.data(), region_key.size()), region_id);
+            return std::nullopt;
         }
     }
     remote_meta.temp_ps = local_ps;
@@ -204,7 +235,7 @@ std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(Context & context, U
 
     if (choices.empty())
     {
-        LOG_INFO(log, "No candidate for region {}", region_id);
+        LOG_INFO(log, "No candidate. [region_id={}]", region_id);
         return std::make_pair(false, std::nullopt);
     }
 
@@ -217,7 +248,6 @@ std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(Context & context, U
         const auto & apply_state = it->apply_state;
         const auto & peers = region_state.region().peers();
         bool ok = false;
-        LOG_INFO(log, "store {} region_state {} region peers {}", store_id, region_state.DebugString(), region_state.region().DebugString());
         for (auto && pr : peers)
         {
             if (pr.id() == new_peer_id)
@@ -260,7 +290,7 @@ std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(Context & context, U
     }
     std::string choice_stat = fmt_buf.toString();
 
-    LOG_INFO(log, "fast add result region_id {} new_peer_id {} remote_dir {} storage_name {} total choices {}; failed: {}; candidates: {};", region_id, new_peer_id, remote_dir, storage_name, choices.size(), failed_reason, choice_stat);
+    LOG_INFO(log, "fast add result [region_id={}] [new_peer_id={}] [remote_dir={}] [storage_name={}] [total_choices={}]; failed: {}; candidates: {};", region_id, new_peer_id, remote_dir, storage_name, choices.size(), failed_reason, choice_stat);
     return std::make_pair(true, choosed);
 }
 
@@ -268,7 +298,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 {
     try
     {
-        std::optional<RemoteMeta> maybe_peer = std::nullopt;
+        std::optional<RemoteMeta> maybe_remote_peer = std::nullopt;
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto kvstore = server->tmt->getKVStore();
         auto current_store_id = kvstore->getStoreMeta().id();
@@ -276,8 +306,8 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         while (true)
         {
             bool can_retry = false;
-            std::tie(can_retry, maybe_peer) = selectRemotePeer(server->tmt->getContext(), wn_ps, current_store_id, region_id, new_peer_id, server->proxy_helper);
-            if (!maybe_peer.has_value())
+            std::tie(can_retry, maybe_remote_peer) = selectRemotePeer(server->tmt->getContext(), wn_ps, current_store_id, region_id, new_peer_id, server->proxy_helper);
+            if (!maybe_remote_peer.has_value())
             {
                 if (!can_retry || watch.elapsedSeconds() >= 60)
                     return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
@@ -287,11 +317,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 break;
         }
         auto * log = &Poco::Logger::get("fast add");
-        auto & peer = maybe_peer.value();
-        auto checkpoint_store_id = peer.remote_store_id;
-        auto checkpoint_manifest_path = peer.checkpoint_path;
-        LOG_INFO(log, "select checkpoint path {} from store {} for region {} takes {} seconds", checkpoint_manifest_path, checkpoint_store_id, region_id, watch.elapsedSeconds());
-        auto region = peer.region;
+        auto & remote_peer = maybe_remote_peer.value();
+        auto checkpoint_store_id = remote_peer.remote_store_id;
+        auto checkpoint_manifest_path = remote_peer.checkpoint_path;
+        LOG_INFO(log, "select checkpoint path {} takes {} seconds; [store_id={}] [region_id={}]", checkpoint_manifest_path, watch.elapsedSeconds(), checkpoint_store_id, region_id);
+        auto region = remote_peer.region;
         if (!region)
             return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
 
@@ -300,29 +330,29 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 
         {
             bool hit = false;
-            const auto & region_pb = peer.region_state.region();
+            const auto & region_pb = remote_peer.region_state.region();
             for (auto && pr : region_pb.peers())
             {
                 if (pr.id() == new_peer_id)
                 {
                     auto cpr = pr;
-                    peer.region->mutMeta().setPeer(std::move(cpr));
+                    remote_peer.region->mutMeta().setPeer(std::move(cpr));
                     hit = true;
                     break;
                 }
             }
             if (!hit)
             {
-                LOG_ERROR(log, "selected remote peer of {} has no new_peer_id {}", region_id, new_peer_id);
+                LOG_ERROR(log, "selected remote peer has no new_peer_id {} [region_id={}]", new_peer_id, region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
             }
             else
             {
-                LOG_INFO(log, "reset selected remote peer of {} to peer {}", region_id, new_peer_id);
+                LOG_INFO(log, "reset selected remote peer to {} [region_id={}]", new_peer_id, region_id);
             }
         }
 
-        auto local_ps = peer.temp_ps;
+        auto local_ps = remote_peer.temp_ps;
         kvstore->handleIngestCheckpoint(region, local_ps, checkpoint_manifest_path, checkpoint_data_dir, checkpoint_store_id, *server->tmt);
 
         UniversalWriteBatch wb;
@@ -335,7 +365,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         wn_ps->write(std::move(wb));
 
         // Generate result.
-        return genFastAddPeerRes(FastAddPeerStatus::Ok, peer.apply_state.SerializeAsString(), peer.region_state.region().SerializeAsString());
+        return genFastAddPeerRes(FastAddPeerStatus::Ok, remote_peer.apply_state.SerializeAsString(), remote_peer.region_state.region().SerializeAsString());
     }
     catch (...)
     {

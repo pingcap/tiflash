@@ -62,8 +62,8 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
@@ -257,6 +257,9 @@ struct ContextShared
 
     /// The PS instance available on Read Node. The data could be volatile.
     UniversalPageStorageWrapperPtr ps_read;
+
+    /// Cached local cache of remote checkpoint manifest file.
+    LocalPageStorageCache<UniversalPageStoragePtr> local_ps_cache{1};
 
     DM::Remote::ManagerPtr dm_remote_manager;
 
@@ -1822,6 +1825,11 @@ UniversalPageStoragePtr Context::getReadNodePageStorage() const
     {
         return nullptr;
     }
+}
+
+LocalPageStorageCache<UniversalPageStoragePtr> & Context::getLocalPageStorageCache()
+{
+    return shared->local_ps_cache;
 }
 
 UInt16 Context::getTCPPort() const
