@@ -35,9 +35,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
     auto & dag_context = *context.getDAGContext();
-    size_t max_streams = dag_context.initialize_concurrency;
-    size_t concurrency_hint = context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID());
-    max_streams = concurrency_hint == 0 ? max_streams : std::min(max_streams, concurrency_hint);
+    size_t max_streams = getMockSourceStreamConcurrency(dag_context.initialize_concurrency, context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID()));
     assert(max_streams > 0);
 
     if (context.mockStorage()->useDeltaMerge())

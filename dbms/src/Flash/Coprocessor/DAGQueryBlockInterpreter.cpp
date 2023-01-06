@@ -175,9 +175,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     else
     {
         /// build from user input blocks.
-        size_t scan_concurrency = max_streams;
-        size_t concurrency_hint = context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID());
-        scan_concurrency = concurrency_hint == 0 ? scan_concurrency : std::min(scan_concurrency, concurrency_hint);
+        size_t scan_concurrency = getMockSourceStreamConcurrency(max_streams, context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID()));
         assert(context.mockStorage()->tableExists(table_scan.getLogicalTableID()));
         NamesAndTypes names_and_types;
         std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
