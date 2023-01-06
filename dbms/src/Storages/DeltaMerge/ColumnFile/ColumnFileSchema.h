@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <openssl/base.h>
