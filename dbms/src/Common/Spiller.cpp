@@ -27,6 +27,12 @@ SpilledFile::SpilledFile(const String & file_name_)
     : Poco::File(file_name_)
 {}
 
+static Poco::Logger * getSpilledFileLogger()
+{
+    static Poco::Logger * logger = &Poco::Logger::get("SpilledFile");
+    return logger;
+}
+
 SpilledFile::~SpilledFile()
 {
     try
@@ -36,6 +42,7 @@ SpilledFile::~SpilledFile()
     }
     catch (...)
     {
+        LOG_WARNING(getSpilledFileLogger(), "Failed to clean spilled file {}, error message: {}", path(), getCurrentExceptionMessage(false, false));
     }
 }
 
@@ -110,6 +117,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
     {
         size_t return_stream_num = std::min(max_stream_size, spilled_files[partition_id]->spilled_files.size());
         std::vector<std::vector<String>> files(return_stream_num);
+        // todo balance based on SpilledDataSize
         for (size_t i = 0; i < spilled_files[partition_id]->spilled_files.size(); ++i)
         {
             const auto & file = spilled_files[partition_id]->spilled_files[i];
