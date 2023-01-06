@@ -14,7 +14,6 @@
 
 #include <Common/config.h>
 #include <Common/config_version.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <common/config_common.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -146,7 +145,6 @@ void outputDetail(std::ostream & os)
        << "Git Branch:      " << getGitBranch() << std::endl
        << "UTC Build Time:  " << getUTCBuildTime() << std::endl
        << "Enable Features: " << getEnabledFeatures() << std::endl
-       << "Profile:         " << getProfile() << std::endl
-       << "Mpp Version:     " << fmt::format("{} (release version {})", TiDB::GetMppVersion(), TiDB::GetMppVersionReleaseInfo(TiDB::GetMppVersion())) << std::endl;
+       << "Profile:         " << getProfile() << std::endl;
 }
 } // namespace TiFlashBuildInfo

@@ -801,7 +801,9 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             dagContext(),
             enable_fine_grained_shuffle,
             stream_count,
-            batch_size);
+            batch_size,
+            exchange_sender.compression(),
+            context.getSettingsRef().batch_send_min_limit_compression);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });

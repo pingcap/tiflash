@@ -24,7 +24,7 @@
 	url = https://github.com/pingcap/boost-extra.git
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
-	url = https://github.com/solotzg/kvproto.git
+	url = https://github.com/pingcap/kvproto.git
 [submodule "contrib/tipb"]
 	path = contrib/tipb
 	url = https://github.com/pingcap/tipb.git

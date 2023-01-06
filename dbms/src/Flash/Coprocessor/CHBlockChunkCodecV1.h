@@ -19,19 +19,14 @@
 #include <IO/CompressedStream.h>
 #include <IO/CompressedWriteBuffer.h>
 
-namespace mpp
-{
-enum CompressMethod : int;
-}
-
 namespace DB
 {
-class CompressedCHBlockChunkCodec
-{
-public:
-    using CompressedReadBuffer = CompressedReadBuffer<false>;
-    using CompressedWriteBuffer = CompressedWriteBuffer<false>;
-};
-
+size_t ApproxBlockBytes(const Block & block);
+size_t GetExtraInfoSize(const Block & block);
+using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
+using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 
 } // namespace DB

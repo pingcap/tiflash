@@ -1,8 +1,7 @@
 
 
-#include "CompressCHBlockChunkCodecStream.h"
-
 #include <DataTypes/DataTypeFactory.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 
 #include <cassert>
 #include <cstddef>
@@ -11,6 +10,30 @@
 namespace DB
 {
 extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
+
+size_t GetExtraInfoSize(const Block & block)
+{
+    size_t size = 8 + 8; /// to hold some length of structures, such as column number, row number...
+    size_t columns = block.columns();
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
+        size += column.name.size();
+        size += 8;
+        size += column.type->getName().size();
+        size += 8;
+        if (column.column->isColumnConst())
+        {
+            size += column.column->byteSize() * column.column->size();
+        }
+    }
+    return size;
+}
+
+size_t ApproxBlockBytes(const Block & block)
+{
+    return block.bytes() + GetExtraInfoSize(block);
+}
 
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
 {
@@ -24,17 +47,6 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
         writeStringBinary(column.name, ostr);
         writeStringBinary(column.type->getName(), ostr);
     }
-}
-
-void EncodeColumn__(WriteBuffer & ostr, const ColumnPtr & column, const ColumnWithTypeAndName & type_name)
-{
-    writeVarUInt(column->size(), ostr);
-    WriteColumnData(*type_name.type, column, ostr, 0, 0);
-}
-
-std::unique_ptr<CompressCHBlockChunkCodecStream> NewCompressCHBlockChunkCodecStream(CompressionMethod compression_method)
-{
-    return std::make_unique<CompressCHBlockChunkCodecStream>(compression_method);
 }
 
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)

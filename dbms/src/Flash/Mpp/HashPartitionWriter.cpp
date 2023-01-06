@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
@@ -111,7 +112,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
     GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
 }
 
-
 static void updateHashPartitionWriterMetrics(size_t sz, bool is_local)
 {
     if (is_local)
@@ -120,12 +120,12 @@ static void updateHashPartitionWriterMetrics(size_t sz, bool is_local)
     }
     else
     {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none).Increment(sz);
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(sz);
     }
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
+void WritePackets(TrackedMppDataPacketPtrs & packets, ExchangeWriterPtr & writer)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
@@ -136,11 +136,16 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPt
 
         if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
         {
-            assert(inner_packet.compression().mode() == mpp::CompressionMode::NONE);
             writer->partitionWrite(std::move(packet), part_id);
             updateHashPartitionWriterMetrics(sz, writer->isLocal(part_id));
         }
     }
+}
+
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
+{
+    WritePackets(packets, writer);
 }
 
 template class HashPartitionWriter<MPPTunnelSetPtr>;

@@ -17,48 +17,37 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/CHBlockChunkCodecStream.h>
-#include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
 #include <IO/ReadBufferFromString.h>
-
-#include "ext/scope_guard.h"
-#include "mpp.pb.h"
 
 namespace DB
 {
-
-CHBlockChunkCodecStream::CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
-    : ChunkCodecStream(field_types)
+class CHBlockChunkCodecStream : public ChunkCodecStream
 {
-    for (const auto & field_type : field_types)
+public:
+    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+        : ChunkCodecStream(field_types)
     {
-        expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+        for (const auto & field_type : field_types)
+        {
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+        }
     }
-}
 
-String CHBlockChunkCodecStream::getString()
-{
-    if (output == nullptr)
+    String getString() override
     {
-        throw Exception("The output should not be null in getString()");
+        if (output == nullptr)
+        {
+            throw Exception("The output should not be null in getString()");
+        }
+        return output->releaseStr();
     }
-    return output->releaseStr();
-}
 
-WriteBuffer * CHBlockChunkCodecStream::initOutputBuffer(size_t init_size)
-{
-    assert(output == nullptr);
-    output = std::make_unique<WriteBufferFromOwnString>(init_size);
-    return output.get();
-}
-
-void CHBlockChunkCodecStream::clear()
-{
-    output = nullptr;
-}
+    void clear() override { output = nullptr; }
+    void encode(const Block & block, size_t start, size_t end) override;
+    std::unique_ptr<WriteBufferFromOwnString> output;
+    DataTypes expected_types;
+};
 
 CHBlockChunkCodec::CHBlockChunkCodec(
     const Block & header_)
@@ -74,28 +63,21 @@ CHBlockChunkCodec::CHBlockChunkCodec(const DAGSchema & schema)
         output_names.push_back(c.first);
 }
 
-size_t GetExtraInfoSize(const Block & block)
+size_t getExtraInfoSize(const Block & block)
 {
-    size_t size = 8 + 8; /// to hold some length of structures, such as column number, row number...
+    size_t size = 64; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
     for (size_t i = 0; i < columns; ++i)
     {
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
         size += column.name.size();
-        size += 8;
         size += column.type->getName().size();
-        size += 8;
         if (column.column->isColumnConst())
         {
             size += column.column->byteSize() * column.column->size();
         }
     }
     return size;
-}
-
-size_t ApproxBlockBytes(const Block & block)
-{
-    return block.bytes() + GetExtraInfoSize(block);
 }
 
 void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
@@ -124,26 +106,6 @@ void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadB
     type.deserializeBinaryBulkWithMultipleStreams(column, input_stream_getter, rows, 0, false, {});
 }
 
-void EncodeCHBlockChunk(WriteBuffer * ostr_ptr, const Block & block)
-{
-    size_t columns = block.columns();
-    size_t rows = block.rows();
-
-    writeVarUInt(columns, *ostr_ptr);
-    writeVarUInt(rows, *ostr_ptr);
-
-    for (size_t i = 0; i < columns; i++)
-    {
-        const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
-
-        writeStringBinary(column.name, *ostr_ptr);
-        writeStringBinary(column.type->getName(), *ostr_ptr);
-
-        if (rows)
-            WriteColumnData(*column.type, column.column, *ostr_ptr, 0, 0);
-    }
-}
-
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
 {
     /// only check block schema in CHBlock codec because for both
@@ -154,28 +116,36 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     if (start != 0 || end != block.rows())
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
 
+    assert(output == nullptr);
+    output = std::make_unique<WriteBufferFromOwnString>(block.bytes() + getExtraInfoSize(block));
+
     block.checkNumberOfRows();
+    size_t columns = block.columns();
+    size_t rows = block.rows();
 
-    size_t init_size = ApproxBlockBytes(block);
-    WriteBuffer * ostr_ptr = initOutputBuffer(init_size);
+    writeVarUInt(columns, *output);
+    writeVarUInt(rows, *output);
 
-    return EncodeCHBlockChunk(ostr_ptr, block);
-}
+    for (size_t i = 0; i < columns; i++)
+    {
+        const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
-std::unique_ptr<CHBlockChunkCodecStream> NewCHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
-{
-    return std::make_unique<CHBlockChunkCodecStream>(field_types);
+        writeStringBinary(column.name, *output);
+        writeStringBinary(column.type->getName(), *output);
+
+        if (rows)
+            WriteColumnData(*column.type, column.column, *output, 0, 0);
+    }
 }
 
 std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
 {
-    return NewCHBlockChunkCodecStream(field_types);
+    return std::make_unique<CHBlockChunkCodecStream>(field_types);
 }
 
 Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 {
     Block res;
-
     if (istr.eof())
     {
         return res;
@@ -253,5 +223,4 @@ Block CHBlockChunkCodec::decode(const String & str, const Block & header)
     ReadBufferFromString read_buffer(str);
     return CHBlockChunkCodec(header).decodeImpl(read_buffer);
 }
-
 } // namespace DB

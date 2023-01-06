@@ -15,36 +15,31 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
+namespace tipb
+{
+enum CompressionMode : int;
+}
 
 namespace DB
 {
-
-struct CompressCHBlockChunkCodecStream;
-
-enum HashPartitionWriterVersion : int64_t
-{
-    HashPartitionWriterV0 = 0,
-    HashPartitionWriterV1,
-    HashPartitionWriterVersionMax,
-};
-
+enum class CompressionMethod;
 template <class ExchangeWriterPtr>
-class HashPartitionWriterImplV1 : public DAGResponseWriter
+class HashPartitionWriterV1 : public DAGResponseWriter
 {
 public:
-    HashPartitionWriterImplV1(
+    // If `partition_batch_limit_` is LT 0, `partition_batch_limit` will be set to `8192 * partition_num`
+    HashPartitionWriterV1(
         ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 partition_batch_limit_,
         DAGContext & dag_context_,
-        mpp::CompressionMode compression_mode_);
+        tipb::CompressionMode compression_mode_);
     void write(const Block & block) override;
     void flush() override;
 
@@ -62,9 +57,7 @@ private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
-    mpp::CompressionMode compression_mode{};
+    CompressionMethod compression_method{};
 };
-
-CompressionMethod ToInternalCompressionMethod(mpp::CompressionMode compression_mode);
 
 } // namespace DB

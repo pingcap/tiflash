@@ -95,7 +95,7 @@ ALWAYS_INLINE static inline void * avx2_inline_memcpy(void * __restrict dst_, co
             assert(size_t(dst) % block32_size == 0);
         }
 
-        // TODO: use non-temporal way(mark data unlikely to be used again soon) to minimize caching for large memory size(bigger than L3 cache size) if necessary.
+        // TODO: use non-temporal way(mark data unlikely to be used again soon) to minimize caching for large memory size(bigger than L2/L3 cache size) if necessary.
         // TODO: check whether source address is aligned to 32 and use specific aligned instructions if necessary.
 
         /// Aligned unrolled copy.

@@ -159,15 +159,12 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 }
 
 template <class ExchangeWriterPtr>
+extern void WritePackets(TrackedMppDataPacketPtrs & packets, ExchangeWriterPtr & writer);
+
+template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
-    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
-    {
-        auto & packet = packets[part_id];
-        assert(packet);
-        if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(std::move(packet), part_id);
-    }
+    WritePackets(packets, writer);
 }
 
 template class FineGrainedShuffleWriter<MPPTunnelSetPtr>;

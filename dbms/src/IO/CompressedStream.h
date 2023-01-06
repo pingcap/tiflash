@@ -32,7 +32,6 @@ enum class CompressionMethod
     LZ4HC = 2, /// The format is the same as for LZ4. The difference is only in compression.
     ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
     NONE = 4, /// No compression
-    SNAPPY = 5, /// Snappy: https://github.com/google/snappy
 };
 
 /** The compressed block format is as follows:
@@ -63,7 +62,6 @@ enum class CompressionMethodByte : uint8_t
     ZSTD = 0x90,
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
     COL_END = 0x66,
-    SNAPPY = 0x67,
 };
 
 } // namespace DB

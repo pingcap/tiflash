@@ -720,7 +720,7 @@ void ReadIndexWorker::consumeRegionNotifies(std::chrono::steady_clock::duration 
         node->runOneRound(proxy_helper, read_index_notify_ctrl);
     }
 
-    TEST_LOG_FMT("worker {} set last run time {}", getID(), std::chrono::steady_clock::now());
+    TEST_LOG_FMT("worker {} set last run time {}", getID(), Clock::now());
     last_run_time.store(std::chrono::steady_clock::now(), std::memory_order_release);
 }
 

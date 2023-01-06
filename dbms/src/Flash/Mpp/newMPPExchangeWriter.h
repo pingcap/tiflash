@@ -34,13 +34,15 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
-    UInt64 fine_grained_shuffle_batch_size)
+    UInt64 fine_grained_shuffle_batch_size,
+    tipb::CompressionMode compression_mode,
+    Int64 batch_send_min_limit_compression)
 {
     RUNTIME_CHECK(dag_context.isMPPTask());
     if (dag_context.isRootMPPTask())
     {
         // No need to use use data compression
-        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compression() == mpp::CompressionMode::NONE);
+        RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
 
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
@@ -57,7 +59,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
             if (enable_fine_grained_shuffle)
             {
                 // TODO: support data compression if necessary
-                RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compression() == mpp::CompressionMode::NONE);
+                RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
 
                 return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
                     writer,
@@ -69,8 +71,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
             }
             else
             {
-                auto && compression_mode = dag_context.getExchangeSenderMeta().compression();
-                if (TiDB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
+                if (DB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
                     return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
                         writer,
                         partition_col_ids,
@@ -78,11 +79,11 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
                         batch_send_min_limit,
                         dag_context);
                 else
-                    return std::make_unique<HashPartitionWriterImplV1<MPPTunnelSetPtr>>(
+                    return std::make_unique<HashPartitionWriterV1<MPPTunnelSetPtr>>(
                         writer,
                         partition_col_ids,
                         partition_col_collators,
-                        8192,
+                        batch_send_min_limit_compression,
                         dag_context,
                         compression_mode);
             }
@@ -90,7 +91,7 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
         else
         {
             // TODO: support data compression if necessary
-            RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compression() == mpp::CompressionMode::NONE);
+            RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
 
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(

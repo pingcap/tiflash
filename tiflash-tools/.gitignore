@@ -1,5 +1,0 @@
-/dist/
-/build/
-*.spec
-version.py
-/tikv_util/.eggs/

@@ -20,9 +20,6 @@
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
-#include "common/logger_useful.h"
-#include "ext/scope_guard.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -88,7 +85,7 @@ MPPTunnel::MPPTunnel(
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
-    , queue_size(std::max(5, input_steams_num_ * 10)) // MPMCQueue can benefit from a slightly larger queue size
+    , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get(req_id, tunnel_id))
     , data_size_in_queue(0)
 {
@@ -155,8 +152,6 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 
 void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 {
-    Stopwatch watch{};
-
     LOG_TRACE(log, "ready to write");
     {
         std::unique_lock lk(mu);
@@ -222,7 +217,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
+    LOG_DEBUG(log, "connected");
 }
 
 void MPPTunnel::connectAsync(IAsyncCallData * call_data)

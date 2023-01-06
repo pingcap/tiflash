@@ -213,6 +213,8 @@ elseif (ARCH_AMD64)
     check_cxx_compiler_flag("${TIFLASH_COMPILER_MOVBE_FLAG}" TIFLASH_COMPILER_MOVBE_SUPPORT)
     set (TIFLASH_COMPILER_BMI2_FLAG "-mbmi2")
     check_cxx_compiler_flag("${TIFLASH_COMPILER_BMI2_FLAG}" TIFLASH_COMPILER_BMI2_SUPPORT)
+
+    # `haswell` was released since 2013 with cpu feature avx2, bmi2. It's a practical arch for optimizer
     set (TIFLASH_COMPILER_ARCH_HASWELL_FLAG "-march=haswell")
     check_cxx_compiler_flag("${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}" TIFLASH_COMPILER_ARCH_HASWELL_SUPPORT)
 else ()

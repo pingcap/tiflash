@@ -22,14 +22,14 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <fmt/core.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cstddef>
 #include <magic_enum.hpp>
 
-#include "Flash/Mpp/HashPartitionWriterV1.h"
-#include "mpp.pb.h"
+#include "IO/CompressedStream.h"
 
 namespace DB
 {
@@ -711,7 +711,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     switch (packet.version())
     {
-    case HashPartitionWriterV0:
+    case DB::MPPDataPacketV0:
     {
         for (const String * chunk : recv_msg->chunks)
         {
@@ -726,7 +726,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         }
         return detail;
     }
-    case HashPartitionWriterV1:
+    case DB::MPPDataPacketV1:
     {
         RUNTIME_CHECK(packet.chunks().size() == int(recv_msg->chunks.size()),
                       packet.chunks().size(),
@@ -734,7 +734,8 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
         for (auto && chunk : packet.chunks())
         {
-            auto && result = decoder_ptr->decodeAndSquash(chunk, packet.compression().mode() != mpp::CompressionMode::NONE);
+            assert(!chunk.empty());
+            auto && result = decoder_ptr->decodeAndSquashWithCompression(chunk);
             if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();

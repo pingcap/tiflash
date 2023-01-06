@@ -229,9 +229,10 @@ grpc::Status FlashService::DispatchMPPTask(
     if (!check_result.ok())
         return check_result;
 
-    if (auto mpp_version = request->meta().mpp_version(); !TiDB::CheckMppVersion(mpp_version))
+    // DO NOT register mpp task and return grpc error
+    if (auto mpp_version = request->meta().mpp_version(); !DB::CheckMppVersion(mpp_version))
     {
-        auto && err_msg = fmt::format("Failed to handling mpp dispatch request, reason=`{}`", TiDB::GenMppVersionErrorMessage(mpp_version));
+        auto && err_msg = fmt::format("Failed to handling mpp dispatch request, reason=`{}`", DB::GenMppVersionErrorMessage(mpp_version));
         LOG_WARNING(log, err_msg);
         return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
     }
@@ -278,7 +279,7 @@ grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_un
 
     auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
-    response->set_mpp_version(TiDB::GetMppVersion());
+    response->set_mpp_version(DB::GetMppVersion());
     return grpc::Status::OK;
 }
 
@@ -289,13 +290,13 @@ static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::Establis
 
     std::string && err_reason{};
 
-    if (!TiDB::CheckMppVersion(sender_mpp_version))
+    if (!DB::CheckMppVersion(sender_mpp_version))
     {
-        err_reason += fmt::format("sender failed: {};", TiDB::GenMppVersionErrorMessage(sender_mpp_version));
+        err_reason += fmt::format("sender failed: {};", DB::GenMppVersionErrorMessage(sender_mpp_version));
     }
-    if (!TiDB::CheckMppVersion(receiver_mpp_version))
+    if (!DB::CheckMppVersion(receiver_mpp_version))
     {
-        err_reason += fmt::format("receiver failed: {};", TiDB::GenMppVersionErrorMessage(receiver_mpp_version));
+        err_reason += fmt::format("receiver failed: {};", DB::GenMppVersionErrorMessage(receiver_mpp_version));
     }
 
     if (!err_reason.empty())
@@ -407,9 +408,9 @@ grpc::Status FlashService::CancelMPPTask(
     if (!check_result.ok())
         return check_result;
 
-    if (auto mpp_version = request->meta().mpp_version(); !TiDB::CheckMppVersion(mpp_version))
+    if (auto mpp_version = request->meta().mpp_version(); !DB::CheckMppVersion(mpp_version))
     {
-        auto && err_msg = fmt::format("Failed to cancel mpp task, reason=`{}`", TiDB::GenMppVersionErrorMessage(mpp_version));
+        auto && err_msg = fmt::format("Failed to cancel mpp task, reason=`{}`", DB::GenMppVersionErrorMessage(mpp_version));
         LOG_WARNING(log, err_msg);
         return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
     }
@@ -461,7 +462,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     if (!status.ok())
     {
         auto err = std::make_unique<mpp::Error>();
-        err->set_mpp_version(TiDB::GetMppVersion());
+        err->set_mpp_version(DB::GetMppVersion());
         err->set_msg("error status");
         response->set_allocated_error(err.release());
         return status;

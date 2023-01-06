@@ -16,6 +16,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
 #include <common/defines.h>
+#include <fiu.h>
 #include <fmt/format.h>
 
 #include <array>
@@ -23,11 +24,17 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char invalid_mpp_version[];
+} // namespace FailPoints
+
 mpp::MPPDataPacket getPacketWithError(String reason)
 {
     mpp::MPPDataPacket data;
     auto err = std::make_unique<mpp::Error>();
-    err->set_mpp_version(TiDB::GetMppVersion());
+    err->set_mpp_version(DB::GetMppVersion());
     err->set_msg(std::move(reason));
     data.set_allocated_error(err.release());
     return data;
@@ -43,45 +50,36 @@ void trimStackTrace(String & message)
     }
 }
 
-} // namespace DB
-
-namespace TiDB
-{
 // Latest mpp-version supported by TiFlash
-constexpr MppVersion MPP_VERSION = MppVersion((MppVersion::MppVersionMAX)-1);
-
-// TODO: set version after committed
-constexpr std::array<const char *, (MppVersion::MppVersionMAX)> MPP_TIFLASH_RELEASE_VERSION = {"", "?"};
+static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
+static MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
 // Check mpp-version is illegal
 bool CheckMppVersion(int64_t mpp_version)
 {
-    return mpp_version >= (MppVersion::MppVersionV0) && mpp_version < (MppVersion::MppVersionMAX);
+    fiu_do_on(FailPoints::invalid_mpp_version, {
+        mpp_version = -1;
+    });
+    return mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion;
 }
 
 std::string GenMppVersionErrorMessage(int64_t mpp_version)
 {
-    auto err_msg = fmt::format("invalid mpp version `{}`, expect version: min `{}`, max `{}` release version `{}`",
+    fiu_do_on(FailPoints::invalid_mpp_version, {
+        mpp_version = -1;
+    });
+    auto err_msg = fmt::format("Invalid mpp version {}, TiFlash expects version: min {}, max {}, should upgrade {}",
                                mpp_version,
-                               (MppVersion::MppVersionV0),
-                               (MPP_VERSION),
-                               MPP_TIFLASH_RELEASE_VERSION[(MPP_VERSION)]);
+                               MinMppVersion,
+                               NewestMppVersion,
+                               (mpp_version < MinMppVersion) ? "TiDB/planner" : "TiFlash");
     return err_msg;
 }
 
 // Get latest mpp-version supported by TiFlash
 int64_t GetMppVersion()
 {
-    return (MPP_VERSION);
+    return (NewestMppVersion);
 }
 
-std::string GetMppVersionReleaseInfo(int64_t mpp_version)
-{
-    if (CheckMppVersion(mpp_version))
-    {
-        return MPP_TIFLASH_RELEASE_VERSION[mpp_version];
-    }
-    return "unknown";
-}
-
-} // namespace TiDB
+} // namespace DB

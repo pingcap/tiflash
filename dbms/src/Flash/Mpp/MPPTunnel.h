@@ -128,8 +128,6 @@ public:
         return memory_tracker != nullptr ? memory_tracker.get() : nullptr;
     }
 
-    size_t queue_size{};
-
 protected:
     /// TunnelSender use consumer state to inform tunnel that whether sender has finished its work
     class ConsumerState

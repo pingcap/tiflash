@@ -40,9 +40,6 @@
 #include <magic_enum.hpp>
 #include <map>
 
-#include "Flash/Coprocessor/tzg-metrics.h"
-#include "mpp.pb.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -283,7 +280,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         is_root_mpp_task = task_meta.task_id() == -1;
     }
 
-    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), task_request.exchange_sender_meta(), is_root_mpp_task);
+    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
     dag_context->tidb_host = context->getClientInfo().current_address.toString();

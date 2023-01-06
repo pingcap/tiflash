@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <Flash/Coprocessor/CompressedCHBlockChunkCodec.h>
+#include <IO/CompressedStream.h>
 #include <IO/ReadBufferFromString.h>
-
-#include <cstddef>
-#include <string_view>
-
-#include "Flash/Coprocessor/CHBlockChunkCodecStream.h"
-#include "Flash/Coprocessor/CompressCHBlockChunkCodecStream.h"
-#include "Flash/Mpp/TrackedMppDataPacket.h"
 
 namespace DB
 {
@@ -33,16 +27,20 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 {
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(std::string_view sv, bool compress)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompression(std::string_view sv)
 {
+    if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
+    {
+        ReadBufferFromString istr(sv.substr(1, sv.size() - 1));
+        return decodeAndSquashWithCompressionImpl(istr);
+    }
+
     ReadBufferFromString istr(sv);
-    if (!compress)
-        return decodeAndSquashWithCompressImpl(istr);
-    auto && compress_buffer = CompressedCHBlockChunkCodec::CompressedReadBuffer(istr);
-    return decodeAndSquashWithCompressImpl(compress_buffer);
+    auto && compress_buffer = CompressedCHBlockChunkReadBuffer(istr);
+    return decodeAndSquashWithCompressionImpl(compress_buffer);
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressImpl(ReadBuffer & istr)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressionImpl(ReadBuffer & istr)
 {
     std::optional<Block> res;
 
