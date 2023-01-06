@@ -422,7 +422,8 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
         query,
         ast,
         context.getClientInfo(),
-        context.getSettingsRef());
+        context.getSettingsRef(),
+        context.getServerInfo());
     context.setProcessListElement(&process_list_entry->get());
     return process_list_entry;
 }

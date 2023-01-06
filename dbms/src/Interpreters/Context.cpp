@@ -50,6 +50,7 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -124,6 +125,7 @@ struct ContextShared
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
 
+    std::optional<ServerInfo> server_info;
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
@@ -203,8 +205,9 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
-    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_, const std::optional<ServerInfo> & server_info_ = std::nullopt)
         : runtime_components_factory(std::move(runtime_components_factory_))
+        , server_info(server_info_)
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
     {
         /// TODO: make it singleton (?)
@@ -277,20 +280,21 @@ private:
 Context::Context() = default;
 
 
-Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory, const std::optional<ServerInfo> & server_info)
 {
     Context res;
     res.runtime_components_factory = runtime_components_factory;
-    res.shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res.shared = std::make_shared<ContextShared>(runtime_components_factory, server_info);
     res.quota = std::make_shared<QuotaForIntervals>();
     res.timezone_info.init();
     res.disaggregated_mode = DisaggregatedMode::None;
+
     return res;
 }
 
-Context Context::createGlobal()
+Context Context::createGlobal(const std::optional<ServerInfo> & server_info)
 {
-    return createGlobal(std::make_unique<RuntimeComponentsFactory>());
+    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), server_info);
 }
 
 Context::~Context()
@@ -321,6 +325,10 @@ const ProcessList & Context::getProcessList() const
     return shared->process_list;
 }
 
+const std::optional<ServerInfo> & Context::getServerInfo() const
+{
+    return shared->server_info;
+}
 
 Databases Context::getDatabases() const
 {

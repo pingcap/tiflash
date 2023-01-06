@@ -23,6 +23,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -183,8 +184,8 @@ private:
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
-    static Context createGlobal();
+    static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory, const std::optional<ServerInfo> & server_info = std::nullopt);
+    static Context createGlobal(const std::optional<ServerInfo> & server_info = std::nullopt);
 
     ~Context();
 
@@ -459,6 +460,8 @@ public:
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
     String getSystemProfileName() const;
+
+    const std::optional<ServerInfo> & getServerInfo() const;
 
     /// Base path for format schemas
     String getFormatSchemaPath() const;

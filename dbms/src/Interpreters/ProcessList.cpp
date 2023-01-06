@@ -83,7 +83,8 @@ ProcessList::EntryPtr ProcessList::insert(
     const String & query_,
     const IAST * ast,
     const ClientInfo & client_info,
-    const Settings & settings)
+    const Settings & settings,
+    const std::optional<ServerInfo> & server_info [[maybe_unused]])
 {
     EntryPtr res;
 
