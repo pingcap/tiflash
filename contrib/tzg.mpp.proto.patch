@@ -1086,7 +1086,7 @@ index fcd4691..f48ae58 100644
  			iNdEx = preIndex
  			skippy, err := skipMpp(dAtA[iNdEx:])
 diff --git a/proto/mpp.proto b/proto/mpp.proto
-index 6739455..0943734 100644
+index 6739455..6fa315e 100644
 --- a/proto/mpp.proto
 +++ b/proto/mpp.proto
 @@ -11,6 +11,17 @@ option (gogoproto.unmarshaler_all) = true;
@@ -1095,9 +1095,9 @@ index 6739455..0943734 100644
  
 +// Data compression mode
 +enum CompressionMode {
-+  NONE = 0; // no compression
-+  FAST = 1; // fast compression/decompression speed, compression ratio is lower than HC mode
-+  HIGH_COMPRESSION = 2; // high compression (HC) ratio mode
++	NONE = 0; // no compression
++	FAST = 1; // fast compression/decompression speed, compression ratio is lower than HC mode
++	HIGH_COMPRESSION = 2; // high compression (HC) ratio mode
 +}
 +
 +message ExchangeSenderMeta {
