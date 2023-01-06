@@ -129,7 +129,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
     return column_files;
 }
 
-ColumnFilePersisteds deserializeSavedRemoteColumnFiles(//
+ColumnFilePersisteds deserializeSavedRemoteColumnFiles( //
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,

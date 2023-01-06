@@ -20,6 +20,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -29,7 +30,6 @@
 #include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>

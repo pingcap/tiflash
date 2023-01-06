@@ -26,5 +26,5 @@ void DMFileWriterRemote::finalize()
 {
     dmfile->finalizeForRemote(file_provider);
 }
-}
-}
+} // namespace DM
+} // namespace DB

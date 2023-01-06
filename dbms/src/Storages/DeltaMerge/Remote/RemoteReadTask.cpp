@@ -262,7 +262,7 @@ RemoteTableReadTaskPtr RemoteTableReadTask::buildFrom(
 
     std::vector<std::future<RemoteSegmentReadTaskPtr>> futures;
 
-    size_t size = static_cast<size_t>(remote_table.segments().size());
+    auto size = static_cast<size_t>(remote_table.segments().size());
     for (size_t idx = 0; idx < size; ++idx)
     {
         const auto & remote_seg = remote_table.segments(idx);

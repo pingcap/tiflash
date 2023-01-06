@@ -96,7 +96,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, 
     return column_files;
 }
 
-ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format(//
+ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format( //
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,

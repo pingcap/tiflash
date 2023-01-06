@@ -24,8 +24,8 @@
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -232,10 +232,9 @@ try
     }
     ASSERT_TRUE(latest_manifest_sequence > 0);
     auto checkpoint_path = checkpoint_dir + fmt::format("{}.manifest", latest_manifest_sequence);
-    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(//
+    auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create( //
         CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-            .file_path = checkpoint_path
-        });
+            .file_path = checkpoint_path});
     PageId new_segment_id = 0;
     {
         auto kvstore = dmContext().db_context.getTMTContext().getKVStore();
