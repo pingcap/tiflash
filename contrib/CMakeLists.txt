@@ -112,7 +112,7 @@ if (USE_INTERNAL_GRPC_LIBRARY)
 endif ()
 
 execute_process(
-  COMMAND grep "CompressionMode compress" "${TiFlash_SOURCE_DIR}/contrib/kvproto/proto/mpp.proto"
+  COMMAND grep "CompressionMode compression" "${TiFlash_SOURCE_DIR}/contrib/kvproto/proto/mpp.proto"
   RESULT_VARIABLE HAVE_APPLY_PATCH)
 
 # grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.

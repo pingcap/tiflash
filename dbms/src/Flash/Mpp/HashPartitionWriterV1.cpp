@@ -140,7 +140,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
         auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compression_mode;
-        tracked_packets[part_id]->getPacket().mutable_compress()->set_mode(mode);
+        tracked_packets[part_id]->getPacket().mutable_compression()->set_mode(mode);
     }
 
     // Sum of all approximate block data memory size
@@ -207,7 +207,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             WriteBuffer * ostr_ptr = output_buffer.get();
 
             // Init compression writer
-            if (tracked_packets[part_id]->getPacket().compress().mode() != mpp::CompressionMode::NONE)
+            if (tracked_packets[part_id]->getPacket().compression().mode() != mpp::CompressionMode::NONE)
             {
                 compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
                     *output_buffer,
@@ -269,7 +269,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
         auto mode = writer->isLocal(part_id) ? mpp::CompressionMode::NONE : compression_mode;
-        tracked_packets[part_id]->getPacket().mutable_compress()->set_mode(mode);
+        tracked_packets[part_id]->getPacket().mutable_compression()->set_mode(mode);
     }
 
     // Sum of all approximate block data memory size
@@ -335,7 +335,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             WriteBuffer * ostr_ptr = output_buffer.get();
 
             // Init compression writer
-            if (tracked_packets[part_id]->getPacket().compress().mode() != mpp::CompressionMode::NONE)
+            if (tracked_packets[part_id]->getPacket().compression().mode() != mpp::CompressionMode::NONE)
             {
                 compress_codec = std::make_unique<CompressedCHBlockChunkCodec::CompressedWriteBuffer>(
                     *output_buffer,
@@ -423,7 +423,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPa
 
         if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
         {
-            auto mode = inner_packet.compress().mode();
+            auto mode = inner_packet.compression().mode();
             writer->partitionWrite(std::move(packet), part_id);
             updateHashPartitionWriterMetrics(mode, sz, writer->isLocal(part_id));
         }

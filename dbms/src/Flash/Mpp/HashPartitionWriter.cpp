@@ -158,7 +158,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPa
 
             // Update metrics about exchange hash partition
             {
-                assert(inner_packet.compress().mode() == mpp::CompressionMode::NONE);
+                assert(inner_packet.compression().mode() == mpp::CompressionMode::NONE);
 
                 if (auto sz = inner_packet.ByteSizeLong(); writer->isLocal(part_id))
                 {

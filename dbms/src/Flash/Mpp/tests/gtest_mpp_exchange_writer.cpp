@@ -528,14 +528,14 @@ try
             {
                 if (part_index == 0)
                 {
-                    ASSERT_EQ(packet.compress().mode(), mpp::CompressionMode::NONE);
+                    ASSERT_EQ(packet.compression().mode(), mpp::CompressionMode::NONE);
                 }
                 else
                 {
-                    ASSERT_NE(packet.compress().mode(), mpp::CompressionMode::NONE);
+                    ASSERT_NE(packet.compression().mode(), mpp::CompressionMode::NONE);
                 }
 
-                auto && result = decoder.decodeAndSquash(chunk, packet.compress().mode() != mpp::CompressionMode::NONE);
+                auto && result = decoder.decodeAndSquash(chunk, packet.compression().mode() != mpp::CompressionMode::NONE);
                 if (!result)
                     continue;
                 decoded_block_rows += result->rows();
