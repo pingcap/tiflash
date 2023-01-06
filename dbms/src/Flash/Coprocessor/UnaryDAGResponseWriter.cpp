@@ -15,7 +15,9 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 
 namespace DB
@@ -70,14 +72,14 @@ void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
     dag_response->set_warning_count(dag_context.getWarningCount());
 }
 
-void UnaryDAGResponseWriter::finishWrite()
+void UnaryDAGResponseWriter::flush()
 {
     if (current_records_num > 0)
     {
         encodeChunkToDAGResponse();
     }
+    // TODO separate from UnaryDAGResponseWriter and support mpp/batchCop.
     appendWarningsToDAGResponse();
-    summary_collector.addExecuteSummaries(*dag_response);
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)

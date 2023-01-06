@@ -107,6 +107,7 @@
 # read_index_runner_count = 1
 ## The minimum duration to handle read-index tasks in each worker.
 # read_index_worker_tick_ms = 10
+# disaggregated_mode = "tiflash_storage" or "tiflash_compute"
 
 [flash.proxy]
 # addr = "0.0.0.0:20170"

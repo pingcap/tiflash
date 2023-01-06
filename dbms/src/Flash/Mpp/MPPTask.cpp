@@ -21,6 +21,7 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -55,7 +56,7 @@ extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta, const ContextPtr & context_)
-    : id(meta.start_ts(), meta.task_id())
+    : id(meta)
     , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
     , schedule_entry(manager, id)
@@ -95,16 +96,23 @@ void MPPTask::abortReceivers()
     receiver_set->cancel();
 }
 
-void MPPTask::abortDataStreams(AbortType abort_type)
+void MPPTask::abortQueryExecutor()
 {
-    /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
-    bool is_kill = abort_type == AbortType::ONCANCELLATION;
-    context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
+    if (auto query_executor = query_executor_holder.tryGet(); query_executor)
+    {
+        assert(query_executor.value());
+        (*query_executor)->cancel();
+    }
 }
 
 void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    if (dag_context->collect_execution_summaries)
+    {
+        ExecutionSummaryCollector summary_collector(*dag_context);
+        tunnel_set->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
+    }
     tunnel_set->finishWrite();
 }
 
@@ -136,7 +144,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
-        tunnel_set_local->registerTunnel(MPPTaskId{receiver_meta.start_ts(), receiver_meta.task_id()}, tunnel);
+        tunnel_set_local->registerTunnel(MPPTaskId(receiver_meta), tunnel);
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
@@ -177,7 +185,6 @@ void MPPTask::initExchangeReceivers()
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
             receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
-            new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
         }
         return true;
     });
@@ -202,7 +209,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
 
-    MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
+    MPPTaskId receiver_id(request->receiver_meta());
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
     auto tunnel_ptr = tunnel_set->getTunnelByReceiverTaskId(receiver_id);
     if (tunnel_ptr == nullptr)
@@ -323,13 +330,19 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    executeQuery(*context);
+    LOG_DEBUG(log, "init exchange receiver done");
+    query_executor_holder.set(queryExecute(*context));
+    LOG_DEBUG(log, "init query executor done");
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
         if (status != RUNNING)
             throw Exception("task not in running state, may be cancelled");
         for (auto & r : dag_context->getCoprocessorReaders())
             receiver_set->addCoprocessorReader(r);
+        const auto & receiver_opt = dag_context->getDisaggregatedComputeExchangeReceiver();
+        if (receiver_opt.has_value())
+            receiver_set->addExchangeReceiver(receiver_opt->first, receiver_opt->second);
+        new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
     }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -360,7 +373,7 @@ void MPPTask::runImpl()
         LOG_INFO(log, "task starts preprocessing");
         preprocess();
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
-        LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
+        LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getExternalThreadCnt(), new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
@@ -373,31 +386,32 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = dag_context->getBlockIO().in;
-        from->readPrefix();
-        LOG_DEBUG(log, "begin read ");
 
-        while (from->read())
-            continue;
-
-        // finish DataStream
-        from->readSuffix();
-        // finish receiver
-        receiver_set->close();
-        // finish MPPTunnel
-        finishWrite();
+        auto result = query_executor_holder->execute();
+        if (likely(result.is_success))
+        {
+            // finish receiver
+            receiver_set->close();
+            // finish MPPTunnel
+            finishWrite();
+        }
+        else
+        {
+            err_msg = result.err_msg;
+        }
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(
             log,
-            "finish write with {} rows, {} blocks, {} bytes",
+            "finish with {} rows, {} blocks, {} bytes",
             return_statistics.rows,
             return_statistics.blocks,
             return_statistics.bytes);
     }
     catch (...)
     {
-        err_msg = getCurrentExceptionMessage(true, true);
+        auto catch_err_msg = getCurrentExceptionMessage(true, true);
+        err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
     if (err_msg.empty())
@@ -444,7 +458,7 @@ void MPPTask::runImpl()
 void MPPTask::handleError(const String & error_msg)
 {
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-    manager->abortMPPQuery(id.start_ts, updated_msg, AbortType::ONERROR);
+    manager->abortMPPQuery(id.query_id, updated_msg, AbortType::ONERROR);
     if (!registered)
         // if the task is not registered, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
@@ -488,7 +502,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// the original error
             err_string = message;
             abortTunnels(message, false);
-            abortDataStreams(abort_type);
+            abortQueryExecutor();
             abortReceivers();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
@@ -518,12 +532,17 @@ bool MPPTask::scheduleThisTask(ScheduleState state)
 
 int MPPTask::estimateCountOfNewThreads()
 {
-    if (dag_context == nullptr || dag_context->getBlockIO().in == nullptr || dag_context->tunnel_set == nullptr)
-        throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
+    auto query_executor = query_executor_holder.tryGet();
+    RUNTIME_CHECK_MSG(
+        query_executor && dag_context->tunnel_set != nullptr,
+        "It should not estimate the threads for the uninitialized task {}",
+        id.toString());
 
-    // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
-    return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
-        + dag_context->tunnel_set->getRemoteTunnelCnt();
+    // Estimated count of new threads from query executor, MppTunnels, mpp_receivers.
+    assert(query_executor.value());
+    return (*query_executor)->estimateNewThreadCount() + 1
+        + dag_context->tunnel_set->getExternalThreadCnt()
+        + new_thread_count_of_mpp_receiver;
 }
 
 } // namespace DB

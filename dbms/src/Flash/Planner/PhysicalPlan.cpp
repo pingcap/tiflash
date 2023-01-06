@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
@@ -40,12 +41,20 @@ namespace DB
 {
 namespace
 {
-bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor_id, const tipb::Selection & selection)
+bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, const String & executor_id, const tipb::Selection & selection)
 {
     if (plan->tp() == PlanType::TableScan)
     {
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->pushDownFilter(executor_id, selection);
+    }
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
+    {
+        auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
+        if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
+        {
+            return physical_mock_table_scan->pushDownFilter(context, executor_id, selection);
+        }
     }
     return false;
 }
@@ -110,22 +119,23 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
         auto child = popBack();
-        if (pushDownSelection(child, executor_id, executor->selection()))
+        if (pushDownSelection(context, child, executor_id, executor->selection()))
             pushBack(child);
         else
             pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         break;
     }
-    case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
+        RUNTIME_CHECK_MSG(executor->aggregation().group_by_size() == 0, "Group by key is not supported in StreamAgg");
+    case tipb::ExecType::TypeAggregation:
         GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
-        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
+        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), FineGrainedShuffle(executor), popBack()));
         break;
     case tipb::ExecType::TypeExchangeSender:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
         buildFinalProjection(fmt::format("{}_", executor_id), true);
-        if (unlikely(context.isExecutorTest()))
+        if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
         {
@@ -138,7 +148,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeExchangeReceiver:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
-        if (unlikely(context.isExecutorTest()))
+        if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver()));
         else
         {
@@ -179,7 +189,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         buildFinalProjection(fmt::format("{}_l_", executor_id), false);
         auto left = popBack();
 
-        pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
+        pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), FineGrainedShuffle(executor), left, right));
         break;
     }
     default:

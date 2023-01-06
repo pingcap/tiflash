@@ -325,7 +325,6 @@ struct ReverseUTF8Impl
     }
 };
 
-
 template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int),
@@ -1097,7 +1096,7 @@ public:
     }
 };
 
-extern UInt64 GetJsonLength(std::string_view sv);
+extern UInt64 GetJsonLength(const std::string_view & sv);
 
 class FunctionJsonLength : public IFunction
 {
@@ -5782,6 +5781,318 @@ private:
     }
 };
 
+// internal function.
+// `abc.def` ==> 'fed.cba'
+// `-abc.def` ==> '-fed.cba'
+// `abc.def0000` ==> 'fed.cba'
+// `-abc.def0000` ==> '-fed.cba'
+// `abc.de0000f` ==> 'f0000ed.cba'
+// `-abc.de0000f` ==> '-f0000ed.cba'
+// `abc.de0000f0000` ==> 'f0000ed.cba'
+// `-abc.de0000f0000` ==> '-f0000ed.cba'
+// `0.def` ==> 'fed.'
+// `-0.def` ==> '-fed.'
+// `0.def0000` ==> 'fed.'
+// `-0.def0000` ==> '-fed.'
+// `0.de0000f` ==> 'f0000ed.'
+// `-0.de0000f` ==> '-f0000ed.'
+// `0.de0000f0000` ==> 'f0000ed.'
+// `-0.de0000f0000` ==> '-f0000ed.'
+// `abc` ==> 'cba'
+// `-abc` ==> '-cba'
+// `abc.00` ==> 'cba'
+// `-abc.00` ==> '-cba'
+// `abc0000` ==> '0000cba'
+// `-abc0000` ==> '-0000cba'
+// `abc0000.00` ==> '0000cba'
+// `-abc0000.00` ==> '-0000cba'
+// `0` ==> ''
+// `0.00` ==> ''
+class FunctionFormatDecimal : public IFunction
+{
+public:
+    static constexpr auto name = "formatDecimal";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionFormatDecimal>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & base_type = block.getByPosition(arguments[0]).type;
+        bool is_types_valid = getDecimalType(base_type, [&](const auto & decimal_type, bool) {
+            using DecimalType = std::decay_t<decltype(decimal_type)>;
+            using DecimalFieldType = typename DecimalType::FieldType;
+            static_assert(IsDecimal<DecimalFieldType>);
+            using IntType = typename DecimalFieldType::NativeType;
+            using DecimalColVec = ColumnDecimal<DecimalFieldType>;
+
+            const auto & col_arg = block.getByPosition(arguments[0]);
+            if (const auto * col = checkAndGetColumn<DecimalColVec>(col_arg.column.get()))
+            {
+                auto precision = maxDecimalPrecision<DecimalFieldType>();
+                auto scale = decimal_type.getScale();
+                auto col_res = ColumnString::create();
+                format<DecimalColVec, IntType>(col, precision, scale, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        });
+
+        if (!is_types_valid)
+            throw Exception(
+                fmt::format("Illegal types {} arguments of function {}", base_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    template <typename F>
+    static bool getDecimalType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename DecimalColVec, typename IntType>
+    static void format(
+        const DecimalColVec * col,
+        PrecType precision,
+        ScaleType scale,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        auto & data = col->getData();
+        size_t size = data.size();
+        res_data.resize(size * (precision + 3));
+        res_offsets.resize(size);
+
+        ColumnString::Offset cur_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & decimal = data[i];
+            if (decimal.value == std::numeric_limits<IntType>::min())
+                // for IntType::min, `value = -value` may cause overflow, so use Int256 here.
+                doFormat<Int256>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+            else
+                doFormat<IntType>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+        }
+    }
+
+    template <typename IntType>
+    static void doFormat(
+        IntType value,
+        ScaleType scale,
+        ColumnString::Offset & cur_offset,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        if (value < 0)
+        {
+            res_data[cur_offset++] = '-';
+            value = -value;
+        }
+        // fill decimal part
+        if (scale > 0 && value > 0)
+        {
+            size_t scale_i = 0;
+            // return false if the decimal part is all 0.
+            auto remove_tailing_zero = [&]() {
+                while (value > 0 && scale_i < scale)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    ++scale_i;
+                    if (d != 0)
+                    {
+                        res_data[cur_offset++] = d + '0';
+                        return true;
+                    }
+                }
+                return false;
+            };
+            auto fill_decimal_part = [&]() {
+                for (; value > 0 && scale_i < scale; ++scale_i)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    res_data[cur_offset++] = d + '0';
+                }
+                res_data[cur_offset++] = '.';
+            };
+            if (remove_tailing_zero())
+                fill_decimal_part();
+        }
+        // fill integer part
+        while (value > 0)
+        {
+            int d = static_cast<int>(value % 10);
+            value = value / 10;
+            res_data[cur_offset++] = d + '0';
+        }
+        res_data[cur_offset++] = 0;
+        res_offset = cur_offset;
+    }
+};
+
+class FunctionTiDBUnHex : public IFunction
+{
+public:
+    static constexpr auto name = "tidbUnHex";
+    FunctionTiDBUnHex() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionTiDBUnHex>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+
+        size_t size = block.rows();
+        auto col_res = ColumnString::create();
+        auto result_null_map = ColumnUInt8::create(size, 0);
+
+        if (executeUnHexString(column, col_res->getChars(), col_res->getOffsets(), result_null_map->getData()))
+        {
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    static bool executeUnHexString(const ColumnPtr & column,
+                                   ColumnString::Chars_t & res_data,
+                                   ColumnString::Offsets & res_offsets,
+                                   ColumnUInt8::Container & res_null_map)
+    {
+        const auto * const col = checkAndGetColumn<ColumnString>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        const size_t size = col->size();
+        const ColumnString::Chars_t & data = col->getChars();
+        const ColumnString::Offsets & offsets = col->getOffsets();
+        res_data.resize(data.size() / 2 + size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset pos = 0;
+        ColumnString::Offset prev_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t begin = prev_offset;
+            size_t length = offsets[i] - prev_offset - 1;
+            unhexOne(data, length, i, begin, pos, res_data, res_offsets, res_null_map);
+            pos = res_offsets[i];
+            prev_offset = offsets[i];
+        }
+        res_data.resize(pos);
+
+        return true;
+    }
+
+    static void unhexOne(const ColumnString::Chars_t & data,
+                         const size_t length,
+                         const size_t idx,
+                         size_t begin,
+                         size_t pos,
+                         ColumnString::Chars_t & res_data,
+                         ColumnString::Offsets & res_offsets,
+                         ColumnUInt8::Container & res_null_map)
+    {
+        char low;
+        char high;
+        size_t end = begin + length;
+        res_offsets[idx] = pos + 1;
+
+        if (length % 2 != 0)
+        {
+            const char * byte = reinterpret_cast<const char *>(&data[begin]);
+            if (!fromHexChar(byte, low))
+            {
+                res_null_map[idx] = 1;
+                return;
+            }
+            res_data[pos] = low;
+            pos++;
+            begin++;
+        }
+        for (size_t i = begin; i < end; i += 2)
+        {
+            const char * byte1 = reinterpret_cast<const char *>(&data[i]);
+            const char * byte2 = reinterpret_cast<const char *>(&data[i + 1]);
+            if (!fromHexChar(byte1, high) || !fromHexChar(byte2, low))
+            {
+                res_null_map[idx] = 1;
+                return;
+            }
+            res_data[pos] = (high << 4) | low;
+            pos++;
+        }
+        res_offsets[idx] = pos + 1;
+    }
+
+    static bool fromHexChar(const char * in, char & out)
+    {
+        if (*in >= '0' && *in <= '9')
+        {
+            out = *in - '0';
+        }
+        else if (*in >= 'a' && *in <= 'f')
+        {
+            out = *in - 'a' + 10;
+        }
+        else if (*in >= 'A' && *in <= 'F')
+        {
+            out = *in - 'A' + 10;
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -5872,5 +6183,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSpace>();
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
+    factory.registerFunction<FunctionFormatDecimal>();
+    factory.registerFunction<FunctionTiDBUnHex>();
 }
 } // namespace DB

@@ -89,4 +89,8 @@ SpacesInContainerLiterals: true
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
+---
+Language: Proto
+# Added to avoid annoying error message
+DisableFormat: true
 ...

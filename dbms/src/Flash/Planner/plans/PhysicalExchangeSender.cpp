@@ -71,7 +71,6 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
     }
-    int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = NewMPPExchangeWriter(
@@ -81,7 +80,6 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             exchange_type,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
-            /*should_send_exec_summary_at_last=*/stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dag_context,
             fine_grained_shuffle.enable(),
             fine_grained_shuffle.stream_count,
@@ -99,90 +97,6 @@ void PhysicalExchangeSender::finalize(const Names & parent_require)
 const Block & PhysicalExchangeSender::getSampleBlock() const
 {
     return child->getSampleBlock();
-}
-
-template <>
-std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter<MPPTunnelSetPtr>(
-    const MPPTunnelSetPtr & writer,
-    const std::vector<Int64> & partition_col_ids,
-    const TiDB::TiDBCollators & partition_col_collators,
-    const tipb::ExchangeType & exchange_type,
-    Int64 records_per_chunk,
-    Int64 batch_send_min_limit,
-    bool should_send_exec_summary_at_last,
-    DAGContext & dag_context,
-    bool enable_fine_grained_shuffle,
-    UInt64 fine_grained_shuffle_stream_count,
-    UInt64 fine_grained_shuffle_batch_size)
-{
-    RUNTIME_CHECK(dag_context.isMPPTask());
-    should_send_exec_summary_at_last = dag_context.collect_execution_summaries && should_send_exec_summary_at_last;
-    if (dag_context.isRootMPPTask())
-    {
-        // No need to use use data compression
-        RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compression() == mpp::CompressionMode::NONE);
-
-        RUNTIME_CHECK(!enable_fine_grained_shuffle);
-        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
-        return std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-            writer,
-            records_per_chunk,
-            batch_send_min_limit,
-            should_send_exec_summary_at_last,
-            dag_context);
-    }
-    else
-    {
-        if (exchange_type == tipb::ExchangeType::Hash)
-        {
-            if (enable_fine_grained_shuffle)
-            {
-                // TODO: support data compression if necessary
-                RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compression() == mpp::CompressionMode::NONE);
-
-                return std::make_unique<FineGrainedShuffleWriter<MPPTunnelSetPtr>>(
-                    writer,
-                    partition_col_ids,
-                    partition_col_collators,
-                    should_send_exec_summary_at_last,
-                    dag_context,
-                    fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size);
-            }
-            else
-            {
-                auto && compression_mode = dag_context.getExchangeSenderMeta().compression();
-                if (TiDB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
-                    return std::make_unique<HashPartitionWriter<MPPTunnelSetPtr>>(
-                        writer,
-                        partition_col_ids,
-                        partition_col_collators,
-                        batch_send_min_limit,
-                        should_send_exec_summary_at_last,
-                        dag_context);
-                return std::make_unique<HashPartitionWriterImplV1<MPPTunnelSetPtr>>(
-                    writer,
-                    partition_col_ids,
-                    partition_col_collators,
-                    8192,
-                    should_send_exec_summary_at_last,
-                    dag_context,
-                    compression_mode);
-            }
-        }
-        else
-        {
-            // TODO: support data compression if necessary
-            RUNTIME_CHECK(dag_context.getExchangeSenderMeta().compression() == mpp::CompressionMode::NONE);
-
-            RUNTIME_CHECK(!enable_fine_grained_shuffle);
-            return std::make_unique<BroadcastOrPassThroughWriter<MPPTunnelSetPtr>>(
-                writer,
-                batch_send_min_limit,
-                should_send_exec_summary_at_last,
-                dag_context);
-        }
-    }
 }
 
 } // namespace DB

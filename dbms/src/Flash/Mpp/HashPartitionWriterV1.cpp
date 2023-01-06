@@ -60,13 +60,11 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     Int64 partition_batch_limit_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
     mpp::CompressionMode compression_mode_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , partition_num(writer_->getPartitionNum())
     , partition_batch_limit(partition_batch_limit_ * partition_num)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
@@ -81,22 +79,6 @@ HashPartitionWriterImplV1<ExchangeWriterPtr>::HashPartitionWriterImplV1(
     {
         expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
     }
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriterImplV1<ExchangeWriterPtr>::finishWrite()
-{
-    assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriterImplV1<ExchangeWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response);
-    writer->sendExecutionSummary(response);
 }
 
 template <class ExchangeWriterPtr>
@@ -168,7 +150,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             total_rows += block.rows();
 
             auto && dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -295,7 +277,7 @@ void HashPartitionWriterImplV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBl
             total_rows += block.rows();
 
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)

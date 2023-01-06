@@ -18,7 +18,9 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -109,6 +111,11 @@ try
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
+        if (dag_context.collect_execution_summaries)
+        {
+            ExecutionSummaryCollector summary_collector(dag_context);
+            summary_collector.addExecuteSummaries(*dag_response);
+        }
     }
     else
     {
@@ -132,10 +139,15 @@ try
             streaming_writer,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
-            dag_context.collect_execution_summaries,
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
+        if (dag_context.collect_execution_summaries)
+        {
+            ExecutionSummaryCollector summary_collector(dag_context);
+            auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
+            streaming_writer->write(execution_summary_response);
+        }
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)

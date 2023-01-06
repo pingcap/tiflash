@@ -16,9 +16,8 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MemoryTracker.h>
-#include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskScheduleEntry.h>
@@ -27,7 +26,6 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/IQuerySource.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
@@ -94,7 +92,7 @@ private:
 
     void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
-    void abortDataStreams(AbortType abort_type);
+    void abortQueryExecutor();
 
     void finishWrite();
 
@@ -127,6 +125,8 @@ private:
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
 
+    QueryExecutorHolder query_executor_holder;
+
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;
 
@@ -136,7 +136,7 @@ private:
 
     MPPReceiverSetPtr receiver_set;
 
-    int new_thread_count_of_exchange_receiver = 0;
+    int new_thread_count_of_mpp_receiver = 0;
 
     const LoggerPtr log;
 

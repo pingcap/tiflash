@@ -207,8 +207,8 @@ TEST(ReadLimiterTest, GetIOStatPeroid200ms)
     ASSERT_EQ(limiter.getAvailableBalance(), -31);
     request(limiter, 1);
     TimePointMS t2 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-    elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    ASSERT_GE(elasped, 2 * refill_period_ms);
+    elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t0).count();
+    ASSERT_GE(elasped, 3 * refill_period_ms);
     ASSERT_EQ(limiter.getAvailableBalance(), 8);
     request(limiter, 9);
     ASSERT_EQ(limiter.getAvailableBalance(), -1);

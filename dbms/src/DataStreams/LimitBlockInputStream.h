@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/LimitTransformAction.h>
 
 namespace DB
 {
@@ -33,9 +34,7 @@ public:
     LimitBlockInputStream(
         const BlockInputStreamPtr & input,
         size_t limit_,
-        size_t offset_,
-        const String & req_id,
-        bool always_read_till_end_ = false);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 
@@ -46,11 +45,8 @@ protected:
     void appendInfo(FmtBuffer & buffer) const override;
 
 private:
-    size_t limit;
-    size_t offset;
-    size_t pos = 0;
-    bool always_read_till_end;
     LoggerPtr log;
+    LimitTransformAction limit_transform_action;
 };
 
 } // namespace DB

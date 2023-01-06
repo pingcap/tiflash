@@ -37,6 +37,13 @@ public:
         : log(Logger::get(req_id))
     {}
 
+    // this is a root mpp writing.
+    void write(tipb::SelectResponse & response);
+    // this is a broadcast or pass through writing.
+    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet);
+    // this is a partition writing.
+    void partitionWrite(TrackedMppDataPacketPtr && packet, int16_t partition_id);
+    /// this is a execution summary writing.
     /// for both broadcast writing and partition writing, only
     /// return meaningful execution summary for the first tunnel,
     /// because in TiDB, it does not know enough information
@@ -45,16 +52,7 @@ public:
     /// so if return execution summary for all the tunnels, the
     /// information in TiDB will be amplified, which may make
     /// user confused.
-    // this is a root mpp writing.
-    void write(tipb::SelectResponse & response);
-    // this is a broadcast or pass through writing.
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet);
-    // this is a broadcast or pass through writing. `local_packet` will only be sent by local tunnel, `not_local_packet` is on the contrary.
-    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & local_packet, const TrackedMppDataPacketPtr & not_local_packet);
-    // this is a partition writing.
-    void partitionWrite(const TrackedMppDataPacketPtr & packet, int16_t partition_id);
-    // this is a execution summary writing.
-    void sendExecutionSummary(tipb::SelectResponse & response);
+    void sendExecutionSummary(const tipb::SelectResponse & response);
 
     void close(const String & reason, bool wait_sender_finish);
     void finishWrite();
@@ -64,9 +62,9 @@ public:
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
-    int getRemoteTunnelCnt()
+    int getExternalThreadCnt()
     {
-        return remote_tunnel_cnt;
+        return external_thread_cnt;
     }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
@@ -79,7 +77,7 @@ private:
     std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
     const LoggerPtr log;
 
-    int remote_tunnel_cnt = 0;
+    int external_thread_cnt = 0;
 };
 
 class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>

@@ -43,12 +43,10 @@ public:
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 partition_batch_limit_,
-        bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         mpp::CompressionMode compression_mode_);
     void write(const Block & block) override;
     void flush() override;
-    void finishWrite() override;
 
 private:
     void partitionAndEncodeThenWriteBlocks();
@@ -56,12 +54,9 @@ private:
 
     void writePackets(TrackedMppDataPacketPtrs && packets);
 
-    void sendExecutionSummary();
-
 private:
     uint16_t partition_num;
     Int64 partition_batch_limit;
-    bool should_send_exec_summary_at_last;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;

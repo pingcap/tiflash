@@ -13,6 +13,17 @@
 // limitations under the License.
 
 #include <Debug/MockComputeServerManager.h>
+#include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
+#include <Debug/MockExecutor/ExchangeSenderBinder.h>
+#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/JoinBinder.h>
+#include <Debug/MockExecutor/LimitBinder.h>
+#include <Debug/MockExecutor/ProjectBinder.h>
+#include <Debug/MockExecutor/SelectionBinder.h>
+#include <Debug/MockExecutor/SortBinder.h>
+#include <Debug/MockExecutor/TableScanBinder.h>
+#include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
@@ -26,6 +37,7 @@
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
+#include <memory>
 #include <unordered_set>
 
 namespace DB::tests
@@ -90,7 +102,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context, DAGRequestType type)
 {
     // build tree struct base executor
-    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
+    MPPInfo mpp_info(properties.start_ts, properties.query_ts, properties.server_id, properties.local_query_id, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
@@ -261,22 +273,23 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
-                                            tipb::JoinType tp,
-                                            MockAstVec join_cols,
-                                            MockAstVec left_conds,
-                                            MockAstVec right_conds,
-                                            MockAstVec other_conds,
-                                            MockAstVec other_eq_conds_from_in)
+DAGRequestBuilder & DAGRequestBuilder::join(
+    const DAGRequestBuilder & right,
+    tipb::JoinType tp,
+    MockAstVec join_col_exprs,
+    MockAstVec left_conds,
+    MockAstVec right_conds,
+    MockAstVec other_conds,
+    MockAstVec other_eq_conds_from_in,
+    uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     assert(right.root);
-
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group_by_expr)
+DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group_by_expr, uint64_t fine_grained_shuffle_stream_count)
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
@@ -284,10 +297,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
         agg_funcs->children.push_back(agg_func);
     if (group_by_expr)
         group_by_exprs->children.push_back(group_by_expr);
-    return buildAggregation(agg_funcs, group_by_exprs);
+    return buildAggregation(agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs)
+DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     auto agg_func_list = std::make_shared<ASTExpressionList>();
     auto group_by_expr_list = std::make_shared<ASTExpressionList>();
@@ -295,13 +308,13 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAstVec agg_funcs, MockAst
         agg_func_list->children.push_back(func);
     for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-    return buildAggregation(agg_func_list, group_by_expr_list);
+    return buildAggregation(agg_func_list, group_by_expr_list, fine_grained_shuffle_stream_count);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs)
+DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs);
+    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
     return *this;
 }
 
@@ -349,63 +362,120 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
-    mock_storage.addTableSchema(db + "." + table, columnInfos);
+    mock_storage->addTableSchema(db + "." + table, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
-    mock_storage.addTableSchema(name.first + "." + name.second, columnInfos);
+    mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
 {
-    mock_storage.addExchangeSchema(name, columnInfos);
+    mock_storage->addExchangeSchema(name, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
 {
-    mock_storage.addTableData(db + "." + table, columns);
+    mock_storage->addTableData(db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
 {
-    mock_storage.addTableData(name.first + "." + name.second, columns);
+    mock_storage->addTableData(name.first + "." + name.second, columns);
+}
+
+void MockDAGRequestContext::addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns)
+{
+    for (const auto & column : columns)
+        RUNTIME_ASSERT(!column.name.empty(), "mock column must have column name");
+
+    mock_storage->addTableDataForDeltaMerge(context, db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
 {
-    mock_storage.addExchangeData(name, columns);
+    mock_storage->addExchangeData(name, columns);
 }
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assertMockInput(columnInfos, columns);
+
     addMockTable(db, table, columnInfos);
     addMockTableColumnData(db, table, columns);
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
 {
+    assertMockInput(columnInfos, columns);
+
     addMockTable(name, columnInfos);
     addMockTableColumnData(name, columns);
 }
 
+void MockDAGRequestContext::addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
+{
+    mock_storage->addTableSchemaForDeltaMerge(db + "." + table, columnInfos);
+}
+
+void MockDAGRequestContext::addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+{
+    assert(mock_storage->useDeltaMerge());
+    assertMockInput(columnInfos, columns);
+
+    addMockDeltaMergeSchema(db, table, columnInfos);
+    addMockDeltaMergeData(db, table, columns);
+}
+
+void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+{
+    assert(mock_storage->useDeltaMerge());
+    assertMockInput(columnInfos, columns);
+
+    addMockDeltaMergeSchema(name.first, name.second, columnInfos);
+    addMockDeltaMergeData(name.first, name.second, columns);
+}
+
 void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns)
 {
+    assertMockInput(columnInfos, columns);
     addExchangeRelationSchema(name, columnInfos);
     addExchangeReceiverColumnData(name, columns);
 }
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
 {
-    auto table_info = mock_storage.getTableInfo(db_name + "." + table_name);
-    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage.getTableSchema(db_name + "." + table_name));
+    if (!mock_storage->useDeltaMerge())
+    {
+        auto table_info = mock_storage->getTableInfo(db_name + "." + table_name);
+        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchema(db_name + "." + table_name));
+    }
+    else
+    {
+        auto table_info = mock_storage->getTableInfoForDeltaMerge(db_name + "." + table_name);
+        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name));
+    }
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage.getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage->getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
-    mock_storage.addExchangeRelation(builder.getRoot()->name, exchange_name);
+    mock_storage->addExchangeRelation(builder.getRoot()->name, exchange_name);
     return builder;
 }
+
+void MockDAGRequestContext::initMockStorage()
+{
+    mock_storage = std::make_unique<MockStorage>();
+}
+
+void MockDAGRequestContext::assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+{
+    assert(columnInfos.size() == columns.size());
+    for (size_t i = 0; i < columns.size(); ++i)
+        assert(columnInfos[i].first == columns[i].name);
+}
+
 } // namespace DB::tests

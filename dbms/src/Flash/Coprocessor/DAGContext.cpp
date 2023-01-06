@@ -207,11 +207,6 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
-void DAGContext::attachBlockIO(const BlockIO & io_)
-{
-    io = io_;
-}
-
 ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_id) const
 {
     if (!isMPPTask())
