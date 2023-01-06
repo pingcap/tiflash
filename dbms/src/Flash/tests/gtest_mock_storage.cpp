@@ -12,15 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeFactory.h>
 #include <Debug/MockStorage.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+
+#include <mutex>
 
 namespace DB
 {
 namespace tests
 {
+using DecimalField64 = DecimalField<Decimal64>;
+
 class MockStorageTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -34,6 +40,8 @@ public:
     const ColumnWithInt64 col0{0, 1, 2, 3, 4, 5, 6, 7};
 
     MockStorage mock_storage;
+    ColumnWithTypeAndName column;
+    ColumnsWithTypeAndName columns;
 };
 
 TEST_F(MockStorageTestRunner, DeltaMergeStorageBasic)
@@ -52,5 +60,19 @@ try
 }
 CATCH
 
+TEST_F(MockStorageTestRunner, Decimal)
+try
+{
+    auto type = DataTypeFactory::instance().get("Decimal(15,5)");
+    column = createColumn<Decimal64>(
+        std::make_tuple(15, 5),
+        {DecimalField64(450256, 5)},
+        "d1");
+    columns.push_back(column);
+    context.addMockTable({"test_db", "t"}, {{"d1", DataTypeFactory::instance().get("Decimal(15,5)")}}, columns);
+    auto request = context.scan("test_db", "t").build(context);
+    executeAndAssertColumnsEqual(request, columns);
+}
+CATCH
 } // namespace tests
 } // namespace DB

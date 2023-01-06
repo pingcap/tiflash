@@ -193,12 +193,12 @@ static DataTypePtr create(const ASTPtr & arguments)
     {
         throw Exception("Decimal data type family must have exactly two arguments: precision and scale");
     }
-    const ASTLiteral * arg0 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * arg0 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg0 || arg0->value.getType() != Field::Types::UInt64 || arg0->value.get<UInt64>() == 0)
         throw Exception(
             "Decimal data type family must have a number (positive integer) as its argument",
             ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-    const ASTLiteral * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
+    const auto * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
     if (!arg1 || arg1->value.getType() != Field::Types::UInt64)
         throw Exception(
             "Decimal data type family must have a number (positive integer) as its argument",

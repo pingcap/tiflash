@@ -36,6 +36,80 @@ void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & 
     addTableInfo(name, columnInfos);
 }
 
+TiDB::TP dataTypeToTP2(const DataTypePtr & type)
+{
+    switch (removeNullable(type)->getTypeId())
+    {
+    case TypeIndex::UInt8:
+    case TypeIndex::Int8:
+        return TiDB::TP::TypeTiny;
+    case TypeIndex::UInt16:
+    case TypeIndex::Int16:
+        return TiDB::TP::TypeShort;
+    case TypeIndex::UInt32:
+    case TypeIndex::Int32:
+        return TiDB::TP::TypeLong;
+    case TypeIndex::UInt64:
+    case TypeIndex::Int64:
+        return TiDB::TP::TypeLongLong;
+    case TypeIndex::String:
+        return TiDB::TP::TypeString;
+    case TypeIndex::Float32:
+        return TiDB::TP::TypeFloat;
+    case TypeIndex::Float64:
+        return TiDB::TP::TypeDouble;
+    case TypeIndex::Date:
+    case TypeIndex::MyDate:
+        return TiDB::TP::TypeDate;
+    case TypeIndex::DateTime:
+    case TypeIndex::MyDateTime:
+        return TiDB::TP::TypeDatetime;
+    case TypeIndex::MyTimeStamp:
+        return TiDB::TP::TypeTimestamp;
+    case TypeIndex::MyTime:
+        return TiDB::TP::TypeTime;
+    case TypeIndex::Decimal32:
+    case TypeIndex::Decimal64:
+    case TypeIndex::Decimal128:
+    case TypeIndex::Decimal256:
+        return TiDB::TP::TypeNewDecimal;
+    case TypeIndex::Enum8:
+    case TypeIndex::Enum16:
+        return TiDB::TP::TypeEnum;
+    default:
+        throw Exception("Unsupport type");
+    }
+}
+
+void MockStorage::addTableSchemaForComplexType(const String & name, const MockColumnInfoVec & columnInfos, NamesAndTypes & names_and_types)
+{
+    name_to_id_map[name] = MockTableIdGenerator::instance().nextTableId();
+    table_schema[getTableId(name)] = columnInfos;
+    
+
+    TableInfo table_info;
+    table_info.name = name;
+    table_info.id = getTableId(name);
+
+    ColumnID col_id = 0;
+    ColumnInfos column_infos;
+    column_infos.reserve(column_infos.size());
+    for (const auto & name_and_type : names_and_types)
+    {
+        TiDB::ColumnInfo column_info;
+        column_info.name = name_and_type.name;
+        column_info.tp = dataTypeToTP2(name_and_type.type);
+        column_info.
+        column_info.id = col_id++;
+        
+        column_info.flen = 15;
+        column_info.decimal = 5;
+        column_infos.push_back(std::move(column_info));
+    }
+    table_info.columns.swap(column_infos);
+    table_infos[name] = table_info;
+}
+
 void MockStorage::addTableData(const String & name, ColumnsWithTypeAndName & columns)
 {
     for (size_t i = 0; i < columns.size(); ++i)
@@ -375,6 +449,7 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableSca
     throw Exception(fmt::format("Failed to get table columns by table_id '{}'", table_id));
 }
 
+// ywq todo refine
 void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & columns)
 {
     TableInfo table_info;
@@ -395,6 +470,7 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
     return table_infos_for_delta_merge[name];
 }
 
+// ywq todo change it.
 ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
 {
     ColumnID col_id = 0;
@@ -408,6 +484,8 @@ ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_colu
         // TODO: find a way to assign decimal field's flen.
         if (column_info.tp == TiDB::TP::TypeNewDecimal)
             column_info.flen = 65;
+        column_info.flen = 18;
+        column_info.decimal = 5;
         ret.push_back(std::move(column_info));
     }
     return ret;

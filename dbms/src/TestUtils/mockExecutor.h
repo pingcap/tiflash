@@ -176,29 +176,31 @@ public:
         return DAGRequestBuilder(index);
     }
     /// mock column table scan
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos);
-    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
-    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos);
+    void addMockTable(const String & db, const String & table, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName  columns);
+    void addMockTable(const MockTableName & name, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName  columns);
+    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName  columns);
+    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName  columns);
     void addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
     void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
     void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
     void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
 
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName  columns, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName  columns, size_t concurrency_hint = 0);
 
     /// mock DeltaMerge table scan
-    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName  columns);
+    void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName  columns);
 
     void addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
-    void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+    void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName  columns);
 
     /// mock column exchange receiver
     void addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos);
-    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
-    void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName  columns);
+    void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName  columns);
 
     DAGRequestBuilder scan(const String & db_name, const String & table_name);
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
@@ -210,7 +212,7 @@ public:
     void initMockStorage();
 
 private:
-    static void assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    static void assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName  columns);
 
 private:
     size_t index;
