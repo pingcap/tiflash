@@ -171,9 +171,10 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
             [&db_context, &remote_tasks, idx, cluster, &task_id, &summary, req = std::move(req), log = this->log] {
                 Stopwatch watch;
                 auto call = pingcap::kv::RpcCall<mpp::EstablishDisaggregatedTaskRequest>(req);
+                LOG_DEBUG(log, "Send EstablishDisaggregated request, address={} req={}", req->address(), req->DebugString());
                 cluster->rpc_client->sendRequest(req->address(), call, req->timeout());
                 const auto & resp = call.getResp();
-                LOG_DEBUG(log, "Get resp from {}, resp.store_id={} resp.num_tables={}", req->address(), resp->store_id(), resp->tables_size());
+                LOG_DEBUG(log, "Received EstablishDisaggregated response, address={} resp.store_id={} resp.num_tables={}", req->address(), resp->store_id(), resp->tables_size());
                 // TODO: handle error
                 if (resp->has_error())
                     throw Exception(fmt::format("EstablishDisaggregated get resp with error={}", resp->error().msg()));
