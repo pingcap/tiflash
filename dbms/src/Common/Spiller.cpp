@@ -27,9 +27,9 @@ SpilledFile::SpilledFile(const String & file_name_)
     : Poco::File(file_name_)
 {}
 
-static Poco::Logger * getSpilledFileLogger()
+static DB::LoggerPtr getSpilledFileLogger()
 {
-    static Poco::Logger * logger = &Poco::Logger::get("SpilledFile");
+    static auto logger = DB::Logger::get("SpilledFile");
     return logger;
 }
 
