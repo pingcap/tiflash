@@ -99,6 +99,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
     context.context.setInterpreterTest();
+    context.context.setMockStorage(context.mockStorage());
 
     // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
