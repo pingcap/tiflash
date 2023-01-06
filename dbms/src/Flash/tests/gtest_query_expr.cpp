@@ -36,9 +36,9 @@ public:
 
         context.addMockTable({"default", "test3"},
                              {{"col_1", TiDB::TP::TypeLongLong}, {"col_2", TiDB::TP::TypeLongLong}, {"col_3", TiDB::TP::TypeLongLong}},
-                             {toNullableVec<Int64>("col1", {666, 776, 777, {}, 999, {}}),
-                              toNullableVec<Int64>("col2", {666, 777, 777, 777, {}, {}}),
-                              toNullableVec<Int64>("col3", {666, 776, 777, 888, 999, 999})});
+                             {toNullableVec<Int64>("col_1", {666, 776, 777, {}, 999, {}}),
+                              toNullableVec<Int64>("col_2", {666, 777, 777, 777, {}, {}}),
+                              toNullableVec<Int64>("col_3", {666, 776, 777, 888, 999, 999})});
 
         context.addMockTable({"default", "i8"},
                              {{"a", TiDB::TP::TypeTiny}},
@@ -74,7 +74,7 @@ public:
         inputs.emplace_back(std::nullopt);
         context.addMockTable({"default", "t"},
                              {{"i", TiDB::TP::TypeLongLong}},
-                             {toNullableVec<Int64>("a", inputs)});
+                             {toNullableVec<Int64>("i", inputs)});
 
 
         context.addMockTable({"default", "logical_op_test"},
