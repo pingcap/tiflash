@@ -17,6 +17,8 @@
 #include <ext/enumerate.h>
 #include <tuple>
 
+#include "TestUtils/ColumnGenerator.h"
+
 namespace DB
 {
 namespace tests
@@ -742,6 +744,147 @@ try
         for (size_t j = 0; j < blocks.size(); ++j)
         {
             ASSERT_EQ(expect[i][j], blocks[j].rows());
+        }
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, NonJoinedData)
+try
+{
+    DB::MockColumnInfoVec left_table_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
+    DB::MockColumnInfoVec right_table_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
+    ColumnsWithTypeAndName left_table_column_data;
+    ColumnsWithTypeAndName right_table_column_data;
+    ColumnsWithTypeAndName common_table_column_data;
+    size_t table_rows = 102400;
+    size_t common_rows = 20480;
+    size_t max_block_size = 800;
+    size_t original_max_streams = 20;
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_table_column_infos))
+    {
+        ColumnGeneratorOpts opts{common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        common_table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+    }
+
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_table_column_infos))
+    {
+        ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        left_table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+    }
+
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(right_table_column_infos))
+    {
+        ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        right_table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+    }
+
+    for (size_t i = 0; i < common_table_column_data.size(); i++)
+    {
+        left_table_column_data[i].column->assumeMutable()->insertRangeFrom(*common_table_column_data[i].column, 0, common_rows);
+        right_table_column_data[i].column->assumeMutable()->insertRangeFrom(*common_table_column_data[i].column, 0, common_rows);
+    }
+
+    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
+    IColumn::Permutation perm;
+    shuffle_column.column->getPermutation(false, 0, -1, perm);
+    for (auto & column : left_table_column_data)
+    {
+        column.column = column.column->permute(perm, 0);
+    }
+    for (auto & column : right_table_column_data)
+    {
+        column.column = column.column->permute(perm, 0);
+    }
+
+    context.addMockTable("outer_join_test", "left_table_1_concurrency", left_table_column_infos, left_table_column_data, 1);
+    context.addMockTable("outer_join_test", "left_table_3_concurrency", left_table_column_infos, left_table_column_data, 3);
+    context.addMockTable("outer_join_test", "left_table_5_concurrency", left_table_column_infos, left_table_column_data, 5);
+    context.addMockTable("outer_join_test", "left_table_10_concurrency", left_table_column_infos, left_table_column_data, 10);
+    context.addMockTable("outer_join_test", "right_table_1_concurrency", right_table_column_infos, right_table_column_data, 1);
+    context.addMockTable("outer_join_test", "right_table_3_concurrency", right_table_column_infos, right_table_column_data, 3);
+    context.addMockTable("outer_join_test", "right_table_5_concurrency", right_table_column_infos, right_table_column_data, 5);
+    context.addMockTable("outer_join_test", "right_table_10_concurrency", right_table_column_infos, right_table_column_data, 10);
+    std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
+    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
+    std::vector<MockOrderByItemVec> left_table_order_items = {
+        {std::make_pair("left_table_1_concurrency.a", true), std::make_pair("left_table_1_concurrency.b", true)},
+        {std::make_pair("left_table_3_concurrency.a", true), std::make_pair("left_table_3_concurrency.b", true)},
+        {std::make_pair("left_table_5_concurrency.a", true), std::make_pair("left_table_5_concurrency.b", true)},
+        {std::make_pair("left_table_10_concurrency.a", true), std::make_pair("left_table_10_concurrency.b", true)},
+    };
+    std::vector<MockOrderByItemVec> right_table_order_items = {
+        {std::make_pair("right_table_1_concurrency.a", true), std::make_pair("right_table_1_concurrency.b", true)},
+        {std::make_pair("right_table_3_concurrency.a", true), std::make_pair("right_table_3_concurrency.b", true)},
+        {std::make_pair("right_table_5_concurrency.a", true), std::make_pair("right_table_5_concurrency.b", true)},
+        {std::make_pair("right_table_10_concurrency.a", true), std::make_pair("right_table_10_concurrency.b", true)},
+    };
+
+    /// case 1, right join without right condition
+    MockOrderByItemVec order_by_items;
+    order_by_items.insert(order_by_items.end(), left_table_order_items[0].begin(), left_table_order_items[0].end());
+    order_by_items.insert(order_by_items.end(), right_table_order_items[0].begin(), right_table_order_items[0].end());
+    auto request = context
+                       .scan("outer_join_test", left_table_names[0])
+                       .join(context.scan("outer_join_test", right_table_names[0]), tipb::JoinType::TypeRightOuterJoin, {col("a")})
+                       .topN(order_by_items, table_rows * 10)
+                       .build(context);
+    context.context.setSetting("max_block_size", Field(max_block_size));
+    auto ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+
+    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    {
+        for (size_t right_index = 0; right_index < right_table_names.size(); right_index++)
+        {
+            if (left_index == 0 && right_index == 0)
+                continue;
+            order_by_items.clear();
+            order_by_items.insert(order_by_items.end(), left_table_order_items[left_index].begin(), left_table_order_items[left_index].end());
+            order_by_items.insert(order_by_items.end(), right_table_order_items[right_index].begin(), right_table_order_items[right_index].end());
+            request = context
+                          .scan("outer_join_test", left_table_names[left_index])
+                          .join(context.scan("outer_join_test", right_table_names[right_index]), tipb::JoinType::TypeRightOuterJoin, {col("a")})
+                          .topN(order_by_items, table_rows * 10)
+                          .build(context);
+            auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
+            for (size_t i = 0; i < ref_blocks.size(); i++)
+            {
+                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
+            }
+        }
+    }
+    /// case 2, right join with right condition
+    order_by_items.clear();
+    order_by_items.insert(order_by_items.end(), left_table_order_items[0].begin(), left_table_order_items[0].end());
+    order_by_items.insert(order_by_items.end(), right_table_order_items[0].begin(), right_table_order_items[0].end());
+    request = context
+                  .scan("outer_join_test", left_table_names[0])
+                  .join(context.scan("outer_join_test", right_table_names[0]), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
+                  .topN(order_by_items, table_rows * 10)
+                  .build(context);
+    context.context.setSetting("max_block_size", Field(max_block_size));
+    ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    {
+        for (size_t right_index = 0; right_index < right_table_names.size(); right_index++)
+        {
+            if (left_index == 0 && right_index == 0)
+                continue;
+            order_by_items.clear();
+            order_by_items.insert(order_by_items.end(), left_table_order_items[left_index].begin(), left_table_order_items[left_index].end());
+            order_by_items.insert(order_by_items.end(), right_table_order_items[right_index].begin(), right_table_order_items[right_index].end());
+            request = context
+                          .scan("outer_join_test", left_table_names[left_index])
+                          .join(context.scan("outer_join_test", right_table_names[right_index]), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_names[right_index] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
+                          .topN(order_by_items, table_rows * 10)
+                          .build(context);
+            auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
+            for (size_t i = 0; i < ref_blocks.size(); i++)
+            {
+                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
+            }
         }
     }
 }

@@ -96,14 +96,23 @@ Block HashJoinProbeBlockInputStream::readImpl()
         Block result_block = getOutputBlock();
         squashing_transform.appendBlock(result_block);
     }
-    return squashing_transform.getFinalOutputBlock();
+    auto ret = squashing_transform.getFinalOutputBlock();
+    total_output_rows += ret.rows();
+    return ret;
+}
+
+void HashJoinProbeBlockInputStream::readSuffixImpl()
+{
+    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", total_output_rows, joined_rows, non_joined_rows);
 }
 
 Block HashJoinProbeBlockInputStream::getOutputBlock()
 {
     if (reading_non_joined_data)
     {
-        return non_joined_stream->read();
+        auto ret = non_joined_stream->read();
+        non_joined_rows += ret.rows();
+        return ret;
     }
     if (probe_process_info.all_rows_joined_finish)
     {
@@ -117,10 +126,10 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 join->waitUntilAllProbeFinished();
                 reading_non_joined_data = true;
                 non_joined_stream->readPrefix();
-                return non_joined_stream->read();
+                block = non_joined_stream->read();
+                non_joined_rows += block.rows();
             }
-            else
-                return block;
+            return block;
         }
         else
         {
@@ -128,7 +137,9 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             probe_process_info.resetBlock(std::move(block));
         }
     }
-    return join->joinBlock(probe_process_info);
+    auto ret = join->joinBlock(probe_process_info);
+    joined_rows += ret.rows();
+    return ret;
 }
 
 } // namespace DB

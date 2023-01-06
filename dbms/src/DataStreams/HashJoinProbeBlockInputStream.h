@@ -53,6 +53,8 @@ protected:
     Block getOutputBlock();
 
 private:
+    void readSuffixImpl() override;
+
     const LoggerPtr log;
     JoinPtr join;
     size_t probe_index;
@@ -62,6 +64,9 @@ private:
     BlockInputStreamPtr non_joined_stream;
     SquashingHashJoinBlockTransform squashing_transform;
     Block child_header;
+    size_t joined_rows = 0;
+    size_t non_joined_rows = 0;
+    size_t total_output_rows = 0;
 };
 
 } // namespace DB

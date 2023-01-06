@@ -117,7 +117,7 @@ Block NonJoinedBlockInputStream::readImpl()
 {
     /// build concurrency is less than non join concurrency,
     /// just return empty block for extra non joined block input stream read
-    if (index > parent.getBuildConcurrency())
+    if (index >= parent.getBuildConcurrency())
         return Block();
     if (parent.blocks.empty())
         return Block();
@@ -232,7 +232,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
     auto end = map.getSegmentTable(current_segment).end();
 
-    for (; *it != end || current_segment < map.getSegmentSize() - step; ++(*it))
+    for (; *it != end || current_segment + step < map.getSegmentSize(); ++(*it))
     {
         if (*it == end)
         {
