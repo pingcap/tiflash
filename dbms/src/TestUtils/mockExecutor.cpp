@@ -472,6 +472,7 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockC
 {
     assertMockInput(columnInfos, columns);
     addExchangeRelationSchema(name, columnInfos);
+    addExchangeReceiverColumnData(name, columns);
     if (fine_grained_stream_count > 0)
     {
         Block original_block(columns);
@@ -521,10 +522,6 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockC
             fine_grained_columns_vector.push_back(std::move(new_columns));
         }
         mock_storage->addFineGrainedExchangeData(name, fine_grained_columns_vector);
-    }
-    else
-    {
-        addExchangeReceiverColumnData(name, columns);
     }
 }
 

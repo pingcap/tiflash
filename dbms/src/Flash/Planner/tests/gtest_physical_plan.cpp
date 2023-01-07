@@ -45,7 +45,9 @@ public:
         context.addExchangeReceiver("exchange2",
                                     {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
                                     {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-                                     toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+                                     toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
+                                    1,
+                                    {{"partition", TiDB::TP::TypeLongLong}});
 
         context.addExchangeReceiver("exchange3",
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeLongLong}, {"s4", TiDB::TP::TypeLongLong}},
