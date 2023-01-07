@@ -451,7 +451,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_3>
+    HashJoinProbe: <join probe, join_executor_id = Join_3, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -751,7 +751,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -778,7 +778,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -859,13 +859,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -901,13 +901,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -944,14 +944,14 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6>
+     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
       Expression: <final projection>
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -987,7 +987,7 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
          Expression: <final projection>
           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -1018,7 +1018,7 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
          Expression: <append join key and join filters for probe side>
           Expression: <final projection>
            MockTableScan
@@ -1060,7 +1060,7 @@ CreatingSets
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <before aggregation>
             Expression: <remove useless column after join>
-             HashJoinProbe: <join probe, join_executor_id = Join_2>
+             HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
               Expression: <append join key and join filters for probe side>
                Expression: <final projection>
                 MockExchangeReceiver

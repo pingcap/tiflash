@@ -405,7 +405,7 @@ CreatingSets
     MockExchangeReceiver
  Expression: <final projection>
   Expression: <remove useless column after join>
-   HashJoinProbe: <join probe, join_executor_id = Join_2>
+   HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
     Expression: <append join key and join filters for probe side>
      Expression: <final projection>
       MockExchangeReceiver)",
