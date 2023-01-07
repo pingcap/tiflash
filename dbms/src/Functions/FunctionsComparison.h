@@ -20,6 +20,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/TargetSpecific.h>
 #include <Common/assert_cast.h>
 #include <Core/DecimalComparison.h>
 #include <Core/callOnTypeIndex.h>
@@ -72,18 +73,17 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 template <typename A, typename B, typename Op>
 struct NumComparisonImpl
 {
-    /// If you don't specify NO_INLINE, the compiler will inline this function, but we don't need this as this function contains tight loop inside.
-    static void NO_INLINE vectorVector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    // clang-format off
+    /// Vectorized version
+    TIFLASH_MULTITARGET_FUNCTION(
+    TIFLASH_MULTITARGET_FUNCTION_HEADER(
+    static void NO_INLINE
+    ), vectorVectorImpl, TIFLASH_MULTITARGET_FUNCTION_BODY((const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c) /// NOLINT
     {
-        /** GCC 4.8.2 vectorizes a loop only if it is written in this form.
-          * In this case, if you loop through the array index (the code will look simpler),
-          *  the loop will not be vectorized.
-          */
-
         size_t size = a.size();
-        const A * __restrict a_pos = &a[0];
-        const B * __restrict b_pos = &b[0];
-        UInt8 * __restrict c_pos = &c[0];
+        const A * __restrict a_pos = a.data();
+        const B * __restrict b_pos = b.data();
+        UInt8 * __restrict c_pos = c.data();
         const A * a_end = a_pos + size;
 
         while (a_pos < a_end)
@@ -93,13 +93,41 @@ struct NumComparisonImpl
             ++b_pos;
             ++c_pos;
         }
+    })
+    )
+    // clang-format on
+
+    /// If you don't specify NO_INLINE, the compiler will inline this function, but we don't need this as this function contains tight loop inside.
+    static void NO_INLINE vectorVector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    {
+        if (TargetSpecific::AVX512Checker::runtimeSupport())
+        {
+            vectorVectorImplAVX512(a, b, c);
+        }
+        else if (TargetSpecific::AVXChecker::runtimeSupport())
+        {
+            vectorVectorImplAVX2(a, b, c);
+        }
+        else if (TargetSpecific::SSE4Checker::runtimeSupport())
+        {
+            vectorVectorImplSSE4(a, b, c);
+        }
+        else
+        {
+            vectorVectorImpl(a, b, c);
+        }
     }
 
-    static void NO_INLINE vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    // clang-format off
+    /// Vectorized version
+    TIFLASH_MULTITARGET_FUNCTION(
+    TIFLASH_MULTITARGET_FUNCTION_HEADER(
+    static void NO_INLINE
+    ), vectorConstantImpl, TIFLASH_MULTITARGET_FUNCTION_BODY((const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c) /// NOLINT
     {
         size_t size = a.size();
-        const A * __restrict a_pos = &a[0];
-        UInt8 * __restrict c_pos = &c[0];
+        const A * __restrict a_pos = a.data();
+        UInt8 * __restrict c_pos = c.data();
         const A * a_end = a_pos + size;
 
         while (a_pos < a_end)
@@ -107,6 +135,28 @@ struct NumComparisonImpl
             *c_pos = Op::apply(*a_pos, b);
             ++a_pos;
             ++c_pos;
+        }
+    })
+    )
+    // clang-format on
+
+    static void NO_INLINE vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    {
+        if (TargetSpecific::AVX512Checker::runtimeSupport())
+        {
+            vectorConstantImplAVX512(a, b, c);
+        }
+        else if (TargetSpecific::AVXChecker::runtimeSupport())
+        {
+            vectorConstantImplAVX2(a, b, c);
+        }
+        else if (TargetSpecific::SSE4Checker::runtimeSupport())
+        {
+            vectorConstantImplSSE4(a, b, c);
+        }
+        else
+        {
+            vectorConstantImpl(a, b, c);
         }
     }
 
@@ -403,7 +453,7 @@ struct StringComparisonImpl
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_size = b.size() + 1;
-        const UInt8 * b_data = reinterpret_cast<const UInt8 *>(b.data());
+        const auto * b_data = reinterpret_cast<const UInt8 *>(b.data());
         for (size_t i = 0; i < size; ++i)
         {
             /// Trailing zero byte of the smaller string is included in the comparison.
@@ -462,7 +512,7 @@ struct StringEqualsImpl
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_n = b.size();
-        const UInt8 * b_data = reinterpret_cast<const UInt8 *>(b.data());
+        const auto * b_data = reinterpret_cast<const UInt8 *>(b.data());
         for (size_t i = 0; i < size; ++i)
             c[i] = positive == ((i == 0) ? (a_offsets[0] == b_n + 1 && !memcmp(&a_data[0], b_data, b_n)) : (a_offsets[i] - a_offsets[i - 1] == b_n + 1 && !memcmp(&a_data[a_offsets[i - 1]], b_data, b_n)));
     }
@@ -865,7 +915,7 @@ private:
                 throw Exception(fmt::format("String is too long for Date: {}", string_value));
 
             ColumnPtr parsed_const_date_holder = DataTypeDate().createColumnConst(block.rows(), UInt64(date));
-            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            const auto * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeDate::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date, left_is_num ? parsed_const_date : col_right_untyped);
         }
         else if (is_my_date || is_my_datetime)
@@ -873,7 +923,7 @@ private:
             Field parsed_time = parseMyDateTime(string_value.toString());
             const DataTypePtr & time_type = left_is_num ? left_type : right_type;
             ColumnPtr parsed_const_date_holder = time_type->createColumnConst(block.rows(), parsed_time);
-            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            const auto * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeMyTimeBase::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date, left_is_num ? parsed_const_date : col_right_untyped);
         }
         else if (is_date_time)
@@ -885,7 +935,7 @@ private:
                 throw Exception(fmt::format("String is too long for DateTime: {}", string_value));
 
             ColumnPtr parsed_const_date_time_holder = DataTypeDateTime().createColumnConst(block.rows(), UInt64(date_time));
-            const ColumnConst * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
+            const auto * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
             executeNumLeftType<DataTypeDateTime::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date_time, left_is_num ? parsed_const_date_time : col_right_untyped);
         }
 

@@ -19,10 +19,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 namespace RowKeyFilter
 {
 /// return <offset, limit>
@@ -89,7 +88,7 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
         return {};
 
     std::vector<std::pair<size_t, size_t>> offset_and_limits;
-    for (auto rowkey_range : rowkey_ranges)
+    for (const auto & rowkey_range : rowkey_ranges)
     {
         offset_and_limits.emplace_back(getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_pos).column, 0, block.rows()));
     }
@@ -133,7 +132,7 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
     for (size_t i = 0; i < rows; ++i)
     {
         bool ok = false;
-        for (auto & rowkey_range : rowkey_ranges)
+        for (const auto & rowkey_range : rowkey_ranges)
         {
             ok = rowkey_range.check(rowkey_column.getRowKeyValue(i));
             if (ok)
@@ -185,7 +184,7 @@ public:
             /// If clean read optimized, only first row's (the smallest) handle is returned as a ColumnConst.
             if (rowkey_column.column->isColumnConst())
             {
-                for (auto rowkey_range : rowkey_ranges)
+                for (const auto & rowkey_range : rowkey_ranges)
                 {
                     if (rowkey_range.check(rowkey_column.getRowKeyValue(0)))
                         return block;
@@ -207,5 +206,4 @@ private:
     size_t handle_col_pos;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

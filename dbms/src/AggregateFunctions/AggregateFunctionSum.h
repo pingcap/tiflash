@@ -16,6 +16,7 @@
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnVector.h>
+#include <Common/TargetSpecific.h>
 #include <Common/assert_cast.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadHelpers.h>
@@ -59,9 +60,13 @@ struct AggregateFunctionSumData
         Impl::add(sum, value);
     }
 
+    // clang-format off
     /// Vectorized version
+    TIFLASH_MULTITARGET_FUNCTION(
+    TIFLASH_MULTITARGET_FUNCTION_HEADER(
     template <typename Value>
-    void NO_SANITIZE_UNDEFINED NO_INLINE addMany(const Value * __restrict ptr, size_t count)
+    void NO_SANITIZE_UNDEFINED NO_INLINE
+    ), addManyImpl, TIFLASH_MULTITARGET_FUNCTION_BODY((const Value * __restrict ptr, size_t count) /// NOLINT
     {
         const auto * end = ptr + count;
 
@@ -95,6 +100,29 @@ struct AggregateFunctionSumData
             ++ptr;
         }
         Impl::add(sum, local_sum);
+    })
+    )
+    // clang-format on
+
+    template <typename Value>
+    void NO_SANITIZE_UNDEFINED NO_INLINE addMany(const Value * __restrict ptr, size_t count)
+    {
+        if (TargetSpecific::AVX512Checker::runtimeSupport())
+        {
+            addManyImplAVX512(ptr, count);
+        }
+        else if (TargetSpecific::AVXChecker::runtimeSupport())
+        {
+            addManyImplAVX2(ptr, count);
+        }
+        else if (TargetSpecific::SSE4Checker::runtimeSupport())
+        {
+            addManyImplSSE4(ptr, count);
+        }
+        else
+        {
+            addManyImpl(ptr, count);
+        }
     }
 
     template <typename Value>

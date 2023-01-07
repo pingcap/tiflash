@@ -22,10 +22,9 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <common/logger_useful.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 /// Use the latest rows. For rows with the same handle, only take the rows with biggest version and version <= version_limit.
 static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
 /// Remove the outdated rows. For rows with the same handle, take
@@ -63,7 +62,7 @@ public:
         delete_col_pos = input_header.getPositionByName(TAG_COLUMN_NAME);
     }
 
-    ~DMVersionFilterBlockInputStream()
+    ~DMVersionFilterBlockInputStream() override
     {
         LOG_DEBUG(log,
                   "Total rows: {}, pass: {:.2f}%"
@@ -199,6 +198,11 @@ private:
         return matched ? cur_version : std::numeric_limits<UInt64>::max();
     }
 
+    Block readImpl(FilterPtr & res_filter, bool return_filter);
+    Block readImplSSE4(FilterPtr & res_filter, bool return_filter);
+    Block readImplAVX2(FilterPtr & res_filter, bool return_filter);
+    Block readImplAVX512(FilterPtr & res_filter, bool return_filter);
+
 private:
     const UInt64 version_limit;
     const bool is_common_handle;
@@ -220,7 +224,7 @@ private:
     // First calculate the gc_hint_version of every pk according to the following rules,
     //     see the comments in `calculateRowGcHintVersion` to see how to calculate it for every pk
     // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
-    UInt64 gc_hint_version;
+    UInt64 gc_hint_version{};
 
     // auxiliary variable for the calculation of gc_hint_version
     bool is_first_oldest_version = true;
@@ -245,5 +249,5 @@ private:
 
     const LoggerPtr log;
 };
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM
