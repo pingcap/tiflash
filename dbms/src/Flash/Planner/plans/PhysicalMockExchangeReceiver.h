@@ -32,7 +32,8 @@ public:
         Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::ExchangeReceiver & exchange_receiver);
+        const tipb::ExchangeReceiver & exchange_receiver,
+        size_t fine_grained_stream_count);
 
     PhysicalMockExchangeReceiver(
         const String & executor_id_,

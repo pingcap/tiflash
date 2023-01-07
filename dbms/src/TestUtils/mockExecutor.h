@@ -88,7 +88,7 @@ public:
     DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
 
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -151,7 +151,7 @@ public:
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & buildExchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     mock::ExecutorBinderPtr root;
     DAGProperties properties;
@@ -178,15 +178,12 @@ public:
     /// mock column table scan
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos);
-    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
-    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
-    void addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
-    void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
-    void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
-    void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
-
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
+    {
+        addMockTableColumnData(db, table, columns);
+    }
 
     /// mock DeltaMerge table scan
     void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
@@ -196,9 +193,8 @@ public:
     void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
 
     /// mock column exchange receiver
-    void addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos);
-    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
-    void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
+    void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos);
 
     DAGRequestBuilder scan(const String & db_name, const String & table_name);
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
@@ -211,6 +207,14 @@ public:
 
 private:
     static void assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
+    void addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos);
+    void addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
+    void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
+    void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
+    void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
+    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
 
 private:
     size_t index;

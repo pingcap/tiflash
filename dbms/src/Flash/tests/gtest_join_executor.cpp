@@ -752,59 +752,64 @@ CATCH
 TEST_F(JoinExecutorTestRunner, NonJoinedData)
 try
 {
-    DB::MockColumnInfoVec left_table_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
-    DB::MockColumnInfoVec right_table_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
-    ColumnsWithTypeAndName left_table_column_data;
-    ColumnsWithTypeAndName right_table_column_data;
-    ColumnsWithTypeAndName common_table_column_data;
+    DB::MockColumnInfoVec left_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
+    DB::MockColumnInfoVec right_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
+    DB::MockColumnInfoVec right_partition_column_infos{{"a", TiDB::TP::TypeLong}};
+    ColumnsWithTypeAndName left_column_data;
+    ColumnsWithTypeAndName right_column_data;
+    ColumnsWithTypeAndName common_column_data;
     size_t table_rows = 102400;
     size_t common_rows = 20480;
     size_t max_block_size = 800;
     size_t original_max_streams = 20;
-    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_table_column_infos))
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
     {
         ColumnGeneratorOpts opts{common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
-        common_table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+        common_column_data.push_back(ColumnGenerator::instance().generate(opts));
     }
 
-    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_table_column_infos))
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
     {
         ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
-        left_table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+        left_column_data.push_back(ColumnGenerator::instance().generate(opts));
     }
 
-    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(right_table_column_infos))
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(right_column_infos))
     {
         ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
-        right_table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+        right_column_data.push_back(ColumnGenerator::instance().generate(opts));
     }
 
-    for (size_t i = 0; i < common_table_column_data.size(); i++)
+    for (size_t i = 0; i < common_column_data.size(); i++)
     {
-        left_table_column_data[i].column->assumeMutable()->insertRangeFrom(*common_table_column_data[i].column, 0, common_rows);
-        right_table_column_data[i].column->assumeMutable()->insertRangeFrom(*common_table_column_data[i].column, 0, common_rows);
+        left_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
+        right_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
     }
 
     ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
     IColumn::Permutation perm;
     shuffle_column.column->getPermutation(false, 0, -1, perm);
-    for (auto & column : left_table_column_data)
+    for (auto & column : left_column_data)
     {
         column.column = column.column->permute(perm, 0);
     }
-    for (auto & column : right_table_column_data)
+    for (auto & column : right_column_data)
     {
         column.column = column.column->permute(perm, 0);
     }
 
-    context.addMockTable("outer_join_test", "left_table_1_concurrency", left_table_column_infos, left_table_column_data, 1);
-    context.addMockTable("outer_join_test", "left_table_3_concurrency", left_table_column_infos, left_table_column_data, 3);
-    context.addMockTable("outer_join_test", "left_table_5_concurrency", left_table_column_infos, left_table_column_data, 5);
-    context.addMockTable("outer_join_test", "left_table_10_concurrency", left_table_column_infos, left_table_column_data, 10);
-    context.addMockTable("outer_join_test", "right_table_1_concurrency", right_table_column_infos, right_table_column_data, 1);
-    context.addMockTable("outer_join_test", "right_table_3_concurrency", right_table_column_infos, right_table_column_data, 3);
-    context.addMockTable("outer_join_test", "right_table_5_concurrency", right_table_column_infos, right_table_column_data, 5);
-    context.addMockTable("outer_join_test", "right_table_10_concurrency", right_table_column_infos, right_table_column_data, 10);
+    context.addMockTable("outer_join_test", "left_table_1_concurrency", left_column_infos, left_column_data, 1);
+    context.addMockTable("outer_join_test", "left_table_3_concurrency", left_column_infos, left_column_data, 3);
+    context.addMockTable("outer_join_test", "left_table_5_concurrency", left_column_infos, left_column_data, 5);
+    context.addMockTable("outer_join_test", "left_table_10_concurrency", left_column_infos, left_column_data, 10);
+    context.addMockTable("outer_join_test", "right_table_1_concurrency", right_column_infos, right_column_data, 1);
+    context.addMockTable("outer_join_test", "right_table_3_concurrency", right_column_infos, right_column_data, 3);
+    context.addMockTable("outer_join_test", "right_table_5_concurrency", right_column_infos, right_column_data, 5);
+    context.addMockTable("outer_join_test", "right_table_10_concurrency", right_column_infos, right_column_data, 10);
+    context.addExchangeReceiver("right_exchange_receiver_1_concurrency", right_column_infos, right_column_data, 1, right_partition_column_infos);
+    context.addExchangeReceiver("right_exchange_receiver_3_concurrency", right_column_infos, right_column_data, 3, right_partition_column_infos);
+    context.addExchangeReceiver("right_exchange_receiver_5_concurrency", right_column_infos, right_column_data, 5, right_partition_column_infos);
+    context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
     std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<MockOrderByItemVec> left_table_order_items = {
@@ -820,6 +825,13 @@ try
         {std::make_pair("right_table_10_concurrency.a", true), std::make_pair("right_table_10_concurrency.b", true)},
     };
 
+    std::vector<MockOrderByItemVec> right_exchange_order_items = {
+        {std::make_pair("right_exchange_receiver_1_concurrency.a", true), std::make_pair("right_exchange_receiver_1_concurrency.b", true)},
+        {std::make_pair("right_exchange_receiver_3_concurrency.a", true), std::make_pair("right_exchange_receiver_3_concurrency.b", true)},
+        {std::make_pair("right_exchange_receiver_5_concurrency.a", true), std::make_pair("right_exchange_receiver_5_concurrency.b", true)},
+        {std::make_pair("right_exchange_receiver_10_concurrency.a", true), std::make_pair("right_exchange_receiver_10_concurrency.b", true)},
+    };
+
     /// case 1, right join without right condition
     MockOrderByItemVec order_by_items;
     order_by_items.insert(order_by_items.end(), left_table_order_items[0].begin(), left_table_order_items[0].end());
@@ -831,6 +843,21 @@ try
                        .build(context);
     context.context.setSetting("max_block_size", Field(max_block_size));
     auto ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+
+    order_by_items.clear();
+    order_by_items.insert(order_by_items.end(), left_table_order_items[1].begin(), left_table_order_items[1].end());
+    order_by_items.insert(order_by_items.end(), right_exchange_order_items[3].begin(), right_exchange_order_items[3].end());
+    request = context
+                  .scan("outer_join_test", left_table_names[1])
+                  .join(context.receive("right_exchange_receiver_10_concurrency", 10), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, 10)
+                  .topN(order_by_items, table_rows * 10)
+                  .build(context);
+    auto blocks_1 = getExecuteStreamsReturnBlocks(request, original_max_streams);
+    ASSERT_EQ(ref_blocks.size(), blocks_1.size());
+    for (size_t i = 0; i < ref_blocks.size(); i++)
+    {
+        ASSERT_BLOCK_EQ(ref_blocks[i], blocks_1[i]);
+    }
 
     for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
     {

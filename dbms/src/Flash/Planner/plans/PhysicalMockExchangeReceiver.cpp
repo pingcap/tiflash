@@ -29,7 +29,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const tipb::ExchangeReceiver & exchange_receiver)
+    const tipb::ExchangeReceiver & exchange_receiver,
+    size_t fine_grained_stream_count)
 {
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
@@ -41,9 +42,11 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     // Interpreter test will not use columns in MockStorage
     if (context.isInterpreterTest() || !context.mockStorage()->exchangeExists(executor_id))
     {
-        /// build with default blocks.
-        for (size_t i = 0; i < max_streams; ++i)
-            // use max_block_size / 10 to determine the mock block's size
+        /// build with empty blocks.
+        size_t stream_count = max_streams;
+        if (fine_grained_stream_count > 0)
+            stream_count = fine_grained_stream_count;
+        for (size_t i = 0; i < stream_count; ++i)
             mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
         for (const auto & col : mock_streams.back()->getHeader())
             schema.emplace_back(col.name, col.type);
@@ -51,9 +54,29 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     else
     {
         /// build from user input blocks.
-        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
-        schema = std::move(names_and_types);
-        mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
+        if (fine_grained_stream_count > 0)
+        {
+            std::vector<ColumnsWithTypeAndName> columns_with_type_and_name_vector;
+            columns_with_type_and_name_vector = context.mockStorage()->getFineGrainedExchangeColumnsVector(executor_id, fine_grained_stream_count);
+            if (columns_with_type_and_name_vector.empty())
+            {
+                for (size_t i = 0; i < fine_grained_stream_count; ++i)
+                    mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+            }
+            else
+            {
+                for (const auto & columns : columns_with_type_and_name_vector)
+                    mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(columns, context.getSettingsRef().max_block_size));
+            }
+            for (const auto & col : mock_streams.back()->getHeader())
+                schema.emplace_back(col.name, col.type);
+        }
+        else
+        {
+            auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
+            schema = std::move(names_and_types);
+            mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
+        }
     }
 
     assert(!schema.empty());
@@ -80,9 +103,10 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const tipb::ExchangeReceiver & exchange_receiver)
+    const tipb::ExchangeReceiver & exchange_receiver,
+    size_t fine_grained_stream_count)
 {
-    auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver);
+    auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver, fine_grained_stream_count);
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,
