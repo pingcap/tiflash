@@ -669,7 +669,7 @@ try
     {
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
+ Expression x 8: <final projection>
   Expression: <expr after window>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     MergeSorting: <enable fine grained shuffle>, limit = 0
@@ -744,7 +744,7 @@ try
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
@@ -799,7 +799,7 @@ try
                            .build(context);
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
+ Expression x 8: <final projection>
   Expression: <expr after aggregation>
    Aggregating: <enable fine grained shuffle>
     Expression: <before aggregation>
@@ -1018,13 +1018,10 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
          Expression: <append join key and join filters for probe side>
           Expression: <final projection>
-           MockTableScan
-      Expression x 10: <before aggregation>
-       Expression: <remove useless column after join>
-        NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -1060,13 +1057,10 @@ CreatingSets
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <before aggregation>
             Expression: <remove useless column after join>
-             HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+             HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
               Expression: <append join key and join filters for probe side>
                Expression: <final projection>
-                MockExchangeReceiver
-           Expression x 20: <before aggregation>
-            Expression: <remove useless column after join>
-             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+                MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }

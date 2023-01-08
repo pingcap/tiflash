@@ -33,6 +33,10 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
     static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right)
     {
         for (size_t j = 0; j < num_columns_left; ++j)
+            /// should fill the key column with key columns from right block
+            /// but we don't care about the key column now so just insert a default value is ok.
+            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
             columns_left[j]->insertDefault();
 
         for (size_t j = 0; j < num_columns_right; ++j)
@@ -50,6 +54,10 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
         for (auto current = &static_cast<const typename Mapped::Base_t &>(mapped); current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_left; ++j)
+                /// should fill the key column with key columns from right block
+                /// but we don't care about the key column now so just insert a default value is ok.
+                /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+                /// for detailed explanation
                 columns_left[j]->insertDefault();
 
             for (size_t j = 0; j < num_columns_right; ++j)
@@ -104,7 +112,12 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
     {
         for (size_t i = 0; i < num_columns_left; ++i)
         {
-            convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
+            const auto & column_with_type_and_name = result_sample_block.getByPosition(column_indices_left[i]);
+            if (parent.key_names_left.end() == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
+                /// if it is not the key, then convert to nullable, if it is key, then just keep the original type
+                /// actually we don't care about the key column now refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+                /// for detailed explanation
+                convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
         }
     }
 
@@ -205,6 +218,10 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     {
         rows_added++;
         for (size_t j = 0; j < num_columns_left; ++j)
+            /// should fill the key column with key columns from right block
+            /// but we don't care about the key column now so just insert a default value is ok.
+            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
             mutable_columns_left[j]->insertDefault();
 
         for (size_t j = 0; j < num_columns_right; ++j)
