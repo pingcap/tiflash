@@ -97,13 +97,12 @@ Block HashJoinProbeBlockInputStream::readImpl()
         squashing_transform.appendBlock(result_block);
     }
     auto ret = squashing_transform.getFinalOutputBlock();
-    total_output_rows += ret.rows();
     return ret;
 }
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
 {
-    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", total_output_rows, joined_rows, non_joined_rows);
+    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
 }
 
 Block HashJoinProbeBlockInputStream::getOutputBlock()

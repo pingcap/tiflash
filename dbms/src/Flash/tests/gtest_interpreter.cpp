@@ -678,12 +678,10 @@ CreatingSets
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
-         MockTableScan
-     Expression x 10: <remove useless column after join>
-      NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+         MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 

@@ -66,7 +66,6 @@ private:
     Block child_header;
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
-    size_t total_output_rows = 0;
 };
 
 } // namespace DB
