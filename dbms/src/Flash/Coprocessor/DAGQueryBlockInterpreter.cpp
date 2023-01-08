@@ -516,27 +516,10 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    // Interpreter test will not use columns in MockStorage
-    if (context.isInterpreterTest() || !context.mockStorage()->exchangeExists(query_block.source_name))
-    {
-        for (size_t i = 0; i < max_streams; ++i)
-        {
-            // use max_block_size / 10 to determine the mock block's size
-            pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
-        }
-        NamesAndTypes source_columns;
-        for (const auto & col : pipeline.firstStream()->getHeader())
-        {
-            source_columns.emplace_back(col.name, col.type);
-        }
-        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-    }
-    else
-    {
-        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, query_block.source_name);
-        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
-        pipeline.streams.insert(pipeline.streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
-    }
+    size_t fine_grained_stream_count = query_block.source->has_fine_grained_shuffle_stream_count() ? 0 : query_block.source->fine_grained_shuffle_stream_count();
+    auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(context, query_block.source_name, log, query_block.source->exchange_receiver(), fine_grained_stream_count);
+    pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(schema), context);
 }
 
 void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
