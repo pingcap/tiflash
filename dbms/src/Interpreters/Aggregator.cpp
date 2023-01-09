@@ -957,8 +957,6 @@ BlocksList Aggregator::convertOneBucketToBlocks(
         convertToBlocksImpl(method, method.data.impls[bucket], key_columns_vec, aggregate_columns_vec, final_aggregate_columns_vec, arena, final_);
     });
 
-    std::cout << "out blocks size : " << blocks.size() << " bucket num : " << bucket << std::endl;
-
     for (auto & block : blocks)
     {
         block.info.bucket_num = bucket;

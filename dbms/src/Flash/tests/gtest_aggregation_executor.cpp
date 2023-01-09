@@ -556,7 +556,6 @@ try
 }
 CATCH
 
-
 TEST_F(AggExecutorTestRunner, AggMerge)
 try
 {

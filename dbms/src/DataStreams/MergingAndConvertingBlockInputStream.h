@@ -95,9 +95,8 @@ protected:
                     *first,
                     final,
                     first->type != AggregatedDataVariants::Type::without_key);
-                Block out_block = single_level_blocks.front();
-                single_level_blocks.pop_front();
-                return out_block;
+
+                return tryGetSingleLevelOutputBlock();
             }
         }
 
@@ -130,9 +129,7 @@ protected:
             }
 #undef M
             single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final);
-            Block out_block = single_level_blocks.front();
-            single_level_blocks.pop_front();
-            return out_block;
+            return tryGetSingleLevelOutputBlock();
         }
         else
         {
