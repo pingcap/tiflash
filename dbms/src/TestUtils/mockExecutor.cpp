@@ -25,6 +25,7 @@
 #include <Debug/MockExecutor/TableScanBinder.h>
 #include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/dbgQueryExecutor.h>
+#include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
@@ -39,8 +40,6 @@
 
 #include <memory>
 #include <unordered_set>
-
-#include "Flash/Mpp/HashBaseWriterHelper.h"
 
 namespace DB::tests
 {
