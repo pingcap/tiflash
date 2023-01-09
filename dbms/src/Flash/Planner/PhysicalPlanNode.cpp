@@ -93,5 +93,6 @@ void PhysicalPlanNode::buildPipeline(PipelineBuilder & pipeline_builder, const P
     assert(childrenSize() <= 1);
     if (childrenSize() == 1)
         children(0)->buildPipeline(pipeline_builder, pipeline);
+    detach();
 }
 } // namespace DB

@@ -70,6 +70,7 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
     assert(!plans.empty());
     auto get_result_sink = PhysicalGetResultSink::build(result_handler, plans.front());
     plans.push_front(get_result_sink);
+    get_result_sink->detach();
 }
 
 OperatorPipelineGroup Pipeline::transform(Context & context, size_t concurrency)

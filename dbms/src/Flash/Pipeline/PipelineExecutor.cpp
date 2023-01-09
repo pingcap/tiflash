@@ -35,7 +35,8 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
 {
     assert(root_pipeline);
     // for result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    if (!result_handler.isIgnored())
+    // Now only used by unit tests.
+    if (unlikely(!result_handler.isIgnored()))
         root_pipeline->addGetResultSink(result_handler);
 
     {

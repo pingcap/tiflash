@@ -67,6 +67,7 @@ private:
     // data flow: plans.begin() <-- plans.end()
     std::deque<PhysicalPlanNodePtr> plans;
 
+    // use weak_ptr to avoid circular references.
     std::vector<std::weak_ptr<Pipeline>> dependencies;
 };
 

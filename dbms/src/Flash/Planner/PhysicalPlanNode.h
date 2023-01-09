@@ -50,8 +50,6 @@ public:
 
     virtual PhysicalPlanNodePtr children(size_t /*i*/) const = 0;
 
-    virtual void setChild(size_t /*i*/, const PhysicalPlanNodePtr & /*new_child*/) = 0;
-
     const PlanType & tp() const { return type; }
 
     const String & execId() const { return executor_id; }
@@ -79,6 +77,9 @@ public:
     void disableRestoreConcurrency() { is_restore_concurrency = false; }
 
     String toString();
+
+    // Release all references to child nodes.
+    virtual void detach() {}
 
 protected:
     virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};

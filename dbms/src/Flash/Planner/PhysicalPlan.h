@@ -31,7 +31,7 @@ using Pipelines = std::vector<PipelinePtr>;
 class PhysicalPlan
 {
 public:
-    explicit PhysicalPlan(Context & context_, const String & req_id)
+    PhysicalPlan(Context & context_, const String & req_id)
         : context(context_)
         , log(Logger::get(req_id))
     {}
