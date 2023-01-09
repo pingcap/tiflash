@@ -66,6 +66,8 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> cutStreams(Co
 
 std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(Context & context, size_t max_streams, DB::LoggerPtr log, const TiDBTableScan & table_scan);
 
+size_t getMockSourceStreamConcurrency(size_t max_streams, size_t scan_concurrency_hint);
+
 template <typename SourceType>
 std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id, Int64 table_id = 0)
 {
