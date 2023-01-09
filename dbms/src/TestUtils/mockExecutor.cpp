@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
+#include <TestUtils/typeUtils.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>
@@ -367,67 +368,19 @@ void MockDAGRequestContext::addMockTable(const String & db, const String & table
     addMockTable(db, table, mock_column_infos, columns);
 }
 
-// ywq todo move to utils.
-TiDB::TP dataTypeToTP1(const DataTypePtr & type)
-{
-    switch (removeNullable(type)->getTypeId())
-    {
-    case TypeIndex::UInt8:
-    case TypeIndex::Int8:
-        return TiDB::TP::TypeTiny;
-    case TypeIndex::UInt16:
-    case TypeIndex::Int16:
-        return TiDB::TP::TypeShort;
-    case TypeIndex::UInt32:
-    case TypeIndex::Int32:
-        return TiDB::TP::TypeLong;
-    case TypeIndex::UInt64:
-    case TypeIndex::Int64:
-        return TiDB::TP::TypeLongLong;
-    case TypeIndex::String:
-        return TiDB::TP::TypeString;
-    case TypeIndex::Float32:
-        return TiDB::TP::TypeFloat;
-    case TypeIndex::Float64:
-        return TiDB::TP::TypeDouble;
-    case TypeIndex::Date:
-    case TypeIndex::MyDate:
-        return TiDB::TP::TypeDate;
-    case TypeIndex::DateTime:
-    case TypeIndex::MyDateTime:
-        return TiDB::TP::TypeDatetime;
-    case TypeIndex::MyTimeStamp:
-        return TiDB::TP::TypeTimestamp;
-    case TypeIndex::MyTime:
-        return TiDB::TP::TypeTime;
-    case TypeIndex::Decimal32:
-    case TypeIndex::Decimal64:
-    case TypeIndex::Decimal128:
-    case TypeIndex::Decimal256:
-        return TiDB::TP::TypeNewDecimal;
-    case TypeIndex::Enum8:
-    case TypeIndex::Enum16:
-        return TiDB::TP::TypeEnum;
-    default:
-        throw Exception("Unsupport type");
-    }
-}
-
-// todo add api without columns input
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName  columns)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
     MockColumnInfoVec column_info_vec;
-    for (const auto& names_and_type : names_and_types)
-    {
-        column_info_vec.push_back({names_and_type.name, dataTypeToTP1(names_and_type.type)});
-    }
-    // auto columns = getColumnWithTypeAndName(names_and_types);
-    addMockTable(db, table, column_info_vec, columns);
+    for (const auto & names_and_type : names_and_types)
+        column_info_vec.push_back({names_and_type.name, dataTypeToTP(names_and_type.type)});
+    mock_storage->addTableSchemaForComplexType(db + "." + table, column_info_vec, names_and_types);
+    addMockTableColumnData(db, table, columns);
+    addMockTableConcurrencyHint(db, table, concurrency_hint);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName  columns)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
-    addMockTable(name.first, name.second, names_and_types, columns);
+    addMockTable(name.first, name.second, names_and_types, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
@@ -486,8 +439,6 @@ void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, C
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
     assertMockInput(columnInfos, columns);
-    auto dec_type = typeid_cast<const DataTypeDecimal64(p);
-    columns[0].type
 
     addMockTableSchema(db, table, columnInfos);
     addMockTableColumnData(db, table, columns);

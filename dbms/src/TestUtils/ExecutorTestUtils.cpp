@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,34 +25,6 @@
 
 namespace DB::tests
 {
-TiDB::TP dataTypeToTP(const DataTypePtr & type)
-{
-    // TODO support more types.
-    switch (removeNullable(type)->getTypeId())
-    {
-    case TypeIndex::UInt8:
-    case TypeIndex::Int8:
-        return TiDB::TP::TypeTiny;
-    case TypeIndex::UInt16:
-    case TypeIndex::Int16:
-        return TiDB::TP::TypeShort;
-    case TypeIndex::UInt32:
-    case TypeIndex::Int32:
-        return TiDB::TP::TypeLong;
-    case TypeIndex::UInt64:
-    case TypeIndex::Int64:
-        return TiDB::TP::TypeLongLong;
-    case TypeIndex::String:
-        return TiDB::TP::TypeString;
-    case TypeIndex::Float32:
-        return TiDB::TP::TypeFloat;
-    case TypeIndex::Float64:
-        return TiDB::TP::TypeDouble;
-    default:
-        throw Exception("Unsupport type");
-    }
-}
-
 DAGContext & ExecutorTest::getDAGContext()
 {
     assert(dag_context_ptr != nullptr);
@@ -160,10 +132,10 @@ void ExecutorTest::executeExecutor(
     WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 
-void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, bool is_restrict)
 {
     executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
-        return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
+        return columnsEqual(expect_columns, res, is_restrict) << "\n  expect_block: \n"
                                                                       << getColumnsContent(expect_columns);
     });
 }

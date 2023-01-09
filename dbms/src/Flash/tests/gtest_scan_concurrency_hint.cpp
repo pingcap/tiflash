@@ -77,5 +77,21 @@ Union: <for test>
 }
 CATCH
 
+TEST_F(ScanConcurrencyHintTest, ComplexType)
+try
+{
+    auto column = createColumn<Decimal64>(std::make_tuple(15, 5), {DecimalField64(450256, 5)}, "d1");
+    context.addMockTable({"test_db", "t"}, {{"d1", DataTypeFactory::instance().get("Decimal(15,5)")}}, {column}, 3);
+    auto request = context.scan("test_db", "t").build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 3: <final projection>
+  MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,6 @@
 
 namespace DB::tests
 {
-TiDB::TP dataTypeToTP(const DataTypePtr & type);
-
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
@@ -69,7 +67,7 @@ public:
     void executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
-    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, bool is_restrict = false);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 
     enum SourceType
@@ -152,4 +150,10 @@ using ColumnWithInt64 = std::vector<ColInt64Type>;
 using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;
 using ColumnWithString = std::vector<ColStringType>;
+
+// decimal types
+using DecimalField32 = DecimalField<Decimal32>;
+using DecimalField64 = DecimalField<Decimal64>;
+using DecimalField128 = DecimalField<Decimal128>;
+using DecimalField256 = DecimalField<Decimal256>;
 } // namespace DB::tests
