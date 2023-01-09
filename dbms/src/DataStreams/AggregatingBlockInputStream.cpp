@@ -76,7 +76,9 @@ Block AggregatingBlockInputStream::readImpl()
     if (isCancelledOrThrowIfKilled() || !impl)
         return {};
 
-    return impl->read();
+    Block ret = impl->read();
+    std::cout << "agg output size : " << ret.rows() << std::endl;
+    return ret;
 }
 
 } // namespace DB

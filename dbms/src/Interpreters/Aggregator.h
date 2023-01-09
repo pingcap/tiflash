@@ -1216,6 +1216,16 @@ protected:
     void convertToBlockImpl(
         Method & method,
         Table & data,
+        MutableColumns & key_columns,
+        AggregateColumnsData & aggregate_columns,
+        MutableColumns & final_aggregate_columns,
+        Arena * arena,
+        bool final) const;
+
+    template <typename Method, typename Table>
+    void convertToBlocksImpl(
+        Method & method,
+        Table & data,
         std::vector<MutableColumns> & key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
@@ -1224,6 +1234,14 @@ protected:
 
     template <typename Method, typename Table>
     void convertToBlockImplFinal(
+        Method & method,
+        Table & data,
+        std::vector<IColumn *> key_columns,
+        MutableColumns & final_aggregate_columns,
+        Arena * arena) const;
+
+    template <typename Method, typename Table>
+    void convertToBlocksImplFinal(
         Method & method,
         Table & data,
         std::vector<std::vector<IColumn *>> key_columns_vec,
@@ -1237,15 +1255,37 @@ protected:
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
+    template <typename Method, typename Table>
+    void convertToBlocksImplNotFinal(
+        Method & method,
+        Table & data,
+        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
+
     template <typename Filler>
-    BlocksList prepareBlockAndFill(
+    Block prepareBlockAndFill(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler) const;
+
+    template <typename Filler>
+    BlocksList prepareBlocksAndFill(
         AggregatedDataVariants & data_variants,
         bool final,
         size_t rows,
         Filler && filler) const;
 
     template <typename Method>
-    BlocksList convertOneBucketToBlock(
+    Block convertOneBucketToBlock(
+        AggregatedDataVariants & data_variants,
+        Method & method,
+        Arena * arena,
+        bool final,
+        size_t bucket) const;
+
+    template <typename Method>
+    BlocksList convertOneBucketToBlocks(
         AggregatedDataVariants & data_variants,
         Method & method,
         Arena * arena,
@@ -1265,7 +1305,9 @@ protected:
         AggregateFunctionInstructions & instructions);
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
-    Blocks prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
+    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillTwoLevel(
         AggregatedDataVariants & data_variants,
         bool final,

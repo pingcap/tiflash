@@ -80,8 +80,7 @@ public:
                               {types_col_name[7], TiDB::TP::TypeDouble},
                               {types_col_name[8], TiDB::TP::TypeDate},
                               {types_col_name[9], TiDB::TP::TypeDatetime},
-                              {types_col_name[10], TiDB::TP::TypeString},
-                              {types_col_name[11], TiDB::TP::TypeString}},
+                              {types_col_name[10], TiDB::TP::TypeString}},
                              /* columns= */
                              {toNullableVec<Int32>(types_col_name[0], col_id),
                               toNullableVec<Decimal32>(types_col_name[1], col_decimal),
@@ -93,8 +92,7 @@ public:
                               toNullableVec<Float64>(types_col_name[7], col_double),
                               toNullableVec<MyDate>(types_col_name[8], col_mydate),
                               toNullableVec<MyDateTime>(types_col_name[9], col_mydatetime),
-                              toNullableVec<String>(types_col_name[10], col_string),
-                              toNullableVec<String>(types_col_name[11], col_string1)});
+                              toNullableVec<String>(types_col_name[10], col_string)});
 
         /// Create table for tests of aggregation functions
         context.addMockTable(/* name= */ {db_name, table_name},
@@ -193,7 +191,7 @@ public:
 
     /// Prepare some data and names for tests of group by
     const String table_types{"types"};
-    const std::vector<String> types_col_name{"id", "decimal_", "tinyint_", "smallint_", "int_", "bigint_", "float_", "double_", "date_", "datetime_", "string_", "string1_"};
+    const std::vector<String> types_col_name{"id", "decimal_", "tinyint_", "smallint_", "int_", "bigint_", "float_", "double_", "date_", "datetime_", "string_"};
     ColumnWithNullableInt32 col_id{1, 2, 3, 4, 5, 6, 7, 8, 9};
     ColumnWithNullableDecimal col_decimal{DT(55, 1), {}, DT(-24, 1), DT(40, 1), DT(-40, 1), DT(40, 1), {}, DT(55, 1), DT(0, 1)};
     ColumnWithNullableInt8 col_tinyint{1, 2, 3, {}, {}, 0, 0, -1, -2};
@@ -205,7 +203,6 @@ public:
     ColumnWithNullableMyDate col_mydate{1000000, 2000000, {}, 300000, 1000000, {}, 0, 2000000, {}};
     ColumnWithNullableMyDateTime col_mydatetime{2000000, 0, {}, 3000000, 1000000, {}, 0, 2000000, 1000000};
     ColumnWithNullableString col_string{{}, "pingcap", "PingCAP", {}, "PINGCAP", "PingCAP", {}, "Shanghai", "Shanghai"};
-    ColumnWithNullableString col_string1{{}, "pingcap", "PingCAP", {}, "PINGCAP", "PingCAP", {}, "Shanghai", "Shanghai"};
 
     /// Prepare some data and names for aggregation functions
     const String table_name{"clerk"};
@@ -264,8 +261,8 @@ try
 
     {
         /// group by two columns
-        group_by_exprs = {COL_GROUP2(2, 6), COL_GROUP2(3, 9), COL_GROUP2(4, 7), COL_GROUP2(5, 10), COL_GROUP2(8, 9), COL_GROUP2(9, 10), COL_GROUP2(10, 11)};
-        projections = {COL_PROJ2(2, 6), COL_PROJ2(3, 9), COL_PROJ2(4, 7), COL_PROJ2(5, 10), COL_PROJ2(8, 9), COL_PROJ2(9, 10), COL_PROJ2(10, 11)};
+        group_by_exprs = {COL_GROUP2(2, 6), COL_GROUP2(3, 9), COL_GROUP2(4, 7), COL_GROUP2(5, 10), COL_GROUP2(8, 9), COL_GROUP2(9, 10)};
+        projections = {COL_PROJ2(2, 6), COL_PROJ2(3, 9), COL_PROJ2(4, 7), COL_PROJ2(5, 10), COL_PROJ2(8, 9), COL_PROJ2(9, 10)};
         expect_cols = {/// select tinyint_, float_ from test_db.types group by tinyint_, float_;
                        {toNullableVec<Int8>(types_col_name[2], ColumnWithNullableInt8{1, 2, {}, 3, 0, 0, -1, {}, -2}),
                         toNullableVec<Float32>(types_col_name[6], ColumnWithNullableFloat32{3.3, {}, 4, 0, -0.1, 5.6, -0.1, 3.3, {}})},
@@ -283,18 +280,13 @@ try
                         toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{2000000, 0, {}, 3000000, 1000000, 0, 2000000, 1000000})},
                        /// select datetime_, string_ from test_db.types group by datetime_, string_;
                        {toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{2000000, 0, {}, 3000000, 1000000, 0, 2000000, 1000000}),
-                        toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, "pingcap", "PingCAP", {}, "PINGCAP", {}, "Shanghai", "Shanghai"})},
-                       /// select datetime_, string_ from test_db.types group by datetime_, string_;
-                       {toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, "pingcap", "PingCAP", {}, "PINGCAP", {}, "Shanghai", "Shanghai"}),
-                        toNullableVec<String>(types_col_name[11], ColumnWithNullableString{{}, "pingcap", "PingCAP", {}, "PINGCAP", {}, "Shanghai", "Shanghai"})}};
+                        toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, "pingcap", "PingCAP", {}, "PINGCAP", {}, "Shanghai", "Shanghai"})}};
         test_num = expect_cols.size();
         ASSERT_EQ(group_by_exprs.size(), test_num);
         ASSERT_EQ(projections.size(), test_num);
 
         for (size_t i = 0; i < test_num; ++i)
         {
-            if (i != 5)
-                continue;
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
             executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
@@ -563,6 +555,7 @@ try
     }
 }
 CATCH
+
 
 TEST_F(AggExecutorTestRunner, AggMerge)
 try
