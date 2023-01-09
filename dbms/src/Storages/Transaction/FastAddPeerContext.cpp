@@ -22,7 +22,10 @@ namespace DB
 {
 FastAddPeerContext::FastAddPeerContext()
 {
-    tasks_trace = new AsyncTasks(4);
+    static constexpr int ffi_handle_sec = 5;
+    static constexpr int region_per_sec = 2;
+    int thread_count = ffi_handle_sec * region_per_sec;
+    tasks_trace = new AsyncTasks(thread_count);
 }
 
 FastAddPeerContext::~FastAddPeerContext()
