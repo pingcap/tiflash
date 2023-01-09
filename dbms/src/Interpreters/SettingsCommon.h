@@ -39,6 +39,7 @@ extern const int UNKNOWN_COMPRESSION_METHOD;
 extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
 extern const int CANNOT_PARSE_BOOL;
 extern const int INVALID_CONFIG_PARAMETER;
+extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
 
@@ -387,6 +388,107 @@ public:
 
 private:
     std::atomic<float> value;
+};
+
+/// MemoryLimit can either be an UInt64 (means memory limit in bytes),
+/// or be a float-point number (means memory limit in percent of total RAM, from 0.0 to 1.0).
+/// 0 or 0.0 means unlimited.
+struct SettingMemoryLimit
+{
+    using UInt64OrDouble = std::variant<UInt64, double>;
+    struct ToStringVisitor
+    {
+        String operator()(UInt64 x) const { return DB::toString(x); }
+        String operator()(double x) const { return DB::toString(x); }
+    };
+
+
+    bool changed = false;
+
+    explicit SettingMemoryLimit(UInt64 bytes = 0)
+        : value(bytes)
+    {}
+
+    explicit SettingMemoryLimit(double percent = 0.0)
+        : value(percent)
+    {}
+    SettingMemoryLimit(const SettingMemoryLimit & setting) { value.store(setting.value.load()); }
+    SettingMemoryLimit & operator=(UInt64OrDouble x)
+    {
+        set(x);
+        return *this;
+    }
+    SettingMemoryLimit & operator=(const SettingMemoryLimit & setting)
+    {
+        set(setting.value.load());
+        return *this;
+    }
+    void set(UInt64OrDouble x)
+    {
+        value.store(x);
+        changed = true;
+    }
+    void set(UInt64 x)
+    {
+        value.store(x);
+        changed = true;
+    }
+
+    void set(double x)
+    {
+        if (x < 0.0 || x > 1.0)
+            throw Exception("Memory limit (in double) should be in range [0.0, 1.0], it means a percent of total RAM, or you can set it in UInt64, which means the limit bytes.", ErrorCodes::BAD_ARGUMENTS);
+        value.store(x);
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        if (x.getType() == Field::Types::UInt64)
+        {
+            set(safeGet<UInt64>(x));
+        }
+        else if (x.getType() == Field::Types::Float64)
+        {
+            set(safeGet<Float64>(x));
+        }
+        else
+            throw Exception(std::string("Bad type of setting. Expected UInt64 or Float64, got ") + x.getTypeName(), ErrorCodes::TYPE_MISMATCH);
+    }
+
+
+    void set(const String & x)
+    {
+        if (x.find('.') != std::string::npos)
+            set(parse<double>(x));
+        else
+            set(parse<UInt64>(x));
+    }
+
+    void set(ReadBuffer & buf)
+    {
+        String x;
+        readBinary(x, buf);
+        set(x);
+    }
+
+    String toString() const
+    {
+        return std::visit(ToStringVisitor(), value.load());
+    }
+
+    void write(WriteBuffer & buf) const
+    {
+        writeBinary(toString(), buf);
+    }
+
+    UInt64OrDouble get() const
+    {
+        return value.load();
+    }
+
+private:
+    std::atomic<UInt64OrDouble> value;
 };
 
 struct SettingDouble

@@ -24,7 +24,7 @@
 #include <common/logger_useful.h>
 
 #include <chrono>
-
+#include <variant>
 
 namespace DB
 {
@@ -162,7 +162,23 @@ ProcessList::EntryPtr ProcessList::insert(
             /// You should specify this value in configuration for default profile,
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
-            total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
+            std::visit([&](auto && arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, UInt64>)
+                {
+                    std::cout << "int branch: " << arg << std::endl;
+                    total_memory_tracker->setOrRaiseLimit(arg);
+                }
+                else if constexpr (std::is_same_v<T, double>)
+                {
+                    auto total_memory = server_info.has_value() ? server_info.value().memory_info.capacity : 0;
+                    auto limit = static_cast<UInt64>(total_memory * arg);
+                    std::cout << "double branch: " << limit << std::endl;
+                    total_memory_tracker->setOrRaiseLimit(limit);
+                }
+            },
+                       settings.max_memory_usage_for_all_queries.get());
+
             total_memory_tracker->setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker->setDescription("(total)");
             total_memory_tracker->setAccuracyDiffForTest(settings.memory_tracker_accuracy_diff_for_test);
