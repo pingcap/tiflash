@@ -61,9 +61,9 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     return physical_window;
 }
 
-void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     executeExpression(pipeline, window_description.before_window, log, "before window");
     window_description.fillArgColumnNumbers();

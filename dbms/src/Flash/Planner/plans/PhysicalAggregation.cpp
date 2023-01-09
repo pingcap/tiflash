@@ -87,9 +87,9 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     return physical_agg;
 }
 
-void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     executeExpression(pipeline, before_agg_actions, log, "before aggregation");
 

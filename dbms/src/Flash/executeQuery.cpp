@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
+#include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/PipelineExecutor.h>
-#include <Flash/Pipeline/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/executeQuery.h>
@@ -40,6 +40,7 @@ namespace FailPoints
 {
 extern const char random_interpreter_failpoint[];
 } // namespace FailPoints
+
 namespace
 {
 void prepareForExecute(Context & context)
@@ -72,7 +73,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     }
 }
 
-BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
+BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -104,7 +105,7 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
     return res;
 }
 
-std::optional<QueryExecutorPtr> pipelineExecute(Context & context, bool internal)
+std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -136,17 +137,17 @@ std::optional<QueryExecutorPtr> pipelineExecute(Context & context, bool internal
 }
 } // namespace
 
-BlockIO executeQuery(Context & context, bool internal)
+BlockIO executeAsBlockIO(Context & context, bool internal)
 {
     if (context.getSettingsRef().enable_planner)
     {
         PlanQuerySource plan(context);
-        return executeDAG(plan, context, internal);
+        return doExecuteAsBlockIO(plan, context, internal);
     }
     else
     {
         DAGQuerySource dag(context);
-        return executeDAG(dag, context, internal);
+        return doExecuteAsBlockIO(dag, context, internal);
     }
 }
 
@@ -155,9 +156,9 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
     // now only support pipeline model in executor/interpreter test.
     if ((context.isExecutorTest() || context.isInterpreterTest()) && context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
     {
-        if (auto res = pipelineExecute(context, internal); res)
+        if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
     }
-    return std::make_unique<DataStreamExecutor>(executeQuery(context, internal));
+    return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context, internal));
 }
 } // namespace DB

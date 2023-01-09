@@ -50,9 +50,9 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
     return physical_exchange_sender;
 }
 
-void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
     restoreConcurrency(pipeline, dag_context.final_concurrency, log);

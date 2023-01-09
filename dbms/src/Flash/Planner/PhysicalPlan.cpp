@@ -282,10 +282,10 @@ String PhysicalPlan::toString() const
     return PhysicalPlanVisitor::visitToString(root_node);
 }
 
-void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     assert(root_node);
-    root_node->transform(pipeline, context, max_streams);
+    root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
 Pipelines PhysicalPlan::toPipelines()

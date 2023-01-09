@@ -14,14 +14,14 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
-#include <Flash/Pipeline/Event.h>
-#include <Flash/Pipeline/GetResultSink.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/PipelineEvent.h>
-#include <Flash/Pipeline/PipelineExecStatus.h>
+#include <Flash/Pipeline/Schedule/Event.h>
+#include <Flash/Pipeline/Schedule/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
+#include <Flash/Planner/plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Operators/OperatorPipelineBuilder.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -34,9 +34,9 @@ FmtBuffer & addPrefix(FmtBuffer & buffer, size_t level)
 }
 } // namespace
 
-void Pipeline::addPlan(const PhysicalPlanNodePtr & plan)
+void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
-    plans.push_back(plan);
+    plan_nodes.push_back(plan_node);
 }
 
 void Pipeline::addDependency(const PipelinePtr & dependency)
@@ -49,8 +49,8 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
     size_t prefix_size = 2 * level;
     addPrefix(buffer, prefix_size).append("pipeline:\n");
     ++prefix_size;
-    for (const auto & plan : plans)
-        addPrefix(buffer, prefix_size).append(plan->toString()).append("\n");
+    for (const auto & plan_node : plan_nodes)
+        addPrefix(buffer, prefix_size).append(plan_node->toString()).append("\n");
 }
 
 void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
@@ -67,22 +67,22 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 
 void Pipeline::addGetResultSink(ResultHandler result_handler)
 {
-    assert(!plans.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(result_handler, plans.front());
-    plans.push_front(get_result_sink);
+    assert(!plan_nodes.empty());
+    auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.front());
+    plan_nodes.push_front(get_result_sink);
     get_result_sink->detach();
 }
 
-OperatorPipelineGroup Pipeline::transform(Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::toExec(Context & context, size_t concurrency)
 {
-    assert(!plans.empty());
-    OperatorPipelineGroupBuilder builder;
-    for (auto it = plans.rbegin(); it != plans.rend(); ++it)
-        (*it)->transform(builder, context, concurrency);
+    assert(!plan_nodes.empty());
+    PipelineExecGroupBuilder builder;
+    for (auto it = plan_nodes.rbegin(); it != plan_nodes.rend(); ++it)
+        (*it)->buildPipelineExec(builder, context, concurrency);
     return builder.build();
 }
 
-Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t concurrency)
+Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;
     toEvent(status, context, concurrency, all_events);
@@ -90,31 +90,31 @@ Events Pipeline::toEvents(PipelineExecStatus & status, Context & context, size_t
     return all_events;
 }
 
-EventPtr Pipeline::toEvent(PipelineExecStatus & status, Context & context, size_t concurrency, Events & all_events)
+EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
 {
     // TODO support fine grained shuffle
     //     - a fine grained partition maps to an event
     //     - the event flow will be
     //     ```
     //     disable fine grained partition pipeline   enable fine grained partition pipeline   enable fine grained partition pipeline
-    //                                       ┌───────────────────PipelineEvent<────────────────────────PipelineEvent
-    //               PipelineEvent<──────────┼───────────────────PipelineEvent<────────────────────────PipelineEvent
-    //                                       ├───────────────────PipelineEvent<────────────────────────PipelineEvent
-    //                                       └───────────────────PipelineEvent<────────────────────────PipelineEvent
+    //                                       ┌───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
+    //            PlainPipelineEvent<────────┼───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
+    //                                       ├───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
+    //                                       └───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
     //     ```
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 
-    auto pipeline_event = std::make_shared<PipelineEvent>(status, memory_tracker, context, concurrency, shared_from_this());
+    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, context, shared_from_this(), concurrency);
     for (const auto & dependency : dependencies)
     {
         auto dependency_ptr = dependency.lock();
         assert(dependency_ptr);
         auto dependency_event = dependency_ptr->toEvent(status, context, concurrency, all_events);
         assert(dependency_event);
-        pipeline_event->addDependency(dependency_event);
+        plain_pipeline_event->addDependency(dependency_event);
     }
-    all_events.push_back(pipeline_event);
-    return pipeline_event;
+    all_events.push_back(plain_pipeline_event);
+    return plain_pipeline_event;
 }
 
 bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)

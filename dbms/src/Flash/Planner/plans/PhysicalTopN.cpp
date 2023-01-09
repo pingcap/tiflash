@@ -56,9 +56,9 @@ PhysicalPlanNodePtr PhysicalTopN::build(
     return physical_top_n;
 }
 
-void PhysicalTopN::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalTopN::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     executeExpression(pipeline, before_sort_actions, log, "before TopN");
 

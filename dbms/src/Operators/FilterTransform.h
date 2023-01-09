@@ -20,7 +20,7 @@
 
 namespace DB
 {
-class FilterTransform : public Transform
+class FilterTransform : public TransformOp
 {
 public:
     explicit FilterTransform(

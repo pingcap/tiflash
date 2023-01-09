@@ -48,7 +48,7 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 
     void initStreams(Context & context);
 
@@ -64,7 +64,7 @@ public:
     void updateStreams(Context & context);
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
 private:
     PushDownFilter push_down_filter;

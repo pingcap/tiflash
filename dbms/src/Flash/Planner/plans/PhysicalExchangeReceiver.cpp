@@ -58,7 +58,7 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
     return physical_exchange_receiver;
 }
 
-void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
 

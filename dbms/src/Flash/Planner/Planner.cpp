@@ -52,6 +52,6 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     physical_plan.build(&plan_source.getDAGRequest());
     physical_plan.outputAndOptimize();
 
-    physical_plan.transform(pipeline, context, max_streams);
+    physical_plan.buildBlockInputStream(pipeline, context, max_streams);
 }
 } // namespace DB

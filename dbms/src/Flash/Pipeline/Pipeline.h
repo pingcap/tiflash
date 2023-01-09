@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
-#include <Operators/OperatorPipeline.h>
+#include <Flash/Pipeline/Exec/PipelineExec.h>
 
 #include <deque>
 #include <vector>
@@ -38,12 +38,12 @@ using Events = std::vector<EventPtr>;
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
-class PipelineExecStatus;
+class PipelineExecutorStatus;
 
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
 public:
-    void addPlan(const PhysicalPlanNodePtr & plan);
+    void addPlanNode(const PhysicalPlanNodePtr & plan_node);
 
     void addDependency(const PipelinePtr & dependency);
 
@@ -52,20 +52,20 @@ public:
     // only used for test.
     void addGetResultSink(ResultHandler result_handler);
 
-    OperatorPipelineGroup transform(Context & context, size_t concurrency);
+    PipelineExecGroup toExec(Context & context, size_t concurrency);
 
-    Events toEvents(PipelineExecStatus & status, Context & context, size_t concurrency);
+    Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
 
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    EventPtr toEvent(PipelineExecStatus & status, Context & context, size_t concurrency, Events & all_events);
+    EventPtr toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
 
 private:
-    // data flow: plans.begin() <-- plans.end()
-    std::deque<PhysicalPlanNodePtr> plans;
+    // data flow: plan_nodes.begin() <-- plan_nodes.end()
+    std::deque<PhysicalPlanNodePtr> plan_nodes;
 
     // use weak_ptr to avoid circular references.
     std::vector<std::weak_ptr<Pipeline>> dependencies;

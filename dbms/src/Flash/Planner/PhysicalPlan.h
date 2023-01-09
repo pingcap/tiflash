@@ -43,7 +43,7 @@ public:
 
     String toString() const;
 
-    void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
+    void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
     Pipelines toPipelines();
 

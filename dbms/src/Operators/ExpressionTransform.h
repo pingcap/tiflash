@@ -22,7 +22,7 @@ namespace DB
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
-class ExpressionTransform : public Transform
+class ExpressionTransform : public TransformOp
 {
 public:
     explicit ExpressionTransform(

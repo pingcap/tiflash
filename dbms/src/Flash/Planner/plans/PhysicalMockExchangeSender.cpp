@@ -37,9 +37,9 @@ PhysicalPlanNodePtr PhysicalMockExchangeSender::build(
     return physical_mock_exchange_sender;
 }
 
-void PhysicalMockExchangeSender::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalMockExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier()); });
 }

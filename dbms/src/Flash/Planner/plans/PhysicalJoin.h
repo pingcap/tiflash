@@ -65,7 +65,7 @@ private:
 
     void doSchemaProject(DAGPipeline & pipeline, Context & context);
 
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     /// the right side is the build side.
     const PhysicalPlanNodePtr & probe() const { return left; }

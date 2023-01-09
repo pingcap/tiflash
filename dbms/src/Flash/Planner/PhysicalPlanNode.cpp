@@ -70,9 +70,9 @@ void PhysicalPlanNode::recordProfileStreams(DAGPipeline & pipeline, const Contex
     }
 }
 
-void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    transformImpl(pipeline, context, max_streams);
+    buildBlockInputStreamImpl(pipeline, context, max_streams);
     if (is_tidb_operator)
         recordProfileStreams(pipeline, context);
     if (is_restore_concurrency)
@@ -82,14 +82,14 @@ void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size
     }
 }
 
-void PhysicalPlanNode::transform(OperatorPipelineGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
 {
     throw Exception("Unsupport");
 }
 
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & pipeline_builder, const PipelinePtr & pipeline)
 {
-    pipeline->addPlan(shared_from_this());
+    pipeline->addPlanNode(shared_from_this());
     assert(childrenSize() <= 1);
     if (childrenSize() == 1)
         children(0)->buildPipeline(pipeline_builder, pipeline);

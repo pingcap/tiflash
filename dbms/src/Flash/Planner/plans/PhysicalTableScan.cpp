@@ -51,7 +51,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
     return physical_table_scan;
 }
 
-void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
 

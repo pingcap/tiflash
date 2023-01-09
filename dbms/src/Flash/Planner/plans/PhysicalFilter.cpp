@@ -16,12 +16,12 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Interpreters/Context.h>
 #include <Operators/FilterTransform.h>
-#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -53,14 +53,14 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     return physical_filter;
 }
 
-void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalFilter::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     auto input_header = group_builder.getHeader();
     group_builder.transform([&](auto & builder) {

@@ -46,10 +46,10 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     String filter_column;
     ExpressionActionsPtr before_filter_actions;

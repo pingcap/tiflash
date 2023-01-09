@@ -50,9 +50,9 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
     return physical_window_sort;
 }
 
-void PhysicalWindowSort::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalWindowSort::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     orderStreams(pipeline, max_streams, order_descr, 0, fine_grained_shuffle.enable(), context, log);
 }

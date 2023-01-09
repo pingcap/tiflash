@@ -23,7 +23,7 @@ class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
 // wrap for BlockInputStream
-class BlockInputStreamSource : public Source
+class BlockInputStreamSource : public SourceOp
 {
 public:
     explicit BlockInputStreamSource(const BlockInputStreamPtr & impl_);

@@ -52,7 +52,7 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators partition_col_collators;

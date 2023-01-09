@@ -18,10 +18,10 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
 #include <Operators/LimitTransform.h>
-#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -41,9 +41,9 @@ PhysicalPlanNodePtr PhysicalLimit::build(
     return physical_limit;
 }
 
-void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
@@ -53,7 +53,7 @@ void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, siz
     }
 }
 
-void PhysicalLimit::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     auto input_header = group_builder.getHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);

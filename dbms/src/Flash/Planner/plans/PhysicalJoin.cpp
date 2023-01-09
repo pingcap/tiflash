@@ -244,18 +244,18 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     dag_context.addSubquery(execId(), std::move(build_query));
 }
 
-void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     /// The build side needs to be transformed first.
     {
         DAGPipeline build_pipeline;
-        build()->transform(build_pipeline, context, max_streams);
+        build()->buildBlockInputStream(build_pipeline, context, max_streams);
         buildSideTransform(build_pipeline, context, max_streams);
     }
 
     {
         DAGPipeline & probe_pipeline = pipeline;
-        probe()->transform(probe_pipeline, context, max_streams);
+        probe()->buildBlockInputStream(probe_pipeline, context, max_streams);
         probeSideTransform(probe_pipeline, context, max_streams);
     }
 

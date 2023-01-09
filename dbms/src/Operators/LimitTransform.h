@@ -22,7 +22,7 @@ namespace DB
 struct GlobalLimitTransformAction;
 using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
 
-class LimitTransform : public Transform
+class LimitTransform : public TransformOp
 {
 public:
     explicit LimitTransform(

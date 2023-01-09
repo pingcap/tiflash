@@ -50,7 +50,7 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     SortDescription order_descr;
     ExpressionActionsPtr before_sort_actions;

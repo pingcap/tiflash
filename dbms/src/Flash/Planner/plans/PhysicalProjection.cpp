@@ -18,12 +18,12 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransform.h>
-#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -136,14 +136,14 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     return physical_projection;
 }
 
-void PhysicalProjection::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
+    child->buildBlockInputStream(pipeline, context, max_streams);
 
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     if (project_actions && !project_actions->getActions().empty())
     {

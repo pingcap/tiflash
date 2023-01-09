@@ -46,7 +46,7 @@ public:
     }
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     Block sample_block;
 

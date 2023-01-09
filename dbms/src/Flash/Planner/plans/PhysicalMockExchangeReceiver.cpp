@@ -16,12 +16,12 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSource.h>
-#include <Operators/OperatorPipelineBuilder.h>
 
 namespace DB
 {
@@ -96,13 +96,13 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     return physical_mock_exchange_receiver;
 }
 
-void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
+void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::transform(OperatorPipelineGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     group_builder.init(mock_streams.size());
     size_t i = 0;

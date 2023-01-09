@@ -36,54 +36,49 @@ enum class OperatorStatus
     CANCELLED,
 };
 
-class SpillOp
+// TODO support operator profile info like `BlockStreamProfileInfo`.
+
+class Operator
 {
 public:
-    virtual ~SpillOp() = default;
-
+    virtual ~Operator() = default;
+    virtual OperatorStatus await() { throw Exception("Unsupport"); }
     virtual OperatorStatus spill() { throw Exception("Unsupport"); }
 };
 
-// TODO support profile info like `BlockStreamProfileInfo`.
-
-class Source : public SpillOp
+class SourceOp : public Operator
 {
 public:
-    virtual ~Source() = default;
-
     virtual OperatorStatus read(Block & block) = 0;
 
     virtual Block readHeader() = 0;
 
-    virtual OperatorStatus await() { return OperatorStatus::PASS; }
+    OperatorStatus await() override { return OperatorStatus::PASS; }
 };
-using SourcePtr = std::unique_ptr<Source>;
+using SourcePtr = std::unique_ptr<SourceOp>;
 
-class Transform : public SpillOp
+class TransformOp : public Operator
 {
 public:
-    virtual ~Transform() = default;
-
     // call fetchBlock first, and then call transform.
     virtual OperatorStatus fetchBlock(Block &) { return OperatorStatus::NO_OUTPUT; }
     virtual OperatorStatus transform(Block & block) = 0;
 
     virtual void transformHeader(Block & header) { transform(header); }
 
-    virtual OperatorStatus await() { return OperatorStatus::SKIP; }
+    OperatorStatus await() override { return OperatorStatus::SKIP; }
 };
-using TransformPtr = std::unique_ptr<Transform>;
+using TransformPtr = std::unique_ptr<TransformOp>;
+using Transforms = std::vector<TransformPtr>;
 
-class Sink : public SpillOp
+class SinkOp : public Operator
 {
 public:
-    virtual ~Sink() = default;
-
     // call prepare first, and then call write.
     virtual OperatorStatus prepare() { return OperatorStatus::PASS; }
     virtual OperatorStatus write(Block && block) = 0;
 
-    virtual OperatorStatus await() { return OperatorStatus::PASS; }
+    OperatorStatus await() override { return OperatorStatus::PASS; }
 };
-using SinkPtr = std::unique_ptr<Sink>;
+using SinkPtr = std::unique_ptr<SinkOp>;
 } // namespace DB
