@@ -140,21 +140,20 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
 
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, stable_id);
     auto page = temp_ps->read(target_id);
-    RUNTIME_CHECK(page.isValid());
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    auto [buf, buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(page, checkpoint_info.checkpoint_data_dir);
 
     UInt64 version, valid_rows, valid_bytes, size;
-    readIntBinary(version, buf);
+    readIntBinary(version, *buf);
     if (version != StableFormat::V1)
         throw Exception("Unexpected version: " + DB::toString(version));
 
-    readIntBinary(valid_rows, buf);
-    readIntBinary(valid_bytes, buf);
-    readIntBinary(size, buf);
+    readIntBinary(valid_rows, *buf);
+    readIntBinary(valid_bytes, *buf);
+    readIntBinary(size, *buf);
     UInt64 page_id;
     for (size_t i = 0; i < size; ++i)
     {
-        readIntBinary(page_id, buf);
+        readIntBinary(page_id, *buf);
         auto remote_file_page_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Data), ns_id, page_id);
         auto remote_orig_file_page_id = temp_ps->getNormalPageId(remote_file_page_id);
         auto remote_file_id = PS::V3::universal::ExternalIdTrait::getU64ID(remote_orig_file_page_id);
@@ -203,6 +202,7 @@ StableValueSpacePtr StableValueSpace::restoreFromCheckpoint( //
     stable->valid_bytes = valid_bytes;
 
     stable->saveMeta(wbs.meta);
+    RUNTIME_CHECK(buf->count(), buf_size);
 
     return stable;
 }
