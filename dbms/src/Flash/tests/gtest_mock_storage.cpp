@@ -23,8 +23,6 @@ namespace DB
 {
 namespace tests
 {
-
-
 class MockStorageTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -89,7 +87,6 @@ public:
 
         return {column, type_name};
     }
-
 
     void testDecimalTable()
     {

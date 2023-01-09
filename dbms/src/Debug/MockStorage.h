@@ -121,7 +121,6 @@ private:
     std::unordered_map<Int64, MockColumnInfoVec> table_schema; /// <table_id, columnInfo>
     std::unordered_map<Int64, ColumnsWithTypeAndName> table_columns; /// <table_id, columns>
     std::unordered_map<String, TableInfo> table_infos; /// <table_name, table_info>
-    std::unordered_map<Int64, NamesAndTypes> names_and_types_map; /// <table_id, NamesAndTypes> // ywq todo check if necessary
     std::unordered_map<Int64, size_t> table_scan_concurrency_hint; /// <table_id, concurrency_hint>
 
     /// for mock exchange receiver

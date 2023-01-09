@@ -433,7 +433,6 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableSca
     throw Exception(fmt::format("Failed to get table columns by table_id '{}'", table_id));
 }
 
-// ywq todo refine
 void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & columns)
 {
     TableInfo table_info;
@@ -454,7 +453,6 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
     return table_infos_for_delta_merge[name];
 }
 
-// ywq todo change it.
 ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
 {
     ColumnID col_id = 0;
@@ -468,8 +466,6 @@ ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_colu
         // TODO: find a way to assign decimal field's flen.
         if (column_info.tp == TiDB::TP::TypeNewDecimal)
             column_info.flen = 65;
-        column_info.flen = 18;
-        column_info.decimal = 5;
         ret.push_back(std::move(column_info));
     }
     return ret;
