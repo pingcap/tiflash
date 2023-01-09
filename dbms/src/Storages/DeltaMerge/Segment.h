@@ -534,7 +534,11 @@ public:
 
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     ReadInfo getReadInfo(
         const DMContext & dm_context,
         const ColumnDefines & read_columns,

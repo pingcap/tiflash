@@ -32,7 +32,6 @@ using namespace DB::tests;
 
 namespace DB::DM::tests
 {
-
 template <typename E, typename A>
 ::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size)
 {
@@ -507,5 +506,52 @@ try
     ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
 }
 CATCH
+
+TEST_F(SegmentBitmapFilterTest, CleanStable)
+{
+    writeSegment("d_mem:[0, 10000)|d_mem:[20000, 25000)");
+    mergeSegmentDelta(SEG_ID, true);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(seg->getDelta()->getRows(), 0);
+    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+    ASSERT_EQ(seg->getStable()->getRows(), 15000);
+    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+        *dm_context,
+        snap,
+        {seg->getRowKeyRange()},
+        EMPTY_FILTER,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_NE(bitmap_filter, nullptr);
+    std::string expect_result;
+    expect_result.append(std::string(15000, '1'));
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+}
+
+TEST_F(SegmentBitmapFilterTest, NotCleanStable)
+{
+    writeSegment("d_mem:[0, 10000)|d_mem:[5000, 15000)");
+    mergeSegmentDelta(SEG_ID, true);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(seg->getDelta()->getRows(), 0);
+    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+    ASSERT_EQ(seg->getStable()->getRows(), 20000);
+    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+        *dm_context,
+        snap,
+        {seg->getRowKeyRange()},
+        EMPTY_FILTER,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_NE(bitmap_filter, nullptr);
+    std::string expect_result;
+    expect_result.append(std::string(5000, '1'));
+    for (int i = 0; i < 5000; i++)
+    {
+        expect_result.append(std::string("01"));
+    }
+    expect_result.append(std::string(5000, '1'));
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+}
 
 } // namespace DB::DM::tests
