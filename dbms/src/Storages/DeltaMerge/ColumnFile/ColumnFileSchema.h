@@ -16,6 +16,8 @@
 
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
+#include <Interpreters/Context.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <openssl/base.h>
 #include <openssl/sha.h>
 
@@ -84,8 +86,36 @@ class ColumnFileSchemaMapWithLock
 private:
     std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>, HashForDigest> column_file_schema_map;
     std::mutex mutex;
+    BackgroundProcessingPool::TaskHandle handle;
+    BackgroundProcessingPool & background_pool;
 
 public:
+    explicit ColumnFileSchemaMapWithLock(DB::Context & context)
+        : background_pool(context.getBackgroundPool())
+    {
+        handle = background_pool.addTask([&, this] {
+            std::lock_guard<std::mutex> lock(mutex);
+            for (auto it = column_file_schema_map.begin(); it != column_file_schema_map.end();)
+            {
+                if (it->second.expired())
+                {
+                    it = column_file_schema_map.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            return true;
+        },
+                                         false);
+    }
+
+    ~ColumnFileSchemaMapWithLock()
+    {
+        background_pool.removeTask(handle);
+    }
+
     //  做成访问的时候都要先拿锁
     ColumnFileSchemaPtr find(const Digest & digest)
     {

@@ -66,6 +66,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
@@ -905,7 +906,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
-    global_context->column_file_schema_map_with_lock = std::make_shared<DM::ColumnFileSchemaMapWithLock>();
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1182,6 +1182,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
+
+    global_context->column_file_schema_map_with_lock = std::make_shared<DM::ColumnFileSchemaMapWithLock>(*global_context);
 
     {
         // Note that this must do before initialize schema sync service.

@@ -22,7 +22,6 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -109,6 +108,7 @@ namespace DM
 class MinMaxIndexCache;
 class DeltaIndexManager;
 class GlobalStoragePool;
+class ColumnFileSchemaMapWithLock;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 

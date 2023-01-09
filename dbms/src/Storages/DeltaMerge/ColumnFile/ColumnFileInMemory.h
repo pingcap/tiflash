@@ -16,6 +16,7 @@
 
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 namespace DB
 {
 namespace DM
