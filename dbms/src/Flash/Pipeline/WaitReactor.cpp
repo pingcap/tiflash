@@ -20,7 +20,9 @@
 #include <common/likely.h>
 #include <common/logger_useful.h>
 #include <errno.h>
+#ifdef __x86_64__
 #include <immintrin.h>
+#endif
 
 namespace DB
 {

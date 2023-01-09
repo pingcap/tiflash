@@ -23,9 +23,13 @@ void cut(Block & block, size_t rows, size_t limit, size_t pos)
 {
     // give away a piece of the block
     assert(rows + limit > pos);
-    size_t length = rows + limit - pos;
-    for (size_t i = 0; i < block.columns(); ++i)
-        block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(0, length);
+    size_t pop_back_cnt = pos - limit;
+    for (auto & col : block)
+    {
+        auto mutate_col = (*std::move(col.column)).mutate();
+        mutate_col->popBack(pop_back_cnt);
+        col.column = std::move(mutate_col);
+    }
 }
 } // namespace
 
