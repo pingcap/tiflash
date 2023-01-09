@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Event.h>
-#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Executor/PipelineExecutor.h>
+#include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/Schedule/Event.h>
 #include <Interpreters/Context.h>
 
 namespace DB

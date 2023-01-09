@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/GetResultSink.h>
 #include <Flash/Planner/plans/PhysicalGetResultSink.h>
+#include <Operators/GetResultSink.h>
 
 namespace DB
 {

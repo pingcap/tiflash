@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/plans/PhysicalGetResultSink.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
-#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Planner/plans/PhysicalGetResultSink.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 

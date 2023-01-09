@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
