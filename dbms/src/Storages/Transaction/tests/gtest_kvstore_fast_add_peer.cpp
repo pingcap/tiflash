@@ -15,13 +15,20 @@
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Transaction/FastAddPeer.h>
 
+#include <chrono>
 #include <optional>
+#include <thread>
 
 #include "Debug/MockRaftStoreProxy.h"
+#include "Storages/Transaction/ProxyFFI.h"
 #include "kvstore_helper.h"
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char fast_add_peer_sleep[];
+} // namespace FailPoints
 namespace tests
 {
 
@@ -59,10 +66,11 @@ TEST_F(RegionKVStoreTest, FAPPSCache)
     }
     {
         LocalPageStorageCache<int> cache(1);
-        cache.insert(1, 0, 1);
+        cache.insert(2, 0, 1);
         cache.guardedMaybeEvict(1);
         cache.guardedMaybeEvict(2);
-        ASSERT_TRUE(cache.maybeGet(1, 0) != std::nullopt);
+        cache.guardedMaybeEvict(3);
+        ASSERT_TRUE(cache.maybeGet(2, 0) != std::nullopt);
     }
     {
         LocalPageStorageCache<int> cache(1);
@@ -161,6 +169,48 @@ void persistAfterWrite(Context & ctx, KVStore & kvs, std::unique_ptr<MockRaftSto
     // There shall be data to flush.
     ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
     ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
+}
+
+TEST_F(RegionKVStoreTest, FAPE2E)
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        uint64_t region_id = 1;
+        auto peer_id = 1;
+        {
+            KVStore & kvs = getKVS();
+            auto & page_storage = kvs.region_persister->global_uni_page_storage;
+
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+
+            auto region = proxy_instance->getRegion(region_id);
+            auto store_id = kvs.getStore().store_id.load();
+            region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
+
+            // Write some data, and persist meta.
+            auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            persistAfterWrite(ctx, kvs, proxy_instance, page_storage, region_id, index);
+            dumpPageStorage(page_storage, store_id);
+
+            auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
+                RaftStoreProxyPtr{proxy_instance.get()}));
+            ;
+            EngineStoreServerWrap server_wrap = {
+                .tmt = &ctx.getTMTContext(),
+                .proxy_helper = proxy_helper.get(),
+                .status = std::atomic<EngineStoreServerStatus>{EngineStoreServerStatus::Running},
+            };
+
+            FailPointHelper::enableFailPoint(FailPoints::fast_add_peer_sleep);
+            auto res = FastAddPeer(&server_wrap, region_id, peer_id);
+            FailPointHelper::disableFailPoint(FailPoints::fast_add_peer_sleep);
+            ASSERT_EQ(res.status, FastAddPeerStatus::WaitForData);
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(1000ms);
+            auto res2 = FastAddPeer(&server_wrap, region_id, peer_id);
+            ASSERT_EQ(res2.status, FastAddPeerStatus::Ok);
+        }
+    }
 }
 
 TEST_F(RegionKVStoreTest, FAPRestorePS)

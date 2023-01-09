@@ -23,6 +23,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Storages/Transaction/FastAddPeerContext.h>
 #include <Storages/Transaction/LocalPageStorageCache.h>
 #include <common/MultiVersion.h>
 
@@ -446,6 +447,7 @@ public:
     UniversalPageStoragePtr getReadNodePageStorage() const;
 
     LocalPageStorageCache<UniversalPageStoragePtr> & getLocalPageStorageCache();
+    FastAddPeerContext & getFastAddPeerContext();
 
     void initializeDeltaMergeRemoteManager();
     DM::Remote::ManagerPtr getDMRemoteManager() const;
