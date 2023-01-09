@@ -37,7 +37,7 @@ public:
 
     MockStorage mock_storage;
 
-    struct TestData
+    struct DecimalTestData
     {
         size_t max_prec;
         size_t min_prec;
@@ -48,7 +48,7 @@ public:
 
     size_t table_id = 1;
 
-    std::vector<TestData> test_datas{{9, 1, 1, 2, "Decimal32"}, {18, 10, 2, 4, "Decimal64"}, {38, 19, 3, 6, "Decimal128"}, {65, 39, 4, 8, "Decimal256"}};
+    std::vector<DecimalTestData> test_datas{{9, 1, 1, 2, "Decimal32"}, {18, 10, 2, 4, "Decimal64"}, {38, 19, 3, 6, "Decimal128"}, {65, 39, 4, 8, "Decimal256"}};
 
     static std::pair<ColumnWithTypeAndName, String> getColumnAndTypeName(size_t prec, size_t scale, bool nullable, const String & type)
     {
@@ -120,10 +120,7 @@ try
     mock_storage.addTableDataForDeltaMerge(context.context, "test", columns);
     auto in = mock_storage.getStreamFromDeltaMerge(context.context, 1);
 
-    ASSERT_INPUTSTREAM_BLOCK_UR(
-        in,
-        Block(columns));
-
+    ASSERT_INPUTSTREAM_BLOCK_UR(in, Block(columns));
     mock_storage.clear();
 }
 CATCH
@@ -134,8 +131,5 @@ try
     testDecimalTable();
 }
 CATCH
-
-// ywq todo test Enum
-
 } // namespace tests
 } // namespace DB

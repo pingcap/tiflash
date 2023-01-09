@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/typeUtils.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <TestUtils/typeUtils.h>
 
 namespace DB::tests
 {

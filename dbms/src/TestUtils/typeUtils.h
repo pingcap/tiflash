@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/IDataType.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB::tests

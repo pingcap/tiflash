@@ -176,8 +176,13 @@ public:
         return DAGRequestBuilder(index);
     }
     /// mock column table scan
+    // The following two methods can add nullable table column schema with simple type.
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos);
+    // The following two methods can add nullable table columns with simple type.
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    // The following two methods can add table columns with type like Decimal and Enum, and the column can be non-nullable.
     void addMockTable(const String & db, const String & table, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
@@ -186,9 +191,6 @@ public:
     void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
     void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
     void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
-
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
 
     /// mock DeltaMerge table scan
     void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);

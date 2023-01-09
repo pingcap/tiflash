@@ -136,7 +136,7 @@ void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGR
 {
     executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
         return columnsEqual(expect_columns, res, is_restrict) << "\n  expect_block: \n"
-                                                                      << getColumnsContent(expect_columns);
+                                                              << getColumnsContent(expect_columns);
     });
 }
 
