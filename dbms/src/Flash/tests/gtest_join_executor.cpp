@@ -812,6 +812,7 @@ try
     context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
     std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
+    std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
     std::vector<MockOrderByItemVec> left_table_order_items = {
         {std::make_pair("left_table_1_concurrency.a", true), std::make_pair("left_table_1_concurrency.b", true)},
         {std::make_pair("left_table_3_concurrency.a", true), std::make_pair("left_table_3_concurrency.b", true)},
@@ -842,23 +843,10 @@ try
                        .topN(order_by_items, table_rows * 10)
                        .build(context);
     context.context.setSetting("max_block_size", Field(max_block_size));
+    /// use 1 build concurrency join 1 probe concurrency as the reference
     auto ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
 
-    order_by_items.clear();
-    order_by_items.insert(order_by_items.end(), left_table_order_items[1].begin(), left_table_order_items[1].end());
-    order_by_items.insert(order_by_items.end(), right_exchange_order_items[3].begin(), right_exchange_order_items[3].end());
-    request = context
-                  .scan("outer_join_test", left_table_names[1])
-                  .join(context.receive("right_exchange_receiver_10_concurrency", 10), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, 10)
-                  .topN(order_by_items, table_rows * 10)
-                  .build(context);
-    auto blocks_1 = getExecuteStreamsReturnBlocks(request, original_max_streams);
-    ASSERT_EQ(ref_blocks.size(), blocks_1.size());
-    for (size_t i = 0; i < ref_blocks.size(); i++)
-    {
-        ASSERT_BLOCK_EQ(ref_blocks[i], blocks_1[i]);
-    }
-
+    /// case 1.1 table scan join table scan
     for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
     {
         for (size_t right_index = 0; right_index < right_table_names.size(); right_index++)
@@ -881,6 +869,28 @@ try
             }
         }
     }
+    /// case 1.2 table scan join fine grained exchange receiver
+    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    {
+        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); right_index++)
+        {
+            order_by_items.clear();
+            order_by_items.insert(order_by_items.end(), left_table_order_items[left_index].begin(), left_table_order_items[left_index].end());
+            order_by_items.insert(order_by_items.end(), right_exchange_order_items[right_index].begin(), right_exchange_order_items[right_index].end());
+            size_t exchange_concurrency = right_exchange_receiver_concurrency[right_index];
+            request = context
+                          .scan("outer_join_test", left_table_names[left_index])
+                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
+                          .topN(order_by_items, table_rows * 10)
+                          .build(context);
+            auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
+            for (size_t i = 0; i < ref_blocks.size(); i++)
+            {
+                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
+            }
+        }
+    }
     /// case 2, right join with right condition
     order_by_items.clear();
     order_by_items.insert(order_by_items.end(), left_table_order_items[0].begin(), left_table_order_items[0].end());
@@ -891,7 +901,9 @@ try
                   .topN(order_by_items, table_rows * 10)
                   .build(context);
     context.context.setSetting("max_block_size", Field(max_block_size));
+    /// use 1 build concurrency join 1 probe concurrency as the reference
     ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+    /// case 2.1 table scan join table scan
     for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
     {
         for (size_t right_index = 0; right_index < right_table_names.size(); right_index++)
@@ -904,6 +916,29 @@ try
             request = context
                           .scan("outer_join_test", left_table_names[left_index])
                           .join(context.scan("outer_join_test", right_table_names[right_index]), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_names[right_index] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
+                          .topN(order_by_items, table_rows * 10)
+                          .build(context);
+            auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
+            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
+            for (size_t i = 0; i < ref_blocks.size(); i++)
+            {
+                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
+            }
+        }
+    }
+    /// case 2.2 table scan join fine grained exchange receiver
+    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    {
+        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); right_index++)
+        {
+            order_by_items.clear();
+            order_by_items.insert(order_by_items.end(), left_table_order_items[left_index].begin(), left_table_order_items[left_index].end());
+            order_by_items.insert(order_by_items.end(), right_exchange_order_items[right_index].begin(), right_exchange_order_items[right_index].end());
+            size_t exchange_concurrency = right_exchange_receiver_concurrency[right_index];
+            String exchange_name = fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency);
+            request = context
+                          .scan("outer_join_test", left_table_names[left_index])
+                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
                           .topN(order_by_items, table_rows * 10)
                           .build(context);
             auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);

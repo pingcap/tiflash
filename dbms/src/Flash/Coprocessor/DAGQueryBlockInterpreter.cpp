@@ -516,7 +516,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    size_t fine_grained_stream_count = query_block.source->has_fine_grained_shuffle_stream_count() ? 0 : query_block.source->fine_grained_shuffle_stream_count();
+    size_t fine_grained_stream_count = query_block.source->has_fine_grained_shuffle_stream_count() ? query_block.source->fine_grained_shuffle_stream_count() : 0;
     auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(context, query_block.source_name, log, query_block.source->exchange_receiver(), fine_grained_stream_count);
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(schema), context);

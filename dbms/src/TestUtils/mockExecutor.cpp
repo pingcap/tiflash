@@ -362,10 +362,10 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
 {
     auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(db, table, mock_column_infos, columns);
+    addMockTable(db, table, mock_column_infos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
@@ -377,10 +377,10 @@ void MockDAGRequestContext::addMockTableSchema(const MockTableName & name, const
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
 {
     auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(name, mock_column_infos, columns);
+    addMockTable(name, mock_column_infos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint)
@@ -462,10 +462,10 @@ void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const 
     addMockDeltaMergeData(name.first, name.second, columns);
 }
 
-void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos)
+void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count, const MockColumnInfoVec & partition_column_infos)
 {
     auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_exchange_receiver"));
-    addExchangeReceiver(name, columnInfos, columns);
+    addExchangeReceiver(name, columnInfos, columns, fine_grained_stream_count, partition_column_infos);
 }
 
 void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count, const MockColumnInfoVec & partition_column_infos)
