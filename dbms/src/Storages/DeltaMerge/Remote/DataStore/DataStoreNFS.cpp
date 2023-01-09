@@ -86,6 +86,7 @@ void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & se
     {
         throw Exception(fmt::format("Link from {} to {} failed.", remote_dmf_dir, self_dmf_dir), ErrorCodes::LOGICAL_ERROR);
     }
+    LOG_DEBUG(log, "Link file from {} to {} succeed", remote_dmf_dir, self_dmf_dir);
 }
 
 IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFile(const DMFileOID & oid)
