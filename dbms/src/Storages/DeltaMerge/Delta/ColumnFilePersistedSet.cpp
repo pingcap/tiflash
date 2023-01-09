@@ -108,16 +108,16 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
     auto & storage_pool = context.storage_pool;
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, id);
     auto meta_page = temp_ps->read(target_id);
-    RUNTIME_CHECK(meta_page.isValid());
-    ReadBufferFromMemory buf(meta_page.data.begin(), meta_page.data.size());
+    auto [meta_buf, meta_buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(meta_page, checkpoint_info.checkpoint_data_dir);
     auto column_files = deserializeSavedRemoteColumnFiles(
         context,
         segment_range,
-        buf,
+        *meta_buf,
         temp_ps,
         checkpoint_info.checkpoint_store_id,
         ns_id,
         wbs);
+    RUNTIME_CHECK(meta_buf->count(), meta_buf_size);
     ColumnFilePersisteds new_column_files;
     for (auto & column_file : column_files)
     {
@@ -125,17 +125,9 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
         {
             auto target_cf_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Log), ns_id, t->getDataPageId());
             auto cf_page = temp_ps->read(target_cf_id);
-            RUNTIME_CHECK(cf_page.isValid());
-            MemoryWriteBuffer cf_buf(0, cf_page.data.size());
-            cf_buf.write(cf_page.data.begin(), cf_page.data.size());
+            auto [cf_buf, cf_buf_size, field_sizes] = PS::V3::CheckpointPageManager::getReadBuffer(cf_page, checkpoint_info.checkpoint_data_dir);
             auto new_cf_id = storage_pool->newLogPageId();
-
-            PageFieldSizes field_sizes;
-            for (size_t i = 0; i < cf_page.fieldSize(); i++)
-            {
-                field_sizes.push_back(cf_page.getFieldData(i).size());
-            }
-            wbs.log.putPage(new_cf_id, 0, cf_buf.tryGetReadBuffer(), cf_page.data.size(), field_sizes);
+            wbs.log.putPage(new_cf_id, 0, cf_buf, cf_buf_size, field_sizes);
             new_column_files.push_back(t->cloneWith(new_cf_id));
         }
         else if (auto * d = column_file->tryToDeleteRange(); d)
