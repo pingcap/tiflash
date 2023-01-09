@@ -113,7 +113,6 @@ void ExecutorTest::executeExecutor(
         std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
-            std::cout << "c & b : " << concurrency << " " << block_size << std::endl;
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto res = executeStreams(request, concurrency);
             auto test_info_msg = [&]() {
