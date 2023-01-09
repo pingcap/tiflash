@@ -44,6 +44,11 @@ void MockStorage::addTableData(const String & name, ColumnsWithTypeAndName & col
     table_columns[getTableId(name)] = columns;
 }
 
+void MockStorage::addTableScanConcurrencyHint(const String & name, size_t concurrency_hint)
+{
+    table_scan_concurrency_hint[getTableId(name)] = concurrency_hint;
+}
+
 Int64 MockStorage::getTableId(const String & name)
 {
     if (name_to_id_map.find(name) != name_to_id_map.end())
@@ -65,6 +70,15 @@ ColumnsWithTypeAndName MockStorage::getColumns(Int64 table_id)
         return table_columns[table_id];
     }
     throw Exception(fmt::format("Failed to get columns by table_id '{}'", table_id));
+}
+
+size_t MockStorage::getScanConcurrencyHint(Int64 table_id)
+{
+    if (tableExists(table_id))
+    {
+        return table_scan_concurrency_hint[table_id];
+    }
+    return 0;
 }
 
 MockColumnInfoVec MockStorage::getTableSchema(const String & name)
@@ -366,17 +380,8 @@ void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & co
     TableInfo table_info;
     table_info.name = name;
     table_info.id = getTableId(name);
-    int i = 0;
-    for (const auto & column : columns)
-    {
-        TiDB::ColumnInfo ret;
-        std::tie(ret.name, ret.tp) = column;
-        // TODO: find a way to assign decimal field's flen.
-        if (ret.tp == TiDB::TP::TypeNewDecimal)
-            ret.flen = 65;
-        ret.id = i++;
-        table_info.columns.push_back(std::move(ret));
-    }
+    auto column_infos = mockColumnInfosToTiDBColumnInfos(columns);
+    table_info.columns.swap(column_infos);
     table_infos[name] = table_info;
 }
 
@@ -389,4 +394,23 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
 {
     return table_infos_for_delta_merge[name];
 }
+
+ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
+{
+    ColumnID col_id = 0;
+    ColumnInfos ret;
+    ret.reserve(mock_column_infos.size());
+    for (const auto & mock_column_info : mock_column_infos)
+    {
+        TiDB::ColumnInfo column_info;
+        std::tie(column_info.name, column_info.tp) = mock_column_info;
+        column_info.id = col_id++;
+        // TODO: find a way to assign decimal field's flen.
+        if (column_info.tp == TiDB::TP::TypeNewDecimal)
+            column_info.flen = 65;
+        ret.push_back(std::move(column_info));
+    }
+    return ret;
+}
+
 } // namespace DB
