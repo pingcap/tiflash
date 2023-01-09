@@ -16,9 +16,14 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/LocalPageStorageCache.h>
 #include <Storages/Transaction/ProxyFFI.h>
 
 #include <tuple>
+#include <utility>
+
+#include "Poco/Logger.h"
+#include "common/logger_useful.h"
 
 using raft_serverpb::PeerState;
 using raft_serverpb::RaftApplyState;
@@ -34,6 +39,7 @@ struct RemoteMeta
     std::string checkpoint_path;
     RegionPtr region;
     UniversalPageStoragePtr temp_ps;
+    uint64_t version;
 };
 
 // pair<can_retry, remote_meta>
