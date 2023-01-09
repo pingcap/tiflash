@@ -20,13 +20,11 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
     size_t probe_index_,
-    bool has_non_joined_data_,
     const String & req_id,
     UInt64 max_block_size)
     : log(Logger::get(req_id))
     , join(join_)
     , probe_index(probe_index_)
-    , has_non_joined_data(has_non_joined_data_)
     , probe_process_info(max_block_size)
     , squashing_transform(max_block_size)
 {
@@ -34,7 +32,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
-    if (has_non_joined_data)
+    if (join->needReturnNonJoinedData())
         non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), probe_index, join->getProbeConcurrency(), max_block_size);
 }
 
@@ -107,38 +105,51 @@ void HashJoinProbeBlockInputStream::readSuffixImpl()
 
 Block HashJoinProbeBlockInputStream::getOutputBlock()
 {
-    if (reading_non_joined_data)
+    while (true)
     {
-        auto ret = non_joined_stream->read();
-        non_joined_rows += ret.rows();
-        return ret;
-    }
-    if (probe_process_info.all_rows_joined_finish)
-    {
-        Block block = children.back()->read();
-        if (!block)
+        switch (status)
         {
-            /// probe is done, append non-joined data if needed
-            join->finishOneProbe();
-            if (has_non_joined_data)
+        case ProbeStatus::PROBE:
+        {
+            if (probe_process_info.all_rows_joined_finish)
             {
-                join->waitUntilAllProbeFinished();
-                reading_non_joined_data = true;
-                non_joined_stream->readPrefix();
-                block = non_joined_stream->read();
-                non_joined_rows += block.rows();
+                Block block = children.back()->read();
+                if (!block)
+                {
+                    join->finishOneProbe();
+                    if (join->needReturnNonJoinedData())
+                        status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
+                    else
+                        status = ProbeStatus::FINISHED;
+                    break;
+                }
+                else
+                {
+                    join->checkTypes(block);
+                    probe_process_info.resetBlock(std::move(block));
+                }
             }
+            auto ret = join->joinBlock(probe_process_info);
+            joined_rows += ret.rows();
+            return ret;
+        }
+        case ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA:
+            join->waitUntilAllProbeFinished();
+            status = ProbeStatus::READ_NON_JOINED_DATA;
+            non_joined_stream->readPrefix();
+            break;
+        case ProbeStatus::READ_NON_JOINED_DATA:
+        {
+            auto block = non_joined_stream->read();
+            non_joined_rows += block.rows();
+            if (!block)
+                status = ProbeStatus::FINISHED;
             return block;
         }
-        else
-        {
-            join->checkTypes(block);
-            probe_process_info.resetBlock(std::move(block));
+        case ProbeStatus::FINISHED:
+            return {};
         }
     }
-    auto ret = join->joinBlock(probe_process_info);
-    joined_rows += ret.rows();
-    return ret;
 }
 
 } // namespace DB

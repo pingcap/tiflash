@@ -597,6 +597,10 @@ ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
     const Block & expected,
     const Block & actual);
 
+::testing::AssertionResult blocksEqual(
+    const Blocks & expected,
+    const Blocks & actual);
+
 ::testing::AssertionResult columnsEqual(
     const ColumnsWithTypeAndName & expected,
     const ColumnsWithTypeAndName & actual,
@@ -836,6 +840,7 @@ protected:
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
 #define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
+#define ASSERT_BLOCKS_EQ(expected, actual) DB::tests::blocksEqual((expected), (actual))
 
 /// restrictly checking columns equality, both data set and each row's offset should be the same
 #define ASSERT_COLUMNS_EQ_R(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), true))

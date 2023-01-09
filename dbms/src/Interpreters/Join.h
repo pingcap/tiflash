@@ -131,6 +131,8 @@ public:
 
     void joinTotals(Block & block) const;
 
+    bool needReturnNonJoinedData() const;
+
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
       * Use only after all calls to joinBlock was done.

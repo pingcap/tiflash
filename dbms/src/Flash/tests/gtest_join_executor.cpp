@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 #include <ext/enumerate.h>
 #include <tuple>
-
-#include "TestUtils/ColumnGenerator.h"
 
 namespace DB
 {
@@ -780,7 +779,7 @@ try
         right_column_data.push_back(ColumnGenerator::instance().generate(opts));
     }
 
-    for (size_t i = 0; i < common_column_data.size(); i++)
+    for (size_t i = 0; i < common_column_data.size(); ++i)
     {
         left_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
         right_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
@@ -847,9 +846,9 @@ try
     auto ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
 
     /// case 1.1 table scan join table scan
-    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
     {
-        for (size_t right_index = 0; right_index < right_table_names.size(); right_index++)
+        for (size_t right_index = 0; right_index < right_table_names.size(); ++right_index)
         {
             if (left_index == 0 && right_index == 0)
                 continue;
@@ -862,17 +861,13 @@ try
                           .topN(order_by_items, table_rows * 10)
                           .build(context);
             auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
-            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
-            for (size_t i = 0; i < ref_blocks.size(); i++)
-            {
-                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
-            }
+            ASSERT_BLOCKS_EQ(ref_blocks, result_blocks);
         }
     }
     /// case 1.2 table scan join fine grained exchange receiver
-    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
     {
-        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); right_index++)
+        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); ++right_index)
         {
             order_by_items.clear();
             order_by_items.insert(order_by_items.end(), left_table_order_items[left_index].begin(), left_table_order_items[left_index].end());
@@ -884,11 +879,7 @@ try
                           .topN(order_by_items, table_rows * 10)
                           .build(context);
             auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
-            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
-            for (size_t i = 0; i < ref_blocks.size(); i++)
-            {
-                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
-            }
+            ASSERT_BLOCKS_EQ(ref_blocks, result_blocks);
         }
     }
     /// case 2, right join with right condition
@@ -904,9 +895,9 @@ try
     /// use 1 build concurrency join 1 probe concurrency as the reference
     ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
     /// case 2.1 table scan join table scan
-    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
     {
-        for (size_t right_index = 0; right_index < right_table_names.size(); right_index++)
+        for (size_t right_index = 0; right_index < right_table_names.size(); ++right_index)
         {
             if (left_index == 0 && right_index == 0)
                 continue;
@@ -919,17 +910,13 @@ try
                           .topN(order_by_items, table_rows * 10)
                           .build(context);
             auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
-            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
-            for (size_t i = 0; i < ref_blocks.size(); i++)
-            {
-                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
-            }
+            ASSERT_BLOCKS_EQ(ref_blocks, result_blocks);
         }
     }
     /// case 2.2 table scan join fine grained exchange receiver
-    for (size_t left_index = 0; left_index < left_table_names.size(); left_index++)
+    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
     {
-        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); right_index++)
+        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); ++right_index)
         {
             order_by_items.clear();
             order_by_items.insert(order_by_items.end(), left_table_order_items[left_index].begin(), left_table_order_items[left_index].end());
@@ -942,11 +929,7 @@ try
                           .topN(order_by_items, table_rows * 10)
                           .build(context);
             auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
-            ASSERT_EQ(ref_blocks.size(), result_blocks.size());
-            for (size_t i = 0; i < ref_blocks.size(); i++)
-            {
-                ASSERT_BLOCK_EQ(ref_blocks[i], result_blocks[i]);
-            }
+            ASSERT_BLOCKS_EQ(ref_blocks, result_blocks);
         }
     }
 }

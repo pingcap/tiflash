@@ -2096,6 +2096,11 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
     return block;
 }
 
+bool Join::needReturnNonJoinedData() const
+{
+    return getFullness(kind);
+}
+
 void Join::joinTotals(Block & block) const
 {
     Block totals_without_keys = totals;

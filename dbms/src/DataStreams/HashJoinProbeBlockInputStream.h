@@ -39,7 +39,6 @@ public:
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
         size_t probe_index,
-        bool has_non_joined_data,
         const String & req_id,
         UInt64 max_block_size);
 
@@ -53,16 +52,22 @@ protected:
     Block getOutputBlock();
 
 private:
+    enum class ProbeStatus
+    {
+        PROBE,
+        WAIT_FOR_READ_NON_JOINED_DATA,
+        READ_NON_JOINED_DATA,
+        FINISHED,
+    };
     void readSuffixImpl() override;
 
     const LoggerPtr log;
     JoinPtr join;
     size_t probe_index;
-    bool has_non_joined_data = false;
-    bool reading_non_joined_data = false;
     ProbeProcessInfo probe_process_info;
     BlockInputStreamPtr non_joined_stream;
     SquashingHashJoinBlockTransform squashing_transform;
+    ProbeStatus status{ProbeStatus::PROBE};
     Block child_header;
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;

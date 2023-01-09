@@ -149,6 +149,20 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column, expected.type->isFloatingPoint());
 }
 
+::testing::AssertionResult blocksEqual(
+    const Blocks & expected,
+    const Blocks & actual)
+{
+    ASSERT_EQUAL(expected.size(), actual.size(), "Blocks size mismatch");
+    for (size_t i = 0; i < expected.size(); i++)
+    {
+        auto cmp_res = blockEqual(expected[i], actual[i]);
+        if (!cmp_res)
+            return cmp_res;
+    }
+    return ::testing::AssertionSuccess();
+}
+
 ::testing::AssertionResult blockEqual(
     const Block & expected,
     const Block & actual)

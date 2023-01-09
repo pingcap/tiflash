@@ -161,7 +161,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         join_ptr,
         probe_side_prepare_actions,
         build_side_prepare_actions,
-        is_tiflash_right_join,
         Block(join_output_schema),
         fine_grained_shuffle);
     return physical_join;
@@ -173,12 +172,12 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
-    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), has_non_joined);
+    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), join_ptr->needReturnNonJoinedData());
     size_t probe_index = 0;
     join_ptr->setProbeConcurrency(probe_pipeline.streams.size());
     for (auto & stream : probe_pipeline.streams)
     {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, has_non_joined, log->identifier(), settings.max_block_size);
+        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
         stream->setExtraInfo(join_probe_extra_info);
     }
 }
