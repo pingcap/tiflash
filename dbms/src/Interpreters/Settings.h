@@ -368,8 +368,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
-    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of  task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                                    \
-    M(SettingUInt64, pipeline_spill_thread_pool_size, 0, "The size of  spill thread pool. 0 means using number_of_logical_cpu_cores.")
+    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                                     \
+    M(SettingUInt64, pipeline_spill_thread_pool_size, 0, "The size of spill thread pool. 0 means using number_of_logical_cpu_cores.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
