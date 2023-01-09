@@ -53,16 +53,20 @@ private:
     struct tm randomLocalTime();
     String randomDate();
     String randomDateTime();
+    String randomDuration();
     String randomDecimal(uint64_t prec, uint64_t scale);
 
     DataTypePtr createDecimalType();
 
+    void genBool(MutableColumnPtr & col);
     void genInt(MutableColumnPtr & col);
     void genUInt(MutableColumnPtr & col);
     void genFloat(MutableColumnPtr & col);
     void genString(MutableColumnPtr & col);
     void genDate(MutableColumnPtr & col);
     void genDateTime(MutableColumnPtr & col);
+    void genDuration(MutableColumnPtr & col);
     void genDecimal(MutableColumnPtr & col, DataTypePtr & data_type);
+    void genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_type);
 };
 } // namespace DB::tests
