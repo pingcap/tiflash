@@ -166,14 +166,16 @@ ProcessList::EntryPtr ProcessList::insert(
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (std::is_same_v<T, UInt64>)
                 {
-                    std::cout << "int branch: " << arg << std::endl;
                     total_memory_tracker->setOrRaiseLimit(arg);
                 }
                 else if constexpr (std::is_same_v<T, double>)
                 {
                     auto total_memory = server_info.has_value() ? server_info.value().memory_info.capacity : 0;
+                    if (total_memory == 0 && arg > 0)
+                    {
+                        LOG_WARNING(&Poco::Logger::get("ProcessList"), "Cannot get total memory from system. Memory limit percent won't take effect. Please set `max_memory_usage_for_all_queries` to an integer value which means limit bytes.");
+                    }
                     auto limit = static_cast<UInt64>(total_memory * arg);
-                    std::cout << "double branch: " << limit << std::endl;
                     total_memory_tracker->setOrRaiseLimit(limit);
                 }
             },
