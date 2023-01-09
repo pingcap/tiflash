@@ -29,8 +29,9 @@ Digest calcDigest(const Block & schema)
     const auto & data = schema.getColumnsWithTypeAndName();
     for (const auto & column_with_type_and_name : data)
     {
-        const auto & type = *(column_with_type_and_name.type);
-        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(&type), sizeof(type));
+        const auto & type = column_with_type_and_name.type->getName();
+        const auto & type_c_str = type.c_str();
+        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(type_c_str), strlen(type_c_str));
 
         const auto & name = column_with_type_and_name.name.c_str();
         SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(name), strlen(name));
