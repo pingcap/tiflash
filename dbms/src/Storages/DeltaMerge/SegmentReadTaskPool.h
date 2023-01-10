@@ -184,7 +184,12 @@ public:
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
+        // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
+        // to encounter empty queues frequently, resulting in too much waiting and thread context
+        // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
         , block_slot_limit(std::max(num_streams_, 3))
+        // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
+        // situations where the computation may be faster and the storage layer may not be able to keep up.
         , active_segment_limit(std::max(num_streams_, 2))
     {}
 
