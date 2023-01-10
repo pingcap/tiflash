@@ -580,5 +580,45 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, SplitAggOutput)
+try
+{
+    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
+    std::vector<size_t> max_block_sizes{1, 2, 9, 19, 40, DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> concurrences{1, 2, 10};
+    std::vector<size_t> expect_rows{15, 200, 1};
+    for (size_t i = 0; i < tables.size(); ++i)
+    {
+        auto request = context
+                           .scan("test_db", tables[i])
+                           .aggregation({Max(col("value"))}, {col("key")})
+                           .build(context);
+        context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+        // 0: use one level
+        // 1: use two level
+        std::vector<UInt64> two_level_thresholds{0, 1};
+        for (auto two_level_threshold : two_level_thresholds)
+        {
+            for (auto block_size : max_block_sizes)
+            {
+                for (auto concurrency : concurrences)
+                {
+                    context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+                    size_t actual_row = 0;
+                    for (auto & block : blocks)
+                    {
+                        ASSERT(block.rows() <= block_size);
+                        actual_row += block.rows();
+                    }
+                    ASSERT_EQ(actual_row, expect_rows[i]);
+                }
+            }
+        }
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
