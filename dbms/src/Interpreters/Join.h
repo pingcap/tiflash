@@ -187,7 +187,7 @@ public:
     /// Reference to the row in block.
     struct RowRef
     {
-        const Block * block;   // block + row num
+        const Block * block;
         size_t row_num;
 
         RowRef() = default;

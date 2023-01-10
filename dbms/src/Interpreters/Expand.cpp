@@ -61,7 +61,7 @@ void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
 
 /// for cases like: select count(distinct a), count(distinct b) from t;
 /// it will generate 2 group set with <a> and <b>, over which we should
-/// repeat one more replica of the source rows from the input block and
+/// expand one more replica of the source rows from the input block and
 /// identify it with the grouping id in the appended new column.
 ///
 /// eg: source block         ==>        replicated block
@@ -111,7 +111,7 @@ void Expand::replicateAndFillNull(Block & block) const
         {
             // start from 1.
             Field grouping_id = j + 1;
-            added_grouping_id_column[0]->insert(grouping_id);
+            added_grouping_id_column[0]->insert(grouping_id); 
         }
     }
     // todo: for some column overlapping in different grouping set, we should copy the overlapped column as a new column
@@ -120,11 +120,11 @@ void Expand::replicateAndFillNull(Block & block) const
     // replicate the original block rows.
     size_t existing_columns = block.columns();
 
-    if (offsets_to_replicate && offsets_to_replicate->size() > 0)
+    if (offsets_to_replicate)
     {
         for (size_t i = 0; i < existing_columns; ++i)
         {
-            // expand the origin const column, since it may be filled with null value when repeating.
+            // expand the origin const column, since it may be filled with null value when expanding.
             if (block.safeGetByPosition(i).column->isColumnConst())
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->convertToFullColumnIfConst();
 
@@ -133,8 +133,9 @@ void Expand::replicateAndFillNull(Block & block) const
             {
                 convertColumnToNullable(block.getByPosition(i));
             }
-            // replicate it.
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
+            if (!offsets_to_replicate->empty())
+                // replicate it.
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
         }
     }
 

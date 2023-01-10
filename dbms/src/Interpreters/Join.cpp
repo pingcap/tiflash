@@ -866,7 +866,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         std::lock_guard lk(blocks_lock);
         total_input_build_rows += block.rows();
         blocks.push_back(block);
-        // block cp
         stored_block = &blocks.back();
         original_blocks.push_back(block);
     }
@@ -1677,7 +1676,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     for (size_t i = 0; i < num_columns_to_add; ++i)
-    {  
+    {
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }

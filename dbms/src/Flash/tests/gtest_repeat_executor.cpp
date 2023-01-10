@@ -19,7 +19,7 @@ namespace DB
 {
 namespace tests
 {
-class RepeatExecutorTestRunner : public DB::tests::ExecutorTest
+class ExpandExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
@@ -36,13 +36,13 @@ public:
     }
 };
 
-TEST_F(RepeatExecutorTestRunner, RepeatLogical)
+TEST_F(ExpandExecutorTestRunner, ExpandLogical)
 try
 {
-    /// case 1
+    /// case 1block.getByName(grouping_col).column->isColumnNullable()
     auto request = context
                        .scan("test_db", "test_table")
-                       .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                       .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                        .build(context);
     /// data flow:
     ///
@@ -70,7 +70,7 @@ try
     request = context
                   .scan("test_db", "test_table")
                   .filter(eq(col("s1"), col("s2")))
-                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .build(context);
     /// data flow:
     ///
@@ -97,10 +97,10 @@ try
     /// case 3: this case is only for non-planner mode.
     /// request = context
     ///                 .scan("test_db", "test_table")
-    ///                 .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+    ///                 .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
     ///                 .filter(eq(col("s1"), col("s2")))
     ///                 .build(context);
-    /// data flow: TiFlash isn't aware of the operation sequence, this filter here will be run before repeat does just like the second test case above.
+    /// data flow: TiFlash isn't aware of the operation sequence, this filter here will be run before expand does just like the second test case above.
     /// since this case is only succeed under planner-disabled mode, just comment and assert the result here for a note.
     ///
     /// executeAndAssertColumnsEqual(
@@ -114,7 +114,7 @@ try
     request = context
                   .scan("test_db", "test_table")
                   .filter(const_false)                      // refuse all rows
-                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .build(context);
     executeAndAssertColumnsEqual(
         request,
@@ -133,7 +133,7 @@ try
     request = context
                   .scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .build(context);
     /// data flow:
     ///
@@ -167,7 +167,7 @@ try
     request = context
                   .scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .project({"count(s1)"})
                   .build(context);
     executeAndAssertColumnsEqual(
@@ -175,11 +175,11 @@ try
         {toNullableVec<UInt64>({1, {}, 0, {}, 1,{}})});
 
     /// case 6   (test integrated with aggregation and projection and limit) 1
-    /// note: by now, limit is executed before repeat does to reduce unnecessary row repeat work.
+    /// note: by now, limit is executed before expand does to reduce unnecessary row expand work.
     /// request = context
     ///               .scan("test_db", "test_table")
     ///               .aggregation({Count(col("s1"))}, {col("s2")})
-    ///               .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+    ///               .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
     ///               .limit(2)
     ///               .project({"count(s1)"})
     ///               .build(context);
@@ -197,12 +197,12 @@ try
     ///    1      "banana"
     ///          |
     ///          v
-    ///  count(s1)   s2                    // limit precede the repeat OP since they are in the same DAG query block.
+    ///  count(s1)   s2                    // limit precede the expand OP since they are in the same DAG query block.
     ///    1      "apple"
     ///    0       NULL
     ///          |
     ///          v
-    ///  count(s1)   s2      groupingID    // repeat is always arranged executed after limit to avoid unnecessary replication in the same DAG query block.
+    ///  count(s1)   s2      groupingID    // expand is always arranged executed after limit to avoid unnecessary replication in the same DAG query block.
     ///    1        NULL        1
     ///   NULL     "apple"      2
     ///    0        NULL        1
@@ -227,7 +227,7 @@ try
     request = context
                   .scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .project({"count(s1)"})
                   .topN({{"count(s1)", true}}, 2)
                   .build(context);
@@ -245,7 +245,7 @@ try
     ///    1      "banana"                                                    |
     ///          |                                                            +------------->  Child DAG Query Block
     ///          v                                                            |
-    ///  count(s1)   s2      groupingID   // repeat                           |
+    ///  count(s1)   s2      groupingID   // expand                           |
     ///    1        NULL        1                                             |
     ///   NULL     "apple"      2                                             |
     ///    0        NULL        1                                             |
@@ -277,9 +277,9 @@ try
     ///    1                                                                  |
     ///                                                        ---------------+
     ///
-    ///  Note: you can see some difference from this plan and the last one above, since projection between repeat and topN is a SOURCE node,
-    ///        it will isolate whole DAG into two independent DAG query blocks, limit and repeat OP take a place in each one of them. So we
-    ///        couldn't guarantee that letting repeat OP run after limit does, which can't reduce unnecessary replication work. DAG query block
+    ///  Note: you can see some difference from this plan and the last one above, since projection between expand and topN is a SOURCE node,
+    ///        it will isolate whole DAG into two independent DAG query blocks, limit and expand OP take a place in each one of them. So we
+    ///        couldn't guarantee that letting expand OP run after limit does, which can't reduce unnecessary replication work. DAG query block
     ///        division should be blamed here.
     ///
     executeAndAssertColumnsEqual(
@@ -300,7 +300,7 @@ try
     request = context
                   .receive("exchange1")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .repeat(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
                   .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
                   .project({"count(s1)", "groupingID"})
                   .topN({{"groupingID", true}}, 2)
@@ -319,7 +319,7 @@ try
     ///    1      "banana"                                                    |
     ///          |                                                            +------------->  Child of Child DAG Query Block
     ///          v                                                            |
-    ///  count(s1)   s2      groupingID   // repeat                           |
+    ///  count(s1)   s2      groupingID   // expand                           |
     ///    1        NULL        1                                             |
     ///   NULL     "apple"      2                                             |
     ///    0        NULL        1                                             |
@@ -372,7 +372,7 @@ CreatingSets
         Expression: <remove useless column after join>
          HashJoinProbe: <join probe, join_executor_id = Join_5>
           Expression: <final projection>
-           RepeatSource: <repeat source, repeat_executor_id = repeat_source_2>: grouping set [<{count(s1)_collator_46 }><{any(s2)_collator_46 }>]
+           Expand: <expand, expand_executor_id = expand_2>: grouping set [<{count(s1)_collator_46 }><{any(s2)_collator_46 }>]
             Expression: <expr after aggregation>
              SharedQuery: <restore concurrency>
               ParallelAggregating, max_threads: 10, final: true

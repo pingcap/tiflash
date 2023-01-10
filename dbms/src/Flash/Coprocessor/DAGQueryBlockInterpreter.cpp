@@ -586,7 +586,7 @@ void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const t
 // 3. construct a final projection, even if it's not necessary. just construct it.
 // Talking about projection, it has the following rules.
 // 1. if the query block does not contain agg, then the final project is the same as the source Executor
-// 2. if the query block contains agg/repeat, then the final project is the same as agg/repeat Executor
+// 2. if the query block contains agg/expand, then the final project is the same as agg/expand Executor
 // 3. if the cop task may contains more then 1 query block, and the current query block is not the root
 //    query block, then the project should add an alias for each column that needs to be projected, something
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
@@ -694,12 +694,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
-    // execute the repeat source OP after all filter/limits and so on.
-    // since repeat source OP has some row replication work to do, place it after limit can reduce some unnecessary burden.
+    // execute the expand OP after all filter/limits and so on.
+    // since expand OP has some row replication work to do, place it after limit can reduce some unnecessary burden.
     // and put it before the final projection, because we should recognize some base col as grouping set col before change their alias.
     if (res.before_expand)
     {
-        executeExpandSource(pipeline, res.before_expand);
+        executeExpand(pipeline, res.before_expand);
         recordProfileStreams(pipeline, query_block.expand_name);
     }
 
@@ -746,7 +746,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeExpandSource(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
+void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
 {
     pipeline.transform([&](auto &stream) {
         stream = std::make_shared<ExpandBlockInputStream>(stream, expr);

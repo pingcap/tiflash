@@ -50,13 +50,6 @@ public:
 TEST_F(InterpreterExecuteTest, SingleQueryBlock)
 try
 {
-
-    //auto grouping_sets = MockVecColumnNameVec{MockColumnNameVec{"s1"}, MockColumnNameVec{"s2"}};
-    //    auto request = context.scan("test_db", "test_table_1").repeat(grouping_sets).build(context);
-    //    {
-    //        ASSERT_BLOCKINPUTSTREAM_EQAUL("", request, 10);
-    //    }
-
     auto request = context.scan("test_db", "test_table_1")
                        .filter(eq(col("s2"), col("s3")))
                        .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})

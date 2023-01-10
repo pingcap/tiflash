@@ -117,7 +117,7 @@ public:
     // replicateAndFillNull is the basic functionality that Expand Operator provided. Briefly, it replicates
     // origin rows with regard to local grouping sets description, and appending a new column named as groupingID
     // to illustrate what group this row is targeted for.
-    void replicateAndFillNull(Block & input) const;
+    void replicateAndFillNull(Block & block) const;
 
     size_t getGroupSetNum() const {return group_sets_names.size();}
 

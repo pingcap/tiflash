@@ -41,51 +41,51 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     if (unlikely(expand.grouping_sets().empty()))
     {
         //should not reach here
-        throw TiFlashException("Repeat executor without grouping sets", Errors::Planner::BadRequest);
+        throw TiFlashException("Expand executor without grouping sets", Errors::Planner::BadRequest);
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr before_repeat_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
 
 
-    auto shared_repeat = analyzer.buildExpandGroupingColumns(expand, before_repeat_actions);
+    auto shared_expand = analyzer.buildExpandGroupingColumns(expand, before_expand_actions);
 
     // construct sample block.
-    NamesAndTypes repeat_output_columns;
+    NamesAndTypes expand_output_columns;
     auto child_header = child->getSchema();
     for (const auto & one : child_header)
     {
-        repeat_output_columns.emplace_back(one.name, shared_repeat->isInGroupSetColumn(one.name)? makeNullable(one.type): one.type);
+        expand_output_columns.emplace_back(one.name, shared_expand->isInGroupSetColumn(one.name)? makeNullable(one.type): one.type);
     }
-    repeat_output_columns.emplace_back(shared_repeat->grouping_identifier_column_name, shared_repeat->grouping_identifier_column_type);
+    expand_output_columns.emplace_back(shared_expand->grouping_identifier_column_name, shared_expand->grouping_identifier_column_type);
 
-    auto physical_repeat = std::make_shared<PhysicalExpand>(
+    auto physical_expand = std::make_shared<PhysicalExpand>(
         executor_id,
-        repeat_output_columns,
+        expand_output_columns,
         log->identifier(),
         child,
-        shared_repeat,
-        Block(repeat_output_columns));
+        shared_expand,
+        Block(expand_output_columns));
 
-    return physical_repeat;
+    return physical_expand;
 }
 
 
-void PhysicalExpand::repeatTransform(DAGPipeline & child_pipeline, Context & context)
+void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline, Context & context)
 {
-    auto repeat_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader(), context);
-    repeat_actions->add(ExpressionAction::expandSource(shared_expand));
-    String repeat_extra_info = fmt::format("repeat source, repeat_executor_id = {}", execId());
+    auto expand_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader(), context);
+    expand_actions->add(ExpressionAction::expandSource(shared_expand));
+    String expand_extra_info = fmt::format("expand, expand_executor_id = {}", execId());
     child_pipeline.transform([&](auto &stream) {
-        stream = std::make_shared<ExpandBlockInputStream>(stream, repeat_actions);
-        stream->setExtraInfo(repeat_extra_info);
+        stream = std::make_shared<ExpandBlockInputStream>(stream, expand_actions);
+        stream->setExtraInfo(expand_extra_info);
     });
 }
 
 void PhysicalExpand::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     child->transform(pipeline, context, max_streams);
-    repeatTransform(pipeline, context);
+    expandTransform(pipeline, context);
 }
 
 void PhysicalExpand::finalize(const Names & parent_require)

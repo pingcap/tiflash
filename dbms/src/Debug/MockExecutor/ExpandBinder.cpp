@@ -40,7 +40,7 @@ bool ExpandBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-ExecutorBinderPtr compileRepeat(ExecutorBinderPtr input, size_t & executor_index, MockVVecGroupingNameVec grouping_set_columns, std::set<String> in_set)
+ExecutorBinderPtr compileExpand(ExecutorBinderPtr input, size_t & executor_index, MockVVecGroupingNameVec grouping_set_columns, std::set<String> in_set)
 {
     DAGSchema output_schema;
     for (const auto & field : input->output_schema)

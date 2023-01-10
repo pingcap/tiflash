@@ -69,7 +69,7 @@ private:
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle);
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
-    void executeExpandSource(DAGPipeline & pipeline, const ExpressionActionsPtr & expr);
+    void executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr);
     void executeWindow(
         DAGPipeline & pipeline,
         WindowDescription & window_description,

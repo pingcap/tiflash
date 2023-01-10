@@ -100,9 +100,8 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
-bool collectForRepeat(std::vector<tipb::FieldType> &out_field_types, const tipb::Executor & executor)
+bool collectForExpand(std::vector<tipb::FieldType> &out_field_types, const tipb::Executor & executor)
 {
-
     auto &out_child_fields = out_field_types;
     // collect output_field_types of children
     getChildren(executor).forEach([&out_child_fields](const tipb::Executor & child) {
@@ -231,7 +230,7 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
     case tipb::ExecType::TypeJoin:
         return collectForJoin(output_field_types, executor);
     case tipb::ExecType::TypeExpand:
-        return collectForRepeat(output_field_types, executor);
+        return collectForExpand(output_field_types, executor);
     default:
         return true;
     }

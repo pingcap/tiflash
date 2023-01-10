@@ -38,12 +38,12 @@ public:
         const PhysicalPlanNodePtr & child_,
         const std::shared_ptr<Expand> & shared_expand,
         const Block & sample_block_)
-        : PhysicalUnary(executor_id_, PlanType::Repeat, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::Expand, schema_, req_id, child_)
         , shared_expand(shared_expand), sample_block(sample_block_){}
 
     void finalize(const Names & parent_require) override;
 
-    void repeatTransform(DAGPipeline & child_pipeline, Context & context);
+    void expandTransform(DAGPipeline & child_pipeline, Context & context);
 
     const Block & getSampleBlock() const override;
 

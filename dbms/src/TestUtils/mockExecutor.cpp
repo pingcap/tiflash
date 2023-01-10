@@ -362,7 +362,7 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::repeat(MockVVecColumnNameVec grouping_set_columns)
+DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set_columns)
 {
     assert(root);
     auto grouping_sets_ast =  mock::MockVVecGroupingNameVec();
@@ -381,7 +381,7 @@ DAGRequestBuilder & DAGRequestBuilder::repeat(MockVVecColumnNameVec grouping_set
         }
         grouping_sets_ast.emplace_back(std::move(grouping_set_ast));
     }
-    root = compileRepeat(root, getExecutorIndex(), grouping_sets_ast, grouping_col_collection);
+    root = compileExpand(root, getExecutorIndex(), grouping_sets_ast, grouping_col_collection);
     return *this;
 }
 

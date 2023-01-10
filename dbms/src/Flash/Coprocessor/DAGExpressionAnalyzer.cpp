@@ -857,9 +857,9 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(
     chain.finalize();
     chain.clear();
 
-    auto & after_repeat_step = initAndGetLastStep(chain);
+    auto & after_expand_step = initAndGetLastStep(chain);
     for (const auto & column : getCurrentInputColumns())
-        after_repeat_step.required_output.push_back(column.name);
+        after_expand_step.required_output.push_back(column.name);
     return before_expand;
 }
 

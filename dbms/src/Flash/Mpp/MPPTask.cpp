@@ -339,7 +339,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
 void MPPTask::preprocess()
 {
-    auto start_time = Clock::now();  
+    auto start_time = Clock::now();
     initExchangeReceivers();
     LOG_DEBUG(log, "init exchange receiver done");
     query_executor_holder.set(queryExecute(*context));

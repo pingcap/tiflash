@@ -147,8 +147,8 @@ public:
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
-    // repeat
-    DAGRequestBuilder & repeat(MockVVecColumnNameVec grouping_set_columns);
+    // expand
+    DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
 
     void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }

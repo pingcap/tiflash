@@ -39,5 +39,5 @@ private:
     MockVVecGroupingNameVec grouping_sets_columns;
 };
 
-ExecutorBinderPtr compileRepeat(ExecutorBinderPtr input, size_t & executor_index, MockVVecGroupingNameVec grouping_set_columns, std::set<String> set);
+ExecutorBinderPtr compileExpand(ExecutorBinderPtr input, size_t & executor_index, MockVVecGroupingNameVec grouping_set_columns, std::set<String> set);
 } // namespace DB::mock
