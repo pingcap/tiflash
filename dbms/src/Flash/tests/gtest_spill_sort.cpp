@@ -64,6 +64,9 @@ try
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, original_max_streams));
+    /// enable spill and use small max_spilled_size_per_spill
+    context.context.setSetting("max_spilled_size_per_spill", Field(static_cast<UInt64>(total_data_size / 100)));
+    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, original_max_streams));
 }
 CATCH
 } // namespace tests
