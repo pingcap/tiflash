@@ -29,8 +29,8 @@
 
 namespace DB
 {
-class PageReceiver;
-using PageReceiverPtr = std::shared_ptr<PageReceiver>;
+class PageDownloader;
+using PageDownloaderPtr = std::shared_ptr<PageDownloader>;
 namespace DM
 {
 
@@ -42,7 +42,7 @@ public:
     static BlockInputStreams buildInputStreams(
         const Context & db_context,
         const RemoteReadTaskPtr & remote_read_tasks,
-        const PageReceiverPtr & page_receiver,
+        const PageDownloaderPtr & page_downloader,
         const DM::ColumnDefinesPtr & columns_to_read,
         UInt64 read_tso,
         size_t num_streams,
@@ -54,7 +54,7 @@ public:
     RemoteSegmentThreadInputStream(
         const Context & db_context_,
         RemoteReadTaskPtr read_tasks_,
-        PageReceiverPtr page_receiver_,
+        PageDownloaderPtr page_downloader_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
         UInt64 max_version_,
@@ -79,7 +79,7 @@ protected:
 private:
     const Context & db_context;
     RemoteReadTaskPtr read_tasks;
-    PageReceiverPtr page_receiver;
+    PageDownloaderPtr page_downloader;
     ColumnDefines columns_to_read;
     RSOperatorPtr filter;
     Block header;

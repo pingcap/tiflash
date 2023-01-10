@@ -18,6 +18,8 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id);
+    
+    ~PageDownloader();
 
 private:
     void persistLoop(size_t idx);

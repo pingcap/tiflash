@@ -71,17 +71,12 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_buffer_size(std::max<size_t>(16, max_streams_ * 2))
-    , persist_threads_num(max_streams_)
     , thread_manager(newThreadManager())
     , live_connections(source_num)
     , state(PageReceiverState::NORMAL)
-    , live_persisters(persist_threads_num)
-    , persister_state(PageReceiverState::NORMAL)
     , collected(false)
     , thread_count(0)
     , exc_log(Logger::get(req_id, executor_id))
-    , total_rows(0)
-    , total_pages(0)
 {
     try
     {
@@ -89,8 +84,6 @@ PageReceiverBase<RPCContext>::PageReceiverBase(
         msg_channel = std::make_unique<MPMCQueue<PageReceivedMessagePtr>>(max_buffer_size);
         // setup fetch threads to fetch pages/blocks from write nodes
         setUpConnection();
-        // setup persist threads to pop msg (pages/blocks) and write down
-        setUpPersist();
     }
     catch (...)
     {
@@ -149,109 +142,6 @@ void PageReceiverBase<RPCContext>::setUpConnection()
         });
         ++thread_count;
     }
-}
-
-template <typename RPCContext>
-void PageReceiverBase<RPCContext>::setUpPersist()
-{
-    for (size_t index = 0; index < persist_threads_num; ++index)
-    {
-        thread_manager->schedule(true, "Persister", [this, index] {
-            persistLoop(index);
-        });
-        ++thread_count;
-    }
-}
-
-template <typename RPCContext>
-void PageReceiverBase<RPCContext>::persistLoop(size_t idx)
-{
-    LoggerPtr log = exc_log->getChild(fmt::format("persist{}", idx));
-
-    bool meet_error = false;
-    String local_err_msg;
-
-    while (!meet_error)
-    {
-        try
-        {
-            // no more results
-            if (!consumeOneResult(log))
-                break;
-        }
-        catch (...)
-        {
-            meet_error = true;
-            local_err_msg = getCurrentExceptionMessage(false);
-        }
-    }
-
-    // persist loop done
-    Int32 copy_persister_num = -1;
-    {
-        std::unique_lock lock(mu);
-        if (meet_error)
-        {
-            if (persister_state == PageReceiverState::NORMAL)
-                persister_state = PageReceiverState::ERROR;
-            if (persister_err_msg.empty())
-                persister_err_msg = local_err_msg;
-        }
-        copy_persister_num = --live_persisters;
-    }
-
-    LOG_DEBUG(
-        log,
-        "persist end. meet error: {}{}, current alive persister: {}",
-        meet_error,
-        meet_error ? fmt::format(", err msg: {}", local_err_msg) : "",
-        copy_persister_num);
-
-    if (copy_persister_num < 0)
-    {
-        throw Exception("live_persisters should not be less than 0!");
-    }
-    else if (copy_persister_num == 0)
-    {
-        LOG_DEBUG(log, "All persist threads end in PageReceiver");
-        String copy_persister_msg;
-        {
-            std::unique_lock lock(mu);
-            copy_persister_msg = persister_err_msg;
-        }
-        rpc_context->finishAllReceivingTasks(copy_persister_msg);
-
-        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_fetch_page).Observe(watch.elapsedSeconds());
-    }
-}
-
-template <typename RPCContext>
-bool PageReceiverBase<RPCContext>::consumeOneResult(const LoggerPtr & log)
-{
-    // TODO: this does not make sense. maybe we need another class for
-    // saving the pages/block
-    DM::ColumnDefines columns_to_read;
-    Block sample_block = DM::toEmptyBlock(columns_to_read);
-
-    auto decoder_ptr = std::make_unique<CHBlockChunkCodec>(sample_block);
-
-    auto result = nextResult(0, decoder_ptr);
-    if (result.eof())
-    {
-        LOG_DEBUG(log, "fetch reader meets eof");
-        return false;
-    }
-    if (!result.ok())
-    {
-        LOG_WARNING(log, "fetch reader meets error: {}", result.error_msg);
-        throw Exception(result.error_msg);
-    }
-
-    const auto decode_detail = result.decode_detail;
-    total_rows += decode_detail.rows;
-    total_pages += decode_detail.pages;
-
-    return true;
 }
 
 template <typename RPCContext>

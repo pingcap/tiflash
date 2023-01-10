@@ -45,14 +45,12 @@ enum class SegmentReadTaskState
     Error,
     Receiving,
     // All data are ready for reading
-    AllReady,
+    DataReady,
     // The data are ready for reading, doing place index to
     // speed up later reading
-    AllReadyPrepraring,
+    DataReadyAndPrepraring,
     // The data are ready for reading with some preparation done
-    AllReadyPrepared,
-    //
-    Reading,
+    DataReadyAndPrepared,
 };
 
 class RemoteReadTask

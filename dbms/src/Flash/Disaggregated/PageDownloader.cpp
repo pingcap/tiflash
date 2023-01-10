@@ -1,13 +1,13 @@
+#include <Common/Exception.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/PageDownloader.h>
 #include <Flash/Disaggregated/PageReceiver.h>
 #include <IO/IOThreadPool.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
+#include <common/logger_useful.h>
 
 #include <future>
-
-#include "Flash/Coprocessor/CHBlockChunkCodec.h"
-#include "Storages/DeltaMerge/DeltaMergeHelpers.h"
-#include "Storages/DeltaMerge/Remote/RemoteReadTask.h"
-#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -31,14 +31,37 @@ PageDownloader::PageDownloader(
     assert(columns_to_read != nullptr);
     decoder_ptr = std::make_unique<CHBlockChunkCodec>(DM::toEmptyBlock(*columns_to_read));
 
-    for (size_t index = 0; index < threads_num; ++index)
+    try
     {
-        auto task = std::make_shared<std::packaged_task<void()>>([this, index] {
-            persistLoop(index);
-        });
-        persist_threads.emplace_back(task->get_future());
+        for (size_t index = 0; index < threads_num; ++index)
+        {
+            auto task = std::make_shared<std::packaged_task<void()>>([this, index] {
+                persistLoop(index);
+            });
+            persist_threads.emplace_back(task->get_future());
 
-        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+            IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        throw;
+    }
+}
+
+PageDownloader::~PageDownloader()
+{
+    for (auto & task : persist_threads)
+    {
+        try
+        {
+            task.get();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
     }
 }
 
@@ -68,6 +91,7 @@ void PageDownloader::persistLoop(size_t idx)
     downloadDone(meet_error, local_err_msg, log);
 
     // try to do some preparation for speed up reading
+    size_t num_prepared = 0;
     while (true)
     {
         auto seg_task = remote_read_tasks->nextTaskForPrepare();
@@ -75,9 +99,11 @@ void PageDownloader::persistLoop(size_t idx)
             break;
         // do place index
         seg_task->prepare();
+        num_prepared += 1;
         // update the state
-        remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::AllReadyPrepared, false);
+        remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReadyAndPrepared, false);
     }
+    LOG_INFO(log, "Done preparation for {} segment tasks", num_prepared);
 }
 
 void PageDownloader::downloadDone(bool meet_error, const String & local_err_msg, const LoggerPtr & log)

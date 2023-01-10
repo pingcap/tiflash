@@ -280,7 +280,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         auto sub_streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
             db_context,
             remote_read_tasks,
-            page_receiver,
+            page_downloader,
             column_defines,
             read_tso,
             sub_streams_size,
