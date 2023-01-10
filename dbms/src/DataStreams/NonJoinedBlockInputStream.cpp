@@ -263,7 +263,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
                     [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
                 it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
                 end = map.getSegmentTable(current_segment).end();
-            } while (*it == end && current_segment < map.getSegmentSize() - step);
+            } while (*it == end && current_segment + step < map.getSegmentSize());
             if (*it == end)
                 break;
         }
