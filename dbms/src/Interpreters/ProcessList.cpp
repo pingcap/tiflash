@@ -85,7 +85,7 @@ ProcessList::EntryPtr ProcessList::insert(
     const IAST * ast,
     const ClientInfo & client_info,
     const Settings & settings,
-    const std::optional<ServerInfo> & server_info)
+    const UInt64 total_memory)
 {
     EntryPtr res;
 
@@ -163,25 +163,8 @@ ProcessList::EntryPtr ProcessList::insert(
             /// You should specify this value in configuration for default profile,
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
-            std::visit([&](auto && arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, UInt64>)
-                {
-                    total_memory_tracker->setOrRaiseLimit(arg);
-                }
-                else if constexpr (std::is_same_v<T, double>)
-                {
-                    auto total_memory = server_info.has_value() ? server_info.value().memory_info.capacity : 0;
-                    if (total_memory == 0 && arg > 0)
-                    {
-                        LOG_WARNING(&Poco::Logger::get("ProcessList"), "Cannot get total memory from system. Memory limit percent won't take effect. Please set `max_memory_usage_for_all_queries` to an integer value which means limit bytes.");
-                    }
-                    auto limit = static_cast<UInt64>(total_memory * arg);
-                    total_memory_tracker->setOrRaiseLimit(limit);
-                }
-            },
-                       settings.max_memory_usage_for_all_queries.get());
 
+            total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries.getActualBytes(total_memory));
             total_memory_tracker->setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker->setDescription("(total)");
             total_memory_tracker->setAccuracyDiffForTest(settings.memory_tracker_accuracy_diff_for_test);

@@ -418,6 +418,8 @@ public:
     void write(WriteBuffer & buf) const;
     UInt64OrDouble get() const;
 
+    UInt64 getActualBytes(UInt64 total_ram) const;
+
 private:
     UInt64OrDouble value;
 };
