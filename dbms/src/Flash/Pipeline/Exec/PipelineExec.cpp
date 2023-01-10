@@ -22,7 +22,7 @@ namespace DB
         return OperatorStatus::CANCELLED;
 
 /**
- *     sink     transform     ...     transform    source
+ *  sink_op   transform_op    ...   transform_op   source_op
  *
  *  prepare───►fetchBlock───► ... ───►fetchBlock───►read────┐
  *                                                          │ block
@@ -31,61 +31,64 @@ namespace DB
 OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
 {
     Block block;
-    size_t transform_index = 0;
-    auto op_status = fetchBlock(block, transform_index, exec_status);
+    size_t transform_op_index = 0;
+    auto op_status = fetchBlock(block, transform_op_index, exec_status);
     if (op_status != OperatorStatus::PASS)
         return op_status;
 
     // start from the next transform after fetch block transform.
-    for (; transform_index < transforms.size(); ++transform_index)
+    for (; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
         CHECK_IS_CANCELLED(exec_status);
-        auto op_status = transforms[transform_index]->transform(block);
+        auto op_status = transform_ops[transform_op_index]->transform(block);
         if (op_status != OperatorStatus::PASS)
-            return prepareSpillOp(op_status, transforms[transform_index]);
+            return prepareSpillOp(op_status, transform_ops[transform_op_index]);
     }
     CHECK_IS_CANCELLED(exec_status);
-    return prepareSpillOp(sink->write(std::move(block)), sink);
+    return prepareSpillOp(sink_op->write(std::move(block)), sink_op);
 }
 
-// try fetch block from transforms and source.
-OperatorStatus PipelineExec::fetchBlock(Block & block, size_t & transform_index, PipelineExecutorStatus & exec_status)
+// try fetch block from transform_ops and source_op.
+OperatorStatus PipelineExec::fetchBlock(
+    Block & block,
+    size_t & transform_op_index,
+    PipelineExecutorStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
-    auto op_status = sink->prepare();
+    auto op_status = sink_op->prepare();
     if (op_status != OperatorStatus::PASS)
-        return prepareSpillOp(op_status, sink);
-    for (int64_t index = transforms.size() - 1; index >= 0; --index)
+        return prepareSpillOp(op_status, sink_op);
+    for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         CHECK_IS_CANCELLED(exec_status);
-        auto op_status = transforms[index]->fetchBlock(block);
+        auto op_status = transform_ops[index]->fetchBlock(block);
         if (op_status != OperatorStatus::NO_OUTPUT)
         {
             // Once the transform fetch block has succeeded, execution will begin with the next transform.
-            transform_index = index + 1;
-            return prepareSpillOp(op_status, transforms[index]);
+            transform_op_index = index + 1;
+            return prepareSpillOp(op_status, transform_ops[index]);
         }
     }
     CHECK_IS_CANCELLED(exec_status);
-    transform_index = 0;
-    return prepareSpillOp(source->read(block), source);
+    transform_op_index = 0;
+    return prepareSpillOp(source_op->read(block), source_op);
 }
 
 OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
 
-    auto op_status = sink->await();
+    auto op_status = sink_op->await();
     if (op_status != OperatorStatus::PASS)
         return op_status;
-    for (auto it = transforms.rbegin(); it != transforms.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
     {
         // if one of the transform return ready status, we don't need to check the upstream operator.
         auto op_status = (*it)->await();
         if (op_status != OperatorStatus::SKIP)
             return op_status;
     }
-    return source->await();
+    return source_op->await();
 }
 
 OperatorStatus PipelineExec::spill(PipelineExecutorStatus & exec_status)

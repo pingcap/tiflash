@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/SpillThreadPool.h>
-#include <Flash/Pipeline/Schedule/Task.h>
+#include <Flash/Pipeline/Schedule/Task/Task.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/WaitReactor.h>
 

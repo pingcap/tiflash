@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/SpillThreadPool.h>
-#include <Flash/Pipeline/Schedule/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
 #include <common/likely.h>

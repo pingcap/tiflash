@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
 #include <common/likely.h>

@@ -23,7 +23,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransform.h>
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -148,7 +148,7 @@ void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_buil
     if (project_actions && !project_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransform(std::make_unique<ExpressionTransform>(project_actions, log->identifier()));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(project_actions, log->identifier()));
         });
     }
 }

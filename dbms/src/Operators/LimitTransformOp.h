@@ -15,20 +15,20 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/FilterTransformAction.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-class FilterTransform : public TransformOp
+struct GlobalLimitTransformAction;
+using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
+
+class LimitTransformOp : public TransformOp
 {
 public:
-    explicit FilterTransform(
-        const Block & input_header,
-        const ExpressionActionsPtr & expression,
-        const String & filter_column_name,
+    LimitTransformOp(
+        const GlobalLimitPtr & action_,
         const String & req_id)
-        : filter_transform_action(input_header, expression, filter_column_name)
+        : action(action_)
         , log(Logger::get(req_id))
     {}
 
@@ -37,7 +37,7 @@ public:
     void transformHeader(Block & header) override;
 
 private:
-    FilterTransformAction filter_transform_action;
+    GlobalLimitPtr action;
     const LoggerPtr log;
 };
 } // namespace DB

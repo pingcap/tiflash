@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Task.h>
+#include <Flash/Pipeline/Schedule/Task/Task.h>
 
 #include <list>
 #include <mutex>

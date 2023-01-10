@@ -16,7 +16,7 @@
 
 #include <Common/MemoryTracker.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Pipeline/Schedule/Task.h>
+#include <Flash/Pipeline/Schedule/Task/Task.h>
 
 namespace DB
 {

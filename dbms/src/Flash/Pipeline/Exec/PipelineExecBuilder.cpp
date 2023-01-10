@@ -16,34 +16,34 @@
 
 namespace DB
 {
-void PipelineExecBuilder::setSource(SourcePtr && source_)
+void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 {
-    assert(!source && source_);
-    source = std::move(source_);
+    assert(!source_op && source_op_);
+    source_op = std::move(source_op_);
     assert(!header);
-    header = source->readHeader();
+    header = source_op->readHeader();
     assert(header);
 }
-void PipelineExecBuilder::appendTransform(TransformPtr && transform)
+void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
-    assert(source && transform);
-    transforms.push_back(std::move(transform));
-    transforms.back()->transformHeader(header);
+    assert(source_op && transform_op);
+    transform_ops.push_back(std::move(transform_op));
+    transform_ops.back()->transformHeader(header);
     assert(header);
 }
-void PipelineExecBuilder::setSink(SinkPtr && sink_)
+void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
-    assert(header && !sink && sink_);
-    sink = std::move(sink_);
+    assert(header && !sink_op && sink_op_);
+    sink_op = std::move(sink_op_);
 }
 
 PipelineExecPtr PipelineExecBuilder::build()
 {
-    assert(source && sink);
+    assert(source_op && sink_op);
     return std::make_unique<PipelineExec>(
-        std::move(source),
-        std::move(transforms),
-        std::move(sink));
+        std::move(source_op),
+        std::move(transform_ops),
+        std::move(sink_op));
 }
 
 void PipelineExecGroupBuilder::init(size_t init_concurrency)

@@ -20,15 +20,15 @@ namespace DB
 {
 struct PipelineExecBuilder
 {
-    SourcePtr source;
-    Transforms transforms;
-    SinkPtr sink;
+    SourceOpPtr source_op;
+    TransformOps transform_ops;
+    SinkOpPtr sink_op;
 
     Block header;
 
-    void setSource(SourcePtr && source_);
-    void appendTransform(TransformPtr && transform);
-    void setSink(SinkPtr && sink_);
+    void setSourceOp(SourceOpPtr && source_op_);
+    void appendTransformOp(TransformOpPtr && transform_op);
+    void setSinkOp(SinkOpPtr && sink_op_);
 
     PipelineExecPtr build();
 };

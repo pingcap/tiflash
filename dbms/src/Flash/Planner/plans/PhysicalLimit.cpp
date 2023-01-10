@@ -21,7 +21,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
-#include <Operators/LimitTransform.h>
+#include <Operators/LimitTransformOp.h>
 
 namespace DB
 {
@@ -58,7 +58,7 @@ void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, 
     auto input_header = group_builder.getHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransform(std::make_unique<LimitTransform>(global_limit, log->identifier()));
+        builder.appendTransformOp(std::make_unique<LimitTransformOp>(global_limit, log->identifier()));
     });
 }
 

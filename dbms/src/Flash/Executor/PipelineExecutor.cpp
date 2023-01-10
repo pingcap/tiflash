@@ -14,7 +14,7 @@
 
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/Schedule/Event.h>
+#include <Flash/Pipeline/Schedule/Event/Event.h>
 #include <Interpreters/Context.h>
 
 namespace DB

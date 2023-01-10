@@ -12,15 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/ExpressionActions.h>
-#include <Operators/ExpressionTransform.h>
+#pragma once
+
+#include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Flash/Pipeline/Schedule/Task/Task.h>
 
 namespace DB
 {
-OperatorStatus ExpressionTransform::transform(Block & block)
+class Event;
+using EventPtr = std::shared_ptr<Event>;
+
+class PipelineTask : public Task
 {
-    if (likely(block))
-        expression->execute(block);
-    return OperatorStatus::PASS;
-}
+public:
+    PipelineTask(
+        MemoryTrackerPtr mem_tracker_,
+        const EventPtr & event_,
+        PipelineExecPtr && pipeline_exec_);
+
+    ~PipelineTask();
+
+protected:
+    ExecTaskStatus executeImpl() override;
+
+    ExecTaskStatus awaitImpl() override;
+
+    ExecTaskStatus spillImpl() override;
+
+private:
+    EventPtr event;
+    PipelineExecPtr pipeline_exec;
+};
 } // namespace DB

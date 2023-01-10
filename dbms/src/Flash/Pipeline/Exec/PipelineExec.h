@@ -29,12 +29,12 @@ class PipelineExec
 {
 public:
     PipelineExec(
-        SourcePtr && source_,
-        Transforms && transforms_,
-        SinkPtr && sink_)
-        : source(std::move(source_))
-        , transforms(std::move(transforms_))
-        , sink(std::move(sink_))
+        SourceOpPtr && source_op_,
+        TransformOps && transform_ops_,
+        SinkOpPtr && sink_op_)
+        : source_op(std::move(source_op_))
+        , transform_ops(std::move(transform_ops_))
+        , sink_op(std::move(sink_op_))
     {}
 
     OperatorStatus execute(PipelineExecutorStatus & exec_status);
@@ -44,7 +44,10 @@ public:
     OperatorStatus spill(PipelineExecutorStatus & exec_status);
 
 private:
-    OperatorStatus fetchBlock(Block & block, size_t & transform_index, PipelineExecutorStatus & exec_status);
+    OperatorStatus fetchBlock(
+        Block & block,
+        size_t & transform_op_index,
+        PipelineExecutorStatus & exec_status);
 
     template <typename Op>
     OperatorStatus prepareSpillOp(OperatorStatus op_status, const Op & op)
@@ -59,13 +62,14 @@ private:
     }
 
 private:
-    SourcePtr source;
-    Transforms transforms;
-    SinkPtr sink;
+    SourceOpPtr source_op;
+    TransformOps transform_ops;
+    SinkOpPtr sink_op;
 
     // hold the operator which is ready for spilling.
     std::optional<Operator *> ready_spill_op;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
+// a set of pipeline_execs running in parallel.
 using PipelineExecGroup = std::vector<PipelineExecPtr>;
 } // namespace DB

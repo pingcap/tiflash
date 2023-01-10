@@ -12,34 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/IBlockInputStream.h>
-#include <Operators/BlockInputStreamSource.h>
+#pragma once
+
+#include <Common/Logger.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
-BlockInputStreamSource::BlockInputStreamSource(
-    const BlockInputStreamPtr & impl_)
-    : impl(impl_)
-{
-    impl->readPrefix();
-}
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
-OperatorStatus BlockInputStreamSource::read(Block & block)
+// wrap for BlockInputStream
+class BlockInputStreamSourceOp : public SourceOp
 {
-    if (unlikely(finished))
-        return OperatorStatus::PASS;
+public:
+    explicit BlockInputStreamSourceOp(const BlockInputStreamPtr & impl_);
 
-    block = impl->read();
-    if (unlikely(!block))
-    {
-        impl->readSuffix();
-        finished = true;
-    }
-    return OperatorStatus::PASS;
-}
+    OperatorStatus read(Block & block) override;
 
-Block BlockInputStreamSource::readHeader()
-{
-    return impl->getHeader();
-}
+    Block readHeader() override;
+
+private:
+    BlockInputStreamPtr impl;
+    bool finished = false;
+};
 } // namespace DB

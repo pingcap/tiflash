@@ -12,30 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/Logger.h>
-#include <Operators/Operator.h>
+#include <Flash/Planner/plans/PhysicalGetResultSink.h>
+#include <Operators/GetResultSinkOp.h>
 
 namespace DB
 {
-class ExpressionActions;
-using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
-
-class ExpressionTransform : public TransformOp
+OperatorStatus GetResultSinkOp::write(Block && block)
 {
-public:
-    explicit ExpressionTransform(
-        const ExpressionActionsPtr & expression_,
-        const String & req_id)
-        : expression(expression_)
-        , log(Logger::get(req_id))
-    {}
-
-    OperatorStatus transform(Block & block) override;
-
-private:
-    ExpressionActionsPtr expression;
-    const LoggerPtr log;
-};
+    if (!block)
+        return OperatorStatus::FINISHED;
+    std::lock_guard lock(physical_sink.mu);
+    physical_sink.result_handler(block);
+    return OperatorStatus::PASS;
+}
 } // namespace DB

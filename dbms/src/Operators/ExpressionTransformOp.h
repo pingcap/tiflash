@@ -14,27 +14,28 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/PipelineEvent.h>
+#include <Common/Logger.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
-class PlainPipelineEvent : public PipelineEvent
+class ExpressionActions;
+using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
+
+class ExpressionTransformOp : public TransformOp
 {
 public:
-    PlainPipelineEvent(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
-        Context & context_,
-        const PipelinePtr & pipeline_,
-        size_t concurrency_)
-        : PipelineEvent(exec_status_, std::move(mem_tracker_), context_, pipeline_)
-        , concurrency(concurrency_)
+    ExpressionTransformOp(
+        const ExpressionActionsPtr & expression_,
+        const String & req_id)
+        : expression(expression_)
+        , log(Logger::get(req_id))
     {}
 
-protected:
-    bool scheduleImpl() override;
+    OperatorStatus transform(Block & block) override;
 
 private:
-    size_t concurrency;
+    ExpressionActionsPtr expression;
+    const LoggerPtr log;
 };
 } // namespace DB

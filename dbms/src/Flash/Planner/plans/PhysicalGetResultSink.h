@@ -19,7 +19,7 @@
 
 namespace DB
 {
-class GetResultSink;
+class GetResultSinkOp;
 
 class PhysicalGetResultSink : public PhysicalUnary
 {
@@ -53,7 +53,7 @@ public:
     void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 
 private:
-    friend class GetResultSink;
+    friend class GetResultSinkOp;
 
     std::mutex mu;
     ResultHandler result_handler;

@@ -12,31 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Pipeline/Schedule/Event.h>
+#include <Operators/FilterTransformOp.h>
 
 namespace DB
 {
-class Pipeline;
-using PipelinePtr = std::shared_ptr<Pipeline>;
-
-// The base class of pipeline related event.
-class PipelineEvent : public Event
+OperatorStatus FilterTransformOp::transform(Block & block)
 {
-public:
-    PipelineEvent(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
-        Context & context_,
-        const PipelinePtr & pipeline_)
-        : Event(exec_status_, std::move(mem_tracker_))
-        , context(context_)
-        , pipeline(pipeline_)
-    {}
+    if (unlikely(filter_transform_action.alwaysFalse()))
+    {
+        block = {};
+        return OperatorStatus::PASS;
+    }
 
-protected:
-    Context & context;
-    PipelinePtr pipeline;
-};
+    if (likely(block))
+        return filter_transform_action.transform(block, /*child_filter=*/nullptr)
+            ? OperatorStatus::PASS
+            : OperatorStatus::MORE_INPUT;
+
+    return OperatorStatus::PASS;
+}
+
+void FilterTransformOp::transformHeader(Block & header)
+{
+    header = filter_transform_action.getHeader();
+}
 } // namespace DB

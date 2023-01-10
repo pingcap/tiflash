@@ -12,25 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Executor/ResultHandler.h>
-#include <Operators/Operator.h>
+#include <DataStreams/LimitTransformAction.h>
+#include <Operators/LimitTransformOp.h>
 
 namespace DB
 {
-class PhysicalGetResultSink;
-class GetResultSink : public SinkOp
+OperatorStatus LimitTransformOp::transform(Block & block)
 {
-public:
-    explicit GetResultSink(PhysicalGetResultSink & physical_sink_)
-        : physical_sink(physical_sink_)
-    {
-    }
+    if (!action->transform(block))
+        block = {};
+    return OperatorStatus::PASS;
+}
 
-    OperatorStatus write(Block && block) override;
-
-private:
-    PhysicalGetResultSink & physical_sink;
-};
+void LimitTransformOp::transformHeader(Block & header)
+{
+    header = action->getHeader();
+}
 } // namespace DB

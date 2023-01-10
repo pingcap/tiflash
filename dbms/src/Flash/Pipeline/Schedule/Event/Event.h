@@ -16,7 +16,7 @@
 
 #include <Common/MemoryTracker.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
-#include <Flash/Pipeline/Schedule/Task.h>
+#include <Flash/Pipeline/Schedule/Task/Task.h>
 
 #include <atomic>
 #include <memory>

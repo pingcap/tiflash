@@ -22,7 +22,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Interpreters/Context.h>
-#include <Operators/BlockInputStreamSource.h>
+#include <Operators/BlockInputStreamSourceOp.h>
 
 namespace DB
 {
@@ -122,7 +122,7 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSource(std::make_unique<BlockInputStreamSource>(mock_streams[i++]));
+        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(mock_streams[i++]));
     });
 }
 

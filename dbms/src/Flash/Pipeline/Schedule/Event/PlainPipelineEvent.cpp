@@ -13,15 +13,15 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/Schedule/PipelineTask.h>
-#include <Flash/Pipeline/Schedule/PlainPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Task/PipelineTask.h>
+#include <Flash/Pipeline/Schedule/Event/PlainPipelineEvent.h>
 
 namespace DB
 {
 bool PlainPipelineEvent::scheduleImpl()
 {
     assert(pipeline);
-    auto pipline_exec_group = pipeline->toExec(context, concurrency);
+    auto pipline_exec_group = pipeline->toExecGroup(context, concurrency);
     pipeline.reset();
 
     if (pipline_exec_group.empty())

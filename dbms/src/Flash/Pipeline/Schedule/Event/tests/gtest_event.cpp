@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Pipeline/Schedule/Event.h>
+#include <Flash/Pipeline/Schedule/Event/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>

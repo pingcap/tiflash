@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Pipeline/Schedule/Event.h>
-#include <Flash/Pipeline/Schedule/PipelineTask.h>
+#include <Flash/Pipeline/Schedule/Event/Event.h>
+#include <Flash/Pipeline/Schedule/Task/PipelineTask.h>
 
 namespace DB
 {

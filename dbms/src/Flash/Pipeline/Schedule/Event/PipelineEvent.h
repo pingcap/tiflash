@@ -14,30 +14,29 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Operators/Operator.h>
+#include <Flash/Pipeline/Schedule/Event/Event.h>
 
 namespace DB
 {
-struct GlobalLimitTransformAction;
-using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
+class Pipeline;
+using PipelinePtr = std::shared_ptr<Pipeline>;
 
-class LimitTransform : public TransformOp
+// The base class of pipeline related event.
+class PipelineEvent : public Event
 {
 public:
-    explicit LimitTransform(
-        const GlobalLimitPtr & action_,
-        const String & req_id)
-        : action(action_)
-        , log(Logger::get(req_id))
+    PipelineEvent(
+        PipelineExecutorStatus & exec_status_,
+        MemoryTrackerPtr mem_tracker_,
+        Context & context_,
+        const PipelinePtr & pipeline_)
+        : Event(exec_status_, std::move(mem_tracker_))
+        , context(context_)
+        , pipeline(pipeline_)
     {}
 
-    OperatorStatus transform(Block & block) override;
-
-    void transformHeader(Block & header) override;
-
-private:
-    GlobalLimitPtr action;
-    const LoggerPtr log;
+protected:
+    Context & context;
+    PipelinePtr pipeline;
 };
 } // namespace DB

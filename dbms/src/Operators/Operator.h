@@ -55,7 +55,7 @@ public:
 
     OperatorStatus await() override { return OperatorStatus::PASS; }
 };
-using SourcePtr = std::unique_ptr<SourceOp>;
+using SourceOpPtr = std::unique_ptr<SourceOp>;
 
 class TransformOp : public Operator
 {
@@ -68,8 +68,8 @@ public:
 
     OperatorStatus await() override { return OperatorStatus::SKIP; }
 };
-using TransformPtr = std::unique_ptr<TransformOp>;
-using Transforms = std::vector<TransformPtr>;
+using TransformOpPtr = std::unique_ptr<TransformOp>;
+using TransformOps = std::vector<TransformOpPtr>;
 
 class SinkOp : public Operator
 {
@@ -80,5 +80,5 @@ public:
 
     OperatorStatus await() override { return OperatorStatus::PASS; }
 };
-using SinkPtr = std::unique_ptr<SinkOp>;
+using SinkOpPtr = std::unique_ptr<SinkOp>;
 } // namespace DB

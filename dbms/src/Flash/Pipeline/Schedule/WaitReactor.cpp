@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
-#include <Flash/Pipeline/Schedule/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/WaitReactor.h>
 #include <assert.h>

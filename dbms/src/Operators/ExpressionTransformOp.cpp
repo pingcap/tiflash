@@ -12,17 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/plans/PhysicalGetResultSink.h>
-#include <Operators/GetResultSink.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
-OperatorStatus GetResultSink::write(Block && block)
+OperatorStatus ExpressionTransformOp::transform(Block & block)
 {
-    if (!block)
-        return OperatorStatus::FINISHED;
-    std::lock_guard lock(physical_sink.mu);
-    physical_sink.result_handler(block);
+    if (likely(block))
+        expression->execute(block);
     return OperatorStatus::PASS;
 }
 } // namespace DB

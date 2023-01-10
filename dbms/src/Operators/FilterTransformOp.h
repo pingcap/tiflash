@@ -15,25 +15,29 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <DataStreams/FilterTransformAction.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-class IBlockInputStream;
-using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-
-// wrap for BlockInputStream
-class BlockInputStreamSource : public SourceOp
+class FilterTransformOp : public TransformOp
 {
 public:
-    explicit BlockInputStreamSource(const BlockInputStreamPtr & impl_);
+    FilterTransformOp(
+        const Block & input_header,
+        const ExpressionActionsPtr & expression,
+        const String & filter_column_name,
+        const String & req_id)
+        : filter_transform_action(input_header, expression, filter_column_name)
+        , log(Logger::get(req_id))
+    {}
 
-    OperatorStatus read(Block & block) override;
+    OperatorStatus transform(Block & block) override;
 
-    Block readHeader() override;
+    void transformHeader(Block & header) override;
 
 private:
-    BlockInputStreamPtr impl;
-    bool finished = false;
+    FilterTransformAction filter_transform_action;
+    const LoggerPtr log;
 };
 } // namespace DB

@@ -21,7 +21,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Interpreters/Context.h>
-#include <Operators/FilterTransform.h>
+#include <Operators/FilterTransformOp.h>
 
 namespace DB
 {
@@ -64,7 +64,7 @@ void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder,
 {
     auto input_header = group_builder.getHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransform(std::make_unique<FilterTransform>(input_header, before_filter_actions, filter_column, log->identifier()));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(input_header, before_filter_actions, filter_column, log->identifier()));
     });
 }
 

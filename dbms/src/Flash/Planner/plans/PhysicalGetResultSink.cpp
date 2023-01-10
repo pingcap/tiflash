@@ -14,7 +14,7 @@
 
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/plans/PhysicalGetResultSink.h>
-#include <Operators/GetResultSink.h>
+#include <Operators/GetResultSinkOp.h>
 
 namespace DB
 {
@@ -28,7 +28,7 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
 void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     group_builder.transform([&](auto & builder) {
-        builder.setSink(std::make_unique<GetResultSink>(*this));
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(*this));
     });
 }
 } // namespace DB
