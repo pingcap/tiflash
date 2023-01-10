@@ -23,6 +23,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <common/logger_useful.h>
 
+#include <atomic>
 #include <chrono>
 #include <variant>
 
