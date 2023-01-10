@@ -15,7 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
-#include <DataStreams/ExpandBlockInputStream.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -77,7 +77,7 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline, Context & con
     expand_actions->add(ExpressionAction::expandSource(shared_expand));
     String expand_extra_info = fmt::format("expand, expand_executor_id = {}", execId());
     child_pipeline.transform([&](auto &stream) {
-        stream = std::make_shared<ExpandBlockInputStream>(stream, expand_actions);
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, expand_actions, log->identifier());
         stream->setExtraInfo(expand_extra_info);
     });
 }

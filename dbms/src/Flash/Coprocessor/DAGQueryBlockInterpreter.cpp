@@ -18,7 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
-#include <DataStreams/ExpandBlockInputStream.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
@@ -749,7 +749,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
 {
     pipeline.transform([&](auto &stream) {
-        stream = std::make_shared<ExpandBlockInputStream>(stream, expr);
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log->identifier());
     });
 }
 

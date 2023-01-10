@@ -54,4 +54,11 @@ Block ExpressionBlockInputStream::readImpl()
     return res;
 }
 
+void ExpressionBlockInputStream::appendInfo(FmtBuffer & buffer) const {
+    if (!expression.get()->getActions().empty() && expression.get()->getActions()[0].expand != nullptr) {
+        buffer.fmtAppend(": grouping set ");
+        expression.get()->getActions()[0].expand->getGroupingSetsDes(buffer);   
+    }
+}
+
 } // namespace DB

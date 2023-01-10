@@ -41,6 +41,7 @@ public:
     String getName() const override { return NAME; }
     Block getTotals() override;
     Block getHeader() const override;
+    void appendInfo(FmtBuffer & buffer) const override;
 
 protected:
     Block readImpl() override;

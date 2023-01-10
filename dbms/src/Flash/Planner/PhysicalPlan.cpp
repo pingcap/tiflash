@@ -199,6 +199,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeExpand:
     {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
         pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
         break;
     }

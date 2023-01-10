@@ -41,10 +41,10 @@ void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
     buffer.fmtAppend("[");
     for (const auto & grouping_set: group_sets_names)
     {
-        buffer.fmtAppend("<");
+        buffer.fmtAppend("{{");
         for (const auto  & grouping_exprs: grouping_set)
         {
-            buffer.fmtAppend("{{");
+            buffer.fmtAppend("<");
             for ( size_t i = 0; i < grouping_exprs.size(); i++)
             {
                 if (i != 0) {
@@ -52,9 +52,9 @@ void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
                 }
                 buffer.fmtAppend(grouping_exprs.at(i));
             }
-            buffer.fmtAppend("}}");
+            buffer.fmtAppend(">");
         }
-        buffer.fmtAppend(">");
+        buffer.fmtAppend("}}");
     }
     buffer.fmtAppend("]");
 }
