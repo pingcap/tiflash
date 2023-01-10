@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Core/SpillConfig.h>
 #include <Poco/File.h>
 
 namespace DB
@@ -27,13 +28,14 @@ using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 class SpilledFile : public Poco::File
 {
 public:
-    explicit SpilledFile(const String & file_name);
+    SpilledFile(const String & file_name, const FileProviderPtr & file_provider_);
     ~SpilledFile() override;
     void addSpilledDataSize(size_t added_size) { spilled_data_size += added_size; }
     size_t getSpilledDataSize() const { return spilled_data_size; }
 
 private:
     size_t spilled_data_size = 0;
+    FileProviderPtr file_provider;
 };
 
 struct SpilledFiles
@@ -45,23 +47,24 @@ struct SpilledFiles
 class Spiller
 {
 public:
-    Spiller(const String & id, bool is_input_sorted, size_t partition_num, const String & spill_dir, const Block & input_schema, const LoggerPtr & logger);
-    bool spillBlocks(const Blocks & blocks, size_t partition_id);
+    Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger);
+    void spillBlocks(const Blocks & blocks, size_t partition_id);
     BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size);
     size_t spilledBlockDataSize(size_t partition_id);
     void finishSpill() { spill_finished = true; };
+    bool hasSpilledData() { return has_spilled_data; };
 
 private:
     String nextSpillFileName(size_t partition_id);
 
-    String id;
+    const SpillConfig config;
     bool is_input_sorted;
     size_t partition_num;
-    String spill_dir;
     /// todo remove input_schema if spiller does not rely on BlockInputStream
     Block input_schema;
     LoggerPtr logger;
     std::atomic<bool> spill_finished{false};
+    std::atomic<bool> has_spilled_data{false};
     static std::atomic<Int64> tmp_file_index;
     std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
 };

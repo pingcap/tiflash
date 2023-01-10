@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Core/SortCursor.h>
 #include <Core/SortDescription.h>
+#include <Core/Spiller.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <IO/CompressedReadBuffer.h>
@@ -38,7 +39,7 @@ public:
         size_t max_merged_block_size_,
         size_t limit_,
         size_t max_bytes_before_external_sort_,
-        const std::string & tmp_path_,
+        const SpillConfig & spill_config_,
         const String & req_id);
 
     String getName() const override { return NAME; }
@@ -59,7 +60,7 @@ private:
     size_t limit;
 
     size_t max_bytes_before_external_sort;
-    const std::string tmp_path;
+    const SpillConfig spill_config;
 
     LoggerPtr log;
 
@@ -74,23 +75,7 @@ private:
     Block header_without_constants;
 
     /// Everything below is for external sorting.
-    std::vector<std::unique_ptr<Poco::TemporaryFile>> temporary_files;
-
-    /// For reading data from temporary file.
-    struct TemporaryFileStream
-    {
-        ReadBufferFromFile file_in;
-        CompressedReadBuffer<> compressed_in;
-        BlockInputStreamPtr block_in;
-
-        TemporaryFileStream(const std::string & path, const Block & header)
-            : file_in(path)
-            , compressed_in(file_in)
-            , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, header, 0))
-        {}
-    };
-
-    std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
+    std::unique_ptr<Spiller> spiller;
 
     BlockInputStreams inputs_to_merge;
 };

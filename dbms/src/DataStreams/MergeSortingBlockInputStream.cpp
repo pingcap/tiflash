@@ -78,13 +78,13 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     size_t max_merged_block_size_,
     size_t limit_,
     size_t max_bytes_before_external_sort_,
-    const std::string & tmp_path_,
+    const SpillConfig & spill_config_,
     const String & req_id)
     : description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_)
-    , tmp_path(tmp_path_)
+    , spill_config(spill_config_)
     , log(Logger::get(req_id))
 {
     children.push_back(input);
@@ -92,6 +92,7 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     header_without_constants = header;
     removeConstantsFromBlock(header_without_constants);
     removeConstantsFromSortDescription(header, description);
+    spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
 
@@ -125,41 +126,33 @@ Block MergeSortingBlockInputStream::readImpl()
               */
             if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
             {
-                temporary_files.emplace_back(new Poco::TemporaryFile(tmp_path));
-                const std::string & path = temporary_files.back()->path();
-                WriteBufferFromFile file_buf(path);
-                CompressedWriteBuffer compressed_buf(file_buf);
-                NativeBlockOutputStream block_out(compressed_buf, 0, header_without_constants);
                 MergeSortingBlocksBlockInputStream block_in(blocks, description, log->identifier(), max_merged_block_size, limit);
-
-                LOG_INFO(log, "Sorting and writing part of data into temporary file {}", path);
-                copyData(block_in, block_out, &is_cancelled); /// NOTE. Possibly limit disk usage.
-                LOG_INFO(log, "Done writing part of data into temporary file {}", path);
-
+                auto all_blocks = readAllData(block_in, &is_cancelled);
+                /// release the memory since now all_blocks contains all data
                 blocks.clear();
+                if (is_cancelled)
+                    break;
+                spiller->spillBlocks(all_blocks, 0);
                 sum_bytes_in_blocks = 0;
             }
         }
 
-        if ((blocks.empty() && temporary_files.empty()) || isCancelledOrThrowIfKilled())
+        if (isCancelledOrThrowIfKilled() || (blocks.empty() && !spiller->hasSpilledData()))
             return Block();
 
-        if (temporary_files.empty())
+        if (!spiller->hasSpilledData())
         {
             impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
         }
         else
         {
-            /// If there was temporary files.
+            /// If spill happens
 
-            LOG_INFO(log, "There are {} temporary sorted parts to merge.", temporary_files.size());
+            LOG_INFO(log, "Begin external merge sort.");
 
             /// Create sorted streams to merge.
-            for (const auto & file : temporary_files)
-            {
-                temporary_inputs.emplace_back(std::make_unique<TemporaryFileStream>(file->path(), header_without_constants));
-                inputs_to_merge.emplace_back(temporary_inputs.back()->block_in);
-            }
+            spiller->finishSpill();
+            inputs_to_merge = spiller->restoreBlocks(0, 0);
 
             /// Rest of blocks in memory.
             if (!blocks.empty())

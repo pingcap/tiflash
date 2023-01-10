@@ -30,9 +30,10 @@ class Block;
   */
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<bool> * is_cancelled = nullptr);
 
+std::vector<Block> readAllData(IBlockInputStream & from, std::atomic<bool> * is_cancelled = nullptr);
+
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled);
 
-void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled,
-              const std::function<void(const Block & block)> & progress);
+void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled, const std::function<void(const Block & block)> & progress);
 
-}
+} // namespace DB

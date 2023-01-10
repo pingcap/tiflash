@@ -18,6 +18,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
+#include <Core/SpillConfig.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -1169,7 +1170,7 @@ void InterpreterSelectQuery::executeOrder(Pipeline & pipeline)
         settings.max_block_size,
         limit,
         settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
+        SpillConfig(context.getTemporaryPath(), "sort", context.getFileProvider()),
         /*req_id=*/"");
 }
 

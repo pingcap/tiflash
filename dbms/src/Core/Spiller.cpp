@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Spiller.h>
+#include <Core/Spiller.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/Path.h>
@@ -23,8 +24,9 @@
 
 namespace DB
 {
-SpilledFile::SpilledFile(const String & file_name_)
+SpilledFile::SpilledFile(const String & file_name_, const FileProviderPtr & file_provider_)
     : Poco::File(file_name_)
+    , file_provider(file_provider_)
 {}
 
 static DB::LoggerPtr getSpilledFileLogger()
@@ -37,8 +39,8 @@ SpilledFile::~SpilledFile()
 {
     try
     {
-        if (exists())
-            remove(true);
+        auto file_path = path();
+        file_provider->deleteRegularFile(file_path, EncryptionPath(file_path, ""));
     }
     catch (...)
     {
@@ -46,35 +48,43 @@ SpilledFile::~SpilledFile()
     }
 }
 
-Spiller::Spiller(const String & id_, bool is_input_sorted_, size_t partition_num_, const String & spill_dir_, const Block & input_schema_, const LoggerPtr & logger_)
-    : id(id_)
+Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, size_t partition_num_, const Block & input_schema_, const LoggerPtr & logger_)
+    : config(config_)
     , is_input_sorted(is_input_sorted_)
     , partition_num(partition_num_)
-    , spill_dir(spill_dir_)
     , input_schema(input_schema_)
     , logger(logger_)
 {
-    if (spill_dir.at(spill_dir.size() - 1) != Poco::Path::separator())
-    {
-        spill_dir += Poco::Path::separator();
-    }
     for (size_t i = 0; i < partition_num; ++i)
         spilled_files.push_back(std::make_unique<SpilledFiles>());
+    Poco::File spill_dir(config.spill_dir);
+    if (!spill_dir.exists())
+    {
+        /// just for test, usually the tmp path should be created when server starting
+        spill_dir.createDirectories();
+    }
+    else
+    {
+        if (!spill_dir.isDirectory())
+            throw Exception(fmt::format("Spilled dir {} is a file", spill_dir.path()));
+    }
 }
 
-bool Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
+void Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
 {
-    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", id, partition_id, partition_num);
-    RUNTIME_CHECK_MSG(spill_finished == false, "{}: spill after the spiller is finished.", id);
-    /// todo append to existing file
+    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
+    RUNTIME_CHECK_MSG(spill_finished == false, "{}: spill after the spiller is finished.", config.spill_id);
+    /// todo 1. append to existing file, 2. check disk usage
     if (unlikely(blocks.empty()))
-        return true;
+        return;
+    has_spilled_data = true;
     auto spilled_file_name = nextSpillFileName(partition_id);
+    LOG_INFO(logger, "Spilling part of data into temporary file {}", spilled_file_name);
     try
     {
-        auto spilled_file = std::make_unique<SpilledFile>(spilled_file_name);
+        auto spilled_file = std::make_unique<SpilledFile>(spilled_file_name, config.file_provider);
         RUNTIME_CHECK_MSG(!spilled_file->exists(), "Duplicated spilled file: {}, should not happens", spilled_file_name);
-        WriteBufferFromFile file_buf(spilled_file_name);
+        WriteBufferFromFileProvider file_buf(config.file_provider, spilled_file_name, EncryptionPath(spilled_file_name, ""));
         CompressedWriteBuffer compressed_buf(file_buf);
         NativeBlockOutputStream block_out(compressed_buf, 0, blocks[0].cloneEmpty());
         block_out.writePrefix();
@@ -88,19 +98,23 @@ bool Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
             std::lock_guard lock(spilled_files[partition_id]->spilled_files_mutex);
             spilled_files[partition_id]->spilled_files.emplace_back(std::move(spilled_file));
         }
-        return true;
+        LOG_INFO(logger, "Finish Spilling part of data into temporary file {}", spilled_file_name);
+        RUNTIME_CHECK_MSG(spill_finished == false, "{}: spill after the spiller is finished.", config.spill_id);
+        return;
     }
     catch (...)
     {
-        LOG_ERROR(logger, "Failed to spill block to disk for file {}, error message: {}", spilled_file_name, getCurrentExceptionMessage(false, false));
-        return false;
+        throw Exception(fmt::format("Failed to spill blocks to disk for file {}, error: {}", spilled_file_name, getCurrentExceptionMessage(false, false)));
     }
 }
 
 BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_size)
 {
-    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", id, partition_id, partition_num);
-    RUNTIME_CHECK_MSG(spill_finished, "{}: restore before the spiller is finished.", id);
+    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
+    RUNTIME_CHECK_MSG(spill_finished, "{}: restore before the spiller is finished.", config.spill_id);
+    if (max_stream_size == 0)
+        /// max_stream_size == 0 means the spiller choose the stream size automatically
+        max_stream_size = spilled_files[partition_id]->spilled_files.size();
     if (is_input_sorted && spilled_files[partition_id]->spilled_files.size() > max_stream_size)
         LOG_WARNING(logger, "sorted spilled data restore does not take max_stream_size into account");
     BlockInputStreams ret;
@@ -110,7 +124,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
         {
             RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
             std::vector<String> files{file->path()};
-            ret.push_back(std::make_shared<SpilledFilesInputStream>(files, input_schema));
+            ret.push_back(std::make_shared<SpilledFilesInputStream>(files, input_schema, config.file_provider));
         }
     }
     else
@@ -127,7 +141,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
         for (size_t i = 0; i < return_stream_num; ++i)
         {
             if (likely(!files[i].empty()))
-                ret.push_back(std::make_shared<SpilledFilesInputStream>(files[i], input_schema));
+                ret.push_back(std::make_shared<SpilledFilesInputStream>(files[i], input_schema, config.file_provider));
         }
     }
     if (ret.empty())
@@ -137,8 +151,8 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
 
 size_t Spiller::spilledBlockDataSize(size_t partition_id)
 {
-    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", id, partition_id, partition_num);
-    RUNTIME_CHECK_MSG(spill_finished, "{}: spilledBlockDataSize must be called when the spiller is finished.", id);
+    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
+    RUNTIME_CHECK_MSG(spill_finished, "{}: spilledBlockDataSize must be called when the spiller is finished.", config.spill_id);
     size_t ret = 0;
     for (auto & file : spilled_files[partition_id]->spilled_files)
         ret += file->getSpilledDataSize();
@@ -148,7 +162,7 @@ size_t Spiller::spilledBlockDataSize(size_t partition_id)
 String Spiller::nextSpillFileName(size_t partition_id)
 {
     Int64 index = tmp_file_index.fetch_add(1);
-    return fmt::format("{}tmp_{}_partition_{}_{}", spill_dir, id, partition_id, index);
+    return fmt::format("{}tmp_{}_partition_{}_{}", config.spill_dir, config.spill_id_as_file_name_prefix, partition_id, index);
 }
 
 std::atomic<Int64> Spiller::tmp_file_index = 0;
