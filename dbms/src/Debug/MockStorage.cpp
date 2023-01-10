@@ -11,8 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Debug/MockStorage.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
@@ -39,6 +44,11 @@ void MockStorage::addTableData(const String & name, ColumnsWithTypeAndName & col
     table_columns[getTableId(name)] = columns;
 }
 
+void MockStorage::addTableScanConcurrencyHint(const String & name, size_t concurrency_hint)
+{
+    table_scan_concurrency_hint[getTableId(name)] = concurrency_hint;
+}
+
 Int64 MockStorage::getTableId(const String & name)
 {
     if (name_to_id_map.find(name) != name_to_id_map.end())
@@ -60,6 +70,15 @@ ColumnsWithTypeAndName MockStorage::getColumns(Int64 table_id)
         return table_columns[table_id];
     }
     throw Exception(fmt::format("Failed to get columns by table_id '{}'", table_id));
+}
+
+size_t MockStorage::getScanConcurrencyHint(Int64 table_id)
+{
+    if (tableExists(table_id))
+    {
+        return table_scan_concurrency_hint[table_id];
+    }
+    return 0;
 }
 
 MockColumnInfoVec MockStorage::getTableSchema(const String & name)
@@ -119,10 +138,11 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
     }
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 id)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter)
 {
-    auto storage = storage_delta_merge_map[id];
-    auto column_infos = table_schema_for_delta_merge[id];
+    assert(tableExistsForDeltaMerge(table_id));
+    auto storage = storage_delta_merge_map[table_id];
+    auto column_infos = table_schema_for_delta_merge[table_id];
     assert(storage);
     assert(!column_infos.empty());
     Names column_names;
@@ -134,10 +154,30 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
-    BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
-
-    BlockInputStreamPtr in = ins[0];
-    return in;
+    if (push_down_filter && push_down_filter->hasValue())
+    {
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            push_down_filter->conditions,
+            analyzer->getPreparedSets(),
+            analyzer->getCurrentInputColumns(),
+            context.getTimezoneInfo());
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*push_down_filter, *analyzer);
+        BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
+        // TODO: set num_streams, then ins.size() != 1
+        BlockInputStreamPtr in = ins[0];
+        in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
+        in->setExtraInfo("push down filter");
+        in = std::make_shared<ExpressionBlockInputStream>(in, project_after_where, "test");
+        in->setExtraInfo("projection after push down filter");
+        return in;
+    }
+    else
+    {
+        BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1);
+        BlockInputStreamPtr in = ins[0];
+        return in;
+    }
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)
@@ -340,17 +380,8 @@ void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & co
     TableInfo table_info;
     table_info.name = name;
     table_info.id = getTableId(name);
-    int i = 0;
-    for (const auto & column : columns)
-    {
-        TiDB::ColumnInfo ret;
-        std::tie(ret.name, ret.tp) = column;
-        // TODO: find a way to assign decimal field's flen.
-        if (ret.tp == TiDB::TP::TypeNewDecimal)
-            ret.flen = 65;
-        ret.id = i++;
-        table_info.columns.push_back(std::move(ret));
-    }
+    auto column_infos = mockColumnInfosToTiDBColumnInfos(columns);
+    table_info.columns.swap(column_infos);
     table_infos[name] = table_info;
 }
 
@@ -363,4 +394,23 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
 {
     return table_infos_for_delta_merge[name];
 }
+
+ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
+{
+    ColumnID col_id = 0;
+    ColumnInfos ret;
+    ret.reserve(mock_column_infos.size());
+    for (const auto & mock_column_info : mock_column_infos)
+    {
+        TiDB::ColumnInfo column_info;
+        std::tie(column_info.name, column_info.tp) = mock_column_info;
+        column_info.id = col_id++;
+        // TODO: find a way to assign decimal field's flen.
+        if (column_info.tp == TiDB::TP::TypeNewDecimal)
+            column_info.flen = 65;
+        ret.push_back(std::move(column_info));
+    }
+    return ret;
+}
+
 } // namespace DB

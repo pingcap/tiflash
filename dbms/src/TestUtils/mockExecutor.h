@@ -180,9 +180,13 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos);
     void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
     void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
+    void addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
+    void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
+    void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
+    void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
 
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
 
     /// mock DeltaMerge table scan
     void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
@@ -204,6 +208,9 @@ public:
 
     MockStorage * mockStorage() { return mock_storage.get(); }
     void initMockStorage();
+
+private:
+    static void assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
 
 private:
     size_t index;
