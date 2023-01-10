@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -26,8 +25,8 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#include <grpcpp/server_context.h>
 #include <kvproto/tikvpb.grpc.pb.h>
-
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -35,8 +34,7 @@ namespace DB
 class IServer;
 class IAsyncCallData;
 class EstablishCallData;
-
-using MockStorage = tests::MockStorage;
+class MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
 namespace Management
@@ -80,7 +78,7 @@ public:
 
     grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
 
-    void setMockStorage(MockStorage & mock_storage_);
+    void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }
 
@@ -98,7 +96,7 @@ protected:
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
 
     /// for mpp unit test.
-    MockStorage mock_storage;
+    MockStorage * mock_storage = nullptr;
     MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.

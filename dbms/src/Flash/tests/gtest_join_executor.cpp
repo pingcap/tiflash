@@ -48,12 +48,12 @@ public:
                               toVec<String>("join_c", {"apple", "banana"})});
 
         context.addExchangeReceiver("exchange_r_table",
-                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
 
         context.addExchangeReceiver("exchange_l_table",
-                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
     }
@@ -354,11 +354,16 @@ try
     executeAndAssertColumnsEqual(cast_request(), {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}), createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
 
     /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeDatetime}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
+    context.addMockTable("cast", "t1", {{"datetime", TiDB::TP::TypeDatetime}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeTimestamp}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
+    context.addMockTable("cast", "t2", {{"datetime", TiDB::TP::TypeTimestamp}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
-    executeAndAssertColumnsEqual(cast_request(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
+    auto cast_request_1 = [&]() {
+        return context.scan("cast", "t1")
+            .join(context.scan("cast", "t2"), tipb::JoinType::TypeInnerJoin, {col("datetime")})
+            .build(context);
+    };
+    executeAndAssertColumnsEqual(cast_request_1(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
 }
 CATCH
 
@@ -700,7 +705,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, SplitJoinResult)
 try
 {
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
+    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {1, 1, 3, 3, 1, 1, 3, 3, 1, 3})});
     context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
 
     auto request = context
@@ -710,6 +715,25 @@ try
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
     std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
+    for (size_t i = 0; i < block_sizes.size(); ++i)
+    {
+        context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        auto blocks = getExecuteStreamsReturnBlocks(request);
+        ASSERT_EQ(expect[i].size(), blocks.size());
+        for (size_t j = 0; j < blocks.size(); ++j)
+        {
+            ASSERT_EQ(expect[i][j], blocks[j].rows());
+        }
+    }
+
+    // with other condition
+    const auto cond = gt(col("b"), lit(Field(static_cast<Int64>(2))));
+    request = context
+                  .scan("split_test", "t1")
+                  .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")}, {}, {}, {cond}, {})
+
+                  .build(context);
+    expect = {{5, 5, 5, 5, 5}, {5, 5, 5, 5, 5}, {5, 5, 5, 5, 5}, {25}, {25}, {25}, {25}, {25}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));

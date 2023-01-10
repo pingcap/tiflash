@@ -1265,9 +1265,22 @@ CATCH
 TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
 try
 {
+    NamespaceId ns_id1 = TEST_NAMESPACE_ID;
+    NamespaceId ns_id2 = TEST_NAMESPACE_ID + 1;
+    {
+        WriteBatch wb(ns_id1);
+        wb.putExternal(20, 0);
+        page_storage->write(std::move(wb));
+    }
+    {
+        WriteBatch wb(ns_id2);
+        wb.putExternal(20, 0);
+        page_storage->write(std::move(wb));
+    }
+
     auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.ns_id = ns_id1;
     callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
@@ -1295,7 +1308,7 @@ try
     // mock table created while gc is running
     {
         ExternalPageCallbacks new_callbacks;
-        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
+        new_callbacks.ns_id = ns_id2;
         new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)

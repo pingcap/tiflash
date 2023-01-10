@@ -67,12 +67,13 @@ Block FilterBlockInputStream::readImpl()
     /// Until non-empty block after filtering or end of stream.
     while (true)
     {
-        res = children.back()->read();
+        FilterPtr child_filter = nullptr;
+        res = children.back()->read(child_filter, true);
 
         if (!res)
             return res;
 
-        if (filter_transform_action.transform(res))
+        if (filter_transform_action.transform(res, child_filter))
             return res;
     }
 }

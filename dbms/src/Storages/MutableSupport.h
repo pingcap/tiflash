@@ -52,15 +52,6 @@ public:
                 block.erase(it);
     }
 
-    bool shouldWiden(const NameAndTypePair & column)
-    {
-        DataTypePtr t
-            = column.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(column.type.get())->getNestedType() : column.type;
-        return (column.name != MutableSupport::version_column_name && column.name != MutableSupport::delmark_column_name
-                && column.name != MutableSupport::tidb_pk_column_name)
-            && t->isInteger() && !(typeid_cast<const DataTypeInt64 *>(t.get()) || typeid_cast<const DataTypeUInt64 *>(t.get()));
-    }
-
     static const String mmt_storage_name;
     static const String txn_storage_name;
     static const String delta_tree_storage_name;

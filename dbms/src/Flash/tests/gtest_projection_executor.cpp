@@ -20,12 +20,9 @@ namespace DB
 namespace tests
 {
 
-class ExecutorProjectionTestRunner : public DB::tests::ExecutorTest
+class ProjectionExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    using ColDataString = std::vector<std::optional<typename TypeTraits<String>::FieldType>>;
-    using ColDataInt32 = std::vector<std::optional<typename TypeTraits<Int32>::FieldType>>;
-
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -70,23 +67,23 @@ public:
     };
 
     /// Prepare column data
-    const ColDataString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
-    const ColDataString col1{"col1-0", {}, "", "col1-1", "", "col1-2", "col1-3"};
-    const ColDataString col2{"", "col2-0", "col2-1", {}, "col2-3", {}, "col2-4"};
-    const ColDataInt32 col3{1, {}, 0, -111111, {}, 0, 9999};
+    const ColumnWithNullableString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
+    const ColumnWithNullableString col1{"col1-0", {}, "", "col1-1", "", "col1-2", "col1-3"};
+    const ColumnWithNullableString col2{"", "col2-0", "col2-1", {}, "col2-3", {}, "col2-4"};
+    const ColumnWithNullableInt32 col3{1, {}, 0, -111111, {}, 0, 9999};
 
     /** Each value in col4 should be different from each other so that topn 
      *  could sort the columns into an unique result, or multi-results could
      *  be right.
      */
-    const ColDataInt32 col4{0, 5, -123, -234, {}, 24353, 9999};
+    const ColumnWithNullableInt32 col4{0, 5, -123, -234, {}, 24353, 9999};
 
     /// Results after sorted by col4
-    const ColDataString col0_sorted_asc{{}, "col0-2", "", "col0-0", "col0-1", "", "col0-3"};
-    const ColDataString col1_sorted_asc{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"};
-    const ColDataString col2_sorted_asc{"col2-3", {}, "col2-1", "", "col2-0", "col2-4", {}};
-    const ColDataInt32 col3_sorted_asc{{}, -111111, 0, 1, {}, 9999, 0};
-    const ColDataInt32 col4_sorted_asc{{}, -234, -123, 0, 5, 9999, 24353};
+    const ColumnWithNullableString col0_sorted_asc{{}, "col0-2", "", "col0-0", "col0-1", "", "col0-3"};
+    const ColumnWithNullableString col1_sorted_asc{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"};
+    const ColumnWithNullableString col2_sorted_asc{"col2-3", {}, "col2-1", "", "col2-0", "col2-4", {}};
+    const ColumnWithNullableInt32 col3_sorted_asc{{}, -111111, 0, 1, {}, 9999, 0};
+    const ColumnWithNullableInt32 col4_sorted_asc{{}, -234, -123, 0, 5, 9999, 24353};
 
     /// Prepare some names
     std::vector<String> col_names{"col0", "col1", "col2", "col3", "col4"};
@@ -94,7 +91,7 @@ public:
     const String table_name{"projection_test_table"};
 };
 
-TEST_F(ExecutorProjectionTestRunner, Projection)
+TEST_F(ProjectionExecutorTestRunner, Projection)
 try
 {
     /// Check single column
@@ -141,7 +138,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, ProjectionFunction)
+TEST_F(ProjectionExecutorTestRunner, ProjectionFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -231,7 +228,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, MultiFunction)
+TEST_F(ProjectionExecutorTestRunner, MultiFunction)
 try
 {
     MockAstVec functions = {
@@ -308,7 +305,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, MultiProjection)
+TEST_F(ProjectionExecutorTestRunner, MultiProjection)
 try
 {
     auto req = context
@@ -343,7 +340,7 @@ try
               .scan("test_db", "test_table3")
               .project({lit(Field(String("a")))})
               .build(context);
-    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({createConstColumn<String>(5, "a")})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -351,7 +348,7 @@ try
               .project(MockAstVec{})
               .project({lit(Field(String("a")))})
               .build(context);
-    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({createConstColumn<String>(5, "a")})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -359,7 +356,7 @@ try
               .project(MockAstVec{})
               .project({lit(Field(String("a")))})
               .build(context);
-    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({createConstColumn<String>(5, "a")})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -375,7 +372,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, ProjectionThenAgg)
+TEST_F(ProjectionExecutorTestRunner, ProjectionThenAgg)
 try
 {
     auto req = context

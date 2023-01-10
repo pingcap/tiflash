@@ -56,13 +56,13 @@ String genNameForExchangeReceiver(Int32 col_index)
     return "exchange_receiver_" + std::to_string(col_index);
 }
 
-NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
+NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;
-    names_and_types.reserve(table_scan.getColumnSize());
-    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    names_and_types.reserve(column_infos.size());
+    for (size_t i = 0; i < column_infos.size(); ++i)
     {
-        const auto column_info = table_scan.getColumns()[i];
+        const auto & column_info = column_infos[i];
         switch (column_info.id)
         {
         case TiDBPkColumnID:
@@ -72,10 +72,14 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
             names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
             break;
         default:
-            names_and_types.emplace_back(fmt::format("{}_{}", column_prefix, i), getDataTypeByColumnInfoForComputingLayer(column_info));
+            names_and_types.emplace_back(column_info.name.empty() ? fmt::format("{}_{}", column_prefix, i) : column_info.name, getDataTypeByColumnInfoForComputingLayer(column_info));
         }
     }
     return names_and_types;
+}
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
+{
+    return genNamesAndTypes(table_scan.getColumns(), column_prefix);
 }
 
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)
