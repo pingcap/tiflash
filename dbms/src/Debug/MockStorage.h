@@ -14,6 +14,7 @@
 #pragma once
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
@@ -44,6 +45,8 @@ private:
     std::atomic<Int64> current_id = 0;
 };
 
+ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos);
+
 /** Responsible for mock data for executor tests and mpp tests.
   * 1. Use this class to add mock table schema and table column data.
   * 2. Use this class to add mock exchange schema and exchange column data.
@@ -57,9 +60,13 @@ public:
 
     void addTableData(const String & name, ColumnsWithTypeAndName & columns);
 
+    void addTableScanConcurrencyHint(const String & name, size_t concurrency_hint);
+
     MockColumnInfoVec getTableSchema(const String & name);
 
     ColumnsWithTypeAndName getColumns(Int64 table_id);
+
+    size_t getScanConcurrencyHint(Int64 table_id);
 
     bool tableExists(Int64 table_id);
 
@@ -74,7 +81,7 @@ public:
 
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
-    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id);
+    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter = nullptr);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 
@@ -83,11 +90,14 @@ public:
 
     void addExchangeData(const String & exchange_name, const ColumnsWithTypeAndName & columns);
 
+    void addFineGrainedExchangeData(const String & exchange_name, const std::vector<ColumnsWithTypeAndName> & columns);
+
     MockColumnInfoVec getExchangeSchema(const String & exchange_name);
 
     void addExchangeRelation(const String & executor_id, const String & exchange_name);
 
     ColumnsWithTypeAndName getExchangeColumns(const String & executor_id);
+    std::vector<ColumnsWithTypeAndName> getFineGrainedExchangeColumnsVector(const String & executor_id, size_t fine_grained_stream_count);
 
     bool exchangeExists(const String & executor_id);
 
@@ -96,6 +106,8 @@ public:
 
     TableInfo getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
+
+    size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
 
     /// clear for StorageDeltaMerge
     void clear();
@@ -110,11 +122,13 @@ private:
     std::unordered_map<Int64, MockColumnInfoVec> table_schema; /// <table_id, columnInfo>
     std::unordered_map<Int64, ColumnsWithTypeAndName> table_columns; /// <table_id, columns>
     std::unordered_map<String, TableInfo> table_infos; /// <table_name, table_info>
+    std::unordered_map<Int64, size_t> table_scan_concurrency_hint; /// <table_id, concurrency_hint>
 
     /// for mock exchange receiver
     std::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
     std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
     std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
+    std::unordered_map<String, std::vector<ColumnsWithTypeAndName>> fine_grained_exchange_columns; /// <exchange_name, vector<columns>>
 
     /// for mock storage delta merge
     std::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>

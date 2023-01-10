@@ -85,7 +85,7 @@ private:
     size_t num_read = 0;
 
     RowKeyValue last_value;
-    RowKeyValueRef last_value_ref;
+    RowKeyValueRef last_value_ref{};
     UInt64 last_version = 0;
     size_t last_handle_pos = 0;
     size_t last_handle_read_num = 0;
@@ -374,7 +374,7 @@ private:
 
         if (stable_ignore < 0)
         {
-            size_t stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
+            auto stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
             if (use_stable_rows > stable_ignore_abs)
             {
                 use_stable_rows += stable_ignore;

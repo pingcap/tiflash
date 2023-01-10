@@ -36,7 +36,7 @@ void restoreConcurrency(
     size_t concurrency,
     const LoggerPtr & log)
 {
-    if (concurrency > 1 && pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
+    if (concurrency > 1 && pipeline.streams.size() == 1)
     {
         BlockInputStreamPtr shared_query_block_input_stream
             = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log->identifier());
@@ -52,33 +52,17 @@ void executeUnion(
     bool ignore_block,
     const String & extra_info)
 {
-    switch (pipeline.streams.size() + pipeline.streams_with_non_joined_data.size())
-    {
-    case 0:
-        break;
-    case 1:
-    {
-        if (pipeline.streams.size() == 1)
-            break;
-        // streams_with_non_joined_data's size is 1.
-        pipeline.streams.push_back(pipeline.streams_with_non_joined_data.at(0));
-        pipeline.streams_with_non_joined_data.clear();
-        break;
-    }
-    default:
+    if (pipeline.streams.size() > 1)
     {
         BlockInputStreamPtr stream;
         if (ignore_block)
-            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier());
         else
-            stream = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+            stream = std::make_shared<UnionWithBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier());
         stream->setExtraInfo(extra_info);
 
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
-        break;
-    }
     }
 }
 
@@ -232,7 +216,6 @@ void executePushedDownFilter(
 {
     auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(push_down_filter, analyzer);
 
-    assert(pipeline.streams_with_non_joined_data.empty());
     assert(remote_read_streams_start_index <= pipeline.streams.size());
     // for remote read, filter had been pushed down, don't need to execute again.
     for (size_t i = 0; i < remote_read_streams_start_index; ++i)

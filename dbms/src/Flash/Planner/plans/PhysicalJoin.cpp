@@ -66,17 +66,6 @@ void recordJoinExecuteInfo(
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 
-void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context & context, size_t max_streams, const LoggerPtr & log)
-{
-    // If there is non-joined-streams here, we need call `executeUnion`
-    // to ensure that non-joined-streams is executed after joined-streams.
-    if (!probe_pipeline.streams_with_non_joined_data.empty())
-    {
-        executeUnion(probe_pipeline, max_streams, log, false, "final union for non_joined_data");
-        restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
-    }
-}
-
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -172,41 +161,23 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         join_ptr,
         probe_side_prepare_actions,
         build_side_prepare_actions,
-        is_tiflash_right_join,
         Block(join_output_schema),
         fine_grained_shuffle);
     return physical_join;
 }
 
-void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context, size_t max_streams)
+void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context)
 {
     const auto & settings = context.getSettingsRef();
-    auto & dag_context = *context.getDAGContext();
-
-    // TODO we can call `executeUnionForPreviousNonJoinedData` only when has_non_joined == true.
-    executeUnionForPreviousNonJoinedData(probe_pipeline, context, max_streams, log);
-
     /// probe side streams
-    assert(probe_pipeline.streams_with_non_joined_data.empty());
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
-    if (has_non_joined)
-    {
-        auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
-        size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
-        const auto & input_header = probe_pipeline.firstStream()->getHeader();
-        for (size_t i = 0; i < not_joined_concurrency; ++i)
-        {
-            auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(input_header, i, not_joined_concurrency, settings.max_block_size);
-            non_joined_stream->setExtraInfo("add stream with non_joined_data if full_or_right_join");
-            probe_pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
-            join_execute_info.non_joined_streams.push_back(non_joined_stream);
-        }
-    }
-    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}", execId());
+    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), join_ptr->needReturnNonJoinedData());
+    size_t probe_index = 0;
+    join_ptr->setProbeConcurrency(probe_pipeline.streams.size());
     for (auto & stream : probe_pipeline.streams)
     {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, log->identifier(), settings.max_block_size);
+        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
         stream->setExtraInfo(join_probe_extra_info);
     }
 }
@@ -214,7 +185,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
 void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
 {
     auto & dag_context = *context.getDAGContext();
-    size_t join_build_concurrency = std::max(build_pipeline.streams.size(), build_pipeline.streams_with_non_joined_data.size());
+    size_t join_build_concurrency = build_pipeline.streams.size();
 
     /// build side streams
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
@@ -233,7 +204,6 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
         }
     };
     build_streams(build_pipeline.streams);
-    build_streams(build_pipeline.streams_with_non_joined_data);
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
 
@@ -256,7 +226,7 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
     {
         DAGPipeline & probe_pipeline = pipeline;
         probe()->transform(probe_pipeline, context, max_streams);
-        probeSideTransform(probe_pipeline, context, max_streams);
+        probeSideTransform(probe_pipeline, context);
     }
 
     doSchemaProject(pipeline, context);
