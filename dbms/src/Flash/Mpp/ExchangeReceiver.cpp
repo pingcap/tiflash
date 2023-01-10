@@ -26,10 +26,7 @@
 #include <fmt/core.h>
 #include <grpcpp/completion_queue.h>
 
-#include <cstddef>
 #include <magic_enum.hpp>
-
-#include "IO/CompressedStream.h"
 
 namespace DB
 {
@@ -64,7 +61,7 @@ bool pushPacket(size_t source_index,
     bool push_succeed = true;
 
     const mpp::Error * error_ptr = nullptr;
-    auto & packet = tracked_packet->getPacket();
+    auto & packet = tracked_packet->packet;
     if (packet.has_error())
         error_ptr = &packet.error();
     const String * resp_ptr = nullptr;
@@ -103,7 +100,7 @@ bool pushPacket(size_t source_index,
             if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
                 continue;
 
-            auto recv_msg = std::make_shared<ReceivedMessage>(
+            std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
                 source_index,
                 req_info,
                 tracked_packet,
