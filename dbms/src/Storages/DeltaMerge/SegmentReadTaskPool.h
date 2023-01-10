@@ -231,8 +231,8 @@ public:
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
 
-    int64_t increaseUnorderedInputStreamRefCount();
-    int64_t decreaseUnorderedInputStreamRefCount();
+    Int64 increaseUnorderedInputStreamRefCount();
+    Int64 decreaseUnorderedInputStreamRefCount();
     Int64 getFreeBlockSlots() const;
     Int64 getFreeActiveSegments() const;
     bool valid() const;
@@ -270,7 +270,7 @@ private:
     BlockStat blk_stat;
     LoggerPtr log;
 
-    std::atomic<int64_t> unordered_input_stream_ref_count;
+    std::atomic<Int64> unordered_input_stream_ref_count;
 
     std::atomic<bool> exception_happened;
     DB::Exception exception;

@@ -269,11 +269,11 @@ void SegmentReadTaskPool::pushBlock(Block && block)
     q.push(std::move(block), nullptr);
 }
 
-int64_t SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
+Int64 SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
 {
     return unordered_input_stream_ref_count.fetch_add(1, std::memory_order_relaxed);
 }
-int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
+Int64 SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 {
     return unordered_input_stream_ref_count.fetch_sub(1, std::memory_order_relaxed);
 }
