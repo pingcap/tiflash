@@ -41,7 +41,7 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 
 void Pipeline::addDependency(const PipelinePtr & dependency)
 {
-    dependencies.emplace_back(dependency);
+    dependencies.push_back(dependency);
 }
 
 void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
@@ -58,11 +58,7 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
     toSelfString(buffer, level);
     ++level;
     for (const auto & dependency : dependencies)
-    {
-        auto dependency_ptr = dependency.lock();
-        assert(dependency_ptr);
-        dependency_ptr->toTreeString(buffer, level);
-    }
+        dependency->toTreeString(buffer, level);
 }
 
 void Pipeline::addGetResultSink(ResultHandler result_handler)
@@ -70,7 +66,6 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
     assert(!plan_nodes.empty());
     auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.front());
     plan_nodes.push_front(get_result_sink);
-    get_result_sink->detach();
 }
 
 PipelineExecGroup Pipeline::toExecGroup(Context & context, size_t concurrency)
@@ -107,9 +102,7 @@ EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, s
     auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, context, shared_from_this(), concurrency);
     for (const auto & dependency : dependencies)
     {
-        auto dependency_ptr = dependency.lock();
-        assert(dependency_ptr);
-        auto dependency_event = dependency_ptr->toEvent(status, context, concurrency, all_events);
+        auto dependency_event = dependency->toEvent(status, context, concurrency, all_events);
         assert(dependency_event);
         plain_pipeline_event->addDependency(dependency_event);
     }

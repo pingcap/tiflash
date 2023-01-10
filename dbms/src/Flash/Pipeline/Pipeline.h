@@ -67,25 +67,6 @@ private:
     // data flow: plan_nodes.begin() <-- plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
-    // use weak_ptr to avoid circular references.
-    std::vector<std::weak_ptr<Pipeline>> dependencies;
-};
-
-class PipelineBuilder
-{
-public:
-    PipelinePtr addPipeline()
-    {
-        pipelines.push_back(std::make_shared<Pipeline>());
-        return pipelines.back();
-    }
-
-    Pipelines build()
-    {
-        return std::move(pipelines);
-    }
-
-private:
-    Pipelines pipelines;
+    std::vector<PipelinePtr> dependencies;
 };
 } // namespace DB

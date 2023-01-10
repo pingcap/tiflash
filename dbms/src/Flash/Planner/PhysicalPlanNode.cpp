@@ -87,12 +87,11 @@ void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_buil
     throw Exception("Unsupport");
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & pipeline_builder, const PipelinePtr & pipeline)
+void PhysicalPlanNode::buildPipelines(const PipelinePtr & cur_pipeline, PipelineBuildState & state)
 {
-    pipeline->addPlanNode(shared_from_this());
+    cur_pipeline->addPlanNode(shared_from_this());
     assert(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipeline(pipeline_builder, pipeline);
-    detach();
+        children(0)->buildPipelines(cur_pipeline, state);
 }
 } // namespace DB

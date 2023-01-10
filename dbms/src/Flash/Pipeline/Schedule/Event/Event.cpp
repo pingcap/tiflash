@@ -57,7 +57,7 @@ void Event::onDependencyComplete()
 void Event::schedule() noexcept
 {
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-    exec_status.addActiveEvent();
+    exec_status.onEventStart();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     // if err throw here, we should call finish directly.
     bool direct_finish = true;
@@ -83,24 +83,22 @@ void Event::finish() noexcept
     // If query has already been cancelled, it will not trigger dependents.
     if (likely(!isCancelled()))
     {
-        // finished processing the event, now we can schedule events that depend on this event
+        // finished processing the event, now we can schedule events that depend on this event.
         for (auto & dependent : dependents)
         {
+            assert(dependent);
             dependent->onDependencyComplete();
             dependent.reset();
         }
     }
+    // Release all dependents, so that the event that did not call `finishImpl`
+    // because of `isCancelled()` will be destructured before the end of `exec_status.wait`.
     dependents.clear();
-    try
-    {
-        finalizeFinish();
-    }
-    CATCH
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
-    // we have to call `exec_status.completeEvent()` here,
-    // since `exec_status.addActiveEvent()` will have been called by dependents.
+    // we have to call `exec_status.onEventFinish()` here,
+    // since `exec_status.onEventStart()` will have been called by dependents.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
-    exec_status.completeEvent();
+    exec_status.onEventFinish();
 }
 
 void Event::scheduleTasks(std::vector<TaskPtr> & tasks)
@@ -112,7 +110,7 @@ void Event::scheduleTasks(std::vector<TaskPtr> & tasks)
     TaskScheduler::instance->submit(tasks);
 }
 
-void Event::finishTask() noexcept
+void Event::onTaskFinish() noexcept
 {
     assert(status != EventStatus::FINISHED);
     auto cur_value = unfinished_tasks.fetch_sub(1);

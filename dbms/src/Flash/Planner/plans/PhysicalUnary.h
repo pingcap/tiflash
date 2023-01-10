@@ -47,8 +47,6 @@ public:
 
     size_t childrenSize() const override { return 1; };
 
-    void detach() override { child.reset(); }
-
 protected:
     PhysicalPlanNodePtr child;
 };

@@ -31,7 +31,9 @@ public:
 
     String getErrMsg();
 
-    void addActiveEvent();
+    void onEventStart();
+
+    void onEventFinish();
 
     void toError(String && err_msg_);
 
@@ -51,8 +53,6 @@ public:
             throw Exception(timeout_err_msg);
         }
     }
-
-    void completeEvent();
 
     void cancel();
 

@@ -49,12 +49,6 @@ public:
 
     size_t childrenSize() const override { return 2; };
 
-    void detach() override
-    {
-        left.reset();
-        right.reset();
-    }
-
 protected:
     PhysicalPlanNodePtr left;
     PhysicalPlanNodePtr right;

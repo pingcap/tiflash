@@ -33,7 +33,7 @@ public:
 
     ~BaseTask()
     {
-        event->finishTask();
+        event->onTaskFinish();
         event.reset();
     }
 
@@ -72,7 +72,7 @@ protected:
         return false;
     }
 
-    void finalizeFinish() override
+    void finishImpl() override
     {
         --counter;
     }
@@ -91,7 +91,7 @@ public:
 
     ~RunTask()
     {
-        event->finishTask();
+        event->onTaskFinish();
         event.reset();
     }
 
@@ -146,7 +146,7 @@ public:
 
     ~WaitCancelTask()
     {
-        event->finishTask();
+        event->onTaskFinish();
         event.reset();
     }
 
@@ -234,11 +234,6 @@ protected:
     {
         assert(mem_tracker.get() == current_memory_tracker);
     }
-
-    void finalizeFinish() override
-    {
-        assert(mem_tracker.get() == current_memory_tracker);
-    }
 };
 
 class CrashEvent : public Event
@@ -257,11 +252,6 @@ protected:
     void finishImpl() override
     {
         throw Exception("finishImpl");
-    }
-
-    void finalizeFinish() override
-    {
-        throw Exception("finalizeFinish");
     }
 };
 } // namespace
@@ -319,7 +309,7 @@ TEST_F(EventTestRunner, base)
 try
 {
     auto do_test = [&](size_t group_num, size_t event_num) {
-        // group_num * (event_num * (`BaseEvent::finalizeFinish + BaseEvent::task_num * ~BaseTask()`))
+        // group_num * (event_num * (`BaseEvent::finishImpl + BaseEvent::task_num * ~BaseTask()`))
         std::atomic_int64_t counter{static_cast<int64_t>(group_num * (event_num * (1 + BaseEvent::task_num)))};
         PipelineExecutorStatus exec_status;
         {

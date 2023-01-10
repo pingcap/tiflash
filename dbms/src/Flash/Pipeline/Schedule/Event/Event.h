@@ -46,11 +46,11 @@ public:
 
     void addDependency(const EventPtr & dependency);
 
-    // schedule, finishTask and finish maybe called directly in TaskScheduler,
+    // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
     // so these functions must be noexcept.
     void schedule() noexcept;
 
-    void finishTask() noexcept;
+    void onTaskFinish() noexcept;
 
     bool isNonDependent();
 
@@ -67,9 +67,8 @@ protected:
     // Returns true meaning no task is scheduled.
     virtual bool scheduleImpl() { return true; }
 
+    // Release all resources held at `finishImpl`.
     virtual void finishImpl() {}
-
-    virtual void finalizeFinish() {}
 
     void scheduleTasks(std::vector<TaskPtr> & tasks);
 

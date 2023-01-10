@@ -32,7 +32,7 @@ struct PipelineExecGroupBuilder;
 
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
-class PipelineBuilder;
+class PipelineBuildState;
 
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
@@ -62,7 +62,7 @@ public:
 
     virtual void buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
 
-    virtual void buildPipeline(PipelineBuilder & pipeline_builder, const PipelinePtr & pipeline);
+    virtual void buildPipelines(const PipelinePtr & cur_pipeline, PipelineBuildState & state);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
@@ -77,9 +77,6 @@ public:
     void disableRestoreConcurrency() { is_restore_concurrency = false; }
 
     String toString();
-
-    // Release all references to child nodes.
-    virtual void detach() {}
 
 protected:
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
