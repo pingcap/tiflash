@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/SpillHandler.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
@@ -127,12 +128,13 @@ Block MergeSortingBlockInputStream::readImpl()
             if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
             {
                 MergeSortingBlocksBlockInputStream block_in(blocks, description, log->identifier(), max_merged_block_size, limit);
-                auto all_blocks = readAllData(block_in, &is_cancelled);
-                /// release the memory since now all_blocks contains all data
+                auto is_cancelled_pred = [this]() {
+                    return this->isCancelled();
+                };
+                spiller->spillBlocksUsingBlockInputStream(block_in, 0, is_cancelled_pred);
                 blocks.clear();
                 if (is_cancelled)
                     break;
-                spiller->spillBlocks(all_blocks, 0);
                 sum_bytes_in_blocks = 0;
             }
         }

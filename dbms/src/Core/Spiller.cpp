@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -20,6 +21,8 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/Path.h>
+
+#include "DataStreams/copyData.h"
 
 
 namespace DB
@@ -69,42 +72,40 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, size_t part
     }
 }
 
-void Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
+void Spiller::spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, size_t partition_id, const std::function<bool()> & is_cancelled)
+{
+    auto spill_handler = createSpillHandler(partition_id);
+    block_in.readPrefix();
+    Blocks spill_blocks;
+    while (true)
+    {
+        spill_blocks = readData(block_in, config.max_spilled_size_per_spill, is_cancelled);
+        if (spill_blocks.empty())
+            break;
+        spill_handler.spillBlocks(spill_blocks);
+    }
+    if (is_cancelled())
+        return;
+    block_in.readSuffix();
+    /// submit the spilled data
+    spill_handler.finish();
+}
+
+SpillHandler Spiller::createSpillHandler(size_t partition_id)
 {
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(spill_finished == false, "{}: spill after the spiller is finished.", config.spill_id);
-    /// todo 1. append to existing file, 2. check disk usage
-    if (unlikely(blocks.empty()))
-        return;
-    has_spilled_data = true;
     auto spilled_file_name = nextSpillFileName(partition_id);
-    LOG_INFO(logger, "Spilling part of data into temporary file {}", spilled_file_name);
-    try
-    {
-        auto spilled_file = std::make_unique<SpilledFile>(spilled_file_name, config.file_provider);
-        RUNTIME_CHECK_MSG(!spilled_file->exists(), "Duplicated spilled file: {}, should not happens", spilled_file_name);
-        WriteBufferFromFileProvider file_buf(config.file_provider, spilled_file_name, EncryptionPath(spilled_file_name, ""));
-        CompressedWriteBuffer compressed_buf(file_buf);
-        NativeBlockOutputStream block_out(compressed_buf, 0, blocks[0].cloneEmpty());
-        block_out.writePrefix();
-        for (const auto & block : blocks)
-        {
-            auto block_bytes_size = block.bytes();
-            block_out.write(block);
-            spilled_file->addSpilledDataSize(block_bytes_size);
-        }
-        {
-            std::lock_guard lock(spilled_files[partition_id]->spilled_files_mutex);
-            spilled_files[partition_id]->spilled_files.emplace_back(std::move(spilled_file));
-        }
-        LOG_INFO(logger, "Finish Spilling part of data into temporary file {}", spilled_file_name);
-        RUNTIME_CHECK_MSG(spill_finished == false, "{}: spill after the spiller is finished.", config.spill_id);
-        return;
-    }
-    catch (...)
-    {
-        throw Exception(fmt::format("Failed to spill blocks to disk for file {}, error: {}", spilled_file_name, getCurrentExceptionMessage(false, false)));
-    }
+    auto spilled_file = std::make_unique<SpilledFile>(spilled_file_name, config.file_provider);
+    RUNTIME_CHECK_MSG(!spilled_file->exists(), "Duplicated spilled file: {}, should not happens", spilled_file_name);
+    return SpillHandler(this, std::move(spilled_file), partition_id);
+}
+
+void Spiller::spillBlocks(const Blocks & blocks, size_t partition_id)
+{
+    auto spiller_handler = createSpillHandler(partition_id);
+    spiller_handler.spillBlocks(blocks);
+    spiller_handler.finish();
 }
 
 BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_size)

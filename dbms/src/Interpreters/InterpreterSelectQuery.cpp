@@ -1170,7 +1170,7 @@ void InterpreterSelectQuery::executeOrder(Pipeline & pipeline)
         settings.max_block_size,
         limit,
         settings.max_bytes_before_external_sort,
-        SpillConfig(context.getTemporaryPath(), "sort", context.getFileProvider()),
+        SpillConfig(context.getTemporaryPath(), "sort", settings.max_spilled_size_per_spill, context.getFileProvider()),
         /*req_id=*/"");
 }
 

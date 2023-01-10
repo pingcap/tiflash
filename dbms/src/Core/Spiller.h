@@ -24,6 +24,7 @@ namespace DB
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
+class SpillHandler;
 
 class SpilledFile : public Poco::File
 {
@@ -49,6 +50,8 @@ class Spiller
 public:
     Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger);
     void spillBlocks(const Blocks & blocks, size_t partition_id);
+    /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
+    void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, size_t partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
     BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size = 0);
     size_t spilledBlockDataSize(size_t partition_id);
@@ -56,7 +59,11 @@ public:
     bool hasSpilledData() { return has_spilled_data; };
 
 private:
+    friend class SpillHandler;
     String nextSpillFileName(size_t partition_id);
+    /// create a SpillHandler which is used to spill blocks, currently hidden behind `spillBlocks`
+    /// and `spillBlocksUsingBlockInputStream`, maybe need to exposed in push model.
+    SpillHandler createSpillHandler(size_t partition_id);
 
     const SpillConfig config;
     bool is_input_sorted;

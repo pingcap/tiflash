@@ -30,7 +30,7 @@ class Block;
   */
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<bool> * is_cancelled = nullptr);
 
-std::vector<Block> readAllData(IBlockInputStream & from, std::atomic<bool> * is_cancelled = nullptr);
+std::vector<Block> readData(IBlockInputStream & from, size_t max_return_size, const std::function<bool()> & is_cancelled);
 
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled);
 

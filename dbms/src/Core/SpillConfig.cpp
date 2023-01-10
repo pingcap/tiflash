@@ -26,10 +26,11 @@ bool needReplace(char c)
     return std::isspace(c) || String::npos != forbidden_or_unusual_chars.find(c);
 }
 } // namespace
-SpillConfig::SpillConfig(const DB::String & spill_dir_, const DB::String & spill_id_, const FileProviderPtr & file_provider_)
+SpillConfig::SpillConfig(const DB::String & spill_dir_, const DB::String & spill_id_, size_t max_spilled_size_per_spill_, const FileProviderPtr & file_provider_)
     : spill_dir(spill_dir_)
     , spill_id(spill_id_)
     , spill_id_as_file_name_prefix(spill_id)
+    , max_spilled_size_per_spill(max_spilled_size_per_spill_)
     , file_provider(file_provider_)
 {
     if (spill_dir.at(spill_dir.size() - 1) != Poco::Path::separator())

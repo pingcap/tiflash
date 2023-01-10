@@ -25,10 +25,11 @@ using FileProviderPtr = std::shared_ptr<FileProvider>;
 struct SpillConfig
 {
 public:
-    SpillConfig(const String & spill_dir_, const String & spill_id_, const FileProviderPtr & file_provider_);
+    SpillConfig(const String & spill_dir_, const String & spill_id_, size_t max_spilled_size_per_spill_, const FileProviderPtr & file_provider_);
     String spill_dir;
     String spill_id;
     String spill_id_as_file_name_prefix;
+    size_t max_spilled_size_per_spill;
     FileProviderPtr file_provider;
 };
 } // namespace DB

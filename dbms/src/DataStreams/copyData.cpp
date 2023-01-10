@@ -77,22 +77,24 @@ void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<boo
     copyDataImpl(from, to, is_cancelled_pred, doNothing);
 }
 
-std::vector<Block> readAllData(IBlockInputStream & from, std::atomic<bool> * is_cancelled)
+std::vector<Block> readData(IBlockInputStream & from, size_t max_return_size, const std::function<bool()> & is_cancelled)
 {
-    from.readPrefix();
     std::vector<Block> ret;
 
+    size_t current_return_size = 0;
     while (Block block = from.read())
     {
-        if (isAtomicSet(is_cancelled))
+        if (is_cancelled())
             break;
         ret.push_back(block);
+        current_return_size += ret.back().bytes();
+        if (current_return_size >= max_return_size)
+            break;
     }
 
-    if (isAtomicSet(is_cancelled))
+    if (is_cancelled())
         return {};
 
-    from.readSuffix();
     return ret;
 }
 
