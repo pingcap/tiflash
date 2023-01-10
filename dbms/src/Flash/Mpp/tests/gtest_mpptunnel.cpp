@@ -153,7 +153,7 @@ public:
 
     std::optional<GRPCKickFunc> getKickFuncForTest() override
     {
-        return [&](KickTag * tag) {
+        return [&](KickSendTag * tag) {
             {
                 void * t;
                 bool s;
