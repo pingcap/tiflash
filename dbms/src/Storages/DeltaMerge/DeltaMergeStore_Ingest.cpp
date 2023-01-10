@@ -1011,7 +1011,7 @@ void DeltaMergeStore::ingestSegmentFromCheckpointPath( //
     }
     LOG_INFO(log, "Ingest checkpoint with manifest path {} data dir {} from store {}", checkpoint_info.checkpoint_manifest_path, checkpoint_info.checkpoint_data_dir, checkpoint_info.checkpoint_store_id);
 
-    auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, temp_ps);
+    auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(physical_table_id, range, temp_ps, checkpoint_info);
     WriteBatches wbs{dm_context->storage_pool};
     auto restored_segments = Segment::restoreSegmentsFromCheckpoint( //
         log,

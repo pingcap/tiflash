@@ -131,7 +131,6 @@ TEST_F(CheckpointTest, CheckpointManagerGetNormalPageId)
         auto checkpoint_data_dir = Poco::Path(checkpoint_path).parent().toString();
         auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, checkpoint_path, checkpoint_data_dir);
 
-
         ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(100, 100)), RaftLogReader::toFullPageId(100, 100));
         ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(10, 4)), RaftLogReader::toFullPageId(100, 100));
         ASSERT_EQ(local_ps->getNormalPageId(RaftLogReader::toFullPageId(102, 4)), RaftLogReader::toFullPageId(100, 100));
