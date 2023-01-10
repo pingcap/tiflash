@@ -370,9 +370,9 @@ CreatingSets
       PartialSorting x 10: limit = 2
        Expression: <projection>
         Expression: <remove useless column after join>
-         HashJoinProbe: <join probe, join_executor_id = Join_5>
+         HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
           Expression: <final projection>
-           Expand: <expand, expand_executor_id = expand_2>: grouping set [<{count(s1)_collator_46 }><{any(s2)_collator_46 }>]
+           Expand: <expand, expand_executor_id = expand_2>: grouping set [<{count(exchange_receiver_0)_collator_46 }><{any(exchange_receiver_1)_collator_46 }>]
             Expression: <expr after aggregation>
              SharedQuery: <restore concurrency>
               ParallelAggregating, max_threads: 10, final: true
