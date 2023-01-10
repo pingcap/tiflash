@@ -32,6 +32,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "common/defines.h"
+
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
     do                                                                                    \
     {                                                                                     \
@@ -163,8 +165,9 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
 }
 
 
-RawCppPtr CreateWriteBatch()
+RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy)
 {
+    UNUSED(dummy);
     //    LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "create write batch");
     return GenRawCppPtr(new UniversalWriteBatch(), RawCppPtrTypeImpl::WriteBatch);
 }
@@ -229,7 +232,7 @@ void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr)
     }
 }
 
-PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id)
+CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id)
 {
     try
     {
@@ -240,11 +243,11 @@ PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView p
         if (page->isValid())
         {
             //            LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle read page");
-            return PageWithView{.inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage), .view = BaseBuffView{page->data.begin(), page->data.size()}};
+            return CppStrWithView{.inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage), .view = BaseBuffView{page->data.begin(), page->data.size()}};
         }
         else
         {
-            return PageWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
         }
     }
     catch (...)
@@ -254,7 +257,7 @@ PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView p
     }
 }
 
-PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id)
+RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id)
 {
     try
     {
@@ -293,7 +296,7 @@ PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, Ba
             }
         }
         //        LOG_DEBUG(&Poco::Logger::get("ProxyFFIDebug"), "handle scan page {}", pages.size());
-        return PageAndCppStrWithViewVec{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size(), .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
+        return RawCppPtrCarr{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size(), .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
     }
     catch (...)
     {
