@@ -71,7 +71,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_after_drop_segment)                               \
     M(exception_between_schema_change_in_the_same_diff)           \
     M(force_ps_wal_compact)                                       \
-    M(pause_before_full_gc_prepare)
+    M(pause_before_full_gc_prepare)                               \
+    M(fast_add_peer_sleep)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

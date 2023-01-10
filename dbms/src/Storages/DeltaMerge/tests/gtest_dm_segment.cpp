@@ -252,7 +252,7 @@ try
         kvstore->setStore(store);
         WriteBatches wbs{dmContext().storage_pool};
         auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(*db_context, info.checkpoint_manifest_path, info.checkpoint_data_dir);
-        auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), local_ps);
+        auto segment_meta_infos = Segment::restoreAllSegmentsMetaInfo(table_id, segment->getRowKeyRange(), local_ps, info);
         auto new_segments = Segment::restoreSegmentsFromCheckpoint( //
             Logger::get(),
             dmContext(),

@@ -15,10 +15,18 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/FastAddPeerContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/LocalPageStorageCache.h>
 #include <Storages/Transaction/ProxyFFI.h>
 
+#include <future>
+#include <memory>
 #include <tuple>
+#include <utility>
+
+#include "Poco/Logger.h"
+#include "common/logger_useful.h"
 
 using raft_serverpb::PeerState;
 using raft_serverpb::RaftApplyState;
@@ -34,6 +42,27 @@ struct RemoteMeta
     std::string checkpoint_path;
     RegionPtr region;
     UniversalPageStoragePtr temp_ps;
+    uint64_t version;
+};
+
+struct FastAddPeerContext::AsyncTasks
+{
+    using Key = uint64_t;
+    using Func = std::function<FastAddPeerRes()>;
+
+    explicit AsyncTasks(uint64_t pool_size)
+    {
+        thread_pool = std::make_unique<ThreadPool>(pool_size);
+    }
+    void addTask(Key k, Func f);
+    bool isScheduled(Key key) const;
+    bool isReady(Key key) const;
+    FastAddPeerRes fetchResult(Key key);
+
+protected:
+    std::map<Key, std::future<FastAddPeerRes>> futures;
+    std::unique_ptr<ThreadPool> thread_pool;
+    mutable std::mutex mtx;
 };
 
 // pair<can_retry, remote_meta>

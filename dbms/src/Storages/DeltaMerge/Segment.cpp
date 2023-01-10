@@ -437,7 +437,8 @@ SegmentPtr Segment::restoreSegment( //
 Segment::SegmentMetaInfos Segment::restoreAllSegmentsMetaInfo( //
     NamespaceId ns_id,
     const RowKeyRange & range,
-    UniversalPageStoragePtr temp_ps)
+    UniversalPageStoragePtr temp_ps,
+    const PS::V3::CheckpointInfo & checkpoint_info)
 {
     PageId target_segment_id = 1;
     SegmentMetaInfos segment_infos;
@@ -447,8 +448,9 @@ Segment::SegmentMetaInfos Segment::restoreAllSegmentsMetaInfo( //
         auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, target_segment_id);
         auto page = temp_ps->read(target_id);
         RUNTIME_CHECK(page.isValid());
-        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        readSegmentMetaInfo(buf, segment_info);
+        auto [buf, buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(page, checkpoint_info.checkpoint_data_dir);
+        readSegmentMetaInfo(*buf, segment_info);
+        RUNTIME_CHECK(buf->count(), buf_size);
 
         target_segment_id = segment_info.next_segment_id;
         if (!(segment_info.rowkey_range.shrink(range).none()))
@@ -476,13 +478,14 @@ Segments Segment::restoreSegmentsFromCheckpoint( //
     Segments segments;
     for (const auto & segment_info : meta_infos)
     {
-        LOG_DEBUG(parent_log, "Begin to restore segment delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.rowkey_range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
+        LOG_DEBUG(parent_log, "Restore segment begin. Delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.rowkey_range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
         auto stable = StableValueSpace::restoreFromCheckpoint(context, temp_ps, checkpoint_info, ns_id, segment_info.stable_id, wbs);
         auto delta = DeltaValueSpace::restoreFromCheckpoint(context, temp_ps, checkpoint_info, segment_info.rowkey_range, ns_id, segment_info.delta_id, wbs);
 
         auto new_segment_id = context.storage_pool->newMetaPageId();
         auto segment = std::make_shared<Segment>(parent_log, segment_info.epoch, segment_info.rowkey_range.shrink(range), new_segment_id, /* next_segment_id */ 0, delta, stable);
         segments.push_back(segment);
+        LOG_DEBUG(parent_log, "Restore segment end. Delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.rowkey_range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
     }
     return segments;
 }

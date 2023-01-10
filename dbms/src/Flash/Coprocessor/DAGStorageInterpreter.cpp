@@ -819,7 +819,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         log,
         "DAGStorageInterpreter::buildLocalStreams, is_disaggregated_task={} snap_id={}",
         dag_context.is_disaggregated_task,
-        *dag_context.getDisaggregatedTaskId());
+        dag_context.is_disaggregated_task ? *dag_context.getDisaggregatedTaskId() : DM::DisaggregatedTaskId::unknown_disaggregated_task_id);
 
     if (dag_context.is_disaggregated_task)
     {
