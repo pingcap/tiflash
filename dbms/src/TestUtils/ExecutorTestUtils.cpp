@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Columns/ColumnNullable.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
@@ -21,7 +22,6 @@
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
-#include <Columns/ColumnNullable.h>
 
 #include <functional>
 

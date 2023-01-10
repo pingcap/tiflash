@@ -98,9 +98,12 @@ try
         const auto * col_1_nest = &static_cast<const ColumnString &>(col_1->getNestedColumn());
         for (int i = 0; i < int(expand_rows); ++i)
         {
-            if (res1[i] == "null") {
+            if (res1[i] == "null")
+            {
                 ASSERT_EQ(col_1->isNullAt(i), true);
-            } else {
+            }
+            else
+            {
                 ASSERT_EQ(col_1_nest->getDataAt(i), res1[i]);
             }
         }
@@ -110,14 +113,17 @@ try
         const auto * col_2_nest = &static_cast<const ColumnString &>(col_2->getNestedColumn());
         for (int i = 0; i < int(expand_rows); ++i)
         {
-            if (res2[i] == "null") {
+            if (res2[i] == "null")
+            {
                 ASSERT_EQ(col_2->isNullAt(i), true);
-            } else {
+            }
+            else
+            {
                 ASSERT_EQ(col_2_nest->getDataAt(i), res2[i]);
             }
         }
 
-        const auto res3 = ColumnWithUInt64{1, 1,1,1, 0,0};
+        const auto res3 = ColumnWithUInt64{1, 1, 1, 1, 0, 0};
         const auto * col_3 = typeid_cast<const ColumnUInt64 *>(block.getColumns()[3].get());
         for (int i = 0; i < int(expand_rows); ++i)
         {
@@ -192,9 +198,12 @@ try
         const auto * col_1_nest = &static_cast<const ColumnString &>(col_1->getNestedColumn());
         for (int i = 0; i < int(expand_rows); ++i)
         {
-            if (res1[i] == "null") {
+            if (res1[i] == "null")
+            {
                 ASSERT_EQ(col_1->isNullAt(i), true);
-            } else {
+            }
+            else
+            {
                 ASSERT_EQ(col_1_nest->getDataAt(i), res1[i]);
             }
         }
@@ -204,9 +213,12 @@ try
         const auto * col_2_nest = &static_cast<const ColumnString &>(col_2->getNestedColumn());
         for (int i = 0; i < int(expand_rows); ++i)
         {
-            if (res2[i] == "null") {
+            if (res2[i] == "null")
+            {
                 ASSERT_EQ(col_2->isNullAt(i), true);
-            } else {
+            }
+            else
+            {
                 ASSERT_EQ(col_2_nest->getDataAt(i), res2[i]);
             }
         }
@@ -217,9 +229,12 @@ try
         const auto * col_3_nest = &typeid_cast<const ColumnUInt64 &>(col_3->getNestedColumn());
         for (int i = 0; i < int(expand_rows); ++i)
         {
-            if (res3[i] == UInt64(-1)) {
+            if (res3[i] == UInt64(-1))
+            {
                 ASSERT_EQ(col_3->isNullAt(i), true);
-            } else {
+            }
+            else
+            {
                 ASSERT_EQ(col_3_nest->getElement(i), res3[i]);
             }
         }
@@ -236,7 +251,7 @@ try
         const ColumnsWithTypeAndName
             ori_col
             = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{}),  // without data.
+                toVec<Int64>(col_name[0], ColumnWithInt64{}), // without data.
                 toVec<String>(col_name[1], ColumnWithString{}),
                 toVec<String>(col_name[2], ColumnWithString{}),
                 toVec<UInt64>(col_name[3], ColumnWithUInt64{}),

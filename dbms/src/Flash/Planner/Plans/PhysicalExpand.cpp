@@ -55,7 +55,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     auto child_header = child->getSchema();
     for (const auto & one : child_header)
     {
-        expand_output_columns.emplace_back(one.name, shared_expand->isInGroupSetColumn(one.name)? makeNullable(one.type): one.type);
+        expand_output_columns.emplace_back(one.name, shared_expand->isInGroupSetColumn(one.name) ? makeNullable(one.type) : one.type);
     }
     expand_output_columns.emplace_back(shared_expand->grouping_identifier_column_name, shared_expand->grouping_identifier_column_type);
 
@@ -76,7 +76,7 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline, Context & con
     auto expand_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader(), context);
     expand_actions->add(ExpressionAction::expandSource(shared_expand));
     String expand_extra_info = fmt::format("expand, expand_executor_id = {}", execId());
-    child_pipeline.transform([&](auto &stream) {
+    child_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expand_actions, log->identifier());
         stream->setExtraInfo(expand_extra_info);
     });
@@ -92,7 +92,7 @@ void PhysicalExpand::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     Names required_output;
-    required_output.reserve( shared_expand->getGroupSetNum());    // grouping set column should be existed in the child output schema.
+    required_output.reserve(shared_expand->getGroupSetNum()); // grouping set column should be existed in the child output schema.
     auto name_set = std::set<String>();
     shared_expand->getAllGroupSetColumnNames(name_set);
     // append parent_require column it may expect self-filled groupingID.
@@ -103,7 +103,8 @@ void PhysicalExpand::finalize(const Names & parent_require)
             name_set.insert(one);
         }
     }
-    for (const auto & grouping_name: name_set) {
+    for (const auto & grouping_name : name_set)
+    {
         required_output.emplace_back(grouping_name);
     }
     child->finalize(required_output);

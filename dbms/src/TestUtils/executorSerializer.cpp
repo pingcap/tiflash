@@ -171,10 +171,11 @@ void serializeExpandSource(const String & executor_id, const tipb::Expand & expa
             buf.fmtAppend("{{");
             for (auto i = 0; i < grouping_exprs.grouping_expr().size(); i++)
             {
-                if (i != 0) {
+                if (i != 0)
+                {
                     buf.fmtAppend(",");
                 }
-                auto expr =  grouping_exprs.grouping_expr().Get(i);
+                auto expr = grouping_exprs.grouping_expr().Get(i);
                 serializeExpression(expr, buf);
             }
             buf.fmtAppend("}}");

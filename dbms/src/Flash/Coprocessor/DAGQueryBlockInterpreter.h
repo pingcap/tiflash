@@ -92,7 +92,10 @@ private:
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
-    DAGContext & dagContext() const { return *context.getDAGContext(); }
+    DAGContext & dagContext() const
+    {
+        return *context.getDAGContext();
+    }
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;

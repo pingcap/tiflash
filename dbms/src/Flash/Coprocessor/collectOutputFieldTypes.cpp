@@ -100,18 +100,21 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
-bool collectForExpand(std::vector<tipb::FieldType> &out_field_types, const tipb::Executor & executor)
+bool collectForExpand(std::vector<tipb::FieldType> & out_field_types, const tipb::Executor & executor)
 {
-    auto &out_child_fields = out_field_types;
+    auto & out_child_fields = out_field_types;
     // collect output_field_types of children
     getChildren(executor).forEach([&out_child_fields](const tipb::Executor & child) {
         traverseExecutorTree(child, [&out_child_fields](const tipb::Executor & e) { return collectForExecutor(out_child_fields, e); });
     });
 
     // make the columns from grouping sets nullable.
-    for (const auto & grouping_set : executor.expand().grouping_sets()){
-        for (const auto & grouping_exprs : grouping_set.grouping_exprs()){
-            for (const auto & grouping_col : grouping_exprs.grouping_expr()){
+    for (const auto & grouping_set : executor.expand().grouping_sets())
+    {
+        for (const auto & grouping_exprs : grouping_set.grouping_exprs())
+        {
+            for (const auto & grouping_col : grouping_exprs.grouping_expr())
+            {
                 // assert that: grouping_col must be the column ref guaranteed by tidb.
                 auto column_index = decodeDAGInt64(grouping_col.val());
                 if (column_index < 0 || column_index >= static_cast<Int64>(out_child_fields.size()))

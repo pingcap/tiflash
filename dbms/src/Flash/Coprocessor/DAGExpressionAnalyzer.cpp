@@ -806,19 +806,24 @@ NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
 }
 
 std::shared_ptr<Expand> DAGExpressionAnalyzer::buildExpandGroupingColumns(
-    const tipb::Expand & expand, const ExpressionActionsPtr & actions)
+    const tipb::Expand & expand,
+    const ExpressionActionsPtr & actions)
 {
     GroupingSets group_sets_columns;
     std::map<String, bool> map_grouping_col;
     group_sets_columns.reserve(expand.grouping_sets().size());
-    for (const auto& group_set : expand.grouping_sets()){
+    for (const auto & group_set : expand.grouping_sets())
+    {
         GroupingSet group_set_columns;
         group_set_columns.reserve(group_set.grouping_exprs().size());
-        for (const auto &group_exprs : group_set.grouping_exprs()) {
+        for (const auto & group_exprs : group_set.grouping_exprs())
+        {
             GroupingColumnNames group_exprs_columns;
             group_exprs_columns.reserve(group_exprs.grouping_expr().size());
-            for (const auto& group_expr : group_exprs.grouping_expr()){
-                if (group_expr.tp() != tipb::ColumnRef){
+            for (const auto & group_expr : group_exprs.grouping_expr())
+            {
+                if (group_expr.tp() != tipb::ColumnRef)
+                {
                     throw TiFlashException("grouping sets expression should be column expr", Errors::Coprocessor::BadRequest);
                 }
                 String cp_name = getActions(group_expr, actions);
@@ -832,7 +837,7 @@ std::shared_ptr<Expand> DAGExpressionAnalyzer::buildExpandGroupingColumns(
         group_sets_columns.emplace_back(std::move(group_set_columns));
     }
     // change the original source column to be nullable, and add a new column for groupingID.
-    for (auto & mutable_one: source_columns)
+    for (auto & mutable_one : source_columns)
     {
         if (map_grouping_col[mutable_one.name])
             mutable_one.type = makeNullable(mutable_one.type);
@@ -843,10 +848,11 @@ std::shared_ptr<Expand> DAGExpressionAnalyzer::buildExpandGroupingColumns(
 }
 
 ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(
-        const tipb::Expand & expand, ExpressionActionsChain & chain)
+    const tipb::Expand & expand,
+    ExpressionActionsChain & chain)
 {
     auto & last_step = initAndGetLastStep(chain);
-    for (const auto &origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
+    for (const auto & origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
     {
         last_step.required_output.push_back(origin_col.name);
     }

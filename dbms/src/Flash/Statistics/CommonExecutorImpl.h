@@ -62,9 +62,9 @@ struct ExpandImpl
 {
     static constexpr bool has_extra_info = false;
 
-    static constexpr  auto type = "Expand";
+    static constexpr auto type = "Expand";
 
-    static bool isMatch(const tipb::Executor *executor)
+    static bool isMatch(const tipb::Executor * executor)
     {
         return executor->has_expand();
     }

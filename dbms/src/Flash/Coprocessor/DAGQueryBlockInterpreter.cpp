@@ -140,7 +140,8 @@ AnalysisResult analyzeExpressions(
         chain.addStep();
     }
 
-    if (query_block.expand) {
+    if (query_block.expand)
+    {
         res.before_expand = analyzer.appendExpand(query_block.expand->expand(), chain);
     }
 
@@ -273,10 +274,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
 
     const Settings & settings = context.getSettingsRef();
-    size_t max_block_size_for_cross_join = settings.max_block_size; 
+    size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
-    JoinPtr join_ptr = std::make_shared<Join>(   // make join
+    JoinPtr join_ptr = std::make_shared<Join>( // make join
         probe_key_names,
         build_key_names,
         tiflash_join.kind,
@@ -748,7 +749,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
 {
-    pipeline.transform([&](auto &stream) {
+    pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log->identifier());
     });
 }

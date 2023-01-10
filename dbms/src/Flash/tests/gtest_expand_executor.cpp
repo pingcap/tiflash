@@ -42,7 +42,14 @@ try
     /// case 1
     auto request = context
                        .scan("test_db", "test_table")
-                       .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                       .expand(MockVVecColumnNameVec{
+                           MockVecColumnNameVec{
+                               MockColumnNameVec{"s1"},
+                           },
+                           MockVecColumnNameVec{
+                               MockColumnNameVec{"s2"},
+                           },
+                       })
                        .build(context);
     /// data flow:
     ///
@@ -64,13 +71,20 @@ try
         request,
         {toNullableVec<String>({"banana", {}, {}, {}, "banana", {}}),
          toNullableVec<String>({{}, "apple", {}, {}, {}, "banana"}),
-         toVec<UInt64>({1,2,1,2,1,2})});
+         toVec<UInt64>({1, 2, 1, 2, 1, 2})});
 
     /// case 2
     request = context
                   .scan("test_db", "test_table")
                   .filter(eq(col("s1"), col("s2")))
-                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s1"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
                   .build(context);
     /// data flow:
     ///
@@ -92,7 +106,7 @@ try
         request,
         {toNullableVec<String>({"banana", {}}),
          toNullableVec<String>({{}, "banana"}),
-         toVec<UInt64>({1,2})});
+         toVec<UInt64>({1, 2})});
 
     /// case 3: this case is only for non-planner mode.
     /// request = context
@@ -113,8 +127,15 @@ try
     auto const_false = lit(Field(static_cast<UInt64>(0)));
     request = context
                   .scan("test_db", "test_table")
-                  .filter(const_false)                      // refuse all rows
-                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .filter(const_false) // refuse all rows
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s1"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
                   .build(context);
     executeAndAssertColumnsEqual(
         request,
@@ -127,13 +148,22 @@ try
                   .build(context);
     executeAndAssertColumnsEqual(
         request,
-        {toVec<UInt64>({1, 0, 1}),
-            toNullableVec<String>({"apple", {}, "banana"}),});
+        {
+            toVec<UInt64>({1, 0, 1}),
+            toNullableVec<String>({"apple", {}, "banana"}),
+        });
 
     request = context
                   .scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"count(s1)"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
                   .build(context);
     /// data flow:
     ///
@@ -159,20 +189,27 @@ try
     ///
     executeAndAssertColumnsEqual(
         request,
-        {toNullableVec<UInt64>({1, {}, 0, {}, 1,{}}),
-         toNullableVec<String>({{}, "apple", {},{},{}, "banana"}),
-         toVec<UInt64>({1,2,1,2,1,2})});
+        {toNullableVec<UInt64>({1, {}, 0, {}, 1, {}}),
+         toNullableVec<String>({{}, "apple", {}, {}, {}, "banana"}),
+         toVec<UInt64>({1, 2, 1, 2, 1, 2})});
 
     /// case 5   (test integrated with aggregation and projection)
     request = context
                   .scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"count(s1)"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
                   .project({"count(s1)"})
                   .build(context);
     executeAndAssertColumnsEqual(
         request,
-        {toNullableVec<UInt64>({1, {}, 0, {}, 1,{}})});
+        {toNullableVec<UInt64>({1, {}, 0, {}, 1, {}})});
 
     /// case 6   (test integrated with aggregation and projection and limit) 1
     /// note: by now, limit is executed before expand does to reduce unnecessary row expand work.
@@ -227,7 +264,14 @@ try
     request = context
                   .scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"count(s1)"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
                   .project({"count(s1)"})
                   .topN({{"count(s1)", true}}, 2)
                   .build(context);
@@ -300,7 +344,14 @@ try
     request = context
                   .receive("exchange1")
                   .aggregation({Count(col("s1"))}, {col("s2")})
-                  .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"count(s1)"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"count(s1)"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
                   .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
                   .project({"count(s1)", "groupingID"})
                   .topN({{"groupingID", true}}, 2)
@@ -349,8 +400,10 @@ try
     ///
     executeAndAssertColumnsEqual(
         request,
-        {toNullableVec<UInt64>({{}, {}}),
-            toVec<UInt64>({2,2}),});
+        {
+            toNullableVec<UInt64>({{}, {}}),
+            toVec<UInt64>({2, 2}),
+        });
 
 
     /// assert the input stream plan format. (under planner-enabled mode)

@@ -51,7 +51,6 @@ using GroupingSet = std::vector<GroupingColumnNames>;
 using GroupingSets = std::vector<GroupingSet>;
 
 
-
 /** Data structure for implementation of Expand.
   *
   * Expand is a kind of operator used for replicate low-layer datasource rows to feed different aggregate
@@ -119,13 +118,13 @@ public:
     // to illustrate what group this row is targeted for.
     void replicateAndFillNull(Block & block) const;
 
-    size_t getGroupSetNum() const {return group_sets_names.size();}
+    size_t getGroupSetNum() const { return group_sets_names.size(); }
 
     bool isInGroupSetColumn(String name) const;
 
-    const GroupingColumnNames& getGroupSetColumnNamesByOffset(size_t offset) const;
+    const GroupingColumnNames & getGroupSetColumnNamesByOffset(size_t offset) const;
 
-    void getAllGroupSetColumnNames(std::set<String>& name_set) const;
+    void getAllGroupSetColumnNames(std::set<String> & name_set) const;
 
     static std::shared_ptr<Expand> sharedExpand(const GroupingSets & groupingSets);
 

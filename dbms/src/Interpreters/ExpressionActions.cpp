@@ -144,7 +144,7 @@ ExpressionAction ExpressionAction::expandSource(std::shared_ptr<const Expand> ex
 }
 
 
-void ExpressionAction::prepare(Block & sample_block)  
+void ExpressionAction::prepare(Block & sample_block)
 {
     /** Constant expressions should be evaluated, and put the result in sample_block.
       */
@@ -242,7 +242,8 @@ void ExpressionAction::prepare(Block & sample_block)
         auto name_set = std::set<String>();
         expand->getAllGroupSetColumnNames(name_set);
         // make grouping set column to be nullable.
-        for (const auto & col_name: name_set) {
+        for (const auto & col_name : name_set)
+        {
             auto & column_with_name = sample_block.getByName(col_name);
             column_with_name.type = makeNullable(column_with_name.type);
             if (column_with_name.column != nullptr)

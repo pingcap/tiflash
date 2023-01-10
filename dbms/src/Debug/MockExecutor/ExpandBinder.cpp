@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockExecutor/ExpandBinder.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
+#include <Debug/MockExecutor/ExpandBinder.h>
 
 namespace DB::mock
 {
@@ -31,8 +31,8 @@ bool ExpandBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             auto * ges = gss->add_grouping_exprs();
             for (const auto & grouping_col : grouping_exprs)
             {
-                tipb::Expr* add_column = ges->add_grouping_expr();
-                astToPB(children[0]->output_schema, grouping_col, add_column, collator_id, context);    // ast column ref change to tipb:Expr column ref
+                tipb::Expr * add_column = ges->add_grouping_expr();
+                astToPB(children[0]->output_schema, grouping_col, add_column, collator_id, context); // ast column ref change to tipb:Expr column ref
             }
         }
     }
@@ -56,7 +56,7 @@ ExecutorBinderPtr compileExpand(ExecutorBinderPtr input, size_t & executor_index
         field_type.set_tp(TiDB::TypeLongLong);
         field_type.set_charset("binary");
         field_type.set_collate(TiDB::ITiDBCollator::BINARY);
-        field_type.set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);  // should have NOT NULL FLAG
+        field_type.set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull); // should have NOT NULL FLAG
         field_type.set_flen(-1);
         field_type.set_decimal(-1);
         output_schema.push_back(std::make_pair("groupingID", TiDB::fieldTypeToColumnInfo(field_type)));

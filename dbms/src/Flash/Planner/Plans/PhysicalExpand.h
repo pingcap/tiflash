@@ -39,7 +39,9 @@ public:
         const std::shared_ptr<Expand> & shared_expand,
         const Block & sample_block_)
         : PhysicalUnary(executor_id_, PlanType::Expand, schema_, req_id, child_)
-        , shared_expand(shared_expand), sample_block(sample_block_){}
+        , shared_expand(shared_expand)
+        , sample_block(sample_block_)
+    {}
 
     void finalize(const Names & parent_require) override;
 
@@ -52,6 +54,4 @@ private:
     std::shared_ptr<Expand> shared_expand;
     Block sample_block;
 };
-}  // namespace DB
-
-
+} // namespace DB

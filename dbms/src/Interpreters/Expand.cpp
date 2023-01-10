@@ -23,7 +23,7 @@
 namespace DB
 {
 
-namespace   /// anonymous namespace for storing private function utils.
+namespace /// anonymous namespace for storing private function utils.
 {
 void convertColumnToNullable(ColumnWithTypeAndName & column)
 {
@@ -31,23 +31,25 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
     if (column.column)
         column.column = makeNullable(column.column);
 }
-}
+} // namespace
 
 Expand::Expand(const DB::GroupingSets & gss)
-    : group_sets_names(gss){}
+    : group_sets_names(gss)
+{}
 
 void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
 {
     buffer.fmtAppend("[");
-    for (const auto & grouping_set: group_sets_names)
+    for (const auto & grouping_set : group_sets_names)
     {
         buffer.fmtAppend("{{");
-        for (const auto  & grouping_exprs: grouping_set)
+        for (const auto & grouping_exprs : grouping_set)
         {
             buffer.fmtAppend("<");
-            for ( size_t i = 0; i < grouping_exprs.size(); i++)
+            for (size_t i = 0; i < grouping_exprs.size(); i++)
             {
-                if (i != 0) {
+                if (i != 0)
+                {
                     buffer.fmtAppend(",");
                 }
                 buffer.fmtAppend(grouping_exprs.at(i));
@@ -111,7 +113,7 @@ void Expand::replicateAndFillNull(Block & block) const
         {
             // start from 1.
             Field grouping_id = j + 1;
-            added_grouping_id_column[0]->insert(grouping_id); 
+            added_grouping_id_column[0]->insert(grouping_id);
         }
     }
     // todo: for some column overlapping in different grouping set, we should copy the overlapped column as a new column
@@ -185,16 +187,18 @@ void Expand::replicateAndFillNull(Block & block) const
                 // eg: for case above, for grouping_offset of <a> = 0, we only set the every offset = 0 in each
                 // small replicate_group_x to null.
                 //
-                 for (UInt64 j = 0; j < replicate_times_for_one_row; j++){
-                     if (j == grouping_offset) {
-                         // only keep this column value for targeted replica.
-                         continue;
-                     }
-                     // set this column as null for all the other targeted replica.
-                     // todo: since nullable column always be prior to computation of null value first, should we clean the old data at the same pos in nested column
-                     auto computed_offset = i * replicate_times_for_one_row + j;
-                     cloned_one->getNullMapData().data()[computed_offset] = 1;
-                 }
+                for (UInt64 j = 0; j < replicate_times_for_one_row; j++)
+                {
+                    if (j == grouping_offset)
+                    {
+                        // only keep this column value for targeted replica.
+                        continue;
+                    }
+                    // set this column as null for all the other targeted replica.
+                    // todo: since nullable column always be prior to computation of null value first, should we clean the old data at the same pos in nested column
+                    auto computed_offset = i * replicate_times_for_one_row + j;
+                    cloned_one->getNullMapData().data()[computed_offset] = 1;
+                }
             }
             block.getByName(grouping_col).column = std::move(cloned_one);
         }
@@ -204,16 +208,18 @@ void Expand::replicateAndFillNull(Block & block) const
     // return input from block.
 }
 
-bool Expand::isInGroupSetColumn(String name) const{
-    for(const auto& it1 : group_sets_names)
+bool Expand::isInGroupSetColumn(String name) const
+{
+    for (const auto & it1 : group_sets_names)
     {
         // for every grouping set.
-        for(const auto& it2 : it1)
+        for (const auto & it2 : it1)
         {
             // for every grouping exprs
-            for(const auto& it3 : it2)
+            for (const auto & it3 : it2)
             {
-                if (it3 == name){
+                if (it3 == name)
+                {
                     return true;
                 }
             }
@@ -222,21 +228,21 @@ bool Expand::isInGroupSetColumn(String name) const{
     return false;
 }
 
-const GroupingColumnNames& Expand::getGroupSetColumnNamesByOffset(size_t offset) const
+const GroupingColumnNames & Expand::getGroupSetColumnNamesByOffset(size_t offset) const
 {
     /// currently, there only can be one groupingExprs in one groupingSet before the planner supporting the grouping set merge.
     return group_sets_names[offset][0];
 }
 
-void Expand::getAllGroupSetColumnNames(std::set<String>& name_set) const
+void Expand::getAllGroupSetColumnNames(std::set<String> & name_set) const
 {
-    for(const auto& it1 : group_sets_names)
+    for (const auto & it1 : group_sets_names)
     {
         // for every grouping set.
-        for(const auto& it2 : it1)
+        for (const auto & it2 : it1)
         {
             // for every grouping exprs
-            for(const auto& it3 : it2)
+            for (const auto & it3 : it2)
             {
                 name_set.insert(it3);
             }
@@ -246,9 +252,9 @@ void Expand::getAllGroupSetColumnNames(std::set<String>& name_set) const
 
 std::shared_ptr<Expand> Expand::sharedExpand(const GroupingSets & groupingSets)
 {
-   return std::make_shared<Expand>(groupingSets);
+    return std::make_shared<Expand>(groupingSets);
 }
 
 const std::string Expand::grouping_identifier_column_name = "groupingID";
 const DataTypePtr Expand::grouping_identifier_column_type = std::make_shared<DataTypeUInt64>();
-}
+} // namespace DB

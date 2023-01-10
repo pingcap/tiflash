@@ -365,15 +365,17 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set_columns)
 {
     assert(root);
-    auto grouping_sets_ast =  mock::MockVVecGroupingNameVec();
+    auto grouping_sets_ast = mock::MockVVecGroupingNameVec();
     auto grouping_col_collection = std::set<String>();
-    for (const auto & grouping_set : grouping_set_columns) {
+    for (const auto & grouping_set : grouping_set_columns)
+    {
         auto grouping_set_ast = mock::MockVecGroupingNameVec();
-        for (const auto &grouping_exprs : grouping_set) {
+        for (const auto & grouping_exprs : grouping_set)
+        {
             auto grouping_exprs_ast = mock::MockGroupingNameVec();
-            for (const auto &grouping_col : grouping_exprs)
+            for (const auto & grouping_col : grouping_exprs)
             {
-                auto ast_col_ptr = buildColumn(grouping_col);             // string identifier change to ast column ref
+                auto ast_col_ptr = buildColumn(grouping_col); // string identifier change to ast column ref
                 grouping_exprs_ast.emplace_back(std::move(ast_col_ptr));
                 grouping_col_collection.insert(grouping_col);
             }
