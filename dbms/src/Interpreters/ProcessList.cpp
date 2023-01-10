@@ -24,7 +24,6 @@
 #include <common/logger_useful.h>
 
 #include <chrono>
-#include <variant>
 
 namespace DB
 {
