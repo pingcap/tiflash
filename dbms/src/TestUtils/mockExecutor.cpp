@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/dataTypeToTP.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
@@ -36,7 +37,6 @@
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
-#include <TestUtils/typeUtils.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>

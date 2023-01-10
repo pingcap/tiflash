@@ -14,6 +14,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataTypes/dataTypeToTP.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -25,7 +26,6 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <TestUtils/typeUtils.h>
 
 namespace DB
 {

@@ -14,7 +14,7 @@
 
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <TestUtils/typeUtils.h>
+#include <DataTypes/dataTypeToTP.h>
 
 namespace DB::tests
 {

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/dataTypeToTP.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/typeUtils.h>
 
 namespace DB::tests
 {
