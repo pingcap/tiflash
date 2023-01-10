@@ -88,7 +88,7 @@ protected:
     MemoryTrackerPtr mem_tracker;
 
 private:
-    std::vector<EventPtr> next_events;
+    Events next_events;
 
     std::atomic_int32_t unfinished_dependencies{0};
 
