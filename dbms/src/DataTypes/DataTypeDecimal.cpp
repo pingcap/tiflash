@@ -41,7 +41,7 @@ void DataTypeDecimal<T>::serializeBinary(const Field & field, WriteBuffer & ostr
 template <typename T>
 void DataTypeDecimal<T>::deserializeBinary(Field & field, ReadBuffer & istr) const
 {
-    T x;
+    T x{};
     readBinary(x, istr);
     field = DecimalField(T(x), scale);
 }
@@ -55,7 +55,7 @@ void DataTypeDecimal<T>::serializeBinary(const IColumn & column, size_t row_num,
 template <typename T>
 void DataTypeDecimal<T>::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
-    T x;
+    T x{};
     readBinary(x, istr);
     static_cast<ColumnType &>(column).getData().push_back(FieldType(x));
 }
@@ -104,7 +104,7 @@ void DataTypeDecimal<T>::readText(T & x, ReadBuffer & istr) const
 template <typename T>
 void DataTypeDecimal<T>::deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const
 {
-    T v;
+    T v{};
     this->readText(v, istr);
     static_cast<ColumnType &>(column).getData().push_back(v);
 }
@@ -118,7 +118,7 @@ void DataTypeDecimal<T>::serializeTextQuoted(const IColumn & column, size_t row_
 template <typename T>
 void DataTypeDecimal<T>::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const
 {
-    T v;
+    T v{};
     this->readText(v, istr);
     static_cast<ColumnType &>(column).getData().push_back(v);
 }
@@ -145,7 +145,7 @@ void DataTypeDecimal<T>::serializeTextCSV(const IColumn & column, size_t row_num
 template <typename T>
 void DataTypeDecimal<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
 {
-    T x;
+    T x{};
     readCSVDecimal(x, istr, precision, scale);
     static_cast<ColumnType &>(column).getData().push_back(x);
 }
