@@ -50,11 +50,11 @@ try
     {
         String expected = R"(
 pipeline:
- <Projection, selection_3> | is_tidb_operator: false, schema: <selection_3_mock_table_scan_0, Nullable(String)>, <selection_3_mock_table_scan_1, Nullable(String)>, <selection_3_mock_table_scan_2, Nullable(String)>
- <Filter, selection_3> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <Filter, selection_2> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <Filter, selection_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <Projection, selection_3> | is_tidb_operator: false, schema: <selection_3_s1, Nullable(String)>, <selection_3_s2, Nullable(String)>, <selection_3_s3, Nullable(String)>
+ <Filter, selection_3> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <Filter, selection_2> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -66,11 +66,11 @@ pipeline:
     {
         String expected = R"(
 pipeline:
- <Projection, limit_3> | is_tidb_operator: false, schema: <limit_3_mock_table_scan_0, Nullable(String)>, <limit_3_mock_table_scan_1, Nullable(String)>, <limit_3_mock_table_scan_2, Nullable(String)>
- <Limit, limit_3> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <Limit, limit_2> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <Projection, limit_3> | is_tidb_operator: false, schema: <limit_3_s1, Nullable(String)>, <limit_3_s2, Nullable(String)>, <limit_3_s3, Nullable(String)>
+ <Limit, limit_3> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <Limit, limit_2> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -166,9 +166,9 @@ try
     {
         String expected = R"(
 pipeline:
- <Projection, limit_1> | is_tidb_operator: false, schema: <limit_1_mock_table_scan_0, Nullable(String)>, <limit_1_mock_table_scan_1, Nullable(String)>, <limit_1_mock_table_scan_2, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <Projection, limit_1> | is_tidb_operator: false, schema: <limit_1_s1, Nullable(String)>, <limit_1_s2, Nullable(String)>, <limit_1_s3, Nullable(String)>
+ <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
@@ -179,9 +179,9 @@ pipeline:
     {
         String expected = R"(
 pipeline:
- <Projection, project_1> | is_tidb_operator: false, schema: <project_1_mock_table_scan_0, Nullable(String)>, <project_1_mock_table_scan_1, Nullable(String)>, <project_1_mock_table_scan_2, Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <Projection, project_1> | is_tidb_operator: false, schema: <project_1_s1, Nullable(String)>, <project_1_s2, Nullable(String)>, <project_1_s3, Nullable(String)>
+ <Projection, project_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
@@ -236,9 +236,9 @@ Union: <for test>
     {
         String expected = R"(
 pipeline:
- <Projection, selection_1> | is_tidb_operator: false, schema: <selection_1_mock_table_scan_0, Nullable(String)>, <selection_1_mock_table_scan_1, Nullable(String)>, <selection_1_mock_table_scan_2, Nullable(String)>
- <Filter, selection_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <Projection, selection_1> | is_tidb_operator: false, schema: <selection_1_s1, Nullable(String)>, <selection_1_s2, Nullable(String)>, <selection_1_s3, Nullable(String)>
+ <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
@@ -392,10 +392,10 @@ MockExchangeSender
     {
         String expected = R"(
 pipeline:
- <MockExchangeSender, exchange_sender_2> | is_tidb_operator: true, schema: <exchange_sender_2_mock_table_scan_0, Nullable(String)>, <exchange_sender_2_mock_table_scan_1, Nullable(String)>, <exchange_sender_2_mock_table_scan_2, Nullable(String)>
- <Projection, limit_1> | is_tidb_operator: false, schema: <exchange_sender_2_mock_table_scan_0, Nullable(String)>, <exchange_sender_2_mock_table_scan_1, Nullable(String)>, <exchange_sender_2_mock_table_scan_2, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <MockExchangeSender, exchange_sender_2> | is_tidb_operator: true, schema: <exchange_sender_2_s1, Nullable(String)>, <exchange_sender_2_s2, Nullable(String)>, <exchange_sender_2_s3, Nullable(String)>
+ <Projection, limit_1> | is_tidb_operator: false, schema: <exchange_sender_2_s1, Nullable(String)>, <exchange_sender_2_s2, Nullable(String)>, <exchange_sender_2_s3, Nullable(String)>
+ <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
@@ -418,7 +418,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_3>
+    HashJoinProbe: <join probe, join_executor_id = Join_3, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -437,11 +437,11 @@ try
     {
         String expected = R"(
 pipeline:
- <Projection, project_3> | is_tidb_operator: false, schema: <project_3_mock_table_scan_0, Nullable(String)>
- <Projection, project_3> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>
- <Projection, project_2> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <mock_table_scan_0, Nullable(String)>, <mock_table_scan_1, Nullable(String)>, <mock_table_scan_2, Nullable(String)>)";
+ <Projection, project_3> | is_tidb_operator: false, schema: <project_3_s1, Nullable(String)>
+ <Projection, project_3> | is_tidb_operator: true, schema: <s1, Nullable(String)>
+ <Projection, project_2> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+ <Projection, project_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -636,7 +636,7 @@ try
     {
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
+ Expression x 8: <final projection>
   Expression: <expr after window>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     MergeSorting: <enable fine grained shuffle>, limit = 0
@@ -690,6 +690,108 @@ Union: <for test>
 }
 CATCH
 
+TEST_F(PipelineInterpreterExecuteTest, FineGrainedShuffleJoin)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    {
+        // Join Source.
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", enable);
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")},
+                                    enable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+    {
+        // Join Source.
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", disable);
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")},
+                                    disable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
+TEST_F(PipelineInterpreterExecuteTest, FineGrainedShuffleAgg)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    {
+        DAGRequestBuilder receiver1 = context.receive("sender_1", enable);
+        auto request = receiver1
+                           .aggregation({Max(col("s1"))}, {col("s2")}, enable)
+                           .build(context);
+        String expected = R"(
+Union: <for test>
+ Expression x 8: <final projection>
+  Expression: <expr after aggregation>
+   Aggregating: <enable fine grained shuffle>
+    Expression: <before aggregation>
+     MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        DAGRequestBuilder receiver1 = context.receive("sender_1", disable);
+        auto request = receiver1
+                           .aggregation({Max(col("s1"))}, {col("s2")}, disable)
+                           .build(context);
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <expr after aggregation>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <before aggregation>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
 TEST_F(PipelineInterpreterExecuteTest, Join)
 try
 {
@@ -724,13 +826,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -766,13 +868,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -809,14 +911,14 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6>
+     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
       Expression: <final projection>
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -852,7 +954,7 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
          Expression: <final projection>
           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -883,13 +985,10 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
          Expression: <append join key and join filters for probe side>
           Expression: <final projection>
-           MockTableScan
-      Expression x 10: <before aggregation>
-       Expression: <remove useless column after join>
-        NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -925,13 +1024,10 @@ CreatingSets
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <before aggregation>
             Expression: <remove useless column after join>
-             HashJoinProbe: <join probe, join_executor_id = Join_2>
+             HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
               Expression: <append join key and join filters for probe side>
                Expression: <final projection>
-                MockExchangeReceiver
-           Expression x 20: <before aggregation>
-            Expression: <remove useless column after join>
-             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+                MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }
