@@ -1130,8 +1130,7 @@ void Aggregator::convertToBlocksImpl(
     std::vector<std::vector<IColumn *>> raw_key_columns_vec;
     for (auto & key_columns : key_columns_vec)
     {
-        if (key_columns.size() != params.keys_size)
-            throw Exception{"Aggregate. Unexpected key columns size.", ErrorCodes::LOGICAL_ERROR};
+        RUNTIME_CHECK_MSG(key_columns.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
 
         std::vector<IColumn *> raw_key_columns;
         raw_key_columns.reserve(key_columns.size());
@@ -1566,8 +1565,7 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
         if (data_variants.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
         {
             AggregatedDataWithoutKey & data = data_variants.without_key;
-            if (!data)
-                throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
+            RUNTIME_CHECK_MSG(data, "Wrong data variant passed.");
             if (!final_)
             {
                 for (size_t i = 0; i < params.aggregates_size; ++i)
