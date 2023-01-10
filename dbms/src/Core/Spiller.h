@@ -49,7 +49,8 @@ class Spiller
 public:
     Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger);
     void spillBlocks(const Blocks & blocks, size_t partition_id);
-    BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size);
+    /// max_stream_size == 0 means the spiller choose the stream size automatically
+    BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size = 0);
     size_t spilledBlockDataSize(size_t partition_id);
     void finishSpill() { spill_finished = true; };
     bool hasSpilledData() { return has_spilled_data; };

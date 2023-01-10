@@ -59,14 +59,11 @@ try
     context.context.setSetting("max_block_size", Field(max_block_size));
     /// disable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
-    auto ref_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
-    auto ref_block = mergeBlocks(std::move(ref_blocks));
+    auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
-    auto result_blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
-    /// the block size is different with and without spill, so has to merge all the blocks into one block before compare
-    auto result_block = mergeBlocks(std::move(result_blocks));
-    ASSERT_BLOCK_EQ(ref_block, result_block);
+    // don't use `executeAndAssertColumnsEqual` since it takes too long to run
+    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, original_max_streams));
 }
 CATCH
 } // namespace tests

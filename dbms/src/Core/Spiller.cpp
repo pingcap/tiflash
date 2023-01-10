@@ -113,7 +113,6 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(spill_finished, "{}: restore before the spiller is finished.", config.spill_id);
     if (max_stream_size == 0)
-        /// max_stream_size == 0 means the spiller choose the stream size automatically
         max_stream_size = spilled_files[partition_id]->spilled_files.size();
     if (is_input_sorted && spilled_files[partition_id]->spilled_files.size() > max_stream_size)
         LOG_WARNING(logger, "sorted spilled data restore does not take max_stream_size into account");
