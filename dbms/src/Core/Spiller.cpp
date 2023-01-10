@@ -65,7 +65,7 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, size_t part
     }
     else
     {
-        RUNTIME_CHECK_MSG(!spill_dir.isDirectory(), "Spill dir {} is a file", spill_dir.path());
+        RUNTIME_CHECK_MSG(spill_dir.isDirectory(), "Spill dir {} is a file", spill_dir.path());
     }
 }
 
