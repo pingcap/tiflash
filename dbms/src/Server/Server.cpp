@@ -901,10 +901,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = std::make_unique<Context>(Context::createGlobal(server_info));
+    global_context = std::make_unique<Context>(Context::createGlobal());
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
+    global_context->setServerInfo(server_info);
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)

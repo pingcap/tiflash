@@ -205,9 +205,8 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
-    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_, const std::optional<ServerInfo> & server_info_ = std::nullopt)
+    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
-        , server_info(server_info_)
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
     {
         /// TODO: make it singleton (?)
@@ -280,11 +279,11 @@ private:
 Context::Context() = default;
 
 
-Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory, const std::optional<ServerInfo> & server_info)
+Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
 {
     Context res;
     res.runtime_components_factory = runtime_components_factory;
-    res.shared = std::make_shared<ContextShared>(runtime_components_factory, server_info);
+    res.shared = std::make_shared<ContextShared>(runtime_components_factory);
     res.quota = std::make_shared<QuotaForIntervals>();
     res.timezone_info.init();
     res.disaggregated_mode = DisaggregatedMode::None;
@@ -292,9 +291,9 @@ Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime
     return res;
 }
 
-Context Context::createGlobal(const std::optional<ServerInfo> & server_info)
+Context Context::createGlobal()
 {
-    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), server_info);
+    return createGlobal(std::make_unique<RuntimeComponentsFactory>());
 }
 
 Context::~Context()
@@ -325,6 +324,10 @@ const ProcessList & Context::getProcessList() const
     return shared->process_list;
 }
 
+void Context::setServerInfo(const ServerInfo & server_info)
+{
+    shared->server_info = server_info;
+}
 const std::optional<ServerInfo> & Context::getServerInfo() const
 {
     return shared->server_info;
