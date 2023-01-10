@@ -14,6 +14,8 @@
 
 #include "FastAddPeer.h"
 
+#include <Common/FailPoint.h>
+#include <Common/ThreadPool.h>
 #include <Poco/DirectoryIterator.h>
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -25,10 +27,13 @@
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 #include <cstdio>
+#include <future>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 
@@ -305,10 +310,21 @@ std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(Context & context, U
     return std::make_pair(true, choosed);
 }
 
-FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
+namespace FailPoints
+{
+extern const char fast_add_peer_sleep[];
+}
+
+FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
     try
     {
+        auto * log = &Poco::Logger::get("fast add");
+        using namespace std::chrono_literals;
+        fiu_do_on(FailPoints::fast_add_peer_sleep, {
+            LOG_INFO(log, "failpoint sleep before add peer");
+            std::this_thread::sleep_for(500ms);
+        });
         std::optional<RemoteMeta> maybe_remote_peer = std::nullopt;
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto kvstore = server->tmt->getKVStore();
@@ -327,7 +343,6 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             else
                 break;
         }
-        auto * log = &Poco::Logger::get("fast add");
         auto & remote_peer = maybe_remote_peer.value();
         auto checkpoint_store_id = remote_peer.remote_store_id;
         auto checkpoint_manifest_path = remote_peer.checkpoint_path;
@@ -383,4 +398,38 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
 }
+
+FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
+{
+    try
+    {
+        auto * log = &Poco::Logger::get("fast add");
+        auto & fap_ctx = server->tmt->getContext().getFastAddPeerContext();
+        if (!fap_ctx.tasks_trace->isScheduled(region_id))
+        {
+            LOG_INFO(log, "add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+            // We need to schedule the task.
+            fap_ctx.tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
+                return FastAddPeerImpl(server, region_id, new_peer_id);
+            });
+        }
+
+        if (fap_ctx.tasks_trace->isReady(region_id))
+        {
+            LOG_INFO(log, "fetch task result [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+            return fap_ctx.tasks_trace->fetchResult(region_id);
+        }
+        else
+        {
+            LOG_DEBUG(log, "the task is still pending [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+            return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
+        }
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException("FastAddPeer", fmt::format("Failed when try to restore from checkpoint {}", StackTrace().toString()));
+        return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+    }
+}
+
 } // namespace DB

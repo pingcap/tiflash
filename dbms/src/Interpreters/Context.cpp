@@ -71,9 +71,12 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
+#include <memory>
 #include <pcg_random.hpp>
 #include <set>
 #include <unordered_map>
+
+#include "Storages/Transaction/FastAddPeerContext.h"
 
 
 namespace ProfileEvents
@@ -261,6 +264,8 @@ struct ContextShared
     /// Cached local cache of remote checkpoint manifest file.
     LocalPageStorageCache<UniversalPageStoragePtr> local_ps_cache{1};
 
+    FastAddPeerContext * fast_add_peer_ctx;
+
     DM::Remote::ManagerPtr dm_remote_manager;
 
     TiFlashSecurityConfigPtr security_config;
@@ -367,12 +372,14 @@ struct ContextShared
             std::lock_guard lock(mutex);
             databases.clear();
         }
+        delete fast_add_peer_ctx;
     }
 
 private:
     void initialize()
     {
         security_manager = runtime_components_factory->createSecurityManager();
+        fast_add_peer_ctx = new FastAddPeerContext();
     }
 };
 
@@ -1830,6 +1837,11 @@ UniversalPageStoragePtr Context::getReadNodePageStorage() const
 LocalPageStorageCache<UniversalPageStoragePtr> & Context::getLocalPageStorageCache()
 {
     return shared->local_ps_cache;
+}
+
+FastAddPeerContext & Context::getFastAddPeerContext()
+{
+    return *(shared->fast_add_peer_ctx);
 }
 
 UInt16 Context::getTCPPort() const
