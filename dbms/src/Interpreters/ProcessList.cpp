@@ -161,7 +161,6 @@ ProcessList::EntryPtr ProcessList::insert(
             /// You should specify this value in configuration for default profile,
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
-
             total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries.getActualBytes(total_memory));
             total_memory_tracker->setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker->setDescription("(total)");
