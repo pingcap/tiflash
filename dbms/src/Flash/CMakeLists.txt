@@ -31,6 +31,7 @@ target_link_libraries(flash_service dbms)
 
 if (ENABLE_TESTS)
     add_subdirectory(Coprocessor/tests)
+    add_subdirectory(Executor/tests)
     add_subdirectory(Pipeline/tests)
     add_subdirectory(Pipeline/Exec/tests)
     add_subdirectory(Pipeline/Schedule/tests)
