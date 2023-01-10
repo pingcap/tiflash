@@ -339,7 +339,7 @@ public:
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.
-    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const
+    std::optional<std::set<PageId>> getAliveExternalIds(NamespaceId ns_id) const
     {
         return external_ids_by_ns.getAliveIds(ns_id);
     }

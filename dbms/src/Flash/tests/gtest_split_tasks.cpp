@@ -126,7 +126,7 @@ try
         "   MergeSorting, limit = 2\n"
         "    PartialSorting: limit = 2\n"
         "     Expression: <remove useless column after join>\n"
-        "      HashJoinProbe: <join probe, join_executor_id = Join_2>\n"
+        "      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>\n"
         "       Expression: <final projection>\n"
         "        MockExchangeReceiver"};
     for (size_t i = 0; i < task_size; ++i)
