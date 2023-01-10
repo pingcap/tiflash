@@ -19,6 +19,7 @@
 #include <Common/VariantOp.h>
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -492,7 +493,7 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
     return manual_compact_manager->handleRequest(request, response);
 }
 
-void FlashService::setMockStorage(MockStorage & mock_storage_)
+void FlashService::setMockStorage(MockStorage * mock_storage_)
 {
     mock_storage = mock_storage_;
 }

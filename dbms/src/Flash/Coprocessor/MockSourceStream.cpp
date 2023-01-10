@@ -18,7 +18,13 @@ namespace DB
 {
 std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(Context & context, size_t max_streams, DB::LoggerPtr log, const TiDBTableScan & table_scan)
 {
-    ColumnsWithTypeAndName columns_with_type_and_name = context.mockStorage().getColumnsForMPPTableScan(table_scan, context.mockMPPServerInfo().partition_id, context.mockMPPServerInfo().partition_num);
+    ColumnsWithTypeAndName columns_with_type_and_name = context.mockStorage()->getColumnsForMPPTableScan(table_scan, context.mockMPPServerInfo().partition_id, context.mockMPPServerInfo().partition_num);
     return cutStreams<MockTableScanBlockInputStream>(context, columns_with_type_and_name, max_streams, log);
+}
+size_t getMockSourceStreamConcurrency(size_t max_streams, size_t scan_concurrency_hint)
+{
+    if (scan_concurrency_hint == 0)
+        return max_streams;
+    return std::max(std::min(max_streams, scan_concurrency_hint), 1);
 }
 } // namespace DB
