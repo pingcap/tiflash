@@ -130,7 +130,7 @@ Block NonJoinedBlockInputStream::readImpl()
 {
     /// build concurrency is less than non join concurrency,
     /// just return empty block for extra non joined block input stream read
-    if (index >= parent.getBuildConcurrency())
+    if (unlikely(index >= parent.getBuildConcurrency()))
         return Block();
     if (parent.blocks.empty())
         return Block();

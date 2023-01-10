@@ -68,7 +68,6 @@ private:
     BlockInputStreamPtr non_joined_stream;
     SquashingHashJoinBlockTransform squashing_transform;
     ProbeStatus status{ProbeStatus::PROBE};
-    Block child_header;
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
 };

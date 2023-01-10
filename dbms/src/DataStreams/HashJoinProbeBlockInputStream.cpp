@@ -143,7 +143,10 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             auto block = non_joined_stream->read();
             non_joined_rows += block.rows();
             if (!block)
+            {
+                non_joined_stream->readSuffix();
                 status = ProbeStatus::FINISHED;
+            }
             return block;
         }
         case ProbeStatus::FINISHED:
