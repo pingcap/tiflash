@@ -53,7 +53,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
 
 void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
+    assert(pipeline.streams.empty());
 
     if (context.isDisaggregatedComputeMode())
     {

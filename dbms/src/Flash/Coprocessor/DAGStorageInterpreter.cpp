@@ -340,8 +340,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-    // It is impossible to have no joined stream.
-    assert(pipeline.streams_with_non_joined_data.empty());
     // after buildRemoteStreams, remote read stream will be appended in pipeline.streams.
     size_t remote_read_streams_start_index = pipeline.streams.size();
 
@@ -422,7 +420,6 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     auto [has_cast, extra_cast, project_for_cop_read] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        assert(pipeline.streams_with_non_joined_data.empty());
         assert(remote_read_streams_start_index <= pipeline.streams.size());
         size_t i = 0;
         // local streams

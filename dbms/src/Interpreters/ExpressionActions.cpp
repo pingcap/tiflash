@@ -749,7 +749,7 @@ std::string ExpressionActions::dumpActions() const
 BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
 {
     for (const auto & action : actions)
-        if (action.join && (action.join->getKind() == ASTTableJoin::Kind::Full || action.join->getKind() == ASTTableJoin::Kind::Right))
+        if (action.join && (action.join->needReturnNonJoinedData()))
             return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
 
     return {};

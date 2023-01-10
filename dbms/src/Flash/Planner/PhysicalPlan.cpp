@@ -150,7 +150,10 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
         if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
-            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver()));
+        {
+            size_t fine_grained_stream_count = executor->has_fine_grained_shuffle_stream_count() ? executor->fine_grained_shuffle_stream_count() : 0;
+            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver(), fine_grained_stream_count));
+        }
         else
         {
             // for MPP test, we can use real exchangeReceiver to run an query across different compute nodes

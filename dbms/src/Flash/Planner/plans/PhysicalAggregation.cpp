@@ -107,7 +107,6 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     if (fine_grained_shuffle.enable())
     {
         /// For fine_grained_shuffle, just do aggregation in streams independently
-        RUNTIME_CHECK(pipeline.streams_with_non_joined_data.empty());
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
@@ -118,13 +117,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
-    else if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    else if (pipeline.streams.size() > 1)
     {
         /// If there are several sources, then we perform parallel aggregation
         const Settings & settings = context.getSettingsRef();
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
-            pipeline.streams_with_non_joined_data,
+            BlockInputStreams{},
             params,
             context.getFileProvider(),
             true,
@@ -133,7 +132,6 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
             log->identifier());
 
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
 
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
@@ -144,11 +142,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         if (!pipeline.streams.empty())
             inputs.push_back(pipeline.firstStream());
 
-        if (!pipeline.streams_with_non_joined_data.empty())
-            inputs.push_back(pipeline.streams_with_non_joined_data.at(0));
-
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
 
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
