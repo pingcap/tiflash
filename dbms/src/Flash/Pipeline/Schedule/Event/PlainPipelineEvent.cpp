@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/Schedule/Task/PipelineTask.h>
 #include <Flash/Pipeline/Schedule/Event/PlainPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Task/PipelineTask.h>
 
 namespace DB
 {
