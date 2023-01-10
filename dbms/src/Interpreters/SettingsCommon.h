@@ -390,7 +390,7 @@ private:
 };
 
 /// MemoryLimit can either be an UInt64 (means memory limit in bytes),
-/// or be a float-point number (means memory limit in percent of total RAM, from 0.0 to 1.0).
+/// or be a float-point number (means memory limit ratio of total RAM, from 0.0 to 1.0).
 /// 0 or 0.0 means unlimited.
 struct SettingMemoryLimit
 {
