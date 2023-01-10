@@ -23,7 +23,6 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <common/logger_useful.h>
 
-#include <atomic>
 #include <chrono>
 #include <variant>
 
@@ -120,8 +119,8 @@ ProcessList::EntryPtr ProcessList::insert(
 
             if (user_process_list != user_to_queries.end())
             {
-                if (!is_unlimited_query && settings.max_concurrent_queries_for_user
-                    && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user)
+                if (!is_unlimited_query && settings.max_concurrent_queries_for_user.getActualBytes(total_memory)
+                    && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user.getActualBytes(total_memory))
                     throw Exception("Too many simultaneous queries for user " + client_info.current_user
                                         + ". Current: " + toString(user_process_list->second.queries.size())
                                         + ", maximum: " + settings.max_concurrent_queries_for_user.toString(),
@@ -143,7 +142,7 @@ ProcessList::EntryPtr ProcessList::insert(
 
         ++cur_size;
 
-        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage, settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
+        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage.getActualBytes(total_memory), settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());
@@ -155,7 +154,7 @@ ProcessList::EntryPtr ProcessList::insert(
             ///  setting from one query effectively sets values for all other queries.
 
             /// Track memory usage for all simultaneously running queries from single user.
-            user_process_list.user_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_user);
+            user_process_list.user_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_user.getActualBytes(total_memory));
             user_process_list.user_memory_tracker->setDescription("(for user)");
             current_memory_tracker->setNext(user_process_list.user_memory_tracker.get());
 

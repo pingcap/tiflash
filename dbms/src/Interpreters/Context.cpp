@@ -295,7 +295,6 @@ Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime
     res.quota = std::make_shared<QuotaForIntervals>();
     res.timezone_info.init();
     res.disaggregated_mode = DisaggregatedMode::None;
-
     return res;
 }
 
