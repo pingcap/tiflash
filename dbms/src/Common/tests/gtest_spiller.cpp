@@ -312,8 +312,7 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, 128});
-        column.name = type_and_name.name;
+        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
@@ -361,8 +360,7 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, 128});
-        column.name = type_and_name.name;
+        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
@@ -408,8 +406,7 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, 128});
-        column.name = type_and_name.name;
+        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
@@ -451,8 +448,7 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, 128});
-        column.name = type_and_name.name;
+        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
