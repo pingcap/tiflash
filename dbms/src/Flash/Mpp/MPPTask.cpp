@@ -26,7 +26,6 @@
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
@@ -34,6 +33,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 #include <chrono>
 #include <ext/scope_guard.h>
@@ -52,8 +52,9 @@ extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
-MPPTask::MPPTask(const mpp::TaskMeta & meta, const ContextPtr & context_)
-    : id(meta)
+MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
+    : meta(meta_)
+    , id(meta)
     , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
     , schedule_entry(manager, id)
@@ -120,8 +121,6 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
-    const mpp::TaskMeta & sender_meta = task_request.meta();
-
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
@@ -129,19 +128,16 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
-        mpp::TaskMeta receiver_meta;
-        if (unlikely(!receiver_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
+        mpp::TaskMeta task_meta;
+        if (unlikely(!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-
-        bool is_local = context->getSettingsRef().enable_local_tunnel && sender_meta.address() == receiver_meta.address();
-
+        bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
-
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(receiver_meta, sender_meta, timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
         LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
-        tunnel_set_local->registerTunnel(MPPTaskId(receiver_meta), tunnel);
+        tunnel_set_local->registerTunnel(MPPTaskId(task_meta), tunnel);
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
@@ -279,7 +275,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         }
         is_root_mpp_task = task_meta.task_id() == -1;
     }
-
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
