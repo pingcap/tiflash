@@ -31,7 +31,7 @@ bool PlainPipelineEvent::scheduleImpl()
     tasks.reserve(pipline_exec_group.size());
     for (auto & pipline_exec : pipline_exec_group)
         tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, shared_from_this(), std::move(pipline_exec)));
-    scheduleTask(tasks);
+    scheduleTasks(tasks);
     return false;
 }
 } // namespace DB

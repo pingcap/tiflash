@@ -68,7 +68,7 @@ protected:
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<BaseTask>(shared_from_this(), counter));
-        scheduleTask(tasks);
+        scheduleTasks(tasks);
         return false;
     }
 
@@ -128,7 +128,7 @@ protected:
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
             tasks.push_back(std::make_unique<RunTask>(shared_from_this()));
-        scheduleTask(tasks);
+        scheduleTasks(tasks);
         return false;
     }
 
@@ -189,7 +189,7 @@ protected:
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
             tasks.push_back(std::make_unique<WaitCancelTask>(shared_from_this()));
-        scheduleTask(tasks);
+        scheduleTasks(tasks);
         return false;
     }
 

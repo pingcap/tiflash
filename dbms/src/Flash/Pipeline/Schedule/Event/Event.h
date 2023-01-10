@@ -71,14 +71,14 @@ protected:
 
     virtual void finalizeFinish() {}
 
-    void scheduleTask(std::vector<TaskPtr> & tasks);
+    void scheduleTasks(std::vector<TaskPtr> & tasks);
 
 private:
     void finish() noexcept;
 
-    void addNext(const EventPtr & next);
+    void addDependent(const EventPtr & dependent);
 
-    void completeDependency();
+    void onDependencyComplete();
 
     void switchStatus(EventStatus from, EventStatus to);
 
@@ -88,7 +88,7 @@ protected:
     MemoryTrackerPtr mem_tracker;
 
 private:
-    Events next_events;
+    Events dependents;
 
     std::atomic_int32_t unfinished_dependencies{0};
 
