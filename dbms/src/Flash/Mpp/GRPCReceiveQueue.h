@@ -24,8 +24,8 @@
 #include <functional>
 #include <magic_enum.hpp>
 #include <mutex>
-#include <utility>
 #include <set>
+#include <utility>
 
 namespace DB
 {
@@ -40,7 +40,8 @@ class KickReceiveTag : public grpc::internal::CompletionQueueTag
 {
 public:
     explicit KickReceiveTag(const LoggerPtr & log_)
-    : log(log_) {}
+        : log(log_)
+    {}
 
     void pushTag(void * tag)
     {
@@ -59,7 +60,7 @@ public:
 
 private:
     std::mutex mu;
-    std::deque<void*> tags;
+    std::deque<void *> tags;
     const LoggerPtr log;
 };
 
@@ -98,7 +99,7 @@ public:
 
     // For gtest usage.
     GRPCReceiveQueue(size_t queue_size, GRPCKickFunc func)
-        :  recv_queue(queue_size)
+        : recv_queue(queue_size)
         , log(Logger::get())
         , kick_func(func)
         , kick_recv_tag(log)
@@ -175,7 +176,7 @@ public:
             return GRPCReceiveQueueRes::CANCELLED;
         case MPMCQueueResult::FULL:
         {
-            kick_recv_tag.pushTag(new_tag);
+            tags.push_back(new_tag);
             return GRPCReceiveQueueRes::FULL;
         }
         default:
@@ -197,16 +198,17 @@ private:
             transferTagToKickReceiveTagWithNoLock();
         }
 
-        grpc_call_error error = kick_func(&kick_recv_tag);
-        // If an error occur, there must be something wrong about shutdown process.
-        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
+        callKickFunc();
     }
 
     void handleTheRemainingTags()
     {
         std::lock_guard lock(mu);
         while (!tags.empty())
+        {
             transferTagToKickReceiveTagWithNoLock();
+            callKickFunc();
+        }
     }
 
     void transferTagToKickReceiveTagWithNoLock()
@@ -215,9 +217,16 @@ private:
         tags.pop_front();
     }
 
+    void callKickFunc()
+    {
+        grpc_call_error error = kick_func(&kick_recv_tag);
+        // If an error occur, there must be something wrong about shutdown process.
+        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
+    }
+
     MPMCQueue<T> recv_queue;
     std::mutex mu;
-    std::deque<void*> tags;
+    std::deque<void *> tags;
     const LoggerPtr log;
     GRPCKickFunc kick_func;
     KickReceiveTag kick_recv_tag;
