@@ -307,7 +307,7 @@ void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_reques
             serializeLimit("Limit", executor.limit(), buf);
             break;
         case tipb::ExecType::TypeExpand:
-            serializeExpandSource("Repeat", executor.expand(), buf);
+            serializeExpandSource("Expand", executor.expand(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);

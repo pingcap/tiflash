@@ -39,7 +39,7 @@ public:
 TEST_F(ExpandExecutorTestRunner, ExpandLogical)
 try
 {
-    /// case 1block.getByName(grouping_col).column->isColumnNullable()
+    /// case 1
     auto request = context
                        .scan("test_db", "test_table")
                        .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
