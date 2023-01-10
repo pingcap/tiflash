@@ -32,10 +32,10 @@ class TestGRPCSendQueue;
 
 /// In grpc cpp framework, the tag that is pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
-class KickReceiveTag : public grpc::internal::CompletionQueueTag
+class KickSendTag : public grpc::internal::CompletionQueueTag
 {
 public:
-    explicit KickReceiveTag(std::function<void *()> a)
+    explicit KickSendTag(std::function<void *()> a)
         : action(std::move(a))
     {}
 
@@ -51,7 +51,7 @@ private:
     std::function<void *()> action;
 };
 
-using GRPCKickFunc = std::function<grpc_call_error(KickReceiveTag *)>;
+using GRPCKickFunc = std::function<grpc_call_error(KickSendTag *)>;
 
 enum class GRPCSendQueueRes
 {
@@ -270,7 +270,7 @@ private:
 
     GRPCKickFunc kick_func;
 
-    KickReceiveTag kick_send_tag;
+    KickSendTag kick_send_tag;
 };
 
 } // namespace DB
