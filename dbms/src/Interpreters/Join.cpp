@@ -852,7 +852,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrencyInternal());
-    assert(stream_index < getNotJoinedStreamConcurrencyInternal());
 
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);

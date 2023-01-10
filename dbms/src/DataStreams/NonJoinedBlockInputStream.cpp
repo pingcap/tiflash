@@ -128,7 +128,7 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 
 Block NonJoinedBlockInputStream::readImpl()
 {
-    /// build concurrency is less than non join concurrency,
+    /// If build concurrency is less than non join concurrency,
     /// just return empty block for extra non joined block input stream read
     if (unlikely(index >= parent.getBuildConcurrency()))
         return Block();

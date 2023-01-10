@@ -389,10 +389,6 @@ private:
             throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
         return build_concurrency;
     }
-    size_t getNotJoinedStreamConcurrencyInternal() const
-    {
-        return getBuildConcurrencyInternal();
-    }
 
     /// Initialize map implementations for various join types.
     void initMapImpl(Type type_);
