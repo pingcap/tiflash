@@ -43,6 +43,8 @@
 #include <atomic>
 #include <numeric>
 
+#include "Flash/Disaggregated/PageDownloader.h"
+
 namespace pingcap::kv
 {
 // The rpc trait
@@ -255,6 +257,13 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto page_downloader = std::make_shared<PageDownloader>(
+        remote_read_tasks,
+        page_receiver,
+        column_defines,
+        num_streams,
+        log->identifier(),
+        executor_id);
 
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";

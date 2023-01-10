@@ -44,7 +44,15 @@ enum class SegmentReadTaskState
     Init,
     Error,
     Receiving,
+    // All data are ready for reading
     AllReady,
+    // The data are ready for reading, doing place index to
+    // speed up later reading
+    AllReadyPrepraring,
+    // The data are ready for reading with some preparation done
+    AllReadyPrepared,
+    //
+    Reading,
 };
 
 class RemoteReadTask
@@ -68,6 +76,10 @@ public:
         bool meet_error);
 
     void allDataReceive(const String & end_err_msg);
+
+    // Return a segment read task that is ready for some preparation
+    // to speed up later reading
+    RemoteSegmentReadTaskPtr nextTaskForPrepare();
 
     // Return a segment read task that is ready for reading.
     RemoteSegmentReadTaskPtr nextReadyTask();
@@ -206,6 +218,8 @@ public:
         std::lock_guard lock(mtx_queue);
         mem_table_blocks.push(std::move(block));
     }
+
+    void prepare();
 
     friend class tests::RemoteReadTaskTest;
 

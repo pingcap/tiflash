@@ -166,7 +166,7 @@ void RemoteReadTask::allDataReceive(const String & end_err_msg)
                 continue;
             }
 
-            // init or receiving
+            // init or receiving -> all data ready
             for (const auto & seg_task : tasks)
             {
                 auto old_state = seg_task->state;
@@ -196,6 +196,43 @@ void RemoteReadTask::insertTask(const RemoteSegmentReadTaskPtr & seg_task, std::
         ready_segment_tasks.emplace(seg_task->state, std::list<RemoteSegmentReadTaskPtr>{seg_task});
 }
 
+RemoteSegmentReadTaskPtr RemoteReadTask::nextTaskForPrepare()
+{
+    std::unique_lock ready_lock(mtx_ready_tasks);
+    RemoteSegmentReadTaskPtr seg_task = nullptr;
+    cv_ready_tasks.wait(ready_lock, [this, &seg_task, &ready_lock] {
+        // All segment task are processed, return a nullptr
+        if (doneOrErrorHappen())
+            return true;
+
+        // Check whether there are segment task ready for place index
+        if (auto iter = ready_segment_tasks.find(SegmentReadTaskState::AllReady); iter != ready_segment_tasks.end())
+        {
+            if (iter->second.empty())
+                return false; // yield for another awake
+            seg_task = iter->second.front();
+            iter->second.pop_front();
+            if (iter->second.empty())
+            {
+                ready_segment_tasks.erase(iter);
+            }
+
+            const auto old_state = seg_task->state;
+            seg_task->state = SegmentReadTaskState::AllReadyPrepraring;
+            LOG_DEBUG(
+                Logger::get(),
+                "seg_task: {} from {} to {}",
+                seg_task->segment_id,
+                magic_enum::enum_name(old_state),
+                magic_enum::enum_name(seg_task->state));
+            insertTask(seg_task, ready_lock);
+            return true;
+        }
+        return false;
+    });
+    return seg_task;
+}
+
 RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
 {
     std::unique_lock ready_lock(mtx_ready_tasks);
@@ -205,12 +242,28 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
         if (doneOrErrorHappen())
             return true;
 
-        // Check whether there are segment task ready for reading
+        // First check whether there are prepared segment task
+        if (auto iter = ready_segment_tasks.find(SegmentReadTaskState::AllReadyPrepared); iter != ready_segment_tasks.end())
+        {
+            if (!iter->second.empty())
+            {
+                seg_task = iter->second.front();
+                seg_task->state = SegmentReadTaskState::Reading;
+                iter->second.pop_front();
+                if (iter->second.empty())
+                {
+                    ready_segment_tasks.erase(iter);
+                }
+                return true;
+            }
+        }
+        // Else fallback to check whether there are segment task ready for reading
         if (auto iter = ready_segment_tasks.find(SegmentReadTaskState::AllReady); iter != ready_segment_tasks.end())
         {
             if (iter->second.empty())
                 return false;
             seg_task = iter->second.front();
+            seg_task->state = SegmentReadTaskState::Reading;
             iter->second.pop_front();
             if (iter->second.empty())
             {
@@ -427,6 +480,11 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
     }
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(Logger::get(), "receive page, oid={}", oid.info());
+}
+
+void RemoteSegmentReadTask::prepare()
+{
+    segment->placeDeltaIndex(*dm_context);
 }
 
 BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
