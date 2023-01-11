@@ -52,6 +52,8 @@ public:
         , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
+    void buildPipeline(PipelineBuilder & builder) override;
+
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;

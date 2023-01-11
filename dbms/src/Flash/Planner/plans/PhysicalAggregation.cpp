@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
@@ -157,6 +158,20 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     // See #3804.
     assert(expr_after_agg && !expr_after_agg->getActions().empty());
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
+}
+
+void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
+{
+    // Break the pipeline for pre-agg.
+    // FIXME: Should be newly created PhysicalPreAgg.
+    auto pre_agg_builder = builder.breakPipeline(shared_from_this());
+    // Pre-agg pipeline.
+    child->buildPipeline(pre_agg_builder);
+    pre_agg_builder.build();
+    // Final-agg pipeline.
+    // FIXME: Should be newly created PhysicalFinalAgg.
+    builder.addPlanNode(shared_from_this());
+    throw Exception("Unsupport");
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)

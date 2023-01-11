@@ -65,15 +65,15 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
 {
     assert(!plan_nodes.empty());
     auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.front());
-    plan_nodes.push_front(get_result_sink);
+    plan_nodes.push_back(get_result_sink);
 }
 
 PipelineExecGroup Pipeline::toExecGroup(Context & context, size_t concurrency)
 {
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
-    for (auto it = plan_nodes.rbegin(); it != plan_nodes.rend(); ++it)
-        (*it)->buildPipelineExec(builder, context, concurrency);
+    for (const auto & plan_node : plan_nodes)
+        plan_node->buildPipelineExec(builder, context, concurrency);
     return builder.build();
 }
 

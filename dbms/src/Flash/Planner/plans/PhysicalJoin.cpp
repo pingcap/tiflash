@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
@@ -232,6 +233,21 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline, Context & context)
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
     assert(schema_project && !schema_project->getActions().empty());
     executeExpression(pipeline, schema_project, log, "remove useless column after join");
+}
+
+void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
+{
+    // Break the pipeline for join build.
+    // FIXME: Should be newly created PhysicalJoinBuild.
+    auto join_build_builder = builder.breakPipeline(shared_from_this());
+    // Join build pipeline.
+    build()->buildPipeline(join_build_builder);
+    join_build_builder.build();
+    // Join probe pipeline.
+    probe()->buildPipeline(builder);
+    // FIXME: Should be newly created PhysicalJoinProbe.
+    builder.addPlanNode(shared_from_this());
+    throw Exception("Unsupport");
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)

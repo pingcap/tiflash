@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/PipelineBuildState.h>
+#include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -292,26 +292,23 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-Pipelines PhysicalPlan::toPipelines()
+PipelinePtr PhysicalPlan::toPipeline()
 {
     assert(root_node);
-    PipelineBuildState state;
-    auto root_pipeline = state.addPipeline();
-    root_node->buildPipelines(root_pipeline, state);
+    PipelineBuilder builder;
+    root_node->buildPipeline(builder);
     root_node.reset();
-    auto result = state.build();
+    auto pipeline = builder.build();
     auto to_string = [&]() -> String {
-        if (result.empty())
-            return "";
         FmtBuffer buffer;
         // just call the root pipeline.
-        result[0]->toTreeString(buffer);
+        pipeline->toTreeString(buffer);
         return buffer.toString();
     };
     LOG_DEBUG(
         log,
         "build pipeline dag: \n{}",
         to_string());
-    return result;
+    return pipeline;
 }
 } // namespace DB
