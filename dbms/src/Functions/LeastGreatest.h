@@ -122,6 +122,7 @@ public:
 private:
     const Context & context;
 };
+template <bool use_collator = true>
 struct LeastStringImpl
 {
     static void processImpl(
@@ -136,7 +137,7 @@ struct LeastStringImpl
         int res = 0;
         StringRef s_ra(&a_data[0], a_size);
         StringRef s_rb(&b_data[0], b_size);
-        if (!collator)
+        if constexpr (!use_collator)
         {
             res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
         }
@@ -172,21 +173,9 @@ struct LeastStringImpl
         ColumnString::Offsets & c_offsets,
         size_t i)
     {
-        size_t a_size;
-        size_t b_size;
-
-        if (i == 0)
-        {
-            a_size = a_offsets[0] - 1;
-            b_size = b_offsets[0] - 1;
-            processImpl(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
-        }
-        else
-        {
-            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            b_size = b_offsets[i] - b_offsets[i - 1] - 1;
-            processImpl(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], c_data, c_offsets);
-        }
+        size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+        size_t b_size = b_offsets[i] - b_offsets[i - 1] - 1;
+        processImpl(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], c_data, c_offsets);
     }
 
     // string_constant
@@ -201,17 +190,8 @@ struct LeastStringImpl
     {
         const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
         ColumnString::Offset b_size = b.size();
-        size_t a_size;
-        if (i == 0)
-        {
-            a_size = a_offsets[0] - 1;
-            processImpl(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
-        }
-        else
-        {
-            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            processImpl(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[0], c_data, c_offsets);
-        }
+        size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+        processImpl(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[0], c_data, c_offsets);
     }
 
     // constant_constant
@@ -222,7 +202,7 @@ struct LeastStringImpl
         std::string & c)
     {
         int res = 0;
-        if (!collator)
+        if constexpr (!use_collator)
         {
             res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
         }
@@ -242,6 +222,7 @@ struct LeastStringImpl
     }
 };
 
+template <bool use_collator>
 struct StringOperationImpl
 {
     static void NO_INLINE stringVectorStringVector(
@@ -255,10 +236,10 @@ struct StringOperationImpl
     {
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b_data.size()));
-        for (size_t i = 0; i < size; ++i)
-        {
-            LeastStringImpl::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
-        }
+        c_data.resize(std::max(a_data.size(), b_data.size()));
+        LeastStringImpl<use_collator>::processImpl(collator, a_offsets[0] - 1, b_offsets[0] - 1, &a_data[0], &b_data[0], c_data, c_offsets);
+        for (size_t i = 1; i < size; ++i)
+            LeastStringImpl<use_collator>::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
     }
 
     static void NO_INLINE stringVectorConstant(
@@ -271,10 +252,12 @@ struct StringOperationImpl
     {
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b.size() * size));
-        for (size_t i = 0; i < size; ++i)
-        {
-            LeastStringImpl::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
-        }
+        c_data.resize(std::max(a_data.size(), b.size() * size));
+
+        const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
+        LeastStringImpl<use_collator>::processImpl(collator, a_offsets[0] - 1, b.size(), &a_data[0], &b_data[0], c_data, c_offsets);
+        for (size_t i = 1; i < size; ++i)
+            LeastStringImpl<use_collator>::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
     }
 
     static void constantStringVector(
@@ -294,7 +277,7 @@ struct StringOperationImpl
         const TiDB::TiDBCollatorPtr & collator,
         std::string & c)
     {
-        LeastStringImpl::process(collator, a, b, c);
+        LeastStringImpl<use_collator>::process(collator, a, b, c);
     }
 };
 
@@ -348,15 +331,29 @@ public:
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
-        using impl = StringOperationImpl;
+        if (collator)
+        {
+            executeInternal<true>(block, arguments, result);
+        }
+        else
+        {
+            executeInternal<false>(block, arguments, result);
+        }
+    }
+    template <bool use_collator>
+    void executeInternal(Block & block, const ColumnNumbers & arguments, size_t result) const
+    {
+        size_t num_arguments = arguments.size();
+
+        using impl = StringOperationImpl<use_collator>;
         const auto * c0 = block.getByPosition(arguments[0]).column.get();
         auto c_res = ColumnString::create();
 
         for (size_t i = 1; i < num_arguments; ++i)
         {
-            c_res = ColumnString::create();
             if (i > 1)
             {
+                c_res = ColumnString::create();
                 c0 = block.getByPosition(result).column.get();
             }
             const auto * const c1 = block.getByPosition(arguments[i]).column.get();
