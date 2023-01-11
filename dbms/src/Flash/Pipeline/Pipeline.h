@@ -62,15 +62,14 @@ public:
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
 
-public:
-    const UInt32 id;
-
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
     EventPtr toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
 
 private:
+    const UInt32 id;
+
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
