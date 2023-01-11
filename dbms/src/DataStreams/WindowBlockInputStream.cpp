@@ -240,9 +240,17 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     Int64 left = partition_end.row;
     Int64 right = block_rows - 1;
 
+    for (; left <= std::min(left + 9, right); ++left)
+    {
+        if (isDifferentFromPrevPartition(left))
+        {
+            return left;
+        }
+    }
+
     while (left <= right)
     {
-        Int64 middle = left + (right - left) / 2;
+        Int64 middle = (left + right) << 1;
         if (isDifferentFromPrevPartition(middle))
         {
             right = middle - 1;
