@@ -183,8 +183,65 @@ try
             createColumn<Nullable<UInt64>>({18446744073709551615U}),
             createColumn<Nullable<UInt64>>({18446744073709551614U})));
 
+    // bigint unsgiend + bigint = Decimal, not support for now
+    // ASSERT_COLUMN_EQ(
+    //     createColumn<Nullable<Int64>>({92233720368547720}),
+    //     executeFunction(
+    //         func_name,
+    //         createColumn<Nullable<UInt64>>({9223372036854775818U}),
+    //         createColumn<Nullable<Int64>>({92233720368547720})));
+}
+CATCH
 
+TEST_F(LeastGreatestTest, string)
+try
+{
     const auto * utf8mb4_general_ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+
+    /// without collator
+    // string string
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11"}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({"1111"}),
+                          createColumn<Nullable<String>>({"11"}),
+                          createColumn<Nullable<String>>({"111"})}));
+
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11", "2"}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({"1111", "2222"}),
+                          createColumn<Nullable<String>>({"11", "2"}),
+                          createColumn<Nullable<String>>({"111", "22"})}));
+    // string constant
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"11", "22222", "22", "11111111"}),
+        executeFunction(
+            "tidbLeastString",
+            {createColumn<Nullable<String>>({"11", "33", "22", "11111111"}),
+             createConstColumn<Nullable<String>>(4, "22222")}));
+
+    // constant string
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"11", "22222", "22", "11111111"}),
+        executeFunction(
+            "tidbLeastString",
+            {createConstColumn<Nullable<String>>(4, "22222"),
+             createColumn<Nullable<String>>({"11", "33", "22", "11111111"})}));
+
+    // const const
+    ASSERT_COLUMN_EQ(createConstColumn<String>(4, "11"),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createConstColumn<Nullable<String>>(4, "1111"),
+                          createConstColumn<Nullable<String>>(4, "11")}));
+
+
+    ASSERT_COLUMN_EQ(createConstColumn<String>(4, "11"),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createConstColumn<Nullable<String>>(4, "11"),
+                          createConstColumn<Nullable<String>>(4, "1111")}));
 
     // string string
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11"}),
@@ -211,6 +268,15 @@ try
                           createColumn<Nullable<String>>({"111", "222"})},
                          utf8mb4_general_ci_collator));
 
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"1", "2"}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({"1111", "2222"}),
+                          createColumn<Nullable<String>>({"11", "22"}),
+                          createColumn<Nullable<String>>({"111", "222"}),
+                          createColumn<Nullable<String>>({"1", "2"})},
+                         utf8mb4_general_ci_collator));
+
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11", {}}),
                      executeFunction(
                          "tidbLeastString",
@@ -218,6 +284,7 @@ try
                           createColumn<Nullable<String>>({"11", "22"}),
                           createColumn<Nullable<String>>({"111", "222"})},
                          utf8mb4_general_ci_collator));
+
 
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({{}, {}}),
                      executeFunction(
@@ -247,7 +314,7 @@ try
 
     // constant constant
     ASSERT_COLUMN_EQ(
-        createColumn<String>({"11111"}),
+        createConstColumn<String>(4, "11111"),
         executeFunction(
             "tidbLeastString",
             {createConstColumn<Nullable<String>>(4, "11111"),
@@ -255,26 +322,12 @@ try
             utf8mb4_general_ci_collator));
 
     ASSERT_COLUMN_EQ(
-        createConstColumn<String>(4, {}),
+        createConstColumn<Nullable<String>>(4, {}),
         executeFunction(
             "tidbLeastString",
             {createConstColumn<Nullable<String>>(4, {}),
              createConstColumn<Nullable<String>>(4, "22222")},
             utf8mb4_general_ci_collator));
-
-    std::vector<std::optional<String>> strs;
-    for (size_t i = 0; i < 1000; ++i)
-    {
-        strs.push_back(std::to_string(i));
-    }
-
-    // bigint unsgiend + bigint = Decimal, not support for now
-    // ASSERT_COLUMN_EQ(
-    //     createColumn<Nullable<Int64>>({92233720368547720}),
-    //     executeFunction(
-    //         func_name,
-    //         createColumn<Nullable<UInt64>>({9223372036854775818U}),
-    //         createColumn<Nullable<Int64>>({92233720368547720})));
 }
 CATCH
 

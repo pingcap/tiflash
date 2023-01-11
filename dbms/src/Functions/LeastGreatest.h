@@ -124,7 +124,7 @@ private:
 };
 struct LeastStringImpl
 {
-    static void processImplWithCollator(
+    static void processImpl(
         const TiDB::TiDBCollatorPtr & collator,
         size_t a_size,
         size_t b_size,
@@ -133,20 +133,30 @@ struct LeastStringImpl
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
     {
-        std::cout << "process with collator" << std::endl;
-        int res;
+        int res = 0;
         StringRef s_ra(&a_data[0], a_size);
         StringRef s_rb(&b_data[0], b_size);
-        res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
-        if (res < 0)
+        if (!collator)
         {
-            std::cout << "res < 0" << std::endl;
-            memcpy(&c_data[c_offsets.back()], &a_data[0], a_size);
-            c_offsets.push_back(c_offsets.back() + a_size + 1);
+            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
         }
         else
         {
-            std::cout << "res > 0" << std::endl;
+            res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
+        }
+        if (res < 0)
+        {
+            memcpy(&c_data[c_offsets.back()], &a_data[0], a_size);
+            c_offsets.push_back(c_offsets.back() + a_size + 1);
+        }
+        else if (res == 0)
+        {
+            size_t size = std::min(a_size, b_size);
+            memcpy(&c_data[c_offsets.back()], &b_data[0], size);
+            c_offsets.push_back(c_offsets.back() + size + 1);
+        }
+        else
+        {
             memcpy(&c_data[c_offsets.back()], &b_data[0], b_size);
             c_offsets.push_back(c_offsets.back() + b_size + 1);
         }
@@ -162,22 +172,20 @@ struct LeastStringImpl
         ColumnString::Offsets & c_offsets,
         size_t i)
     {
-        std::cout << "string string with collator" << std::endl;
         size_t a_size;
         size_t b_size;
-        std::cout << "i = " << i << std::endl;
 
         if (i == 0)
         {
             a_size = a_offsets[0] - 1;
             b_size = b_offsets[0] - 1;
-            processImplWithCollator(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
+            processImpl(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
         }
         else
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
             b_size = b_offsets[i] - b_offsets[i - 1] - 1;
-            processImplWithCollator(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], c_data, c_offsets);
+            processImpl(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], c_data, c_offsets);
         }
     }
 
@@ -191,19 +199,18 @@ struct LeastStringImpl
         ColumnString::Offsets & c_offsets,
         size_t i)
     {
-        std::cout << "string constant with collator" << std::endl;
         const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
         ColumnString::Offset b_size = b.size();
         size_t a_size;
         if (i == 0)
         {
             a_size = a_offsets[0] - 1;
-            processImplWithCollator(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
+            processImpl(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
         }
         else
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            processImplWithCollator(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[0], c_data, c_offsets);
+            processImpl(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[0], c_data, c_offsets);
         }
     }
 
@@ -214,9 +221,22 @@ struct LeastStringImpl
         const std::string & b,
         std::string & c)
     {
-        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
+        int res = 0;
+        if (!collator)
+        {
+            res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
+        }
+        else
+        {
+            res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
+        }
         if (res < 0)
             c = a;
+        else if (res == 0)
+        {
+            size_t size = std::min(a.size(), b.size());
+            c = b.substr(0, size);
+        }
         else
             c = b;
     }
@@ -335,7 +355,6 @@ public:
         for (size_t i = 1; i < num_arguments; ++i)
         {
             c_res = ColumnString::create();
-            std::cout << "column i: " << i << std::endl;
             if (i > 1)
             {
                 c0 = block.getByPosition(result).column.get();
@@ -349,36 +368,38 @@ public:
             {
                 String res;
                 impl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
-                std::cout << "res: " << res << std::endl;
                 block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
             }
-            if (c0_string && c1_string)
-                impl::stringVectorStringVector(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_string->getChars(),
-                    c1_string->getOffsets(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
-            else if (c0_string && c1_const)
-                impl::stringVectorConstant(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_const->getValue<String>(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
-            else if (c0_const && c1_string)
-                impl::constantStringVector(
-                    c0_const->getValue<String>(),
-                    c1_string->getChars(),
-                    c1_string->getOffsets(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
+            else
+            {
+                if (c0_string && c1_string)
+                    impl::stringVectorStringVector(
+                        c0_string->getChars(),
+                        c0_string->getOffsets(),
+                        c1_string->getChars(),
+                        c1_string->getOffsets(),
+                        collator,
+                        c_res->getChars(),
+                        c_res->getOffsets());
+                else if (c0_string && c1_const)
+                    impl::stringVectorConstant(
+                        c0_string->getChars(),
+                        c0_string->getOffsets(),
+                        c1_const->getValue<String>(),
+                        collator,
+                        c_res->getChars(),
+                        c_res->getOffsets());
+                else if (c0_const && c1_string)
+                    impl::constantStringVector(
+                        c0_const->getValue<String>(),
+                        c1_string->getChars(),
+                        c1_string->getOffsets(),
+                        collator,
+                        c_res->getChars(),
+                        c_res->getOffsets());
 
-            block.getByPosition(result).column = std::move(c_res);
+                block.getByPosition(result).column = std::move(c_res);
+            }
         }
     }
 
