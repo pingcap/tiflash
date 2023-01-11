@@ -260,6 +260,22 @@ try
                           createColumn<Nullable<String>>({"111"})},
                          utf8mb4_general_ci_collator));
 
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"a", "b"}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({"a", "b"}),
+                          createColumn<Nullable<String>>({"b", "c"}),
+                          createColumn<Nullable<String>>({"c", "d"})},
+                         utf8mb4_general_ci_collator));
+
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"a", "b", "asdhkas-\\"}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({"a", "b", "asdhkas-\\"}),
+                          createColumn<Nullable<String>>({"b", "c", "sadhhdask"}),
+                          createColumn<Nullable<String>>({"c", "d", "sahdjkdsahk"})},
+                         utf8mb4_general_ci_collator));
+
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11", "22"}),
                      executeFunction(
                          "tidbLeastString",

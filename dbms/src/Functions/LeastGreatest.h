@@ -242,7 +242,7 @@ struct LeastStringImpl
     }
 };
 
-struct StringOperationWithCollatorImpl
+struct StringOperationImpl
 {
     static void NO_INLINE stringVectorStringVector(
         const ColumnString::Chars_t & a_data,
@@ -285,7 +285,7 @@ struct StringOperationWithCollatorImpl
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
     {
-        StringOperationWithCollatorImpl::stringVectorConstant(b_data, b_offsets, a, collator, c_data, c_offsets);
+        StringOperationImpl::stringVectorConstant(b_data, b_offsets, a, collator, c_data, c_offsets);
     }
 
     static void constantConstant(
@@ -348,7 +348,7 @@ public:
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
-        using impl = StringOperationWithCollatorImpl;
+        using impl = StringOperationImpl;
         const auto * c0 = block.getByPosition(arguments[0]).column.get();
         auto c_res = ColumnString::create();
 
