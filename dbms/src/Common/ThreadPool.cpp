@@ -25,6 +25,8 @@
 #include <iostream>
 #include <type_traits>
 
+#include "Poco/Logger.h"
+
 namespace DB
 {
 namespace ErrorCodes

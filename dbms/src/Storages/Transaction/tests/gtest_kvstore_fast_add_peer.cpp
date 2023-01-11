@@ -14,17 +14,21 @@
 
 #include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Transaction/FastAddPeer.h>
+#include <Storages/Transaction/FastAddPeerContext.h>
 
 #include <chrono>
+#include <numeric>
 #include <optional>
 #include <thread>
 
 #include "Debug/MockRaftStoreProxy.h"
 #include "Storages/Transaction/ProxyFFI.h"
+#include "common/logger_useful.h"
 #include "kvstore_helper.h"
 
 namespace DB
 {
+FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
 namespace FailPoints
 {
 extern const char fast_add_peer_sleep[];
@@ -53,6 +57,56 @@ std::string readData(const std::string & output_directory, const RemoteDataLocat
     RUNTIME_CHECK(n == location.size_in_file);
 
     return ret;
+}
+
+
+TEST_F(RegionKVStoreTest, FAPThreadPool)
+{
+    auto * log = &Poco::Logger::get("fast add");
+    using namespace std::chrono_literals;
+    auto async_tasks = std::make_unique<FastAddPeerContext::AsyncTasks>(1, 1, 1);
+
+    int total = 5;
+    std::vector<bool> f(total, false);
+    while (true)
+    {
+        auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int {
+            return a + int(b);
+        });
+        if (count >= total)
+        {
+            break;
+        }
+        else
+        {
+            LOG_DEBUG(log, "finished {}/{}", count, total);
+        }
+        for (int i = 0; i < total; i++)
+        {
+            if (!async_tasks->isScheduled(i))
+            {
+                auto res = async_tasks->addTask(i, []() {
+                    std::this_thread::sleep_for(1000ms);
+                    return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
+                });
+                UNUSED(res);
+            }
+        }
+
+        for (int i = 0; i < total; i++)
+        {
+            if (!f[i])
+            {
+                if (async_tasks->isReady(i))
+                {
+                    auto r = async_tasks->fetchResult(i);
+                    UNUSED(r);
+                    f[i] = true;
+                }
+            }
+        }
+        std::this_thread::sleep_for(1000ms);
+    }
 }
 
 TEST_F(RegionKVStoreTest, FAPPSCache)
