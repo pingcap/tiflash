@@ -43,6 +43,10 @@ class PipelineExecutorStatus;
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
 public:
+    explicit Pipeline(UInt32 id_)
+        : id(id_)
+    {}
+
     void addPlanNode(const PhysicalPlanNodePtr & plan_node);
 
     void addDependency(const PipelinePtr & dependency);
@@ -58,13 +62,16 @@ public:
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
 
+public:
+    const UInt32 id;
+
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
     EventPtr toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
 
 private:
-    // data flow: plan_nodes.begin() <-- plan_nodes.end()
+    // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
     std::vector<PipelinePtr> dependencies;

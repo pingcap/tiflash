@@ -54,6 +54,11 @@ String PhysicalPlanNode::toString()
         schema_to_string());
 }
 
+String PhysicalPlanNode::toSimpleString()
+{
+    return fmt::format("{}|{}", type.toString(), isTiDBOperator() ? executor_id : "NonTiDBOperator");
+}
+
 void PhysicalPlanNode::finalize()
 {
     finalize(DB::toNames(schema));

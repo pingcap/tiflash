@@ -20,22 +20,49 @@
 
 namespace DB
 {
+class PipelineIdGenerator
+{
+public:
+    UInt32 nextID()
+    {
+        return current_id++;
+    }
+
+private:
+    UInt32 current_id = 0;
+};
+using PipelineIdGeneratorPtr = std::shared_ptr<PipelineIdGenerator>;
+
 class PipelineBuilder
 {
 public:
-    PipelineBuilder() : pipeline(std::make_shared<Pipeline>()), pipeline_breaker(std::nullopt)
+    PipelineBuilder()
+        : id_generator(std::make_shared<PipelineIdGenerator>())
+        , pipeline_breaker(std::nullopt)
     {
+        pipeline = std::make_shared<Pipeline>(id_generator->nextID());
     }
 
 private:
     struct PipelineBreaker
     {
-        PipelinePtr dependent;
-        PhysicalPlanNodePtr breaker_node;
+        PipelineBreaker(const PipelinePtr & dependent_, const PhysicalPlanNodePtr & breaker_node_)
+            : dependent(dependent_)
+            , breaker_node(breaker_node_)
+        {
+            assert(dependent);
+            assert(breaker_node);
+        }
+
+        const PipelinePtr dependent;
+        const PhysicalPlanNodePtr breaker_node;
     };
 
-    PipelineBuilder(PipelineBreaker && pipeline_breaker_) : pipeline_breaker(std::move(pipeline_breaker_))
+    PipelineBuilder(const PipelineIdGeneratorPtr & id_generator_, PipelineBreaker && pipeline_breaker_)
+        : id_generator(id_generator_)
+        , pipeline_breaker(std::move(pipeline_breaker_))
     {
+        pipeline = std::make_shared<Pipeline>(id_generator->nextID());
     }
 
 public:
@@ -47,11 +74,12 @@ public:
     /// Break the current pipeline and return a new builder for the broke pipeline.
     PipelineBuilder breakPipeline(const PhysicalPlanNodePtr & breaker_node)
     {
-        return PipelineBuilder(PipelineBreaker{pipeline, breaker_node});
+        return PipelineBuilder(id_generator, PipelineBreaker{pipeline, breaker_node});
     }
 
     PipelinePtr build()
     {
+        assert(pipeline);
         if (pipeline_breaker)
         {
             // First add the breaker node as the last node in this pipeline.
@@ -64,6 +92,7 @@ public:
     }
 
 private:
+    PipelineIdGeneratorPtr id_generator;
     PipelinePtr pipeline;
     std::optional<PipelineBreaker> pipeline_breaker;
 };

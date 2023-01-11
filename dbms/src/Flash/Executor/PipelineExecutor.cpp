@@ -27,6 +27,7 @@ PipelineExecutor::PipelineExecutor(
     , context(context_)
     , root_pipeline(root_pipeline_)
 {
+    assert(root_pipeline);
 }
 
 ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)

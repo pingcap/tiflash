@@ -48,13 +48,7 @@ try
                        .filter(eq(col("s1"), col("s2")))
                        .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, selection_3> | is_tidb_operator: false, schema: <selection_3_s1, Nullable(String)>, <selection_3_s2, Nullable(String)>, <selection_3_s3, Nullable(String)>
- <Filter, selection_3> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <Filter, selection_2> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Filter|selection_1 -> Filter|selection_2 -> Filter|selection_3 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -64,13 +58,7 @@ pipeline:
                   .limit(8)
                   .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, limit_3> | is_tidb_operator: false, schema: <limit_3_s1, Nullable(String)>, <limit_3_s2, Nullable(String)>, <limit_3_s3, Nullable(String)>
- <Limit, limit_3> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <Limit, limit_2> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Limit|limit_2 -> Limit|limit_3 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -164,11 +152,7 @@ try
                        .limit(10)
                        .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, limit_1> | is_tidb_operator: false, schema: <limit_1_s1, Nullable(String)>, <limit_1_s2, Nullable(String)>, <limit_1_s3, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
@@ -177,11 +161,7 @@ pipeline:
                   .project({"s1", "s2", "s3"})
                   .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, project_1> | is_tidb_operator: false, schema: <project_1_s1, Nullable(String)>, <project_1_s2, Nullable(String)>, <project_1_s3, Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
@@ -234,11 +214,7 @@ Union: <for test>
                   .filter(eq(col("s2"), col("s3")))
                   .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, selection_1> | is_tidb_operator: false, schema: <selection_1_s1, Nullable(String)>, <selection_1_s2, Nullable(String)>, <selection_1_s3, Nullable(String)>
- <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Filter|selection_1 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
     }
@@ -390,12 +366,7 @@ MockExchangeSender
                   .exchangeSender(tipb::PassThrough)
                   .build(context);
     {
-        String expected = R"(
-pipeline:
- <MockExchangeSender, exchange_sender_2> | is_tidb_operator: true, schema: <exchange_sender_2_s1, Nullable(String)>, <exchange_sender_2_s2, Nullable(String)>, <exchange_sender_2_s3, Nullable(String)>
- <Projection, limit_1> | is_tidb_operator: false, schema: <exchange_sender_2_s1, Nullable(String)>, <exchange_sender_2_s2, Nullable(String)>, <exchange_sender_2_s3, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
@@ -435,13 +406,7 @@ try
                        .project({"s1"})
                        .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, project_3> | is_tidb_operator: false, schema: <project_3_s1, Nullable(String)>
- <Projection, project_3> | is_tidb_operator: true, schema: <s1, Nullable(String)>
- <Projection, project_2> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(String)>)";
+        String expected = "pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> Projection|project_2 -> Projection|project_3 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -527,13 +492,7 @@ Union: <for test>
                   .project({"s1"})
                   .build(context);
     {
-        String expected = R"(
-pipeline:
- <Projection, project_3> | is_tidb_operator: false, schema: <project_3_exchange_receiver_0, Nullable(String)>
- <Projection, project_3> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>
- <Projection, project_2> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>
- <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>)";
+        String expected = "pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|project_1 -> Projection|project_2 -> Projection|project_3 -> Projection|NonTiDBOperator";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -544,14 +503,7 @@ pipeline:
                   .exchangeSender(tipb::Broadcast)
                   .build(context);
     {
-        String expected = R"(
-pipeline:
- <MockExchangeSender, exchange_sender_4> | is_tidb_operator: true, schema: <exchange_sender_4_exchange_receiver_0, Nullable(String)>
- <Projection, project_3> | is_tidb_operator: false, schema: <exchange_sender_4_exchange_receiver_0, Nullable(String)>
- <Projection, project_3> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>
- <Projection, project_2> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>
- <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <exchange_receiver_0, Nullable(String)>, <exchange_receiver_1, Nullable(String)>, <exchange_receiver_2, Nullable(String)>)";
+        String expected = "pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|project_1 -> Projection|project_2 -> Projection|project_3 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_4";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }

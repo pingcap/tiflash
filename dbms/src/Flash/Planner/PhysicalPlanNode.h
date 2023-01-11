@@ -78,6 +78,8 @@ public:
 
     String toString();
 
+    String toSimpleString();
+
 protected:
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
 

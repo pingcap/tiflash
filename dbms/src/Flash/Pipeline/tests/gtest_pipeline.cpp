@@ -72,24 +72,14 @@ try
                            .build(context);
         assertEquals(
             request,
-            R"(
-pipeline:
- <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
- <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
- <Projection, project_2> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>
- <Limit, limit_3> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>
- <Projection, limit_3> | is_tidb_operator: false, schema: <exchange_sender_4_CAST(tidbConcat(s1, s2)_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>
- <MockExchangeSender, exchange_sender_4> | is_tidb_operator: true, schema: <exchange_sender_4_CAST(tidbConcat(s1, s2)_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>)");
+            "pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Filter|selection_1 -> Projection|project_2 -> Limit|limit_3 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_4");
     }
 
     {
         auto request = context.scan("test_db", "test_table").build(context);
         assertEquals(
             request,
-            R"(
-pipeline:
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
- <Projection, table_scan_0> | is_tidb_operator: false, schema: <table_scan_0_s1, Nullable(String)>, <table_scan_0_s2, Nullable(String)>)");
+            "pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator");
     }
 }
 CATCH

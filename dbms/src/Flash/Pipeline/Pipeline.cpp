@@ -41,21 +41,27 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 
 void Pipeline::addDependency(const PipelinePtr & dependency)
 {
+    assert(dependency);
     dependencies.push_back(dependency);
 }
 
 void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
 {
-    size_t prefix_size = 2 * level;
-    addPrefix(buffer, prefix_size).append("pipeline:\n");
-    ++prefix_size;
-    for (const auto & plan_node : plan_nodes)
-        addPrefix(buffer, prefix_size).append(plan_node->toString()).append("\n");
+    if (level > 0)
+        addPrefix(buffer, level).append("|- ");
+    buffer.fmtAppend("pipeline#{}: ", id);
+    buffer.joinStr(
+        plan_nodes.cbegin(),
+        plan_nodes.cend(),
+        [](const auto & plan_node, FmtBuffer & buf) { buf.append(plan_node->toSimpleString()); },
+        " -> ");
 }
 
 void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 {
     toSelfString(buffer, level);
+    if (!dependencies.empty())
+        buffer.append("\n");
     ++level;
     for (const auto & dependency : dependencies)
         dependency->toTreeString(buffer, level);
@@ -64,8 +70,8 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 void Pipeline::addGetResultSink(ResultHandler result_handler)
 {
     assert(!plan_nodes.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.front());
-    plan_nodes.push_back(get_result_sink);
+    auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.back());
+    addPlanNode(get_result_sink);
 }
 
 PipelineExecGroup Pipeline::toExecGroup(Context & context, size_t concurrency)
