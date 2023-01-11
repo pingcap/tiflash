@@ -154,11 +154,18 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
                 return res + 8 /*partition rows*/;
             });
 
-            // Each partition encode format:
-            //  header meta(include all row count of the partition);
-            //  repeated:
-            //      row count;
-            //      columns data;
+            // compression method flag; NONE = 0x02, LZ4 = 0x82, ZSTD = 0x90
+            // ... 
+            // header meta:
+            //     columns count;
+            //     total row count (multi parts);
+            //     for each column:
+            //         column name;
+            //         column type;
+            // for each part:
+            //     row count;
+            //     columns data;
+
             size_t init_size = part_column_bytes + header_size + 1 /*compression method*/;
 
             // Reserve enough memory buffer size

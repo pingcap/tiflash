@@ -21,6 +21,10 @@
 
 namespace DB
 {
+extern size_t ApproxBlockBytes(const Block & block);
+}
+namespace DB
+{
 template <class ExchangeWriterPtr>
 HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     ExchangeWriterPtr writer_,
@@ -64,8 +68,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
         partitionAndEncodeThenWriteBlocks();
 }
-
-extern size_t ApproxBlockBytes(const Block & block);
 
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()

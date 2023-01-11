@@ -37,11 +37,6 @@
 
 namespace DB
 {
-namespace tests
-{
-class TestMPPExchangeWriter;
-}
-
 class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
@@ -387,7 +382,6 @@ public:
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
-    friend class tests::TestMPPExchangeWriter;
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;

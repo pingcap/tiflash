@@ -21,6 +21,11 @@
 
 namespace DB
 {
+extern size_t ApproxBlockBytes(const Block & block);
+}
+
+namespace DB
+{
 template <class ExchangeWriterPtr>
 FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     ExchangeWriterPtr writer_,
@@ -110,6 +115,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::initScatterColumns()
 template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
+    size_t ori_block_mem_size = 0;
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
     if (likely(!blocks.empty()))
     {
@@ -120,6 +126,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
+            ori_block_mem_size += ApproxBlockBytes(block);
             HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
             blocks.pop_back();
         }
@@ -156,6 +163,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
     }
 
     writePackets(tracked_packets);
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
 }
 
 template <class ExchangeWriterPtr>

@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -29,11 +30,6 @@
 #include <Flash/Mpp/HashPartitionWriterV1.cpp>
 #include <cstddef>
 #include <limits>
-
-#include "Flash/Mpp/MppVersion.h"
-#include "IO/CompressedStream.h"
-#include "ext/scope_guard.h"
-#include "mpp.pb.h"
 
 namespace DB
 {
@@ -49,7 +45,6 @@ protected:
         dag_context_ptr->is_mpp_task = true;
         dag_context_ptr->is_root_mpp_task = false;
         dag_context_ptr->result_field_types = makeFields();
-        dag_context_ptr->mpp_task_meta.set_mpp_version(DB::GetMppVersion());
         context.setDAGContext(dag_context_ptr.get());
     }
 
