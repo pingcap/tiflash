@@ -77,9 +77,6 @@ protected:
         if (data.empty())
             return {};
 
-        if (current_bucket_num >= NUM_BUCKETS)
-            return {};
-
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
         AggregatedDataVariantsPtr & first = data[0];
@@ -162,7 +159,13 @@ protected:
 
                 if (!parallel_merge_data->ready_blocks.empty())
                 {
-                    scheduleThreadForNextBucket();
+                    size_t finished_thread_num = parallel_merge_data->ready_blocks.size();
+
+                    for (size_t i = 0; i < finished_thread_num; ++i)
+                    {
+                        scheduleThreadForNextBucket();
+                    }
+
                     for (auto & ready_block : parallel_merge_data->ready_blocks)
                     {
                         current_bucket_num++;
