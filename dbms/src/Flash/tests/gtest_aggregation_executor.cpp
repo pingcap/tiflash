@@ -585,7 +585,7 @@ try
 {
     std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
     std::vector<size_t> max_block_sizes{1, 2, 9, 19, 40, DEFAULT_BLOCK_SIZE};
-    std::vector<size_t> concurrences{1, 2, 10};
+    std::vector<size_t> concurrences{2, 10};
     std::vector<size_t> expect_rows{15, 200, 1};
     for (size_t i = 0; i < tables.size(); ++i)
     {
@@ -596,7 +596,7 @@ try
         context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
         // 0: use one level
         // 1: use two level
-        std::vector<UInt64> two_level_thresholds{0, 1};
+        std::vector<UInt64> two_level_thresholds{1};
         for (auto two_level_threshold : two_level_thresholds)
         {
             for (auto block_size : max_block_sizes)

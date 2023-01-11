@@ -1309,13 +1309,14 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     std::vector<MutableColumns> & final_aggregate_columns_vec,
     Arena * arena) const
 {
+    assert(!key_columns_vec.empty());
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns_vec[0], key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     agg_keys_helper.initAggKeys(data.size(), key_columns_vec[0]);
 
-    UInt64 index = 0;
+    size_t index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
         agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[index / params.max_block_size], key_sizes_ref, params.collators);
         insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[index / params.max_block_size], arena);
@@ -1606,8 +1607,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
         {
             AggregatedDataWithoutKey & data = data_variants.without_key;
 
-            if (!data)
-                throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
+            RUNTIME_CHECK_MSG(data, "Wrong data variant passed.");
 
             if (!final_)
             {

@@ -933,7 +933,6 @@ public:
         const std::string tmp_path;
 
         UInt64 max_block_size;
-
         TiDB::TiDBCollators collators;
 
         Params(
@@ -974,7 +973,7 @@ public:
                const AggregateDescriptions & aggregates_,
                bool overflow_row_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", 0, collators_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", DEFAULT_BLOCK_SIZE, collators_)
         {
             intermediate_header = intermediate_header_;
         }
