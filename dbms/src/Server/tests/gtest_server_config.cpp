@@ -218,7 +218,7 @@ dt_compression_level = 1
         ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
-        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage.getActualBytes(0), 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
@@ -327,7 +327,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
-        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage.getActualBytes(0), 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
@@ -402,7 +402,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
-        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage.getActualBytes(0), 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
