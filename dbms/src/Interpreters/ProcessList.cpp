@@ -118,8 +118,8 @@ ProcessList::EntryPtr ProcessList::insert(
 
             if (user_process_list != user_to_queries.end())
             {
-                if (!is_unlimited_query && settings.max_concurrent_queries_for_user.getActualBytes(total_memory)
-                    && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user.getActualBytes(total_memory))
+                if (!is_unlimited_query && settings.max_concurrent_queries_for_user
+                    && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user)
                     throw Exception("Too many simultaneous queries for user " + client_info.current_user
                                         + ". Current: " + toString(user_process_list->second.queries.size())
                                         + ", maximum: " + settings.max_concurrent_queries_for_user.toString(),

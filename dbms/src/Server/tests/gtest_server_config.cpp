@@ -139,7 +139,7 @@ dt_enable_rough_set_filter = false
             EXPECT_EQ(settings.use_uncompressed_cache, 1U);
             if (i == 2)
             {
-                EXPECT_EQ(settings.max_memory_usage, 123456UL);
+                EXPECT_EQ(settings.max_memory_usage.getActualBytes(0), 123456UL);
                 EXPECT_FALSE(settings.dt_enable_rough_set_filter);
             }
             QuotaForIntervals * quota_raw_ptr = nullptr;
