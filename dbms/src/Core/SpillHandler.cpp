@@ -57,7 +57,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
     }
     catch (...)
     {
-        /// mark the spill handle invalid
+        /// mark the spill handler invalid
         writer = nullptr;
         spilled_files.clear();
         current_spilled_file_index = -1;

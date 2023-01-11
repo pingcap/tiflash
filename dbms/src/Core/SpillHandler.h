@@ -25,7 +25,7 @@ namespace DB
 class IBlockOutputStream;
 
 /// SpillHandler is used to spill blocks, currently hidden behind `Spiller::spillBlocks`
-/// and `Spiller::spillBlocksUsingBlockInputStream`, maybe need to exposed in push model.
+/// and `Spiller::spillBlocksUsingBlockInputStream`, maybe need to be exposed in push model.
 /// NOTE 1. SpillHandler is not thread-safe, each thread should use its own spill handler
 ///      2. After all the data is spilled, SpillHandler::finish() must be called to submit the spilled data
 class SpillHandler
