@@ -66,6 +66,8 @@ public:
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
+    void executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
+
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
@@ -115,4 +117,39 @@ protected:
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
 
+// nullable type
+using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
+using ColInt8NullableType = std::optional<typename TypeTraits<Int8>::FieldType>;
+using ColInt16NullableType = std::optional<typename TypeTraits<Int16>::FieldType>;
+using ColInt32NullableType = std::optional<typename TypeTraits<Int32>::FieldType>;
+using ColInt64NullableType = std::optional<typename TypeTraits<Int64>::FieldType>;
+using ColFloat32NullableType = std::optional<typename TypeTraits<Float32>::FieldType>;
+using ColFloat64NullableType = std::optional<typename TypeTraits<Float64>::FieldType>;
+using ColMyDateNullableType = std::optional<typename TypeTraits<MyDate>::FieldType>;
+using ColMyDateTimeNullableType = std::optional<typename TypeTraits<MyDateTime>::FieldType>;
+using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal32>::FieldType>;
+
+// non nullable type
+using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
+using ColInt64Type = typename TypeTraits<Int64>::FieldType;
+using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
+using ColStringType = typename TypeTraits<String>::FieldType;
+
+// nullable column
+using ColumnWithNullableString = std::vector<ColStringNullableType>;
+using ColumnWithNullableInt8 = std::vector<ColInt8NullableType>;
+using ColumnWithNullableInt16 = std::vector<ColInt16NullableType>;
+using ColumnWithNullableInt32 = std::vector<ColInt32NullableType>;
+using ColumnWithNullableInt64 = std::vector<ColInt64NullableType>;
+using ColumnWithNullableFloat32 = std::vector<ColFloat32NullableType>;
+using ColumnWithNullableFloat64 = std::vector<ColFloat64NullableType>;
+using ColumnWithNullableMyDate = std::vector<ColMyDateNullableType>;
+using ColumnWithNullableMyDateTime = std::vector<ColMyDateTimeNullableType>;
+using ColumnWithNullableDecimal = std::vector<ColDecimalNullableType>;
+
+// non nullable column
+using ColumnWithInt64 = std::vector<ColInt64Type>;
+using ColumnWithUInt64 = std::vector<ColUInt64Type>;
+using ColumnWithFloat64 = std::vector<ColFloat64Type>;
+using ColumnWithString = std::vector<ColStringType>;
 } // namespace DB::tests

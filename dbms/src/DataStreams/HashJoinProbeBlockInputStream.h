@@ -38,22 +38,38 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
+        size_t probe_index,
         const String & req_id,
         UInt64 max_block_size);
 
     String getName() const override { return name; }
     Block getTotals() override;
     Block getHeader() const override;
+    void cancel(bool kill) override;
 
 protected:
     Block readImpl() override;
     Block getOutputBlock();
 
 private:
+    enum class ProbeStatus
+    {
+        PROBE,
+        WAIT_FOR_READ_NON_JOINED_DATA,
+        READ_NON_JOINED_DATA,
+        FINISHED,
+    };
+    void readSuffixImpl() override;
+
     const LoggerPtr log;
     JoinPtr join;
+    size_t probe_index;
     ProbeProcessInfo probe_process_info;
+    BlockInputStreamPtr non_joined_stream;
     SquashingHashJoinBlockTransform squashing_transform;
+    ProbeStatus status{ProbeStatus::PROBE};
+    size_t joined_rows = 0;
+    size_t non_joined_rows = 0;
 };
 
 } // namespace DB

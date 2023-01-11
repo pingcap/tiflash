@@ -33,9 +33,9 @@ public:
 
     static void check(Blocks blocks, UInt64 max_block_size)
     {
-        for (size_t i = 0; i < blocks.size(); ++i)
+        for (auto & block : blocks)
         {
-            ASSERT(blocks[i].rows() <= max_block_size);
+            ASSERT(block.rows() <= max_block_size);
         }
     }
 };

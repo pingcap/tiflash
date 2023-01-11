@@ -24,7 +24,11 @@
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
 
-namespace DB::tests
+#include <memory>
+
+namespace DB
+{
+namespace tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
@@ -84,7 +88,7 @@ public:
     DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
 
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -147,7 +151,7 @@ public:
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & buildExchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     mock::ExecutorBinderPtr root;
     DAGProperties properties;
@@ -161,26 +165,36 @@ class MockDAGRequestContext
 {
 public:
     explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
-        : context(context_)
+        : index(0)
+        , context(context_)
         , collation(-abs(collation_))
     {
-        index = 0;
     }
 
     DAGRequestBuilder createDAGRequestBuilder()
     {
         return DAGRequestBuilder(index);
     }
+    /// mock column table scan
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
+    {
+        addMockTableColumnData(db, table, columns);
+    }
 
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos);
-    void addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos);
-    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
-    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
-    void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
+    /// mock DeltaMerge table scan
+    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+
+    void addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
+    void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+
+    /// mock column exchange receiver
+    void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
+    void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
 
     DAGRequestBuilder scan(const String & db_name, const String & table_name);
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
@@ -188,11 +202,23 @@ public:
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
     Int32 getCollation() const { return abs(collation); }
 
-    MockStorage & mockStorage() { return mock_storage; }
+    MockStorage * mockStorage() { return mock_storage.get(); }
+    void initMockStorage();
+
+private:
+    static void assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
+    void addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos);
+    void addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
+    void addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos);
+    void addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint);
+    void addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
+    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
 
 private:
     size_t index;
-    MockStorage mock_storage;
+    std::unique_ptr<MockStorage> mock_storage = nullptr;
 
 public:
     // Currently don't support task_id, so the following to structure is useless,
@@ -212,6 +238,8 @@ MockWindowFrame buildDefaultRowsFrame();
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
+
+// expressions
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
 #define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
 #define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
@@ -239,5 +267,5 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Lag1(expr) makeASTFunction("Lag", (expr))
 #define Lag2(expr1, expr2) makeASTFunction("Lag", (expr1), (expr2))
 #define Lag3(expr1, expr2, expr3) makeASTFunction("Lag", (expr1), (expr2), (expr3))
-
-} // namespace DB::tests
+} // namespace tests
+} // namespace DB
