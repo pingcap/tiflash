@@ -149,8 +149,8 @@ void SettingMemoryLimit::set(UInt64 x)
 }
 void SettingMemoryLimit::set(double x)
 {
-    if (x < 0.0 || x > 1.0)
-        throw Exception("Memory limit (in double) should be in range [0.0, 1.0], it means a ratio of total RAM, or you can set it in UInt64, which means the limit bytes.", ErrorCodes::BAD_ARGUMENTS);
+    if (x < 0.0 || x >= 1.0)
+        throw Exception("Memory limit (in double) should be in range [0.0, 1.0), it means a ratio of total RAM, or you can set it in UInt64, which means the limit bytes.", ErrorCodes::BAD_ARGUMENTS);
     value = x;
     changed = true;
 }
