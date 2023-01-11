@@ -245,6 +245,13 @@ struct ContextShared
             return;
         shutdown_called = true;
 
+        if (global_storage_pool)
+        {
+            // shutdown the gc task of global storage pool before
+            // shutting down the tables.
+            global_storage_pool->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.

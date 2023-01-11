@@ -69,7 +69,7 @@ public:
 
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const String & db, const String & table_name, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
-        context.addMockTableColumnData(db, table_name, source_columns);
+        context.updateMockTableColumnData(db, table_name, source_columns);
         executeAndAssertColumnsEqual(request, expect_columns);
     }
 };
