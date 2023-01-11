@@ -73,7 +73,7 @@ PipelineExecGroup Pipeline::toExecGroup(Context & context, size_t concurrency)
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
-        (*it)->buildPipelineExec(builder, context, concurrency);
+        plan_node->buildPipelineExec(builder, context, concurrency);
     return builder.build();
 }
 
