@@ -14,15 +14,10 @@
 
 #include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
-#include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <DataStreams/copyData.h>
 #include <Poco/Path.h>
-
-#include "DataStreams/copyData.h"
 
 
 namespace DB

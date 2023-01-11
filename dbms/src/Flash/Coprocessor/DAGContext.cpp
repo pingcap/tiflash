@@ -77,7 +77,10 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
 
 void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
 {
-    final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
+    if (likely(!is_final_topN_test))
+        final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
+    else
+        final_concurrency = 1;
 }
 
 void DAGContext::initExecutorIdToJoinIdMap()

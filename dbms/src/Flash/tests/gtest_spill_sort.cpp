@@ -43,9 +43,8 @@ try
     size_t total_data_size = 0;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
-        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM};
+        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
         column_data.push_back(ColumnGenerator::instance().generate(opts));
-        column_data.back().name = column_info.name;
         total_data_size += column_data.back().column->byteSize();
     }
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_data, 8);
@@ -59,11 +58,11 @@ try
     context.context.setSetting("max_block_size", Field(max_block_size));
     /// disable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
-    auto ref_columns = executeStreams(request, original_max_streams);
+    auto ref_columns = executeStreamsWithTopTopN(request, original_max_streams);
     /// enable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
-    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreamsWithTopTopN(request, original_max_streams));
     /// enable spill and use small max_spilled_size_per_spill
     context.context.setSetting("max_spilled_size_per_spill", Field(static_cast<UInt64>(total_data_size / 100)));
     ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, original_max_streams));

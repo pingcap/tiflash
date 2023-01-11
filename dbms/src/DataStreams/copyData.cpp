@@ -88,7 +88,7 @@ std::vector<Block> readData(IBlockInputStream & from, size_t max_return_size, co
             break;
         ret.push_back(block);
         current_return_size += ret.back().bytes();
-        if (current_return_size >= max_return_size)
+        if (max_return_size > 0 && current_return_size >= max_return_size)
             break;
     }
 
