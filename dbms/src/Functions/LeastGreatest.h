@@ -16,6 +16,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
@@ -36,6 +37,7 @@
 
 #include <cstddef>
 #include <type_traits>
+#include <utility>
 
 namespace DB
 {
@@ -119,6 +121,269 @@ public:
 
 private:
     const Context & context;
+};
+struct LeastStringImpl
+{
+    static void processImplWithCollator(
+        const TiDB::TiDBCollatorPtr & collator,
+        size_t a_size,
+        size_t b_size,
+        const unsigned char * a_data,
+        const unsigned char * b_data,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        std::cout << "process with collator" << std::endl;
+        int res;
+        StringRef s_ra(&a_data[0], a_size);
+        StringRef s_rb(&b_data[0], b_size);
+        res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
+        if (res < 0)
+        {
+            std::cout << "res < 0" << std::endl;
+            memcpy(&c_data[c_offsets.back()], &a_data[0], a_size);
+            c_offsets.push_back(c_offsets.back() + a_size + 1);
+        }
+        else
+        {
+            std::cout << "res > 0" << std::endl;
+            memcpy(&c_data[c_offsets.back()], &b_data[0], b_size);
+            c_offsets.push_back(c_offsets.back() + b_size + 1);
+        }
+    }
+    // string_string
+    static void process(
+        const TiDB::TiDBCollatorPtr & collator,
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const ColumnString::Chars_t & b_data,
+        const ColumnString::Offsets & b_offsets,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets,
+        size_t i)
+    {
+        std::cout << "string string with collator" << std::endl;
+        size_t a_size;
+        size_t b_size;
+        std::cout << "i = " << i << std::endl;
+
+        if (i == 0)
+        {
+            a_size = a_offsets[0] - 1;
+            b_size = b_offsets[0] - 1;
+            processImplWithCollator(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
+        }
+        else
+        {
+            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            b_size = b_offsets[i] - b_offsets[i - 1] - 1;
+            processImplWithCollator(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], c_data, c_offsets);
+        }
+    }
+
+    // string_constant
+    static void process(
+        const TiDB::TiDBCollatorPtr & collator,
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const String & b,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets,
+        size_t i)
+    {
+        std::cout << "string constant with collator" << std::endl;
+        const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
+        ColumnString::Offset b_size = b.size();
+        size_t a_size;
+        if (i == 0)
+        {
+            a_size = a_offsets[0] - 1;
+            processImplWithCollator(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets);
+        }
+        else
+        {
+            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            processImplWithCollator(collator, a_size, b_size, &a_data[a_offsets[i - 1]], &b_data[0], c_data, c_offsets);
+        }
+    }
+
+    // constant_constant
+    static void process(
+        const TiDB::TiDBCollatorPtr & collator,
+        const std::string & a,
+        const std::string & b,
+        std::string & c)
+    {
+        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
+        if (res < 0)
+            c = a;
+        else
+            c = b;
+    }
+};
+
+struct StringOperationWithCollatorImpl
+{
+    static void NO_INLINE stringVectorStringVector(
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const ColumnString::Chars_t & b_data,
+        const ColumnString::Offsets & b_offsets,
+        const TiDB::TiDBCollatorPtr & collator,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b_data.size()));
+        for (size_t i = 0; i < size; ++i)
+        {
+            LeastStringImpl::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
+        }
+    }
+
+    static void NO_INLINE stringVectorConstant(
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const std::string & b,
+        const TiDB::TiDBCollatorPtr & collator,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b.size() * size));
+        for (size_t i = 0; i < size; ++i)
+        {
+            LeastStringImpl::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
+        }
+    }
+
+    static void constantStringVector(
+        const std::string & a,
+        const ColumnString::Chars_t & b_data,
+        const ColumnString::Offsets & b_offsets,
+        const TiDB::TiDBCollatorPtr & collator,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        StringOperationWithCollatorImpl::stringVectorConstant(b_data, b_offsets, a, collator, c_data, c_offsets);
+    }
+
+    static void constantConstant(
+        const std::string & a,
+        const std::string & b,
+        const TiDB::TiDBCollatorPtr & collator,
+        std::string & c)
+    {
+        LeastStringImpl::process(collator, a, b, c);
+    }
+};
+
+class FunctionLeastString : public IFunction
+{
+public:
+    static constexpr auto name = "tidbLeastString";
+    explicit FunctionLeastString() = default;
+    ;
+    static FunctionPtr create(const Context & context [[maybe_unused]])
+    {
+        return std::make_shared<FunctionLeastString>();
+    }
+
+    String getName() const override { return name; }
+    bool isVariadic() const override { return true; }
+
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
+    {
+        collator = collator_;
+    }
+
+    size_t getNumberOfArguments() const override { return 0; }
+    bool useDefaultImplementationForNulls() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto & argument : arguments)
+        {
+            if (!argument->isString())
+            {
+                throw Exception(
+                    fmt::format("argument type not string"),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+        }
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        size_t num_arguments = arguments.size();
+        if (num_arguments < 2)
+        {
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+        using impl = StringOperationWithCollatorImpl;
+        const auto * c0 = block.getByPosition(arguments[0]).column.get();
+        auto c_res = ColumnString::create();
+
+        for (size_t i = 1; i < num_arguments; ++i)
+        {
+            c_res = ColumnString::create();
+            std::cout << "column i: " << i << std::endl;
+            if (i > 1)
+            {
+                c0 = block.getByPosition(result).column.get();
+            }
+            const auto * const c1 = block.getByPosition(arguments[i]).column.get();
+            const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
+            const auto * c1_string = checkAndGetColumn<ColumnString>(c1);
+            const ColumnConst * c0_const = checkAndGetColumnConstStringOrFixedString(c0);
+            const ColumnConst * c1_const = checkAndGetColumnConstStringOrFixedString(c1);
+            if (c0_const && c1_const)
+            {
+                String res;
+                impl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
+                std::cout << "res: " << res << std::endl;
+                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
+            }
+            if (c0_string && c1_string)
+                impl::stringVectorStringVector(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_string->getChars(),
+                    c1_string->getOffsets(),
+                    collator,
+                    c_res->getChars(),
+                    c_res->getOffsets());
+            else if (c0_string && c1_const)
+                impl::stringVectorConstant(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_const->getValue<String>(),
+                    collator,
+                    c_res->getChars(),
+                    c_res->getOffsets());
+            else if (c0_const && c1_string)
+                impl::constantStringVector(
+                    c0_const->getValue<String>(),
+                    c1_string->getChars(),
+                    c1_string->getOffsets(),
+                    collator,
+                    c_res->getChars(),
+                    c_res->getOffsets());
+
+            block.getByPosition(result).column = std::move(c_res);
+        }
+    }
+
+private:
+    TiDB::TiDBCollatorPtr collator{};
 };
 
 } // namespace DB
