@@ -242,7 +242,8 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
 
     // Compare several times first.
     // It will speed up if the partition end is very close.
-    for (; left <= std::min(left + 2, right); ++left)
+    Int64 end = std::min(left + 2, right);
+    for (; left <= end; ++left)
     {
         if (isDifferentFromPrevPartition(left))
         {
