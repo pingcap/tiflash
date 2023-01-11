@@ -302,6 +302,14 @@ try
                           createColumn<Nullable<String>>({"111", "222"})},
                          utf8mb4_general_ci_collator));
 
+    ASSERT_COLUMN_EQ(createColumn<String>({"11", "2"}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<String>({"1111", "2"}),
+                          createColumn<String>({"11", "22"}),
+                          createColumn<String>({"111", "222"})},
+                         utf8mb4_general_ci_collator));
+
 
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({{}, {}}),
                      executeFunction(
@@ -309,6 +317,14 @@ try
                          {createColumn<Nullable<String>>({"1111", "2222"}),
                           createColumn<Nullable<String>>({"11", {}}),
                           createColumn<Nullable<String>>({{}, "222"})},
+                         utf8mb4_general_ci_collator));
+
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({{}, {}}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({{}, {}}),
+                          createColumn<Nullable<String>>({{}, {}}),
+                          createColumn<Nullable<String>>({{}, {}})},
                          utf8mb4_general_ci_collator));
 
     // string constant
@@ -345,6 +361,15 @@ try
             {createConstColumn<Nullable<String>>(4, {}),
              createConstColumn<Nullable<String>>(4, "22222")},
             utf8mb4_general_ci_collator));
+
+    const auto * bin_col = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({{}, {}}),
+                     executeFunction(
+                         "tidbLeastString",
+                         {createColumn<Nullable<String>>({"1111", "2222"}),
+                          createColumn<Nullable<String>>({"11", {}}),
+                          createColumn<Nullable<String>>({{}, "222"})},
+                         bin_col));
 }
 CATCH
 

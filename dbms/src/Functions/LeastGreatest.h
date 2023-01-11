@@ -237,6 +237,8 @@ struct StringOperationImpl
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b_data.size()));
         c_data.resize(std::max(a_data.size(), b_data.size()));
+        if (size == 0)
+            return;
         LeastStringImpl<use_collator>::processImpl(collator, a_offsets[0] - 1, b_offsets[0] - 1, &a_data[0], &b_data[0], c_data, c_offsets);
         for (size_t i = 1; i < size; ++i)
             LeastStringImpl<use_collator>::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
@@ -255,6 +257,9 @@ struct StringOperationImpl
         c_data.resize(std::max(a_data.size(), b.size() * size));
 
         const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
+        if (size == 0)
+            return;
+
         LeastStringImpl<use_collator>::processImpl(collator, a_offsets[0] - 1, b.size(), &a_data[0], &b_data[0], c_data, c_offsets);
         for (size_t i = 1; i < size; ++i)
             LeastStringImpl<use_collator>::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
