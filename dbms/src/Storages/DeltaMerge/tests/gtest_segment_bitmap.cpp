@@ -536,22 +536,44 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 20000);
-    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
-        *dm_context,
-        snap,
-        {seg->getRowKeyRange()},
-        EMPTY_FILTER,
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_NE(bitmap_filter, nullptr);
-    std::string expect_result;
-    expect_result.append(std::string(5000, '1'));
-    for (int i = 0; i < 5000; i++)
     {
-        expect_result.append(std::string("01"));
+        auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_NE(bitmap_filter, nullptr);
+        std::string expect_result;
+        expect_result.append(std::string(5000, '1'));
+        for (int i = 0; i < 5000; i++)
+        {
+            expect_result.append(std::string("01"));
+        }
+        expect_result.append(std::string(5000, '1'));
+        ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
     }
-    expect_result.append(std::string(5000, '1'));
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    {
+        // Stale read
+        ASSERT_EQ(version, 2);
+        auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            EMPTY_FILTER,
+            1,
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_NE(bitmap_filter, nullptr);
+        std::string expect_result;
+        expect_result.append(std::string(5000, '1'));
+        for (int i = 0; i < 5000; i++)
+        {
+            expect_result.append(std::string("10"));
+        }
+        expect_result.append(std::string(5000, '0'));
+        ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    }
 }
 
 } // namespace DB::DM::tests
