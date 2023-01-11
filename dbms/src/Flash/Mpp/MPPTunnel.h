@@ -270,6 +270,9 @@ public:
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
+        if (unlikely(is_done))
+            return false;
+
         if (unlikely(checkPacketErr(data)))
             return false;
 
@@ -279,9 +282,6 @@ public:
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
         auto res = local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
-
-        if (unlikely(!res))
-            closeLocalTunnel(true, "Push mpp packet failed at local tunnel");
         return res;
     }
 
