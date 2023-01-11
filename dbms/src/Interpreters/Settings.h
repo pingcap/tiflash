@@ -367,6 +367,7 @@ struct Settings
     M(SettingUInt64, manual_compact_pool_size, 1, "The number of worker threads to handle manual compact requests.")                                                                                                                    \
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
+    M(SettingUInt64, max_spilled_size_per_spill, 1024ULL * 1024 * 1024, "Max spilled data size per spill, 1GB as the default value.")                                                                                                   \
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")
 // clang-format on
