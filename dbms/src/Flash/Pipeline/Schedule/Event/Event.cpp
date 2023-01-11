@@ -46,7 +46,7 @@ void Event::addDependent(const EventPtr & dependent)
     dependents.push_back(dependent);
 }
 
-void Event::onDependencyComplete()
+void Event::onDependencyFinish()
 {
     auto cur_value = unfinished_dependencies.fetch_sub(1);
     assert(cur_value >= 1);
@@ -57,7 +57,7 @@ void Event::onDependencyComplete()
 void Event::schedule() noexcept
 {
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-    exec_status.onEventStart();
+    exec_status.onEventSchedule();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     // if err throw here, we should call finish directly.
     bool direct_finish = true;
@@ -87,7 +87,7 @@ void Event::finish() noexcept
         for (auto & dependent : dependents)
         {
             assert(dependent);
-            dependent->onDependencyComplete();
+            dependent->onDependencyFinish();
             dependent.reset();
         }
     }
@@ -96,7 +96,7 @@ void Event::finish() noexcept
     dependents.clear();
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
     // we have to call `exec_status.onEventFinish()` here,
-    // since `exec_status.onEventStart()` will have been called by dependents.
+    // since `exec_status.onEventSchedule()` will have been called by dependents.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
     exec_status.onEventFinish();
 }

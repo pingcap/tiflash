@@ -77,7 +77,7 @@ private:
 
     void addDependent(const EventPtr & dependent);
 
-    void onDependencyComplete();
+    void onDependencyFinish();
 
     void switchStatus(EventStatus from, EventStatus to);
 

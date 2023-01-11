@@ -48,7 +48,7 @@ void PipelineExecutorStatus::wait()
     cv.wait(lock, [&] { return 0 == active_event_count; });
 }
 
-void PipelineExecutorStatus::onEventStart()
+void PipelineExecutorStatus::onEventSchedule()
 {
     std::lock_guard lock(mu);
     ++active_event_count;

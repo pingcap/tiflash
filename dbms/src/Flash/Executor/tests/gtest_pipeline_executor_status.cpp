@@ -29,7 +29,7 @@ try
     PipelineExecutorStatus status;
     try
     {
-        status.onEventStart();
+        status.onEventSchedule();
         std::chrono::milliseconds timeout(10);
         status.waitFor(timeout);
         GTEST_FAIL();
@@ -47,7 +47,7 @@ TEST_F(PipelineExecutorStatusTestRunner, run)
 try
 {
     PipelineExecutorStatus status;
-    status.onEventStart();
+    status.onEventSchedule();
     auto thread_manager = newThreadManager();
     thread_manager->schedule(false, "run", [&status]() mutable { status.onEventFinish(); });
     status.wait();
@@ -63,7 +63,7 @@ try
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg.empty() ? PipelineExecutorStatus::empty_err_msg : err_msg;
         PipelineExecutorStatus status;
-        status.onEventStart();
+        status.onEventSchedule();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
             status.toError(std::move(err_msg));

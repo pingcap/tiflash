@@ -31,7 +31,7 @@ public:
 
     String getErrMsg();
 
-    void onEventStart();
+    void onEventSchedule();
 
     void onEventFinish();
 
