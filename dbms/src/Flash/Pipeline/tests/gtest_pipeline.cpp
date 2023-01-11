@@ -52,9 +52,8 @@ public:
         assert(request);
         physical_plan.build(request.get());
         physical_plan.outputAndOptimize();
-        auto pipelines = physical_plan.toPipelines();
-        assert(!pipelines.empty());
-        auto root_pipeline = pipelines[0];
+        auto root_pipeline = physical_plan.toPipeline();
+        assert(root_pipeline);
         FmtBuffer buffer;
         root_pipeline->toTreeString(buffer);
         ASSERT_EQ(Poco::trim(expected_pipeline), Poco::trim(buffer.toString()));

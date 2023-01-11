@@ -54,7 +54,7 @@ public:
     PipelineExecutor(
         const ProcessListEntryPtr & process_list_entry_,
         Context & context_,
-        Pipelines && pipelines_);
+        const PipelinePtr & root_pipeline_);
 
     String toString() const override;
 
@@ -68,7 +68,6 @@ protected:
 private:
     Context & context;
 
-    Pipelines pipelines;
     PipelinePtr root_pipeline;
 
     PipelineExecutorStatus status;

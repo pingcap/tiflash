@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
@@ -87,11 +88,11 @@ void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_buil
     throw Exception("Unsupport");
 }
 
-void PhysicalPlanNode::buildPipelines(const PipelinePtr & cur_pipeline, PipelineBuildState & state)
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
 {
-    cur_pipeline->addPlanNode(shared_from_this());
     assert(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipelines(cur_pipeline, state);
+        children(0)->buildPipeline(builder);
+    builder.addPlanNode(shared_from_this());
 }
 } // namespace DB
