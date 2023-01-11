@@ -14,7 +14,6 @@
 
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <IO/CompressedStream.h>
 #include <IO/ReadBufferFromString.h>
 
 namespace DB
@@ -85,13 +84,12 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             res.swap(accumulated_block);
         return res;
     }
-    ReadBuffer * istr_ptr = &istr;
 
     if (!accumulated_block)
     {
         /// hard-code 1.5 here, since final column size will be more than rows_limit in most situations,
         /// so it should be larger than 1.0, just use 1.5 here, no special meaning
-        Block block = codec.decodeImpl(*istr_ptr, static_cast<size_t>(rows_limit * 1.5));
+        Block block = codec.decodeImpl(istr, static_cast<size_t>(rows_limit * 1.5));
         if (block)
             accumulated_block.emplace(std::move(block));
     }
@@ -100,7 +98,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
         /// Dimensions
         size_t columns = 0;
         size_t rows = 0;
-        codec.readBlockMeta(*istr_ptr, columns, rows);
+        codec.readBlockMeta(istr, columns, rows);
 
         if (rows)
         {
@@ -108,8 +106,8 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             for (size_t i = 0; i < columns; ++i)
             {
                 ColumnWithTypeAndName column;
-                codec.readColumnMeta(i, *istr_ptr, column);
-                CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), *istr_ptr, rows);
+                codec.readColumnMeta(i, istr, column);
+                CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
             }
             accumulated_block->setColumns(std::move(mutable_columns));
         }
