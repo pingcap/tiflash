@@ -358,12 +358,6 @@ public:
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
-    // this is a hack to test topN/Sort executor in TiFlash
-    // because TiFlash is not support final topN/Sort yet, so
-    // when compile a DAGRequest with TopN operator, the compiler
-    // will restore the stream concurrency after TopN, which makes
-    // the result unstable
-    bool is_final_topN_test = false;
 
     LoggerPtr log;
 

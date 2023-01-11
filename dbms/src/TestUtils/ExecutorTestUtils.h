@@ -100,10 +100,6 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
 
-    ColumnsWithTypeAndName executeStreamsWithTopTopN(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1);
-
     Blocks getExecuteStreamsReturnBlocks(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);

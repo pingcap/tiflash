@@ -41,6 +41,7 @@ try
     size_t max_block_size = 500;
     size_t original_max_streams = 20;
     size_t total_data_size = 0;
+    size_t limit_size = table_rows / 10 * 9;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
         ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
@@ -53,19 +54,20 @@ try
 
     auto request = context
                        .scan("spill_sort_test", "simple_table")
-                       .topN(order_by_items, table_rows)
+                       .topN(order_by_items, limit_size)
                        .build(context);
     context.context.setSetting("max_block_size", Field(max_block_size));
     /// disable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
-    auto ref_columns = executeStreamsWithTopTopN(request, original_max_streams);
+    auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
-    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreamsWithTopTopN(request, original_max_streams));
+    /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     /// enable spill and use small max_spilled_size_per_spill
     context.context.setSetting("max_spilled_size_per_spill", Field(static_cast<UInt64>(total_data_size / 100)));
-    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
 }
 CATCH
 } // namespace tests

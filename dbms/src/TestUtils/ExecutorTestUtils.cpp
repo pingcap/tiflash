@@ -217,15 +217,6 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     return executeStreams(&dag_context);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreamsWithTopTopN(
-    const std::shared_ptr<tipb::DAGRequest> & request,
-    size_t concurrency)
-{
-    DAGContext dag_context(*request, "executor_test", concurrency);
-    dag_context.is_final_topN_test = true;
-    return executeStreams(&dag_context);
-}
-
 ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
 {
     context.context.setExecutorTest();
