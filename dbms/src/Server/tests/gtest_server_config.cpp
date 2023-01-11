@@ -154,6 +154,89 @@ dt_enable_rough_set_filter = false
 }
 CATCH
 
+TEST_F(UsersConfigParserTest, MemoryLimit)
+try
+{
+    UInt64 total = 1'000'000;
+
+    std::vector<std::pair<String, Int64>> tests = {
+        {R"(
+[profiles]
+[profiles.default]
+# default
+        )",
+         800'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0
+        )",
+         0},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.0
+        )",
+         0},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.001
+        )",
+         1'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.1
+        )",
+         100'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.999
+        )",
+         999'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 1
+        )",
+         1},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 1.0
+        )",
+         -1},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 10000
+        )",
+         10000},
+    };
+    auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    for (const auto & [cfg_string, limit] : tests)
+    {
+        LOG_INFO(log, "parsing [content={}]", cfg_string);
+        auto config = loadConfigFromString(cfg_string);
+        auto settings = Settings();
+
+        try
+        {
+            settings.setProfile("default", *config);
+            EXPECT_EQ(settings.max_memory_usage_for_all_queries.getActualBytes(total), limit);
+        }
+        catch (const Exception & e)
+        {
+            EXPECT_EQ(limit, -1);
+            EXPECT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+    }
+    global_ctx.setSettings(origin_settings);
+}
+CATCH
+
 TEST_F(UsersConfigParserTest, ReloadDtConfig)
 try
 {
