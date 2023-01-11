@@ -146,26 +146,26 @@ public:
     template <typename U>
     GRPCReceiveQueueRes push(U && data, void * new_tag)
     {
-        auto res = recv_queue.tryPush(data);
-        switch (res)
+        MPMCQueueResult res = recv_queue.tryPush(data);
+        if (res == MPMCQueueResult::FULL)
         {
-        case MPMCQueueResult::OK:
-            return GRPCReceiveQueueRes::OK;
-        case MPMCQueueResult::FINISHED:
-            return GRPCReceiveQueueRes::FINISHED;
-        case MPMCQueueResult::CANCELLED:
-            return GRPCReceiveQueueRes::CANCELLED;
-        case MPMCQueueResult::FULL:
-            // Handle this case later.
-            break;
-        default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
+            // tryPush and push_back must be protected by lock at the same time.
+            // Because if we don't contain the second tryPush in the lock, the
+            // following bug will happen:
+            //   step1. Thread1: tryPush fail at first.
+            //   step2. Thread1: tryPush fail at second.
+            //   step3. Thread2: pop successfully and find that it's needless to
+            //                   kick CompletionQueue.
+            //   step4. Thread1: lock and set tags. However, the pop of the Thread2
+            //                   is the last pop operation, no more pop operation
+            //                   will be executed. So the tag will not be kicked
+            //                   into completion queue forever.
+            std::lock_guard lock(mu);
+            res = recv_queue.tryPush(data);
+            if (res == MPMCQueueResult::FULL)
+                tags.push_back(new_tag);
         }
 
-        std::lock_guard lock(mu);
-
-        // Double check if this queue is full.
-        res = recv_queue.tryPush(data);
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -175,10 +175,7 @@ public:
         case MPMCQueueResult::CANCELLED:
             return GRPCReceiveQueueRes::CANCELLED;
         case MPMCQueueResult::FULL:
-        {
-            tags.push_back(new_tag);
             return GRPCReceiveQueueRes::FULL;
-        }
         default:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
