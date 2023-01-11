@@ -22,7 +22,7 @@
 namespace DB
 {
 size_t ApproxBlockBytes(const Block & block);
-size_t GetExtraInfoSize(const Block & block);
+size_t ApproxBlockHeaderBytes(const Block & block);
 using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
 using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);

@@ -138,7 +138,7 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
             }
         }
 
-        size_t header_size = GetExtraInfoSize(dest_block_header);
+        size_t header_size = ApproxBlockHeaderBytes(dest_block_header);
 
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
