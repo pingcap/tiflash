@@ -65,7 +65,7 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
 {
     assert(!plan_nodes.empty());
     auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.front());
-    plan_nodes.push_front(get_result_sink);
+    plan_nodes.push_back(get_result_sink);
 }
 
 PipelineExecGroup Pipeline::toExecGroup(Context & context, size_t concurrency)
