@@ -28,9 +28,8 @@ SpillHandler::SpillHandler(Spiller * spiller_, std::unique_ptr<SpilledFile> && s
 
 void SpillHandler::spillBlocks(const Blocks & blocks)
 {
-    /// todo 1. append to existing file if the existing file is small
-    ///  2. set max_file_size and spill to new file if needed
-    ///  3. check the disk usage
+    ///  todo 1. set max_file_size and spill to new file if needed
+    ///   2. check the disk usage
     if (unlikely(blocks.empty()))
         return;
     RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
@@ -59,8 +58,8 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
     catch (...)
     {
         /// mark the spill handle invalid
-        spilled_files.clear();
         writer = nullptr;
+        spilled_files.clear();
         current_spilled_file_index = -1;
         throw Exception(fmt::format("Failed to spill blocks to disk for file {}, error: {}", current_spill_file_name, getCurrentExceptionMessage(false, false)));
     }
@@ -68,7 +67,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
 
 void SpillHandler::finish()
 {
-    if (likely(current_spilled_file_index >= 0 && writer != nullptr))
+    if (likely(writer != nullptr))
     {
         writer->out->writeSuffix();
         std::unique_lock lock(spiller->spilled_files[partition_id]->spilled_files_mutex);

@@ -61,8 +61,6 @@ public:
 private:
     friend class SpillHandler;
     String nextSpillFileName(size_t partition_id);
-    /// create a SpillHandler which is used to spill blocks, currently hidden behind `spillBlocks`
-    /// and `spillBlocksUsingBlockInputStream`, maybe need to exposed in push model.
     SpillHandler createSpillHandler(size_t partition_id);
 
     const SpillConfig config;
