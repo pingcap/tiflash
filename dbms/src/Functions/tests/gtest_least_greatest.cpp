@@ -205,7 +205,8 @@ try
                          "tidbLeastString",
                          {createColumn<Nullable<String>>({"1111"}),
                           createColumn<Nullable<String>>({"11"}),
-                          createColumn<Nullable<String>>({"111"})}));
+                          createColumn<Nullable<String>>({"111"}),
+                          createColumn<Nullable<String>>({"111111"})}));
 
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11", "2"}),
                      executeFunction(
