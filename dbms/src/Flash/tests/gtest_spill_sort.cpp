@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-
-#include "TestUtils/ColumnGenerator.h"
 
 namespace DB
 {
