@@ -341,9 +341,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                     break;
                 }
 
-                output_order = blocks_to_merge->front().info.is_overflows
-                    ? NUM_BUCKETS /// "Overflow" blocks returned by 'getNextBlocksToMerge' after all other blocks.
-                    : blocks_to_merge->front().info.bucket_num;
+                output_order = blocks_to_merge->front().info.bucket_num;
 
                 {
                     std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
@@ -410,10 +408,6 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
       * If all servers will send non-partitioned data, we may just merge it.
       * But if some other servers will send partitioned data,
       *  then we must first partition non-partitioned data, and then merge data in each partition.
-      *
-      * 3. Blocks with 'is_overflows' = true.
-      * It is additional data, that was not passed 'max_rows_to_group_by' threshold.
-      * It must be merged together independently of ordinary data.
       */
     ++current_bucket_num;
 
@@ -425,15 +419,12 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
     };
 
     auto read_from_input = [this](Input & input) {
-        /// If block with 'overflows' (not ordinary data) will be received, then remember that block and repeat.
         while (true)
         {
-            //            std::cerr << "reading block\n";
             Block block = input.stream->read();
 
             if (!block)
             {
-                //                std::cerr << "input is exhausted\n";
                 input.is_exhausted = true;
                 break;
             }
@@ -441,25 +432,12 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
             if (block.info.bucket_num != -1)
             {
                 /// One of partitioned blocks for two-level data.
-                //                std::cerr << "block for bucket " << block.info.bucket_num << "\n";
-
                 has_two_level = true;
                 input.block = block;
-            }
-            else if (block.info.is_overflows)
-            {
-                //                std::cerr << "block for overflows\n";
-
-                has_overflows = true;
-                input.overflow_block = block;
-
-                continue;
             }
             else
             {
                 /// Block for non-partitioned (single-level) data.
-                //                std::cerr << "block without bucket\n";
-
                 input.block = block;
             }
 
@@ -492,24 +470,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
     {
         if (current_bucket_num >= NUM_BUCKETS)
         {
-            /// All ordinary data was processed. Maybe, there are also 'overflows'-blocks.
-            //            std::cerr << "at end\n";
-
-            if (has_overflows)
-            {
-                //                std::cerr << "merging overflows\n";
-
-                has_overflows = false;
-                BlocksToMerge blocks_to_merge = std::make_unique<BlocksList>();
-
-                for (auto & input : inputs)
-                    if (input.overflow_block)
-                        blocks_to_merge->emplace_back(std::move(input.overflow_block));
-
-                return blocks_to_merge;
-            }
-            else
-                return {};
+            return {};
         }
         else if (has_two_level)
         {
@@ -518,8 +479,6 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
               * Find minimum bucket number, for which there is data
               *  - this will be data for merge.
               */
-            //            std::cerr << "has two level\n";
-
             int min_bucket_num = NUM_BUCKETS;
 
             for (auto & input : inputs)

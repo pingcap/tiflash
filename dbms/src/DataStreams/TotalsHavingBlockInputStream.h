@@ -36,8 +36,9 @@ public:
     /// expression may be nullptr
     TotalsHavingBlockInputStream(
         const BlockInputStreamPtr & input_,
-        bool overflow_row_, const ExpressionActionsPtr & expression_,
-        const std::string & filter_column_, TotalsMode totals_mode_, double auto_include_threshold_);
+        const ExpressionActionsPtr & expression_,
+        const std::string & filter_column_,
+        TotalsMode totals_mode_);
 
     String getName() const override { return "TotalsHaving"; }
 
@@ -49,18 +50,11 @@ protected:
     Block readImpl() override;
 
 private:
-    bool overflow_row;
     ExpressionActionsPtr expression;
     String filter_column_name;
     TotalsMode totals_mode;
-    double auto_include_threshold;
     size_t passed_keys = 0;
     size_t total_keys = 0;
-
-    /** Here are the values that did not pass max_rows_to_group_by.
-      * They are added or not added to the current_totals, depending on the totals_mode.
-      */
-    Block overflow_aggregates;
 
     /// Here, total values are accumulated. After the work is finished, they will be placed in IProfilingBlockInputStream::totals.
     MutableColumns current_totals;
@@ -71,4 +65,4 @@ private:
     void addToTotals(const Block & block, const IColumn::Filter * filter);
 };
 
-}
+} // namespace DB

@@ -499,9 +499,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
     {
         /// Now we will compose block streams that perform the necessary actions.
 
-        /// Do I need to aggregate in a separate row rows that have not passed max_rows_to_group_by.
-        bool aggregate_overflow_row = expressions.need_aggregate && query.group_by_with_totals && settings.max_rows_to_group_by && settings.group_by_overflow_mode == OverflowMode::ANY && settings.totals_mode != TotalsMode::AFTER_HAVING_EXCLUSIVE;
-
         /// Do I need to immediately finalize the aggregate functions after the aggregation?
         bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState && !query.group_by_with_totals;
 
@@ -525,7 +522,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 executeWhere(pipeline, expressions.before_where);
 
             if (expressions.need_aggregate)
-                executeAggregation(pipeline, expressions.before_aggregation, context.getFileProvider(), aggregate_overflow_row, aggregate_final);
+                executeAggregation(pipeline, expressions.before_aggregation, context.getFileProvider(), aggregate_final);
             else
             {
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -559,10 +556,10 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             {
                 /// If you need to combine aggregated results from multiple servers
                 if (!expressions.first_stage)
-                    executeMergeAggregated(pipeline, aggregate_overflow_row, aggregate_final);
+                    executeMergeAggregated(pipeline, aggregate_final);
 
                 if (!aggregate_final)
-                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having, aggregate_overflow_row);
+                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having);
                 else if (expressions.has_having)
                     executeHaving(pipeline, expressions.before_having);
 
@@ -576,7 +573,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 need_second_distinct_pass = query.distinct && pipeline.hasMoreThanOneStream();
 
                 if (query.group_by_with_totals && !aggregate_final)
-                    executeTotalsAndHaving(pipeline, false, nullptr, aggregate_overflow_row);
+                    executeTotalsAndHaving(pipeline, false, nullptr);
             }
 
             if (expressions.has_order_by)
@@ -950,7 +947,7 @@ void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionA
 }
 
 
-void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool final)
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, /*req_id=*/"");
@@ -977,7 +974,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
-    Aggregator::Params params(header, keys, aggregates, overflow_row, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
+    Aggregator::Params params(header, keys, aggregates, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
@@ -1020,7 +1017,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
 }
 
 
-void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool final)
 {
     Names key_names;
     AggregateDescriptions aggregates;
@@ -1047,7 +1044,7 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool ov
       *  but it can work more slowly.
       */
 
-    Aggregator::Params params(header, keys, aggregates, overflow_row);
+    Aggregator::Params params(header, keys, aggregates);
 
     const Settings & settings = context.getSettingsRef();
 
@@ -1082,7 +1079,7 @@ void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const Expression
 }
 
 
-void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression, bool overflow_row)
+void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression)
 {
     executeUnion(pipeline);
 
@@ -1090,11 +1087,9 @@ void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool ha
 
     pipeline.firstStream() = std::make_shared<TotalsHavingBlockInputStream>(
         pipeline.firstStream(),
-        overflow_row,
         expression,
         has_having ? query.having_expression->getColumnName() : "",
-        settings.totals_mode,
-        settings.totals_auto_threshold);
+        settings.totals_mode);
 }
 
 
