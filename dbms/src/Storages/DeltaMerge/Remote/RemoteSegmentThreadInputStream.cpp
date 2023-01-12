@@ -95,7 +95,7 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
                     throw Exception(read_tasks->getErrorMessage(), ErrorCodes::LOGICAL_ERROR);
                 }
                 LOG_DEBUG(log, "Read from remote segment done");
-                read_tasks->wakeAll();
+                // read_tasks->wakeAll();
                 return {};
             }
             cur_segment_id = task->segment_id;
