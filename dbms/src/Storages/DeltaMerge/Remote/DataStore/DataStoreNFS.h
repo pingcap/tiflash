@@ -14,9 +14,7 @@
 
 #pragma once
 
-#include <Common/LRUCache.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
-#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <common/types.h>
 
 namespace DB::DM::Remote
@@ -34,16 +32,12 @@ public:
          * Must trailing with "/".
          */
         String base_directory;
-
-        // FIXME: this is a magic number, need to check the num after testsing
-        size_t max_cached_dtfiles = 1000;
     };
 
     DataStoreNFS(const Config & config_, const FileProviderPtr & file_provider_)
         : log(Logger::get())
         , file_provider(file_provider_)
         , config(config_)
-        , cached_dmfiles(config.max_cached_dtfiles)
     {
         RUNTIME_CHECK(file_provider != nullptr);
         RUNTIME_CHECK(endsWith(config.base_directory, "/"), config.base_directory);
@@ -72,14 +66,10 @@ private:
         return fmt::format("{}{}/t_{}", config.base_directory, oid.write_node_id, oid.table_id);
     }
 
-    IPreparedDMFileTokenPtr prepareDMFileImpl(const DMFileOID & oid);
-
 private:
     const LoggerPtr log;
     const FileProviderPtr file_provider;
     const Config config;
-
-    LRUCache<DMFileOID, IPreparedDMFileToken> cached_dmfiles;
 };
 
 } // namespace DB::DM::Remote

@@ -89,7 +89,7 @@ void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & se
     LOG_DEBUG(log, "Link file from {} to {} succeed", remote_dmf_dir, self_dmf_dir);
 }
 
-IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFileImpl(const DMFileOID & oid)
+IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFile(const DMFileOID & oid)
 {
     // TODO: if remote_parent_path is a symlink, is there some extra work that need to be done?
     const auto remote_parent_path = buildDMFileParentPathInNFS(oid);
@@ -116,11 +116,6 @@ IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFileImpl(const DMFileOID & oid)
     }
 
     return std::shared_ptr<PreparedDMFileToken>(token);
-}
-
-IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFile(const DMFileOID & oid)
-{
-    return cached_dmfiles.getOrSet(oid, [this, &oid]() { return this->prepareDMFileImpl(oid); }).first;
 }
 
 } // namespace DB::DM::Remote
