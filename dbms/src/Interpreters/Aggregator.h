@@ -728,31 +728,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         }
     }
 
-    /// The size without taking into account the row in which data is written for the calculation of TOTALS.
-    size_t sizeWithoutOverflowRow() const
-    {
-        switch (type)
-        {
-        case Type::EMPTY:
-            return 0;
-        case Type::without_key:
-            return 1;
-
-#define M(NAME, IS_TWO_LEVEL)                                                                              \
-    case Type::NAME:                                                                                       \
-    {                                                                                                      \
-        const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
-        return ptr->data.size();                                                                           \
-    }
-
-            APPLY_FOR_AGGREGATED_VARIANTS(M)
-#undef M
-
-        default:
-            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-        }
-    }
-
     const char * getMethodName() const
     {
         return getMethodName(type);
@@ -882,13 +857,9 @@ using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingBlockInputStream.)
   *
-  * In the absence of group_by_overflow_mode = 'any', the data is aggregated as usual, but the states of the aggregate functions are not finalized.
+  * The data is aggregated as usual, but the states of the aggregate functions are not finalized.
   * Later, the aggregate function states for all rows (passed through HAVING) are merged into one - this will be TOTALS.
   *
-  * If there is group_by_overflow_mode = 'any', the data is aggregated as usual, except for the keys that did not fit in max_rows_to_group_by.
-  * For these keys, the data is aggregated into one additional row - see below under the names `overflow_row`, `overflows`...
-  * Later, the aggregate function states for all rows (passed through HAVING) are merged into one,
-  *  also overflow_row is added or not added (depending on the totals_mode setting) also - this will be TOTALS.
   */
 
 
@@ -912,7 +883,6 @@ public:
         Int64 local_delta_memory = 0;
 
         /// The settings of approximate calculation of GROUP BY.
-        const bool overflow_row; /// Do we need to put into AggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.
         const size_t max_rows_to_group_by;
         const OverflowMode group_by_overflow_mode;
 
@@ -939,7 +909,6 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const AggregateDescriptions & aggregates_,
-            bool overflow_row_,
             size_t max_rows_to_group_by_,
             OverflowMode group_by_overflow_mode_,
             size_t group_by_two_level_threshold_,
@@ -954,7 +923,6 @@ public:
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
-            , overflow_row(overflow_row_)
             , max_rows_to_group_by(max_rows_to_group_by_)
             , group_by_overflow_mode(group_by_overflow_mode_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
@@ -971,10 +939,9 @@ public:
         Params(const Block & intermediate_header_,
                const ColumnNumbers & keys_,
                const AggregateDescriptions & aggregates_,
-               bool overflow_row_,
                UInt64 max_block_size_ = DEFAULT_BLOCK_SIZE,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", max_block_size_, collators_)
+            : Params(Block(), keys_, aggregates_, 0, OverflowMode::THROW, 0, 0, 0, false, "", max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1013,19 +980,14 @@ public:
         const FileProviderPtr & file_provider,
         ColumnRawPtrs & key_columns,
         AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        Int64 & local_delta_memory,
-        bool & no_more_keys);
+        Int64 & local_delta_memory);
 
     /** Convert the aggregation data structure into a block.
-      * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
-      *
       * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
       *  which can then be combined with other states (for distributed query processing).
       * If final = true, then columns with ready values are created as aggregate columns.
       */
     BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
-
-    ManyAggregatedDataVariants prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
 
     /** Merge several aggregation data structures and output the result as a block stream.
       */
@@ -1039,9 +1001,6 @@ public:
     using BucketToBlocks = std::map<Int32, BlocksList>;
 
     /// Merge several partially aggregated blocks into one.
-    /// Precondition: for all blocks block.info.is_overflows flag must be the same.
-    /// (either all blocks are from overflow data or none blocks are).
-    /// The resulting block has the same value of is_overflows flag.
     Block mergeBlocks(BlocksList & blocks, bool final);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
@@ -1155,19 +1114,15 @@ protected:
         size_t rows,
         ColumnRawPtrs & key_columns,
         TiDB::TiDBCollators & collators,
-        AggregateFunctionInstruction * aggregate_instructions,
-        bool no_more_keys,
-        AggregateDataPtr overflow_row) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
-    /// Specialization for a particular value no_more_keys.
-    template <bool no_more_keys, typename Method>
+    template <typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         size_t rows,
-        AggregateFunctionInstruction * aggregate_instructions,
-        AggregateDataPtr overflow_row) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(
@@ -1186,21 +1141,6 @@ protected:
     /// Merge data from hash table `src` into `dst`.
     template <typename Method, typename Table>
     void mergeDataImpl(
-        Table & table_dst,
-        Table & table_src,
-        Arena * arena) const;
-
-    /// Merge data from hash table `src` into `dst`, but only for keys that already exist in dst. In other cases, merge the data into `overflows`.
-    template <typename Method, typename Table>
-    void mergeDataNoMoreKeysImpl(
-        Table & table_dst,
-        AggregatedDataWithoutKey & overflows,
-        Table & table_src,
-        Arena * arena) const;
-
-    /// Same, but ignores the rest of the keys.
-    template <typename Method, typename Table>
-    void mergeDataOnlyExistingKeysImpl(
         Table & table_dst,
         Table & table_src,
         Arena * arena) const;
@@ -1304,8 +1244,8 @@ protected:
         Columns & materialized_columns,
         AggregateFunctionInstructions & instructions);
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
-    BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillTwoLevel(
@@ -1322,22 +1262,19 @@ protected:
         ThreadPoolManager * thread_pool,
         size_t max_threads) const;
 
-    template <bool no_more_keys, typename Method, typename Table>
+    template <typename Method, typename Table>
     void mergeStreamsImplCase(
         Block & block,
         Arena * aggregates_pool,
         Method & method,
-        Table & data,
-        AggregateDataPtr overflow_row) const;
+        Table & data) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImpl(
         Block & block,
         Arena * aggregates_pool,
         Method & method,
-        Table & data,
-        AggregateDataPtr overflow_row,
-        bool no_more_keys) const;
+        Table & data) const;
 
     void mergeWithoutKeyStreamsImpl(
         Block & block,
@@ -1368,9 +1305,8 @@ protected:
       * If it is exceeded, then, depending on the group_by_overflow_mode, either
       * - throws an exception;
       * - returns false, which means that execution must be aborted;
-      * - sets the variable no_more_keys to true.
       */
-    bool checkLimits(size_t result_size, bool & no_more_keys) const;
+    bool checkLimits(size_t result_size) const;
 };
 
 /** Get the aggregation variant by its type. */
