@@ -158,7 +158,7 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
                 return res + 8 /*partition rows*/;
             });
 
-            // compression method flag; NONE = 0x02, LZ4 = 0x82, ZSTD = 0x90
+            // compression method flag; NONE, LZ4, ZSTD, defined in `CompressionMethodByte`
             // ...
             // header meta:
             //     columns count;

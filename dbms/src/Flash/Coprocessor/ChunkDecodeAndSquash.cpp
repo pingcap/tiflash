@@ -28,6 +28,7 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompression(std::string_view sv)
 {
+    // read first byte of compression method flag which defined in `CompressionMethodByte`
     if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
     {
         ReadBufferFromString istr(sv.substr(1, sv.size() - 1));

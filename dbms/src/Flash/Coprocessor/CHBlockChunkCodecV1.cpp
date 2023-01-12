@@ -17,9 +17,6 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 
-#include <cassert>
-#include <cstddef>
-#include <vector>
 
 namespace DB
 {
@@ -94,7 +91,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
     return res;
 }
 
-[[maybe_unused]] static inline void DecodeColumns_by_block(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
     if (!rows_to_read)
         return;
@@ -137,7 +134,8 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
     res.setColumns(std::move(mutable_columns));
 }
 
-[[maybe_unused]] static inline void DecodeColumns_by_col(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
+// Deprecated
+[[maybe_unused]] static inline void decodeColumnsByCol(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
     if (!rows_to_read)
         return;
@@ -187,7 +185,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
 
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
-    return DecodeColumns_by_block(istr, res, rows_to_read, reserve_size);
+    return decodeColumnsByBlock(istr, res, rows_to_read, reserve_size);
 }
 
 } // namespace DB
