@@ -52,23 +52,10 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-std::shared_ptr<String> getIntHandleKey(Int64 i)
-{
-    WriteBufferFromOwnString ss;
-    DB::EncodeInt64(i, ss);
-    return std::make_shared<String>(ss.releaseStr());
-};
-
-RowKeyValue SegmentTestBasic::buildRowKeyValue(Int64 key)
-{
-    return RowKeyValue(options.is_common_handle, getIntHandleKey(key), key);
-}
-
 RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
 {
-    auto begin_key = buildRowKeyValue(begin);
-    auto end_key = buildRowKeyValue(end);
-    return RowKeyRange(begin_key, end_key, options.is_common_handle, 1);
+    HandleRange range(begin, end);
+    return RowKeyRange::fromHandleRange(range);
 }
 
 std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageId segment_id)

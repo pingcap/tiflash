@@ -576,4 +576,28 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
     }
 }
 
+TEST_F(SegmentBitmapFilterTest, StableRange)
+{
+    writeSegment("d_mem:[0, 50000)");
+    mergeSegmentDelta(SEG_ID, true);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(seg->getDelta()->getRows(), 0);
+    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+    ASSERT_EQ(seg->getStable()->getRows(), 50000);
+
+    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+        *dm_context,
+        snap,
+        {buildRowKeyRange(10000, 50000)}, // [10000, 50000)
+        EMPTY_FILTER,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_NE(bitmap_filter, nullptr);
+    std::string expect_result;
+    // [0, 10000) is filtered by range.
+    expect_result.append(std::string(10000, '0'));
+    expect_result.append(std::string(40000, '1'));
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+}
+
 } // namespace DB::DM::tests
