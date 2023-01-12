@@ -150,6 +150,20 @@ public:
                 {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
                 {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
         }
+        {
+            // with 1024 types of key.
+            std::vector<std::optional<TypeTraits<int>::FieldType>> key(1024);
+            std::vector<std::optional<String>> value(1024);
+            for (size_t i = 0; i < 1024; ++i)
+            {
+                key[i] = i;
+                value[i] = {fmt::format("val_{}", i)};
+            }
+            context.addMockTable(
+                {"test_db", "big_table_4"},
+                {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
+                {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
+        }
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
@@ -531,7 +545,7 @@ CATCH
 TEST_F(AggExecutorTestRunner, AggMerge)
 try
 {
-    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
+    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3", "big_table_4"};
     for (const auto & table : tables)
     {
         auto request = context
@@ -555,10 +569,10 @@ CATCH
 TEST_F(AggExecutorTestRunner, SplitAggOutput)
 try
 {
-    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3"};
+    std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3", "big_table_4"};
     std::vector<size_t> max_block_sizes{1, 2, 9, 19, 40, DEFAULT_BLOCK_SIZE};
     std::vector<size_t> concurrences{1, 2, 10};
-    std::vector<size_t> expect_rows{15, 200, 1};
+    std::vector<size_t> expect_rows{15, 200, 1, 1024};
     for (size_t i = 0; i < tables.size(); ++i)
     {
         auto request = context

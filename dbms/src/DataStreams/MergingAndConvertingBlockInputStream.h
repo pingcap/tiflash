@@ -164,11 +164,8 @@ protected:
                     for (auto & ready_block : parallel_merge_data->ready_blocks)
                     {
                         scheduleThreadForNextBucket();
+                        two_level_blocks[ready_block.first] = std::move(ready_block.second);
                         current_bucket_num++;
-                        if (!ready_block.empty())
-                        {
-                            two_level_blocks.splice(two_level_blocks.end(), std::move(ready_block), ready_block.begin(), ready_block.end());
-                        }
                     }
                     parallel_merge_data->ready_blocks.clear();
 
@@ -190,7 +187,8 @@ private:
     const LoggerPtr log;
     const Aggregator & aggregator;
     BlocksList single_level_blocks;
-    BlocksList two_level_blocks;
+    BucketBlocksListMap two_level_blocks;
+    Int32 two_level_blocks_out_bucket = 0;
     ManyAggregatedDataVariants data;
     bool final;
     size_t threads;
@@ -201,7 +199,7 @@ private:
 
     struct ParallelMergeData
     {
-        BlocksLists ready_blocks;
+        BucketBlocksListMap ready_blocks;
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
@@ -258,7 +256,7 @@ private:
 #undef M
 
             std::lock_guard lock(parallel_merge_data->mutex);
-            parallel_merge_data->ready_blocks.push_back(std::move(blocks));
+            parallel_merge_data->ready_blocks[bucket_num] = std::move(blocks);
         }
         catch (...)
         {
@@ -283,13 +281,24 @@ private:
 
     Block tryGetTwoLevelOutputBlock()
     {
-        if (!two_level_blocks.empty())
+        while (true)
         {
-            Block out_block = two_level_blocks.front();
-            two_level_blocks.pop_front();
-            return out_block;
+            auto it = two_level_blocks.find(two_level_blocks_out_bucket);
+            if (it != two_level_blocks.end())
+            {
+                if (!it->second.empty())
+                {
+                    Block out_block = it->second.front();
+                    it->second.pop_front();
+                    return out_block;
+                }
+                two_level_blocks_out_bucket++;
+            }
+            else
+            {
+                return {};
+            }
         }
-        return {};
     }
 };
 
