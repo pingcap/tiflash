@@ -157,6 +157,7 @@ private:
 
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
+using BlocksLists = std::vector<BlocksList>;
 
 Block mergeBlocks(Blocks && blocks);
 

@@ -169,9 +169,9 @@ protected:
                     for (auto & ready_block : parallel_merge_data->ready_blocks)
                     {
                         current_bucket_num++;
-                        if (!ready_block.second.empty())
+                        if (!ready_block.empty())
                         {
-                            two_level_blocks.splice(two_level_blocks.end(), std::move(ready_block.second), ready_block.second.begin(), ready_block.second.end());
+                            two_level_blocks.splice(two_level_blocks.end(), std::move(ready_block), ready_block.begin(), ready_block.end());
                         }
                     }
                     parallel_merge_data->ready_blocks.clear();
@@ -205,7 +205,7 @@ private:
 
     struct ParallelMergeData
     {
-        std::map<Int32, BlocksList> ready_blocks;
+        BlocksLists ready_blocks;
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
@@ -262,7 +262,7 @@ private:
 #undef M
 
             std::lock_guard lock(parallel_merge_data->mutex);
-            parallel_merge_data->ready_blocks[bucket_num] = std::move(blocks);
+            parallel_merge_data->ready_blocks.push_back(std::move(blocks));
         }
         catch (...)
         {

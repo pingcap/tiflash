@@ -35,7 +35,7 @@ protected:
             spiller_dir.remove(true);
         spiller_dir.createDirectories();
         NamesAndTypes names_and_types;
-        names_and_types.emplace_back("col0", DataTypeFactory::instance().get("Int64"));
+        names_and_types.emplace_back("col0", DataTypeFactory::instance().get("UInt64"));
         names_and_types.emplace_back("col1", DataTypeFactory::instance().get("UInt64"));
         spiller_test_header = Block(names_and_types);
     }
@@ -56,7 +56,7 @@ protected:
             {
                 auto column = type_and_name.type->createColumn();
                 for (size_t k = 0; k < 100; ++k)
-                    column->insert(k);
+                    column->insert(Field(static_cast<UInt64>(k)));
                 data.push_back(ColumnWithTypeAndName(std::move(column), type_and_name.type, type_and_name.name));
             }
             ret.emplace_back(data);
@@ -73,7 +73,7 @@ protected:
             {
                 auto column = type_and_name.type->createColumn();
                 for (size_t k = 0; k < 100; ++k)
-                    column->insert(k + i * 100);
+                    column->insert(Field(static_cast<UInt64>(k + i * 100)));
                 data.push_back(ColumnWithTypeAndName(std::move(column), type_and_name.type, type_and_name.name));
             }
             ret.emplace_back(data);
