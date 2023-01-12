@@ -234,7 +234,7 @@ grpc::Status FlashService::DispatchMPPTask(
     {
         auto && err_msg = fmt::format("Failed to handling mpp dispatch request, reason=`{}`", DB::GenMppVersionErrorMessage(mpp_version));
         LOG_WARNING(log, err_msg);
-        return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+        return grpc::Status(grpc::StatusCode::CANCELLED, std::move(err_msg));
     }
 
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
