@@ -115,6 +115,10 @@ struct MockWriter
         write(tmp);
     }
     uint16_t getPartitionNum() const { return 1; }
+    bool isLocal(size_t index) const
+    {
+        return index == 0;
+    }
 
     PacketQueuePtr queue;
     bool add_summary = false;

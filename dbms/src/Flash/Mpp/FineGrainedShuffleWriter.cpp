@@ -13,10 +13,16 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+
+namespace DB
+{
+extern size_t ApproxBlockBytes(const Block & block);
+}
 
 namespace DB
 {
@@ -109,6 +115,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::initScatterColumns()
 template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
+    size_t ori_block_mem_size = 0;
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
     if (likely(!blocks.empty()))
     {
@@ -119,6 +126,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
+            ori_block_mem_size += ApproxBlockBytes(block);
             HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
             blocks.pop_back();
         }
@@ -155,18 +163,16 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
     }
 
     writePackets(tracked_packets);
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
 }
+
+template <class ExchangeWriterPtr>
+extern void WritePackets(TrackedMppDataPacketPtrs & packets, ExchangeWriterPtr & writer);
 
 template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
-    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
-    {
-        auto & packet = packets[part_id];
-        assert(packet);
-        if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(std::move(packet), part_id);
-    }
+    WritePackets(packets, writer);
 }
 
 template class FineGrainedShuffleWriter<MPPTunnelSetPtr>;

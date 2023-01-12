@@ -15,6 +15,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -24,6 +27,9 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
+#include <Flash/Mpp/HashPartitionWriterV1.cpp>
+#include <cstddef>
+#include <limits>
 
 namespace DB
 {
@@ -130,6 +136,12 @@ struct MockExchangeWriter
         checker(tracked_packet, 0);
     }
     uint16_t getPartitionNum() const { return part_num; }
+    bool isLocal(size_t index) const
+    {
+        assert(getPartitionNum() > index);
+        // make only part 0 use local tunnel
+        return index == 0;
+    }
 
 private:
     MockExchangeWriterChecker checker;
@@ -360,5 +372,101 @@ try
 }
 CATCH
 
+static CompressionMethodByte ToCompressionMethodByte(CompressionMethod m)
+{
+    switch (m)
+    {
+    case CompressionMethod::LZ4:
+        return CompressionMethodByte::LZ4;
+    case CompressionMethod::NONE:
+        return CompressionMethodByte::NONE;
+    case CompressionMethod::ZSTD:
+        return CompressionMethodByte::ZSTD;
+    default:
+        RUNTIME_CHECK(false);
+    }
+    return CompressionMethodByte::NONE;
+}
+
+TEST_F(TestMPPExchangeWriter, TestHashPartitionWriterV1)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = 16;
+    const uint16_t part_num = 4;
+
+    for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
+    {
+        // 1. Build Blocks.
+        std::vector<Block> blocks;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            blocks.emplace_back(prepareUniformBlock(block_rows));
+            blocks.emplace_back(prepareUniformBlock(0));
+        }
+        Block header = blocks.back();
+
+        // 2. Build MockExchangeWriter.
+        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+            write_report[part_id].emplace_back(packet);
+        };
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+
+        // 3. Start to write.
+        auto dag_writer = std::make_shared<HashPartitionWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+            mock_writer,
+            part_col_ids,
+            part_col_collators,
+            batch_send_min_limit,
+            *dag_context_ptr,
+            mode);
+        for (const auto & block : blocks)
+            dag_writer->write(block);
+        dag_writer->flush();
+
+        // 4. Start to check write_report.
+        size_t per_part_rows = block_rows * block_num / part_num;
+        ASSERT_EQ(write_report.size(), part_num);
+
+        CHBlockChunkDecodeAndSquash decoder(header, 512);
+
+        for (size_t part_index = 0; part_index < part_num; ++part_index)
+        {
+            size_t decoded_block_rows = 0;
+            for (const auto & tracked_packet : write_report[part_index])
+            {
+                auto & packet = tracked_packet->getPacket();
+
+                ASSERT_EQ(packet.version(), DB::MPPDataPacketV1);
+
+                for (auto && chunk : packet.chunks())
+                {
+                    if (part_index == 0)
+                    {
+                        ASSERT_EQ(CompressionMethodByte(chunk[0]), CompressionMethodByte::NONE);
+                    }
+                    else
+                    {
+                        ASSERT_EQ(CompressionMethodByte(chunk[0]), ToCompressionMethodByte(ToInternalCompressionMethod(mode)));
+                    }
+
+                    auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                    if (!result)
+                        continue;
+                    decoded_block_rows += result->rows();
+                }
+            }
+            {
+                auto result = decoder.flush();
+                if (result)
+                    decoded_block_rows += result->rows();
+            }
+            ASSERT_EQ(decoded_block_rows, per_part_rows);
+        }
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

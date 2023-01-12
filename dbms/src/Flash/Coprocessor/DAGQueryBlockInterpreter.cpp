@@ -771,8 +771,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            context.getDAGContext()->tunnel_set,
+        std::unique_ptr<DAGResponseWriter> response_writer = NewMPPExchangeWriter(
+            dagContext().tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_sender.tp(),
@@ -781,7 +781,9 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             dagContext(),
             enable_fine_grained_shuffle,
             stream_count,
-            batch_size);
+            batch_size,
+            exchange_sender.compression(),
+            context.getSettingsRef().batch_send_min_limit_compression);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });

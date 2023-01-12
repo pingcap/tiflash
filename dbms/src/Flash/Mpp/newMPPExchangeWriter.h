@@ -18,11 +18,13 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
+#include <Flash/Mpp/HashPartitionWriterV1.h>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
 template <class ExchangeWriterPtr>
-std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
+std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
     const ExchangeWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
@@ -32,11 +34,16 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
-    UInt64 fine_grained_shuffle_batch_size)
+    UInt64 fine_grained_shuffle_batch_size,
+    tipb::CompressionMode compression_mode,
+    Int64 batch_send_min_limit_compression)
 {
     RUNTIME_CHECK(dag_context.isMPPTask());
     if (dag_context.isRootMPPTask())
     {
+        // No need to use use data compression
+        RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
+
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
         return std::make_unique<StreamingDAGResponseWriter<ExchangeWriterPtr>>(
@@ -51,6 +58,9 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
         {
             if (enable_fine_grained_shuffle)
             {
+                // TODO: support data compression if necessary
+                RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
+
                 return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
                     writer,
                     partition_col_ids,
@@ -61,16 +71,28 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             }
             else
             {
-                return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
-                    writer,
-                    partition_col_ids,
-                    partition_col_collators,
-                    batch_send_min_limit,
-                    dag_context);
+                if (DB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
+                    return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
+                        writer,
+                        partition_col_ids,
+                        partition_col_collators,
+                        batch_send_min_limit,
+                        dag_context);
+                else
+                    return std::make_unique<HashPartitionWriterV1<MPPTunnelSetPtr>>(
+                        writer,
+                        partition_col_ids,
+                        partition_col_collators,
+                        batch_send_min_limit_compression,
+                        dag_context,
+                        compression_mode);
             }
         }
         else
         {
+            // TODO: support data compression if necessary
+            RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
+
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
@@ -79,4 +101,5 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
         }
     }
 }
+
 } // namespace DB
