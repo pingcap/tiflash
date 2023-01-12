@@ -918,7 +918,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         req_info,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1003,7 +1004,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
