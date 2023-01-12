@@ -102,7 +102,7 @@ public:
     ~ExchangeReceiverBase();
 
     void cancel();
-    void close();
+    void close() noexcept;
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
@@ -146,7 +146,7 @@ private:
         const String & local_err_msg,
         const LoggerPtr & log);
 
-    void waitAllConnectionDone();
+    void waitAllConnectionDone() noexcept;
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();

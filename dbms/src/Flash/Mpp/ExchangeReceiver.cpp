@@ -100,7 +100,7 @@ public:
         case AsyncRequestStage::WAIT_MAKE_READER:
         {
             // Use lock to ensure reader is created already in reactor thread
-            std::unique_lock lock(mu);
+            std::lock_guard lock(mu);
             if (!ok)
             {
                 reader.reset();
@@ -230,7 +230,7 @@ private:
         stage = AsyncRequestStage::WAIT_MAKE_READER;
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
         rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
     }
 
@@ -364,7 +364,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
+void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone() noexcept
 {
     std::unique_lock lock(mu);
     auto pred = [&] {
@@ -395,7 +395,7 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::close()
+void ExchangeReceiverBase<RPCContext>::close() noexcept
 {
     setEndState(ExchangeReceiverState::CLOSED);
     finishAllMsgChannels();
@@ -645,7 +645,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     std::optional<Block> last_block = decoder_ptr->flush();
-    std::unique_lock lock(mu);
+    std::lock_guard lock(mu);
     if (this->state != DB::ExchangeReceiverState::NORMAL)
     {
         return DB::ExchangeReceiverResult::newError(0, DB::ExchangeReceiverBase<RPCContext>::name, DB::constructStatusString(this->state, this->err_msg));
@@ -715,7 +715,7 @@ template <typename RPCContext>
 bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
     assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
-    std::unique_lock lock(mu);
+    std::lock_guard lock(mu);
     if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
     {
         return false;
@@ -727,7 +727,7 @@ bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_sta
 template <typename RPCContext>
 String ExchangeReceiverBase<RPCContext>::getStatusString()
 {
-    std::unique_lock lock(mu);
+    std::lock_guard lock(mu);
     return constructStatusString(state, err_msg);
 }
 
@@ -737,35 +737,37 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    Int32 copy_live_conn = -1;
+    // The whole function should be protected by the lock,
+    // because once live_connections is equal to 0, waitAllConnectionDone
+    // function will return and the ExchangeReceiver may be destructed
+    // before we leave this function.
+    std::lock_guard lock(mu);
+
+    if (meet_error)
     {
-        std::unique_lock lock(mu);
-        if (meet_error)
-        {
-            if (state == ExchangeReceiverState::NORMAL)
-                state = ExchangeReceiverState::ERROR;
-            if (err_msg.empty())
-                err_msg = local_err_msg;
-        }
-        copy_live_conn = --live_connections;
+        if (state == ExchangeReceiverState::NORMAL)
+            state = ExchangeReceiverState::ERROR;
+        if (err_msg.empty())
+            err_msg = local_err_msg;
     }
+    --live_connections;
 
     LOG_DEBUG(
         log,
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
         meet_error,
         local_err_msg,
-        copy_live_conn);
+        live_connections);
 
-    if (copy_live_conn == 0)
+    if (live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (copy_live_conn < 0)
+    else if (live_connections < 0)
         throw Exception("live_connections should not be less than 0!");
 
-    if (meet_error || copy_live_conn == 0)
+    if (meet_error || live_connections == 0)
         finishAllMsgChannels();
 }
 
