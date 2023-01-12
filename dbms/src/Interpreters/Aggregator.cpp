@@ -559,26 +559,20 @@ void NO_INLINE Aggregator::executeImpl(
     size_t rows,
     ColumnRawPtrs & key_columns,
     TiDB::TiDBCollators & collators,
-    AggregateFunctionInstruction * aggregate_instructions,
-    bool no_more_keys,
-    AggregateDataPtr overflow_row) const
+    AggregateFunctionInstruction * aggregate_instructions) const
 {
     typename Method::State state(key_columns, key_sizes, collators);
 
-    if (!no_more_keys)
-        executeImplBatch<false>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
-    else
-        executeImplBatch<true>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
+    executeImplBatch(method, state, aggregates_pool, rows, aggregate_instructions);
 }
 
-template <bool no_more_keys, typename Method>
+template <typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
     size_t rows,
-    AggregateFunctionInstruction * aggregate_instructions,
-    AggregateDataPtr overflow_row [[maybe_unused]]) const
+    AggregateFunctionInstruction * aggregate_instructions) const
 {
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
@@ -586,9 +580,6 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
     {
-        if constexpr (no_more_keys)
-            return;
-
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
         for (size_t i = 0; i < rows; ++i)
@@ -597,7 +588,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     }
 
     /// Optimization for special case when aggregating by 8bit key.
-    if constexpr (!no_more_keys && std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
+    if constexpr (std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
     {
         for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
         {
@@ -624,33 +615,21 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        if constexpr (!no_more_keys)
+        auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
+
+        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+        if (emplace_result.isInserted())
         {
-            auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
+            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+            emplace_result.setMapped(nullptr);
 
-            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-            if (emplace_result.isInserted())
-            {
-                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-                emplace_result.setMapped(nullptr);
+            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+            createAggregateStates(aggregate_data);
 
-                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                createAggregateStates(aggregate_data);
-
-                emplace_result.setMapped(aggregate_data);
-            }
-            else
-                aggregate_data = emplace_result.getMapped();
+            emplace_result.setMapped(aggregate_data);
         }
         else
-        {
-            /// Add only if the key already exists.
-            auto find_result = state.findKey(method.data, i, *aggregates_pool, sort_key_containers);
-            if (find_result.isFound())
-                aggregate_data = find_result.getMapped();
-            else
-                aggregate_data = overflow_row;
-        }
+            aggregate_data = emplace_result.getMapped();
 
         places[i] = aggregate_data;
     }
@@ -733,8 +712,7 @@ bool Aggregator::executeOnBlock(
     const FileProviderPtr & file_provider,
     ColumnRawPtrs & key_columns,
     AggregateColumns & aggregate_columns,
-    Int64 & local_delta_memory,
-    bool & no_more_keys)
+    Int64 & local_delta_memory)
 {
     if (is_cancelled())
         return true;
@@ -778,7 +756,7 @@ bool Aggregator::executeOnBlock(
 
     size_t num_rows = block.rows();
 
-    if ((params.overflow_row || result.type == AggregatedDataVariants::Type::without_key) && !result.without_key)
+    if ((result.type == AggregatedDataVariants::Type::without_key) && !result.without_key)
     {
         AggregateDataPtr place = result.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
         createAggregateStates(place);
@@ -794,14 +772,11 @@ bool Aggregator::executeOnBlock(
     }
     else
     {
-        /// This is where data is written that does not fit in `max_rows_to_group_by` with `group_by_overflow_mode = any`.
-        AggregateDataPtr overflow_row_ptr = params.overflow_row ? result.without_key : nullptr;
-
-#define M(NAME, IS_TWO_LEVEL)                                                                                                                                                                                                 \
-    case AggregationMethodType(NAME):                                                                                                                                                                                         \
-    {                                                                                                                                                                                                                         \
-        executeImpl(*ToAggregationMethodPtr(NAME, result.aggregation_method_impl), result.aggregates_pool, num_rows, key_columns, params.collators, aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr); \
-        break;                                                                                                                                                                                                                \
+#define M(NAME, IS_TWO_LEVEL)                                                                                                                                                                 \
+    case AggregationMethodType(NAME):                                                                                                                                                         \
+    {                                                                                                                                                                                         \
+        executeImpl(*ToAggregationMethodPtr(NAME, result.aggregation_method_impl), result.aggregates_pool, num_rows, key_columns, params.collators, aggregate_functions_instructions.data()); \
+        break;                                                                                                                                                                                \
     }
 
         switch (result.type)
@@ -814,7 +789,7 @@ bool Aggregator::executeOnBlock(
 #undef M
     }
 
-    size_t result_size = result.sizeWithoutOverflowRow();
+    size_t result_size = result.size();
     Int64 current_memory_usage = 0;
     if (current_memory_tracker)
     {
@@ -838,7 +813,7 @@ bool Aggregator::executeOnBlock(
         result.convertToTwoLevel();
 
     /// Checking the constraints.
-    if (!checkLimits(result_size, no_more_keys))
+    if (!checkLimits(result_size))
         return false;
 
     /** Flush data to disk if too much RAM is consumed.
@@ -869,7 +844,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
 
     LOG_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
 
-    /// Flush only two-level data and possibly overflow data.
+    /// Flush only two-level data.
 
 #define M(NAME)                                                                   \
     case AggregationMethodType(NAME):                                             \
@@ -972,13 +947,6 @@ void Aggregator::writeToTemporaryFileImpl(
         update_max_sizes(block);
     }
 
-    if (params.overflow_row)
-    {
-        Block block = prepareBlockAndFillWithoutKey(data_variants, false, true);
-        out.write(block);
-        update_max_sizes(block);
-    }
-
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
@@ -987,9 +955,9 @@ void Aggregator::writeToTemporaryFileImpl(
 }
 
 
-bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
+bool Aggregator::checkLimits(size_t result_size) const
 {
-    if (!no_more_keys && params.max_rows_to_group_by && result_size > params.max_rows_to_group_by)
+    if (params.max_rows_to_group_by && result_size > params.max_rows_to_group_by)
     {
         switch (params.group_by_overflow_mode)
         {
@@ -1000,13 +968,8 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
 
         case OverflowMode::BREAK:
             return false;
-
-        case OverflowMode::ANY:
-            no_more_keys = true;
-            break;
         }
     }
-
     return true;
 }
 
@@ -1018,13 +981,6 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     ColumnRawPtrs key_columns(params.keys_size);
     AggregateColumns aggregate_columns(params.aggregates_size);
-
-    /** Used if there is a limit on the maximum number of rows in the aggregation,
-      *  and if group_by_overflow_mode == ANY.
-      * In this case, new keys are not added to the set, but aggregation is performed only by
-      *  keys that have already managed to get into the set.
-      */
-    bool no_more_keys = false;
 
     LOG_TRACE(log, "Aggregating");
 
@@ -1042,17 +998,17 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, params.local_delta_memory, no_more_keys))
+        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, params.local_delta_memory))
             break;
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, params.local_delta_memory, no_more_keys);
+        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, params.local_delta_memory);
 
     double elapsed_seconds = watch.elapsedSeconds();
-    size_t rows = result.sizeWithoutOverflowRow();
+    size_t rows = result.size();
     LOG_TRACE(
         log,
         "Aggregated. {} to {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
@@ -1346,16 +1302,16 @@ Block Aggregator::prepareBlockAndFill(
 }
 
 
-Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const
+Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = 1;
 
     auto filler = [&data_variants, this](
-                      MutableColumns & key_columns,
+                      MutableColumns &,
                       AggregateColumnsData & aggregate_columns,
                       MutableColumns & final_aggregate_columns,
                       bool final_) {
-        if (data_variants.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
+        if (data_variants.type == AggregatedDataVariants::Type::without_key)
         {
             AggregatedDataWithoutKey & data = data_variants.without_key;
 
@@ -1373,17 +1329,10 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
                 /// Always single-thread. It's safe to pass current arena from 'aggregates_pool'.
                 insertAggregatesIntoColumns(data, final_aggregate_columns, data_variants.aggregates_pool);
             }
-
-            if (params.overflow_row)
-                for (size_t i = 0; i < params.keys_size; ++i)
-                    key_columns[i]->insertDefault();
         }
     };
 
     Block block = prepareBlockAndFill(data_variants, final, rows, filler);
-
-    if (is_overflows)
-        block.info.is_overflows = true;
 
     if (final)
         destroyWithoutKey(data_variants);
@@ -1394,7 +1343,7 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
 
 Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const
 {
-    size_t rows = data_variants.sizeWithoutOverflowRow();
+    size_t rows = data_variants.size();
 
     auto filler = [&data_variants, this](
                       MutableColumns & key_columns,
@@ -1547,7 +1496,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
         return blocks;
 
     std::shared_ptr<ThreadPoolManager> thread_pool;
-    if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000 /// TODO Make a custom threshold.
+    if (max_threads > 1 && data_variants.size() > 100000 /// TODO Make a custom threshold.
         && data_variants.isTwoLevel()) /// TODO Use the shared thread pool with the `merge` function.
         thread_pool = newThreadPoolManager(max_threads);
 
@@ -1557,8 +1506,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     if (data_variants.without_key)
         blocks.emplace_back(prepareBlockAndFillWithoutKey(
             data_variants,
-            final,
-            data_variants.type != AggregatedDataVariants::Type::without_key));
+            final));
 
     if (is_cancelled())
         return BlocksList();
@@ -1633,58 +1581,6 @@ void NO_INLINE Aggregator::mergeDataImpl(
     table_src.clearAndShrink();
 }
 
-
-template <typename Method, typename Table>
-void NO_INLINE Aggregator::mergeDataNoMoreKeysImpl(
-    Table & table_dst,
-    AggregatedDataWithoutKey & overflows,
-    Table & table_src,
-    Arena * arena) const
-{
-    table_src.mergeToViaFind(table_dst, [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found) {
-        AggregateDataPtr res_data = found ? dst : overflows;
-
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->merge(
-                res_data + offsets_of_aggregate_states[i],
-                src + offsets_of_aggregate_states[i],
-                arena);
-
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
-
-        src = nullptr;
-    });
-    table_src.clearAndShrink();
-}
-
-
-template <typename Method, typename Table>
-void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
-    Table & table_dst,
-    Table & table_src,
-    Arena * arena) const
-{
-    table_src.mergeToViaFind(table_dst,
-                             [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found) {
-                                 if (!found)
-                                     return;
-
-                                 for (size_t i = 0; i < params.aggregates_size; ++i)
-                                     aggregate_functions[i]->merge(
-                                         dst + offsets_of_aggregate_states[i],
-                                         src + offsets_of_aggregate_states[i],
-                                         arena);
-
-                                 for (size_t i = 0; i < params.aggregates_size; ++i)
-                                     aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
-
-                                 src = nullptr;
-                             });
-    table_src.clearAndShrink();
-}
-
-
 void NO_INLINE Aggregator::mergeWithoutKeyDataImpl(
     ManyAggregatedDataVariants & non_empty_data) const
 {
@@ -1712,32 +1608,19 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
     ManyAggregatedDataVariants & non_empty_data) const
 {
     AggregatedDataVariantsPtr & res = non_empty_data[0];
-    bool no_more_keys = false;
 
     /// We merge all aggregation results to the first.
     for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
     {
-        if (!checkLimits(res->sizeWithoutOverflowRow(), no_more_keys))
+        if (!checkLimits(res->size()))
             break;
 
         AggregatedDataVariants & current = *non_empty_data[result_num];
 
-        if (!no_more_keys)
-            mergeDataImpl<Method>(
-                getDataVariant<Method>(*res).data,
-                getDataVariant<Method>(current).data,
-                res->aggregates_pool);
-        else if (res->without_key)
-            mergeDataNoMoreKeysImpl<Method>(
-                getDataVariant<Method>(*res).data,
-                res->without_key,
-                getDataVariant<Method>(current).data,
-                res->aggregates_pool);
-        else
-            mergeDataOnlyExistingKeysImpl<Method>(
-                getDataVariant<Method>(*res).data,
-                getDataVariant<Method>(current).data,
-                res->aggregates_pool);
+        mergeDataImpl<Method>(
+            getDataVariant<Method>(*res).data,
+            getDataVariant<Method>(current).data,
+            res->aggregates_pool);
 
         /// `current` will not destroy the states of aggregate functions in the destructor
         current.aggregator = nullptr;
@@ -1796,7 +1679,7 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
     {
         /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
         std::sort(non_empty_data.begin(), non_empty_data.end(), [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs) {
-            return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
+            return lhs->size() > rhs->size();
         });
     }
 
@@ -1857,7 +1740,7 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
     {
         /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
         std::sort(non_empty_data.begin(), non_empty_data.end(), [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs) {
-            return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
+            return lhs->size() > rhs->size();
         });
     }
 
@@ -1898,13 +1781,12 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
 }
 
 
-template <bool no_more_keys, typename Method, typename Table>
+template <typename Method, typename Table>
 void NO_INLINE Aggregator::mergeStreamsImplCase(
     Block & block,
     Arena * aggregates_pool,
     Method & method [[maybe_unused]],
-    Table & data,
-    AggregateDataPtr overflow_row) const
+    Table & data) const
 {
     ColumnRawPtrs key_columns(params.keys_size);
     AggregateColumnsConstData aggregate_columns(params.aggregates_size);
@@ -1932,32 +1814,20 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        if constexpr (!no_more_keys)
+        auto emplace_result = state.emplaceKey(data, i, *aggregates_pool, sort_key_containers);
+        if (emplace_result.isInserted())
         {
-            auto emplace_result = state.emplaceKey(data, i, *aggregates_pool, sort_key_containers);
-            if (emplace_result.isInserted())
-            {
-                emplace_result.setMapped(nullptr);
+            emplace_result.setMapped(nullptr);
 
-                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                createAggregateStates(aggregate_data);
+            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+            createAggregateStates(aggregate_data);
 
-                emplace_result.setMapped(aggregate_data);
-            }
-            else
-                aggregate_data = emplace_result.getMapped();
+            emplace_result.setMapped(aggregate_data);
         }
         else
-        {
-            auto find_result = state.findKey(data, i, *aggregates_pool, sort_key_containers);
-            if (find_result.isFound())
-                aggregate_data = find_result.getMapped();
-        }
+            aggregate_data = emplace_result.getMapped();
 
-        /// aggregate_date == nullptr means that the new key did not fit in the hash table because of no_more_keys.
-
-        AggregateDataPtr value = aggregate_data ? aggregate_data : overflow_row;
-        places[i] = value;
+        places[i] = aggregate_data;
     }
 
     for (size_t j = 0; j < params.aggregates_size; ++j)
@@ -1981,14 +1851,9 @@ void NO_INLINE Aggregator::mergeStreamsImpl(
     Block & block,
     Arena * aggregates_pool,
     Method & method,
-    Table & data,
-    AggregateDataPtr overflow_row,
-    bool no_more_keys) const
+    Table & data) const
 {
-    if (!no_more_keys)
-        mergeStreamsImplCase<false>(block, aggregates_pool, method, data, overflow_row);
-    else
-        mergeStreamsImplCase<true>(block, aggregates_pool, method, data, overflow_row);
+    mergeStreamsImplCase(block, aggregates_pool, method, data);
 }
 
 
@@ -2058,7 +1923,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
         return;
 
     /** `minus one` means the absence of information about the bucket
-      * - in the case of single-level aggregation, as well as for blocks with "overflowing" values.
+      * - in the case of single-level aggregation.
       * If there is at least one block with a bucket number greater than zero, then there was a two-level aggregation.
       */
     auto max_bucket = bucket_to_blocks.rbegin()->first;
@@ -2097,11 +1962,6 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     /// First, parallel the merge for the individual buckets. Then we continue merge the data not allocated to the buckets.
     if (has_two_level)
     {
-        /** In this case, no_more_keys is not supported due to the fact that
-          *  from different threads it is difficult to update the general state for "other" keys (overflows).
-          * That is, the keys in the end can be significantly larger than max_rows_to_group_by.
-          */
-
         LOG_TRACE(log, "Merging partially aggregated two-level data.");
 
         auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool) {
@@ -2110,16 +1970,14 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
                 if (is_cancelled())
                     return;
 
-#define M(NAME)                                                                                            \
-    case AggregationMethodType(NAME):                                                                      \
-    {                                                                                                      \
-        mergeStreamsImpl(block,                                                                            \
-                         aggregates_pool,                                                                  \
-                         *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),                    \
-                         ToAggregationMethodPtr(NAME, result.aggregation_method_impl)->data.impls[bucket], \
-                         nullptr,                                                                          \
-                         false);                                                                           \
-        break;                                                                                             \
+#define M(NAME)                                                                                             \
+    case AggregationMethodType(NAME):                                                                       \
+    {                                                                                                       \
+        mergeStreamsImpl(block,                                                                             \
+                         aggregates_pool,                                                                   \
+                         *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),                     \
+                         ToAggregationMethodPtr(NAME, result.aggregation_method_impl)->data.impls[bucket]); \
+        break;                                                                                              \
     }
 
                 switch (result.type)
@@ -2173,8 +2031,6 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     {
         LOG_TRACE(log, "Merging partially aggregated single-level data.");
 
-        bool no_more_keys = false;
-
         BlocksList & blocks = bucket_to_blocks[-1];
         for (Block & block : blocks)
         {
@@ -2184,22 +2040,20 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
                 return;
             }
 
-            if (!checkLimits(result.sizeWithoutOverflowRow(), no_more_keys))
+            if (!checkLimits(result.size()))
                 break;
 
-            if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
+            if (result.type == AggregatedDataVariants::Type::without_key)
                 mergeWithoutKeyStreamsImpl(block, result);
 
-#define M(NAME, IS_TWO_LEVEL)                                                                \
-    case AggregationMethodType(NAME):                                                        \
-    {                                                                                        \
-        mergeStreamsImpl(block,                                                              \
-                         result.aggregates_pool,                                             \
-                         *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),      \
-                         ToAggregationMethodPtr(NAME, result.aggregation_method_impl)->data, \
-                         result.without_key,                                                 \
-                         no_more_keys);                                                      \
-        break;                                                                               \
+#define M(NAME, IS_TWO_LEVEL)                                                                 \
+    case AggregationMethodType(NAME):                                                         \
+    {                                                                                         \
+        mergeStreamsImpl(block,                                                               \
+                         result.aggregates_pool,                                              \
+                         *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),       \
+                         ToAggregationMethodPtr(NAME, result.aggregation_method_impl)->data); \
+        break;                                                                                \
     }
             switch (result.type)
             {
@@ -2225,7 +2079,6 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
         return {};
 
     auto bucket_num = blocks.front().info.bucket_num;
-    bool is_overflows = blocks.front().info.is_overflows;
 
     LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {}). Original method `{}`.", bucket_num, AggregatedDataVariants::getMethodName(method_chosen));
     Stopwatch watch;
@@ -2276,19 +2129,17 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
         if (bucket_num >= 0 && block.info.bucket_num != bucket_num)
             bucket_num = -1;
 
-        if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
+        if (result.type == AggregatedDataVariants::Type::without_key)
             mergeWithoutKeyStreamsImpl(block, result);
 
-#define M(NAME, IS_TWO_LEVEL)                                                                \
-    case AggregationMethodType(NAME):                                                        \
-    {                                                                                        \
-        mergeStreamsImpl(block,                                                              \
-                         result.aggregates_pool,                                             \
-                         *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),      \
-                         ToAggregationMethodPtr(NAME, result.aggregation_method_impl)->data, \
-                         nullptr,                                                            \
-                         false);                                                             \
-        break;                                                                               \
+#define M(NAME, IS_TWO_LEVEL)                                                                 \
+    case AggregationMethodType(NAME):                                                         \
+    {                                                                                         \
+        mergeStreamsImpl(block,                                                               \
+                         result.aggregates_pool,                                              \
+                         *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),       \
+                         ToAggregationMethodPtr(NAME, result.aggregation_method_impl)->data); \
+        break;                                                                                \
     }
         switch (result.type)
         {
@@ -2302,8 +2153,8 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     }
 
     Block block;
-    if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
-        block = prepareBlockAndFillWithoutKey(result, final, is_overflows);
+    if (result.type == AggregatedDataVariants::Type::without_key)
+        block = prepareBlockAndFillWithoutKey(result, final);
     else
         block = prepareBlockAndFillSingleLevel(result, final);
     /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
@@ -2506,7 +2357,7 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
     LOG_TRACE(log, "Destroying aggregate states");
 
     /// In what data structure is the data aggregated?
-    if (result.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
+    if (result.type == AggregatedDataVariants::Type::without_key)
         destroyWithoutKey(result);
 
 #define M(NAME, IS_TWO_LEVEL)                                                                                         \

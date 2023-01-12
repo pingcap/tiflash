@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/TotalsHavingBlockInputStream.h>
-#include <Interpreters/ExpressionActions.h>
-#include <DataTypes/DataTypeAggregateFunction.h>
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/TotalsHavingBlockInputStream.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
+#include <Interpreters/ExpressionActions.h>
 
 
 namespace DB
@@ -26,11 +26,12 @@ namespace DB
 
 TotalsHavingBlockInputStream::TotalsHavingBlockInputStream(
     const BlockInputStreamPtr & input_,
-    bool overflow_row_, const ExpressionActionsPtr & expression_,
-    const std::string & filter_column_, TotalsMode totals_mode_, double auto_include_threshold_)
-    : overflow_row(overflow_row_),
-    expression(expression_), filter_column_name(filter_column_), totals_mode(totals_mode_),
-    auto_include_threshold(auto_include_threshold_)
+    const ExpressionActionsPtr & expression_,
+    const std::string & filter_column_,
+    TotalsMode totals_mode_)
+    : expression(expression_)
+    , filter_column_name(filter_column_)
+    , totals_mode(totals_mode_)
 {
     children.push_back(input_);
 
@@ -55,7 +56,6 @@ TotalsHavingBlockInputStream::TotalsHavingBlockInputStream(
         }
         else
         {
-
             /// Not an aggregate function state. Just create a column with default value.
 
             MutableColumnPtr new_column = elem.type->createColumn();
@@ -87,18 +87,6 @@ Block TotalsHavingBlockInputStream::getTotals()
 {
     if (!totals)
     {
-        /** If totals_mode == AFTER_HAVING_AUTO, you need to decide whether to add aggregates to TOTALS for strings,
-          *  not passed max_rows_to_group_by.
-          */
-        if (overflow_aggregates)
-        {
-            if (totals_mode == TotalsMode::BEFORE_HAVING
-                || totals_mode == TotalsMode::AFTER_HAVING_INCLUSIVE
-                || (totals_mode == TotalsMode::AFTER_HAVING_AUTO
-                    && static_cast<double>(passed_keys) / total_keys >= auto_include_threshold))
-                addToTotals(overflow_aggregates, nullptr);
-        }
-
         totals = children.at(0)->getHeader().cloneWithColumns(std::move(current_totals));
         finalize(totals);
     }
@@ -128,13 +116,6 @@ Block TotalsHavingBlockInputStream::readImpl()
     while (1)
     {
         block = children[0]->read();
-
-        /// Block with values not included in `max_rows_to_group_by`. We'll postpone it.
-        if (overflow_row && block && block.info.is_overflows)
-        {
-            overflow_aggregates = block;
-            continue;
-        }
 
         if (!block)
             return finalized;
@@ -223,4 +204,4 @@ void TotalsHavingBlockInputStream::addToTotals(const Block & block, const IColum
     }
 }
 
-}
+} // namespace DB

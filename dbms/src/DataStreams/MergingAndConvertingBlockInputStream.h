@@ -88,13 +88,12 @@ protected:
         {
             ++current_bucket_num;
 
-            if (first->type == AggregatedDataVariants::Type::without_key || aggregator.params.overflow_row)
+            if (first->type == AggregatedDataVariants::Type::without_key)
             {
                 aggregator.mergeWithoutKeyDataImpl(data);
                 return aggregator.prepareBlockAndFillWithoutKey(
                     *first,
-                    final,
-                    first->type != AggregatedDataVariants::Type::without_key);
+                    final);
             }
         }
 
@@ -202,8 +201,6 @@ private:
     {
         try
         {
-            /// TODO: add no_more_keys support maybe
-
             auto & merged_data = *data[0];
             auto method = merged_data.type;
             Block block;
