@@ -59,7 +59,7 @@ try
         queue->close();
     });
     // take valid task
-    thread_manager->schedule(false, "submit", [&]() {
+    thread_manager->schedule(false, "take", [&]() {
         TaskPtr task;
         size_t expect_index = 0;
         while (queue->take(task))
