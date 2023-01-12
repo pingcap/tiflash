@@ -601,6 +601,7 @@ public:
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap,
                              const ColumnDefines & columns_to_read);
+    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges);
     BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context,
                                       const SegmentSnapshotPtr & segment_snap,
                                       const RowKeyRanges & read_ranges,

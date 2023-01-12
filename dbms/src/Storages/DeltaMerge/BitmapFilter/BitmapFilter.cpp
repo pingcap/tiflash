@@ -122,4 +122,9 @@ String BitmapFilter::toDebugString() const
     }
     return fmt::format("{}", s);
 }
+
+size_t BitmapFilter::count() const
+{
+    return std::count(filter.cbegin(), filter.cend(), true);
+}
 } // namespace DB::DM

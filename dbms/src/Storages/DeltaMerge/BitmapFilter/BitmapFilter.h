@@ -39,6 +39,7 @@ public:
     void runOptimize();
 
     String toDebugString() const;
+    size_t count() const;
 
 private:
     std::vector<bool> filter;

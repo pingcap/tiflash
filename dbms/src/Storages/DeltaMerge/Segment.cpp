@@ -2492,18 +2492,35 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         dm_context.tracing_id);
 }
 
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)
+{
+    RowKeyRanges real_ranges;
+    for (const auto & read_range : read_ranges)
+    {
+        auto real_range = rowkey_range.shrink(read_range);
+        if (!real_range.none())
+            real_ranges.emplace_back(std::move(real_range));
+    }
+    return real_ranges;
+}
+
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_context,
                                                         const ColumnDefines & columns_to_read,
                                                         const SegmentSnapshotPtr & segment_snap,
-                                                        const RowKeyRanges & data_ranges,
+                                                        const RowKeyRanges & read_ranges,
                                                         const RSOperatorPtr & filter,
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    if (real_ranges.empty())
+    {
+        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+    }
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
-        data_ranges,
+        real_ranges,
         filter,
         max_version,
         expected_block_size);
@@ -2512,7 +2529,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         std::move(bitmap_filter),
         dm_context,
         columns_to_read,
-        data_ranges,
+        real_ranges,
         filter,
         max_version,
         expected_block_size);
