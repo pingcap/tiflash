@@ -36,17 +36,8 @@ size_t ApproxBlockHeaderBytes(const Block & block)
         size += 8;
         size += column.type->getName().size();
         size += 8;
-        if (column.column->isColumnConst())
-        {
-            size += column.column->byteSize() * column.column->size();
-        }
     }
     return size;
-}
-
-size_t ApproxBlockBytes(const Block & block)
-{
-    return block.bytes() + ApproxBlockHeaderBytes(block);
 }
 
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)

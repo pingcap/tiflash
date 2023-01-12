@@ -21,7 +21,6 @@
 
 namespace DB
 {
-size_t ApproxBlockBytes(const Block & block);
 size_t ApproxBlockHeaderBytes(const Block & block);
 using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
 using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;

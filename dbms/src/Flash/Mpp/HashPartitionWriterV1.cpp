@@ -23,6 +23,10 @@
 
 namespace DB
 {
+extern size_t ApproxBlockBytes(const Block & block);
+}
+namespace DB
+{
 
 static inline CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode)
 {
@@ -155,7 +159,7 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
             });
 
             // compression method flag; NONE = 0x02, LZ4 = 0x82, ZSTD = 0x90
-            // ... 
+            // ...
             // header meta:
             //     columns count;
             //     total row count (multi parts);
