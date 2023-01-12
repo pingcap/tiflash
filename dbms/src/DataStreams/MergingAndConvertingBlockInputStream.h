@@ -154,20 +154,16 @@ protected:
                 std::unique_lock lock(parallel_merge_data->mutex);
 
                 if (parallel_merge_data->exception)
+                {
                     std::rethrow_exception(parallel_merge_data->exception);
+                }
 
 
                 if (!parallel_merge_data->ready_blocks.empty())
                 {
-                    size_t finished_thread_num = parallel_merge_data->ready_blocks.size();
-
-                    for (size_t i = 0; i < finished_thread_num; ++i)
-                    {
-                        scheduleThreadForNextBucket();
-                    }
-
                     for (auto & ready_block : parallel_merge_data->ready_blocks)
                     {
+                        scheduleThreadForNextBucket();
                         current_bucket_num++;
                         if (!ready_block.empty())
                         {
