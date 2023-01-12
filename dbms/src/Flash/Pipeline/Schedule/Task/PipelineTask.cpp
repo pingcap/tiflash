@@ -84,7 +84,7 @@ ExecTaskStatus PipelineTask::executeImpl()
             return ExecTaskStatus::WAITING;
         case OperatorStatus::SPILLING:
             return ExecTaskStatus::SPILLING;
-        // After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations.
+        // After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
         // And other states are unexpected.
         case OperatorStatus::NEED_INPUT:
             return ExecTaskStatus::RUNNING;
@@ -108,7 +108,7 @@ ExecTaskStatus PipelineTask::awaitImpl()
             HANDLE_FINISHED_STATUS
         case OperatorStatus::WAITING:
             return ExecTaskStatus::WAITING;
-        // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations.
+        // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
         // And other states are unexpected.
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
@@ -133,8 +133,8 @@ ExecTaskStatus PipelineTask::spillImpl()
         case OperatorStatus::SPILLING:
             return ExecTaskStatus::SPILLING;
         // After `pipeline_exec->spill`,
-        // `NEED_INPUT` means that pipeline_exec need data to spill.
-        // `HAS_OUTPUT` means that pipeline_exec has restored data.
+        // - `NEED_INPUT` means that pipeline_exec need data to spill.
+        // - `HAS_OUTPUT` means that pipeline_exec has restored data, and ready for ouput.
         // And other states are unexpected.
         case OperatorStatus::NEED_INPUT:
         case OperatorStatus::HAS_OUTPUT:

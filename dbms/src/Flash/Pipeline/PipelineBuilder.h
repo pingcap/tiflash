@@ -33,6 +33,7 @@ private:
 };
 using PipelineIdGeneratorPtr = std::shared_ptr<PipelineIdGenerator>;
 
+// PipelineBuilder is used to build pipelines, and PipelineBreaker is used to build dependencies between pipelines in the process.
 class PipelineBuilder
 {
 public:

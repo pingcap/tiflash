@@ -20,6 +20,11 @@
 
 namespace DB
 {
+/**
+ * All interfaces of the operator may return the following state.
+ * - finish status, spilling status and waiting status can be returned in all interfaces of operator.
+ * - operator may return a different running status depending on the interface.
+*/
 enum class OperatorStatus
 {
     /// finish status
@@ -46,10 +51,16 @@ class Operator
 {
 public:
     virtual ~Operator() = default;
+    // running status may return are
+    // - `NEED_INPUT` means that the data that operator is waiting for has been prepared.
     virtual OperatorStatus await() { throw Exception("Unsupport"); }
+    // running status may return are
+    // - `NEED_INPUT` means that operator need data to spill.
+    // - `HAS_OUTPUT` means that operator has restored data, and ready for ouput.
     virtual OperatorStatus spill() { throw Exception("Unsupport"); }
 };
 
+// The running status returned by Sink can only be `HAS_OUTPUT`.
 class SourceOp : public Operator
 {
 public:
@@ -64,7 +75,9 @@ using SourceOpPtr = std::unique_ptr<SourceOp>;
 class TransformOp : public Operator
 {
 public:
+    // may return NEED_INPUT and HAS_OUTPUT
     virtual OperatorStatus tryOutput(Block &) { return OperatorStatus::NEED_INPUT; }
+    // may return NEED_INPUT and PASS_THROUGH
     virtual OperatorStatus transform(Block & block) = 0;
 
     virtual void transformHeader(Block & header) { transform(header); }
@@ -74,6 +87,7 @@ public:
 using TransformOpPtr = std::unique_ptr<TransformOp>;
 using TransformOps = std::vector<TransformOpPtr>;
 
+// The running status returned by Sink can only be `NEED_INPUT`.
 class SinkOp : public Operator
 {
 public:
