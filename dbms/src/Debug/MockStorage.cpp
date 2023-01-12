@@ -243,17 +243,8 @@ void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColum
     TableInfo table_info;
     table_info.name = name;
     table_info.id = getTableIdForDeltaMerge(name);
-    int i = 0;
-    for (const auto & column : columns)
-    {
-        TiDB::ColumnInfo ret;
-        std::tie(ret.name, ret.tp) = column;
-        // TODO: find a way to assign decimal field's flen.
-        if (ret.tp == TiDB::TP::TypeNewDecimal)
-            ret.flen = 65;
-        ret.id = i++;
-        table_info.columns.push_back(std::move(ret));
-    }
+    auto column_infos = mockColumnInfosToTiDBColumnInfos(columns);
+    table_info.columns.swap(column_infos);
     table_infos_for_delta_merge[name] = table_info;
 }
 

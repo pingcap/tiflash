@@ -387,6 +387,7 @@ void MockDAGRequestContext::addMockTableSchema(const String & db, const String &
 {
     mock_storage->addTableSchema(db + "." + table, columnInfos);
 }
+
 void MockDAGRequestContext::addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);

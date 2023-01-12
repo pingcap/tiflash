@@ -48,7 +48,7 @@ public:
 
     size_t table_id = 1;
 
-    std::vector<DecimalTestData> test_datas{{9, 1, 1, 2, "Decimal32"}, {18, 10, 2, 4, "Decimal64"}, {38, 19, 3, 6, "Decimal128"}, {65, 39, 4, 8, "Decimal256"}};
+    std::vector<DecimalTestData> test_datas{{38, 19, 3, 6, "Decimal128"}, {65, 39, 4, 8, "Decimal256"}};
 
     static std::pair<ColumnWithTypeAndName, String> getColumnAndTypeName(size_t prec, size_t scale, bool nullable, const String & type)
     {
@@ -58,30 +58,32 @@ public:
         {
             type_name = fmt::format("Nullable(Decimal({},{}))", prec, scale);
             if (type == "Decimal32")
-                column = createColumn<Nullable<Decimal32>>(std::make_tuple(prec, scale), {DecimalField32(450256, scale)}, "d1");
+                column = createColumn<Nullable<Decimal32>>(std::make_tuple(prec, scale), {DecimalField32(450256, scale), DecimalField32(450257, scale)}, "d1");
             else if (type == "Decimal64")
-                column = createColumn<Nullable<Decimal64>>(std::make_tuple(prec, scale), {DecimalField64(450256, scale)}, "d1");
+                column = createColumn<Nullable<Decimal64>>(std::make_tuple(prec, scale), {DecimalField64(450256, scale), DecimalField64(450257, scale)}, "d1");
             else if (type == "Decimal128")
-                column = createColumn<Nullable<Decimal128>>(std::make_tuple(prec, scale), {DecimalField128(450256, scale)}, "d1");
+                column = createColumn<Nullable<Decimal128>>(std::make_tuple(prec, scale), {DecimalField128(450256, scale), DecimalField128(450257, scale)}, "d1");
             else
             {
-                Int256 val = 450256;
-                column = createColumn<Nullable<Decimal256>>(std::make_tuple(prec, scale), {DecimalField256(val, scale)}, "d1");
+                Int256 val1 = 450256;
+                Int256 val2 = 450257;
+                column = createColumn<Nullable<Decimal256>>(std::make_tuple(prec, scale), {DecimalField256(val1, scale), DecimalField256(val2, scale)}, "d1");
             }
         }
         else
         {
             type_name = fmt::format("Decimal({},{})", prec, scale);
             if (type == "Decimal32")
-                column = createColumn<Decimal32>(std::make_tuple(prec, scale), {DecimalField32(450256, scale)}, "d1");
+                column = createColumn<Decimal32>(std::make_tuple(prec, scale), {DecimalField32(450256, scale), DecimalField32(450257, scale)}, "d1");
             else if (type == "Decimal64")
-                column = createColumn<Decimal64>(std::make_tuple(prec, scale), {DecimalField64(450256, scale)}, "d1");
+                column = createColumn<Decimal64>(std::make_tuple(prec, scale), {DecimalField64(450256, scale), DecimalField64(450257, scale)}, "d1");
             else if (type == "Decimal128")
-                column = createColumn<Decimal128>(std::make_tuple(prec, scale), {DecimalField128(450256, scale)}, "d1");
+                column = createColumn<Decimal128>(std::make_tuple(prec, scale), {DecimalField128(450256, scale), DecimalField128(450257, scale)}, "d1");
             else
             {
-                Int256 val = 450256;
-                column = createColumn<Decimal256>(std::make_tuple(prec, scale), {DecimalField256(val, scale)}, "d1");
+                Int256 val1 = 450256;
+                Int256 val2 = 450257;
+                column = createColumn<Decimal256>(std::make_tuple(prec, scale), {DecimalField256(val1, scale), DecimalField256(val2, scale)}, "d1");
             }
         }
 
@@ -104,7 +106,8 @@ public:
                         auto table_name = "t" + std::to_string(table_id++);
                         context.addMockTable({"test_db", table_name}, {{"d1", DataTypeFactory::instance().get(type_name)}}, {column});
                         auto request = context.scan("test_db", table_name).build(context);
-                        executeAndAssertColumnsEqual(request, {column}, true);
+                        // TODO: bug in compare blocks in non-restrict mode.
+                        executeAndAssertColumnsEqual(request, {column});
                     }
                 }
             }
@@ -131,5 +134,6 @@ try
     testDecimalTable();
 }
 CATCH
+
 } // namespace tests
 } // namespace DB

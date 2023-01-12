@@ -546,7 +546,7 @@ public:
 
 private:
     std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), Null, UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>
-        storage;
+        storage{};
 
     Types::Which which;
 
@@ -561,7 +561,7 @@ private:
     void createConcrete(T && x)
     {
         using JustT = std::decay_t<T>;
-        JustT * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
@@ -571,7 +571,7 @@ private:
     void assignConcrete(T && x)
     {
         using JustT = std::decay_t<T>;
-        JustT * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
         *ptr = std::forward<T>(x);
     }
 
@@ -648,7 +648,7 @@ private:
 
     void create(const char * data, size_t size)
     {
-        String * MAY_ALIAS ptr = reinterpret_cast<String *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<String *>(&storage);
         new (ptr) String(data, size);
         which = Types::String;
     }
