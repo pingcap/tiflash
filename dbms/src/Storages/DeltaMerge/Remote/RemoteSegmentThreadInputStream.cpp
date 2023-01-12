@@ -107,13 +107,13 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
                 max_version,
                 filter,
                 expected_block_size);
-            LOG_DEBUG(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(task->state));
+            LOG_TRACE(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(task->state));
         }
 
         Block res = cur_stream->read(res_filter, return_filter);
         if (!res)
         {
-            LOG_DEBUG(log, "Read blocks from remote segment end, segment={}", cur_segment_id);
+            LOG_TRACE(log, "Read blocks from remote segment end, segment={}", cur_segment_id);
             cur_segment_id = 0;
             cur_stream = {};
             // try read from next task
