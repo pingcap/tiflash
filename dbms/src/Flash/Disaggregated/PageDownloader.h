@@ -17,8 +17,9 @@ public:
         const DM::ColumnDefinesPtr & columns_to_read,
         size_t max_streams_,
         const String & req_id,
-        const String & executor_id);
-    
+        const String & executor_id,
+        bool do_prepare_);
+
     ~PageDownloader();
 
 private:
@@ -30,6 +31,7 @@ private:
 
 private:
     const size_t threads_num;
+    const bool do_prepare;
     DM::RemoteReadTaskPtr remote_read_tasks;
     std::shared_ptr<PageReceiver> receiver;
     std::vector<std::future<void>> persist_threads;

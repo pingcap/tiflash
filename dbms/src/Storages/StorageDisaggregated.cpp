@@ -255,6 +255,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         log->identifier(),
         executor_id);
 
+    bool do_prepare = db_context.getSettingsRef().dis_prepare;
+
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto page_downloader = std::make_shared<PageDownloader>(
@@ -263,7 +265,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         column_defines,
         num_streams,
         log->identifier(),
-        executor_id);
+        executor_id,
+        do_prepare);
 
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";

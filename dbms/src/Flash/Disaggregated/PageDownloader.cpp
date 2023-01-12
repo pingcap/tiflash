@@ -18,8 +18,10 @@ PageDownloader::PageDownloader(
     const DM::ColumnDefinesPtr & columns_to_read,
     size_t max_streams_,
     const String & req_id,
-    const String & executor_id)
+    const String & executor_id,
+    bool do_prepare_)
     : threads_num(max_streams_)
+    , do_prepare(do_prepare_)
     , remote_read_tasks(std::move(remote_read_tasks_))
     , receiver(std::move(receiver_))
     , live_persisters(threads_num)
@@ -92,18 +94,26 @@ void PageDownloader::persistLoop(size_t idx)
 
     // try to do some preparation for speed up reading
     size_t num_prepared = 0;
-    while (true)
+    double ms_cost = 0.0;
+    if (do_prepare)
     {
-        auto seg_task = remote_read_tasks->nextTaskForPrepare();
-        if (!seg_task)
-            break;
-        // do place index
-        seg_task->prepare();
-        num_prepared += 1;
-        // update the state
-        remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReadyAndPrepared, false);
+        while (true)
+        {
+            auto seg_task = remote_read_tasks->nextTaskForPrepare();
+            if (!seg_task)
+                break;
+            watch.restart();
+            // do place index
+            seg_task->prepare();
+            ms_cost = watch.elapsedSeconds();
+            num_prepared += 1;
+            LOG_DEBUG(log, "segment prepare done, segment_id={}", seg_task->segment_id);
+            // update the state
+            remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReadyAndPrepared, false);
+        }
     }
-    LOG_INFO(log, "Done preparation for {} segment tasks", num_prepared);
+
+    LOG_INFO(log, "Done preparation for {} segment tasks, cost={:.3f}ms", num_prepared, ms_cost);
 }
 
 void PageDownloader::downloadDone(bool meet_error, const String & local_err_msg, const LoggerPtr & log)

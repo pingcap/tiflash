@@ -58,6 +58,8 @@ class RemoteReadTask
 public:
     explicit RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_);
 
+    ~RemoteReadTask();
+
     size_t numSegments() const;
 
     // Return a segment task that need to fetch pages from
@@ -81,6 +83,8 @@ public:
 
     // Return a segment read task that is ready for reading.
     RemoteSegmentReadTaskPtr nextReadyTask();
+
+    void wakeAll() { cv_ready_tasks.notify_all(); }
 
     const String & getErrorMessage() const;
 

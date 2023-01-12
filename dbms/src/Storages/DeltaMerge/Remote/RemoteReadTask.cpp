@@ -76,6 +76,11 @@ RemoteReadTask::RemoteReadTask(std::vector<RemoteTableReadTaskPtr> && tasks_)
     GET_METRIC(tiflash_disaggregated_details, type_cftiny_fetch).Increment(total_num_cftiny_to_fetch);
 }
 
+RemoteReadTask::~RemoteReadTask()
+{
+    cv_ready_tasks.notify_all();
+}
+
 size_t RemoteReadTask::numSegments() const
 {
     return num_segments;
@@ -483,7 +488,7 @@ void RemoteSegmentReadTask::receivePage(dtpb::RemotePage && remote_page)
 void RemoteSegmentReadTask::prepare()
 {
     // Do place index for full segment
-    segment->placeDeltaIndex(*dm_context);
+    segment->placeDeltaIndex(*dm_context, segment_snap);
 }
 
 BlockInputStreamPtr RemoteSegmentReadTask::getInputStream(
