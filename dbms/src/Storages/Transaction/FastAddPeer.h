@@ -26,6 +26,7 @@
 #include <utility>
 
 #include "Poco/Logger.h"
+#include "common/defines.h"
 #include "common/logger_useful.h"
 
 using raft_serverpb::PeerState;
@@ -52,9 +53,15 @@ struct FastAddPeerContext::AsyncTasks
 
     explicit AsyncTasks(uint64_t pool_size)
     {
-        thread_pool = std::make_unique<ThreadPool>(pool_size);
+        // We use a very big queue.
+        thread_pool = std::make_unique<ThreadPool>(pool_size, pool_size, 300);
     }
-    void addTask(Key k, Func f);
+    explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
+    {
+        // We use a very big queue.
+        thread_pool = std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size);
+    }
+    bool addTask(Key k, Func f);
     bool isScheduled(Key key) const;
     bool isReady(Key key) const;
     FastAddPeerRes fetchResult(Key key);

@@ -22,7 +22,7 @@ namespace PS::V3
 {
 class CheckpointPageManager;
 using CheckpointPageManagerPtr = std::shared_ptr<CheckpointPageManager>;
-}
+} // namespace PS::V3
 namespace DM
 {
 class ColumnFilePersisted;
@@ -51,7 +51,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
 /// Recreate column file instances from buf.
 ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
-ColumnFilePersisteds deserializeSavedRemoteColumnFiles(//
+ColumnFilePersisteds deserializeSavedRemoteColumnFiles( //
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
@@ -66,7 +66,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(ReadBuffer & buf, UIn
 void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
-ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format(//
+ColumnFilePersisteds deserializeSavedRemoteColumnFilesInV3Format( //
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,

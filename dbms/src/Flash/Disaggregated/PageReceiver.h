@@ -149,11 +149,6 @@ private:
         const String & local_err_msg,
         const LoggerPtr & log);
 
-    // TODO the persist logic may belong to another class
-    void setUpPersist();
-    void persistLoop(size_t idx);
-    bool consumeOneResult(const LoggerPtr & log);
-
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
 
@@ -169,9 +164,6 @@ private:
     std::unique_ptr<RPCContext> rpc_context;
     const size_t source_num;
     const size_t max_buffer_size;
-    const size_t persist_threads_num;
-
-    Stopwatch watch;
 
     std::shared_ptr<ThreadManager> thread_manager;
     // std::vector<std::unique_ptr<MPMCQueue<PageReceivedMessagePtr>>> msg_channels;
@@ -183,18 +175,10 @@ private:
     PageReceiverState state;
     String err_msg;
 
-    Int32 live_persisters;
-    PageReceiverState persister_state;
-    String persister_err_msg;
-
     bool collected;
     int thread_count;
 
     LoggerPtr exc_log;
-
-    // below members are for persist threads
-    std::atomic<size_t> total_rows;
-    std::atomic<size_t> total_pages;
 };
 
 class PageReceiver : public PageReceiverBase<GRPCPagesReceiverContext>

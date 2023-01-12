@@ -1,7 +1,7 @@
-#include <algorithm>
-
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+
+#include <algorithm>
 
 namespace DB::PS::V3
 {
@@ -24,8 +24,7 @@ UniversalPageStoragePtr CheckpointPageManager::createTempPageStorage(Context & c
     local_ps->restore();
 
     auto reader = CheckpointManifestFileReader<PageDirectoryTrait>::create(CheckpointManifestFileReader<PageDirectoryTrait>::Options{
-        .file_path = checkpoint_manifest_path
-    });
+        .file_path = checkpoint_manifest_path});
     auto t_edit = reader->read();
     const auto & records = t_edit.getRecords();
     UniversalWriteBatch wb;
@@ -108,4 +107,4 @@ std::tuple<ReadBufferPtr, size_t, PageFieldSizes> CheckpointPageManager::getRead
     buf->seek(offset);
     return std::make_tuple(buf, size, field_sizes);
 }
-}
+} // namespace DB::PS::V3

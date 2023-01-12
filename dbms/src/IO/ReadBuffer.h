@@ -158,11 +158,12 @@ public:
     void readStrict(char * to, size_t n)
     {
         size_t expect_size = n;
-        if (auto actual_size= read(to, n); actual_size != expect_size)
+        if (auto actual_size = read(to, n); actual_size != expect_size)
             throw Exception("Cannot read all data expect_size "
                                 + std::to_string(expect_size)
                                 + " actual_size "
-                                + std::to_string(actual_size) , ErrorCodes::CANNOT_READ_ALL_DATA);
+                                + std::to_string(actual_size),
+                            ErrorCodes::CANNOT_READ_ALL_DATA);
     }
 
     /** A method that can be more efficiently implemented in successors, in the case of reading large enough blocks.

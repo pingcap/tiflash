@@ -1,7 +1,8 @@
 #pragma once
 
-#include "DMFile.h"
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+
+#include "DMFile.h"
 
 namespace DB
 {
@@ -25,5 +26,5 @@ private:
     Remote::DMFileOID remote_oid;
     Remote::IDataStorePtr data_store;
 };
-}
-}
+} // namespace DM
+} // namespace DB

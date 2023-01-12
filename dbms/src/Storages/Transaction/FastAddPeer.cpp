@@ -407,11 +407,16 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         auto & fap_ctx = server->tmt->getContext().getFastAddPeerContext();
         if (!fap_ctx.tasks_trace->isScheduled(region_id))
         {
-            LOG_INFO(log, "add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
             // We need to schedule the task.
-            fap_ctx.tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
+            auto res = fap_ctx.tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
                 return FastAddPeerImpl(server, region_id, new_peer_id);
             });
+            if (res) {
+                LOG_INFO(log, "add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+            } else {
+                LOG_INFO(log, "add new task fail(queue full) [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+                return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
+            }
         }
 
         if (fap_ctx.tasks_trace->isReady(region_id))

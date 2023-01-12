@@ -34,6 +34,12 @@ namespace DB
 class ExchangeReceiver;
 struct SelectQueryInfo;
 
+namespace DM
+{
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
+} // namespace DM
+
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
 // Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),
@@ -81,6 +87,9 @@ private:
     DM::RemoteReadTaskPtr buildDisaggregatedTask(
         const Context & db_context,
         const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+    DM::RSOperatorPtr buildRSOperator(
+        const Context & db_context,
+        const DM::ColumnDefinesPtr & columns_to_read);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::RemoteReadTaskPtr & remote_read_tasks,

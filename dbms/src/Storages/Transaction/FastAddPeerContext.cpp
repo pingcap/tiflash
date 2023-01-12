@@ -33,16 +33,18 @@ FastAddPeerContext::~FastAddPeerContext()
     delete tasks_trace;
 }
 
-void FastAddPeerContext::AsyncTasks::addTask(Key k, Func f)
+bool FastAddPeerContext::AsyncTasks::addTask(Key k, Func f)
 {
     using P = std::packaged_task<FastAddPeerRes()>;
     std::shared_ptr<P> p = std::make_shared<P>(P(f));
+
+    auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
+    if (res)
     {
         std::scoped_lock l(mtx);
         futures[k] = p->get_future();
     }
-
-    thread_pool->scheduleOrThrowOnError([p]() { (*p)(); });
+    return res;
 }
 
 bool FastAddPeerContext::AsyncTasks::isScheduled(Key key) const

@@ -15,17 +15,26 @@
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
+#include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
+#include <Flash/Disaggregated/PageDownloader.h>
 #include <Flash/Disaggregated/PageReceiver.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
@@ -235,6 +244,40 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     return read_task;
 }
 
+DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
+    const Context & db_context,
+    const DM::ColumnDefinesPtr & columns_to_read)
+{
+    if (!push_down_filter.hasValue())
+        return DM::EMPTY_FILTER;
+
+    const bool enable_rs_filter = db_context.getSettingsRef().dt_enable_rough_set_filter;
+    if (!enable_rs_filter)
+    {
+        LOG_DEBUG(log, "Rough set filter is disabled.");
+        return DM::EMPTY_FILTER;
+    }
+
+    auto dag_query = std::make_unique<DAGQueryInfo>(
+        push_down_filter.conditions,
+        DAGPreparedSets{}, // Not care now
+        NamesAndTypes{}, // Not care now
+        db_context.getTimezoneInfo());
+    auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
+        auto iter = std::find_if(
+            defines->begin(),
+            defines->end(),
+            [column_id](const DM::ColumnDefine & d) -> bool { return d.id == column_id; });
+        if (iter != defines->end())
+            return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+        return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+    };
+    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
+    if (likely(rs_operator != DM::EMPTY_FILTER))
+        LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
+    return rs_operator;
+}
+
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
     const DM::RemoteReadTaskPtr & remote_read_tasks,
@@ -253,12 +296,24 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         log->identifier(),
         executor_id);
 
+    bool do_prepare = db_context.getSettingsRef().dis_prepare;
+
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto page_downloader = std::make_shared<PageDownloader>(
+        remote_read_tasks,
+        page_receiver,
+        column_defines,
+        num_streams,
+        log->identifier(),
+        executor_id,
+        do_prepare);
 
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
+
+    auto rs_operator = buildRSOperator(db_context, column_defines);
 
     auto io_concurrency = std::max(50, num_streams * 10);
     auto sub_streams_size = io_concurrency / num_streams;
@@ -271,11 +326,12 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         auto sub_streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
             db_context,
             remote_read_tasks,
-            page_receiver,
+            page_downloader,
             column_defines,
             read_tso,
             sub_streams_size,
             extra_table_id_index,
+            rs_operator,
             extra_info,
             /*tracing_id*/ log->identifier());
         RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
@@ -284,8 +340,9 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         pipeline.streams.emplace_back(std::move(union_stream));
     }
 
-    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
-    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
+    auto * dag_context = db_context.getDAGContext();
+    auto & table_scan_io_input_streams = dag_context->getInBoundIOInputStreamsMap()[executor_id];
+    auto & profile_streams = dag_context->getProfileStreamsMap()[executor_id];
     pipeline.transform([&](auto & stream) {
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
