@@ -292,19 +292,16 @@ static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::Establis
 
     if (!DB::CheckMppVersion(sender_mpp_version))
     {
-        err_reason += fmt::format("sender failed: {};", DB::GenMppVersionErrorMessage(sender_mpp_version));
+        err_reason += fmt::format("sender failed: {}; ", DB::GenMppVersionErrorMessage(sender_mpp_version));
     }
     if (!DB::CheckMppVersion(receiver_mpp_version))
     {
-        err_reason += fmt::format("receiver failed: {};", DB::GenMppVersionErrorMessage(receiver_mpp_version));
+        err_reason += fmt::format("receiver failed: {}; ", DB::GenMppVersionErrorMessage(receiver_mpp_version));
     }
 
     if (!err_reason.empty())
     {
-        auto && err_msg = fmt::format("Failed to establish MPP connection, sender-meta=`{}`, receiver-meta=`{}`, reason=`{}`",
-                                      request->sender_meta().DebugString(),
-                                      request->receiver_meta().DebugString(),
-                                      err_reason);
+        auto && err_msg = fmt::format("Failed to establish MPP connection, reason=`{}`", err_reason);
         return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
     }
     return grpc::Status::OK;
