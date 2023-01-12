@@ -47,6 +47,7 @@ public:
         UInt64 read_tso,
         size_t num_streams,
         size_t extra_table_id_index,
+        DM::RSOperatorPtr rs_filter,
         std::string_view extra_info,
         std::string_view tracing_id,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
