@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,23 +14,22 @@
 
 #pragma once
 
-#include <DataStreams/IBlockInputStream.h>
+#include <common/types.h>
 
 namespace DB
 {
-struct DAGPipeline
+
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
+
+struct SpillConfig
 {
-    BlockInputStreams streams;
-
-    BlockInputStreamPtr & firstStream() { return streams.at(0); }
-
-    template <typename Transform>
-    void transform(Transform && transform)
-    {
-        for (auto & stream : streams)
-            transform(stream);
-    }
-
-    bool hasMoreThanOneStream() const { return streams.size() > 1; }
+public:
+    SpillConfig(const String & spill_dir_, const String & spill_id_, size_t max_spilled_size_per_spill_, const FileProviderPtr & file_provider_);
+    String spill_dir;
+    String spill_id;
+    String spill_id_as_file_name_prefix;
+    size_t max_spilled_size_per_spill;
+    FileProviderPtr file_provider;
 };
 } // namespace DB

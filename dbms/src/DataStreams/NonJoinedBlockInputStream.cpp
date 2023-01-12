@@ -33,6 +33,10 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
     static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right)
     {
         for (size_t j = 0; j < num_columns_left; ++j)
+            /// should fill the key column with key columns from right block
+            /// but we don't care about the key column now so just insert a default value is ok.
+            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
             columns_left[j]->insertDefault();
 
         for (size_t j = 0; j < num_columns_right; ++j)
@@ -50,6 +54,10 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
         for (auto current = &static_cast<const typename Mapped::Base_t &>(mapped); current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_left; ++j)
+                /// should fill the key column with key columns from right block
+                /// but we don't care about the key column now so just insert a default value is ok.
+                /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+                /// for detailed explanation
                 columns_left[j]->insertDefault();
 
             for (size_t j = 0; j < num_columns_right; ++j)
@@ -69,7 +77,7 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 {
     size_t build_concurrency = parent.getBuildConcurrency();
     if (unlikely(step > build_concurrency || index >= build_concurrency))
-        throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
+        LOG_WARNING(parent.log, "The concurrency of NonJoinedBlockInputStream is larger than join build concurrency");
 
     /** left_sample_block contains keys and "left" columns.
           * result_sample_block - keys, "left" columns, and "right" columns.
@@ -104,7 +112,12 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
     {
         for (size_t i = 0; i < num_columns_left; ++i)
         {
-            convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
+            const auto & column_with_type_and_name = result_sample_block.getByPosition(column_indices_left[i]);
+            if (parent.key_names_left.end() == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
+                /// if it is not the key, then convert to nullable, if it is key, then just keep the original type
+                /// actually we don't care about the key column now refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+                /// for detailed explanation
+                convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
         }
     }
 
@@ -115,6 +128,10 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 
 Block NonJoinedBlockInputStream::readImpl()
 {
+    /// If build concurrency is less than non join concurrency,
+    /// just return empty block for extra non joined block input stream read
+    if (unlikely(index >= parent.getBuildConcurrency()))
+        return Block();
     if (parent.blocks.empty())
         return Block();
 
@@ -196,10 +213,15 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
 {
     size_t rows_added = 0;
     size_t key_num = parent.key_names_right.size();
+    /// first add rows that is not in the hash table
     while (current_not_mapped_row != nullptr)
     {
         rows_added++;
         for (size_t j = 0; j < num_columns_left; ++j)
+            /// should fill the key column with key columns from right block
+            /// but we don't care about the key column now so just insert a default value is ok.
+            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
             mutable_columns_left[j]->insertDefault();
 
         for (size_t j = 0; j < num_columns_right; ++j)
@@ -214,6 +236,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         }
     }
 
+    /// then add rows that in hash table, but not joined
     if (!position)
     {
         current_segment = index;
@@ -226,7 +249,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
     auto end = map.getSegmentTable(current_segment).end();
 
-    for (; *it != end || current_segment < map.getSegmentSize() - step; ++(*it))
+    for (; *it != end || current_segment + step < map.getSegmentSize(); ++(*it))
     {
         if (*it == end)
         {
@@ -240,7 +263,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
                     [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
                 it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
                 end = map.getSegmentTable(current_segment).end();
-            } while (*it == end && current_segment < map.getSegmentSize() - step);
+            } while (*it == end && current_segment + step < map.getSegmentSize());
             if (*it == end)
                 break;
         }

@@ -1099,6 +1099,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
+    global_context->setServerInfo(server_info);
+    if (server_info.memory_info.capacity == 0)
+    {
+        LOG_ERROR(log, "Failed to get memory capacity, float-pointing memory limit config (for example, set `max_memory_usage_for_all_queries` to `0.1`) won't take effect. If you set them as float-pointing value, you can change them to integer instead.");
+    }
+    else
+    {
+        LOG_INFO(log, fmt::format("Detected memory capacity {} bytes, you have config `max_memory_usage_for_all_queries` to {}, finally limit to {} bytes.", server_info.memory_info.capacity, settings.max_memory_usage_for_all_queries.toString(), settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity)));
+    }
+
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
