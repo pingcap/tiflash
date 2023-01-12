@@ -43,7 +43,7 @@ TotalsHavingBlockInputStream::TotalsHavingBlockInputStream(
     current_totals.reserve(source_header.columns());
     for (const auto & elem : source_header)
     {
-        if (const ColumnAggregateFunction * column = typeid_cast<const ColumnAggregateFunction *>(elem.column.get()))
+        if (const auto * column = typeid_cast<const ColumnAggregateFunction *>(elem.column.get()))
         {
             /// Create ColumnAggregateFunction with initial aggregate function state.
 
@@ -71,7 +71,7 @@ static void finalize(Block & block)
     for (size_t i = 0; i < block.columns(); ++i)
     {
         ColumnWithTypeAndName & current = block.getByPosition(i);
-        const DataTypeAggregateFunction * unfinalized_type = typeid_cast<const DataTypeAggregateFunction *>(current.type.get());
+        const auto * unfinalized_type = typeid_cast<const DataTypeAggregateFunction *>(current.type.get());
 
         if (unfinalized_type)
         {
@@ -113,7 +113,7 @@ Block TotalsHavingBlockInputStream::readImpl()
     Block finalized;
     Block block;
 
-    while (1)
+    while (true)
     {
         block = children[0]->read();
 
@@ -178,7 +178,7 @@ void TotalsHavingBlockInputStream::addToTotals(const Block & block, const IColum
     {
         const ColumnWithTypeAndName & current = block.getByPosition(i);
 
-        if (const ColumnAggregateFunction * column = typeid_cast<const ColumnAggregateFunction *>(current.column.get()))
+        if (const auto * column = typeid_cast<const ColumnAggregateFunction *>(current.column.get()))
         {
             auto & target = typeid_cast<ColumnAggregateFunction &>(*current_totals[i]);
             IAggregateFunction * function = target.getAggregateFunction().get();
