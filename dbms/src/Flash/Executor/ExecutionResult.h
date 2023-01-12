@@ -14,15 +14,30 @@
 
 #pragma once
 
-#include <DataStreams/BlockIO.h>
-#include <Flash/Executor/QueryExecutor.h>
+#include <Common/Exception.h>
+#include <common/types.h>
 
 namespace DB
 {
-class Context;
+struct ExecutionResult
+{
+    bool is_success;
+    String err_msg;
 
-// Use BlockInputStream-based pull model directly.
-BlockIO executeAsBlockIO(Context & context, bool internal = false);
+    void verify()
+    {
+        RUNTIME_CHECK(is_success, err_msg);
+    }
 
-QueryExecutorPtr queryExecute(Context & context, bool internal = false);
+    static ExecutionResult success()
+    {
+        return {true, ""};
+    }
+
+    static ExecutionResult fail(const String & err_msg)
+    {
+        RUNTIME_CHECK(!err_msg.empty());
+        return {false, err_msg};
+    }
+};
 } // namespace DB

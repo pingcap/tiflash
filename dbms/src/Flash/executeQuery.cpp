@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     }
 }
 
-BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
+BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -100,22 +100,22 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
 }
 } // namespace
 
-BlockIO executeQuery(Context & context, bool internal)
+BlockIO executeAsBlockIO(Context & context, bool internal)
 {
     if (context.getSettingsRef().enable_planner)
     {
         PlanQuerySource plan(context);
-        return executeDAG(plan, context, internal);
+        return doExecuteAsBlockIO(plan, context, internal);
     }
     else
     {
         DAGQuerySource dag(context);
-        return executeDAG(dag, context, internal);
+        return doExecuteAsBlockIO(dag, context, internal);
     }
 }
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    return std::make_unique<DataStreamExecutor>(executeQuery(context, internal));
+    return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context, internal));
 }
 } // namespace DB
