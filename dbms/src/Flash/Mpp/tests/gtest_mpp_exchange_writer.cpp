@@ -388,7 +388,7 @@ static CompressionMethodByte ToCompressionMethodByte(CompressionMethod m)
     return CompressionMethodByte::NONE;
 }
 
-TEST_F(TestMPPExchangeWriter, testHashPartitionWriterV1)
+TEST_F(TestMPPExchangeWriter, TestHashPartitionWriterV1)
 try
 {
     const size_t block_rows = 64;

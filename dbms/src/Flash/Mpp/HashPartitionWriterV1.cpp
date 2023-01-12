@@ -59,8 +59,6 @@ HashPartitionWriterV1<ExchangeWriterPtr>::HashPartitionWriterV1(
     , collators(std::move(collators_))
     , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
-    assert(dag_context.getMPPTaskMeta().mpp_version() > 0);
-
     if (partition_batch_limit < 0)
     {
         partition_batch_limit = 8192LL * partition_num;
