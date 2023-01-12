@@ -281,7 +281,7 @@ public:
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
-        auto res = local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
+        return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
         return res;
     }
 
