@@ -4,6 +4,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace DB::DM
@@ -11,17 +12,16 @@ namespace DB::DM
 BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
     const Context & db_context,
     const RemoteReadTaskPtr & remote_read_tasks,
-    const PageReceiverPtr & page_receiver,
+    const PageDownloaderPtr & page_downloader,
     const DM::ColumnDefinesPtr & columns_to_read,
     UInt64 read_tso,
     size_t num_streams,
     size_t extra_table_id_index,
+    DM::RSOperatorPtr rs_filter,
     std::string_view extra_info,
     std::string_view tracing_id,
     size_t expected_block_size)
 {
-    DM::RSOperatorPtr rs_filter = {};
-
     BlockInputStreams streams;
     streams.reserve(num_streams);
     for (size_t i = 0; i < num_streams; ++i)
@@ -29,7 +29,7 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
         BlockInputStreamPtr stream = std::make_shared<DM::RemoteSegmentThreadInputStream>(
             db_context,
             remote_read_tasks,
-            page_receiver,
+            page_downloader,
             *columns_to_read,
             rs_filter,
             read_tso,
@@ -46,7 +46,7 @@ BlockInputStreams RemoteSegmentThreadInputStream::buildInputStreams(
 RemoteSegmentThreadInputStream::RemoteSegmentThreadInputStream(
     const Context & db_context_,
     RemoteReadTaskPtr read_tasks_,
-    PageReceiverPtr page_receiver_,
+    PageDownloaderPtr page_downloader_,
     const ColumnDefines & columns_to_read_,
     const RSOperatorPtr & filter_,
     UInt64 max_version_,
@@ -56,7 +56,7 @@ RemoteSegmentThreadInputStream::RemoteSegmentThreadInputStream(
     std::string_view req_id)
     : db_context(db_context_)
     , read_tasks(std::move(read_tasks_))
-    , page_receiver(std::move(page_receiver_))
+    , page_downloader(std::move(page_downloader_))
     , columns_to_read(columns_to_read_)
     , filter(filter_)
     , header(toEmptyBlock(columns_to_read))
@@ -95,6 +95,7 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
                     throw Exception(read_tasks->getErrorMessage(), ErrorCodes::LOGICAL_ERROR);
                 }
                 LOG_DEBUG(log, "Read from remote segment done");
+                read_tasks->wakeAll();
                 return {};
             }
             cur_segment_id = task->segment_id;
@@ -106,13 +107,13 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
                 max_version,
                 filter,
                 expected_block_size);
-            LOG_TRACE(log, "Start to read remote segment, segment={}", cur_segment_id);
+            LOG_TRACE(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(task->state));
         }
 
         Block res = cur_stream->read(res_filter, return_filter);
         if (!res)
         {
-            LOG_TRACE(log, "Finish reading remote segment, segment={}", cur_segment_id);
+            LOG_TRACE(log, "Read blocks from remote segment end, segment={}", cur_segment_id);
             cur_segment_id = 0;
             cur_stream = {};
             // try read from next task

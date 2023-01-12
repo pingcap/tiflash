@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/Remote/CheckpointManifestFileReader.h>
 
 namespace DB::PS::V3
 {
@@ -22,4 +22,4 @@ public:
     static std::tuple<ReadBufferPtr, size_t, PageFieldSizes> getReadBuffer(const Page & page, const String & data_dir);
 };
 
-}
+} // namespace DB::PS::V3

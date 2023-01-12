@@ -168,7 +168,7 @@ void GRPCPagesReceiverContext::finishTaskEstablish(const Request & req, bool mee
 
 void GRPCPagesReceiverContext::finishTaskReceive(const DM::RemoteSegmentReadTaskPtr & seg_task)
 {
-    remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::AllReady, false);
+    remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReady, false);
 }
 
 void GRPCPagesReceiverContext::finishAllReceivingTasks(const String & err_msg)

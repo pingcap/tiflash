@@ -34,9 +34,10 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
-#include <fmt/format.h>
-#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 #include <Storages/Page/V3/PageDirectory.h>
+#include <fmt/format.h>
+
+#include "Storages/Page/V3/Remote/CheckpointPageManager.h"
 
 
 namespace DB

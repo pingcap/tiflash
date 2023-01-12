@@ -20,7 +20,6 @@
 #include <Storages/Page/V3/Remote/CheckpointPageManager.h>
 #include <Storages/Page/universal/Readers.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
-#include <Storages/Page/universal/Readers.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -87,8 +86,8 @@ TEST_F(CheckpointTest, CheckpointManagerGetNormalPageId)
     }
 
     using PS::V3::CheckpointManifestFileReader;
-    using PS::V3::PageDirectory;
     using PS::V3::CheckpointPageManager;
+    using PS::V3::PageDirectory;
     using PS::V3::RemoteDataLocation;
     using PS::V3::Remote::WriterInfo;
     using PS::V3::universal::BlobStoreTrait;
@@ -139,5 +138,5 @@ TEST_F(CheckpointTest, CheckpointManagerGetNormalPageId)
     }
 }
 
-}
-}
+} // namespace PS::universal::tests
+} // namespace DB

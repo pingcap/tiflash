@@ -6,6 +6,8 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::DM::tests
 {
 using namespace DB::tests;
@@ -47,7 +49,7 @@ protected:
     static constexpr TableID TEST_TABLE_ID = 100;
 };
 
-TEST_F(RemoteReadTaskTest, popTasks)
+TEST_F(RemoteReadTaskTest, popTasksWithoutPreparation)
 {
     auto read_task = buildTestTask();
     const auto num_segments = read_task->numSegments();
@@ -56,15 +58,82 @@ TEST_F(RemoteReadTaskTest, popTasks)
     for (size_t i = 0; i < num_segments; ++i)
     {
         auto seg_task = read_task->nextFetchTask();
-        read_task->updateTaskState(seg_task, SegmentReadTaskState::AllReady, false);
+
+        read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReady, false); // mock fetch done
         auto ready_seg_task = read_task->nextReadyTask();
-        ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::AllReady);
+        ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::DataReady) << magic_enum::enum_name(ready_seg_task->state);
         ASSERT_EQ(seg_task->segment_id, ready_seg_task->segment_id);
         ASSERT_EQ(seg_task->store_id, ready_seg_task->store_id);
         ASSERT_EQ(seg_task->table_id, ready_seg_task->table_id);
     }
 
     ASSERT_EQ(read_task->nextFetchTask(), nullptr);
+    ASSERT_EQ(read_task->nextReadyTask(), nullptr);
+}
+
+TEST_F(RemoteReadTaskTest, popTasksWithAllPrepared)
+{
+    auto read_task = buildTestTask();
+    const auto num_segments = read_task->numSegments();
+    ASSERT_EQ(num_segments, 3 + 3 + 4);
+
+    for (size_t i = 0; i < num_segments; ++i)
+    {
+        auto seg_task = read_task->nextFetchTask();
+        read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReady, false); // mock fetch done
+        {
+            auto prepare_seg_task = read_task->nextTaskForPrepare();
+            ASSERT_EQ(prepare_seg_task->state, SegmentReadTaskState::DataReadyAndPrepraring) << magic_enum::enum_name(prepare_seg_task->state);
+            ASSERT_EQ(seg_task->segment_id, prepare_seg_task->segment_id);
+            ASSERT_EQ(seg_task->store_id, prepare_seg_task->store_id);
+            ASSERT_EQ(seg_task->table_id, prepare_seg_task->table_id);
+            read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReadyAndPrepared, false); // mock prepare done
+        }
+        {
+            auto ready_seg_task = read_task->nextReadyTask();
+            ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::DataReadyAndPrepared) << magic_enum::enum_name(ready_seg_task->state);
+            ASSERT_EQ(seg_task->segment_id, ready_seg_task->segment_id);
+            ASSERT_EQ(seg_task->store_id, ready_seg_task->store_id);
+            ASSERT_EQ(seg_task->table_id, ready_seg_task->table_id);
+        }
+    }
+
+    ASSERT_EQ(read_task->nextFetchTask(), nullptr);
+    ASSERT_EQ(read_task->nextTaskForPrepare(), nullptr);
+    ASSERT_EQ(read_task->nextReadyTask(), nullptr);
+}
+
+TEST_F(RemoteReadTaskTest, popTasksWithSomePrepared)
+{
+    auto read_task = buildTestTask();
+    const auto num_segments = read_task->numSegments();
+    ASSERT_EQ(num_segments, 3 + 3 + 4);
+
+    for (size_t i = 0; i < num_segments; ++i)
+    {
+        auto seg_task = read_task->nextFetchTask();
+        read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReady, false); // mock fetch done
+        bool do_prepare = i % 2 == 0;
+        if (do_prepare)
+        {
+            auto prepare_seg_task = read_task->nextTaskForPrepare();
+            ASSERT_EQ(prepare_seg_task->state, SegmentReadTaskState::DataReadyAndPrepraring) << magic_enum::enum_name(prepare_seg_task->state);
+            ASSERT_EQ(seg_task->segment_id, prepare_seg_task->segment_id);
+            ASSERT_EQ(seg_task->store_id, prepare_seg_task->store_id);
+            ASSERT_EQ(seg_task->table_id, prepare_seg_task->table_id);
+            read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReadyAndPrepared, false); // mock prepare done
+        }
+        {
+            auto ready_seg_task = read_task->nextReadyTask();
+            ASSERT_EQ(ready_seg_task->state, do_prepare ? SegmentReadTaskState::DataReadyAndPrepared : SegmentReadTaskState::DataReady) << magic_enum::enum_name(ready_seg_task->state);
+            ASSERT_EQ(seg_task->segment_id, ready_seg_task->segment_id);
+            ASSERT_EQ(seg_task->store_id, ready_seg_task->store_id);
+            ASSERT_EQ(seg_task->table_id, ready_seg_task->table_id);
+        }
+    }
+
+    ASSERT_EQ(read_task->nextFetchTask(), nullptr);
+    ASSERT_EQ(read_task->nextTaskForPrepare(), nullptr);
     ASSERT_EQ(read_task->nextReadyTask(), nullptr);
 }
 
@@ -78,16 +147,17 @@ TEST_F(RemoteReadTaskTest, failTask)
     for (size_t i = 0; i < 3; ++i)
     {
         auto seg_task = read_task->nextFetchTask();
-        read_task->updateTaskState(seg_task, SegmentReadTaskState::AllReady, false);
+        read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReady, false);
         auto ready_seg_task = read_task->nextReadyTask();
-        ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::AllReady);
+        ASSERT_EQ(ready_seg_task->state, SegmentReadTaskState::DataReady) << magic_enum::enum_name(ready_seg_task->state);
         ASSERT_EQ(seg_task->segment_id, ready_seg_task->segment_id);
         ASSERT_EQ(seg_task->store_id, ready_seg_task->store_id);
         ASSERT_EQ(seg_task->table_id, ready_seg_task->table_id);
     }
     auto seg_task = read_task->nextFetchTask();
-    read_task->updateTaskState(seg_task, SegmentReadTaskState::AllReady, /*meet_error*/ true);
+    read_task->updateTaskState(seg_task, SegmentReadTaskState::DataReady, /*meet_error*/ true);
     ASSERT_EQ(read_task->nextReadyTask(), nullptr);
+    ASSERT_EQ(read_task->nextTaskForPrepare(), nullptr);
 }
 
 TEST_F(RemoteReadTaskTest, ser)
