@@ -55,7 +55,7 @@ try
                        .scan("spill_sort_test", "simple_table")
                        .topN(order_by_items, limit_size)
                        .build(context);
-    context.context.setSetting("max_block_size", Field(max_block_size));
+    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, original_max_streams);
