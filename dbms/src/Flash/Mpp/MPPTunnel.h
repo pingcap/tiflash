@@ -270,6 +270,7 @@ public:
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
+        std::lock_guard lock(mu);
         if (unlikely(is_done))
             return false;
 
@@ -282,7 +283,6 @@ public:
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
         return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
-        return res;
     }
 
     void cancelWith(const String & reason) override
@@ -309,9 +309,10 @@ private:
 
     void closeLocalTunnel(bool meet_error, const String & local_err_msg)
     {
-        bool expect = false;
-        if (is_done.compare_exchange_strong(expect, true))
+        std::lock_guard lock(mu);
+        if (!is_done)
         {
+            is_done = true;
             consumer_state.setMsg(local_err_msg);
             local_request_handler.connectionLocalDone(meet_error, local_err_msg);
         }
@@ -319,7 +320,8 @@ private:
 
     size_t source_index;
     LocalRequestHandler local_request_handler;
-    std::atomic_bool is_done;
+    bool is_done;
+    std::mutex mu;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;

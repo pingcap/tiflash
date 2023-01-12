@@ -347,15 +347,18 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
+    bool wait_all_connection_done = false;
     try
     {
         close();
         waitAllConnectionDone();
+        wait_all_connection_done = true;
         thread_manager->wait();
         ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
     {
+        RUNTIME_ASSERT(wait_all_connection_done, "We should wait the close of all connections");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
 }
