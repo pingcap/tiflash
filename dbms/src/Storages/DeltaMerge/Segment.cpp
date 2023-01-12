@@ -2455,7 +2455,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitmap_filter,
                                                         const DMContext & dm_context,
                                                         const ColumnDefines & columns_to_read,
-                                                        const RowKeyRanges & data_ranges,
+                                                        const RowKeyRanges & read_ranges,
                                                         const RSOperatorPtr & filter,
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
@@ -2467,7 +2467,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         columns_to_read,
-        data_ranges,
+        read_ranges,
         filter,
         max_version,
         expected_block_size,
