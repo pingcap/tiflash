@@ -18,7 +18,7 @@ namespace DB
 {
 namespace
 {
-inline void injectFailPointReceiverPushFail([[maybe_unused]] bool & push_succeed, ReceiverMode mode)
+inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
 {
     switch (mode)
     {
