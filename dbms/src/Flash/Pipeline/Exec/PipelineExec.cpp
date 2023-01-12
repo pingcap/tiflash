@@ -15,8 +15,6 @@
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 
-#include <magic_enum.hpp>
-
 namespace DB
 {
 #define CHECK_IS_CANCELLED(exec_status)        \

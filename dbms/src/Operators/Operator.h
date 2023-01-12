@@ -33,7 +33,7 @@ enum class OperatorStatus
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
     // also used as an external state of `PipelineExec`.
     NEED_INPUT,
-    // means that SourceOp/TransformOp can output blocks for used by subsequent operators.
+    // means that SourceOp/TransformOp output a block for used by subsequent operators.
     // also used as an external state of `PipelineExec`.
     HAS_OUTPUT,
     // means that TransformOp handle the input block and output it.
@@ -64,7 +64,6 @@ using SourceOpPtr = std::unique_ptr<SourceOp>;
 class TransformOp : public Operator
 {
 public:
-    // call tryOutput first, and then call transform.
     virtual OperatorStatus tryOutput(Block &) { return OperatorStatus::NEED_INPUT; }
     virtual OperatorStatus transform(Block & block) = 0;
 
@@ -78,7 +77,6 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
-    // call prepare first, and then call write.
     virtual OperatorStatus prepare() { return OperatorStatus::NEED_INPUT; }
     virtual OperatorStatus write(Block && block) = 0;
 

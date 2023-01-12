@@ -89,7 +89,7 @@ ExecTaskStatus PipelineTask::executeImpl()
         case OperatorStatus::NEED_INPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            throw Exception(fmt::format("Unexpected state {} at PipelineTask::execute", magic_enum::enum_name(op_status)));
+            throw Exception(fmt::format("Unexpected op state {} at PipelineTask::execute", magic_enum::enum_name(op_status)));
         }
     }
     HANDLE_ERROR
@@ -113,7 +113,7 @@ ExecTaskStatus PipelineTask::awaitImpl()
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            throw Exception(fmt::format("Unexpected state {} at PipelineTask::await", magic_enum::enum_name(op_status)));
+            throw Exception(fmt::format("Unexpected op state {} at PipelineTask::await", magic_enum::enum_name(op_status)));
         }
     }
     HANDLE_ERROR
@@ -140,7 +140,7 @@ ExecTaskStatus PipelineTask::spillImpl()
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            throw Exception(fmt::format("Unexpected state {} at PipelineTask::spill", magic_enum::enum_name(op_status)));
+            throw Exception(fmt::format("Unexpected op state {} at PipelineTask::spill", magic_enum::enum_name(op_status)));
         }
     }
     HANDLE_ERROR
