@@ -2417,6 +2417,10 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         }
         preceded_dmfile_rows += dmfiles[i]->getRows();
     }
+    if (some_packs_count <= 0)
+    {
+        return bitmap_filter;
+    }
     static ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
         getVersionColumnDefine(),
