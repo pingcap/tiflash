@@ -21,6 +21,8 @@
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
@@ -65,37 +67,32 @@ void TaskThreadPool::handleTask(TaskPtr & task)
 {
     assert(task);
     TRACE_MEMORY(task);
-    int64_t time_spent = 0;
+
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+    ExecTaskStatus status;
     while (true)
     {
-        Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
-        assert(task);
-        auto status = task->execute();
-        switch (status)
-        {
-        case ExecTaskStatus::RUNNING:
-        {
-            time_spent += stopwatch.elapsed();
-            static constexpr int64_t YIELD_MAX_TIME_SPENT = 100'000'000L;
-            if (time_spent >= YIELD_MAX_TIME_SPENT)
-            {
-                submit(std::move(task));
-                return;
-            }
+        status = task->execute();
+        if (status != ExecTaskStatus::RUNNING || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT)
             break;
-        }
-        case ExecTaskStatus::WAITING:
-            scheduler.wait_reactor.submit(std::move(task));
-            return;
-        case ExecTaskStatus::SPILLING:
-            scheduler.spill_thread_pool.submit(std::move(task));
-            return;
-        case FINISH_STATUS:
-            task.reset();
-            return;
-        default:
-            __builtin_unreachable();
-        }
+    }
+
+    switch (status)
+    {
+    case ExecTaskStatus::RUNNING:
+        submit(std::move(task));
+        break;
+    case ExecTaskStatus::WAITING:
+        scheduler.wait_reactor.submit(std::move(task));
+        break;
+    case ExecTaskStatus::SPILLING:
+        scheduler.spill_thread_pool.submit(std::move(task));
+        break;
+    case FINISH_STATUS:
+        task.reset();
+        break;
+    default:
+        RUNTIME_ASSERT(false, logger, "Unexpected task state {}", magic_enum::enum_name(status));
     }
 }
 

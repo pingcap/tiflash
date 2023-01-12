@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
@@ -23,6 +24,7 @@
 #ifdef __x86_64__
 #include <immintrin.h>
 #endif
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -52,7 +54,7 @@ public:
             task.reset();
             return true;
         default:
-            __builtin_unreachable();
+            RUNTIME_ASSERT(false, "Unexpected task state {}", magic_enum::enum_name(status));
         }
     }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/SpillThreadPool.h>
 #include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
@@ -21,6 +22,8 @@
 #include <common/likely.h>
 #include <common/logger_useful.h>
 #include <errno.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -50,12 +53,20 @@ void SpillThreadPool::submit(TaskPtr && task)
     task_queue->submit(std::move(task));
 }
 
-// TODO ensure that the task is executed more than 100 ms at a time like `TaskThreadPool::handleTask`.
 void SpillThreadPool::handleTask(TaskPtr && task)
 {
     assert(task);
     TRACE_MEMORY(task);
-    auto status = task->spill();
+
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+    ExecTaskStatus status;
+    while (true)
+    {
+        status = task->spill();
+        if (status != ExecTaskStatus::SPILLING || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT)
+            break;
+    }
+
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
@@ -68,7 +79,7 @@ void SpillThreadPool::handleTask(TaskPtr && task)
         task.reset();
         break;
     default:
-        __builtin_unreachable();
+        RUNTIME_ASSERT(false, logger, "Unexpected task state {}", magic_enum::enum_name(status));
     }
 }
 
