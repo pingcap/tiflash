@@ -21,15 +21,15 @@ OperatorStatus FilterTransformOp::transform(Block & block)
     if (unlikely(filter_transform_action.alwaysFalse()))
     {
         block = {};
-        return OperatorStatus::PASS;
+        return OperatorStatus::PASS_THROUGH;
     }
 
     if (likely(block))
         return filter_transform_action.transform(block, /*child_filter=*/nullptr)
-            ? OperatorStatus::PASS
-            : OperatorStatus::MORE_INPUT;
+            ? OperatorStatus::PASS_THROUGH
+            : OperatorStatus::NEED_INPUT;
 
-    return OperatorStatus::PASS;
+    return OperatorStatus::PASS_THROUGH;
 }
 
 void FilterTransformOp::transformHeader(Block & header)

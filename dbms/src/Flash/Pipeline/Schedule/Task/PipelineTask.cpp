@@ -17,6 +17,8 @@
 #include <Flash/Pipeline/Schedule/Event/Event.h>
 #include <Flash/Pipeline/Schedule/Task/PipelineTask.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 PipelineTask::PipelineTask(
@@ -82,11 +84,12 @@ ExecTaskStatus PipelineTask::executeImpl()
             return ExecTaskStatus::WAITING;
         case OperatorStatus::SPILLING:
             return ExecTaskStatus::SPILLING;
-        case OperatorStatus::PASS:
-        case OperatorStatus::MORE_INPUT:
+        // After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations.
+        // And other states are unexpected.
+        case OperatorStatus::NEED_INPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            __builtin_unreachable();
+            throw Exception(fmt::format("Unexpected state {} at PipelineTask::execute", magic_enum::enum_name(op_status)));
         }
     }
     HANDLE_ERROR
@@ -105,10 +108,12 @@ ExecTaskStatus PipelineTask::awaitImpl()
             HANDLE_FINISHED_STATUS
         case OperatorStatus::WAITING:
             return ExecTaskStatus::WAITING;
-        case OperatorStatus::PASS:
+        // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations.
+        // And other states are unexpected.
+        case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            __builtin_unreachable();
+            throw Exception(fmt::format("Unexpected state {} at PipelineTask::await", magic_enum::enum_name(op_status)));
         }
     }
     HANDLE_ERROR
@@ -127,10 +132,15 @@ ExecTaskStatus PipelineTask::spillImpl()
             HANDLE_FINISHED_STATUS
         case OperatorStatus::SPILLING:
             return ExecTaskStatus::SPILLING;
-        case OperatorStatus::PASS:
+        // After `pipeline_exec->spill`,
+        // `NEED_INPUT` means that pipeline_exec need data to spill.
+        // `HAS_OUTPUT` means that pipeline_exec has restored data.
+        // And other states are unexpected.
+        case OperatorStatus::NEED_INPUT:
+        case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            __builtin_unreachable();
+            throw Exception(fmt::format("Unexpected state {} at PipelineTask::spill", magic_enum::enum_name(op_status)));
         }
     }
     HANDLE_ERROR

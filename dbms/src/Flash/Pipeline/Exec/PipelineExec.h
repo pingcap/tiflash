@@ -46,11 +46,13 @@ public:
 private:
     OperatorStatus fetchBlock(
         Block & block,
-        size_t & transform_op_index,
+        size_t & start_transform_op_index,
         PipelineExecutorStatus & exec_status);
 
+    // It will only be called by `executeImpl` and `awaitImpl`.
+    // Because the spilling state will only be transferred from spilling status and running status.
     template <typename Op>
-    OperatorStatus prepareSpillOp(OperatorStatus op_status, const Op & op)
+    OperatorStatus prepareSpillOpIfNeed(OperatorStatus op_status, const Op & op)
     {
         assert(op);
         if (op_status == OperatorStatus::SPILLING)

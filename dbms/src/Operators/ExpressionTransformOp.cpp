@@ -21,6 +21,6 @@ OperatorStatus ExpressionTransformOp::transform(Block & block)
 {
     if (likely(block))
         expression->execute(block);
-    return OperatorStatus::PASS;
+    return OperatorStatus::PASS_THROUGH;
 }
 } // namespace DB

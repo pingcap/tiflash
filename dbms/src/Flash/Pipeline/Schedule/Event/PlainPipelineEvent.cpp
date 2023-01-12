@@ -21,13 +21,13 @@ namespace DB
 bool PlainPipelineEvent::scheduleImpl()
 {
     assert(pipeline);
-    auto pipline_exec_group = pipeline->toExecGroup(context, concurrency);
-    if (pipline_exec_group.empty())
+    auto pipeline_exec_group = pipeline->toExecGroup(context, concurrency);
+    if (pipeline_exec_group.empty())
         return true;
 
     std::vector<TaskPtr> tasks;
-    tasks.reserve(pipline_exec_group.size());
-    for (auto & pipline_exec : pipline_exec_group)
+    tasks.reserve(pipeline_exec_group.size());
+    for (auto & pipline_exec : pipeline_exec_group)
         tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, shared_from_this(), std::move(pipline_exec)));
     scheduleTasks(tasks);
     return false;

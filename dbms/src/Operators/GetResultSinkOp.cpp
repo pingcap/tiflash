@@ -21,8 +21,9 @@ OperatorStatus GetResultSinkOp::write(Block && block)
 {
     if (!block)
         return OperatorStatus::FINISHED;
+
     std::lock_guard lock(physical_sink.mu);
     physical_sink.result_handler(block);
-    return OperatorStatus::PASS;
+    return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB

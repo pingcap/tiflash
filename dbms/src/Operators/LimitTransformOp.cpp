@@ -21,7 +21,7 @@ OperatorStatus LimitTransformOp::transform(Block & block)
 {
     if (!action->transform(block))
         block = {};
-    return OperatorStatus::PASS;
+    return OperatorStatus::PASS_THROUGH;
 }
 
 void LimitTransformOp::transformHeader(Block & header)

@@ -15,6 +15,8 @@
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 #define CHECK_IS_CANCELLED(exec_status)        \
@@ -24,54 +26,55 @@ namespace DB
 /**
  *  sink_op   transform_op    ...   transform_op   source_op
  *
- *  prepare───►fetchBlock───► ... ───►fetchBlock───►read────┐
+ *  prepare────►tryOutput───► ... ───►tryOutput────►read────┐
  *                                                          │ block
  *    write◄────transform◄─── ... ◄───transform◄────────────┘
  */
 OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
 {
     Block block;
-    size_t transform_op_index = 0;
-    auto op_status = fetchBlock(block, transform_op_index, exec_status);
-    if (op_status != OperatorStatus::PASS)
+    size_t start_transform_op_index = 0;
+    auto op_status = fetchBlock(block, start_transform_op_index, exec_status);
+    // If the state `fetchBlock` returns isn't `HAS_OUTPUT`, it means that `fetchBlock` did not return a block and is an exception state.
+    if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
 
     // start from the next transform after fetch block transform.
-    for (; transform_op_index < transform_ops.size(); ++transform_op_index)
+    for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
         CHECK_IS_CANCELLED(exec_status);
         auto op_status = transform_ops[transform_op_index]->transform(block);
-        if (op_status != OperatorStatus::PASS)
-            return prepareSpillOp(op_status, transform_ops[transform_op_index]);
+        if (op_status != OperatorStatus::PASS_THROUGH)
+            return prepareSpillOpIfNeed(op_status, transform_ops[transform_op_index]);
     }
     CHECK_IS_CANCELLED(exec_status);
-    return prepareSpillOp(sink_op->write(std::move(block)), sink_op);
+    return prepareSpillOpIfNeed(sink_op->write(std::move(block)), sink_op);
 }
 
 // try fetch block from transform_ops and source_op.
 OperatorStatus PipelineExec::fetchBlock(
     Block & block,
-    size_t & transform_op_index,
+    size_t & start_transform_op_index,
     PipelineExecutorStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
     auto op_status = sink_op->prepare();
-    if (op_status != OperatorStatus::PASS)
-        return prepareSpillOp(op_status, sink_op);
+    if (op_status != OperatorStatus::NEED_INPUT)
+        return prepareSpillOpIfNeed(op_status, sink_op);
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         CHECK_IS_CANCELLED(exec_status);
-        auto op_status = transform_ops[index]->fetchBlock(block);
-        if (op_status != OperatorStatus::NO_OUTPUT)
+        auto op_status = transform_ops[index]->tryOutput(block);
+        if (op_status != OperatorStatus::NEED_INPUT)
         {
-            // Once the transform fetch block has succeeded, execution will begin with the next transform.
-            transform_op_index = index + 1;
-            return prepareSpillOp(op_status, transform_ops[index]);
+            // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
+            start_transform_op_index = index + 1;
+            return prepareSpillOpIfNeed(op_status, transform_ops[index]);
         }
     }
     CHECK_IS_CANCELLED(exec_status);
-    transform_op_index = 0;
-    return prepareSpillOp(source_op->read(block), source_op);
+    start_transform_op_index = 0;
+    return prepareSpillOpIfNeed(source_op->read(block), source_op);
 }
 
 OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
@@ -79,13 +82,14 @@ OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
     CHECK_IS_CANCELLED(exec_status);
 
     auto op_status = sink_op->await();
-    if (op_status != OperatorStatus::PASS)
+    if (op_status != OperatorStatus::NEED_INPUT)
         return op_status;
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
     {
-        // if one of the transform return ready status, we don't need to check the upstream operator.
+        // If the transform_op returns `NEED_INPUT`,
+        // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
         auto op_status = (*it)->await();
-        if (op_status != OperatorStatus::SKIP)
+        if (op_status != OperatorStatus::NEED_INPUT)
             return op_status;
     }
     return source_op->await();

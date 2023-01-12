@@ -27,7 +27,7 @@ BlockInputStreamSourceOp::BlockInputStreamSourceOp(
 OperatorStatus BlockInputStreamSourceOp::read(Block & block)
 {
     if (unlikely(finished))
-        return OperatorStatus::PASS;
+        return OperatorStatus::HAS_OUTPUT;
 
     block = impl->read();
     if (unlikely(!block))
@@ -35,7 +35,7 @@ OperatorStatus BlockInputStreamSourceOp::read(Block & block)
         impl->readSuffix();
         finished = true;
     }
-    return OperatorStatus::PASS;
+    return OperatorStatus::HAS_OUTPUT;
 }
 
 Block BlockInputStreamSourceOp::readHeader()
