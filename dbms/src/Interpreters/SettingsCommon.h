@@ -36,9 +36,9 @@ extern const int UNKNOWN_OVERFLOW_MODE;
 extern const int ILLEGAL_OVERFLOW_MODE;
 extern const int UNKNOWN_TOTALS_MODE;
 extern const int UNKNOWN_COMPRESSION_METHOD;
-extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
 extern const int CANNOT_PARSE_BOOL;
 extern const int INVALID_CONFIG_PARAMETER;
+extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
 
@@ -387,6 +387,41 @@ public:
 
 private:
     std::atomic<float> value;
+};
+
+/// MemoryLimit can either be an UInt64 (means memory limit in bytes),
+/// or be a float-point number (means memory limit ratio of total RAM, from 0.0 to 1.0).
+/// 0 or 0.0 means unlimited.
+struct SettingMemoryLimit
+{
+public:
+    bool changed = false;
+
+    using UInt64OrDouble = std::variant<UInt64, double>;
+    struct ToStringVisitor;
+
+    explicit SettingMemoryLimit(UInt64 bytes = 0);
+    explicit SettingMemoryLimit(double percent = 0.0);
+
+    SettingMemoryLimit(const SettingMemoryLimit & setting);
+    SettingMemoryLimit & operator=(UInt64OrDouble x);
+    SettingMemoryLimit & operator=(const SettingMemoryLimit & setting);
+
+    void set(UInt64OrDouble x);
+    void set(UInt64 x);
+    void set(double x);
+    void set(const Field & x);
+    void set(const String & x);
+    void set(ReadBuffer & buf);
+
+    String toString() const;
+    void write(WriteBuffer & buf) const;
+    UInt64OrDouble get() const;
+
+    UInt64 getActualBytes(UInt64 total_ram) const;
+
+private:
+    UInt64OrDouble value;
 };
 
 struct SettingDouble
