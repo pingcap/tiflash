@@ -137,6 +137,8 @@ Join::Join(
     , key_names_right(key_names_right_)
     , use_nulls(use_nulls_)
     , build_concurrency(0)
+    , probe_concurrency(0)
+    , active_probe_concurrency(0)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -472,7 +474,7 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
     // init for non-joined-streams.
     if (getFullness(kind))
     {
-        for (size_t i = 0; i < getNotJoinedStreamConcurrencyInternal(); ++i)
+        for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
             rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
 }
@@ -850,7 +852,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrencyInternal());
-    assert(stream_index < getNotJoinedStreamConcurrencyInternal());
 
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -2092,6 +2093,11 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
     }
 
     return block;
+}
+
+bool Join::needReturnNonJoinedData() const
+{
+    return getFullness(kind);
 }
 
 void Join::joinTotals(Block & block) const

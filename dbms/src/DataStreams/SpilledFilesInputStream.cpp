@@ -16,13 +16,14 @@
 
 namespace DB
 {
-SpilledFilesInputStream::SpilledFilesInputStream(const std::vector<String> & spilled_files_, const Block & header_)
+SpilledFilesInputStream::SpilledFilesInputStream(const std::vector<String> & spilled_files_, const Block & header_, const FileProviderPtr & file_provider_)
     : spilled_files(spilled_files_)
     , header(header_)
+    , file_provider(file_provider_)
 {
     RUNTIME_CHECK_MSG(!spilled_files.empty(), "Spilled files must not be empty");
     current_reading_file_index = 0;
-    current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[0], header);
+    current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[0], header, file_provider);
 }
 
 Block SpilledFilesInputStream::readImpl()
@@ -35,7 +36,7 @@ Block SpilledFilesInputStream::readImpl()
 
     for (++current_reading_file_index; current_reading_file_index < spilled_files.size(); ++current_reading_file_index)
     {
-        current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[current_reading_file_index], header);
+        current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[current_reading_file_index], header, file_provider);
         ret = current_file_stream->block_in->read();
         if (ret)
             return ret;
