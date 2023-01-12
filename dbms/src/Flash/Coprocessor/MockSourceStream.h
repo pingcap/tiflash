@@ -79,4 +79,11 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
 
     return cutStreams<SourceType>(context, columns_with_type_and_name, max_streams, log);
 }
+
+std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreamsForExchangeReceiver(
+    Context & context,
+    const String & executor_id,
+    const LoggerPtr & log,
+    const tipb::ExchangeReceiver & exchange_receiver,
+    size_t fine_grained_stream_count);
 } // namespace DB

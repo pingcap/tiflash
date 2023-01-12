@@ -18,6 +18,17 @@
 
 namespace DB::tests
 {
+ColumnWithTypeAndName ColumnGenerator::generateNullMapColumn(const ColumnGeneratorOpts & opts)
+{
+    DataTypePtr type = DataTypeFactory::instance().get(opts.type_name);
+    assert(type != nullptr && type->getTypeId() == TypeIndex::UInt8);
+    auto col = type->createColumn();
+    col->reserve(opts.size);
+    for (size_t i = 0; i < opts.size; ++i)
+        genBool(col);
+    return {std::move(col), type, opts.name};
+}
+
 ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts)
 {
     int_rand_gen = std::uniform_int_distribution<Int64>(0, opts.string_max_size);
@@ -33,7 +44,7 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         nested_column_generator_opts.type_name = removeNullable(type)->getName();
         auto null_map_column_generator_opts = opts;
         null_map_column_generator_opts.type_name = "UInt8";
-        return {ColumnNullable::create(generate(nested_column_generator_opts).column, generate(null_map_column_generator_opts).column), type};
+        return {ColumnNullable::create(generate(nested_column_generator_opts).column, generateNullMapColumn(null_map_column_generator_opts).column), type, opts.name};
     }
 
     auto col = type->createColumn();
@@ -96,7 +107,7 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         throw std::invalid_argument("RandomColumnGenerator invalid type");
     }
 
-    return {std::move(col), type};
+    return {std::move(col), type, opts.name};
 }
 
 DataTypePtr ColumnGenerator::createDecimalType()
@@ -195,7 +206,7 @@ void ColumnGenerator::genUInt(MutableColumnPtr & col)
 
 void ColumnGenerator::genBool(MutableColumnPtr & col)
 {
-    Field f = static_cast<UInt64>(static_cast<UInt64>(rand_gen()) == 0);
+    Field f = static_cast<UInt64>(static_cast<UInt64>(rand_gen()) % 8 == 0);
     col->insert(f);
 }
 
