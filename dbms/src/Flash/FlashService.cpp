@@ -25,6 +25,7 @@
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
@@ -32,6 +33,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status_code_enum.h>
 
 #include <ext/scope_guard.h>
 
@@ -202,6 +204,15 @@ grpc::Status FlashService::DispatchMPPTask(
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    // DO NOT register mpp task and return grpc error
+    if (auto mpp_version = request->meta().mpp_version(); !DB::CheckMppVersion(mpp_version))
+    {
+        auto && err_msg = fmt::format("Failed to handling mpp dispatch request, reason=`{}`", DB::GenMppVersionErrorMessage(mpp_version));
+        LOG_WARNING(log, err_msg);
+        return grpc::Status(grpc::StatusCode::CANCELLED, std::move(err_msg));
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
@@ -244,6 +255,31 @@ grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_un
 
     auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
+    response->set_mpp_version(DB::GetMppVersion());
+    return grpc::Status::OK;
+}
+
+static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::EstablishMPPConnectionRequest * request)
+{
+    const auto & sender_mpp_version = request->sender_meta().mpp_version();
+    const auto & receiver_mpp_version = request->receiver_meta().mpp_version();
+
+    std::string && err_reason{};
+
+    if (!DB::CheckMppVersion(sender_mpp_version))
+    {
+        err_reason += fmt::format("sender failed: {}; ", DB::GenMppVersionErrorMessage(sender_mpp_version));
+    }
+    if (!DB::CheckMppVersion(receiver_mpp_version))
+    {
+        err_reason += fmt::format("receiver failed: {}; ", DB::GenMppVersionErrorMessage(receiver_mpp_version));
+    }
+
+    if (!err_reason.empty())
+    {
+        auto && err_msg = fmt::format("Failed to establish MPP connection, reason=`{}`", err_reason);
+        return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+    }
     return grpc::Status::OK;
 }
 
@@ -259,6 +295,12 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    {
+        LOG_WARNING(log, res.error_message());
+        return res;
+    }
 
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -278,6 +320,13 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    {
+        LOG_WARNING(log, res.error_message());
+        return res;
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
@@ -331,6 +380,14 @@ grpc::Status FlashService::CancelMPPTask(
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
+
+    if (auto mpp_version = request->meta().mpp_version(); !DB::CheckMppVersion(mpp_version))
+    {
+        auto && err_msg = fmt::format("Failed to cancel mpp task, reason=`{}`", DB::GenMppVersionErrorMessage(mpp_version));
+        LOG_WARNING(log, err_msg);
+        return grpc::Status(grpc::StatusCode::INTERNAL, std::move(err_msg));
+    }
+
     GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
     Stopwatch watch;
@@ -378,6 +435,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     if (!status.ok())
     {
         auto err = std::make_unique<mpp::Error>();
+        err->set_mpp_version(DB::GetMppVersion());
         err->set_msg("error status");
         response->set_allocated_error(err.release());
         return status;

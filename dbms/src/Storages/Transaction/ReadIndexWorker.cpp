@@ -42,7 +42,7 @@ static std::mutex global_logger_mutex;
             auto _ = std::lock_guard(global_logger_mutex);                      \
             std::cout << fmt::format(                                           \
                 "[{}][{}:{}][{}]",                                              \
-                Clock::now(),                                                   \
+                std::chrono::steady_clock::now(),                               \
                 &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)],          \
                 __LINE__,                                                       \
                 formatted_message)                                              \
@@ -156,7 +156,7 @@ protected:
     uint64_t timeout_ms;
 };
 
-struct BlockedReadIndexHelper : BlockedReadIndexHelperTrait
+struct BlockedReadIndexHelper final : BlockedReadIndexHelperTrait
 {
 public:
     BlockedReadIndexHelper(uint64_t timeout_ms_, AsyncWaker & waker_)
@@ -181,7 +181,7 @@ private:
     AsyncWaker & waker;
 };
 
-struct BlockedReadIndexHelperV3 : BlockedReadIndexHelperTrait
+struct BlockedReadIndexHelperV3 final : BlockedReadIndexHelperTrait
 {
     BlockedReadIndexHelperV3(uint64_t timeout_ms_, AsyncWaker::Notifier & notifier_)
         : BlockedReadIndexHelperTrait(timeout_ms_)
@@ -335,7 +335,7 @@ struct ReadIndexNotifyCtrl : MutexLockWrap
     AsyncWaker::NotifierPtr notifier;
 };
 
-struct RegionReadIndexNotifier : AsyncNotifier
+struct RegionReadIndexNotifier final : AsyncNotifier
 {
     void wake() override
     {
@@ -446,7 +446,7 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
 
                 clean_task = true;
             }
-            else if (Clock::now() > timeout + start_time)
+            else if (std::chrono::steady_clock::now() > timeout + start_time)
             {
                 TEST_LOG_FMT("poll ReadIndexElement timeout for region {}", region_id);
 
@@ -458,7 +458,7 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
                 TEST_LOG_FMT(
                     "poll ReadIndexElement failed for region {}, time cost {}, timeout {}, start time {}",
                     region_id,
-                    Clock::now() - start_time,
+                    std::chrono::steady_clock::now() - start_time,
                     timeout,
                     start_time);
             }
@@ -706,7 +706,7 @@ void ReadIndexWorker::consumeReadIndexNotifyCtrl()
     }
 }
 
-void ReadIndexWorker::consumeRegionNotifies(Duration min_dur)
+void ReadIndexWorker::consumeRegionNotifies(std::chrono::steady_clock::duration min_dur)
 {
     if (!lastRunTimeout(min_dur))
     {
@@ -721,7 +721,7 @@ void ReadIndexWorker::consumeRegionNotifies(Duration min_dur)
     }
 
     TEST_LOG_FMT("worker {} set last run time {}", getID(), Clock::now());
-    last_run_time.store(Clock::now(), std::memory_order_release);
+    last_run_time.store(std::chrono::steady_clock::now(), std::memory_order_release);
 }
 
 ReadIndexFuturePtr ReadIndexWorker::genReadIndexFuture(const kvrpcpb::ReadIndexRequest & req)
@@ -737,7 +737,7 @@ ReadIndexFuturePtr ReadIndexWorkerManager::genReadIndexFuture(const kvrpcpb::Rea
     return getWorkerByRegion(req.context().region_id()).genReadIndexFuture(req);
 }
 
-void ReadIndexWorker::runOneRound(Duration min_dur)
+void ReadIndexWorker::runOneRound(std::chrono::steady_clock::duration min_dur)
 {
     if (!read_index_notify_ctrl->empty())
     {
@@ -759,10 +759,10 @@ ReadIndexWorker::ReadIndexWorker(
 {
 }
 
-bool ReadIndexWorker::lastRunTimeout(Duration timeout) const
+bool ReadIndexWorker::lastRunTimeout(std::chrono::steady_clock::duration timeout) const
 {
     TEST_LOG_FMT("worker {}, last run time {}, timeout {}", getID(), last_run_time.load(std::memory_order_relaxed), timeout);
-    return last_run_time.load(std::memory_order_relaxed) + timeout < Clock::now();
+    return last_run_time.load(std::memory_order_relaxed) + timeout < std::chrono::steady_clock::now();
 }
 
 ReadIndexWorker & ReadIndexWorkerManager::getWorkerByRegion(RegionID region_id)
@@ -828,13 +828,13 @@ ReadIndexWorkerManager::~ReadIndexWorkerManager()
     stop();
 }
 
-void ReadIndexWorkerManager::runOneRoundAll(Duration min_dur)
+void ReadIndexWorkerManager::runOneRoundAll(std::chrono::steady_clock::duration min_dur)
 {
     for (size_t id = 0; id < runners.size(); ++id)
         runOneRound(min_dur, id);
 }
 
-void ReadIndexWorkerManager::runOneRound(Duration min_dur, size_t id)
+void ReadIndexWorkerManager::runOneRound(std::chrono::steady_clock::duration min_dur, size_t id)
 {
     runners[id]->runOneRound(min_dur);
 }
@@ -1003,7 +1003,7 @@ void ReadIndexWorkerManager::ReadIndexRunner::blockedWaitFor(std::chrono::millis
     global_notifier->blockedWaitFor(timeout);
 }
 
-void ReadIndexWorkerManager::ReadIndexRunner::runOneRound(Duration min_dur)
+void ReadIndexWorkerManager::ReadIndexRunner::runOneRound(std::chrono::steady_clock::duration min_dur)
 {
     for (size_t i = id; i < workers.size(); i += runner_cnt)
         workers[i]->runOneRound(min_dur);

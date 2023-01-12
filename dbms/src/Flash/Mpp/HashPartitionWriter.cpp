@@ -13,11 +13,16 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
+namespace DB
+{
+extern size_t ApproxBlockBytes(const Block & block);
+}
 namespace DB
 {
 template <class ExchangeWriterPtr>
@@ -69,6 +74,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
+    size_t ori_block_mem_size = 0;
+
     if (!blocks.empty())
     {
         assert(rows_in_blocks > 0);
@@ -80,6 +87,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
+            ori_block_mem_size += ApproxBlockBytes(block);
+
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
             HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
@@ -101,18 +110,44 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
     }
 
     writePackets(tracked_packets);
+
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
+}
+
+static void updateHashPartitionWriterMetrics(size_t sz, bool is_local)
+{
+    if (is_local)
+    {
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+    }
+    else
+    {
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(sz);
+    }
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
+void WritePackets(TrackedMppDataPacketPtrs & packets, ExchangeWriterPtr & writer)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
         auto & packet = packets[part_id];
         assert(packet);
-        if (likely(packet->getPacket().chunks_size() > 0))
+
+        auto & inner_packet = packet->getPacket();
+
+        if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
+        {
             writer->partitionWrite(std::move(packet), part_id);
+            updateHashPartitionWriterMetrics(sz, writer->isLocal(part_id));
+        }
     }
+}
+
+template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
+{
+    WritePackets(packets, writer);
 }
 
 template class HashPartitionWriter<MPPTunnelSetPtr>;

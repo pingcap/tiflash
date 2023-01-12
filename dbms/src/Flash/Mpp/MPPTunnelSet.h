@@ -69,6 +69,9 @@ public:
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
+    bool isLocal(size_t index) const;
+
+
 private:
     std::vector<TunnelPtr> tunnels;
     std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;

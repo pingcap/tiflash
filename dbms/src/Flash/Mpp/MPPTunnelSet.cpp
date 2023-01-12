@@ -114,6 +114,13 @@ typename MPPTunnelSetBase<Tunnel>::TunnelPtr MPPTunnelSetBase<Tunnel>::getTunnel
     return tunnels[it->second];
 }
 
+template <typename Tunnel>
+bool MPPTunnelSetBase<Tunnel>::isLocal(size_t index) const
+{
+    assert(getPartitionNum() > index);
+    return getTunnels()[index]->isLocal();
+}
+
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class MPPTunnelSetBase<MPPTunnel>;
 

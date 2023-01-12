@@ -22,6 +22,7 @@
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
 
+
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalExchangeSender::build(
@@ -44,7 +45,8 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
         partition_col_ids,
         partition_col_collators,
         exchange_sender.tp(),
-        fine_grained_shuffle);
+        fine_grained_shuffle,
+        exchange_sender.compression());
     // executeUnion will be call after sender.transform, so don't need to restore concurrency.
     physical_exchange_sender->disableRestoreConcurrency();
     return physical_exchange_sender;
@@ -68,7 +70,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+        std::unique_ptr<DAGResponseWriter> response_writer = NewMPPExchangeWriter(
             dag_context.tunnel_set,
             partition_col_ids,
             partition_col_collators,
@@ -78,7 +80,9 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             dag_context,
             fine_grained_shuffle.enable(),
             fine_grained_shuffle.stream_count,
-            fine_grained_shuffle.batch_size);
+            fine_grained_shuffle.batch_size,
+            compression_mode,
+            context.getSettingsRef().batch_send_min_limit_compression);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });
@@ -93,4 +97,5 @@ const Block & PhysicalExchangeSender::getSampleBlock() const
 {
     return child->getSampleBlock();
 }
+
 } // namespace DB

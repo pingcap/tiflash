@@ -12,17 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/PDTiKVClient.h>
+#pragma once
+
+#include <string>
 
 namespace DB
 {
-
-namespace ErrorCodes
+enum MppVersion : int64_t
 {
-extern const int LOGICAL_ERROR;
-}
+    MppVersionV0 = 0,
+    MppVersionV1,
+    //
+    MppVersionMAX,
+};
 
-std::atomic<Timestamp> PDClientHelper::cached_gc_safe_point = 0;
-std::atomic<std::chrono::time_point<std::chrono::steady_clock>> PDClientHelper::safe_point_last_update_time;
+enum MPPDataPacketVersion : int64_t
+{
+    MPPDataPacketV0 = 0,
+    MPPDataPacketV1,
+    MPPDataPacketMAX,
+};
+
+bool CheckMppVersion(int64_t mpp_version);
+std::string GenMppVersionErrorMessage(int64_t mpp_version);
+int64_t GetMppVersion();
 
 } // namespace DB

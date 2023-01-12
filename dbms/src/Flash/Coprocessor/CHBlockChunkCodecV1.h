@@ -15,29 +15,17 @@
 #pragma once
 
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/CodecUtils.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedStream.h>
+#include <IO/CompressedWriteBuffer.h>
 
 namespace DB
 {
-
-class CHBlockChunkDecodeAndSquash
-{
-public:
-    CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
-    ~CHBlockChunkDecodeAndSquash() = default;
-    std::optional<Block> decodeAndSquash(const String &);
-    std::optional<Block> decodeAndSquashWithCompression(std::string_view);
-    std::optional<Block> flush();
-
-private:
-    std::optional<Block> decodeAndSquashWithCompressionImpl(ReadBuffer & istr);
-
-private:
-    CHBlockChunkCodec codec;
-    std::optional<Block> accumulated_block;
-    size_t rows_limit;
-};
-
+size_t ApproxBlockHeaderBytes(const Block & block);
+using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
+using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 
 } // namespace DB
