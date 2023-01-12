@@ -20,7 +20,7 @@ add_headers_and_sources(clickhouse_functions ./Conditional)
 add_headers_and_sources(clickhouse_functions ${TiFlash_BINARY_DIR}/dbms/src/Functions)
 
 check_then_add_sources_compile_flag (
-    TIFLASH_COMPILER_ARCH_HASWELL_SUPPORT
+    TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
     CollationStringOptimized.cpp
 )

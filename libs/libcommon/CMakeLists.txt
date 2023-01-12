@@ -166,7 +166,7 @@ check_then_add_sources_compile_flag (
 )
 
 check_then_add_sources_compile_flag (
-    TIFLASH_COMPILER_ARCH_HASWELL_SUPPORT
+    TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
     src/mem_utils_avx2.cpp
     src/crc64_avx2.cpp

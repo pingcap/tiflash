@@ -106,7 +106,7 @@ add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
 check_then_add_sources_compile_flag (
-    TIFLASH_COMPILER_ARCH_HASWELL_SUPPORT
+    TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
     src/Columns/ColumnString.cpp
     src/Columns/ColumnsCommon.cpp
