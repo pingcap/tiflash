@@ -94,7 +94,7 @@ void PageDownloader::persistLoop(size_t idx)
 
     // try to do some preparation for speed up reading
     size_t num_prepared = 0;
-    double ms_cost = 0.0;
+    double seconds_cost = 0.0;
     if (do_prepare)
     {
         while (true)
@@ -105,7 +105,7 @@ void PageDownloader::persistLoop(size_t idx)
             watch.restart();
             // do place index
             seg_task->prepare();
-            ms_cost = watch.elapsedSeconds();
+            seconds_cost = watch.elapsedSeconds();
             num_prepared += 1;
             LOG_DEBUG(log, "segment prepare done, segment_id={}", seg_task->segment_id);
             // update the state
@@ -113,7 +113,9 @@ void PageDownloader::persistLoop(size_t idx)
         }
     }
 
-    LOG_INFO(log, "Done preparation for {} segment tasks, cost={:.3f}ms", num_prepared, ms_cost);
+    remote_read_tasks->wakeAll();
+
+    LOG_INFO(log, "Done preparation for {} segment tasks, cost={:.3f}s", num_prepared, seconds_cost);
 }
 
 void PageDownloader::downloadDone(bool meet_error, const String & local_err_msg, const LoggerPtr & log)
