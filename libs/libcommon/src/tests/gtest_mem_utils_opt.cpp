@@ -235,7 +235,6 @@ void TestMemByteCount(size_t size)
     char target = 8;
     std::string oa(size + 100, target);
     char * start = oa.data();
-    start = reinterpret_cast<decltype(start)>(ALIGNED_ADDR(size_t(start), 32)) + 32;
     for (auto * pos = start; pos < start + 32; ++pos)
     {
         ASSERT_EQ(mem_utils::avx2_byte_count(pos, size, target), size);

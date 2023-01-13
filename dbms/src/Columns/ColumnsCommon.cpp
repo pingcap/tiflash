@@ -44,13 +44,8 @@ inline UInt64 ToBits64(const Int8 * bytes64)
 }
 #endif
 
-#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
-NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
-#else
-ALWAYS_INLINE inline
-#endif
-    static size_t
-    CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
+ALWAYS_INLINE inline static size_t
+CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
 {
 #if defined(__AVX2__)
     size_t size = end - start;
