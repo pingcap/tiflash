@@ -1084,6 +1084,7 @@ void Aggregator::convertToBlocksImpl(
         return;
 
     std::vector<std::vector<IColumn *>> raw_key_columns_vec;
+    raw_key_columns_vec.reserve(key_columns_vec.size());
     for (auto & key_columns : key_columns_vec)
     {
         RUNTIME_CHECK_MSG(key_columns.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
@@ -1272,11 +1273,12 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     agg_keys_helper.initAggKeys(data.size(), key_columns_vec[0]);
 
-    size_t index = 0;
+    size_t data_index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
-        agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[index / params.max_block_size], key_sizes_ref, params.collators);
-        insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[index / params.max_block_size], arena);
-        index++;
+        size_t key_columns_vec_index = data_index / params.max_block_size;
+        agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+        insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[key_columns_vec_index], arena);
+        data_index++;
     });
 }
 
@@ -1319,12 +1321,14 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
-        agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[data_index / params.max_block_size], key_sizes_ref, params.collators);
+        size_t key_columns_vec_index = data_index / params.max_block_size;
+        agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
 
         /// reserved, so push_back does not throw exceptions
         for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_columns_vec[data_index / params.max_block_size][i]->push_back(mapped + offsets_of_aggregate_states[i]);
+            aggregate_columns_vec[key_columns_vec_index][i]->push_back(mapped + offsets_of_aggregate_states[i]);
 
+        data_index++;
         mapped = nullptr;
     });
 }
