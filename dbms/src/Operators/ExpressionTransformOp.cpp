@@ -17,10 +17,15 @@
 
 namespace DB
 {
-OperatorStatus ExpressionTransformOp::transform(Block & block)
+OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
 {
     if (likely(block))
         expression->execute(block);
     return OperatorStatus::PASS_THROUGH;
+}
+
+void ExpressionTransformOp::transformHeaderImpl(Block & header_)
+{
+    expression->execute(header_);
 }
 } // namespace DB

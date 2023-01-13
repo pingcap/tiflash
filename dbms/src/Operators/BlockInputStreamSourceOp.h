@@ -28,9 +28,12 @@ class BlockInputStreamSourceOp : public SourceOp
 public:
     explicit BlockInputStreamSourceOp(const BlockInputStreamPtr & impl_);
 
-    OperatorStatus read(Block & block) override;
+    String getName() const override
+    {
+        return "BlockInputStreamSourceOp";
+    }
 
-    Block readHeader() override;
+    OperatorStatus readImpl(Block & block) override;
 
 private:
     BlockInputStreamPtr impl;

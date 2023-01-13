@@ -16,7 +16,7 @@
 
 namespace DB
 {
-OperatorStatus FilterTransformOp::transform(Block & block)
+OperatorStatus FilterTransformOp::transformImpl(Block & block)
 {
     if (unlikely(filter_transform_action.alwaysFalse()))
     {
@@ -32,8 +32,8 @@ OperatorStatus FilterTransformOp::transform(Block & block)
     return OperatorStatus::PASS_THROUGH;
 }
 
-void FilterTransformOp::transformHeader(Block & header)
+void FilterTransformOp::transformHeaderImpl(Block & header_)
 {
-    header = filter_transform_action.getHeader();
+    header_ = filter_transform_action.getHeader();
 }
 } // namespace DB

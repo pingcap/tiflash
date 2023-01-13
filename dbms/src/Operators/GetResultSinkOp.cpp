@@ -17,7 +17,7 @@
 
 namespace DB
 {
-OperatorStatus GetResultSinkOp::write(Block && block)
+OperatorStatus GetResultSinkOp::writeImpl(Block && block)
 {
     if (!block)
         return OperatorStatus::FINISHED;

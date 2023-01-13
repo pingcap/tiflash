@@ -32,9 +32,14 @@ public:
         , log(Logger::get(req_id))
     {}
 
-    OperatorStatus transform(Block & block) override;
+    String getName() const override
+    {
+        return "LimitTransformOp";
+    }
 
-    void transformHeader(Block & header) override;
+    OperatorStatus transformImpl(Block & block) override;
+
+    void transformHeaderImpl(Block & header_) override;
 
 private:
     GlobalLimitPtr action;

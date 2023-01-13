@@ -20,20 +20,19 @@ void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 {
     assert(!source_op && source_op_);
     source_op = std::move(source_op_);
-    assert(!header);
-    header = source_op->readHeader();
-    assert(header);
 }
 void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
     assert(source_op && transform_op);
+    Block header = getHeader();
+    transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
-    transform_ops.back()->transformHeader(header);
-    assert(header);
 }
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
-    assert(header && !sink_op && sink_op_);
+    assert(!sink_op && sink_op_);
+    Block header = getHeader();
+    sink_op_->setHeader(header);
     sink_op = std::move(sink_op_);
 }
 
@@ -44,6 +43,19 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(source_op),
         std::move(transform_ops),
         std::move(sink_op));
+}
+
+Block PipelineExecBuilder::getHeader() const
+{
+    if (sink_op)
+        return sink_op->getHeader();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getHeader();
+    else
+    {
+        assert(source_op);
+        return source_op->getHeader();
+    }
 }
 
 void PipelineExecGroupBuilder::init(size_t init_concurrency)
@@ -65,8 +77,7 @@ PipelineExecGroup PipelineExecGroupBuilder::build()
 
 Block PipelineExecGroupBuilder::getHeader()
 {
-    assert(concurrency > 0);
-    assert(group.back().header);
-    return group.back().header;
+    assert(!group.empty());
+    return group.back().getHeader();
 }
 } // namespace DB

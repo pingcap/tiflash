@@ -53,36 +53,71 @@ public:
     virtual ~Operator() = default;
     // running status may return are
     // - `NEED_INPUT` means that the data that operator is waiting for has been prepared.
-    virtual OperatorStatus await() { throw Exception("Unsupport"); }
+    OperatorStatus await();
+    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
     // running status may return are
     // - `NEED_INPUT` means that operator need data to spill.
     // - `HAS_OUTPUT` means that operator has restored data, and ready for ouput.
-    virtual OperatorStatus spill() { throw Exception("Unsupport"); }
+    OperatorStatus spill();
+    virtual OperatorStatus spillImpl() { throw Exception("Unsupport"); }
+
+    virtual String getName() const = 0;
+
+    /** Get data structure of the operator in a form of "header" block (it is also called "sample block").
+      * Header block contains column names, data types, columns of size 0. Constant columns must have corresponding values.
+      */
+    Block getHeader() const
+    {
+        assert(header);
+        return header;
+    }
+    void setHeader(const Block & header_)
+    {
+        assert(header_ && !header);
+        header = header_;
+    }
+
+protected:
+    Block header;
 };
 
-// The running status returned by Sink can only be `HAS_OUTPUT`.
+// The running status returned by Source can only be `HAS_OUTPUT`.
 class SourceOp : public Operator
 {
 public:
-    virtual OperatorStatus read(Block & block) = 0;
+    // read will inplace the block when return status is HAS_OUTPUT;
+    // Even after source has finished, source op still needs to return the empty block and HAS_OUTPUT,
+    // because there are many operators that need the empty block as input, such as JoinProbe and WindowFunction.
+    OperatorStatus read(Block & block);
+    virtual OperatorStatus readImpl(Block & block) = 0;
 
-    virtual Block readHeader() = 0;
-
-    OperatorStatus await() override { return OperatorStatus::HAS_OUTPUT; }
+    OperatorStatus awaitImpl() override { return OperatorStatus::HAS_OUTPUT; }
 };
 using SourceOpPtr = std::unique_ptr<SourceOp>;
 
 class TransformOp : public Operator
 {
 public:
-    // may return NEED_INPUT and HAS_OUTPUT
-    virtual OperatorStatus tryOutput(Block &) { return OperatorStatus::NEED_INPUT; }
-    // may return NEED_INPUT and PASS_THROUGH
-    virtual OperatorStatus transform(Block & block) = 0;
+    // running status may return are NEED_INPUT and HAS_OUTPUT.
+    // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
+    OperatorStatus tryOutput(Block &);
+    virtual OperatorStatus tryOutputImpl(Block &) { return OperatorStatus::NEED_INPUT; }
+    // running status may return are NEED_INPUT and PASS_THROUGH.
+    // tryOutput will inplace the block when return status is PASS_THROUGH; do nothing to the block when NEED_INPUT or others.
+    // Even if an empty block is input, transform will still return PASS_THROUGH,
+    // because there are many operators that need the empty block as input, such as JoinProbe and WindowFunction.
+    OperatorStatus transform(Block & block);
+    virtual OperatorStatus transformImpl(Block & block) = 0;
 
-    virtual void transformHeader(Block & header) { transform(header); }
+    virtual void transformHeaderImpl(Block & header_) = 0;
+    void transformHeader(Block & header_)
+    {
+        assert(header_);
+        transformHeaderImpl(header_);
+        setHeader(header_);
+    }
 
-    OperatorStatus await() override { return OperatorStatus::NEED_INPUT; }
+    OperatorStatus awaitImpl() override { return OperatorStatus::NEED_INPUT; }
 };
 using TransformOpPtr = std::unique_ptr<TransformOp>;
 using TransformOps = std::vector<TransformOpPtr>;
@@ -92,9 +127,11 @@ class SinkOp : public Operator
 {
 public:
     virtual OperatorStatus prepare() { return OperatorStatus::NEED_INPUT; }
-    virtual OperatorStatus write(Block && block) = 0;
 
-    OperatorStatus await() override { return OperatorStatus::NEED_INPUT; }
+    OperatorStatus write(Block && block);
+    virtual OperatorStatus writeImpl(Block && block) = 0;
+
+    OperatorStatus awaitImpl() override { return OperatorStatus::NEED_INPUT; }
 };
 using SinkOpPtr = std::unique_ptr<SinkOp>;
 } // namespace DB

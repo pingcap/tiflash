@@ -24,11 +24,11 @@ struct PipelineExecBuilder
     TransformOps transform_ops;
     SinkOpPtr sink_op;
 
-    Block header;
-
     void setSourceOp(SourceOpPtr && source_op_);
     void appendTransformOp(TransformOpPtr && transform_op);
     void setSinkOp(SinkOpPtr && sink_op_);
+
+    Block getHeader() const;
 
     PipelineExecPtr build();
 };

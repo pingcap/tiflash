@@ -22,9 +22,10 @@ BlockInputStreamSourceOp::BlockInputStreamSourceOp(
     : impl(impl_)
 {
     impl->readPrefix();
+    setHeader(impl->getHeader());
 }
 
-OperatorStatus BlockInputStreamSourceOp::read(Block & block)
+OperatorStatus BlockInputStreamSourceOp::readImpl(Block & block)
 {
     if (unlikely(finished))
         return OperatorStatus::HAS_OUTPUT;
@@ -36,10 +37,5 @@ OperatorStatus BlockInputStreamSourceOp::read(Block & block)
         finished = true;
     }
     return OperatorStatus::HAS_OUTPUT;
-}
-
-Block BlockInputStreamSourceOp::readHeader()
-{
-    return impl->getHeader();
 }
 } // namespace DB

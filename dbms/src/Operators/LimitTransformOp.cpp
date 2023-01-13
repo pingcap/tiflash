@@ -17,15 +17,15 @@
 
 namespace DB
 {
-OperatorStatus LimitTransformOp::transform(Block & block)
+OperatorStatus LimitTransformOp::transformImpl(Block & block)
 {
     if (!action->transform(block))
         block = {};
     return OperatorStatus::PASS_THROUGH;
 }
 
-void LimitTransformOp::transformHeader(Block & header)
+void LimitTransformOp::transformHeaderImpl(Block & header_)
 {
-    header = action->getHeader();
+    header_ = action->getHeader();
 }
 } // namespace DB

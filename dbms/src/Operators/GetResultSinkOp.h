@@ -28,7 +28,12 @@ public:
     {
     }
 
-    OperatorStatus write(Block && block) override;
+    String getName() const override
+    {
+        return "GetResultSinkOp";
+    }
+
+    OperatorStatus writeImpl(Block && block) override;
 
 private:
     PhysicalGetResultSink & physical_sink;
