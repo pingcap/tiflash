@@ -315,6 +315,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
 
+#if 1
     auto io_concurrency = std::max(50, num_streams * 10);
     auto sub_streams_size = io_concurrency / num_streams;
 
@@ -339,6 +340,21 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
         pipeline.streams.emplace_back(std::move(union_stream));
     }
+#else
+    auto streams = DM::RemoteSegmentThreadInputStream::buildInputStreams(
+        db_context,
+        remote_read_tasks,
+        page_downloader,
+        column_defines,
+        read_tso,
+        num_streams,
+        extra_table_id_index,
+        rs_operator,
+        extra_info,
+        /*tracing_id*/ log->identifier());
+    RUNTIME_CHECK(!streams.empty(), streams.size(), num_streams);
+    pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
+#endif
 
     auto * dag_context = db_context.getDAGContext();
     auto & table_scan_io_input_streams = dag_context->getInBoundIOInputStreamsMap()[executor_id];

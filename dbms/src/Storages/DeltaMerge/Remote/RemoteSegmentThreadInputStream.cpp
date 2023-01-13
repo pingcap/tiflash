@@ -1,4 +1,5 @@
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Disaggregated/PageReceiver.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -65,6 +66,8 @@ RemoteSegmentThreadInputStream::RemoteSegmentThreadInputStream(
     , read_mode(read_mode_)
     , extra_table_id_index(extra_table_id_index_)
     , physical_table_id(-1)
+    , seconds_pop(0.0)
+    , seconds_build(0.0)
     , cur_segment_id(0)
     , log(Logger::get(String(req_id)))
 {
@@ -77,6 +80,13 @@ RemoteSegmentThreadInputStream::RemoteSegmentThreadInputStream(
     }
 }
 
+RemoteSegmentThreadInputStream::~RemoteSegmentThreadInputStream()
+{
+    LOG_INFO(log, "RemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_pop_ready_tasks).Observe(seconds_pop);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_stream).Observe(seconds_build);
+}
+
 Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
     if (done)
@@ -85,7 +95,10 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
     {
         while (!cur_stream)
         {
+            watch.restart();
             auto task = read_tasks->nextReadyTask();
+            seconds_pop += watch.elapsedSeconds();
+            watch.restart();
             if (!task)
             {
                 // There is no task left or error happen
@@ -107,6 +120,7 @@ Block RemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool retu
                 max_version,
                 filter,
                 expected_block_size);
+            seconds_build += watch.elapsedSeconds();
             LOG_TRACE(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(task->state));
         }
 
