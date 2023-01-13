@@ -210,6 +210,8 @@ protected:
         children.push_back(child);
     }
 
+    uint64_t estimateCPUTimeImpl(bool is_root) override;
+
 private:
     bool enabled_extremes = false;
 

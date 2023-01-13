@@ -442,4 +442,9 @@ Block IProfilingBlockInputStream::getExtremes()
     return res;
 }
 
+uint64_t IProfilingBlockInputStream::estimateCPUTimeImpl(bool is_root)
+{
+    return is_root ? info.execution_time : 0;
+}
+
 }

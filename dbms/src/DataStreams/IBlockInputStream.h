@@ -108,6 +108,8 @@ public:
         return cnt;
     }
 
+    uint64_t estimateCPUTime(bool is_root = true);
+
     virtual ~IBlockInputStream() = default;
 
     /** To output the data stream transformation tree (query execution plan).
@@ -164,7 +166,12 @@ public:
 
     virtual void collectNewThreadCountOfThisLevel(int &) {}
 
-    virtual void resetNewThreadCountCompute()
+    virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
+
+protected:
+    virtual uint64_t estimateCPUTimeImpl(bool /*is_root*/) { return 0; }
+
+    void resetNewThreadCountCompute()
     {
         if (collected)
         {
@@ -176,8 +183,6 @@ public:
             }
         }
     }
-
-    virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
 protected:
     BlockInputStreams children;

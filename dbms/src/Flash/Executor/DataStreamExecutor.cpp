@@ -70,6 +70,7 @@ int DataStreamExecutor::estimateNewThreadCount()
 
 ACU DataStreamExecutor::acu()
 {
+    
     return 0;
 }
 } // namespace DB

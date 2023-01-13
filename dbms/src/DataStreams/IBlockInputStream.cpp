@@ -108,5 +108,28 @@ void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multi
         }
     }
 }
+    
+uint64_t IBlockInputStream::estimateCPUTime(bool is_root)
+{
+    uint64_t cpu_time = estimateCPUTimeImpl(is_root);
 
+    /// If the subtree is repeated several times, then we output it once with the multiplier.
+    using Multipliers = std::map<String, size_t>;
+    Multipliers multipliers;
+
+    for (const auto & child : children)
+        ++multipliers[child->getTreeID()];
+
+    for (auto & child : children)
+    {
+        String id = child->getTreeID();
+        size_t & subtree_multiplier = multipliers[id];
+        if (subtree_multiplier != 0)
+        {
+            cpu_time += child->estimateCPUTime(false);
+            subtree_multiplier = 0;
+        }
+    }
+    return cpu_time;
+}
 } // namespace DB

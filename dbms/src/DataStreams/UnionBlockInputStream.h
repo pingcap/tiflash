@@ -255,6 +255,16 @@ protected:
             children[i]->readSuffix();
     }
 
+    uint64_t estimateCPUTimeImpl(bool /*is_root*/) override
+    {
+        uint64_t cpu_time = 0;
+        forEachProfilingChild([&] (IProfilingBlockInputStream & child)
+        {
+            cpu_time += child.getProfileInfo().execution_time;
+            return false;
+        });
+    }
+
 private:
     BlockExtraInfo doGetBlockExtraInfo() const
     {
