@@ -15,6 +15,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>

@@ -127,13 +127,17 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    explicit DAGContext(const tipb::DAGRequest & dag_request_)
+    explicit DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
+        , tidb_host(tidb_host_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
+        , is_batch_cop(is_batch_cop_)
+        , tables_regions_info(std::move(tables_regions_info_))
+        , log(std::move(log_))
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
@@ -158,7 +162,7 @@ public:
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , mpp_task_meta(meta_)
-        , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
+        , mpp_task_id(mpp_task_meta)
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
@@ -189,6 +193,7 @@ public:
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
         , initialize_concurrency(concurrency)
+        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(true)
         , is_root_mpp_task(false)
         , log(Logger::get(log_identifier))
@@ -328,6 +333,8 @@ public:
     void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
 
+    void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
+
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -343,9 +350,9 @@ public:
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
     bool return_executor_id{};
-    bool is_mpp_task = false;
-    bool is_root_mpp_task = false;
-    bool is_batch_cop = false;
+    /* const */ bool is_mpp_task = false;
+    /* const */ bool is_root_mpp_task = false;
+    /* const */ bool is_batch_cop = false;
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
@@ -378,6 +385,9 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
+    /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
+    TableLockHolders table_locks;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.

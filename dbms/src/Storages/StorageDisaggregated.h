@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -29,7 +30,6 @@
 
 namespace DB
 {
-
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
 // Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),
@@ -40,15 +40,7 @@ public:
     StorageDisaggregated(
         Context & context_,
         const TiDBTableScan & table_scan_,
-        const PushDownFilter & push_down_filter_)
-        : IStorage()
-        , context(context_)
-        , table_scan(table_scan_)
-        , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
-        , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
-        , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id())
-        , push_down_filter(push_down_filter_)
-    {}
+        const PushDownFilter & push_down_filter_);
 
     std::string getName() const override
     {
@@ -87,8 +79,7 @@ private:
     Context & context;
     const TiDBTableScan & table_scan;
     LoggerPtr log;
-    uint64_t sender_target_task_start_ts;
-    int64_t sender_target_task_task_id;
+    MPPTaskId sender_target_mpp_task_id;
     const PushDownFilter & push_down_filter;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;

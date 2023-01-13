@@ -115,9 +115,13 @@ size_t PageStorageImpl::getNumberOfPages()
     return page_directory->numPages();
 }
 
+// For debugging purpose
 std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
 {
-    return page_directory->getAliveExternalIds(ns_id);
+    // Keep backward compatibility of this functions with v2
+    if (auto ids = page_directory->getAliveExternalIds(ns_id); ids)
+        return *ids;
+    return {};
 }
 
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
@@ -369,8 +373,11 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
         auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->ns_id);
         statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
-        // remove the external pages that is not alive now.
-        ns_callbacks->remover(pending_external_pages, alive_external_ids);
+        if (alive_external_ids)
+        {
+            // remove the external pages that is not alive now.
+            ns_callbacks->remover(pending_external_pages, *alive_external_ids);
+        } // else the ns_id is invalid, just skip
         statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
 
         // move to next namespace callbacks

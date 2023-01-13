@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
@@ -54,7 +53,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
 
 void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
+    assert(pipeline.streams.empty());
 
     if (context.isDisaggregatedComputeMode())
     {

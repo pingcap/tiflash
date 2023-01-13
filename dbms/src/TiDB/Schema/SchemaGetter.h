@@ -95,11 +95,17 @@ enum class SchemaActionType : Int8
     AlterNoCacheTable = 59,
     CreateTables = 60,
     ActionMultiSchemaChange = 61,
+    ActionFlashbackCluster = 62,
+    ActionRecoverSchema = 63,
+    ActionReorganizePartition = 64,
+    ActionAlterTTLInfo = 65,
+    ActionAlterTTLRemove = 67,
+
 
     // If we supporte new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 62,
+    MaxRecognizedType = 68,
 };
 
 struct AffectedOption
@@ -122,6 +128,7 @@ struct SchemaDiff
 
     TableID old_table_id;
     DatabaseID old_schema_id;
+    bool regenerate_schema_map{false};
 
     std::vector<AffectedOption> affected_opts;
 

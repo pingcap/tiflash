@@ -411,7 +411,7 @@ private:
     PathPool::PageFilePathMap page_path_map;
 };
 
-/// A class to manage paths for the specified storage.
+/// A class to manage paths for a specified physical table.
 class StoragePathPool
 {
 public:
@@ -447,6 +447,10 @@ public:
     void rename(const String & new_database, const String & new_table);
 
     void drop(bool recursive, bool must_success = true);
+
+    void shutdown() { shutdown_called.store(true); }
+
+    bool isShutdown() const { return shutdown_called.load(); }
 
     DISALLOW_COPY(StoragePathPool);
 
@@ -495,6 +499,8 @@ private:
     DMFilePathMap dt_file_path_map;
 
     bool path_need_database_name = false;
+
+    std::atomic<bool> shutdown_called;
 
     PathCapacityMetricsPtr global_capacity;
 

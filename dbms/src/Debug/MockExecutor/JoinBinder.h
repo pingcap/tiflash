@@ -14,16 +14,16 @@
 
 #pragma once
 
-#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
-#include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 
 namespace DB::mock
 {
+class ExchangeSenderBinder;
+class ExchangeReceiverBinder;
 class JoinBinder : public ExecutorBinder
 {
 public:
-    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds)
+    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds, uint64_t fine_grained_shuffle_stream_count_)
         : ExecutorBinder(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
         , join_cols(join_cols_)
@@ -31,6 +31,7 @@ public:
         , right_conds(r_conds)
         , other_conds(o_conds)
         , other_eq_conds_from_in(o_eq_conds)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {
         if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
             throw Exception("No join condition found.");
@@ -57,9 +58,10 @@ protected:
     const ASTs right_conds{};
     const ASTs other_conds{};
     const ASTs other_eq_conds_from_in{};
+    uint64_t fine_grained_shuffle_stream_count;
 };
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
-ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, ExecutorBinderPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {});
+ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, ExecutorBinderPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {}, uint64_t fine_grained_shuffle_stream_count = 0);
 
 
 /// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,

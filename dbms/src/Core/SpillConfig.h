@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,20 @@
 
 #include <common/types.h>
 
-#include <thread>
+namespace DB
+{
 
-UInt16 getNumberOfLogicalCPUCores();
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
 
-// We should call this function before Context has been created,
-// which will call `getNumberOfLogicalCPUCores`, or we can not
-// set cpu cores any more.
-void setNumberOfLogicalCPUCores(UInt16 max_logical_cpu_cores);
+struct SpillConfig
+{
+public:
+    SpillConfig(const String & spill_dir_, const String & spill_id_, size_t max_spilled_size_per_spill_, const FileProviderPtr & file_provider_);
+    String spill_dir;
+    String spill_id;
+    String spill_id_as_file_name_prefix;
+    size_t max_spilled_size_per_spill;
+    FileProviderPtr file_provider;
+};
+} // namespace DB

@@ -18,7 +18,6 @@
 namespace DB
 {
 using MockServerConfig = tests::MockServerConfig;
-using TiFlashTestEnv = tests::TiFlashTestEnv;
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
