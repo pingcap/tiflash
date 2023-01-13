@@ -250,7 +250,7 @@ static void updateHashPartitionWriterMetrics(CompressionMethod method, size_t sz
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriterV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs && packets)
+void WritePackets(CompressionMethod compression_method, TrackedMppDataPacketPtrs && packets, ExchangeWriterPtr & writer)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
@@ -258,7 +258,6 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPacket
         assert(packet);
 
         auto & inner_packet = packet->getPacket();
-        inner_packet.chunks();
 
         if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
         {
@@ -266,6 +265,12 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPacket
             updateHashPartitionWriterMetrics(compression_method, sz, writer->isLocal(part_id));
         }
     }
+}
+
+template <class ExchangeWriterPtr>
+void HashPartitionWriterV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs && packets)
+{
+    WritePackets(compression_method, std::move(packets), writer);
 }
 
 template class HashPartitionWriterV1<MPPTunnelSetPtr>;

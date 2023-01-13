@@ -215,12 +215,12 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle
 }
 
 template <class ExchangeWriterPtr>
-extern void WritePackets(TrackedMppDataPacketPtrs & packets, ExchangeWriterPtr & writer);
+extern void WritePackets(CompressionMethod compression_method, TrackedMppDataPacketPtrs && packets, ExchangeWriterPtr & writer);
 
 template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
 {
-    WritePackets(packets, writer);
+    WritePackets(compression_method, std::move(packets), writer);
 }
 
 template class FineGrainedShuffleWriterV1<MPPTunnelSetPtr>;
