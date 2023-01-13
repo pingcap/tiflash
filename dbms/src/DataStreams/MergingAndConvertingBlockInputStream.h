@@ -97,9 +97,10 @@ protected:
 
         if (!first->isTwoLevel())
         {
-            if (Block out = popBlocksListFront(single_level_blocks))
+            Block out_block = popBlocksListFront(single_level_blocks);
+            if (likely(out_block))
             {
-                return out;
+                return out_block;
             }
 
             if (current_bucket_num > 0)
@@ -128,9 +129,10 @@ protected:
         }
         else
         {
-            if (Block out = popBlocksListFront(two_level_blocks))
+            Block out_block = popBlocksListFront(two_level_blocks);
+            if (likely(out_block))
             {
-                return out;
+                return out_block;
             }
             if (!parallel_merge_data)
             {
@@ -160,7 +162,12 @@ protected:
                     if (!it->second.empty())
                     {
                         two_level_blocks.splice(two_level_blocks.end(), std::move(it->second), it->second.begin(), it->second.end());
-                        return popBlocksListFront(two_level_blocks);
+
+                        Block out = popBlocksListFront(two_level_blocks);
+                        if (likely(out))
+                        {
+                            return out;
+                        }
                     }
 
                     continue;
