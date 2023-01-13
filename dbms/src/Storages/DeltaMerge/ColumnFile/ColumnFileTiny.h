@@ -72,13 +72,13 @@ public:
         , data_page_id(data_page_id_)
         , cache(cache_)
     {
-        //GET_METRIC(tiflash_column_file_info, column_file_tiny_count).Increment();
+        GET_METRIC(tiflash_column_file_info, column_file_tiny_count).Increment();
     }
 
-    // ~ColumnFileTiny() override
-    // {
-    //     GET_METRIC(tiflash_column_file_info, column_file_tiny_count).Decrement();
-    // }
+    ~ColumnFileTiny() override
+    {
+        GET_METRIC(tiflash_column_file_info, column_file_tiny_count).Decrement();
+    }
 
     Type getType() const override { return Type::TINY_FILE; }
 

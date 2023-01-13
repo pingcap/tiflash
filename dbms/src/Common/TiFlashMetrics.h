@@ -261,7 +261,11 @@ namespace DB
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
     M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                              \
         F(type_send, {{"type", "send_queue"}}),                                                                                           \
-        F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
+        F(type_receive, {{"type", "recv_queue"}}))       \
+    M(tiflash_column_file_info, "info about column files", Gauge,                                                           \
+        F(column_file_tiny_count, {"type", "column_file_tiny_count"}),                                                                    \
+        F(column_file_memory_count, {"type", "column_file_memory_count"}),                                                                \
+        F(column_file_schema_count, {"type", "column_file_schema_count"}))                                                                \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
