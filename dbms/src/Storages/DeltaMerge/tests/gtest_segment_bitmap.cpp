@@ -600,4 +600,44 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 }
 
+TEST_F(SegmentBitmapFilterTest, StableLogicalSplit)
+try
+{
+    writeSegment("d_mem:[0, 50000)");
+    mergeSegmentDelta(SEG_ID, true);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(seg->getDelta()->getRows(), 0);
+    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+    ASSERT_EQ(seg->getStable()->getRows(), 50000);
+
+    auto new_seg_id = splitSegmentAt(SEG_ID, 25000, Segment::SplitMode::Logical);
+
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
+
+    auto left_handle = getSegmentHandle(SEG_ID, {});
+    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
+    auto expected_left_handle = genSequence<Int64>("[0, 25000)");
+    ASSERT_EQ(expected_left_handle.size(), left_h->size());
+    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+
+    auto left_row_id = getSegmentRowId(SEG_ID, {});
+    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    auto expected_left_row_id = genSequence<UInt32>("[0, 25000)");
+    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+
+    auto right_handle = getSegmentHandle(*new_seg_id, {});
+    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
+    auto expected_right_handle = genSequence<Int64>("[25000, 50000)");
+    ASSERT_EQ(expected_right_handle.size(), right_h->size());
+    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+
+    auto right_row_id = getSegmentRowId(*new_seg_id, {});
+    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
+    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+}
+CATCH
 } // namespace DB::DM::tests
