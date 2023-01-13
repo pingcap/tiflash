@@ -128,6 +128,10 @@ protected:
         }
         else
         {
+            if (Block out = popBlocksListFront(two_level_blocks))
+            {
+                return out;
+            }
             if (!parallel_merge_data)
             {
                 parallel_merge_data = std::make_unique<ParallelMergeData>(threads);
@@ -139,33 +143,27 @@ protected:
             {
                 std::unique_lock lock(parallel_merge_data->mutex);
 
+                if (current_bucket_num >= NUM_BUCKETS)
+                {
+                    return {};
+                }
+
                 if (parallel_merge_data->exception)
                     std::rethrow_exception(parallel_merge_data->exception);
 
                 auto it = parallel_merge_data->ready_blocks.find(current_bucket_num);
                 if (it != parallel_merge_data->ready_blocks.end())
                 {
-                    // only need to call scheduleThreadForNextBucket() once on the first loop
-                    if (is_first_block)
+                    scheduleThreadForNextBucket();
+                    current_bucket_num++;
+
+                    if (!it->second.empty())
                     {
-                        scheduleThreadForNextBucket();
-                        is_first_block = false;
+                        two_level_blocks.splice(two_level_blocks.end(), std::move(it->second), it->second.begin(), it->second.end());
+                        return popBlocksListFront(two_level_blocks);
                     }
 
-                    if (Block out = popBlocksListFront(it->second))
-                    {
-                        return out;
-                    }
-                    else
-                    {
-                        current_bucket_num++;
-                        is_first_block = true;
-                        if (current_bucket_num >= NUM_BUCKETS)
-                        {
-                            return {};
-                        }
-                        continue;
-                    }
+                    continue;
                 }
                 parallel_merge_data->condvar.wait(lock);
             }
@@ -176,6 +174,7 @@ private:
     const LoggerPtr log;
     const Aggregator & aggregator;
     BlocksList single_level_blocks;
+    BlocksList two_level_blocks;
     ManyAggregatedDataVariants data;
     bool final;
     size_t threads;
@@ -198,7 +197,6 @@ private:
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
-    bool is_first_block = true;
 
     void scheduleThreadForNextBucket()
     {
