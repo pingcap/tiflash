@@ -818,7 +818,7 @@ try
                        .scan("outer_join_test", left_table_names[0])
                        .join(context.scan("outer_join_test", right_table_names[0]), tipb::JoinType::TypeRightOuterJoin, {col("a")})
                        .build(context);
-    context.context.setSetting("max_block_size", Field(max_block_size));
+    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use 1 build concurrency join 1 probe concurrency as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
@@ -856,7 +856,7 @@ try
                   .scan("outer_join_test", left_table_names[0])
                   .join(context.scan("outer_join_test", right_table_names[0]), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
                   .build(context);
-    context.context.setSetting("max_block_size", Field(max_block_size));
+    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use 1 build concurrency join 1 probe concurrency as the reference
     ref_columns = executeStreams(request, original_max_streams);
     /// case 2.1 table scan join table scan
