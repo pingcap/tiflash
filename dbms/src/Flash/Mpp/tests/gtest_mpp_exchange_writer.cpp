@@ -26,15 +26,17 @@
 
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
+#include <Flash/Mpp/FineGrainedShuffleWriterV1.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriterV1.cpp>
-#include <cstddef>
-#include <limits>
+#include <utility>
 
 namespace DB
 {
 namespace tests
 {
+static CompressionMethodByte ToCompressionMethodByte(CompressionMethod m);
+
 class TestMPPExchangeWriter : public testing::Test
 {
 protected:
@@ -128,7 +130,7 @@ struct MockExchangeWriter
 
     void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet) { checker(packet, 0); }
     void partitionWrite(TrackedMppDataPacketPtr && packet, uint16_t part_id) { checker(packet, part_id); }
-    void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
+    static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void sendExecutionSummary(const tipb::SelectResponse & response)
     {
         auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
@@ -204,6 +206,92 @@ try
     {
         ASSERT_EQ(block.rows(), block_rows / (fine_grained_shuffle_stream_count * part_num));
     }
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, TestFineGrainedShuffleWriterV1)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const uint16_t part_num = 4;
+    const uint32_t fine_grained_shuffle_stream_count = 8;
+    const Int64 fine_grained_shuffle_batch_size = 108;
+
+    // 1. Build Block.
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+    {
+        blocks.emplace_back(prepareUniformBlock(block_rows));
+        blocks.emplace_back(prepareUniformBlock(0));
+    }
+    Block header = blocks.back();
+
+    // 2. Build MockExchangeWriter.
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(packet);
+    };
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+
+    // 3. Start to write.
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+        mock_writer,
+        part_col_ids,
+        part_col_collators,
+        *dag_context_ptr,
+        fine_grained_shuffle_stream_count,
+        fine_grained_shuffle_batch_size,
+        tipb::CompressionMode::FAST);
+    dag_writer->prepare(blocks[0].cloneEmpty());
+    for (const auto & block : blocks)
+        dag_writer->write(block);
+    dag_writer->flush();
+
+    // 4. Start to check write_report.
+    size_t per_part_rows = block_rows * block_num / part_num;
+    ASSERT_EQ(write_report.size(), part_num);
+    std::vector<size_t> rows_of_stream_ids(fine_grained_shuffle_stream_count, 0);
+
+    CHBlockChunkDecodeAndSquash decoder(header, 512);
+
+    for (size_t part_index = 0; part_index < part_num; ++part_index)
+    {
+        size_t part_decoded_block_rows = 0;
+
+        for (const auto & packet : write_report[part_index])
+        {
+            ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
+            {
+                const auto & chunk = packet->getPacket().chunks(i);
+
+                if (part_index == 0)
+                {
+                    ASSERT_EQ(CompressionMethodByte(chunk[0]), CompressionMethodByte::NONE);
+                }
+                else
+                {
+                    ASSERT_EQ(CompressionMethodByte(chunk[0]), ToCompressionMethodByte(ToInternalCompressionMethod(tipb::CompressionMode::FAST)));
+                }
+
+                auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                if (!result)
+                {
+                    result = decoder.flush();
+                }
+                assert(result);
+                auto decoded_block = std::move(*result);
+                part_decoded_block_rows += decoded_block.rows();
+                rows_of_stream_ids[packet->getPacket().stream_ids(i)] += decoded_block.rows();
+            }
+        }
+        ASSERT_EQ(part_decoded_block_rows, per_part_rows);
+    }
+
+    size_t per_stream_id_rows = block_rows * block_num / fine_grained_shuffle_stream_count;
+    for (size_t rows : rows_of_stream_ids)
+        ASSERT_EQ(rows, per_stream_id_rows);
 }
 CATCH
 

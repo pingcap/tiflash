@@ -674,7 +674,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     {
     case DB::MPPDataPacketV0:
     {
-        for (const String * chunk : recv_msg->chunks)
+        for (const auto * chunk : recv_msg->chunks)
         {
             auto result = decoder_ptr->decodeAndSquash(*chunk);
             if (!result)
@@ -689,14 +689,10 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     }
     case DB::MPPDataPacketV1:
     {
-        RUNTIME_CHECK(packet.chunks().size() == int(recv_msg->chunks.size()),
-                      packet.chunks().size(),
-                      recv_msg->chunks.size());
-
-        for (auto && chunk : packet.chunks())
+        for (const auto * chunk : recv_msg->chunks)
         {
-            assert(!chunk.empty());
-            auto && result = decoder_ptr->decodeAndSquashWithCompression(chunk);
+            assert(!chunk->empty());
+            auto && result = decoder_ptr->decodeAndSquashWithCompression(*chunk);
             if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();
