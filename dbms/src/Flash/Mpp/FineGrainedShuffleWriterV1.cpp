@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/FineGrainedShuffleWriterV1.h>
