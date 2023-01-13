@@ -118,9 +118,8 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         executed = true;
     }
 
-    Block res;
     if (isCancelledOrThrowIfKilled() || !impl)
-        return res;
+        return {};
 
     return impl->read();
 }

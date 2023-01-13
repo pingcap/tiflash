@@ -759,7 +759,7 @@ try
     ColumnsWithTypeAndName common_column_data;
     size_t table_rows = 102400;
     size_t common_rows = 20480;
-    size_t max_block_size = 800;
+    UInt64 max_block_size = 800;
     size_t original_max_streams = 20;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
     {

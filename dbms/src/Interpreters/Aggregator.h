@@ -902,6 +902,7 @@ public:
 
         const std::string tmp_path;
 
+        UInt64 max_block_size;
         TiDB::TiDBCollators collators;
 
         Params(
@@ -915,6 +916,7 @@ public:
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
             const std::string & tmp_path_,
+            UInt64 max_block_size_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
@@ -928,6 +930,7 @@ public:
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
             , tmp_path(tmp_path_)
+            , max_block_size(max_block_size_)
             , collators(collators_)
         {
         }
@@ -936,8 +939,9 @@ public:
         Params(const Block & intermediate_header_,
                const ColumnNumbers & keys_,
                const AggregateDescriptions & aggregates_,
+               UInt64 max_block_size_ = DEFAULT_BLOCK_SIZE,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
+            : Params(Block(), keys_, aggregates_, 0, OverflowMode::THROW, 0, 0, 0, false, "", max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1159,11 +1163,29 @@ protected:
         bool final) const;
 
     template <typename Method, typename Table>
+    void convertToBlocksImpl(
+        Method & method,
+        Table & data,
+        std::vector<MutableColumns> & key_columns_vec,
+        std::vector<AggregateColumnsData> & aggregate_columns_vec,
+        std::vector<MutableColumns> & final_aggregate_columns_vec,
+        Arena * arena,
+        bool final) const;
+
+    template <typename Method, typename Table>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
         std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
+        Arena * arena) const;
+
+    template <typename Method, typename Table>
+    void convertToBlocksImplFinal(
+        Method & method,
+        Table & data,
+        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
     template <typename Method, typename Table>
@@ -1173,6 +1195,13 @@ protected:
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
+    template <typename Method, typename Table>
+    void convertToBlocksImplNotFinal(
+        Method & method,
+        Table & data,
+        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
+
     template <typename Filler>
     Block prepareBlockAndFill(
         AggregatedDataVariants & data_variants,
@@ -1180,8 +1209,23 @@ protected:
         size_t rows,
         Filler && filler) const;
 
+    template <typename Filler>
+    BlocksList prepareBlocksAndFill(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler) const;
+
     template <typename Method>
     Block convertOneBucketToBlock(
+        AggregatedDataVariants & data_variants,
+        Method & method,
+        Arena * arena,
+        bool final,
+        size_t bucket) const;
+
+    template <typename Method>
+    BlocksList convertOneBucketToBlocks(
         AggregatedDataVariants & data_variants,
         Method & method,
         Arena * arena,
@@ -1201,7 +1245,9 @@ protected:
         AggregateFunctionInstructions & instructions);
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillTwoLevel(
         AggregatedDataVariants & data_variants,
         bool final,
