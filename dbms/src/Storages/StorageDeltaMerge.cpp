@@ -55,6 +55,8 @@
 
 #include <random>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -960,7 +962,20 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     {
         if (cache_blocks.empty())
         {
-            return std::make_pair(decoding_schema_snapshot, std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot)));
+            BlockUPtr block = std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot));
+            auto digest = calcDigest(*block);
+            auto schema = global_context.column_file_schema_map_with_lock->find(digest);
+            if (schema)
+            {
+                // check if the block schema is the same or just sha-256 of schema is the same
+                if (!isSameSchema(*block, schema->getSchema()))
+                {
+                    // 确认一下这边用什么报错方式，直接 core 嘛？
+                    LOG_ERROR(log, "new table's schema's digest is the same as one previous table schemas' digest, but schema info is not the same, please change the new tables' schema, whose table_info is ", tidb_table_info);
+                }
+            }
+
+            return std::make_pair(decoding_schema_snapshot, std::move(block));
         }
         else
         {
