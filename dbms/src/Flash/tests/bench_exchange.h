@@ -126,7 +126,7 @@ struct MockReceiverContext
         return {index, index, -1};
     }
 
-    std::shared_ptr<Reader> makeReader(const Request & request)
+    std::shared_ptr<Reader> makeSyncReader(const Request & request)
     {
         return std::make_shared<Reader>(queues[request.send_task_id]);
     }

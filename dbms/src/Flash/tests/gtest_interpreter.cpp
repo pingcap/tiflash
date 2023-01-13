@@ -32,10 +32,13 @@ public:
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addMockTable({"test_db", "l_table_5_concurrency"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}}, 5);
+        context.addExchangeReceiver("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}}, enable, {{"s2", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}}, enable, {{"join_c", TiDB::TP::TypeString}});
     }
+    const size_t enable = 8;
+    const size_t disable = 0;
 };
 
 TEST_F(InterpreterExecuteTest, SingleQueryBlock)
@@ -323,8 +326,6 @@ TEST_F(InterpreterExecuteTest, FineGrainedShuffle)
 try
 {
     // fine-grained shuffle is enabled.
-    const uint64_t enable = 8;
-    const uint64_t disable = 0;
     auto request = context
                        .receive("sender_1", enable)
                        .sort({{"s1", true}, {"s2", false}}, true, enable)
@@ -333,7 +334,7 @@ try
     {
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
+ Expression x 8: <final projection>
   Expression: <before order and select>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     Expression: <final projection>
@@ -395,8 +396,6 @@ TEST_F(InterpreterExecuteTest, FineGrainedShuffleJoin)
 try
 {
     // fine-grained shuffle is enabled.
-    const uint64_t enable = 8;
-    const uint64_t disable = 0;
     {
         // Join Source.
         DAGRequestBuilder receiver1 = context.receive("sender_l");
@@ -412,16 +411,43 @@ try
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+    {
+        // Join Source.
+        DAGRequestBuilder scan1 = context.scan("test_db", "l_table_5_concurrency");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", enable);
+
+        auto request = scan1.join(
+                                receiver2,
+                                tipb::JoinType::TypeLeftOuterJoin,
+                                {col("join_c")},
+                                enable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 5: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
     {
@@ -446,7 +472,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -458,8 +484,6 @@ TEST_F(InterpreterExecuteTest, FineGrainedShuffleAgg)
 try
 {
     // fine-grained shuffle is enabled.
-    const uint64_t enable = 8;
-    const uint64_t disable = 0;
     {
         DAGRequestBuilder receiver1 = context.receive("sender_1", enable);
         auto request = receiver1
@@ -467,7 +491,7 @@ try
                            .build(context);
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
+ Expression x 8: <final projection>
   Aggregating: <enable fine grained shuffle>
    MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -523,13 +547,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -565,13 +589,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -608,14 +632,14 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6>
+     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
       Expression: <final projection>
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -649,7 +673,7 @@ CreatingSets
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
        Expression: <final projection>
         MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -678,12 +702,10 @@ CreatingSets
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
-         MockTableScan
-     Expression x 10: <remove useless column after join>
-      NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+         MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -718,12 +740,10 @@ CreatingSets
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <remove useless column after join>
-            HashJoinProbe: <join probe, join_executor_id = Join_2>
+            HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
              Expression: <append join key and join filters for probe side>
               Expression: <final projection>
-               MockExchangeReceiver
-           Expression x 20: <remove useless column after join>
-            NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+               MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }
