@@ -270,11 +270,11 @@ public:
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        std::lock_guard lock(mu);
-        if (unlikely(is_done))
+        if (unlikely(checkPacketErr(data)))
             return false;
 
-        if (unlikely(checkPacketErr(data)))
+        std::lock_guard lock(mu);
+        if (unlikely(is_done))
             return false;
 
         // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
