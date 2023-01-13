@@ -188,4 +188,19 @@ void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t r
     return decodeColumnsByBlock(istr, res, rows_to_read, reserve_size);
 }
 
+CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode)
+{
+    switch (compression_mode)
+    {
+    case tipb::CompressionMode::NONE:
+        return CompressionMethod::NONE;
+    case tipb::CompressionMode::FAST:
+        return CompressionMethod::LZ4; // use LZ4 method as fast mode
+    case tipb::CompressionMode::HIGH_COMPRESSION:
+        return CompressionMethod::ZSTD; // use ZSTD method as HC mode
+    default:
+        return CompressionMethod::NONE;
+    }
+}
+
 } // namespace DB

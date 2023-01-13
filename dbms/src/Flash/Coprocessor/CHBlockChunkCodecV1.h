@@ -27,5 +27,6 @@ using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
+CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode);
 
 } // namespace DB

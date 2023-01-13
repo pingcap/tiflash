@@ -14,7 +14,6 @@
 
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriterV1.h>
@@ -24,25 +23,11 @@
 namespace DB
 {
 extern size_t ApproxBlockBytes(const Block & block);
-}
+extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
+} // namespace DB
+
 namespace DB
 {
-
-static inline CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode)
-{
-    switch (compression_mode)
-    {
-    case tipb::CompressionMode::NONE:
-        return CompressionMethod::NONE;
-    case tipb::CompressionMode::FAST:
-        return CompressionMethod::LZ4; // use LZ4 method as fast mode
-    case tipb::CompressionMode::HIGH_COMPRESSION:
-        return CompressionMethod::ZSTD; // use ZSTD method as HC mode
-    default:
-        return CompressionMethod::NONE;
-    }
-}
-
 template <class ExchangeWriterPtr>
 HashPartitionWriterV1<ExchangeWriterPtr>::HashPartitionWriterV1(
     ExchangeWriterPtr writer_,
@@ -92,8 +77,6 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::write(const Block & block)
     if (static_cast<Int64>(rows_in_blocks) > partition_batch_limit)
         partitionAndEncodeThenWriteBlocks();
 }
-
-extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 
 template <class ExchangeWriterPtr>
 void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()

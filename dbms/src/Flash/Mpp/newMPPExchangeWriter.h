@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
+#include <Flash/Mpp/FineGrainedShuffleWriterV1.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/HashPartitionWriterV1.h>
 #include <Flash/Mpp/MppVersion.h>
@@ -58,16 +59,23 @@ std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
         {
             if (enable_fine_grained_shuffle)
             {
-                // TODO: support data compression if necessary
-                RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
-
-                return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
-                    writer,
-                    partition_col_ids,
-                    partition_col_collators,
-                    dag_context,
-                    fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size);
+                if (DB::MppVersion::MppVersionV0 == dag_context.getMPPTaskMeta().mpp_version())
+                    return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
+                        writer,
+                        partition_col_ids,
+                        partition_col_collators,
+                        dag_context,
+                        fine_grained_shuffle_stream_count,
+                        fine_grained_shuffle_batch_size);
+                else
+                    return std::make_unique<FineGrainedShuffleWriterV1<ExchangeWriterPtr>>(
+                        writer,
+                        partition_col_ids,
+                        partition_col_collators,
+                        dag_context,
+                        fine_grained_shuffle_stream_count,
+                        fine_grained_shuffle_batch_size,
+                        compression_mode);
             }
             else
             {
