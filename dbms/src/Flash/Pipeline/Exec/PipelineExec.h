@@ -22,7 +22,7 @@ namespace DB
 {
 class PipelineExecutorStatus;
 
-// The executor of push model operator.
+// The executor for push model operator.
 // A pipeline will generate multiple pipeline_execs.
 // data flow: source --> transform --> .. --> transform --> sink
 class PipelineExec
