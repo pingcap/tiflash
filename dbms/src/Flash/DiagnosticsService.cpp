@@ -38,6 +38,12 @@ using diagnosticspb::SearchLogResponse;
     ::diagnosticspb::ServerInfoResponse * response)
 try
 {
+    if (context.isDisaggregatedComputeMode())
+    {
+        String err_msg = "tiflash compute node should be managed by AutoScaler instead of PD, this grpc should not be called be AutoScaler for now";
+        LOG_ERROR(log, err_msg);
+        return ::grpc::Status(::grpc::StatusCode::INTERNAL, err_msg);
+    }
     const TiFlashRaftProxyHelper * helper = context.getTMTContext().getKVStore()->getProxyHelper();
     if (helper)
     {

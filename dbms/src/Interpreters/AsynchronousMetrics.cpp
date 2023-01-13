@@ -121,6 +121,7 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
 
 FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
 {
+    RUNTIME_CHECK(!context.isDisaggregatedStorageMode());
     // Get from RegionPersister
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -195,6 +196,7 @@ void AsynchronousMetrics::update()
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
+    if (!context.isDisaggregatedStorageMode())
     {
         const FileUsageStatistics usage = getPageStorageFileUsage();
         set("BlobFileNums", usage.total_file_num);
