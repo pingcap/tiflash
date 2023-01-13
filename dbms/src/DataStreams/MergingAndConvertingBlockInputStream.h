@@ -91,13 +91,13 @@ protected:
                 single_level_blocks = aggregator.prepareBlocksAndFillWithoutKey(
                     *first,
                     final);
-                return tryGetSingleLevelOutputBlock();
+                return popBlocksListFront(single_level_blocks);
             }
         }
 
         if (!first->isTwoLevel())
         {
-            if (Block out = tryGetSingleLevelOutputBlock())
+            if (Block out = popBlocksListFront(single_level_blocks))
             {
                 return out;
             }
@@ -124,20 +124,10 @@ protected:
             }
 #undef M
             single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final);
-            return tryGetSingleLevelOutputBlock();
+            return popBlocksListFront(single_level_blocks);
         }
         else
         {
-            if (Block out = tryGetTwoLevelOutputBlock())
-            {
-                return out;
-            }
-
-            if (current_bucket_num >= NUM_BUCKETS)
-            {
-                return {};
-            }
-
             if (!parallel_merge_data)
             {
                 parallel_merge_data = std::make_unique<ParallelMergeData>(threads);
@@ -145,39 +135,40 @@ protected:
                     scheduleThreadForNextBucket();
             }
 
-            Block res;
-
             while (true)
             {
                 std::unique_lock lock(parallel_merge_data->mutex);
 
                 if (parallel_merge_data->exception)
-                {
                     std::rethrow_exception(parallel_merge_data->exception);
-                }
 
-
-                if (!parallel_merge_data->ready_blocks.empty())
+                auto it = parallel_merge_data->ready_blocks.find(current_bucket_num);
+                if (it != parallel_merge_data->ready_blocks.end())
                 {
-                    for (auto & ready_block : parallel_merge_data->ready_blocks)
+                    // only need to call scheduleThreadForNextBucket() once on the first loop
+                    if (is_first_block)
                     {
                         scheduleThreadForNextBucket();
-                        two_level_blocks[ready_block.first] = std::move(ready_block.second);
-                        current_bucket_num++;
+                        is_first_block = false;
                     }
-                    parallel_merge_data->ready_blocks.clear();
 
-                    if (Block out = tryGetTwoLevelOutputBlock())
+                    if (Block out = popBlocksListFront(it->second))
                     {
                         return out;
                     }
-                    else if (current_bucket_num >= NUM_BUCKETS)
+                    else
                     {
-                        return {};
+                        current_bucket_num++;
+                        is_first_block = true;
+                        if (current_bucket_num >= NUM_BUCKETS)
+                        {
+                            return {};
+                        }
+                        continue;
                     }
                 }
                 parallel_merge_data->condvar.wait(lock);
-            };
+            }
         }
     }
 
@@ -185,8 +176,6 @@ private:
     const LoggerPtr log;
     const Aggregator & aggregator;
     BlocksList single_level_blocks;
-    BucketBlocksListMap two_level_blocks;
-    Int32 two_level_blocks_out_bucket = 0;
     ManyAggregatedDataVariants data;
     bool final;
     size_t threads;
@@ -209,6 +198,7 @@ private:
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
+    bool is_first_block = true;
 
     void scheduleThreadForNextBucket()
     {
@@ -264,37 +254,15 @@ private:
         parallel_merge_data->condvar.notify_all();
     }
 
-    Block tryGetSingleLevelOutputBlock()
+    static Block popBlocksListFront(BlocksList & blocks)
     {
-        if (!single_level_blocks.empty())
+        if (!blocks.empty())
         {
-            Block out_block = single_level_blocks.front();
-            single_level_blocks.pop_front();
+            Block out_block = blocks.front();
+            blocks.pop_front();
             return out_block;
         }
         return {};
-    }
-
-    Block tryGetTwoLevelOutputBlock()
-    {
-        while (true)
-        {
-            auto it = two_level_blocks.find(two_level_blocks_out_bucket);
-            if (it != two_level_blocks.end())
-            {
-                if (!it->second.empty())
-                {
-                    Block out_block = it->second.front();
-                    it->second.pop_front();
-                    return out_block;
-                }
-                two_level_blocks_out_bucket++;
-            }
-            else
-            {
-                return {};
-            }
-        }
     }
 };
 
