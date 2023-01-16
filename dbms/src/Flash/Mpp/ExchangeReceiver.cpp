@@ -353,16 +353,11 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     bool wait_all_connection_done = false;
     try
     {
-        LOG_INFO(exc_log, "ReceiverDes");
-        LOG_INFO(exc_log, "here1");
         close();
-        LOG_INFO(exc_log, "here2");
         waitAllConnectionDone();
-        LOG_INFO(exc_log, "here3");
         wait_all_connection_done = true;
         thread_manager->wait();
         ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
-        LOG_INFO(exc_log, "ReceiverDesOver");
     }
     catch (...)
     {
