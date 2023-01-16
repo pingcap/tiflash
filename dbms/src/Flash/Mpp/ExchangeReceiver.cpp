@@ -793,37 +793,36 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    // The whole function should be protected by the lock,
-    // because once live_connections is equal to 0, waitAllConnectionDone
-    // function will return and the ExchangeReceiver may be destructed
-    // before we leave this function.
-    std::lock_guard lock(mu);
-
-    if (meet_error)
+    Int32 copy_live_conn = -1;
     {
-        if (state == ExchangeReceiverState::NORMAL)
-            state = ExchangeReceiverState::ERROR;
-        if (err_msg.empty())
-            err_msg = local_err_msg;
+        std::lock_guard lock(mu);
+
+        if (meet_error)
+        {
+            if (state == ExchangeReceiverState::NORMAL)
+                state = ExchangeReceiverState::ERROR;
+            if (err_msg.empty())
+                err_msg = local_err_msg;
+        }
+        copy_live_conn = --live_connections;
     }
-    --live_connections;
 
     LOG_DEBUG(
         log,
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
         meet_error,
         local_err_msg,
-        live_connections);
+        copy_live_conn);
 
-    if (live_connections == 0)
+    if (copy_live_conn == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (live_connections < 0)
+    else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
 
-    if (meet_error || live_connections == 0)
+    if (meet_error || copy_live_conn == 0)
         finishAllMsgChannels();
 }
 
