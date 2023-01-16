@@ -29,6 +29,7 @@ public:
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
         context.addExchangeReceiver("exchange1",
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
@@ -248,6 +249,90 @@ try
                            .build(context);
         executeAndAssertColumnsEqual(request, {toNullableVec<String>({"1"})});
     }
+}
+CATCH
+
+TEST_F(FilterExecutorTestRunner, PushDownFilter)
+try
+{
+    context.mockStorage()->setUseDeltaMerge(true);
+    context.addMockDeltaMerge({"test_db", "test_table1"},
+                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}},
+                              {toVec<Int64>("i1", {1, 2, 3}),
+                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+    // Do not support push down filter test for DAGQueryBlockInterpreter
+    enablePlanner(true);
+
+    auto request = context
+                       .scan("test_db", "test_table1")
+                       .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
+                       .build(context);
+
+    {
+        String expected = R"(
+Expression: <final projection>
+ Expression: <projection after push down filter>
+  Filter: <push down filter>
+   DeltaMergeSegmentThread)";
+        executeInterpreterWithDeltaMerge(expected, request, 10);
+    }
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1}),
+         toNullableVec<String>({"apple"})});
+
+
+    request = context
+                  .scan("test_db", "test_table1")
+                  .filter(lt(col("i1"), lit(Field(static_cast<Int64>(3)))))
+                  .build(context);
+
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1, 2}),
+         toNullableVec<String>({"apple", {}})});
+
+    for (size_t i = 4; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(lt(col("i1"), lit(Field(static_cast<Int64>(i)))))
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3}),
+             toNullableVec<String>({"apple", {}, "banana"})});
+    }
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(gt(col("i1"), lit(Field(static_cast<Int64>(-i)))))
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3}),
+             toNullableVec<String>({"apple", {}, "banana"})});
+    }
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(gt(col("i1"), lit(Field(static_cast<Int64>(-i)))))
+                      .project({col("i1")})
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3})});
+    }
+
+    context.mockStorage()->setUseDeltaMerge(false);
 }
 CATCH
 

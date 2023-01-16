@@ -22,6 +22,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -459,6 +460,9 @@ public:
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
     String getSystemProfileName() const;
+
+    void setServerInfo(const ServerInfo & server_info);
+    const std::optional<ServerInfo> & getServerInfo() const;
 
     /// Base path for format schemas
     String getFormatSchemaPath() const;

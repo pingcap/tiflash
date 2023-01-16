@@ -23,6 +23,7 @@
 #include <IO/Progress.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/QueryPriorities.h>
+#include <Server/ServerInfo.h>
 
 #include <condition_variable>
 #include <list>
@@ -309,7 +310,7 @@ public:
       * If timeout is passed - throw an exception.
       * Don't count KILL QUERY queries.
       */
-    EntryPtr insert(const String & query_, const IAST * ast, const ClientInfo & client_info, const Settings & settings);
+    EntryPtr insert(const String & query_, const IAST * ast, const ClientInfo & client_info, const Settings & settings, const UInt64 total_memory);
 
     /// Number of currently executing queries.
     size_t size() const { return cur_size; }

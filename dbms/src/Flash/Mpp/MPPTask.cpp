@@ -52,6 +52,39 @@ extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
+namespace
+{
+void injectFailPointBeforeRegisterTunnel(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
+    }
+}
+
+void injectFailPointBeforeRegisterMPPTask(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
+    }
+}
+
+void injectFailPointDuringRegisterTunnel(bool is_root_task)
+{
+    if (!is_root_task)
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
+}
+} // namespace
+
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
@@ -131,17 +164,18 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         mpp::TaskMeta task_meta;
         if (unlikely(!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
+
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
+
         LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
+
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
+
         tunnel_set_local->registerTunnel(MPPTaskId(task_meta), tunnel);
-        if (!dag_context->isRootMPPTask())
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
-        }
+        injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
@@ -284,30 +318,13 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
     dag_context->setProcessListEntry(process_list_entry);
 
-    if (dag_context->isRootMPPTask())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
-    }
-    else
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
-    }
-
-    // register tunnels
+    injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
-    // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
-    if (dag_context->isRootMPPTask())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
-    }
-    else
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
-    }
+    injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
     auto [result, reason] = task_manager->registerTask(shared_from_this());
     if (!result)
     {
@@ -352,6 +369,7 @@ void MPPTask::runImpl()
         unregisterTask();
         return;
     }
+
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
@@ -359,6 +377,7 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
+
     String err_msg;
     try
     {
