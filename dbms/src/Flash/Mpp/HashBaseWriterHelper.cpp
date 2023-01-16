@@ -142,15 +142,6 @@ void scatterColumns(const Block & input_block,
     }
 }
 
-DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num)
-{
-    DB::TrackedMppDataPacketPtrs tracked_packets;
-    tracked_packets.reserve(partition_num);
-    for (size_t i = 0; i < partition_num; ++i)
-        tracked_packets.emplace_back(std::make_shared<TrackedMppDataPacket>());
-    return tracked_packets;
-}
-
 void scatterColumnsForFineGrainedShuffle(const Block & block,
                                          const std::vector<Int64> & partition_col_ids,
                                          const TiDB::TiDBCollators & collators,
