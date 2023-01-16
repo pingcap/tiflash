@@ -40,29 +40,9 @@ private:
     class SpillWriter
     {
     public:
-        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header, size_t spill_version)
-            : file_buf(file_provider, file_name, EncryptionPath(file_name, ""))
-            , compressed_buf(file_buf)
-        {
-            /// note this implicitly assumes that a SpillWriter will always write to a new file,
-            /// if we support append write, don't need to write the spill version again
-            writeVarUInt(spill_version, compressed_buf);
-            out = std::make_unique<NativeBlockOutputStream>(compressed_buf, spill_version, header);
-            out->writePrefix();
-        }
-        SpillDetails finishWrite()
-        {
-            out->flush();
-            compressed_buf.next();
-            file_buf.next();
-            out->writeSuffix();
-            return {written_rows, compressed_buf.count(), file_buf.count()};
-        }
-        void write(const Block & block)
-        {
-            written_rows += block.rows();
-            out->write(block);
-        }
+        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header, size_t spill_version);
+        SpillDetails finishWrite();
+        void write(const Block & block);
 
     private:
         WriteBufferFromFileProvider file_buf;

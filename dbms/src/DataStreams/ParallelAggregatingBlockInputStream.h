@@ -16,7 +16,6 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <DataStreams/TemporaryFileStream.h>
 
 namespace DB
 {
@@ -75,8 +74,6 @@ private:
     size_t aggregates_size;
 
     std::atomic<bool> executed{false};
-
-    TemporaryFileStreams temporary_inputs;
 
     ManyAggregatedDataVariants many_data;
     Exceptions exceptions;

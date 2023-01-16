@@ -15,7 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/TemporaryFileStream.h>
 #include <Interpreters/Aggregator.h>
 
 namespace DB
@@ -61,8 +60,6 @@ protected:
     bool final;
 
     bool executed = false;
-
-    TemporaryFileStreams temporary_inputs;
 
     /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;

@@ -18,6 +18,32 @@
 namespace DB
 {
 
+SpillHandler::SpillWriter::SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header, size_t spill_version)
+    : file_buf(file_provider, file_name, EncryptionPath(file_name, ""))
+    , compressed_buf(file_buf)
+{
+    /// note this implicitly assumes that a SpillWriter will always write to a new file,
+    /// if we support append write, don't need to write the spill version again
+    writeVarUInt(spill_version, compressed_buf);
+    out = std::make_unique<NativeBlockOutputStream>(compressed_buf, spill_version, header);
+    out->writePrefix();
+}
+
+SpillDetails SpillHandler::SpillWriter::finishWrite()
+{
+    out->flush();
+    compressed_buf.next();
+    file_buf.next();
+    out->writeSuffix();
+    return {written_rows, compressed_buf.count(), file_buf.count()};
+}
+
+void SpillHandler::SpillWriter::write(const Block & block)
+{
+    written_rows += block.rows();
+    out->write(block);
+}
+
 SpillHandler::SpillHandler(Spiller * spiller_, std::unique_ptr<SpilledFile> && spilled_file, size_t partition_id_)
     : spiller(spiller_)
     , partition_id(partition_id_)
