@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
 #include <common/likely.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -61,7 +64,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
             task.reset();
             break;
         default:
-            __builtin_unreachable();
+            RUNTIME_ASSERT(false, logger, "Unexpected task state {}", magic_enum::enum_name(status));
         }
     }
     tasks.clear();
