@@ -35,14 +35,13 @@ public:
     void flush() override;
 
 private:
-    void encodeThenWriteBlocks();
+    void writeBlocks();
 
 private:
     Int64 batch_send_min_limit;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 
 } // namespace DB

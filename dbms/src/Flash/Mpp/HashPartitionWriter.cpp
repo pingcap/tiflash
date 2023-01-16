@@ -38,14 +38,13 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-    chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        partitionAndEncodeThenWriteBlocks();
+        partitionAndWriteBlocks();
 }
 
 template <class ExchangeWriterPtr>
@@ -62,20 +61,20 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        partitionAndEncodeThenWriteBlocks();
+        partitionAndWriteBlocks();
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
+void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
 {
-    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
+    std::vector<Blocks> partition_blocks;
+    partition_blocks.resize(partition_num);
 
     if (!blocks.empty())
     {
         assert(rows_in_blocks > 0);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
-        Block dest_block = blocks[0].cloneEmpty();
         std::vector<String> partition_key_containers(collators.size());
 
         while (!blocks.empty())
@@ -87,32 +86,31 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
             {
+                Block dest_block = blocks[0].cloneEmpty();
                 dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
                 size_t dest_block_rows = dest_block.rows();
                 if (dest_block_rows > 0)
-                {
-                    chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
-                    chunk_codec_stream->clear();
-                }
+                    partition_blocks[part_id].push_back(std::move(dest_block));
             }
         }
         assert(blocks.empty());
         rows_in_blocks = 0;
     }
 
-    writePackets(tracked_packets);
+    writePartitionBlocks(partition_blocks);
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePackets(TrackedMppDataPacketPtrs & packets)
+void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Blocks> & partition_blocks)
 {
-    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
+    for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        auto & packet = packets[part_id];
-        assert(packet);
-        if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(std::move(packet), part_id);
+        auto & blocks = partition_blocks[part_id];
+        if (likely(blocks.size() > 0))
+        {
+            writer->partitionWrite(blocks, part_id);
+            blocks.clear();
+        }
     }
 }
 
