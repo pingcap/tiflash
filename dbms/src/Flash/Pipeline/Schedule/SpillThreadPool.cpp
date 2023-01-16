@@ -63,6 +63,7 @@ void SpillThreadPool::handleTask(TaskPtr && task)
     while (true)
     {
         status = task->spill();
+        // The spilling task should yield if it takes more than `YIELD_MAX_TIME_SPENT`.
         if (status != ExecTaskStatus::SPILLING || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT)
             break;
     }
