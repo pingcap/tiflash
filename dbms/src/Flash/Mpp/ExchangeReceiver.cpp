@@ -17,6 +17,7 @@
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
+#include <common/logger_useful.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
@@ -30,8 +31,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
-
-#include "common/logger_useful.h"
 
 namespace DB
 {
