@@ -157,6 +157,7 @@ private:
 
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
+using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
 Block mergeBlocks(Blocks && blocks);
 
