@@ -76,9 +76,11 @@ enum class GRPCReceiveQueueRes
 template <typename T>
 class GRPCReceiveQueue
 {
+private:
+    using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<T>>>;
 public:
-    GRPCReceiveQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log_)
-        : recv_queue(queue_size)
+    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, grpc_call * call, const LoggerPtr & log_)
+        : recv_queue(recv_queue_)
         , log(log_)
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
@@ -91,8 +93,8 @@ public:
     }
 
     // For gtest usage.
-    GRPCReceiveQueue(size_t queue_size, GRPCKickFunc func)
-        : recv_queue(queue_size)
+    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, GRPCKickFunc func)
+        : recv_queue(recv_queue_)
         , log(Logger::get())
         , kick_func(func)
     {}
@@ -228,7 +230,7 @@ private:
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
-    MPMCQueue<T> recv_queue;
+    MsgChannelPtr recv_queue;
     std::mutex mu;
     std::map<void *, KickReceiveTag> kick_recv_tags; // Create a KickReceiveTag for each receiver
     const LoggerPtr log;
