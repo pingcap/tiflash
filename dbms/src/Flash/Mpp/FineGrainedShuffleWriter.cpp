@@ -18,6 +18,7 @@
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -116,7 +117,7 @@ template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
     size_t ori_block_mem_size = 0;
-    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
+    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, DB::MPPDataPacketV0);
     if (likely(!blocks.empty()))
     {
         assert(rows_in_blocks > 0);

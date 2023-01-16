@@ -277,7 +277,7 @@ try
                         ASSERT_EQ(CompressionMethodByte(chunk[0]), GetCompressionMethodByte(ToInternalCompressionMethod(mode)));
                     }
 
-                    auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                    auto && result = decoder.decodeAndSquashV1(chunk);
                     if (!result)
                     {
                         result = decoder.flush();
@@ -543,7 +543,7 @@ try
                         ASSERT_EQ(CompressionMethodByte(chunk[0]), GetCompressionMethodByte(ToInternalCompressionMethod(mode)));
                     }
 
-                    auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                    auto && result = decoder.decodeAndSquashV1(chunk);
                     if (!result)
                         continue;
                     decoded_block_rows += result->rows();

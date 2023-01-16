@@ -617,7 +617,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         for (const auto * chunk : recv_msg->chunks)
         {
             assert(!chunk->empty());
-            auto && result = decoder_ptr->decodeAndSquashWithCompression(*chunk);
+            auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
             if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();

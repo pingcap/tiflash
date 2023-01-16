@@ -146,7 +146,7 @@ public:
             }
             else
             {
-                result = decoder.decodeAndSquashWithCompression(str);
+                result = decoder.decodeAndSquashV1(str);
             }
             round_index++;
 

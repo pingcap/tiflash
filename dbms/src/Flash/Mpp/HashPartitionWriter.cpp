@@ -18,6 +18,7 @@
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -72,7 +73,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
-    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
+    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, DB::MPPDataPacketV0);
 
     size_t ori_block_mem_size = 0;
 

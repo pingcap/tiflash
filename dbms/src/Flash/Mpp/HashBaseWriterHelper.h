@@ -39,7 +39,7 @@ void computeHash(size_t rows,
                  std::vector<String> & partition_key_containers,
                  WeakHash32 & hash);
 
-DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num, uint64_t version = 0);
+DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num, uint64_t version);
 
 void scatterColumns(const Block & input_block,
                     const std::vector<Int64> & partition_col_ids,
