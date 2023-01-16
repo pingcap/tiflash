@@ -220,8 +220,6 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
 
 ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool enable_memory_tracker)
 {
-    if (enable_memory_tracker)
-        dag_context->is_mpp_task = false;
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(dag_context);
@@ -236,8 +234,6 @@ Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::D
                                                    bool enable_memory_tracker)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    if (enable_memory_tracker)
-        dag_context.is_mpp_task = false;
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
