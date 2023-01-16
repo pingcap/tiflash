@@ -27,10 +27,10 @@ namespace DB
         toError(getCurrentExceptionMessage(true, true)); \
     }
 
-void Event::addInput(const EventPtr & intput)
+void Event::addInput(const EventPtr & input)
 {
     assert(status == EventStatus::INIT);
-    intput->addOutput(shared_from_this());
+    input->addOutput(shared_from_this());
     ++unfinished_inputs;
 }
 
