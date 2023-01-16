@@ -319,7 +319,7 @@ private:
         if (is_done.compare_exchange_strong(expect, true))
         {
             consumer_state.setMsg(local_err_msg);
-            local_request_handler.prepareToCloseLocalConnection(meet_error, local_err_msg);
+            local_request_handler.writeDone(meet_error, local_err_msg);
         }
     }
 

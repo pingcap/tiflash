@@ -37,7 +37,7 @@ struct LocalRequestHandler
         return channel_writer.write<enable_fine_grained_shuffle>(source_index, tracked_packet);
     }
 
-    void prepareToCloseLocalConnection(bool meet_error, const String & local_err_msg) const
+    void writeDone(bool meet_error, const String & local_err_msg) const
     {
         notify_write_done(meet_error, local_err_msg);
     }
