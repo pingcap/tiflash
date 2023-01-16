@@ -26,7 +26,7 @@ extern "C" {
 
 size_t __pthread_get_minstack(const pthread_attr_t * attr)
 {
-    return 1048576;        /// This is a guess. Don't sure it is correct.
+    return 16384;        /// This is a guess. Don't sure it is correct.
 }
 
 #include <signal.h>
