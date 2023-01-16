@@ -53,9 +53,9 @@ public:
         total_dmfile_skipped_packs = tiflash_scan_context_pb.total_dmfile_skipped_packs();
         total_dmfile_scanned_rows = tiflash_scan_context_pb.total_dmfile_scanned_rows();
         total_dmfile_skipped_rows = tiflash_scan_context_pb.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_load_time_ns = tiflash_scan_context_pb.total_dmfile_rough_set_index_load_time_ns();
-        total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ns();
-        total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ns();
+        total_dmfile_rough_set_index_load_time_ns = tiflash_scan_context_pb.total_dmfile_rough_set_index_load_time_ms() * 1000000;
+        total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ms() * 1000000;
+        total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
     }
 
     tipb::TiFlashScanContext serialize()
@@ -65,9 +65,9 @@ public:
         tiflash_scan_context_pb.set_total_dmfile_skipped_packs(total_dmfile_skipped_packs);
         tiflash_scan_context_pb.set_total_dmfile_scanned_rows(total_dmfile_scanned_rows);
         tiflash_scan_context_pb.set_total_dmfile_skipped_rows(total_dmfile_skipped_rows);
-        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_load_time_ns(total_dmfile_rough_set_index_load_time_ns);
-        tiflash_scan_context_pb.set_total_dmfile_read_time_ns(total_dmfile_read_time_ns);
-        tiflash_scan_context_pb.set_total_create_snapshot_time_ns(total_create_snapshot_time_ns);
+        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_load_time_ms(total_dmfile_rough_set_index_load_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_create_snapshot_time_ms(total_create_snapshot_time_ns / 1000000);
         return tiflash_scan_context_pb;
     }
 
@@ -88,9 +88,9 @@ public:
         total_dmfile_skipped_packs += other.total_dmfile_skipped_packs();
         total_dmfile_scanned_rows += other.total_dmfile_scanned_rows();
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_load_time_ns += other.total_dmfile_rough_set_index_load_time_ns();
-        total_dmfile_read_time_ns += other.total_dmfile_read_time_ns();
-        total_create_snapshot_time_ns += other.total_create_snapshot_time_ns();
+        total_dmfile_rough_set_index_load_time_ns += other.total_dmfile_rough_set_index_load_time_ms() * 1000000;
+        total_dmfile_read_time_ns += other.total_dmfile_read_time_ms() * 1000000;
+        total_create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
     }
 };
 
