@@ -47,6 +47,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     for (auto & task : tasks)
     {
         assert(task);
+        // A quick check to avoid an unnecessary round into `running_tasks` then being scheduled out immediately.
         auto status = task->await();
         switch (status)
         {
