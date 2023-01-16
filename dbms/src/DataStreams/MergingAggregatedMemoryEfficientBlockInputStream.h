@@ -48,7 +48,6 @@ namespace DB
   * Each source can return one of the following block sequences:
   * 1. "unsplitted" block with bucket_num = -1;
   * 2. "splitted" (two_level) blocks with bucket_num from 0 to 255;
-  * In both cases, there may also be a block of "overflows" with bucket_num = -1 and is_overflows = true;
   *
   * We start from the convention that splitted blocks are always passed in the order of bucket_num.
   * That is, if a < b, then the bucket_num = a block goes before bucket_num = b.
@@ -56,7 +55,6 @@ namespace DB
   * - so that you do not need to read the blocks up front, but go all the way up by bucket_num.
   *
   * In this case, not all bucket_num from the range of 0..255 can be present.
-  * The overflow block can be presented in any order relative to other blocks (but it can be only one).
   *
   * It is necessary to combine these sequences of blocks and return the result as a sequence with the same properties.
   * That is, at the output, if there are "splitted" blocks in the sequence, then they should go in the order of bucket_num.
@@ -114,14 +112,12 @@ private:
     bool started = false;
     bool all_read = false;
     std::atomic<bool> has_two_level{false};
-    std::atomic<bool> has_overflows{false};
     int current_bucket_num = -1;
 
     struct Input
     {
         BlockInputStreamPtr stream;
         Block block;
-        Block overflow_block;
         std::vector<Block> splitted_blocks;
         bool is_exhausted = false;
 
