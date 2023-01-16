@@ -29,6 +29,7 @@
 
 #include <magic_enum.hpp>
 #include <memory>
+#include <mutex>
 
 namespace DB
 {
@@ -314,6 +315,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
     , live_connections(source_num)
+    , live_local_connections(0)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -364,11 +366,28 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone() noexcept
+void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
     std::unique_lock lock(mu);
     auto pred = [&] {
         return live_connections == 0;
+    };
+    cv.wait(lock, pred);
+
+    // The meaning of calling of connectionDone by local tunnel is to tell the receiver
+    // to close channels and the local tunnel may still alive after it calls connectionDone.
+    //
+    // In order to ensure the destructions of local tunnels are
+    // after the ExchangeReceiver, we need to wait at here.
+    waitLocalConnectionDone();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone()
+{
+    std::unique_lock lock(mu);
+    auto pred = [&] {
+        return live_local_connections == 0;
     };
     cv.wait(lock, pred);
 }
@@ -395,10 +414,29 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::close() noexcept
+void ExchangeReceiverBase<RPCContext>::close()
 {
     setEndState(ExchangeReceiverState::CLOSED);
     finishAllMsgChannels();
+}
+
+template <typename RPCContext>
+std::vector<typename RPCContext::Request> ExchangeReceiverBase<RPCContext>::makeRequests()
+{
+    std::vector<Request> requests;
+    for (size_t index = 0; index < source_num; ++index)
+        requests.push_back(rpc_context->makeRequest(index));
+    return requests;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::analyzeConnectionTypes(const std::vector<Request> & requests)
+{
+    for (size_t index = 0; index < source_num; ++index)
+    {
+        if (requests[index].is_local)
+            ++live_local_connections;
+    }
 }
 
 template <typename RPCContext>
@@ -407,27 +445,35 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
 
+    std::vector<ExchangeRecvRequest> requests = makeRequests();
+
+    // Do not analyze connection types in the following for-loop
+    // as they are not protected by the lock after threads start.
+    analyzeConnectionTypes(requests);
+
     for (size_t index = 0; index < source_num; ++index)
     {
-        auto req = rpc_context->makeRequest(index);
-        if (rpc_context->supportAsync(req))
-            async_requests.push_back(std::move(req));
-        else if (req.is_local)
+        if (rpc_context->supportAsync(requests[index]))
+            async_requests.push_back(std::move(requests[index]));
+        else if (requests[index].is_local)
         {
-            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            String req_info = fmt::format("tunnel{}+{}", requests[index].send_task_id, requests[index].recv_task_id);
 
             LocalRequestHandler local_request_handler(
                 getMemoryTracker(),
                 [this](bool meet_error, const String & local_err_msg) {
                     this->connectionDone(meet_error, local_err_msg, exc_log);
                 },
+                [this]() {
+                    this->connectionLocalDone();
+                },
                 ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
-            rpc_context->establishMPPConnectionLocal(req, req.source_index, local_request_handler, enable_fine_grained_shuffle_flag);
+            rpc_context->establishMPPConnectionLocal(requests[index], requests[index].source_index, local_request_handler, enable_fine_grained_shuffle_flag);
         }
         else
         {
-            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
+            thread_manager->schedule(true, "Receiver", [this, req = std::move(requests[index])] {
                 if (enable_fine_grained_shuffle_flag)
                     readLoop<true>(req);
                 else
@@ -769,6 +815,15 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
 
     if (meet_error || live_connections == 0)
         finishAllMsgChannels();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
+{
+    std::lock_guard lock(mu);
+    --live_local_connections;
+    if (live_local_connections == 0)
+        cv.notify_all();
 }
 
 template <typename RPCContext>

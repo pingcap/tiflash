@@ -31,6 +31,8 @@
 
 #include <atomic>
 
+#include "Common/Exception.h"
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -265,16 +267,13 @@ public:
 
     ~LocalTunnelSender() override
     {
-        closeLocalTunnel(false, "");
+        RUNTIME_ASSERT(is_done, "Local tunnel is destructed before called by cancel() or finish()");
+        closeLocalConnection();
     }
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
         if (unlikely(checkPacketErr(data)))
-            return false;
-
-        std::lock_guard lock(mu);
-        if (unlikely(is_done))
             return false;
 
         // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
@@ -287,12 +286,12 @@ public:
 
     void cancelWith(const String & reason) override
     {
-        closeLocalTunnel(true, reason);
+        prepareToCloseLocalTunnel(true, reason);
     }
 
     bool finish() override
     {
-        closeLocalTunnel(false, "");
+        prepareToCloseLocalTunnel(false, "");
         return true;
     }
 
@@ -301,26 +300,36 @@ private:
     {
         if (packet->hasError())
         {
-            closeLocalTunnel(true, packet->error());
+            prepareToCloseLocalTunnel(true, packet->error());
             return true;
         }
         return false;
     }
 
-    void closeLocalTunnel(bool meet_error, const String & local_err_msg)
+    // Need to tell receiver that the local tunnel will be closed and the receiver should
+    // close channels otherwise the dead lock may happen.
+    void prepareToCloseLocalTunnel(bool meet_error, const String & local_err_msg)
     {
-        std::lock_guard lock(mu);
-        if (!is_done)
+        bool expect = false;
+        if (is_done.compare_exchange_strong(expect, true))
         {
-            is_done = true;
             consumer_state.setMsg(local_err_msg);
-            local_request_handler.connectionLocalDone(meet_error, local_err_msg);
+            local_request_handler.prepareToCloseLocalConnection(meet_error, local_err_msg);
         }
+    }
+
+    // It should only be called in the destructor.
+    //
+    // This function is used to hold the destruction of receiver so that the push operation
+    // of local tunnel is always valid(valid means pushing data to an alive reveiver).
+    void closeLocalConnection() const
+    {
+        local_request_handler.closeLocalConnection();
     }
 
     size_t source_index;
     LocalRequestHandler local_request_handler;
-    bool is_done;
+    std::atomic_bool is_done;
     std::mutex mu;
 };
 

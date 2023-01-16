@@ -102,7 +102,7 @@ public:
     ~ExchangeReceiverBase();
 
     void cancel();
-    void close() noexcept;
+    void close();
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
@@ -146,7 +146,10 @@ private:
         const String & local_err_msg,
         const LoggerPtr & log);
 
-    void waitAllConnectionDone() noexcept;
+    void connectionLocalDone();
+
+    void waitAllConnectionDone();
+    void waitLocalConnectionDone();
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
@@ -166,6 +169,9 @@ private:
         return !disaggregated_dispatch_reqs.empty();
     }
 
+    std::vector<typename RPCContext::Request> makeRequests();
+    void analyzeConnectionTypes(const std::vector<Request> & requests);
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -184,6 +190,7 @@ private:
     std::condition_variable cv;
     /// should lock `mu` when visit these members
     Int32 live_connections;
+    Int32 live_local_connections;
     ExchangeReceiverState state;
     String err_msg;
 
