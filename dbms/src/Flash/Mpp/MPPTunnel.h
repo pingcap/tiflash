@@ -310,7 +310,7 @@ private:
     }
 
     // Need to tell receiver that the local tunnel will be closed and the receiver should
-    // close channels otherwise the dead lock may happen.
+    // close channels otherwise the MPPTask may hang.
     void prepareToCloseLocalTunnel(bool meet_error, const String & local_err_msg)
     {
         bool expect = false;
