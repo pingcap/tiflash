@@ -18,6 +18,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/Exception.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
@@ -31,7 +32,6 @@
 
 #include <atomic>
 
-#include "Common/Exception.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
