@@ -44,17 +44,25 @@ public:
         : tag(tag_)
     {}
 
-    void * getTag() const { return tag; }
-    void setTag(void * tag_) { tag = tag_; }
+    void * getTag() const {
+        std::lock_guard lock(mu);
+        return tag;
+    }
+    void setTag(void * tag_) {
+        std::lock_guard lock(mu);
+        tag = tag_;
+    }
 
     bool FinalizeResult(void ** tag, bool * /*status*/) override
     {
+        std::lock_guard lock(mu);
         *tag = this->tag;
         this->tag = nullptr;
         return true;
     }
 
 private:
+    std::mutex mu;
     void * tag;
 };
 
