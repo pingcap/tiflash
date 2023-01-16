@@ -27,28 +27,28 @@ namespace DB
         toError(getCurrentExceptionMessage(true, true)); \
     }
 
-void Event::addDependency(const EventPtr & dependency)
+void Event::addInput(const EventPtr & intput)
 {
     assert(status == EventStatus::INIT);
-    dependency->addDependent(shared_from_this());
-    ++unfinished_dependencies;
+    intput->addOutput(shared_from_this());
+    ++unfinished_inputs;
 }
 
-bool Event::isNonDependent()
+bool Event::withoutInput()
 {
     assert(status == EventStatus::INIT);
-    return 0 == unfinished_dependencies;
+    return 0 == unfinished_inputs;
 }
 
-void Event::addDependent(const EventPtr & dependent)
+void Event::addOutput(const EventPtr & output)
 {
     assert(status == EventStatus::INIT);
-    dependents.push_back(dependent);
+    outputs.push_back(output);
 }
 
-void Event::onDependencyFinish()
+void Event::onInputFinish()
 {
-    auto cur_value = unfinished_dependencies.fetch_sub(1);
+    auto cur_value = unfinished_inputs.fetch_sub(1);
     assert(cur_value >= 1);
     if (1 == cur_value)
         schedule();
@@ -57,6 +57,7 @@ void Event::onDependencyFinish()
 void Event::schedule() noexcept
 {
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
+    assert(0 == unfinished_inputs);
     exec_status.onEventSchedule();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     // if err throw here, we should call finish directly.
@@ -80,23 +81,23 @@ void Event::finish() noexcept
         finishImpl();
     }
     CATCH
-    // If query has already been cancelled, it will not trigger dependents.
+    // If query has already been cancelled, it will not trigger outputs.
     if (likely(!isCancelled()))
     {
-        // finished processing the event, now we can schedule events that depend on this event.
-        for (auto & dependent : dependents)
+        // finished processing the event, now we can schedule output events.
+        for (auto & output : outputs)
         {
-            assert(dependent);
-            dependent->onDependencyFinish();
-            dependent.reset();
+            assert(output);
+            output->onInputFinish();
+            output.reset();
         }
     }
-    // Release all dependents, so that the event that did not call `finishImpl`
+    // Release all output, so that the event that did not call `finishImpl`
     // because of `isCancelled()` will be destructured before the end of `exec_status.wait`.
-    dependents.clear();
+    outputs.clear();
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
     // we have to call `exec_status.onEventFinish()` here,
-    // since `exec_status.onEventSchedule()` will have been called by dependents.
+    // since `exec_status.onEventSchedule()` will have been called by outputs.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
     exec_status.onEventFinish();
 }

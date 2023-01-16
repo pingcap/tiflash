@@ -44,7 +44,7 @@ public:
     {}
     virtual ~Event() = default;
 
-    void addDependency(const EventPtr & dependency);
+    void addInput(const EventPtr & input);
 
     // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
     // so these functions must be noexcept.
@@ -52,7 +52,7 @@ public:
 
     void onTaskFinish() noexcept;
 
-    bool isNonDependent();
+    bool withoutInput();
 
     bool isCancelled()
     {
@@ -76,9 +76,9 @@ protected:
 private:
     void finish() noexcept;
 
-    void addDependent(const EventPtr & dependent);
+    void addOutput(const EventPtr & output);
 
-    void onDependencyFinish();
+    void onInputFinish();
 
     void switchStatus(EventStatus from, EventStatus to);
 
@@ -88,9 +88,9 @@ protected:
     MemoryTrackerPtr mem_tracker;
 
 private:
-    Events dependents;
+    Events outputs;
 
-    std::atomic_int32_t unfinished_dependencies{0};
+    std::atomic_int32_t unfinished_inputs{0};
 
     std::atomic_int32_t unfinished_tasks{0};
 

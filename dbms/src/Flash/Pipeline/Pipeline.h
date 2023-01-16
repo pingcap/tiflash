@@ -49,11 +49,11 @@ public:
 
     void addPlanNode(const PhysicalPlanNodePtr & plan_node);
 
-    void addDependency(const PipelinePtr & dependency);
+    void addChild(const PipelinePtr & child);
 
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
-    // only used for test.
+    // only used for test to get the result blocks.
     void addGetResultSink(ResultHandler result_handler);
 
     PipelineExecGroup toExecGroup(Context & context, size_t concurrency);
@@ -73,6 +73,6 @@ private:
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
-    std::vector<PipelinePtr> dependencies;
+    std::vector<PipelinePtr> children;
 };
 } // namespace DB

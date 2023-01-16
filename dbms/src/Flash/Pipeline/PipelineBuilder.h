@@ -33,7 +33,8 @@ private:
 };
 using PipelineIdGeneratorPtr = std::shared_ptr<PipelineIdGenerator>;
 
-// PipelineBuilder is used to build pipelines, and PipelineBreaker is used to build dependencies between pipelines in the process.
+// PipelineBuilder is used to build pipelines,
+// and PipelineBreaker is used to build the tree struct relationship between pipelines.
 class PipelineBuilder
 {
 public:
@@ -47,15 +48,16 @@ public:
 private:
     struct PipelineBreaker
     {
-        PipelineBreaker(const PipelinePtr & dependent_, const PhysicalPlanNodePtr & breaker_node_)
-            : dependent(dependent_)
+        PipelineBreaker(const PipelinePtr & pipeline_, const PhysicalPlanNodePtr & breaker_node_)
+            : pipeline(pipeline_)
             , breaker_node(breaker_node_)
         {
-            assert(dependent);
+            assert(pipeline);
             assert(breaker_node);
         }
 
-        const PipelinePtr dependent;
+        // the broken pipeline.
+        const PipelinePtr pipeline;
         const PhysicalPlanNodePtr breaker_node;
     };
 
@@ -72,7 +74,7 @@ public:
         pipeline->addPlanNode(node);
     }
 
-    /// Break the current pipeline and return a new builder for the broke pipeline.
+    /// Break the current pipeline and return a new builder for the broken pipeline.
     PipelineBuilder breakPipeline(const PhysicalPlanNodePtr & breaker_node)
     {
         return PipelineBuilder(id_generator, PipelineBreaker{pipeline, breaker_node});
@@ -85,8 +87,8 @@ public:
         {
             // First add the breaker node as the last node in this pipeline.
             pipeline->addPlanNode(pipeline_breaker->breaker_node);
-            // Then set this pipeline as a dependency of the dependent pipeline.
-            pipeline_breaker->dependent->addDependency(pipeline);
+            // Then set this pipeline as a child of the broken pipeline.
+            pipeline_breaker->pipeline->addChild(pipeline);
             pipeline_breaker.reset();
         }
         return pipeline;

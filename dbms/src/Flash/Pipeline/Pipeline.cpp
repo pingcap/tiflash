@@ -39,10 +39,10 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
     plan_nodes.push_back(plan_node);
 }
 
-void Pipeline::addDependency(const PipelinePtr & dependency)
+void Pipeline::addChild(const PipelinePtr & child)
 {
-    assert(dependency);
-    dependencies.push_back(dependency);
+    assert(child);
+    children.push_back(child);
 }
 
 void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
@@ -60,11 +60,11 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
 void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 {
     toSelfString(buffer, level);
-    if (!dependencies.empty())
+    if (!children.empty())
         buffer.append("\n");
     ++level;
-    for (const auto & dependency : dependencies)
-        dependency->toTreeString(buffer, level);
+    for (const auto & child : children)
+        child->toTreeString(buffer, level);
 }
 
 void Pipeline::addGetResultSink(ResultHandler result_handler)
@@ -106,11 +106,11 @@ EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, s
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 
     auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, context, shared_from_this(), concurrency);
-    for (const auto & dependency : dependencies)
+    for (const auto & child : children)
     {
-        auto dependency_event = dependency->toEvent(status, context, concurrency, all_events);
-        assert(dependency_event);
-        plain_pipeline_event->addDependency(dependency_event);
+        auto in_event = child->toEvent(status, context, concurrency, all_events);
+        assert(in_event);
+        plain_pipeline_event->addInput(in_event);
     }
     all_events.push_back(plain_pipeline_event);
     return plain_pipeline_event;

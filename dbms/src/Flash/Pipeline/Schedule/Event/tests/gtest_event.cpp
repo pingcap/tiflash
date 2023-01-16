@@ -264,7 +264,7 @@ public:
         Events non_dependent_events;
         for (const auto & event : events)
         {
-            if (event->isNonDependent())
+            if (event->withoutInput())
                 non_dependent_events.push_back(event);
         }
         for (const auto & event : non_dependent_events)
@@ -322,7 +322,7 @@ try
                 {
                     auto event = std::make_shared<BaseEvent>(exec_status, counter);
                     if (!events.empty())
-                        event->addDependency(events.back());
+                        event->addInput(events.back());
                     events.push_back(event);
                 }
                 all_events.insert(all_events.end(), events.begin(), events.end());
@@ -377,7 +377,7 @@ try
                 events.push_back(wait_cancel_event);
                 // Expected to_err_event will not be triggered.
                 auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
-                to_err_event->addDependency(wait_cancel_event);
+                to_err_event->addInput(wait_cancel_event);
                 events.push_back(to_err_event);
             }
             schedule(events, with_tasks ? nullptr : thread_manager);
@@ -409,7 +409,7 @@ try
         }
         {
             auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
-            assert(to_err_event->isNonDependent());
+            assert(to_err_event->withoutInput());
             to_err_event->schedule();
         }
         wait(exec_status);
@@ -448,10 +448,12 @@ try
     auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
     events.push_back(run_event);
     auto crash_event = std::make_shared<CrashEvent>(exec_status);
+    crash_event->addInput(run_event);
+    events.push_back(crash_event);
+
     for (size_t i = 0; i < 100; ++i)
         events.push_back(std::make_shared<WaitCancelEvent>(exec_status, /*with_tasks=*/true));
-    events.push_back(crash_event);
-    crash_event->addDependency(run_event);
+
     schedule(events);
     wait(exec_status);
     auto err_msg = exec_status.getErrMsg();
