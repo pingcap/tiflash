@@ -42,14 +42,14 @@ struct LocalRequestHandler
         notify_receiver_prepare(meet_error, local_err_msg);
     }
 
-    void closeLocalConnection() const
+    void closeConnection() const
     {
         notify_receiver_close();
     }
 
     MemoryTracker * recv_mem_tracker;
-    std::function<void(bool, const String &)> notify_receiver_prepare;
-    std::function<void()> notify_receiver_close;
+    std::function<void(bool, const String &)> notify_write_done;
+    std::function<void()> notify_close;
     ReceiverChannelWriter channel_writer;
 };
 } // namespace DB
