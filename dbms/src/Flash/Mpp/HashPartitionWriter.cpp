@@ -89,8 +89,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
             {
                 Block dest_block = header.cloneEmpty();
                 dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
-                size_t dest_block_rows = dest_block.rows();
-                if (dest_block_rows > 0)
+                if (dest_block.rows() > 0)
                     partition_blocks[part_id].push_back(std::move(dest_block));
             }
         }
@@ -107,7 +106,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Bl
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
         auto & blocks = partition_blocks[part_id];
-        if (likely(blocks.size() > 0))
+        if (likely(!blocks.empty()))
         {
             writer->partitionWrite(blocks, part_id);
             blocks.clear();
