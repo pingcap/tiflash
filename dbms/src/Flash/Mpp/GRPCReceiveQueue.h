@@ -190,9 +190,9 @@ private:
     // It will be kick to Completion Queue at an appropriate time.
     void holdTheTagNoLock(void * tag)
     {
-        auto iter = kick_recv_tags.find(tag);
-        if (iter == kick_recv_tags.end())
-            kick_recv_tags[tag] = KickReceiveTag(tag);
+        auto iter = kick_recv_tags_map.find(tag);
+        if (iter == kick_recv_tags_map.end())
+            kick_recv_tags_map.emplace(tag, KickReceiveTag(tag));
         else
             iter->second.setTag(tag);
     }
@@ -201,7 +201,7 @@ private:
     void kickCompletionQueue()
     {
         std::lock_guard lock(mu);
-        if (kick_recv_tags.empty())
+        if (kick_recv_tags_map.empty())
             return;
 
         putTagIntoCompletionQueueNoLock();
@@ -210,7 +210,7 @@ private:
     void handleTheRemainingTags()
     {
         std::lock_guard lock(mu);
-        if (kick_recv_tags.empty())
+        if (kick_recv_tags_map.empty())
             return;
 
         putTagIntoCompletionQueueNoLock(true);
@@ -218,7 +218,7 @@ private:
 
     void putTagIntoCompletionQueueNoLock(bool is_all = false)
     {
-        for (auto & iter : kick_recv_tags)
+        for (auto & iter : kick_recv_tags_map)
         {
             if (iter.second.getTag() == nullptr)
                 continue;
@@ -240,7 +240,7 @@ private:
 
     MsgChannelPtr recv_queue;
     std::mutex mu;
-    std::map<void *, KickReceiveTag> kick_recv_tags; // Create a KickReceiveTag for each receiver
+    std::map<void *, KickReceiveTag> kick_recv_tags_map; // Create a KickReceiveTag for each receiver
     const LoggerPtr log;
     GRPCKickFunc kick_func;
 };
