@@ -22,12 +22,12 @@ struct LocalRequestHandler
 {
     LocalRequestHandler(
         MemoryTracker * recv_mem_tracker_,
-        std::function<void(bool, const String &)> && notify_receiver_,
-        std::function<void()> && notify_receiver_close_,
+        std::function<void(bool, const String &)> && notify_write_done_,
+        std::function<void()> && notify_close_,
         ReceiverChannelWriter && channel_writer_)
         : recv_mem_tracker(recv_mem_tracker_)
-        , notify_receiver_prepare(std::move(notify_receiver_))
-        , notify_receiver_close(std::move(notify_receiver_close_))
+        , notify_write_done(std::move(notify_write_done_))
+        , notify_close(std::move(notify_close_))
         , channel_writer(std::move(channel_writer_))
     {}
 
@@ -39,12 +39,12 @@ struct LocalRequestHandler
 
     void prepareToCloseLocalConnection(bool meet_error, const String & local_err_msg) const
     {
-        notify_receiver_prepare(meet_error, local_err_msg);
+        notify_write_done(meet_error, local_err_msg);
     }
 
     void closeConnection() const
     {
-        notify_receiver_close();
+        notify_close();
     }
 
     MemoryTracker * recv_mem_tracker;

@@ -329,7 +329,7 @@ private:
     // of local tunnel is always valid(valid means pushing data to an alive reveiver).
     void closeLocalConnection() const
     {
-        local_request_handler.closeLocalConnection();
+        local_request_handler.closeConnection();
     }
 
     size_t source_index;
