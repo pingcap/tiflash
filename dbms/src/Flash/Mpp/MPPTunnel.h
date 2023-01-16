@@ -264,19 +264,14 @@ public:
         , source_index(source_index_)
         , local_request_handler(local_request_handler_)
         , is_done(false)
-        , log(log_)
     {
         add_local_conn_num();
-        LOG_INFO(log, "TunnelCons");
     }
 
     ~LocalTunnelSender() override
     {
-        LOG_INFO(log, "TunnelDes");
         RUNTIME_ASSERT(is_done, "Local tunnel is destructed before called by cancel() or finish()");
-        LOG_INFO(log, "TDes1");
         closeLocalConnection();
-        LOG_INFO(log, "TDes2");
     }
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -339,7 +334,6 @@ private:
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
     std::mutex mu;
-    const LoggerPtr & log;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
