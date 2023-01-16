@@ -108,9 +108,9 @@ EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, s
     auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, context, shared_from_this(), concurrency);
     for (const auto & child : children)
     {
-        auto in_event = child->toEvent(status, context, concurrency, all_events);
-        assert(in_event);
-        plain_pipeline_event->addInput(in_event);
+        auto input = child->toEvent(status, context, concurrency, all_events);
+        assert(input);
+        plain_pipeline_event->addInput(input);
     }
     all_events.push_back(plain_pipeline_event);
     return plain_pipeline_event;

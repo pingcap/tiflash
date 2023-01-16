@@ -261,13 +261,13 @@ class EventTestRunner : public ::testing::Test
 public:
     void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
-        Events non_dependent_events;
+        Events without_input_events;
         for (const auto & event : events)
         {
             if (event->withoutInput())
-                non_dependent_events.push_back(event);
+                without_input_events.push_back(event);
         }
-        for (const auto & event : non_dependent_events)
+        for (const auto & event : without_input_events)
         {
             if (thread_manager)
                 thread_manager->schedule(false, "event", [event]() { event->schedule(); });

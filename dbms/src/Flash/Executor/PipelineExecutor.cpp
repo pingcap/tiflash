@@ -40,13 +40,13 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
 
     {
         auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-        Events non_input_events;
+        Events without_input_events;
         for (const auto & event : events)
         {
             if (event->withoutInput())
-                non_input_events.push_back(event);
+                without_input_events.push_back(event);
         }
-        for (const auto & event : non_input_events)
+        for (const auto & event : without_input_events)
             event->schedule();
     }
 
