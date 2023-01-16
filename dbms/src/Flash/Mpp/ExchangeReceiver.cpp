@@ -31,6 +31,8 @@
 #include <memory>
 #include <mutex>
 
+#include "common/logger_useful.h"
+
 namespace DB
 {
 namespace
@@ -314,7 +316,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
-    , live_connections(source_num)
+    , live_connections(0)
     , live_local_connections(0)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
@@ -352,11 +354,16 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     bool wait_all_connection_done = false;
     try
     {
+        LOG_INFO(exc_log, "ReceiverDes");
+        LOG_INFO(exc_log, "here1");
         close();
+        LOG_INFO(exc_log, "here2");
         waitAllConnectionDone();
+        LOG_INFO(exc_log, "here3");
         wait_all_connection_done = true;
         thread_manager->wait();
         ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
+        LOG_INFO(exc_log, "ReceiverDesOver");
     }
     catch (...)
     {
@@ -379,13 +386,12 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     //
     // In order to ensure the destructions of local tunnels are
     // after the ExchangeReceiver, we need to wait at here.
-    waitLocalConnectionDone();
+    waitLocalConnectionDone(lock);
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone()
+void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone(std::unique_lock<std::mutex> & lock)
 {
-    std::unique_lock lock(mu);
     auto pred = [&] {
         return live_local_connections == 0;
     };
@@ -421,22 +427,25 @@ void ExchangeReceiverBase<RPCContext>::close()
 }
 
 template <typename RPCContext>
-std::vector<typename RPCContext::Request> ExchangeReceiverBase<RPCContext>::makeRequests()
+void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
-    std::vector<Request> requests;
-    for (size_t index = 0; index < source_num; ++index)
-        requests.push_back(rpc_context->makeRequest(index));
-    return requests;
+    std::lock_guard lock(mu);
+    ++live_connections;
+    ++live_local_connections;
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::analyzeConnectionTypes(const std::vector<Request> & requests)
+void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
 {
-    for (size_t index = 0; index < source_num; ++index)
-    {
-        if (requests[index].is_local)
-            ++live_local_connections;
-    }
+    std::lock_guard lock(mu);
+    ++live_connections;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum()
+{
+    std::lock_guard lock(mu);
+    ++live_connections;
 }
 
 template <typename RPCContext>
@@ -445,19 +454,14 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
 
-    std::vector<ExchangeRecvRequest> requests = makeRequests();
-
-    // Do not analyze connection types in the following for-loop
-    // as they are not protected by the lock after threads start.
-    analyzeConnectionTypes(requests);
-
     for (size_t index = 0; index < source_num; ++index)
     {
-        if (rpc_context->supportAsync(requests[index]))
-            async_requests.push_back(std::move(requests[index]));
-        else if (requests[index].is_local)
+        auto req = rpc_context->makeRequest(index);
+        if (rpc_context->supportAsync(req))
+            async_requests.push_back(std::move(req));
+        else if (req.is_local)
         {
-            String req_info = fmt::format("tunnel{}+{}", requests[index].send_task_id, requests[index].recv_task_id);
+            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
             LocalRequestHandler local_request_handler(
                 getMemoryTracker(),
@@ -469,16 +473,24 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 },
                 ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
-            rpc_context->establishMPPConnectionLocal(requests[index], requests[index].source_index, local_request_handler, enable_fine_grained_shuffle_flag);
+            rpc_context->establishMPPConnectionLocal(
+                req,
+                req.source_index,
+                local_request_handler,
+                enable_fine_grained_shuffle_flag,
+                [this]() {
+                    this->addLocalConnectionNum();
+                });
         }
         else
         {
-            thread_manager->schedule(true, "Receiver", [this, req = std::move(requests[index])] {
+            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
                 if (enable_fine_grained_shuffle_flag)
                     readLoop<true>(req);
                 else
                     readLoop<false>(req);
             });
+
             ++thread_count;
         }
     }
@@ -492,6 +504,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             else
                 reactor<false>(async_requests);
         });
+
         ++thread_count;
     }
 }
@@ -501,6 +514,8 @@ template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
     using AsyncHandler = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
+
+    addAsyncConnectionNum();
 
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Increment();
     SCOPE_EXIT({
@@ -542,6 +557,8 @@ template <typename RPCContext>
 template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
+    addSyncConnectionNum();
+
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Decrement();

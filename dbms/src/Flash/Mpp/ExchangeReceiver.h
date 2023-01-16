@@ -149,7 +149,7 @@ private:
     void connectionLocalDone();
 
     void waitAllConnectionDone();
-    void waitLocalConnectionDone();
+    void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
@@ -162,15 +162,15 @@ private:
 
 private:
     void prepareMsgChannels();
+    void addLocalConnectionNum();
+    void addSyncConnectionNum();
+    void addAsyncConnectionNum();
 
     bool isReceiverForTiFlashStorage()
     {
         // If not empty, need to send MPPTask to tiflash_storage.
         return !disaggregated_dispatch_reqs.empty();
     }
-
-    std::vector<typename RPCContext::Request> makeRequests();
-    void analyzeConnectionTypes(const std::vector<Request> & requests);
 
     std::shared_ptr<RPCContext> rpc_context;
 

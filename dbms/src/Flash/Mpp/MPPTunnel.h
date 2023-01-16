@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/Exception.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
@@ -258,17 +258,25 @@ public:
         LocalRequestHandler & local_request_handler_,
         const LoggerPtr & log_,
         MemoryTrackerPtr & memory_tracker_,
-        const String & tunnel_id_)
+        const String & tunnel_id_,
+        std::function<void()> && add_local_conn_num)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, nullptr)
         , source_index(source_index_)
         , local_request_handler(local_request_handler_)
         , is_done(false)
-    {}
+        , log(log_)
+    {
+        add_local_conn_num();
+        LOG_INFO(log, "TunnelCons");
+    }
 
     ~LocalTunnelSender() override
     {
+        LOG_INFO(log, "TunnelDes");
         RUNTIME_ASSERT(is_done, "Local tunnel is destructed before called by cancel() or finish()");
+        LOG_INFO(log, "TDes1");
         closeLocalConnection();
+        LOG_INFO(log, "TDes2");
     }
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -331,6 +339,7 @@ private:
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
     std::mutex mu;
+    const LoggerPtr & log;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -405,7 +414,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained, std::function<void()> && add_local_conn_num);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
