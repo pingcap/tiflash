@@ -30,9 +30,11 @@ class Block;
   */
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<bool> * is_cancelled = nullptr);
 
+/// max_return_size == 0 mean read all data
+std::vector<Block> readData(IBlockInputStream & from, size_t max_return_size, const std::function<bool()> & is_cancelled);
+
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled);
 
-void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled,
-              const std::function<void(const Block & block)> & progress);
+void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled, const std::function<void(const Block & block)> & progress);
 
-}
+} // namespace DB
