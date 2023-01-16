@@ -36,7 +36,6 @@ public:
         const BlockInputStreams & inputs,
         const BlockInputStreams & additional_inputs_at_end,
         const Aggregator::Params & params_,
-        const FileProviderPtr & file_provider_,
         bool final_,
         size_t max_threads_,
         size_t temporary_data_merge_threads_,
@@ -68,7 +67,6 @@ private:
 
     Aggregator::Params params;
     Aggregator aggregator;
-    FileProviderPtr file_provider;
     bool final;
     size_t max_threads;
     size_t temporary_data_merge_threads;

@@ -82,6 +82,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
+    global_context->setTemporaryPath(getTemporaryPath());
 
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);

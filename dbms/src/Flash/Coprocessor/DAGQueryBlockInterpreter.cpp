@@ -400,6 +400,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     Block before_agg_header = pipeline.firstStream()->getHeader();
 
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -407,7 +408,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
         key_names,
         collators,
         aggregate_descriptions,
-        is_final_agg);
+        is_final_agg,
+        spill_config);
 
     if (enable_fine_grained_shuffle)
     {
@@ -416,7 +418,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
                 params,
-                context.getFileProvider(),
                 true,
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
@@ -431,7 +432,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             pipeline.streams,
             BlockInputStreams{},
             params,
-            context.getFileProvider(),
             true,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
@@ -454,7 +454,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
             params,
-            context.getFileProvider(),
             true,
             log->identifier());
         recordProfileStreams(pipeline, query_block.aggregation_name);

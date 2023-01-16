@@ -213,11 +213,26 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
 {
     start();
 
+    if (Block block = popBlocksListFront(current_result))
+    {
+        return block;
+    }
+
     if (!parallel_merge_data)
     {
-        if (BlocksToMerge blocks_to_merge = getNextBlocksToMerge())
-            return aggregator.mergeBlocks(*blocks_to_merge, final);
-        return {};
+        BlocksToMerge blocks_to_merge = getNextBlocksToMerge();
+        if (blocks_to_merge && !blocks_to_merge->empty())
+        {
+            current_result = aggregator.mergeBlocks(*blocks_to_merge, final);
+            auto block = popBlocksListFront(current_result);
+            RUNTIME_CHECK_MSG(block, "Block must be non-empty");
+            return block;
+        }
+        else
+        {
+            /// if all the buckets are done, return empty block
+            return {};
+        }
     }
     else
     {
@@ -249,13 +264,15 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
             {
                 auto it = parallel_merge_data->merged_blocks.begin();
 
-                if (it->second)
+                if (!it->second.empty())
                 {
-                    res.swap(it->second);
+                    current_result.swap(it->second);
                     parallel_merge_data->merged_blocks.erase(it);
 
                     lock.unlock();
                     parallel_merge_data->have_space.notify_one(); /// We consumed block. Merging thread may merge next block for us.
+                    res = popBlocksListFront(current_result);
+                    RUNTIME_CHECK_MSG(res, "Block must be non-empty");
                     break;
                 }
             }
@@ -354,7 +371,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                     if (parallel_merge_data->finish)
                         break;
 
-                    /** Place empty block. It is promise to do merge and fill it.
+                    /** Place empty blockslist. It is promise to do merge and fill it.
                       * Main thread knows, that there will be result for 'output_order' place.
                       * Main thread must return results exactly in 'output_order', so that is important.
                       */
@@ -363,14 +380,13 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
             }
 
             /// At this point, several merge threads may work in parallel.
-            Block res = aggregator.mergeBlocks(*blocks_to_merge, final);
+            BlocksList res = aggregator.mergeBlocks(*blocks_to_merge, final);
 
             {
                 std::lock_guard lock(parallel_merge_data->merged_blocks_mutex);
 
                 if (parallel_merge_data->finish)
                     break;
-
                 parallel_merge_data->merged_blocks[output_order] = res;
             }
 

@@ -26,16 +26,35 @@ using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 class SpillHandler;
 
+struct SpillDetails
+{
+    size_t rows;
+    size_t data_bytes_uncompressed;
+    size_t data_bytes_compressed;
+    SpillDetails() = default;
+    SpillDetails(size_t rows_, size_t data_bytes_uncompressed_, size_t data_bytes_compressed_)
+        : rows(rows_)
+        , data_bytes_uncompressed(data_bytes_uncompressed_)
+        , data_bytes_compressed(data_bytes_compressed_)
+    {}
+    void merge(const SpillDetails & other)
+    {
+        rows += other.rows;
+        data_bytes_uncompressed += other.data_bytes_uncompressed;
+        data_bytes_compressed += other.data_bytes_compressed;
+    }
+};
 class SpilledFile : public Poco::File
 {
 public:
     SpilledFile(const String & file_name, const FileProviderPtr & file_provider_);
     ~SpilledFile() override;
-    void addSpilledDataSize(size_t added_size) { spilled_data_size += added_size; }
-    size_t getSpilledDataSize() const { return spilled_data_size; }
+    size_t getSpilledRows() const { return details.rows; }
+    const SpillDetails & getSpillDetails() const { return details; }
+    void updateSpillDetails(const SpillDetails & other_details) { details.merge(other_details); }
 
 private:
-    size_t spilled_data_size = 0;
+    SpillDetails details;
     FileProviderPtr file_provider;
 };
 
@@ -48,13 +67,13 @@ struct SpilledFiles
 class Spiller
 {
 public:
-    Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger);
+    Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1);
     void spillBlocks(const Blocks & blocks, size_t partition_id);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
     void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, size_t partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
     BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size = 0);
-    size_t spilledBlockDataSize(size_t partition_id);
+    size_t spilledRows(size_t partition_id);
     void finishSpill() { spill_finished = true; };
     bool hasSpilledData() { return has_spilled_data; };
 
@@ -73,6 +92,7 @@ private:
     std::atomic<bool> has_spilled_data{false};
     static std::atomic<Int64> tmp_file_index;
     std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
+    Int64 spill_version = 1;
 };
 
 } // namespace DB

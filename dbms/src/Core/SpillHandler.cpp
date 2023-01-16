@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
 
 namespace DB
@@ -35,22 +36,23 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
     RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
     try
     {
+        Stopwatch watch;
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", blocks.size(), current_spill_file_name);
         size_t spilled_data_size = 0;
         if (unlikely(writer == nullptr))
         {
-            writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, blocks[0].cloneEmpty());
-            writer->out->writePrefix();
+            writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, blocks[0].cloneEmpty(), spiller->spill_version);
         }
         for (const auto & block : blocks)
         {
             auto block_bytes_size = block.bytes();
-            writer->out->write(block);
-            spilled_files[current_spilled_file_index]->addSpilledDataSize(block_bytes_size);
+            writer->write(block);
             spilled_data_size += block_bytes_size;
         }
-        LOG_INFO(spiller->logger, "Finish Spilling data into temporary file {}, spilled data size: {}", current_spill_file_name, spilled_data_size);
+        double cost = watch.elapsedSeconds();
+        time_cost += cost;
+        LOG_INFO(spiller->logger, "Finish Spilling data into temporary file {}, spilled data size: {}, time cost: {:.3f} sec.", current_spill_file_name, spilled_data_size, cost);
         RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;
@@ -69,7 +71,28 @@ void SpillHandler::finish()
 {
     if (likely(writer != nullptr))
     {
-        writer->out->writeSuffix();
+        auto spill_details = writer->finishWrite();
+        spilled_files[current_spilled_file_index]->updateSpillDetails(spill_details);
+
+        auto gen_spill_detail_info = [&]() {
+            SpillDetails details{0, 0, 0};
+            for (Int64 i = 0; i <= current_spilled_file_index; i++)
+                details.merge(spilled_files[i]->getSpillDetails());
+            return fmt::format("Spill {} rows in {:.3f} sec,"
+                               " {:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
+                               "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
+                               details.rows,
+                               time_cost,
+                               (details.data_bytes_uncompressed / 1048576.0),
+                               (details.data_bytes_compressed / 1048576.0),
+                               (details.data_bytes_uncompressed / static_cast<double>(details.rows)),
+                               (details.data_bytes_compressed / static_cast<double>(details.rows)),
+                               (details.data_bytes_uncompressed / static_cast<double>(details.data_bytes_compressed)),
+                               (details.rows / time_cost),
+                               (details.data_bytes_uncompressed / time_cost / 1048576.0),
+                               (details.data_bytes_compressed / time_cost / 1048576.0));
+        };
+        LOG_DEBUG(spiller->logger, gen_spill_detail_info());
         std::unique_lock lock(spiller->spilled_files[partition_id]->spilled_files_mutex);
         for (auto & spilled_file : spilled_files)
             spiller->spilled_files[partition_id]->spilled_files.push_back(std::move(spilled_file));

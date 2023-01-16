@@ -113,6 +113,7 @@ private:
     bool all_read = false;
     std::atomic<bool> has_two_level{false};
     int current_bucket_num = -1;
+    std::list<Block> current_result;
 
     struct Input
     {
@@ -154,7 +155,7 @@ private:
         /// If the value is an empty block, you need to wait for its merge.
         /// (This means the promise that there will be data here, which is important because the data should be given out
         /// in the order of the key - bucket_num)
-        std::map<int, Block> merged_blocks;
+        std::map<int, BlocksList> merged_blocks;
         std::mutex merged_blocks_mutex;
         /// An event that is used by merging threads to tell the main thread that the new block is ready.
         std::condition_variable merged_blocks_changed;
