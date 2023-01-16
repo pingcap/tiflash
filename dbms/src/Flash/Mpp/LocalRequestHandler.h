@@ -42,7 +42,7 @@ struct LocalRequestHandler
         notify_receiver_prepare(meet_error, local_err_msg);
     }
 
-    void closeLocalConnection() const
+    void closeConnection() const
     {
         notify_receiver_close();
     }
