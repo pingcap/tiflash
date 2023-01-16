@@ -126,16 +126,16 @@ namespace DB
         F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                             \
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
-        F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
-        F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
-        F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.0005, 2, 20}),                                          \
-        F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.0005, 2, 20}),                                            \
-        F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                    \
-        F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
-        F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.0005, 2, 20}),                                                      \
-        F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.0005, 2, 20}),                                                      \
-        F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.0005, 2, 20}),                                                \
-        F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.0005, 2, 20}))                                          \
+        F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
+        F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
+        F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
+        F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                           \
+        F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                     \
+        F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                         \
+        F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+        F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+        F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                 \
+        F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                           \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
         F(type_ingest, {"type", "ingest"}),                                                                       /**/                    \
