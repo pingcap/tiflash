@@ -418,11 +418,13 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
     const IAST * ast)
 {
     assert(ast);
+    auto total_memory = context.getServerInfo().has_value() ? context.getServerInfo()->memory_info.capacity : 0;
     auto process_list_entry = context.getProcessList().insert(
         query,
         ast,
         context.getClientInfo(),
-        context.getSettingsRef());
+        context.getSettingsRef(),
+        total_memory);
     context.setProcessListElement(&process_list_entry->get());
     return process_list_entry;
 }

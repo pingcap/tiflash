@@ -14,8 +14,9 @@
 
 #pragma once
 
-#include <Common/Spiller.h>
+#include <Core/Spiller.h>
 #include <DataStreams/NativeBlockInputStream.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 
@@ -25,7 +26,7 @@ namespace DB
 class SpilledFilesInputStream : public IProfilingBlockInputStream
 {
 public:
-    SpilledFilesInputStream(const std::vector<String> & spilled_files, const Block & header_);
+    SpilledFilesInputStream(const std::vector<String> & spilled_files, const Block & header_, const FileProviderPtr & file_provider);
     Block getHeader() const override;
     String getName() const override;
 
@@ -35,12 +36,12 @@ protected:
 private:
     struct SpilledFileStream
     {
-        ReadBufferFromFile file_in;
+        ReadBufferFromFileProvider file_in;
         CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
-        SpilledFileStream(const std::string & path, const Block & header)
-            : file_in(path)
+        SpilledFileStream(const std::string & path, const Block & header, const FileProviderPtr & file_provider)
+            : file_in(file_provider, path, EncryptionPath(path, ""))
             , compressed_in(file_in)
             , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, header, 0))
         {}
@@ -49,6 +50,7 @@ private:
     std::vector<String> spilled_files;
     size_t current_reading_file_index;
     Block header;
+    FileProviderPtr file_provider;
     std::unique_ptr<SpilledFileStream> current_file_stream;
 };
 
