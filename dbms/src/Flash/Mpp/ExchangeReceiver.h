@@ -164,7 +164,7 @@ private:
     void prepareMsgChannels();
     void addLocalConnectionNum();
     void addSyncConnectionNum();
-    void addAsyncConnectionNum();
+    void addAsyncConnectionNum(Int32 conn_num);
 
     bool isReceiverForTiFlashStorage()
     {

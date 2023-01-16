@@ -17,13 +17,13 @@
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
-#include <common/logger_useful.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
@@ -436,10 +436,10 @@ void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum()
+void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum(Int32 conn_num)
 {
     std::lock_guard lock(mu);
-    ++live_connections;
+    live_connections += conn_num;
 }
 
 template <typename RPCContext>
@@ -509,8 +509,6 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
 {
     using AsyncHandler = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
 
-    addAsyncConnectionNum();
-
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Decrement();
@@ -519,6 +517,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
+    addAsyncConnectionNum(alive_async_connections);
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
 
     std::vector<std::unique_ptr<AsyncHandler>> handlers;

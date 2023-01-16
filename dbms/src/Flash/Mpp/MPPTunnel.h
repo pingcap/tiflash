@@ -299,6 +299,8 @@ public:
     }
 
 private:
+    friend class tests::TestMPPTunnel;
+
     bool checkPacketErr(TrackedMppDataPacketPtr & packet)
     {
         if (packet->hasError())
