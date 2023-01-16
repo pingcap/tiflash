@@ -77,6 +77,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
         HashBaseWriterHelper::materializeBlocks(blocks);
         std::vector<String> partition_key_containers(collators.size());
 
+        Block header = blocks[0].cloneEmpty();
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
@@ -86,7 +87,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
             {
-                Block dest_block = blocks[0].cloneEmpty();
+                Block dest_block = header.cloneEmpty();
                 dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
                 size_t dest_block_rows = dest_block.rows();
                 if (dest_block_rows > 0)
