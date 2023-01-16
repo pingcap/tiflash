@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,14 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/grpcpp.h>
-#include <Flash/Mpp/GRPCQueue.h>
 #include <common/logger_useful.h>
 
+#include <deque>
 #include <functional>
 #include <magic_enum.hpp>
+#include <map>
+#include <mutex>
+#include <set>
 #include <utility>
 
 namespace DB
@@ -31,6 +34,39 @@ namespace tests
 {
 class TestGRPCReceiveQueue;
 } // namespace tests
+
+/// In grpc cpp framework, the tag that is pushed into grpc completion
+/// queue must be inherited from `CompletionQueueTag`.
+class KickReceiveTag : public grpc::internal::CompletionQueueTag
+{
+public:
+    explicit KickReceiveTag(void * tag_)
+        : tag(tag_)
+    {}
+
+    void * getTag() const {
+        std::lock_guard lock(mu);
+        return tag;
+    }
+    void setTag(void * tag_) {
+        std::lock_guard lock(mu);
+        tag = tag_;
+    }
+
+    bool FinalizeResult(void ** tag, bool * /*status*/) override
+    {
+        std::lock_guard lock(mu);
+        *tag = this->tag;
+        this->tag = nullptr;
+        return true;
+    }
+
+private:
+    std::mutex mu;
+    void * tag;
+};
+
+using GRPCKickFunc = std::function<grpc_call_error(KickReceiveTag *)>;
 
 enum class GRPCReceiveQueueRes
 {
@@ -46,25 +82,34 @@ enum class GRPCReceiveQueueRes
 // and more push operation are blocked. In order to avoid the above case, we create this
 // non-blocking queue so that push operation will not be blocked when the queue is full.
 template <typename T>
-class GRPCReceiveQueue : public GRPCQueue
+class GRPCReceiveQueue
 {
+private:
+    using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<T>>>;
 public:
-    GRPCReceiveQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log)
-        : GRPCQueue(call, log)
-        , recv_queue(queue_size)
-    {}
+    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, grpc_call * call, const LoggerPtr & log_)
+        : recv_queue(recv_queue_)
+        , log(log_)
+    {
+        RUNTIME_ASSERT(call != nullptr, log, "call is null");
+        // If a call to `grpc_call_start_batch` with an empty batch returns
+        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
+        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+        kick_func = [call](void * t) {
+            return grpc_call_start_batch(call, nullptr, 0, t, nullptr);
+        };
+    }
 
     // For gtest usage.
-    GRPCReceiveQueue(size_t queue_size, GRPCKickFunc func)
-        : GRPCQueue(func)
-        , recv_queue(queue_size)
+    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, GRPCKickFunc func)
+        : recv_queue(recv_queue_)
+        , log(Logger::get())
+        , kick_func(func)
     {}
 
-    ~GRPCReceiveQueue()
+    const String & getCancelReason() const
     {
-        std::unique_lock lock(mu);
-
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
+        return recv_queue.getCancelReason();
     }
 
     // Cancel the send queue, and set the cancel reason
@@ -72,22 +117,15 @@ public:
     {
         auto ret = recv_queue.cancelWith(reason);
         if (ret)
-            kickCompletionQueue();
+            handleTheRemainingTags();
         return ret;
-    }
-
-    const String & getCancelReason() const
-    {
-        return recv_queue.getCancelReason();
     }
 
     bool finish()
     {
         auto ret = recv_queue.finish();
         if (ret)
-        {
-            kickCompletionQueue();
-        }
+            handleTheRemainingTags();
         return ret;
     }
 
@@ -110,30 +148,26 @@ public:
     template <typename U>
     GRPCReceiveQueueRes push(U && data, void * new_tag)
     {
-        RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
-
-        auto res = recv_queue.tryPush(data);
-        switch (res)
+        MPMCQueueResult res = recv_queue.tryPush(data);
+        if (res == MPMCQueueResult::FULL)
         {
-        case MPMCQueueResult::OK:
-            return GRPCReceiveQueueRes::OK;
-        case MPMCQueueResult::FINISHED:
-            return GRPCReceiveQueueRes::FINISHED;
-        case MPMCQueueResult::CANCELLED:
-            return GRPCReceiveQueueRes::CANCELLED;
-        case MPMCQueueResult::FULL:
-            // Handle this case later.
-            break;
-        default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
+            // tryPush and push_back must be protected by lock at the same time.
+            // Because if we don't contain the second tryPush in the lock, the
+            // following bug will happen:
+            //   step1. Thread1: tryPush fail at first.
+            //   step2. Thread1: tryPush fail at second.
+            //   step3. Thread2: pop successfully and find that it's needless to
+            //                   kick CompletionQueue.
+            //   step4. Thread1: lock and set tags. However, the pop of the Thread2
+            //                   is the last pop operation, no more pop operation
+            //                   will be executed. So the tag will not be kicked
+            //                   into completion queue forever.
+            std::lock_guard lock(mu);
+            res = recv_queue.tryPush(data);
+            if (res == MPMCQueueResult::FULL)
+                holdTheTagNoLock(new_tag);
         }
 
-        std::unique_lock lock(mu);
-
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
-
-        // Double check if this queue is full.
-        res = recv_queue.tryPush(data);
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -143,12 +177,7 @@ public:
         case MPMCQueueResult::CANCELLED:
             return GRPCReceiveQueueRes::CANCELLED;
         case MPMCQueueResult::FULL:
-        {
-            // If empty, change status to WAITING.
-            status = Status::WAITING;
-            tag = new_tag;
             return GRPCReceiveQueueRes::FULL;
-        }
         default:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
@@ -157,7 +186,63 @@ public:
 private:
     friend class tests::TestGRPCReceiveQueue;
 
-    MPMCQueue<T> recv_queue;
+    // The tag is temporarily saved in the kick_recv_tags.
+    // It will be kick to Completion Queue at an appropriate time.
+    void holdTheTagNoLock(void * tag)
+    {
+        auto iter = kick_recv_tags_map.find(tag);
+        if (iter == kick_recv_tags_map.end())
+            kick_recv_tags_map.emplace(tag, KickReceiveTag(tag));
+        else
+            iter->second.setTag(tag);
+    }
+
+    // Wake up its completion queue.
+    void kickCompletionQueue()
+    {
+        std::lock_guard lock(mu);
+        if (kick_recv_tags_map.empty())
+            return;
+
+        putTagIntoCompletionQueueNoLock();
+    }
+
+    void handleTheRemainingTags()
+    {
+        std::lock_guard lock(mu);
+        if (kick_recv_tags_map.empty())
+            return;
+
+        putTagIntoCompletionQueueNoLock(true);
+    }
+
+    void putTagIntoCompletionQueueNoLock(bool is_all = false)
+    {
+        for (auto & iter : kick_recv_tags_map)
+        {
+            if (iter.second.getTag() == nullptr)
+                continue;
+            else
+            {
+                callKickFunc(&(iter.second));
+                if (!is_all)
+                    break;
+            }
+        }
+    }
+
+    void callKickFunc(KickReceiveTag * kick_receive_tag)
+    {
+        grpc_call_error error = kick_func(kick_receive_tag);
+        // If an error occur, there must be something wrong about shutdown process.
+        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
+    }
+
+    MsgChannelPtr recv_queue;
+    std::mutex mu;
+    std::map<void *, KickReceiveTag> kick_recv_tags_map; // Create a KickReceiveTag for each receiver
+    const LoggerPtr log;
+    GRPCKickFunc kick_func;
 };
 
 } // namespace DB

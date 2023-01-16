@@ -18,7 +18,6 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/grpcpp.h>
-#include <Flash/Mpp/GRPCQueue.h>
 #include <common/logger_useful.h>
 
 #include <functional>
@@ -30,6 +29,29 @@ namespace tests
 {
 class TestGRPCSendQueue;
 } // namespace tests
+
+/// In grpc cpp framework, the tag that is pushed into grpc completion
+/// queue must be inherited from `CompletionQueueTag`.
+class KickSendTag : public grpc::internal::CompletionQueueTag
+{
+public:
+    explicit KickSendTag(std::function<void *()> a)
+        : action(std::move(a))
+    {}
+
+    bool FinalizeResult(void ** tag_, bool * /*status*/) override
+    {
+        *tag_ = action();
+        return true;
+    }
+
+private:
+    /// `action` is called before the `tag` is popped from completion queue
+    /// in `FinalizeResult`.
+    std::function<void *()> action;
+};
+
+using GRPCKickFunc = std::function<grpc_call_error(KickSendTag *)>;
 
 enum class GRPCSendQueueRes
 {
@@ -52,23 +74,34 @@ enum class GRPCSendQueueRes
 /// to trigger it immediately. So we can say `kickCompletionQueue` function is a
 /// immediately-triggered `Alarm`.
 template <typename T>
-class GRPCSendQueue : public GRPCQueue
+class GRPCSendQueue
 {
 public:
-    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log)
-        : GRPCQueue(call, log)
-        , send_queue(queue_size)
-    {}
+    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & l)
+        : send_queue(queue_size)
+        , log(l)
+        , kick_send_tag([this]() { return kickTagAction(); })
+    {
+        RUNTIME_ASSERT(call != nullptr, log, "call is null");
+        // If a call to `grpc_call_start_batch` with an empty batch returns
+        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
+        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+        kick_func = [call](void * t) {
+            return grpc_call_start_batch(call, nullptr, 0, t, nullptr);
+        };
+    }
 
     // For gtest usage.
     GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
-        : GRPCQueue(func)
-        , send_queue(queue_size)
+        : send_queue(queue_size)
+        , log(Logger::get())
+        , kick_func(func)
+        , kick_send_tag([this]() { return kickTagAction(); })
     {}
 
     ~GRPCSendQueue()
     {
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
 
         RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
     }
@@ -93,7 +126,9 @@ public:
     {
         auto ret = send_queue.cancelWith(reason);
         if (ret)
+        {
             kickCompletionQueue();
+        }
         return ret;
     }
 
@@ -133,7 +168,7 @@ public:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
         }
 
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
 
         RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
 
@@ -175,7 +210,67 @@ public:
 private:
     friend class tests::TestGRPCSendQueue;
 
+    void * kickTagAction()
+    {
+        std::lock_guard lock(mu);
+
+        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", magic_enum::enum_name(status));
+        status = Status::NONE;
+
+        return std::exchange(tag, nullptr);
+    }
+
+    /// Wake up its completion queue.
+    void kickCompletionQueue()
+    {
+        {
+            std::lock_guard lock(mu);
+            if (status != Status::WAITING)
+                return;
+            RUNTIME_ASSERT(tag != nullptr, log, "status is waiting but tag is nullptr");
+            status = Status::QUEUING;
+        }
+
+        grpc_call_error error = kick_func(&kick_send_tag);
+        // If an error occur, there must be something wrong about shutdown process.
+        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
+    }
+
     MPMCQueue<T> send_queue;
+
+    const LoggerPtr log;
+
+    /// The mutex is used to synchronize the concurrent calls between push/finish and pop.
+    /// It protects `status` and `tag`.
+    /// The concurrency problem we want to prevent here is LOST NOTIFICATION which is
+    /// similar to `condition_variable`.
+    /// Note that this mutex is necessary. It's useless to just change the `tag` to atomic.
+    ///
+    /// Imagine this case:
+    /// Thread 1: want to pop the data from queue but find no data there.
+    /// Thread 2: push/finish the data in queue.
+    /// Thread 2: do not kick the completion queue because tag is nullptr.
+    /// Thread 1: set the tag.
+    ///
+    /// If there is no more data, this connection will get stuck forever.
+    std::mutex mu;
+
+    enum class Status
+    {
+        /// No tag.
+        NONE,
+        /// Waiting for kicking.
+        WAITING,
+        /// Queuing in the grpc completion queue.
+        QUEUING,
+    };
+
+    Status status = Status::NONE;
+    void * tag = nullptr;
+
+    GRPCKickFunc kick_func;
+
+    KickSendTag kick_send_tag;
 };
 
 } // namespace DB
