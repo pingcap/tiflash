@@ -48,7 +48,7 @@ struct LocalRequestHandler
     }
 
     MemoryTracker * recv_mem_tracker;
-    std::function<void(bool, const String &)> notify_receiver_prepare;
+    std::function<void(bool, const String &)> notify_write_done;
     std::function<void()> notify_receiver_close;
     ReceiverChannelWriter channel_writer;
 };
