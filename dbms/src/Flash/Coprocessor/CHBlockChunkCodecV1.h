@@ -35,43 +35,51 @@ struct CHBlockChunkCodecV1
     using Self = CHBlockChunkCodecV1;
 
     const Block & header;
-    size_t header_size;
+    const size_t header_size;
     size_t encoded_rows{};
+    size_t original_size{};
+    size_t compressed_size{};
+    bool always_keep_header{};
 
-    explicit CHBlockChunkCodecV1(const Block & header_)
+    explicit CHBlockChunkCodecV1(const Block & header_, bool always_keep_header_)
         : header(header_)
         , header_size(ApproxBlockHeaderBytes(header))
+        , always_keep_header(always_keep_header_)
     {
     }
+
     static std::string encode(const Block & block, CompressionMethod compression_method, bool always_keep_header)
     {
-        return Self{block}.encode(compression_method, always_keep_header);
+        return Self{block, always_keep_header}.encode(compression_method);
     }
+
     void clear()
     {
         encoded_rows = 0;
+        original_size = 0;
+        compressed_size = 0;
     }
 
-    std::string encode(CompressionMethod compression_method, bool always_keep_header)
+    std::string encode(CompressionMethod compression_method)
     {
-        return encodeImpl(header, compression_method, always_keep_header);
+        return encodeImpl(header, compression_method);
     }
 
-    std::string encode(const MutableColumns & columns, CompressionMethod compression_method, bool always_keep_header)
+    std::string encode(const MutableColumns & columns, CompressionMethod compression_method)
     {
-        return encodeImpl(columns, compression_method, always_keep_header);
+        return encodeImpl(columns, compression_method);
     }
-    std::string encode(const Columns & columns, CompressionMethod compression_method, bool always_keep_header)
+    std::string encode(const Columns & columns, CompressionMethod compression_method)
     {
-        return encodeImpl(columns, compression_method, always_keep_header);
+        return encodeImpl(columns, compression_method);
     }
-    std::string encode(const std::vector<MutableColumns> & columns, CompressionMethod compression_method, bool always_keep_header)
+    std::string encode(const std::vector<MutableColumns> & columns, CompressionMethod compression_method)
     {
-        return encodeImpl(columns, compression_method, always_keep_header);
+        return encodeImpl(columns, compression_method);
     }
-    std::string encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method, bool always_keep_header)
+    std::string encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method)
     {
-        return encodeImpl(std::move(columns), compression_method, always_keep_header);
+        return encodeImpl(std::move(columns), compression_method);
     }
 
     template <typename ColumnsHolder>
@@ -209,7 +217,7 @@ struct CHBlockChunkCodecV1
     }
 
     template <typename VecColumns>
-    std::string encodeImpl(VecColumns && batch_columns, CompressionMethod compression_method, bool always_keep_header)
+    std::string encodeImpl(VecColumns && batch_columns, CompressionMethod compression_method)
     {
         size_t column_encode_bytes = 0;
         size_t rows = 0;
@@ -261,7 +269,15 @@ struct CHBlockChunkCodecV1
 
         // Flush rest buffer
         if (compress_codec)
+        {
             compress_codec->next();
+            original_size += compress_codec->getUncompressedBytes();
+            compressed_size += compress_codec->getCompressedBytes();
+        }
+        else
+        {
+            original_size += output_buffer->count();
+        }
 
         return output_buffer->releaseStr();
     }

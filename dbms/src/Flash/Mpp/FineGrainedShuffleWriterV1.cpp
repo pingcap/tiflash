@@ -120,28 +120,30 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::initScatterColumns()
 template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
-    size_t ori_block_mem_size = 0;
+    if (blocks.empty())
+        return;
+    size_t ori_all_packets_size = 0;
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, DB::MPPDataPacketV1);
-    if (likely(!blocks.empty()))
+
     {
         assert(rows_in_blocks > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
-        [[maybe_unused]] size_t total_rows = 0, encoded_rows = 0;
+        [[maybe_unused]] size_t total_rows = 0;
 
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
-
-            ori_block_mem_size += ApproxBlockBytes(block);
             total_rows += block.rows();
-
             HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
             blocks.pop_back();
         }
 
-        auto && codec = CHBlockChunkCodecV1{header};
+        auto && codec = CHBlockChunkCodecV1{
+            header,
+            true /*keep header info*/,
+        };
 
         // serialize each partitioned block and write it to its destination
         size_t part_id = 0;
@@ -156,12 +158,10 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle
                     columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
 
                 auto method = writer->isLocal(part_id) ? CompressionMethod::NONE : compression_method;
-                auto && res = codec.encode(columns, method, true /*keep header info*/);
+                auto && res = codec.encode(columns, method);
                 assert(!res.empty());
                 tracked_packets[part_id]->getPacket().add_chunks(std::move(res));
                 tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
-                encoded_rows += codec.encoded_rows;
-                codec.clear();
 
                 for (size_t col_id = 0; col_id < num_columns; ++col_id)
                 {
@@ -170,13 +170,13 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle
                 }
             }
         }
+        assert(codec.encoded_rows == total_rows);
+        ori_all_packets_size += codec.original_size;
         rows_in_blocks = 0;
-
-        assert(encoded_rows == total_rows);
     }
 
     writePackets(tracked_packets);
-    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_all_packets_size);
 }
 
 template <class ExchangeWriterPtr>

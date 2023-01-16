@@ -75,8 +75,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num, DB::MPPDataPacketV0);
 
-    size_t ori_block_mem_size = 0;
-
     if (!blocks.empty())
     {
         assert(rows_in_blocks > 0);
@@ -88,8 +86,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
-            ori_block_mem_size += ApproxBlockBytes(block);
-
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
             HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
             blocks.pop_back();
@@ -111,20 +107,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
     }
 
     writePackets(tracked_packets);
-
-    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
-}
-
-static void updateHashPartitionWriterMetrics(size_t sz, bool is_local)
-{
-    if (is_local)
-    {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
-    }
-    else
-    {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(sz);
-    }
 }
 
 template <class ExchangeWriterPtr>
@@ -137,10 +119,15 @@ void WritePackets(TrackedMppDataPacketPtrs & packets, ExchangeWriterPtr & writer
 
         auto & inner_packet = packet->getPacket();
 
-        if (auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
+        if (const auto sz = inner_packet.ByteSizeLong(); likely(inner_packet.chunks_size() > 0))
         {
             writer->partitionWrite(std::move(packet), part_id);
-            updateHashPartitionWriterMetrics(sz, writer->isLocal(part_id));
+
+            GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(sz);
+            if (writer->isLocal(part_id))
+                GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+            else
+                GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(sz);
         }
     }
 }
