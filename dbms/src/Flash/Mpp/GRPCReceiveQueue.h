@@ -23,6 +23,7 @@
 #include <deque>
 #include <functional>
 #include <magic_enum.hpp>
+#include <map>
 #include <mutex>
 #include <set>
 #include <utility>
@@ -39,29 +40,22 @@ class TestGRPCReceiveQueue;
 class KickReceiveTag : public grpc::internal::CompletionQueueTag
 {
 public:
-    explicit KickReceiveTag(const LoggerPtr & log_)
-        : log(log_)
+    explicit KickReceiveTag(void * tag_)
+        : tag(tag_)
     {}
 
-    void pushTag(void * tag)
-    {
-        std::lock_guard lock(mu);
-        tags.push_back(tag);
-    }
+    void * getTag() const { return tag; }
+    void setTag(void * tag_) { tag = tag_; }
 
     bool FinalizeResult(void ** tag, bool * /*status*/) override
     {
-        std::lock_guard lock(mu);
-        RUNTIME_ASSERT(!tags.empty(), log, "tags shouldn't be empty in KickReceiveTag");
-        *tag = tags.front();
-        tags.pop_front();
+        *tag = this->tag;
+        this->tag = nullptr;
         return true;
     }
 
 private:
-    std::mutex mu;
-    std::deque<void *> tags;
-    const LoggerPtr log;
+    void * tag;
 };
 
 using GRPCKickFunc = std::function<grpc_call_error(KickReceiveTag *)>;
@@ -86,7 +80,6 @@ public:
     GRPCReceiveQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log_)
         : recv_queue(queue_size)
         , log(log_)
-        , kick_recv_tag(log)
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
@@ -102,7 +95,6 @@ public:
         : recv_queue(queue_size)
         , log(Logger::get())
         , kick_func(func)
-        , kick_recv_tag(log)
     {}
 
     const String & getCancelReason() const
@@ -163,7 +155,7 @@ public:
             std::lock_guard lock(mu);
             res = recv_queue.tryPush(data);
             if (res == MPMCQueueResult::FULL)
-                tags.push_back(new_tag);
+                holdTheTagNoLock(new_tag);
         }
 
         switch (res)
@@ -184,49 +176,63 @@ public:
 private:
     friend class tests::TestGRPCReceiveQueue;
 
-    /// Wake up its completion queue.
+    // The tag is temporarily saved in the kick_recv_tags.
+    // It will be kick to Completion Queue at an appropriate time.
+    void holdTheTagNoLock(void * tag)
+    {
+        auto iter = kick_recv_tags.find(tag);
+        if (iter == kick_recv_tags.end())
+            kick_recv_tags[tag] = KickReceiveTag(tag);
+        else
+            iter->second.setTag(tag);
+    }
+
+    // Wake up its completion queue.
     void kickCompletionQueue()
     {
-        {
-            std::lock_guard lock(mu);
-            if (tags.empty())
-                return;
+        std::lock_guard lock(mu);
+        if (kick_recv_tags.empty())
+            return;
 
-            transferTagToKickReceiveTagWithNoLock();
-        }
-
-        callKickFunc();
+        putTagIntoCompletionQueueNoLock();
     }
 
     void handleTheRemainingTags()
     {
         std::lock_guard lock(mu);
-        while (!tags.empty())
+        if (kick_recv_tags.empty())
+            return;
+
+        putTagIntoCompletionQueueNoLock(true);
+    }
+
+    void putTagIntoCompletionQueueNoLock(bool is_all = false)
+    {
+        for (auto & iter : kick_recv_tags)
         {
-            transferTagToKickReceiveTagWithNoLock();
-            callKickFunc();
+            if (iter.second.getTag() == nullptr)
+                continue;
+            else
+            {
+                callKickFunc(&(iter.second));
+                if (!is_all)
+                    break;
+            }
         }
     }
 
-    void transferTagToKickReceiveTagWithNoLock()
+    void callKickFunc(KickReceiveTag * kick_receive_tag)
     {
-        kick_recv_tag.pushTag(tags.front());
-        tags.pop_front();
-    }
-
-    void callKickFunc()
-    {
-        grpc_call_error error = kick_func(&kick_recv_tag);
+        grpc_call_error error = kick_func(kick_receive_tag);
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
     MPMCQueue<T> recv_queue;
     std::mutex mu;
-    std::deque<void *> tags;
+    std::map<void *, KickReceiveTag> kick_recv_tags; // Create a KickReceiveTag for each receiver
     const LoggerPtr log;
     GRPCKickFunc kick_func;
-    KickReceiveTag kick_recv_tag;
 };
 
 } // namespace DB
