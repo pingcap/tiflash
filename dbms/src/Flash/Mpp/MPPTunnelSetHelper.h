@@ -29,4 +29,4 @@ TrackedMppDataPacketPtr toFineGrainedPacket(
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
     const std::vector<tipb::FieldType> & field_types);
-} // namespace DB::HashBaseWriterHelper
+} // namespace DB::MPPTunnelSetHelper

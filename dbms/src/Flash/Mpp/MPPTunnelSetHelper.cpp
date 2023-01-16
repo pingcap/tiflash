@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Mpp/MPPTunnelSetHelper.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Mpp/MPPTunnelSetHelper.h>
 
 namespace DB::MPPTunnelSetHelper
 {
@@ -69,4 +69,4 @@ TrackedMppDataPacketPtr toFineGrainedPacket(
     }
     return tracked_packet;
 }
-} // namespace DB::HashBaseWriterHelper
+} // namespace DB::MPPTunnelSetHelper
