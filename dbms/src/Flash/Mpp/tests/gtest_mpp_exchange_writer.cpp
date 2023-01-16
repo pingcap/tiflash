@@ -35,7 +35,7 @@ namespace DB
 {
 namespace tests
 {
-static CompressionMethodByte ToCompressionMethodByte(CompressionMethod m);
+static CompressionMethodByte GetCompressionMethodByte(CompressionMethod m);
 
 class TestMPPExchangeWriter : public testing::Test
 {
@@ -227,71 +227,74 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
-        write_report[part_id].emplace_back(packet);
-    };
-    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
-
-    // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriterV1<std::shared_ptr<MockExchangeWriter>>>(
-        mock_writer,
-        part_col_ids,
-        part_col_collators,
-        *dag_context_ptr,
-        fine_grained_shuffle_stream_count,
-        fine_grained_shuffle_batch_size,
-        tipb::CompressionMode::FAST);
-    dag_writer->prepare(blocks[0].cloneEmpty());
-    for (const auto & block : blocks)
-        dag_writer->write(block);
-    dag_writer->flush();
-
-    // 4. Start to check write_report.
-    size_t per_part_rows = block_rows * block_num / part_num;
-    ASSERT_EQ(write_report.size(), part_num);
-    std::vector<size_t> rows_of_stream_ids(fine_grained_shuffle_stream_count, 0);
-
-    CHBlockChunkDecodeAndSquash decoder(header, 512);
-
-    for (size_t part_index = 0; part_index < part_num; ++part_index)
+    for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
-        size_t part_decoded_block_rows = 0;
+        // 2. Build MockExchangeWriter.
+        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+            write_report[part_id].emplace_back(packet);
+        };
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
-        for (const auto & packet : write_report[part_index])
+        // 3. Start to write.
+        auto dag_writer = std::make_shared<FineGrainedShuffleWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+            mock_writer,
+            part_col_ids,
+            part_col_collators,
+            *dag_context_ptr,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            mode);
+        dag_writer->prepare(blocks[0].cloneEmpty());
+        for (const auto & block : blocks)
+            dag_writer->write(block);
+        dag_writer->flush();
+
+        // 4. Start to check write_report.
+        size_t per_part_rows = block_rows * block_num / part_num;
+        ASSERT_EQ(write_report.size(), part_num);
+        std::vector<size_t> rows_of_stream_ids(fine_grained_shuffle_stream_count, 0);
+
+        CHBlockChunkDecodeAndSquash decoder(header, 512);
+
+        for (size_t part_index = 0; part_index < part_num; ++part_index)
         {
-            ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
-            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
+            size_t part_decoded_block_rows = 0;
+
+            for (const auto & packet : write_report[part_index])
             {
-                const auto & chunk = packet->getPacket().chunks(i);
+                ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+                for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
+                {
+                    const auto & chunk = packet->getPacket().chunks(i);
 
-                if (part_index == 0)
-                {
-                    ASSERT_EQ(CompressionMethodByte(chunk[0]), CompressionMethodByte::NONE);
-                }
-                else
-                {
-                    ASSERT_EQ(CompressionMethodByte(chunk[0]), ToCompressionMethodByte(ToInternalCompressionMethod(tipb::CompressionMode::FAST)));
-                }
+                    if (part_index == 0)
+                    {
+                        ASSERT_EQ(CompressionMethodByte(chunk[0]), CompressionMethodByte::NONE);
+                    }
+                    else
+                    {
+                        ASSERT_EQ(CompressionMethodByte(chunk[0]), GetCompressionMethodByte(ToInternalCompressionMethod(mode)));
+                    }
 
-                auto && result = decoder.decodeAndSquashWithCompression(chunk);
-                if (!result)
-                {
-                    result = decoder.flush();
+                    auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                    if (!result)
+                    {
+                        result = decoder.flush();
+                    }
+                    assert(result);
+                    auto decoded_block = std::move(*result);
+                    part_decoded_block_rows += decoded_block.rows();
+                    rows_of_stream_ids[packet->getPacket().stream_ids(i)] += decoded_block.rows();
                 }
-                assert(result);
-                auto decoded_block = std::move(*result);
-                part_decoded_block_rows += decoded_block.rows();
-                rows_of_stream_ids[packet->getPacket().stream_ids(i)] += decoded_block.rows();
             }
+            ASSERT_EQ(part_decoded_block_rows, per_part_rows);
         }
-        ASSERT_EQ(part_decoded_block_rows, per_part_rows);
-    }
 
-    size_t per_stream_id_rows = block_rows * block_num / fine_grained_shuffle_stream_count;
-    for (size_t rows : rows_of_stream_ids)
-        ASSERT_EQ(rows, per_stream_id_rows);
+        size_t per_stream_id_rows = block_rows * block_num / fine_grained_shuffle_stream_count;
+        for (size_t rows : rows_of_stream_ids)
+            ASSERT_EQ(rows, per_stream_id_rows);
+    }
 }
 CATCH
 
@@ -460,7 +463,7 @@ try
 }
 CATCH
 
-static CompressionMethodByte ToCompressionMethodByte(CompressionMethod m)
+static CompressionMethodByte GetCompressionMethodByte(CompressionMethod m)
 {
     switch (m)
     {
@@ -537,7 +540,7 @@ try
                     }
                     else
                     {
-                        ASSERT_EQ(CompressionMethodByte(chunk[0]), ToCompressionMethodByte(ToInternalCompressionMethod(mode)));
+                        ASSERT_EQ(CompressionMethodByte(chunk[0]), GetCompressionMethodByte(ToInternalCompressionMethod(mode)));
                     }
 
                     auto && result = decoder.decodeAndSquashWithCompression(chunk);

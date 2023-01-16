@@ -20,7 +20,6 @@
 
 namespace DB
 {
-extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 
 size_t ApproxBlockHeaderBytes(const Block & block)
 {

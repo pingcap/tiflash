@@ -28,6 +28,14 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompression(std::string_view sv)
 {
+    if unlikely (sv.empty())
+    {
+        std::optional<Block> res;
+        if (accumulated_block)
+            res.swap(accumulated_block);
+        return res;
+    }
+
     // read first byte of compression method flag which defined in `CompressionMethodByte`
     if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
     {
@@ -44,20 +52,15 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompression
 {
     std::optional<Block> res;
 
-    if (istr.eof())
-    {
-        if (accumulated_block)
-            res.swap(accumulated_block);
-        return res;
-    }
-
     if (!accumulated_block)
     {
         size_t rows{};
         Block block = DecodeHeader(istr, codec.header, rows);
-        DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
-        if (block)
+        if (rows)
+        {
+            DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
             accumulated_block.emplace(std::move(block));
+        }
     }
     else
     {

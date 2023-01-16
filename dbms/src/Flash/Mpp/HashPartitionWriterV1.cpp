@@ -23,7 +23,6 @@
 namespace DB
 {
 extern size_t ApproxBlockBytes(const Block & block);
-extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 } // namespace DB
 
 namespace DB
@@ -123,85 +122,18 @@ void HashPartitionWriterV1<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks
             }
         }
 
-        size_t header_size = ApproxBlockHeaderBytes(dest_block_header);
+        auto && codec = CHBlockChunkCodecV1{dest_block_header};
 
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
             auto & part_columns = dest_columns[part_id];
-            size_t part_rows = std::accumulate(part_columns.begin(), part_columns.end(), 0, [](const auto & r, const auto & columns) { return r + columns.front()->size(); });
-
-            if (!part_rows)
+            auto method = writer->isLocal(part_id) ? CompressionMethod::NONE : compression_method;
+            auto && res = codec.encode(std::move(part_columns), method, false /*scape empty part*/);
+            if (res.empty())
                 continue;
-
-            size_t part_column_bytes = std::accumulate(part_columns.begin(), part_columns.end(), 0, [](auto res, const auto & columns) {
-                for (const auto & elem : columns)
-                    res += elem->byteSize();
-                return res + 8 /*partition rows*/;
-            });
-
-            // compression method flag; NONE, LZ4, ZSTD, defined in `CompressionMethodByte`
-            // ...
-            // header meta:
-            //     columns count;
-            //     total row count (multi parts);
-            //     for each column:
-            //         column name;
-            //         column type;
-            // for each part:
-            //     row count;
-            //     columns data;
-
-            size_t init_size = part_column_bytes + header_size + 1 /*compression method*/;
-
-            // Reserve enough memory buffer size
-            auto output_buffer = std::make_unique<WriteBufferFromOwnString>(init_size);
-            std::unique_ptr<CompressedCHBlockChunkWriteBuffer> compress_codec{};
-            WriteBuffer * ostr_ptr = output_buffer.get();
-
-            // Init compression writer
-            if (!writer->isLocal(part_id) && compression_method != CompressionMethod::NONE)
-            {
-                // CompressedWriteBuffer will encode compression method flag as first byte
-                compress_codec = std::make_unique<CompressedCHBlockChunkWriteBuffer>(
-                    *output_buffer,
-                    CompressionSettings(compression_method),
-                    init_size);
-                ostr_ptr = compress_codec.get();
-            }
-            else
-            {
-                // Write compression method flag
-                output_buffer->write(static_cast<char>(CompressionMethodByte::NONE));
-            }
-
-            // Encode header
-            EncodeHeader(*ostr_ptr, dest_block_header, part_rows);
-
-            for (auto && columns : part_columns)
-            {
-                size_t rows = columns.front()->size();
-                if (!rows)
-                    continue;
-
-                // Encode row count for next columns
-                writeVarUInt(rows, *ostr_ptr);
-                encoded_rows += rows;
-
-                // Encode columns data
-                for (size_t col_index = 0; col_index < dest_block_header.columns(); ++col_index)
-                {
-                    auto && col_type_name = dest_block_header.getByPosition(col_index);
-                    WriteColumnData(*col_type_name.type, std::move(columns[col_index]), *ostr_ptr, 0, 0);
-                }
-
-                columns.clear();
-            }
-
-            // Flush rest buffer
-            if (compress_codec)
-                compress_codec->next();
-
-            tracked_packets[part_id]->getPacket().add_chunks(output_buffer->releaseStr());
+            encoded_rows += codec.encoded_rows;
+            tracked_packets[part_id]->getPacket().add_chunks(std::move(res));
+            codec.clear();
         }
         assert(encoded_rows == total_rows);
         assert(blocks.empty());

@@ -20,10 +20,11 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/MppVersion.h>
 
+#include <cassert>
+
 namespace DB
 {
 extern size_t ApproxBlockBytes(const Block & block);
-extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 } // namespace DB
 
 namespace DB
@@ -126,15 +127,21 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle
         assert(rows_in_blocks > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
 
-        size_t header_size = ApproxBlockHeaderBytes(header);
         HashBaseWriterHelper::materializeBlocks(blocks);
+        [[maybe_unused]] size_t total_rows = 0, encoded_rows = 0;
+
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
+
             ori_block_mem_size += ApproxBlockBytes(block);
+            total_rows += block.rows();
+
             HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
             blocks.pop_back();
         }
+
+        auto && codec = CHBlockChunkCodecV1{header};
 
         // serialize each partitioned block and write it to its destination
         size_t part_id = 0;
@@ -148,57 +155,13 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle
                 for (size_t col_id = 0; col_id < num_columns; ++col_id)
                     columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
 
-                size_t part_column_bytes = std::accumulate(columns.begin(), columns.end(), 0, [](auto res, const auto & column) {
-                                               return res += column->byteSize();
-                                           })
-                    + 8 /*partition rows*/;
-
-                {
-                    size_t init_size = part_column_bytes + header_size + 1 /*compression method*/;
-
-                    // Reserve enough memory buffer size
-                    auto output_buffer = std::make_unique<WriteBufferFromOwnString>(init_size);
-                    std::unique_ptr<CompressedCHBlockChunkWriteBuffer> compress_codec{};
-                    WriteBuffer * ostr_ptr = output_buffer.get();
-
-                    // Init compression writer
-                    if (!writer->isLocal(part_id) && compression_method != CompressionMethod::NONE)
-                    {
-                        // CompressedWriteBuffer will encode compression method flag as first byte
-                        compress_codec = std::make_unique<CompressedCHBlockChunkWriteBuffer>(
-                            *output_buffer,
-                            CompressionSettings(compression_method),
-                            init_size);
-                        ostr_ptr = compress_codec.get();
-                    }
-                    else
-                    {
-                        // Write compression method flag
-                        output_buffer->write(static_cast<char>(CompressionMethodByte::NONE));
-                    }
-
-                    size_t rows = columns.front()->size();
-                    // Encode header
-                    EncodeHeader(*ostr_ptr, header, rows);
-                    if (rows)
-                    {
-                        // Encode row count for next columns
-                        writeVarUInt(rows, *ostr_ptr);
-
-                        // Encode columns data
-                        for (size_t col_id = 0; col_id < num_columns; ++col_id)
-                        {
-                            auto && col_type_name = header.getByPosition(col_id);
-                            WriteColumnData(*col_type_name.type, columns[col_id]->getPtr(), *ostr_ptr, 0, 0);
-                        }
-                    }
-
-                    // Flush rest buffer
-                    if (compress_codec)
-                        compress_codec->next();
-                    tracked_packets[part_id]->getPacket().add_chunks(output_buffer->releaseStr());
-                    tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
-                }
+                auto method = writer->isLocal(part_id) ? CompressionMethod::NONE : compression_method;
+                auto && res = codec.encode(columns, method, true /*keep header info*/);
+                assert(!res.empty());
+                tracked_packets[part_id]->getPacket().add_chunks(std::move(res));
+                tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
+                encoded_rows += codec.encoded_rows;
+                codec.clear();
 
                 for (size_t col_id = 0; col_id < num_columns; ++col_id)
                 {
@@ -208,6 +171,8 @@ void FineGrainedShuffleWriterV1<ExchangeWriterPtr>::batchWriteFineGrainedShuffle
             }
         }
         rows_in_blocks = 0;
+
+        assert(encoded_rows == total_rows);
     }
 
     writePackets(tracked_packets);
