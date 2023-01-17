@@ -178,4 +178,23 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
 }
+
+void TiFlashTestEnv::setUpTestContext(Context & context, DAGContext * dag_context, MockStorage * mock_storage, const TestType & test_type)
+{
+    switch (test_type)
+    {
+    case TestType::EXECUTOR_TEST:
+        context.setExecutorTest();
+        break;
+    case TestType::INTERPRETER_TEST:
+        context.setInterpreterTest();
+        break;
+    }
+    context.setMockStorage(mock_storage);
+    context.setDAGContext(dag_context);
+    context.getTimezoneInfo().resetByDAGRequest(*dag_context->dag_request);
+    /// by default non-mpp task will do collation insensitive group by, let the test do
+    /// collation sensitive group by setting `group_by_collation_sensitive` to true
+    context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
+}
 } // namespace DB::tests

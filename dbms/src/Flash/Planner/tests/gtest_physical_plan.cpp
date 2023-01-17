@@ -31,8 +31,6 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.context.setExecutorTest();
-
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
@@ -99,8 +97,7 @@ public:
         size_t max_streams = 1;
 
         DAGContext dag_context(*request, "executor_test", max_streams);
-        context.context.setDAGContext(&dag_context);
-        context.context.setMockStorage(context.mockStorage());
+        TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
 
         PhysicalPlan physical_plan{context.context, log->identifier()};
         assert(request);
