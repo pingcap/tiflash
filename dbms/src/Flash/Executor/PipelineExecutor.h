@@ -26,7 +26,7 @@ using PipelinePtr = std::shared_ptr<Pipeline>;
 using Pipelines = std::vector<PipelinePtr>;
 
 /**
- * PipelineExecutor is the implementation of the pipeline-base execution model.
+ * PipelineExecutor is the implementation of the pipeline-based execution model.
  * 
  *                                            ┌─────────────────────┐
  *                                            │  task scheduler     │
