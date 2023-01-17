@@ -522,7 +522,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 executeWhere(pipeline, expressions.before_where);
 
             if (expressions.need_aggregate)
-                executeAggregation(pipeline, expressions.before_aggregation, context.getFileProvider(), aggregate_final);
+                executeAggregation(pipeline, expressions.before_aggregation, aggregate_final);
             else
             {
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -947,7 +947,7 @@ void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionA
 }
 
 
-void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool final)
+void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool final)
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, /*req_id=*/"");
@@ -974,7 +974,8 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
-    Aggregator::Params params(header, keys, aggregates, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(), settings.max_block_size);
+    SpillConfig spill_config(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider());
+    Aggregator::Params params(header, keys, aggregates, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, spill_config, settings.max_block_size);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
@@ -983,7 +984,6 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             pipeline.streams,
             pipeline.streams_with_non_joined_data,
             params,
-            file_provider,
             final,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads
@@ -1010,7 +1010,6 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, /*req_id=*/""),
             params,
-            file_provider,
             final,
             /*req_id=*/"");
     }
@@ -1044,9 +1043,9 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
       *  but it can work more slowly.
       */
 
-    Aggregator::Params params(header, keys, aggregates);
-
     const Settings & settings = context.getSettingsRef();
+
+    Aggregator::Params params(header, keys, aggregates, SpillConfig(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider()), settings.max_block_size);
 
     if (!settings.distributed_aggregation_memory_efficient)
     {
