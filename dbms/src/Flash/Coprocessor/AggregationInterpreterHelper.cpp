@@ -104,6 +104,7 @@ Aggregator::Params buildParams(
         settings.max_bytes_before_external_group_by,
         !is_final_agg,
         context.getTemporaryPath(),
+        context.getSettingsRef().max_block_size,
         has_collator ? collators : TiDB::dummy_collators);
 }
 
