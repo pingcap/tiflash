@@ -238,7 +238,7 @@ void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
 uint64_t ParallelAggregatingBlockInputStream::collectCPUTimeImpl(bool is_root)
 {
     assert(impl);
-    uint64_t cpu_time = impl->collectCPUTime(is_root);
+    uint64_t cpu_time = impl ? impl->collectCPUTime(is_root) : 0;
     forEachChild([&](IBlockInputStream & child) {
         cpu_time += child.collectCPUTime(true);
         return false;
