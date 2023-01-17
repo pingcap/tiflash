@@ -68,9 +68,7 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
             }
             if (block.segmentRowIdCol() != nullptr)
             {
-                auto new_col = block.segmentRowIdCol()->cloneEmpty();
-                new_col->insertRangeFrom(*block.segmentRowIdCol(), offset, limit);
-                block.setSegmentRowIdCol(std::move(new_col));
+                block.setSegmentRowIdCol(block.segmentRowIdCol()->cut(offset, limit));
             }
         }
         return std::move(block);
