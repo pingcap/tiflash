@@ -159,7 +159,7 @@ void SchemaDiff::deserialize(const String & data)
     Poco::Dynamic::Var result = parser.parse(data);
     if (result.isEmpty())
     {
-        LOG_WARNING(&Poco::Logger::get("SchemaDiff"), "The schema diff deserialize failed {}", data);
+        throw Exception("The schema diff deserialize failed " + data);
     }
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
     version = obj->getValue<Int64>("version");
