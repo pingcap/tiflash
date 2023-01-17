@@ -225,7 +225,7 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
         {
             current_result = aggregator.mergeBlocks(*blocks_to_merge, final);
             auto block = popBlocksListFront(current_result);
-            assert(!block);
+            assert(block);
             return block;
         }
         else
@@ -272,7 +272,7 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
                     lock.unlock();
                     parallel_merge_data->have_space.notify_one(); /// We consumed block. Merging thread may merge next block for us.
                     res = popBlocksListFront(current_result);
-                    assert(!res);
+                    assert(res);
                     break;
                 }
             }

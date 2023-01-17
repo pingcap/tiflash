@@ -213,8 +213,7 @@ try
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    MockExchangeReceiver)",
+   MockExchangeReceiver)",
         {toNullableVec<String>({{}, "banana"}),
          toNullableVec<String>({{}, "banana"})});
 }
