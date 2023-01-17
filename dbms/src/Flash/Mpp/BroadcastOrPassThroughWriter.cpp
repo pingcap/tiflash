@@ -31,14 +31,13 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 {
     rows_in_blocks = 0;
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-    chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        encodeThenWriteBlocks();
+        writeBlocks();
 }
 
 template <class ExchangeWriterPtr>
@@ -55,39 +54,18 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        encodeThenWriteBlocks();
+        writeBlocks();
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
 {
     if (unlikely(blocks.empty()))
         return;
 
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-    while (!blocks.empty())
-    {
-        const auto & block = blocks.back();
-        chunk_codec_stream->encode(block, 0, block.rows());
-        blocks.pop_back();
-        tracked_packet->addChunk(chunk_codec_stream->getString());
-        chunk_codec_stream->clear();
-    }
-    assert(blocks.empty());
+    writer->broadcastOrPassThroughWrite(blocks);
+    blocks.clear();
     rows_in_blocks = 0;
-    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
-    writer->broadcastOrPassThroughWrite(std::move(tracked_packet));
-
-    {
-        auto tunnel_cnt = writer->getPartitionNum();
-        size_t local_tunnel_cnt = 0;
-        for (size_t i = 0; i < tunnel_cnt; ++i)
-        {
-            local_tunnel_cnt += writer->isLocal(i);
-        }
-        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_original_all).Increment(packet_bytes * tunnel_cnt);
-        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_none_local).Increment(packet_bytes * local_tunnel_cnt);
-    }
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

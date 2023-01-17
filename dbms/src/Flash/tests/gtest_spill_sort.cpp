@@ -37,7 +37,7 @@ try
     DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}, {"c", TiDB::TP::TypeLongLong}, {"d", TiDB::TP::TypeLongLong}, {"e", TiDB::TP::TypeLongLong}};
     ColumnsWithTypeAndName column_data;
     size_t table_rows = 102400;
-    size_t max_block_size = 500;
+    UInt64 max_block_size = 500;
     size_t original_max_streams = 20;
     size_t total_data_size = 0;
     size_t limit_size = table_rows / 10 * 9;
@@ -55,7 +55,7 @@ try
                        .scan("spill_sort_test", "simple_table")
                        .topN(order_by_items, limit_size)
                        .build(context);
-    context.context.setSetting("max_block_size", Field(max_block_size));
+    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
     context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, original_max_streams);
