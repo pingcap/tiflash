@@ -70,7 +70,6 @@ int DataStreamExecutor::estimateNewThreadCount()
 
 ACU DataStreamExecutor::acu()
 {
-    
-    return 0;
+    return data_stream->estimateCPUTime();
 }
 } // namespace DB

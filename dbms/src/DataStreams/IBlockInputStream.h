@@ -108,7 +108,13 @@ public:
         return cnt;
     }
 
-    uint64_t estimateCPUTime(bool is_root = true);
+    uint64_t estimateCPUTime()
+    {
+        resetCPUTimeCompute();
+        return collectCPUTime(true);
+    }
+
+    uint64_t collectCPUTime(bool is_root);
 
     virtual ~IBlockInputStream() = default;
 
@@ -152,9 +158,9 @@ public:
 
     virtual void collectNewThreadCount(int & cnt)
     {
-        if (!collected)
+        if (!thread_cnt_collected)
         {
-            collected = true;
+            thread_cnt_collected = true;
             collectNewThreadCountOfThisLevel(cnt);
             for (auto & child : children)
             {
@@ -169,13 +175,13 @@ public:
     virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
 protected:
-    virtual uint64_t estimateCPUTimeImpl(bool /*is_root*/) { return 0; }
+    virtual uint64_t collectCPUTimeImpl(bool /*is_root*/) { return 0; }
 
     void resetNewThreadCountCompute()
     {
-        if (collected)
+        if (thread_cnt_collected)
         {
-            collected = false;
+            thread_cnt_collected = false;
             for (auto & child : children)
             {
                 if (child)
@@ -184,10 +190,25 @@ protected:
         }
     }
 
+    void resetCPUTimeCompute()
+    {
+        if (cpu_time_collected)
+        {
+            cpu_time_collected = false;
+            for (auto & child : children)
+            {
+                if (child)
+                    child->resetCPUTimeCompute();
+            }
+        }
+    }
+
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
-    bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
+    // flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
+    bool thread_cnt_collected = false;
+    bool cpu_time_collected = false;
 
 private:
     TableLockHolders table_locks;

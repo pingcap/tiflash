@@ -62,6 +62,7 @@ protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
 
+    uint64_t collectCPUTimeImpl(bool is_root) override;
 
 private:
     const LoggerPtr log;

@@ -183,6 +183,16 @@ protected:
             throw Exception(exception_msg);
     }
 
+    uint64_t collectCPUTimeImpl(bool /*is_root*/) override
+    {
+        uint64_t cpu_time = 0;
+        forEachChild([&](IBlockInputStream & child) {
+            cpu_time += child.collectCPUTime(true);
+            return false;
+        });
+        return cpu_time;
+    }
+
 private:
     MPMCQueue<Block> queue;
 
