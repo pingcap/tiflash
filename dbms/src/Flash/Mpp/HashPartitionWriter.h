@@ -19,25 +19,37 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
+namespace DB::HashBaseWriterHelper
+{
+struct HashPartitionWriterHelperV1;
+}
 namespace DB
 {
 class DAGContext;
+enum class CompressionMethod;
+enum MPPDataPacketVersion : int64_t;
 
 template <class ExchangeWriterPtr>
 class HashPartitionWriter : public DAGResponseWriter
 {
 public:
+    // If `batch_send_min_limit_` is LT 0, `batch_send_min_limit` will be set to `8192 * partition_num`
     HashPartitionWriter(
         ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 batch_send_min_limit_,
-        DAGContext & dag_context_);
+        DAGContext & dag_context_,
+        MPPDataPacketVersion data_codec_version,
+        tipb::CompressionMode compression_mode_);
     void write(const Block & block) override;
     void flush() override;
+    ~HashPartitionWriter() override;
 
 private:
     void partitionAndEncodeThenWriteBlocks();
+    void partitionAndEncodeThenWriteBlocksImpl();
+    void partitionAndEncodeThenWriteBlocksImplV1();
 
     void writePackets(TrackedMppDataPacketPtrs & packets);
 
@@ -50,6 +62,10 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+    // support data compression
+    MPPDataPacketVersion data_codec_version;
+    CompressionMethod compression_method{};
+    std::unique_ptr<HashBaseWriterHelper::HashPartitionWriterHelperV1> codec_helper_v1{};
 };
 
 } // namespace DB

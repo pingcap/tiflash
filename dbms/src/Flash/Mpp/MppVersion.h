@@ -30,6 +30,7 @@ enum MPPDataPacketVersion : int64_t
 {
     MPPDataPacketV0 = 0,
     MPPDataPacketV1,
+    //
     MPPDataPacketMAX,
 };
 

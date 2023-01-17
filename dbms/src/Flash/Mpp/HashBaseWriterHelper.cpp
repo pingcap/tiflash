@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB::HashBaseWriterHelper
 {
@@ -179,6 +181,19 @@ void scatterColumnsForFineGrainedShuffle(const Block & block,
         const auto & column = block.getByPosition(i).column;
         column->scatterTo(scattered[i], selector);
     }
+}
+
+HashPartitionWriterHelperV1::HashPartitionWriterHelperV1(const std::vector<tipb::FieldType> & field_types)
+{
+    for (const auto & field_type : field_types)
+    {
+        expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+    }
+}
+void HashPartitionWriterHelperV1::checkBlock(const Block & block) const
+{
+    DB::assertBlockSchema(expected_types, block, "HashPartitionWriterHelper");
+    block.checkNumberOfRows();
 }
 
 } // namespace DB::HashBaseWriterHelper

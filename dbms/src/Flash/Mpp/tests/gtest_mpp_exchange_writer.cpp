@@ -26,9 +26,7 @@
 
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
-#include <Flash/Mpp/FineGrainedShuffleWriterV1.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
-#include <Flash/Mpp/HashPartitionWriterV1.cpp>
 #include <utility>
 
 namespace DB
@@ -182,7 +180,9 @@ try
         part_col_collators,
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
-        fine_grained_shuffle_batch_size);
+        fine_grained_shuffle_batch_size,
+        DB::MPPDataPacketV0,
+        tipb::CompressionMode::NONE);
     dag_writer->prepare(block.cloneEmpty());
     dag_writer->write(block);
     dag_writer->flush();
@@ -237,13 +237,14 @@ try
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
         // 3. Start to write.
-        auto dag_writer = std::make_shared<FineGrainedShuffleWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
             *dag_context_ptr,
             fine_grained_shuffle_stream_count,
             fine_grained_shuffle_batch_size,
+            DB::MPPDataPacketV1,
             mode);
         dag_writer->prepare(blocks[0].cloneEmpty());
         for (const auto & block : blocks)
@@ -264,6 +265,8 @@ try
             for (const auto & packet : write_report[part_index])
             {
                 ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+                ASSERT_EQ(DB::MPPDataPacketV1, packet->getPacket().version());
+
                 for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
                 {
                     const auto & chunk = packet->getPacket().chunks(i);
@@ -330,7 +333,9 @@ try
         part_col_collators,
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
-        fine_grained_shuffle_batch_size);
+        fine_grained_shuffle_batch_size,
+        DB::MPPDataPacketV0,
+        tipb::CompressionMode::NONE);
     dag_writer->prepare(blocks[0].cloneEmpty());
     for (const auto & block : blocks)
         dag_writer->write(block);
@@ -391,7 +396,9 @@ try
         part_col_ids,
         part_col_collators,
         batch_send_min_limit,
-        *dag_context_ptr);
+        *dag_context_ptr,
+        DB::MPPDataPacketV0,
+        tipb::CompressionMode::NONE);
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
@@ -506,12 +513,13 @@ try
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
         // 3. Start to write.
-        auto dag_writer = std::make_shared<HashPartitionWriterV1<std::shared_ptr<MockExchangeWriter>>>(
+        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
             batch_send_min_limit,
             *dag_context_ptr,
+            DB::MPPDataPacketV1,
             mode);
         for (const auto & block : blocks)
             dag_writer->write(block);

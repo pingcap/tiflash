@@ -57,4 +57,12 @@ void scatterColumnsForFineGrainedShuffle(const Block & block,
                                          WeakHash32 & hash,
                                          IColumn::Selector & selector,
                                          std::vector<IColumn::ScatterColumns> & scattered);
+
+// Used to hold expected types for codec
+struct HashPartitionWriterHelperV1
+{
+    DataTypes expected_types;
+    explicit HashPartitionWriterHelperV1(const std::vector<tipb::FieldType> & field_types);
+    void checkBlock(const Block & block) const;
+};
 } // namespace DB::HashBaseWriterHelper
