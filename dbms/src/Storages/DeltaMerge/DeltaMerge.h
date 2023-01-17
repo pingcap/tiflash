@@ -283,7 +283,7 @@ private:
         ColumnUInt32::Container & v = seg_row_id_col->getData();
         auto offset = v.size();
         v.resize(v.size() + limit);
-        for (UInt64 i = 0; i < limit; i++)
+        for (UInt64 i = 0; i < limit; ++i)
         {
             v[offset + i] = start + i;
         }
@@ -294,7 +294,7 @@ private:
         ColumnUInt32::Container & v = seg_row_id_col->getData();
         auto offset = v.size();
         v.resize(v.size() + row_ids.size());
-        for (UInt32 i = 0; i < row_ids.size(); i++)
+        for (UInt32 i = 0; i < row_ids.size(); ++i)
         {
             v[offset + i] = row_ids[i] + stable_rows;
         }
