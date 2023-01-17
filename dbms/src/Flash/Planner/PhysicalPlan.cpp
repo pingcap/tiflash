@@ -301,7 +301,6 @@ PipelinePtr PhysicalPlan::toPipeline()
     auto pipeline = builder.build();
     auto to_string = [&]() -> String {
         FmtBuffer buffer;
-        // just call the root pipeline.
         pipeline->toTreeString(buffer);
         return buffer.toString();
     };
