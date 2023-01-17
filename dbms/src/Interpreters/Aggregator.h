@@ -29,6 +29,7 @@
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
 #include <Common/ThreadManager.h>
+#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
@@ -812,6 +813,13 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     bool isConvertibleToTwoLevel() const
     {
+        return isConvertibleToTwoLevel(type);
+    }
+
+    static size_t getBucketNumberForTwoLevelHashTable(Type type);
+
+    static bool isConvertibleToTwoLevel(Type type)
+    {
         switch (type)
         {
 #define M(NAME)      \
@@ -901,6 +909,7 @@ public:
         bool empty_result_for_aggregation_by_empty_set;
 
         const std::string tmp_path;
+        SpillConfig spill_config;
 
         UInt64 max_block_size;
         TiDB::TiDBCollators collators;
@@ -915,7 +924,7 @@ public:
             size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
-            const std::string & tmp_path_,
+            const SpillConfig & spill_config_,
             UInt64 max_block_size_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
@@ -929,7 +938,7 @@ public:
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
-            , tmp_path(tmp_path_)
+            , spill_config(spill_config_)
             , max_block_size(max_block_size_)
             , collators(collators_)
         {
@@ -939,9 +948,10 @@ public:
         Params(const Block & intermediate_header_,
                const ColumnNumbers & keys_,
                const AggregateDescriptions & aggregates_,
-               UInt64 max_block_size_ = DEFAULT_BLOCK_SIZE,
+               const SpillConfig & spill_config,
+               UInt64 max_block_size_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, OverflowMode::THROW, 0, 0, 0, false, "", max_block_size_, collators_)
+            : Params(Block(), keys_, aggregates_, 0, OverflowMode::THROW, 0, 0, 0, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -966,7 +976,7 @@ public:
     Aggregator(const Params & params_, const String & req_id);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
-    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
+    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
@@ -977,7 +987,6 @@ public:
     bool executeOnBlock(
         const Block & block,
         AggregatedDataVariants & result,
-        const FileProviderPtr & file_provider,
         ColumnRawPtrs & key_columns,
         AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         Int64 & local_delta_memory);
@@ -1001,7 +1010,7 @@ public:
     using BucketToBlocks = std::map<Int32, BlocksList>;
 
     /// Merge several partially aggregated blocks into one.
-    Block mergeBlocks(BlocksList & blocks, bool final);
+    BlocksList mergeBlocks(BlocksList & blocks, bool final);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
@@ -1015,25 +1024,10 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void writeToTemporaryFile(AggregatedDataVariants & data_variants, const FileProviderPtr & file_provider);
-
-    bool hasTemporaryFiles() const { return !temporary_files.empty(); }
-
-    struct TemporaryFiles
-    {
-        std::vector<std::unique_ptr<Poco::TemporaryFile>> files;
-        size_t sum_size_uncompressed = 0;
-        size_t sum_size_compressed = 0;
-        mutable std::mutex mutex;
-
-        bool empty() const
-        {
-            std::lock_guard lock(mutex);
-            return files.empty();
-        }
-    };
-
-    const TemporaryFiles & getTemporaryFiles() const { return temporary_files; }
+    void spill(AggregatedDataVariants & data_variants);
+    void finishSpill();
+    BlockInputStreams restoreSpilledData();
+    bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1091,7 +1085,7 @@ protected:
     CancellationHook is_cancelled;
 
     /// For external aggregation.
-    TemporaryFiles temporary_files;
+    std::unique_ptr<Spiller> spiller;
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();
@@ -1132,10 +1126,9 @@ protected:
         Arena * arena);
 
     template <typename Method>
-    void writeToTemporaryFileImpl(
+    void spillImpl(
         AggregatedDataVariants & data_variants,
-        Method & method,
-        IBlockOutputStream & out);
+        Method & method);
 
 protected:
     /// Merge data from hash table `src` into `dst`.
