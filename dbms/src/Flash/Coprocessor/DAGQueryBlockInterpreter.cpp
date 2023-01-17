@@ -16,23 +16,18 @@
 #include <Common/TiFlashException.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
-#include <DataStreams/MockExchangeReceiverInputStream.h>
 #include <DataStreams/MockExchangeSenderInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -45,7 +40,6 @@
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -400,6 +394,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     Block before_agg_header = pipeline.firstStream()->getHeader();
 
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -407,7 +402,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
         key_names,
         collators,
         aggregate_descriptions,
-        is_final_agg);
+        is_final_agg,
+        spill_config);
 
     if (enable_fine_grained_shuffle)
     {
@@ -416,7 +412,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
                 params,
-                context.getFileProvider(),
                 true,
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
@@ -431,7 +426,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             pipeline.streams,
             BlockInputStreams{},
             params,
-            context.getFileProvider(),
             true,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
@@ -446,15 +440,10 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
     else
     {
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-
-        pipeline.streams.resize(1);
+        assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
+            pipeline.firstStream(),
             params,
-            context.getFileProvider(),
             true,
             log->identifier());
         recordProfileStreams(pipeline, query_block.aggregation_name);
