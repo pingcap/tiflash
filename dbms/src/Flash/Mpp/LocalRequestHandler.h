@@ -22,10 +22,12 @@ struct LocalRequestHandler
 {
     LocalRequestHandler(
         MemoryTracker * recv_mem_tracker_,
-        std::function<void(bool, const String &)> && notify_receiver_,
+        std::function<void(bool, const String &)> && notify_write_done_,
+        std::function<void()> && notify_close_,
         ReceiverChannelWriter && channel_writer_)
         : recv_mem_tracker(recv_mem_tracker_)
-        , notify_receiver(std::move(notify_receiver_))
+        , notify_write_done(std::move(notify_write_done_))
+        , notify_close(std::move(notify_close_))
         , channel_writer(std::move(channel_writer_))
     {}
 
@@ -35,13 +37,19 @@ struct LocalRequestHandler
         return channel_writer.write<enable_fine_grained_shuffle>(source_index, tracked_packet);
     }
 
-    void connectionLocalDone(bool meet_error, const String & local_err_msg) const
+    void writeDone(bool meet_error, const String & local_err_msg) const
     {
-        notify_receiver(meet_error, local_err_msg);
+        notify_write_done(meet_error, local_err_msg);
+    }
+
+    void closeConnection() const
+    {
+        notify_close();
     }
 
     MemoryTracker * recv_mem_tracker;
-    std::function<void(bool, const String &)> notify_receiver;
+    std::function<void(bool, const String &)> notify_write_done;
+    std::function<void()> notify_close;
     ReceiverChannelWriter channel_writer;
 };
 } // namespace DB
