@@ -77,9 +77,6 @@ protected:
         if (data.empty())
             return {};
 
-        if (current_bucket_num >= NUM_BUCKETS)
-            return {};
-
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
         AggregatedDataVariantsPtr & first = data[0];
@@ -88,18 +85,24 @@ protected:
         {
             ++current_bucket_num;
 
-            if (first->type == AggregatedDataVariants::Type::without_key || aggregator.params.overflow_row)
+            if (first->type == AggregatedDataVariants::Type::without_key)
             {
                 aggregator.mergeWithoutKeyDataImpl(data);
-                return aggregator.prepareBlockAndFillWithoutKey(
+                single_level_blocks = aggregator.prepareBlocksAndFillWithoutKey(
                     *first,
-                    final,
-                    first->type != AggregatedDataVariants::Type::without_key);
+                    final);
+                return popBlocksListFront(single_level_blocks);
             }
         }
 
         if (!first->isTwoLevel())
         {
+            Block out_block = popBlocksListFront(single_level_blocks);
+            if (likely(out_block))
+            {
+                return out_block;
+            }
+
             if (current_bucket_num > 0)
                 return {};
 
@@ -121,10 +124,16 @@ protected:
                 throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
             }
 #undef M
-            return aggregator.prepareBlockAndFillSingleLevel(*first, final);
+            single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final);
+            return popBlocksListFront(single_level_blocks);
         }
         else
         {
+            Block out_block = popBlocksListFront(two_level_blocks);
+            if (likely(out_block))
+            {
+                return out_block;
+            }
             if (!parallel_merge_data)
             {
                 parallel_merge_data = std::make_unique<ParallelMergeData>(threads);
@@ -132,11 +141,14 @@ protected:
                     scheduleThreadForNextBucket();
             }
 
-            Block res;
-
             while (true)
             {
                 std::unique_lock lock(parallel_merge_data->mutex);
+
+                if (current_bucket_num >= NUM_BUCKETS)
+                {
+                    return {};
+                }
 
                 if (parallel_merge_data->exception)
                     std::rethrow_exception(parallel_merge_data->exception);
@@ -144,28 +156,32 @@ protected:
                 auto it = parallel_merge_data->ready_blocks.find(current_bucket_num);
                 if (it != parallel_merge_data->ready_blocks.end())
                 {
-                    ++current_bucket_num;
                     scheduleThreadForNextBucket();
+                    current_bucket_num++;
 
-                    if (it->second)
+                    if (!it->second.empty())
                     {
-                        res.swap(it->second);
-                        break;
-                    }
-                    else if (current_bucket_num >= NUM_BUCKETS)
-                        break;
-                }
+                        two_level_blocks.splice(two_level_blocks.end(), std::move(it->second), it->second.begin(), it->second.end());
 
+                        Block out = popBlocksListFront(two_level_blocks);
+                        if (likely(out))
+                        {
+                            return out;
+                        }
+                    }
+
+                    continue;
+                }
                 parallel_merge_data->condvar.wait(lock);
             }
-
-            return res;
         }
     }
 
 private:
     const LoggerPtr log;
     const Aggregator & aggregator;
+    BlocksList single_level_blocks;
+    BlocksList two_level_blocks;
     ManyAggregatedDataVariants data;
     bool final;
     size_t threads;
@@ -176,7 +192,7 @@ private:
 
     struct ParallelMergeData
     {
-        std::map<Int32, Block> ready_blocks;
+        BucketBlocksListMap ready_blocks;
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
@@ -202,11 +218,9 @@ private:
     {
         try
         {
-            /// TODO: add no_more_keys support maybe
-
             auto & merged_data = *data[0];
             auto method = merged_data.type;
-            Block block;
+            BlocksList blocks;
 
             /// Select Arena to avoid race conditions
             size_t thread_number = static_cast<size_t>(bucket_num) % threads;
@@ -216,7 +230,7 @@ private:
     case AggregationMethodType(NAME):                                                     \
     {                                                                                     \
         aggregator.mergeBucketImpl<AggregationMethodName(NAME)>(data, bucket_num, arena); \
-        block = aggregator.convertOneBucketToBlock(                                       \
+        blocks = aggregator.convertOneBucketToBlocks(                                     \
             merged_data,                                                                  \
             *ToAggregationMethodPtr(NAME, merged_data.aggregation_method_impl),           \
             arena,                                                                        \
@@ -233,7 +247,7 @@ private:
 #undef M
 
             std::lock_guard lock(parallel_merge_data->mutex);
-            parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
+            parallel_merge_data->ready_blocks[bucket_num] = std::move(blocks);
         }
         catch (...)
         {
@@ -243,6 +257,17 @@ private:
         }
 
         parallel_merge_data->condvar.notify_all();
+    }
+
+    static Block popBlocksListFront(BlocksList & blocks)
+    {
+        if (!blocks.empty())
+        {
+            Block out_block = blocks.front();
+            blocks.pop_front();
+            return out_block;
+        }
+        return {};
     }
 };
 

@@ -711,27 +711,20 @@ public:
             return OverflowMode::THROW;
         if (s == "break")
             return OverflowMode::BREAK;
-        if (s == "any")
-            return OverflowMode::ANY;
 
         throw Exception("Unknown overflow mode: '" + s + "', must be one of 'throw', 'break', 'any'", ErrorCodes::UNKNOWN_OVERFLOW_MODE);
     }
 
     static OverflowMode getOverflowMode(const String & s)
     {
-        OverflowMode mode = getOverflowModeForGroupBy(s);
-
-        if (mode == OverflowMode::ANY && !enable_mode_any)
-            throw Exception("Illegal overflow mode: 'any' is only for 'group_by_overflow_mode'", ErrorCodes::ILLEGAL_OVERFLOW_MODE);
-
-        return mode;
+        return getOverflowModeForGroupBy(s);
     }
 
     String toString() const
     {
-        const char * strings[] = {"throw", "break", "any"};
+        const char * strings[] = {"throw", "break"};
 
-        if (value < OverflowMode::THROW || value > OverflowMode::ANY)
+        if (value < OverflowMode::THROW || value > OverflowMode::BREAK)
             throw Exception("Unknown overflow mode", ErrorCodes::UNKNOWN_OVERFLOW_MODE);
 
         return strings[static_cast<size_t>(value)];
