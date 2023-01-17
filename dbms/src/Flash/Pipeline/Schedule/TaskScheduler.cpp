@@ -65,7 +65,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
             task.reset();
             break;
         default:
-            RUNTIME_ASSERT(false, logger, "Unexpected task state {}", magic_enum::enum_name(status));
+            UNEXPECTED_STATUS(logger, status);
         }
     }
     tasks.clear();
