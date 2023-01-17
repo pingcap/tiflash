@@ -51,7 +51,7 @@ private:
     std::function<void *()> action;
 };
 
-using GRPCKickFunc = std::function<grpc_call_error(KickSendTag *)>;
+using GRPCSendKickFunc = std::function<grpc_call_error(KickSendTag *)>;
 
 enum class GRPCSendQueueRes
 {
@@ -92,7 +92,7 @@ public:
     }
 
     // For gtest usage.
-    GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
+    GRPCSendQueue(size_t queue_size, GRPCSendKickFunc func)
         : send_queue(queue_size)
         , log(Logger::get())
         , kick_func(func)
@@ -268,7 +268,7 @@ private:
     Status status = Status::NONE;
     void * tag = nullptr;
 
-    GRPCKickFunc kick_func;
+    GRPCSendKickFunc kick_func;
 
     KickSendTag kick_send_tag;
 };

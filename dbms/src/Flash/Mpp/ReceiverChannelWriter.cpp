@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,35 +37,62 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]]
 }
 } // namespace
 
+template <bool enable_fine_grained_shuffle>
+bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
+{
+    const mpp::Error * error_ptr = getErrorPtr(tracked_packet->packet);
+    const String * resp_ptr = getRespPtr(tracked_packet->packet);
+
+    bool success;
+    if constexpr (enable_fine_grained_shuffle)
+        success = writeFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
+    else
+        success = writeNonFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
+
+    if (likely(success))
+        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
+    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels->size(), success, enable_fine_grained_shuffle);
+    return success;
+}
+
+bool ReceiverChannelWriter::splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks)
+{
+    if (packet.chunks().empty())
+        return true;
+
+    // Packet not empty.
+    if (unlikely(packet.stream_ids().empty()))
+    {
+        // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
+        // This can happen when there are old version nodes when upgrading.
+        LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
+                        "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                        "Cannot handle this.",
+                    source_index);
+        return false;
+    }
+
+    // packet.stream_ids[i] is corresponding to packet.chunks[i],
+    // indicating which stream_id this chunk belongs to.
+    RUNTIME_ASSERT(packet.chunks_size() == packet.stream_ids_size(), log, "packet's chunk size shoule be equal to it's size of streams");
+
+    for (int i = 0; i < packet.stream_ids_size(); ++i)
+    {
+        UInt64 stream_id = packet.stream_ids(i) % msg_channels->size();
+        chunks[stream_id].push_back(&packet.chunks(i));
+    }
+
+    return true;
+}
+
 bool ReceiverChannelWriter::writeFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
 {
     bool success = true;
     auto & packet = tracked_packet->packet;
     std::vector<std::vector<const String *>> chunks(msg_channels->size());
-    if (!packet.chunks().empty())
-    {
-        // Packet not empty.
-        if (unlikely(packet.stream_ids().empty()))
-        {
-            // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
-            // This can happen when there are old version nodes when upgrading.
-            LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                           "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                           "Cannot handle this.",
-                      source_index);
-            return false;
-        }
 
-        // packet.stream_ids[i] is corresponding to packet.chunks[i],
-        // indicating which stream_id this chunk belongs to.
-        assert(packet.chunks_size() == packet.stream_ids_size());
-
-        for (int i = 0; i < packet.stream_ids_size(); ++i)
-        {
-            UInt64 stream_id = packet.stream_ids(i) % msg_channels->size();
-            chunks[stream_id].push_back(&packet.chunks(i));
-        }
-    }
+    if (!splitPacketIntoChunks(source_index, packet, chunks))
+        return false;
 
     // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
     for (size_t i = 0; i < msg_channels->size() && success; ++i)

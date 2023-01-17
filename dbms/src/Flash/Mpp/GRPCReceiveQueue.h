@@ -66,7 +66,7 @@ private:
     void * tag;
 };
 
-using GRPCKickFunc = std::function<grpc_call_error(KickReceiveTag *)>;
+using GRPCReceiveKickFunc = std::function<grpc_call_error(KickReceiveTag *)>;
 
 enum class GRPCReceiveQueueRes
 {
@@ -101,7 +101,7 @@ public:
     }
 
     // For gtest usage.
-    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, GRPCKickFunc func)
+    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, GRPCReceiveKickFunc func)
         : recv_queue(recv_queue_)
         , log(Logger::get())
         , kick_func(func)
@@ -242,7 +242,7 @@ private:
     std::mutex mu;
     std::map<void *, KickReceiveTag> kick_recv_tags_map; // Create a KickReceiveTag for each receiver
     const LoggerPtr log;
-    GRPCKickFunc kick_func;
+    GRPCReceiveKickFunc kick_func;
 };
 
 } // namespace DB

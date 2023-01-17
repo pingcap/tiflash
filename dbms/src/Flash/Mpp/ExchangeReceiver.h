@@ -18,9 +18,11 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Interpreters/Context.h>
 
 #include <future>
+#include <memory>
 #include <mutex>
 #include <thread>
 
@@ -127,8 +129,8 @@ private:
     void readLoop(const Request & req);
     template <bool enable_fine_grained_shuffle>
     void reactor(const std::vector<Request> & async_requests);
-    void setUpConnection();
 
+    void setUpConnection();
     bool setEndState(ExchangeReceiverState new_state);
     String getStatusString();
 
@@ -161,10 +163,17 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
-    void prepareMsgChannels();
     void addLocalConnectionNum();
     void addSyncConnectionNum();
-    void addAsyncConnectionNum(Int32 conn_num);
+    void addAsyncConnectionNum();
+
+    void prepareMsgChannels();
+    void createAsyncRequestHandler(Request && request);
+    void destructAllAsyncRequestHandler();
+
+    void setUpLocalConnection(const Request & req);
+    void setUpSyncConnection(Request && req);
+    void setUpAsyncConnection(std::vector<Request> && async_requests);
 
     bool isReceiverForTiFlashStorage()
     {
@@ -185,6 +194,9 @@ private:
     DAGSchema schema;
 
     std::vector<MsgChannelPtr> msg_channels;
+
+    std::vector<AsyncRequestHandler<RPCContext, true> *> async_handler_fine_grained_ptr;
+    std::vector<AsyncRequestHandler<RPCContext, false> *> async_handler_no_fine_grained_ptr;
 
     std::mutex mu;
     std::condition_variable cv;

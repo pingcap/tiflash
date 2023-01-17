@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Flash/Mpp/GRPCReceiveQueue.h>
 
 namespace DB
 {
@@ -108,24 +109,18 @@ public:
     // Return true if all push succeed, otherwise return false.
     // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
     template <bool enable_fine_grained_shuffle>
-    bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
-    {
-        const mpp::Error * error_ptr = getErrorPtr(tracked_packet->packet);
-        const String * resp_ptr = getRespPtr(tracked_packet->packet);
-
-        bool success;
-        if constexpr (enable_fine_grained_shuffle)
-            success = writeFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
-        else
-            success = writeNonFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
-
-        if (likely(success))
-            ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
-        LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels->size(), success, enable_fine_grained_shuffle);
-        return success;
-    }
+    bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
 private:
+    bool splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
+
+    template <typename AsyncReader>
+    void createGRPCReceiveQueues(const std::shared_ptr<AsyncReader> & reader)
+    {
+        for (auto & channel_ptr : *msg_channels)
+            grpc_recv_queues.emplace_back(channel_ptr, reader->client_context.c_call(), log);
+    }
+
     static const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
     {
         if (unlikely(packet.has_error()))
@@ -145,6 +140,7 @@ private:
 
     std::atomic<Int64> * data_size_in_queue;
     std::vector<MsgChannelPtr> * msg_channels;
+    std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queues;
     String req_info;
     const LoggerPtr log;
     ReceiverMode mode;

@@ -42,262 +42,6 @@ String constructStatusString(ExchangeReceiverState state, const String & error_m
         return fmt::format("Receiver state: {}", magic_enum::enum_name(state));
     return fmt::format("Receiver state: {}, error message: {}", magic_enum::enum_name(state), error_message);
 }
-
-enum class AsyncRequestStage
-{
-    NEED_INIT,
-    WAIT_MAKE_READER,
-    WAIT_BATCH_READ,
-    WAIT_FINISH,
-    WAIT_RETRY,
-    FINISHED,
-};
-
-using Clock = std::chrono::system_clock;
-using TimePoint = Clock::time_point;
-
-constexpr Int32 max_retry_times = 10;
-constexpr Int32 retry_interval_time = 1; // second
-
-template <typename RPCContext, bool enable_fine_grained_shuffle>
-class AsyncRequestHandler : public UnaryCallback<bool>
-{
-public:
-    using Status = typename RPCContext::Status;
-    using Request = typename RPCContext::Request;
-    using AsyncReader = typename RPCContext::AsyncReader;
-    using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
-
-    AsyncRequestHandler(
-        MPMCQueue<Self *> * queue,
-        std::vector<MsgChannelPtr> * msg_channels_,
-        const std::shared_ptr<RPCContext> & context,
-        const Request & req,
-        const String & req_id,
-        std::atomic<Int64> * data_size_in_queue)
-        : rpc_context(context)
-        , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
-        , request(&req)
-        , notify_queue(queue)
-        , msg_channels(msg_channels_)
-        , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , log(Logger::get(req_id, req_info))
-        , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ReceiverMode::Async)
-    {
-        packets.resize(batch_packet_count);
-        for (auto & packet : packets)
-            packet = std::make_shared<TrackedMppDataPacket>();
-
-        start();
-    }
-
-    // execute will be called by RPC framework so it should be as light as possible.
-    void execute(bool & ok) override
-    {
-        switch (stage)
-        {
-        case AsyncRequestStage::WAIT_RETRY:
-            start();
-            break;
-        case AsyncRequestStage::WAIT_MAKE_READER:
-        {
-            // Use lock to ensure reader is created already in reactor thread
-            std::lock_guard lock(mu);
-            if (!ok)
-            {
-                reader.reset();
-                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
-                if (!retryOrDone("Exchange receiver meet error : send async stream request fail"))
-                    notifyReactor();
-            }
-            else
-            {
-                stage = AsyncRequestStage::WAIT_BATCH_READ;
-                read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
-            }
-            break;
-        }
-        case AsyncRequestStage::WAIT_BATCH_READ:
-            if (ok)
-                ++read_packet_index;
-
-            if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
-                notifyReactor();
-            else
-                reader->read(packets[read_packet_index], thisAsUnaryCallback());
-            break;
-        case AsyncRequestStage::WAIT_FINISH:
-            notifyReactor();
-            break;
-        default:
-            __builtin_unreachable();
-        }
-    }
-
-    // handle will be called by ExchangeReceiver::reactor.
-    void handle()
-    {
-        std::string err_info;
-        LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
-        switch (stage)
-        {
-        case AsyncRequestStage::WAIT_BATCH_READ:
-            LOG_TRACE(log, "Received {} packets.", read_packet_index);
-            if (read_packet_index > 0)
-                has_data = true;
-
-            if (auto error_message = getErrorFromPackets(); !error_message.empty())
-                setDone(fmt::format("Exchange receiver meet error : {}", error_message));
-            else if (!sendPackets())
-                setDone("Exchange receiver meet error : push packets fail");
-            else if (read_packet_index < batch_packet_count)
-            {
-                stage = AsyncRequestStage::WAIT_FINISH;
-                reader->finish(finish_status, thisAsUnaryCallback());
-            }
-            else
-            {
-                read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
-            }
-            break;
-        case AsyncRequestStage::WAIT_FINISH:
-            if (finish_status.ok())
-                setDone("");
-            else
-            {
-                LOG_WARNING(
-                    log,
-                    "Finish fail. err code: {}, err msg: {}, retry time {}",
-                    finish_status.error_code(),
-                    finish_status.error_message(),
-                    retry_times);
-                retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
-            }
-            break;
-        default:
-            __builtin_unreachable();
-        }
-    }
-
-    bool finished() const
-    {
-        return stage == AsyncRequestStage::FINISHED;
-    }
-
-    bool meetError() const { return meet_error; }
-    const String & getErrMsg() const { return err_msg; }
-    const LoggerPtr & getLog() const { return log; }
-
-private:
-    void notifyReactor()
-    {
-        notify_queue->push(this);
-    }
-
-    String getErrorFromPackets()
-    {
-        // step 1: check if there is error packet
-        // only the last packet may has error, see execute().
-        if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
-            return packets[read_packet_index - 1]->error();
-        // step 2: check memory overflow error
-        for (size_t i = 0; i < read_packet_index; ++i)
-        {
-            packets[i]->recomputeTrackedMem();
-            if (packets[i]->hasError())
-                return packets[i]->error();
-        }
-        return "";
-    }
-
-    bool retriable() const
-    {
-        return !has_data && retry_times + 1 < max_retry_times;
-    }
-
-    void setDone(String && msg)
-    {
-        if (!msg.empty())
-        {
-            meet_error = true;
-            err_msg = std::move(msg);
-        }
-        stage = AsyncRequestStage::FINISHED;
-    }
-
-    void start()
-    {
-        stage = AsyncRequestStage::WAIT_MAKE_READER;
-
-        // Use lock to ensure async reader is unreachable from grpc thread before this function returns
-        std::lock_guard lock(mu);
-        rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
-    }
-
-    bool retryOrDone(String done_msg)
-    {
-        if (retriable())
-        {
-            ++retry_times;
-            stage = AsyncRequestStage::WAIT_RETRY;
-
-            // Let alarm put me into CompletionQueue after a while
-            // , so that we can try to connect again.
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), this);
-            return true;
-        }
-        else
-        {
-            setDone(std::move(done_msg));
-            return false;
-        }
-    }
-
-    bool sendPackets()
-    {
-        // note: no exception should be thrown rudely, since it's called by a GRPC poller.
-        for (size_t i = 0; i < read_packet_index; ++i)
-        {
-            auto & packet = packets[i];
-            if (!channel_writer.write<enable_fine_grained_shuffle>(request->source_index, packet))
-                return false;
-
-            // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>();
-        }
-        return true;
-    }
-
-    // in case of potential multiple inheritances.
-    UnaryCallback<bool> * thisAsUnaryCallback()
-    {
-        return static_cast<UnaryCallback<bool> *>(this);
-    }
-
-    std::shared_ptr<RPCContext> rpc_context;
-    grpc::Alarm alarm{};
-    grpc::CompletionQueue * cq; // won't be null and do not delete this pointer
-    const Request * request; // won't be null
-    MPMCQueue<Self *> * notify_queue; // won't be null
-    std::vector<MsgChannelPtr> * msg_channels; // won't be null
-
-    String req_info;
-    bool meet_error = false;
-    bool has_data = false;
-    String err_msg;
-    int retry_times = 0;
-    AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
-
-    std::shared_ptr<AsyncReader> reader;
-    TrackedMPPDataPacketPtrs packets;
-    size_t read_packet_index = 0;
-    Status finish_status = RPCContext::getStatusOK();
-    LoggerPtr log;
-    ReceiverChannelWriter channel_writer;
-    std::mutex mu;
-};
 } // namespace
 
 template <typename RPCContext>
@@ -350,6 +94,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
+    // TODO delete async_req_handler_ptr at the appropriate time
     try
     {
         close();
@@ -434,10 +179,10 @@ void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum(Int32 conn_num)
+void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum()
 {
     std::lock_guard lock(mu);
-    live_connections += conn_num;
+    ++live_connections;
 }
 
 template <typename RPCContext>
@@ -452,53 +197,103 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
         else if (req.is_local)
-        {
-            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
-
-            LocalRequestHandler local_request_handler(
-                getMemoryTracker(),
-                [this](bool meet_error, const String & local_err_msg) {
-                    this->connectionDone(meet_error, local_err_msg, exc_log);
-                },
-                [this]() {
-                    this->connectionLocalDone();
-                },
-                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
-
-            rpc_context->establishMPPConnectionLocal(
-                req,
-                req.source_index,
-                local_request_handler,
-                enable_fine_grained_shuffle_flag,
-                [this]() {
-                    this->addLocalConnectionNum();
-                });
-        }
+            setUpLocalConnection(req);
         else
-        {
-            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
-                if (enable_fine_grained_shuffle_flag)
-                    readLoop<true>(req);
-                else
-                    readLoop<false>(req);
-            });
-
-            ++thread_count;
-        }
+            setUpSyncConnection(std::move(req));
     }
 
-    // TODO: reduce this thread in the future.
-    if (!async_requests.empty())
-    {
-        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] {
-            if (enable_fine_grained_shuffle_flag)
-                reactor<true>(async_requests);
-            else
-                reactor<false>(async_requests);
+    setUpAsyncConnection(std::move(async_requests));
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpLocalConnection(const Request & req)
+{
+    String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+
+    LocalRequestHandler local_request_handler(
+        getMemoryTracker(),
+        [this](bool meet_error, const String & local_err_msg) {
+            this->connectionDone(meet_error, local_err_msg, exc_log);
+        },
+        [this]() {
+            this->connectionLocalDone();
+        },
+        ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+
+    rpc_context->establishMPPConnectionLocal(
+        req,
+        req.source_index,
+        local_request_handler,
+        enable_fine_grained_shuffle_flag,
+        [this]() {
+            this->addLocalConnectionNum();
         });
+}
 
-        ++thread_count;
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpSyncConnection(Request && req)
+{
+    thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
+        if (enable_fine_grained_shuffle_flag)
+            readLoop<true>(req);
+        else
+            readLoop<false>(req);
+    });
+    ++thread_count;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request> && async_requests)
+{
+    if (async_requests.empty())
+        return;
+
+    for (auto & request : async_requests)
+        createAsyncRequestHandler(std::move(request));
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && request)
+{
+    if (enable_fine_grained_shuffle_flag)
+    {
+        async_handler_fine_grained_ptr.push_back(
+            new AsyncRequestHandler<RPCContext, true>(
+                &msg_channels,
+                rpc_context,
+                std::move(request),
+                exc_log->identifier(),
+                &data_size_in_queue,
+                [this]() {
+                    this->addAsyncConnectionNum();
+                })
+        );
     }
+    else
+    {
+        async_handler_no_fine_grained_ptr.push_back(
+            new AsyncRequestHandler<RPCContext, false>(
+                &msg_channels,
+                rpc_context,
+                std::move(request),
+                exc_log->identifier(),
+                &data_size_in_queue,
+                [this]() {
+                    this->addAsyncConnectionNum();
+                })
+        );
+    }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::destructAllAsyncRequestHandler()
+{
+    if (enable_fine_grained_shuffle_flag)
+        for (auto handler_ptr : async_handler_fine_grained_ptr)
+            delete handler_ptr;
+    else
+        for (auto handler_ptr : async_handler_no_fine_grained_ptr)
+            delete handler_ptr;
 }
 
 template <typename RPCContext>
