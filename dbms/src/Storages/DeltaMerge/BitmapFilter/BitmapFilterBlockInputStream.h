@@ -31,7 +31,6 @@ public:
         BlockInputStreamPtr stable_,
         BlockInputStreamPtr delta_,
         size_t stable_rows_,
-        size_t delta_rows_,
         const BitmapFilterPtr & bitmap_filter_,
         const String & req_id_);
 
@@ -55,7 +54,6 @@ private:
     BlockInputStreamPtr stable;
     BlockInputStreamPtr delta;
     size_t stable_rows;
-    [[maybe_unused]] size_t delta_rows;
     BitmapFilterPtr bitmap_filter;
     const LoggerPtr log;
     IColumn::Filter filter{};

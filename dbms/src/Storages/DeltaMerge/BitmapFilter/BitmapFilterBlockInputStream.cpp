@@ -23,14 +23,12 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     BlockInputStreamPtr stable_,
     BlockInputStreamPtr delta_,
     size_t stable_rows_,
-    size_t delta_rows_,
     const BitmapFilterPtr & bitmap_filter_,
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
     , stable(stable_)
     , delta(delta_)
     , stable_rows(stable_rows_)
-    , delta_rows(delta_rows_)
     , bitmap_filter(bitmap_filter_)
     , log(Logger::get(NAME, req_id_))
 {}

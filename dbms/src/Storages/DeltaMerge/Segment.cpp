@@ -2487,7 +2487,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         stable_stream,
         delta_stream,
         segment_snap->stable->getDMFilesRows(),
-        segment_snap->delta->getRows(),
         bitmap_filter,
         dm_context.tracing_id);
 }
