@@ -16,23 +16,18 @@
 #include <Common/TiFlashException.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
-#include <DataStreams/MockExchangeReceiverInputStream.h>
 #include <DataStreams/MockExchangeSenderInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -45,7 +40,6 @@
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -446,13 +440,9 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
     else
     {
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-
-        pipeline.streams.resize(1);
+        assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
+            pipeline.firstStream(),
             params,
             true,
             log->identifier());

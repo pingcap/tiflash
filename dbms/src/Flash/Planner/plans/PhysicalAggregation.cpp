@@ -15,7 +15,6 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -137,14 +136,9 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
     }
     else
     {
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-
-        pipeline.streams.resize(1);
-
+        assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
+            pipeline.firstStream(),
             params,
             true,
             log->identifier());

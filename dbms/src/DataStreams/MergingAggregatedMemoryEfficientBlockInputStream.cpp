@@ -225,7 +225,7 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
         {
             current_result = aggregator.mergeBlocks(*blocks_to_merge, final);
             auto block = popBlocksListFront(current_result);
-            RUNTIME_CHECK_MSG(block, "Block must be non-empty");
+            assert(!block);
             return block;
         }
         else
@@ -272,7 +272,7 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
                     lock.unlock();
                     parallel_merge_data->have_space.notify_one(); /// We consumed block. Merging thread may merge next block for us.
                     res = popBlocksListFront(current_result);
-                    RUNTIME_CHECK_MSG(res, "Block must be non-empty");
+                    assert(!res);
                     break;
                 }
             }
@@ -381,6 +381,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
 
             /// At this point, several merge threads may work in parallel.
             BlocksList res = aggregator.mergeBlocks(*blocks_to_merge, final);
+            assert(!res.empty());
 
             {
                 std::lock_guard lock(parallel_merge_data->merged_blocks_mutex);
