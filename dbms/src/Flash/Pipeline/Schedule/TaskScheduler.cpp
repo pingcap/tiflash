@@ -45,6 +45,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     if (unlikely(tasks.empty()))
         return;
 
+    // The memory tracker is set by the caller.
     std::vector<TaskPtr> running_tasks;
     std::list<TaskPtr> waiting_tasks;
     for (auto & task : tasks)
