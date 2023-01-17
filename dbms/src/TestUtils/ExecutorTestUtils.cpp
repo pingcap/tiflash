@@ -238,6 +238,7 @@ Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::D
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)
 {
     DAGProperties properties;
+    properties.is_mpp_query = false;
     properties.start_ts = 1;
     auto [query_tasks, func_wrap_output_stream] = compileQuery(
         context.context,
