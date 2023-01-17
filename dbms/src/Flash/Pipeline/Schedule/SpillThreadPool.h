@@ -37,14 +37,14 @@ public:
     void submit(TaskPtr && task);
 
 private:
-    void loop() noexcept;
+    void loop(size_t thread_no) noexcept;
 
-    void handleTask(TaskPtr && task);
+    void handleTask(TaskPtr && task, const LoggerPtr & log);
 
 private:
     TaskQueuePtr task_queue = std::make_unique<FIFOTaskQueue>();
 
-    LoggerPtr logger = Logger::get("SpillThreadPool");
+    LoggerPtr logger = Logger::get();
 
     TaskScheduler & scheduler;
 

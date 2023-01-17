@@ -39,14 +39,14 @@ public:
     void submit(std::vector<TaskPtr> & tasks);
 
 private:
-    void loop() noexcept;
+    void loop(size_t thread_no) noexcept;
 
-    void handleTask(TaskPtr & task);
+    void handleTask(TaskPtr & task, const LoggerPtr & log);
 
 private:
     TaskQueuePtr task_queue = std::make_unique<FIFOTaskQueue>();
 
-    LoggerPtr logger = Logger::get("TaskThreadPool");
+    LoggerPtr logger = Logger::get();
 
     TaskScheduler & scheduler;
 

@@ -69,7 +69,7 @@ private:
 
     SpillThreadPool spill_thread_pool;
 
-    LoggerPtr logger = Logger::get("TaskScheduler");
+    LoggerPtr logger = Logger::get();
 
     friend class TaskThreadPool;
     friend class WaitReactor;

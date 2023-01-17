@@ -22,8 +22,6 @@
 #include <common/logger_useful.h>
 #include <errno.h>
 
-#include <magic_enum.hpp>
-
 namespace DB
 {
 namespace
@@ -31,12 +29,13 @@ namespace
 class Spinner
 {
 public:
-    explicit Spinner(TaskThreadPool & task_thread_pool_)
+    Spinner(TaskThreadPool & task_thread_pool_, const LoggerPtr & logger_)
         : task_thread_pool(task_thread_pool_)
+        , logger(logger_->getChild("Spinner"))
     {}
 
     // return true if the task is not in waiting status.
-    bool await(TaskPtr && task)
+    bool awaitAndPushReadyTask(TaskPtr && task)
     {
         assert(task);
         TRACE_MEMORY(task);
@@ -52,28 +51,20 @@ public:
             task.reset();
             return true;
         default:
-            RUNTIME_ASSERT(false, "Unexpected task state {}", magic_enum::enum_name(status));
+            UNEXPECTED_STATUS(logger, status);
         }
     }
 
-    void submitAndTryYield()
+    // return false if there are no ready task to submit.
+    bool submitReadyTasks()
     {
         if (ready_tasks.empty())
-        {
-            tryYield();
-        }
-        else
-        {
-            task_thread_pool.submit(ready_tasks);
-            reset();
-        }
-    }
+            return false;
 
-private:
-    void reset()
-    {
+        task_thread_pool.submit(ready_tasks);
         ready_tasks.clear();
         spin_count = 0;
+        return true;
     }
 
     void tryYield()
@@ -94,6 +85,8 @@ private:
 
 private:
     TaskThreadPool & task_thread_pool;
+
+    LoggerPtr logger;
 
     int16_t spin_count = 0;
 
@@ -134,21 +127,23 @@ void WaitReactor::loop() noexcept
     LOG_INFO(logger, "start wait reactor loop");
     ASSERT_MEMORY_TRACKER
 
-    Spinner spinner{scheduler.task_thread_pool};
+    Spinner spinner{scheduler.task_thread_pool, logger};
     std::list<TaskPtr> local_waiting_tasks;
+    // Get the incremental tasks from wait queue.
     while (likely(wait_queue.take(local_waiting_tasks)))
     {
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
         {
-            if (spinner.await(std::move(*task_it)))
+            if (spinner.awaitAndPushReadyTask(std::move(*task_it)))
                 task_it = local_waiting_tasks.erase(task_it);
             else
                 ++task_it;
             ASSERT_MEMORY_TRACKER
         }
 
-        spinner.submitAndTryYield();
+        if (!spinner.submitReadyTasks())
+            spinner.tryYield();
     }
 
     LOG_INFO(logger, "wait reactor loop finished");

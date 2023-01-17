@@ -14,9 +14,12 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Task/Task.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -27,13 +30,16 @@ namespace DB
     auto memory_tracker = (task)->getMemTracker(); \
     MemoryTrackerSetter memory_tracker_setter{true, memory_tracker.get()};
 
-#define FINISH_STATUS \
-    ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
-
 #define ASSERT_MEMORY_TRACKER                  \
     assert(nullptr == current_memory_tracker); \
     assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
 
-static constexpr int64_t YIELD_MAX_TIME_SPENT = 100'000'000L;
+#define FINISH_STATUS \
+    ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
+
+#define UNEXPECTED_STATUS(logger, status) \
+    RUNTIME_ASSERT(false, (logger), "Unexpected task state {}", magic_enum::enum_name(status));
+
+static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 
 } // namespace DB

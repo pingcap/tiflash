@@ -44,7 +44,7 @@ private:
 private:
     WaitQueue wait_queue;
 
-    LoggerPtr logger = Logger::get("WaitReactor");
+    LoggerPtr logger = Logger::get();
 
     TaskScheduler & scheduler;
 

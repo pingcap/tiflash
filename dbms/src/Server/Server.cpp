@@ -1282,13 +1282,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
     if (enable_pipeline)
     {
-        size_t task_thread_pool_size = settings.pipeline_task_thread_pool_size == 0
-            ? getNumberOfLogicalCPUCores()
-            : static_cast<size_t>(settings.pipeline_task_thread_pool_size);
-        size_t spill_thread_pool_size = settings.pipeline_spill_thread_pool_size == 0
-            ? getNumberOfLogicalCPUCores()
-            : static_cast<size_t>(settings.pipeline_spill_thread_pool_size);
-        TaskSchedulerConfig config{task_thread_pool_size, spill_thread_pool_size};
+        auto get_pool_size = [](const auto & setting) {
+            return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+        };
+        TaskSchedulerConfig config{
+            get_pool_size(settings.pipeline_task_thread_pool_size),
+            get_pool_size(settings.pipeline_spill_thread_pool_size)};
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
