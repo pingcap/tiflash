@@ -42,7 +42,7 @@ static std::mutex global_logger_mutex;
             auto _ = std::lock_guard(global_logger_mutex);                      \
             std::cout << fmt::format(                                           \
                 "[{}][{}:{}][{}]",                                              \
-                std::chrono::steady_clock::now(),                               \
+                Clock::now(),                                                   \
                 &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)],          \
                 __LINE__,                                                       \
                 formatted_message)                                              \
