@@ -629,7 +629,6 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
     if (real_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
 
-    bool use_clean_read = false;
     BlockInputStreamPtr stream;
     if (dm_context.read_delta_only)
     {
@@ -649,7 +648,6 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
     else if (useCleanRead(segment_snap, columns_to_read))
     {
         // No delta, let's try some optimizations.
-        use_clean_read = true;
         stream = segment_snap->stable->getInputStream(
             dm_context,
             *read_info.read_columns,
@@ -687,8 +685,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
         "Finish segment create input stream, max_version={} range_size={} ranges={}",
         max_version,
         real_ranges.size(),
-        DB::DM::toDebugString(read_ranges),
-        use_clean_read);
+        DB::DM::toDebugString(read_ranges));
     return stream;
 }
 
