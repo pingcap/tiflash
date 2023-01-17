@@ -139,12 +139,11 @@ RWLock::LockHolder RWLock::getLock(
         if (const auto owner_query_it = owner_queries.find(query_id); owner_query_it != owner_queries.end())
         {
             if (wrlock_owner != writers_queue.end())
-                throw Exception("RWLock::getLock(): RWLock is already locked in exclusive mode", ErrorCodes::LOGICAL_ERROR);
-
+                throw Exception(fmt::format("RWLock::getLock(): RWLock is already locked in exclusive mode, query_id:{}", query_id), ErrorCodes::LOGICAL_ERROR);
             /// Lock upgrading is not supported
             if (type == Write)
                 throw Exception(
-                    "RWLock::getLock(): Cannot acquire exclusive lock while RWLock is already locked",
+                    fmt::format("RWLock::getLock(): Cannot acquire exclusive lock while RWLock is already locked, query_id:{}", query_id),
                     ErrorCodes::LOGICAL_ERROR);
 
             /// N.B. Type is Read here, query_id is not empty and owner_query_it is a valid iterator
