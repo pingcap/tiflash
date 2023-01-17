@@ -16,6 +16,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPTunnelSetHelper.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -104,6 +105,7 @@ public:
         return block;
     }
 
+
     Context context;
     std::vector<Int64> part_col_ids;
     TiDB::TiDBCollators part_col_collators;
@@ -115,14 +117,41 @@ using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketP
 
 struct MockExchangeWriter
 {
-    MockExchangeWriter(MockExchangeWriterChecker checker_,
-                       uint16_t part_num_)
+    MockExchangeWriter(
+        MockExchangeWriterChecker checker_,
+        uint16_t part_num_,
+        DAGContext & dag_context)
         : checker(checker_)
         , part_num(part_num_)
+        , result_field_types(dag_context.result_field_types)
     {}
 
-    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet) { checker(packet, 0); }
-    void partitionWrite(TrackedMppDataPacketPtr && packet, uint16_t part_id) { checker(packet, part_id); }
+    void broadcastOrPassThroughWrite(Blocks & blocks)
+    {
+        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types), 0);
+    }
+    void partitionWrite(Blocks & blocks, uint16_t part_id)
+    {
+        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types), part_id);
+    }
+    void fineGrainedShuffleWrite(
+        const Block & header,
+        std::vector<IColumn::ScatterColumns> & scattered,
+        size_t bucket_idx,
+        uint16_t fine_grained_shuffle_stream_count,
+        size_t num_columns,
+        int16_t part_id)
+    {
+        auto tracked_packet = MPPTunnelSetHelper::toFineGrainedPacket(
+            header,
+            scattered,
+            bucket_idx,
+            fine_grained_shuffle_stream_count,
+            num_columns,
+            result_field_types);
+        checker(tracked_packet, part_id);
+    }
+
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void sendExecutionSummary(const tipb::SelectResponse & response)
     {
@@ -135,6 +164,7 @@ struct MockExchangeWriter
 private:
     MockExchangeWriterChecker checker;
     uint16_t part_num;
+    std::vector<tipb::FieldType> result_field_types;
 };
 
 // Input block data is distributed uniform.
@@ -160,7 +190,7 @@ try
         // batchWriteFineGrainedShuffle() only called once, so will only be one packet for each partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
     auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
@@ -219,7 +249,7 @@ try
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
     auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
@@ -281,7 +311,7 @@ try
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
     auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
@@ -335,7 +365,7 @@ try
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1, *dag_context_ptr);
 
     // 3. Start to write.
     auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
