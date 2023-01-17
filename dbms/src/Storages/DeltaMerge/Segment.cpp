@@ -2295,7 +2295,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "{} total_rows={} cost={}ms", __func__, total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log, "total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -2399,7 +2399,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
 
     if (all_match)
     {
-        LOG_DEBUG(log, "{} all match, total_rows={}, cost={}ms", __func__, segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+        LOG_DEBUG(log, "all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), segment_snap, /*default_value*/ true);
     }
 
@@ -2445,7 +2445,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-    LOG_DEBUG(log, "{} some_packs={}, total_rows={}, cost={}ms", __func__, some_packs_count, segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+    LOG_DEBUG(log, "some_packs={}, total_rows={}, cost={}ms", some_packs_count, segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
     return bitmap_filter;
 }
 
