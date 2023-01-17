@@ -410,8 +410,8 @@ void MPPTask::runImpl()
         {
             err_msg = result.err_msg;
         }
-        auto acu = query_executor_holder->acu();
-        LOG_DEBUG(log, "finish with acu: {}", acu);
+        auto cpu_time = query_executor_holder->collectCPUTime();
+        LOG_DEBUG(log, "finish with cpu time: {}", cpu_time);
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(

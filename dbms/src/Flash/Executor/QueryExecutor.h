@@ -25,9 +25,6 @@ namespace DB
 class ProcessListEntry;
 using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
 
-// Analytical Compute Unit = cpu_core_num * time
-using ACU = UInt64;
-
 class QueryExecutor
 {
 public:
@@ -46,7 +43,7 @@ public:
 
     virtual int estimateNewThreadCount() = 0;
 
-    virtual ACU acu() = 0;
+    virtual UInt64 collectCPUTime() = 0;
 
 protected:
     virtual ExecutionResult execute(ResultHandler) = 0;

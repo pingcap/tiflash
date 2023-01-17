@@ -68,7 +68,7 @@ int DataStreamExecutor::estimateNewThreadCount()
     return data_stream->estimateNewThreadCount();
 }
 
-ACU DataStreamExecutor::acu()
+UInt64 DataStreamExecutor::collectCPUTime()
 {
     return data_stream->estimateCPUTime();
 }
