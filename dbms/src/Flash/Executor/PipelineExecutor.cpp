@@ -72,7 +72,6 @@ String PipelineExecutor::toString() const
 {
     assert(root_pipeline);
     FmtBuffer buffer;
-    // just call the root pipeline.
     root_pipeline->toTreeString(buffer);
     return buffer.toString();
 }
