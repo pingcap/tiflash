@@ -83,24 +83,41 @@ struct CHBlockChunkCodecV1
     }
 
     template <typename ColumnsHolder>
-    static void getColumnEncodeInfoImpl(ColumnsHolder && columns_holder, size_t & bytes, size_t & rows)
+    static void getColumnEncodeInfoImpl(ColumnsHolder && columns_holder, size_t & bytes, size_t & total_rows)
     {
         bytes += 8 /*rows*/;
 
         if constexpr (isBlockType<ColumnsHolder>())
         {
-            rows += columns_holder.rows();
-            for (size_t col_index = 0; col_index < columns_holder.columns(); ++col_index)
+            const Block & block = columns_holder;
+            const auto rows = block.rows();
+            total_rows += rows;
+            for (size_t col_index = 0; col_index < block.columns(); ++col_index)
             {
-                auto && col_type_name = columns_holder.getByPosition(col_index);
+                auto && col_type_name = block.getByPosition(col_index);
                 bytes += col_type_name.column->byteSize();
+                RUNTIME_ASSERT(rows == col_type_name.column->size());
             }
         }
         else
         {
-            rows += columns_holder.front()->size();
-            for (const auto & elem : columns_holder)
-                bytes += elem->byteSize();
+            if (columns_holder.front())
+            {
+                const auto rows = columns_holder.front()->size();
+                total_rows += rows;
+                for (const auto & elem : columns_holder)
+                {
+                    bytes += elem->byteSize();
+                    RUNTIME_ASSERT(rows == elem->size());
+                }
+            }
+            else
+            {
+                for (const auto & elem : columns_holder)
+                {
+                    RUNTIME_ASSERT(!elem);
+                }
+            }
         }
     }
     static const ColumnPtr & toColumnPtr(const Columns & c, size_t index)

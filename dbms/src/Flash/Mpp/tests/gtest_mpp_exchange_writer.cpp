@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
@@ -28,7 +27,6 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
-#include <utility>
 
 namespace DB
 {
@@ -130,14 +128,50 @@ struct MockExchangeWriter
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
     {}
-
+    void partitionWrite(
+        const Block & header,
+        std::vector<MutableColumns> && part_columns,
+        int16_t part_id,
+        MPPDataPacketVersion version,
+        CompressionMethod method)
+    {
+        method = isLocal(part_id) ? CompressionMethod::NONE : method;
+        size_t original_size = 0;
+        auto tracked_packet = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, method, original_size);
+        checker(tracked_packet, part_id);
+    }
+    void fineGrainedShuffleWrite(
+        const Block & header,
+        std::vector<IColumn::ScatterColumns> & scattered,
+        size_t bucket_idx,
+        UInt64 fine_grained_shuffle_stream_count,
+        size_t num_columns,
+        int16_t part_id,
+        MPPDataPacketVersion version,
+        CompressionMethod method)
+    {
+        if (version == MPPDataPacketV0)
+            return fineGrainedShuffleWrite(header, scattered, bucket_idx, fine_grained_shuffle_stream_count, num_columns, part_id);
+        method = isLocal(part_id) ? CompressionMethod::NONE : method;
+        size_t original_size = 0;
+        auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacket(
+            header,
+            scattered,
+            bucket_idx,
+            fine_grained_shuffle_stream_count,
+            num_columns,
+            version,
+            method,
+            original_size);
+        checker(tracked_packet, part_id);
+    }
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types), 0);
+        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0), 0);
     }
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
-        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types), part_id);
+        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0), part_id);
     }
     void fineGrainedShuffleWrite(
         const Block & header,
@@ -153,14 +187,15 @@ struct MockExchangeWriter
             bucket_idx,
             fine_grained_shuffle_stream_count,
             num_columns,
-            result_field_types);
+            result_field_types,
+            MPPDataPacketV0);
         checker(tracked_packet, part_id);
     }
 
     static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void sendExecutionSummary(const tipb::SelectResponse & response)
     {
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+        auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         tracked_packet->serializeByResponse(response);
         checker(tracked_packet, 0);
     }
@@ -264,7 +299,7 @@ try
         auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
-        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
         // 3. Start to write.
         auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
@@ -301,15 +336,9 @@ try
                 {
                     const auto & chunk = packet->getPacket().chunks(i);
 
-                    if (part_index == 0)
-                    {
-                        ASSERT_EQ(CompressionMethodByte(chunk[0]), CompressionMethodByte::NONE);
-                    }
-                    else
-                    {
-                        ASSERT_EQ(CompressionMethodByte(chunk[0]), GetCompressionMethodByte(ToInternalCompressionMethod(mode)));
-                    }
+                    auto tar_method_byte = mock_writer->isLocal(part_index) ? CompressionMethodByte::NONE : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
 
+                    ASSERT_EQ(CompressionMethodByte(chunk[0]), tar_method_byte);
                     auto && result = decoder.decodeAndSquashV1(chunk);
                     if (!result)
                     {
@@ -540,7 +569,7 @@ try
         auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
-        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
         // 3. Start to write.
         auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
@@ -572,15 +601,8 @@ try
 
                 for (auto && chunk : packet.chunks())
                 {
-                    if (part_index == 0)
-                    {
-                        ASSERT_EQ(CompressionMethodByte(chunk[0]), CompressionMethodByte::NONE);
-                    }
-                    else
-                    {
-                        ASSERT_EQ(CompressionMethodByte(chunk[0]), GetCompressionMethodByte(ToInternalCompressionMethod(mode)));
-                    }
-
+                    auto tar_method_byte = mock_writer->isLocal(part_index) ? CompressionMethodByte::NONE : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
+                    ASSERT_EQ(CompressionMethodByte(chunk[0]), tar_method_byte);
                     auto && result = decoder.decodeAndSquashV1(chunk);
                     if (!result)
                         continue;

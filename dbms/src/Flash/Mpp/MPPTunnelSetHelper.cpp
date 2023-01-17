@@ -13,15 +13,43 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
 
 namespace DB::MPPTunnelSetHelper
 {
-TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types)
+
+TrackedMppDataPacketPtr ToPacket(
+    const Block & header,
+    std::vector<MutableColumns> && part_columns,
+    MPPDataPacketVersion version,
+    CompressionMethod method,
+    size_t & original_size)
 {
+    assert(version > MPPDataPacketV0);
+
+    auto && codec = CHBlockChunkCodecV1{
+        header,
+        false /*scape empty part*/,
+    };
+
+    auto && res = codec.encode(std::move(part_columns), method);
+    if unlikely (res.empty())
+        return nullptr;
+
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
+    tracked_packet->addChunk(std::move(res));
+    original_size += codec.original_size;
+    return tracked_packet;
+}
+
+TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types, MPPDataPacketVersion version)
+{
+    assert(version == MPPDataPacketV0);
+
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     while (!blocks.empty())
     {
         const auto & block = blocks.back();
@@ -33,17 +61,63 @@ TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldT
     return tracked_packet;
 }
 
+TrackedMppDataPacketPtr ToFineGrainedPacket(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    MPPDataPacketVersion version,
+    CompressionMethod method,
+    size_t & original_size)
+{
+    assert(version > MPPDataPacketV0);
+
+    auto && codec = CHBlockChunkCodecV1{
+        header,
+        true /*keep header even if no rows*/,
+    };
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
+
+    for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
+    {
+        // assemble scatter columns into a block
+        MutableColumns columns;
+        columns.reserve(num_columns);
+        for (size_t col_id = 0; col_id < num_columns; ++col_id)
+            columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
+
+        auto && res = codec.encode(columns, method);
+        assert(!res.empty());
+
+        tracked_packet->addChunk(std::move(res));
+        tracked_packet->getPacket().add_stream_ids(stream_idx);
+
+        for (size_t col_id = 0; col_id < num_columns; ++col_id)
+        {
+            columns[col_id]->popBack(columns[col_id]->size()); // clear column
+            scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
+        }
+    }
+
+    original_size += codec.original_size;
+    return tracked_packet;
+}
+
 TrackedMppDataPacketPtr toFineGrainedPacket(
     const Block & header,
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
-    const std::vector<tipb::FieldType> & field_types)
+    const std::vector<tipb::FieldType> & field_types,
+    MPPDataPacketVersion version)
 {
+    assert(version == MPPDataPacketV0);
+
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
     {
         // assemble scatter columns into a block

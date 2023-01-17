@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
@@ -33,7 +34,7 @@ void checkPacketSize(size_t size)
 
 TrackedMppDataPacketPtr serializePacket(const tipb::SelectResponse & response)
 {
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     tracked_packet->serializeByResponse(response);
     checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
     return tracked_packet;
@@ -62,11 +63,56 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
     tunnels.back()->write(serializePacket(response));
 }
 
+static inline void updatePartitionWriterMetrics(size_t packet_bytes, bool is_local)
+{
+    // statistic
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(packet_bytes);
+    // compression method is always NONE
+    if (is_local)
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(packet_bytes);
+    else
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(packet_bytes);
+}
+
+static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t original_size, size_t sz, bool is_local)
+{
+    // statistic
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(original_size);
+
+    switch (method)
+    {
+    case CompressionMethod::NONE:
+    {
+        if (is_local)
+        {
+            GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+        }
+        else
+        {
+            GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(sz);
+        }
+        break;
+    }
+    case CompressionMethod::LZ4:
+    {
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4).Increment(sz);
+        break;
+    }
+    case CompressionMethod::ZSTD:
+    {
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd).Increment(sz);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks)
 {
     RUNTIME_CHECK(!tunnels.empty());
-    auto tracked_packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types);
+    auto tracked_packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0);
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     // TODO avoid copy packet for broadcast.
@@ -89,12 +135,76 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::partitionWrite(Blocks & blocks, int16_t partition_id)
 {
-    auto tracked_packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types);
-    if (likely(tracked_packet->getPacket().chunks_size() > 0))
-    {
-        checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
-        tunnels[partition_id]->write(std::move(tracked_packet));
-    }
+    auto tracked_packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0);
+
+    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+        return;
+
+    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(packet_bytes);
+    tunnels[partition_id]->write(std::move(tracked_packet));
+    updatePartitionWriterMetrics(packet_bytes, isLocal(partition_id));
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::partitionWrite(
+    const Block & header,
+    std::vector<MutableColumns> && part_columns,
+    int16_t partition_id,
+    MPPDataPacketVersion version,
+    CompressionMethod compression_method)
+{
+    assert(version > MPPDataPacketV0);
+
+    bool is_local = isLocal(partition_id);
+    compression_method = is_local ? CompressionMethod::NONE : compression_method;
+
+    size_t original_size = 0;
+    auto tracked_packet = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, compression_method, original_size);
+    if (!tracked_packet)
+        return;
+
+    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(packet_bytes);
+    tunnels[partition_id]->write(std::move(tracked_packet));
+    updatePartitionWriterMetrics(compression_method, original_size, packet_bytes, is_local);
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::fineGrainedShuffleWrite(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    int16_t partition_id,
+    MPPDataPacketVersion version,
+    CompressionMethod compression_method)
+{
+    if (version == MPPDataPacketV0)
+        return fineGrainedShuffleWrite(header, scattered, bucket_idx, fine_grained_shuffle_stream_count, num_columns, partition_id);
+
+    bool is_local = isLocal(partition_id);
+    compression_method = is_local ? CompressionMethod::NONE : compression_method;
+
+    size_t original_size = 0;
+    auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacket(
+        header,
+        scattered,
+        bucket_idx,
+        fine_grained_shuffle_stream_count,
+        num_columns,
+        version,
+        compression_method,
+        original_size);
+
+    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+        return;
+
+    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(packet_bytes);
+    tunnels[partition_id]->write(std::move(tracked_packet));
+    updatePartitionWriterMetrics(compression_method, original_size, packet_bytes, is_local);
 }
 
 template <typename Tunnel>
@@ -112,12 +222,16 @@ void MPPTunnelSetBase<Tunnel>::fineGrainedShuffleWrite(
         bucket_idx,
         fine_grained_shuffle_stream_count,
         num_columns,
-        result_field_types);
-    if (likely(tracked_packet->getPacket().chunks_size() > 0))
-    {
-        checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
-        tunnels[partition_id]->write(std::move(tracked_packet));
-    }
+        result_field_types,
+        MPPDataPacketV0);
+
+    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+        return;
+
+    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(packet_bytes);
+    tunnels[partition_id]->write(std::move(tracked_packet));
+    updatePartitionWriterMetrics(packet_bytes, isLocal(partition_id));
 }
 
 template <typename Tunnel>

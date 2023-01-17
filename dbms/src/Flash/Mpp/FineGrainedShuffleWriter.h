@@ -46,14 +46,12 @@ public:
     void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
     void flush() override;
-    ~FineGrainedShuffleWriter() override;
 
 private:
     void batchWriteFineGrainedShuffle();
-    void batchWriteFineGrainedShuffleImpl(TrackedMppDataPacketPtrs &&);
-    void batchWriteFineGrainedShuffleImplV1(TrackedMppDataPacketPtrs &&);
-
     void initScatterColumns();
+    template <MPPDataPacketVersion version>
+    void batchWriteFineGrainedShuffleImpl();
 
 private:
     ExchangeWriterPtr writer;
@@ -73,9 +71,9 @@ private:
     IColumn::Selector selector;
     std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
     // support data compression
+    DataTypes expected_types;
     MPPDataPacketVersion data_codec_version;
     CompressionMethod compression_method{};
-    std::unique_ptr<HashBaseWriterHelper::HashPartitionWriterHelperV1> codec_helper_v1{};
 };
 
 } // namespace DB

@@ -85,7 +85,7 @@ public:
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
-            packet = std::make_shared<TrackedMppDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
 
         start();
     }
@@ -264,7 +264,7 @@ private:
                 return false;
 
             // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         }
         return true;
     }
@@ -517,7 +517,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
+                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
                 bool success = reader->read(packet);
                 if (!success)
                     break;

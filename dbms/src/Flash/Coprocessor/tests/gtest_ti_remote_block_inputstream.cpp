@@ -28,11 +28,10 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.cpp>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
-#include <memory>
+
 
 namespace DB
 {
@@ -85,7 +84,7 @@ struct MockWriter
 
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        auto packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types);
+        auto packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0);
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
