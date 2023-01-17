@@ -64,7 +64,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             }
             catch (const Poco::Exception & e)
             {
-                LOG_ERROR(log, "{} failed by {}", stage, e.displayText());
+                LOG_ERROR(log, "{} failed by {} \n stack : {}", stage, e.displayText(), e.getStackTrace().toString());
             }
             catch (const std::exception & e)
             {
