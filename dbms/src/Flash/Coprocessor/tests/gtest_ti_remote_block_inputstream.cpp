@@ -77,9 +77,9 @@ struct MockWriter
         summary.scan_context->total_dmfile_skipped_packs = 2;
         summary.scan_context->total_dmfile_scanned_rows = 8000;
         summary.scan_context->total_dmfile_skipped_rows = 15000;
-        summary.scan_context->total_dmfile_rough_set_index_load_time_ms = 10;
-        summary.scan_context->total_dmfile_read_time_ms = 200;
-        summary.scan_context->total_create_snapshot_time_ms = 5;
+        summary.scan_context->total_dmfile_rough_set_index_load_time_ns = 10;
+        summary.scan_context->total_dmfile_read_time_ns = 200;
+        summary.scan_context->total_create_snapshot_time_ns = 5;
         return summary;
     }
 
