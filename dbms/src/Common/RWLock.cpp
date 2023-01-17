@@ -166,7 +166,7 @@ RWLock::LockHolder RWLock::getLock(
         // 3. Otherwise, join the previous reader group for waiting (so that reader won't be blocked by another reader)
         readers_queue.emplace_back(type); /// SM1: may throw (nothing to roll back)
     }
-    GroupsContainer::iterator it_group = (type == Type::Write) ? std::prev(writers_queue.end()) : std::prev(readers_queue.end());
+    auto it_group = (type == Type::Write) ? std::prev(writers_queue.end()) : std::prev(readers_queue.end());
 
     /// Lock is free to acquire
     if (rdlock_owner == readers_queue.end() && wrlock_owner == writers_queue.end())
