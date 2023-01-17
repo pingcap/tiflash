@@ -56,6 +56,11 @@ public:
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(std::move(req))
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
+        , meet_error(false)
+        , has_data(false)
+        , retry_times(0)
+        , stage(AsyncRequestStage::NEED_INIT)
+        , finish_status(RPCContext::getStatusOK())
         , log(Logger::get(req_id, req_info))
         , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ReceiverMode::Async)
     {
@@ -73,86 +78,64 @@ public:
             start();
             break;
         case AsyncRequestStage::WAIT_MAKE_READER:
-        {
-            // Use lock to ensure reader is created already in reactor thread
-            std::lock_guard lock(mu);
-            if (!ok)
-            {
-                reader.reset();
-                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
-                retryOrDone("Exchange receiver meet error : send async stream request fail");
-            }
-            else
-            {
-                stage = AsyncRequestStage::WAIT_READ;
-                reader->read(packet, thisAsUnaryCallback());
-            }
+            processWaitMakeReader(ok);
             break;
-        }
         case AsyncRequestStage::WAIT_READ:
-            if (!ok)
-            {}
-
-            if (auto error_message = getErrorFromPacket(); !error_message.empty())
-                setDone(fmt::format("Exchange receiver meet error : {}", error_message));
-
-            // if (!ok packets[read_packet_index - 1]->hasError())
-            //     notifyReactor();
-            // else
-            //     reader->read(packets[read_packet_index], thisAsUnaryCallback());
+            processWaitRead(ok);
             break;
         case AsyncRequestStage::WAIT_FINISH:
+            processWaitFinish();
             break;
         default:
             __builtin_unreachable();
         }
     }
 
+    // TODO remove it
     // handle will be called by ExchangeReceiver::reactor.
-    void handle()
-    {
-        std::string err_info;
-        LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
-        switch (stage)
-        {
-        case AsyncRequestStage::WAIT_READ:
-            LOG_TRACE(log, "Received {} packets.", read_packet_index);
-            if (read_packet_index > 0)
-                has_data = true;
-
-            if (auto error_message = getErrorFromPackets(); !error_message.empty())
-                setDone(fmt::format("Exchange receiver meet error : {}", error_message));
-            else if (!sendPackets())
-                setDone("Exchange receiver meet error : push packets fail");
-            else if (read_packet_index < batch_packet_count)
-            {
-                stage = AsyncRequestStage::WAIT_FINISH;
-                reader->finish(finish_status, thisAsUnaryCallback());
-            }
-            else
-            {
-                read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
-            }
-            break;
-        case AsyncRequestStage::WAIT_FINISH:
-            if (finish_status.ok())
-                setDone("");
-            else
-            {
-                LOG_WARNING(
-                    log,
-                    "Finish fail. err code: {}, err msg: {}, retry time {}",
-                    finish_status.error_code(),
-                    finish_status.error_message(),
-                    retry_times);
-                retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
-            }
-            break;
-        default:
-            __builtin_unreachable();
-        }
-    }
+    // void handle()
+    // {
+    //     std::string err_info;
+    //     LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
+    //     switch (stage)
+    //     {
+    //     case AsyncRequestStage::WAIT_READ:
+    //         LOG_TRACE(log, "Received {} packets.", read_packet_index);
+    //         if (read_packet_index > 0)
+    //             has_data = true;
+    //         if (auto error_message = getErrorFromPackets(); !error_message.empty())
+    //             setDone(fmt::format("Exchange receiver meet error : {}", error_message));
+    //         else if (!sendPackets())
+    //             setDone("Exchange receiver meet error : push packets fail");
+    //         else if (read_packet_index < batch_packet_count)
+    //         {
+    //             stage = AsyncRequestStage::WAIT_FINISH;
+    //             reader->finish(finish_status, thisAsUnaryCallback());
+    //         }
+    //         else
+    //         {
+    //             read_packet_index = 0;
+    //             reader->read(packets[0], thisAsUnaryCallback());
+    //         }
+    //         break;
+    //     case AsyncRequestStage::WAIT_FINISH:
+    //         if (finish_status.ok())
+    //             setDone("");
+    //         else
+    //         {
+    //             LOG_WARNING(
+    //                 log,
+    //                 "Finish fail. err code: {}, err msg: {}, retry time {}",
+    //                 finish_status.error_code(),
+    //                 finish_status.error_message(),
+    //                 retry_times);
+    //             retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
+    //         }
+    //         break;
+    //     default:
+    //         __builtin_unreachable();
+    //     }
+    // }
 
     bool finished() const
     {
@@ -164,6 +147,71 @@ public:
     const LoggerPtr & getLog() const { return log; }
 
 private:
+    void processWaitMakeReader(bool ok)
+    {
+        // Use lock to ensure reader is created already in reactor thread
+        std::lock_guard lock(mu);
+        if (!ok)
+        {
+            reader.reset();
+            LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+            retryOrDone("Exchange receiver meet error : send async stream request fail");
+        }
+        else
+        {
+            stage = AsyncRequestStage::WAIT_READ;
+            reader->read(packet, thisAsUnaryCallback());
+        }
+    }
+
+    void processWaitRead(bool ok)
+    {
+        if (!ok)
+        {
+            stage = AsyncRequestStage::WAIT_FINISH;
+            reader->finish(finish_status, thisAsUnaryCallback());
+            return;
+        }
+
+        has_data = true;
+
+        if (auto error_message = getErrorFromPacket(); unlikely(!error_message.empty()))
+        {
+            setDone(fmt::format("Exchange receiver meet error : {}", error_message));
+            return;
+        }
+
+        // TODO write here
+        if (unlikely(!sendPacket()))
+        {
+            setDone("Exchange receiver meet error : push packets fail");
+            return;
+        }
+
+        reader->read(packet, thisAsUnaryCallback());
+        // TODO remove it
+        // if (!ok packets[read_packet_index - 1]->hasError())
+        //     notifyReactor();
+        // else
+        //     reader->read(packets[read_packet_index], thisAsUnaryCallback());
+    }
+
+    void processWaitFinish()
+    {
+        if (finish_status.ok())
+            setDone("");
+        else
+        {
+            LOG_WARNING(
+                log,
+                "Finish fail. err code: {}, err msg: {}, retry time {}",
+                finish_status.error_code(),
+                finish_status.error_message(),
+                retry_times);
+            retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
+        }
+    }
+
     String getErrorFromPacket()
     {
         if (unlikely(packet->hasError()))
@@ -173,6 +221,7 @@ private:
         if (unlikely(packet->hasError()))
             return packet->error();
 
+        // TODO remove it
         // // step 1: check if there is error packet
         // // only the last packet may has error, see execute().
         // if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
@@ -230,19 +279,11 @@ private:
         }
     }
 
-    bool sendPackets()
+    bool sendPacket()
     {
-        // note: no exception should be thrown rudely, since it's called by a GRPC poller.
-        for (size_t i = 0; i < read_packet_index; ++i)
-        {
-            auto & packet = packets[i];
-            if (!channel_writer.tryTowrite<enable_fine_grained_shuffle>(request->source_index, packet))
-                return false;
-
-            // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>();
-        }
-        return true;
+        // TODO write here
+        packet = std::make_shared<TrackedMppDataPacket>();
+        return true; // TODO reconsider it
     }
 
     // in case of potential multiple inheritances.
@@ -251,21 +292,23 @@ private:
         return static_cast<UnaryCallback<bool> *>(this);
     }
 
+    // won't be null and do not delete this pointer
+    grpc::CompletionQueue * cq;
+
     std::shared_ptr<RPCContext> rpc_context;
     grpc::Alarm alarm{};
     Request request;
-    grpc::CompletionQueue * cq; // won't be null and do not delete this pointer
 
     String req_info;
-    bool meet_error = false;
-    bool has_data = false;
+    bool meet_error;
+    bool has_data;
     String err_msg;
-    int retry_times = 0;
-    AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
+    int retry_times;
+    AsyncRequestStage stage;
 
     std::shared_ptr<AsyncReader> reader;
     TrackedMppDataPacketPtr packet;
-    Status finish_status = RPCContext::getStatusOK();
+    Status finish_status;
     LoggerPtr log;
     ReceiverChannelWriter channel_writer;
     std::mutex mu;
