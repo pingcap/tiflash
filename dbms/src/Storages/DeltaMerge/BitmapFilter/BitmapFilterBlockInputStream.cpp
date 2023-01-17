@@ -59,6 +59,10 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
                 }
             }
         }
+        else
+        {
+            res_filter = nullptr;
+        }
     }
     return block;
 }
