@@ -107,6 +107,12 @@ public:
         bool enable_memory_tracker = false);
 
 private:
+    enum class TestType
+    {
+        EXECUTOR_TEST,
+        INTERPRETER_TEST,
+    };
+    void setUpTestContext(DAGContext * dag_context, const TestType & test_type);
     void executeExecutor(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
