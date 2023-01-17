@@ -316,7 +316,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
     , live_connections(0)
-    , live_local_connections(0)
+    , is_local_conn_alive(false)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -385,7 +385,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone(std::unique_lock<std::mutex> & lock)
 {
     auto pred = [&] {
-        return live_local_connections == 0;
+        return !is_local_conn_alive;
     };
     cv.wait(lock, pred);
 }
@@ -423,7 +423,7 @@ void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
     ++live_connections;
-    ++live_local_connections;
+    is_local_conn_alive = true;
 }
 
 template <typename RPCContext>
@@ -828,9 +828,8 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 {
     std::lock_guard lock(mu);
-    --live_local_connections;
-    if (live_local_connections == 0)
-        cv.notify_all();
+    is_local_conn_alive = false;
+    cv.notify_all();
 }
 
 template <typename RPCContext>
