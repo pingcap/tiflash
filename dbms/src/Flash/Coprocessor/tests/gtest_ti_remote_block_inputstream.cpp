@@ -78,6 +78,9 @@ struct MockWriter
         summary.scan_context->total_dmfile_rough_set_index_load_time_ms = 10;
         summary.scan_context->total_dmfile_read_time_ms = 200;
         summary.scan_context->total_create_snapshot_time_ms = 5;
+        summary.scan_context->total_local_region_num = 10;
+        summary.scan_context->total_remote_region_num = 5;
+        summary.scan_context->total_region_num = 15;
         return summary;
     }
 

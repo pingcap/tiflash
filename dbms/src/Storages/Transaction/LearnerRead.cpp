@@ -475,12 +475,14 @@ void validateQueryInfo(
             iter == regions_snapshot.end() || iter->second != region)
         {
             status = RegionException::RegionReadStatus::NOT_FOUND;
+            mvcc_query_info.scan_context->total_local_region_num--;
         }
         else if (region->version() != region_query_info.version)
         {
             // ABA problem may cause because one region is removed and inserted back.
             // if the version of region is changed, the `streams` may has less data because of compaction.
             status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+            mvcc_query_info.scan_context->total_local_region_num--;
         }
 
         if (status != RegionException::RegionReadStatus::OK)
@@ -499,6 +501,7 @@ void validateQueryInfo(
 
     if (!fail_region_ids.empty())
     {
+        mvcc_query_info.scan_context->total_local_region_num -= fail_region_ids.empty();
         throw RegionException(std::move(fail_region_ids), fail_status);
     }
 }
