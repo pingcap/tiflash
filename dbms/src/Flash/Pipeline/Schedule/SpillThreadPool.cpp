@@ -46,11 +46,6 @@ void SpillThreadPool::waitForStop()
     LOG_INFO(logger, "spill thread pool is stopped");
 }
 
-void SpillThreadPool::submit(TaskPtr && task)
-{
-    task_queue->submit(std::move(task));
-}
-
 void SpillThreadPool::handleTask(TaskPtr && task, const LoggerPtr & log)
 {
     assert(task);
@@ -102,5 +97,15 @@ void SpillThreadPool::loop(size_t thread_no) noexcept
     }
 
     LOG_INFO(thread_logger, "loop finished");
+}
+
+void SpillThreadPool::submit(TaskPtr && task)
+{
+    task_queue->submit(std::move(task));
+}
+
+void SpillThreadPool::submit(std::vector<TaskPtr> & tasks)
+{
+    task_queue->submit(tasks);
 }
 } // namespace DB

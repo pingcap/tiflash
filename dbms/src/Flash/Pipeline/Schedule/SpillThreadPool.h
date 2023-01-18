@@ -36,6 +36,8 @@ public:
 
     void submit(TaskPtr && task);
 
+    void submit(std::vector<TaskPtr> & tasks);
+
 private:
     void loop(size_t thread_no) noexcept;
 
