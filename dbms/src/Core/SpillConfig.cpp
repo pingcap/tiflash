@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Core/SpillConfig.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
@@ -33,6 +34,8 @@ SpillConfig::SpillConfig(const DB::String & spill_dir_, const DB::String & spill
     , max_spilled_size_per_spill(max_spilled_size_per_spill_)
     , file_provider(file_provider_)
 {
+    RUNTIME_CHECK_MSG(!spill_dir.empty(), "Spiller dir must be non-empty");
+    RUNTIME_CHECK_MSG(!spill_id.empty(), "Spiller id must be non-empty");
     if (spill_dir.at(spill_dir.size() - 1) != Poco::Path::separator())
     {
         spill_dir += Poco::Path::separator();

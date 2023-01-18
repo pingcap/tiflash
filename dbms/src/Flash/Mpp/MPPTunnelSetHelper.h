@@ -13,13 +13,20 @@
 // limitations under the License.
 
 #pragma once
-#include <string>
 
-/** Sets the thread name (maximum length is 15 bytes),
-  *  which will be visible in ps, gdb, /proc,
-  *  for convenience of observation and debugging.
-  */
-void setThreadName(const char * name);
+#include <Core/Block.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <tipb/select.pb.h>
 
-std::string getThreadName();
-std::string getThreadNameAndID();
+namespace DB::MPPTunnelSetHelper
+{
+TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
+
+TrackedMppDataPacketPtr toFineGrainedPacket(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    const std::vector<tipb::FieldType> & field_types);
+} // namespace DB::MPPTunnelSetHelper

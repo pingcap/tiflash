@@ -63,10 +63,9 @@ try
         " Expression: <final projection>\n"
         "  Expression: <expr after aggregation>\n"
         "   Aggregating\n"
-        "    Concat\n"
-        "     Expression: <before aggregation>\n"
-        "      Filter\n"
-        "       MockTableScan",
+        "    Expression: <before aggregation>\n"
+        "     Filter\n"
+        "      MockTableScan",
         "MockExchangeSender\n"
         " Expression: <final projection>\n"
         "  MergeSorting, limit = 10\n"
@@ -75,8 +74,7 @@ try
         "     Filter\n"
         "      Expression: <expr after aggregation>\n"
         "       Aggregating\n"
-        "        Concat\n"
-        "         MockExchangeReceiver"};
+        "        MockExchangeReceiver"};
     for (size_t i = 0; i < task_size; ++i)
     {
         ASSERT_BLOCKINPUTSTREAM_EQAUL(streams[i], tasks[i].dag_request, 1);
