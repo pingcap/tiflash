@@ -37,12 +37,12 @@ OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
     if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
 
-    // start from the next transform after fetch block transform.
+    // start from the next transform after fetched block transform.
     for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
         CHECK_IS_CANCELLED(exec_status);
         auto op_status = transform_ops[transform_op_index]->transform(block);
-        if (op_status != OperatorStatus::PASS_THROUGH)
+        if (op_status != OperatorStatus::HAS_OUTPUT)
             return prepareSpillOpIfNeed(op_status, transform_ops[transform_op_index]);
     }
     CHECK_IS_CANCELLED(exec_status);

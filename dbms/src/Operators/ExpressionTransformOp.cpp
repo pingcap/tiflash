@@ -21,7 +21,7 @@ OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
 {
     if (likely(block))
         expression->execute(block);
-    return OperatorStatus::PASS_THROUGH;
+    return OperatorStatus::HAS_OUTPUT;
 }
 
 void ExpressionTransformOp::transformHeaderImpl(Block & header_)

@@ -36,13 +36,9 @@ enum class OperatorStatus
     WAITING,
     /// running status
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
-    // also used as an external state of `PipelineExec`.
     NEED_INPUT,
-    // means that SourceOp/TransformOp output a block for used by subsequent operators.
-    // also used as an external state of `PipelineExec`.
+    // means that SourceOp/TransformOp outputs a block as input to the subsequent operators.
     HAS_OUTPUT,
-    // means that TransformOp handle the input block and output it.
-    PASS_THROUGH,
 };
 
 // TODO support operator profile info like `BlockStreamProfileInfo`.
@@ -52,7 +48,7 @@ class Operator
 public:
     virtual ~Operator() = default;
     // running status may return are
-    // - `NEED_INPUT` means that the data that operator is waiting for has been prepared.
+    // - `NEED_INPUT` means that the data that the operator is waiting for has been prepared.
     OperatorStatus await();
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
     // running status may return are
@@ -86,8 +82,8 @@ class SourceOp : public Operator
 {
 public:
     // read will inplace the block when return status is HAS_OUTPUT;
-    // Even after source has finished, source op still needs to return the empty block and HAS_OUTPUT,
-    // because there are many operators that need the empty block as input, such as JoinProbe and WindowFunction.
+    // Even after source has finished, source op still needs to return an empty block and HAS_OUTPUT,
+    // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
     OperatorStatus read(Block & block);
     virtual OperatorStatus readImpl(Block & block) = 0;
 
@@ -98,13 +94,13 @@ using SourceOpPtr = std::unique_ptr<SourceOp>;
 class TransformOp : public Operator
 {
 public:
-    // running status may return are NEED_INPUT and HAS_OUTPUT.
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
     OperatorStatus tryOutput(Block &);
     virtual OperatorStatus tryOutputImpl(Block &) { return OperatorStatus::NEED_INPUT; }
-    // running status may return are NEED_INPUT and PASS_THROUGH.
-    // tryOutput will inplace the block when return status is PASS_THROUGH; do nothing to the block when NEED_INPUT or others.
-    // Even if an empty block is input, transform will still return PASS_THROUGH,
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
+    // transform will inplace the block and if the return status is HAS_OUTPUT, this block can be used as input to subsequent operators.
+    // Even if an empty block is input, transform will still return HAS_OUTPUT,
     // because there are many operators that need the empty block as input, such as JoinProbe and WindowFunction.
     OperatorStatus transform(Block & block);
     virtual OperatorStatus transformImpl(Block & block) = 0;
