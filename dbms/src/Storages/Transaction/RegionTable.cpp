@@ -227,7 +227,7 @@ void removeObsoleteDataInStorage(
     try
     {
         // Acquire a `drop_lock` so that no other threads can drop the `storage`
-        auto storage_lock = storage->lockForShare(getThreadName());
+        auto storage_lock = storage->lockForShare(getThreadNameAndID());
 
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         if (dm_storage == nullptr)
