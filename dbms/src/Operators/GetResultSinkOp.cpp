@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Operators/GetResultSinkOp.h>
 
 namespace DB

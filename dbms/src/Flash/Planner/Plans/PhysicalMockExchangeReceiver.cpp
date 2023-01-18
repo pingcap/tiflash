@@ -19,7 +19,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
+#include <Flash/Planner/Plans/PhysicalMockExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSourceOp.h>
 

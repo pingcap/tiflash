@@ -26,7 +26,7 @@
 #include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalAggregation.h>
 #include <Interpreters/Context.h>
 
 namespace DB

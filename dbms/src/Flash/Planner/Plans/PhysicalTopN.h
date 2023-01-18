@@ -14,37 +14,35 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/FineGrainedShuffle.h>
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Core/SortDescription.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
+#include <Interpreters/ExpressionActions.h>
 #include <tipb/executor.pb.h>
-#include <tipb/select.pb.h>
 
 namespace DB
 {
-class PhysicalExchangeSender : public PhysicalUnary
+class PhysicalTopN : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
+        const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::ExchangeSender & exchange_sender,
-        const FineGrainedShuffle & fine_grained_shuffle,
+        const tipb::TopN & top_n,
         const PhysicalPlanNodePtr & child);
 
-    PhysicalExchangeSender(
+    PhysicalTopN(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const std::vector<Int64> & partition_col_ids_,
-        const TiDB::TiDBCollators & collators_,
-        const tipb::ExchangeType & exchange_type_,
-        const FineGrainedShuffle & fine_grained_shuffle_)
-        : PhysicalUnary(executor_id_, PlanType::ExchangeSender, schema_, req_id, child_)
-        , partition_col_ids(partition_col_ids_)
-        , partition_col_collators(collators_)
-        , exchange_type(exchange_type_)
-        , fine_grained_shuffle(fine_grained_shuffle_)
+        const SortDescription & order_descr_,
+        const ExpressionActionsPtr & before_sort_actions_,
+        size_t limit_)
+        : PhysicalUnary(executor_id_, PlanType::TopN, schema_, req_id, child_)
+        , order_descr(order_descr_)
+        , before_sort_actions(before_sort_actions_)
+        , limit(limit_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -54,10 +52,8 @@ public:
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    std::vector<Int64> partition_col_ids;
-    TiDB::TiDBCollators partition_col_collators;
-    tipb::ExchangeType exchange_type;
-
-    FineGrainedShuffle fine_grained_shuffle;
+    SortDescription order_descr;
+    ExpressionActionsPtr before_sort_actions;
+    size_t limit;
 };
 } // namespace DB

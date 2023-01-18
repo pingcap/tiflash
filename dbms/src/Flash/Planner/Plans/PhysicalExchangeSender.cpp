@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
-#include <Flash/Planner/plans/PhysicalExchangeSender.h>
+#include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
 
 namespace DB

@@ -14,45 +14,44 @@
 
 #pragma once
 
-#include <Core/SortDescription.h>
-#include <Flash/Coprocessor/FineGrainedShuffle.h>
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
+#include <Interpreters/ExpressionActions.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-class PhysicalWindowSort : public PhysicalUnary
+class PhysicalFilter : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::Sort & window_sort,
-        const FineGrainedShuffle & fine_grained_shuffle,
+        const tipb::Selection & selection,
         const PhysicalPlanNodePtr & child);
 
-    PhysicalWindowSort(
+    PhysicalFilter(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const SortDescription & order_descr_,
-        const FineGrainedShuffle & fine_grained_shuffle_)
-        : PhysicalUnary(executor_id_, PlanType::WindowSort, schema_, req_id, child_)
-        , order_descr(order_descr_)
-        , fine_grained_shuffle(fine_grained_shuffle_)
+        const String & filter_column_,
+        const ExpressionActionsPtr & before_filter_actions_)
+        : PhysicalUnary(executor_id_, PlanType::Filter, schema_, req_id, child_)
+        , filter_column(filter_column_)
+        , before_filter_actions(before_filter_actions_)
     {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-private:
-    SortDescription order_descr;
-    FineGrainedShuffle fine_grained_shuffle;
+    String filter_column;
+    ExpressionActionsPtr before_filter_actions;
 };
 } // namespace DB

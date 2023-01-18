@@ -15,7 +15,7 @@
 #include <Common/Logger.h>
 #include <DataStreams/MockExchangeSenderInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
+#include <Flash/Planner/Plans/PhysicalMockExchangeSender.h>
 #include <Interpreters/Context.h>
 
 namespace DB

@@ -12,48 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/SortDescription.h>
-#include <Flash/Planner/plans/PhysicalUnary.h>
-#include <Interpreters/ExpressionActions.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-class PhysicalTopN : public PhysicalUnary
+class PhysicalTableScan : public PhysicalLeaf
 {
 public:
     static PhysicalPlanNodePtr build(
-        const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::TopN & top_n,
-        const PhysicalPlanNodePtr & child);
+        const TiDBTableScan & table_scan);
 
-    PhysicalTopN(
+    PhysicalTableScan(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & child_,
-        const SortDescription & order_descr_,
-        const ExpressionActionsPtr & before_sort_actions_,
-        size_t limit_)
-        : PhysicalUnary(executor_id_, PlanType::TopN, schema_, req_id, child_)
-        , order_descr(order_descr_)
-        , before_sort_actions(before_sort_actions_)
-        , limit(limit_)
-    {}
+        const TiDBTableScan & tidb_table_scan_,
+        const Block & sample_block_);
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
+    bool pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection);
+
+    bool hasPushDownFilter() const;
+
+    const String & getPushDownFilterId() const;
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void buildProjection(Context & context, DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
 
-    SortDescription order_descr;
-    ExpressionActionsPtr before_sort_actions;
-    size_t limit;
+private:
+    PushDownFilter push_down_filter;
+
+    TiDBTableScan tidb_table_scan;
+
+    Block sample_block;
 };
 } // namespace DB

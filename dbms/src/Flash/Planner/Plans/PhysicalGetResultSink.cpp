@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <Flash/Planner/plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Operators/GetResultSinkOp.h>
 
 namespace DB

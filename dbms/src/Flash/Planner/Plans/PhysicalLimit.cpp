@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <Flash/Planner/plans/PhysicalLimit.h>
+#include <Flash/Planner/Plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
 #include <Operators/LimitTransformOp.h>
 

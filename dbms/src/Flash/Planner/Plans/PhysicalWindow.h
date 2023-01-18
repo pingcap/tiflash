@@ -14,35 +14,45 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
+#include <Interpreters/WindowDescription.h>
 #include <tipb/executor.pb.h>
-#include <tipb/select.pb.h>
 
 namespace DB
 {
-class PhysicalMockExchangeSender : public PhysicalUnary
+class PhysicalWindow : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
+        const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
+        const tipb::Window & window,
+        const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child);
 
-    PhysicalMockExchangeSender(
+    PhysicalWindow(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & child_)
-        : PhysicalUnary(executor_id_, PlanType::MockExchangeSender, schema_, req_id, child_)
+        const PhysicalPlanNodePtr & child_,
+        const WindowDescription & window_description_,
+        const FineGrainedShuffle & fine_grained_shuffle_)
+        : PhysicalUnary(executor_id_, PlanType::Window, schema_, req_id, child_)
+        , window_description(window_description_)
+        , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/) override {}
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+private:
+    WindowDescription window_description;
+    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

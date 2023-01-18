@@ -24,7 +24,7 @@ add_headers_and_sources(flash_service ./Pipeline/Schedule)
 add_headers_and_sources(flash_service ./Pipeline/Schedule/Events)
 add_headers_and_sources(flash_service ./Pipeline/Schedule/Tasks)
 add_headers_and_sources(flash_service ./Planner)
-add_headers_and_sources(flash_service ./Planner/plans)
+add_headers_and_sources(flash_service ./Planner/Plans)
 add_headers_and_sources(flash_service ./Statistics)
 add_headers_and_sources(flash_service ./Management)
 

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
 #include <tipb/executor.pb.h>
 
 namespace DB

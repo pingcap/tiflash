@@ -14,42 +14,45 @@
 
 #pragma once
 
-#include <Flash/Mpp/ExchangeReceiver.h>
-#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Core/SortDescription.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
-class ExchangeReceiver;
-
-class PhysicalExchangeReceiver : public PhysicalLeaf
+class PhysicalWindowSort : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
-        const LoggerPtr & log);
+        const LoggerPtr & log,
+        const tipb::Sort & window_sort,
+        const FineGrainedShuffle & fine_grained_shuffle,
+        const PhysicalPlanNodePtr & child);
 
-    PhysicalExchangeReceiver(
+    PhysicalWindowSort(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const Block & sample_block_,
-        const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_);
+        const PhysicalPlanNodePtr & child_,
+        const SortDescription & order_descr_,
+        const FineGrainedShuffle & fine_grained_shuffle_)
+        : PhysicalUnary(executor_id_, PlanType::WindowSort, schema_, req_id, child_)
+        , order_descr(order_descr_)
+        , fine_grained_shuffle(fine_grained_shuffle_)
+    {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-    size_t getSourceNum() const
-    {
-        return mpp_exchange_receiver->getSourceNum();
-    }
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    Block sample_block;
-
-    std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;
+private:
+    SortDescription order_descr;
+    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

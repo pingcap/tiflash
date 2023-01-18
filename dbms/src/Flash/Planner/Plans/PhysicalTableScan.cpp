@@ -20,7 +20,7 @@
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalTableScan.h>
+#include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Interpreters/Context.h>
 
 namespace DB

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
 
 namespace DB
 {

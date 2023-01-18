@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalWindowSort.h>
+#include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Interpreters/Context.h>
 
 namespace DB

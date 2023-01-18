@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
 namespace DB

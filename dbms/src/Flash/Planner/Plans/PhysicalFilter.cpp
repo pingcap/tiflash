@@ -19,7 +19,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Interpreters/Context.h>
 #include <Operators/FilterTransformOp.h>
 

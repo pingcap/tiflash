@@ -26,7 +26,7 @@
 #include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>

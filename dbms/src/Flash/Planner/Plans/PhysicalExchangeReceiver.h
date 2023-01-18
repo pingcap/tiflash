@@ -14,44 +14,42 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalUnary.h>
-#include <Interpreters/ExpressionActions.h>
-#include <tipb/executor.pb.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Planner/Plans/PhysicalLeaf.h>
 
 namespace DB
 {
-class PhysicalFilter : public PhysicalUnary
+class ExchangeReceiver;
+
+class PhysicalExchangeReceiver : public PhysicalLeaf
 {
 public:
     static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
-        const LoggerPtr & log,
-        const tipb::Selection & selection,
-        const PhysicalPlanNodePtr & child);
+        const LoggerPtr & log);
 
-    PhysicalFilter(
+    PhysicalExchangeReceiver(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & child_,
-        const String & filter_column_,
-        const ExpressionActionsPtr & before_filter_actions_)
-        : PhysicalUnary(executor_id_, PlanType::Filter, schema_, req_id, child_)
-        , filter_column(filter_column_)
-        , before_filter_actions(before_filter_actions_)
-    {}
+        const Block & sample_block_,
+        const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_);
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    size_t getSourceNum() const
+    {
+        return mpp_exchange_receiver->getSourceNum();
+    }
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    String filter_column;
-    ExpressionActionsPtr before_filter_actions;
+    Block sample_block;
+
+    std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;
 };
 } // namespace DB

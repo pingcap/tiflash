@@ -20,7 +20,7 @@
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
-#include <Flash/Planner/plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <tipb/select.pb.h>
 

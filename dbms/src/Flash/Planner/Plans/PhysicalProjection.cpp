@@ -21,7 +21,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalProjection.h>
+#include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
 

@@ -17,7 +17,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
 namespace DB

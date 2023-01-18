@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalBinary.h>
+#include <Flash/Planner/Plans/PhysicalBinary.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
 #include <tipb/executor.pb.h>

@@ -16,7 +16,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
-#include <Flash/Planner/plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
