@@ -310,6 +310,11 @@ void MockStorage::addExchangeData(const String & exchange_name, const ColumnsWit
     exchange_columns[exchange_name] = columns;
 }
 
+void MockStorage::addFineGrainedExchangeData(const String & exchange_name, const std::vector<ColumnsWithTypeAndName> & columns)
+{
+    fine_grained_exchange_columns[exchange_name] = columns;
+}
+
 bool MockStorage::exchangeExists(const String & executor_id)
 {
     return exchange_schemas.find(executor_id_to_name_map[executor_id]) != exchange_schemas.end();
@@ -318,6 +323,30 @@ bool MockStorage::exchangeExists(const String & executor_id)
 bool MockStorage::exchangeExistsWithName(const String & name)
 {
     return exchange_schemas.find(name) != exchange_schemas.end();
+}
+
+std::vector<ColumnsWithTypeAndName> MockStorage::getFineGrainedExchangeColumnsVector(const String & executor_id, size_t fine_grained_stream_count)
+{
+    if (exchangeExists(executor_id))
+    {
+        auto exchange_name = executor_id_to_name_map[executor_id];
+        if (fine_grained_exchange_columns.find(exchange_name) != fine_grained_exchange_columns.end())
+        {
+            RUNTIME_CHECK_MSG(fine_grained_exchange_columns[exchange_name].size() == fine_grained_stream_count,
+                              "Fine grained exchange data does not match fine grained stream count for exchange receiver {}",
+                              executor_id);
+            return fine_grained_exchange_columns[exchange_name];
+        }
+        if (exchange_columns.find(exchange_name) != exchange_columns.end())
+        {
+            auto columns = exchange_columns[exchange_name];
+            if (columns[0].column == nullptr || columns[0].column->empty())
+                return {};
+            throw Exception(fmt::format("Failed to get fine grained exchange columns by executor_id '{}'", executor_id));
+        }
+        return {};
+    }
+    throw Exception(fmt::format("Failed to get exchange columns by executor_id '{}'", executor_id));
 }
 
 ColumnsWithTypeAndName MockStorage::getExchangeColumns(const String & executor_id)
@@ -382,6 +411,35 @@ CutColumnInfo getCutColumnInfo(size_t rows, Int64 partition_id, Int64 partition_
     return {start, cur_rows};
 }
 
+ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns)
+{
+    if (used_columns.empty())
+        /// if used columns is not set, just return all the columns
+        return all_columns;
+    ColumnsWithTypeAndName res;
+    for (const auto & column_with_type_and_name : all_columns)
+    {
+        bool contains = false;
+        for (const auto & column : used_columns)
+        {
+            if (column.id == column_with_type_and_name.column_id)
+            {
+                contains = true;
+                break;
+            }
+        }
+        if (contains)
+        {
+            res.push_back(
+                ColumnWithTypeAndName(
+                    column_with_type_and_name.column,
+                    column_with_type_and_name.type,
+                    column_with_type_and_name.name));
+        }
+    }
+    return res;
+}
+
 ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num)
 {
     auto table_id = table_scan.getLogicalTableID();
@@ -398,26 +456,10 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableSca
 
         CutColumnInfo cut_info = getCutColumnInfo(rows, partition_id, partition_num);
 
-        ColumnsWithTypeAndName res;
-        for (const auto & column_with_type_and_name : columns_with_type_and_name)
+        ColumnsWithTypeAndName res = getUsedColumns(table_scan.getColumns(), columns_with_type_and_name);
+        for (auto & column_with_type_and_name : res)
         {
-            bool contains = false;
-            for (const auto & column : table_scan.getColumns())
-            {
-                if (column.id == column_with_type_and_name.column_id)
-                {
-                    contains = true;
-                    break;
-                }
-            }
-            if (contains)
-            {
-                res.push_back(
-                    ColumnWithTypeAndName(
-                        column_with_type_and_name.column->cut(cut_info.first, cut_info.second),
-                        column_with_type_and_name.type,
-                        column_with_type_and_name.name));
-            }
+            column_with_type_and_name.column = column_with_type_and_name.column->cut(cut_info.first, cut_info.second);
         }
         return res;
     }

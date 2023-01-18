@@ -46,6 +46,7 @@ private:
 };
 
 ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos);
+ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns);
 
 /** Responsible for mock data for executor tests and mpp tests.
   * 1. Use this class to add mock table schema and table column data.
@@ -92,11 +93,14 @@ public:
 
     void addExchangeData(const String & exchange_name, const ColumnsWithTypeAndName & columns);
 
+    void addFineGrainedExchangeData(const String & exchange_name, const std::vector<ColumnsWithTypeAndName> & columns);
+
     MockColumnInfoVec getExchangeSchema(const String & exchange_name);
 
     void addExchangeRelation(const String & executor_id, const String & exchange_name);
 
     ColumnsWithTypeAndName getExchangeColumns(const String & executor_id);
+    std::vector<ColumnsWithTypeAndName> getFineGrainedExchangeColumnsVector(const String & executor_id, size_t fine_grained_stream_count);
 
     bool exchangeExists(const String & executor_id);
 
@@ -127,6 +131,7 @@ private:
     std::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
     std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
     std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
+    std::unordered_map<String, std::vector<ColumnsWithTypeAndName>> fine_grained_exchange_columns; /// <exchange_name, vector<columns>>
 
     /// for mock storage delta merge
     std::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>

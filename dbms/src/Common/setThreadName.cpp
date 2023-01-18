@@ -20,9 +20,9 @@
 #else
 #include <sys/prctl.h>
 #endif
-
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
+#include <IO/WriteHelpers.h>
 
 #include <cstring>
 #include <iostream>
@@ -73,4 +73,9 @@ std::string getThreadName()
 
     name.resize(std::strlen(name.data()));
     return name;
+}
+
+std::string getThreadNameAndID()
+{
+    return getThreadName() + "_" + DB::toString(pthread_self());
 }

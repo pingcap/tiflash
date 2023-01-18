@@ -99,6 +99,7 @@ ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_in
     for (const auto & column_info : table_info.columns)
     {
         ColumnInfo ci;
+        ci.id = column_info.id;
         ci.tp = column_info.tp;
         ci.flag = column_info.flag;
         ci.flen = column_info.flen;
@@ -114,6 +115,7 @@ ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_in
     {
         ColumnInfo ci;
         ci.tp = TiDB::TypeLongLong;
+        ci.id = TiDBPkColumnID;
         ci.setPriKeyFlag();
         ci.setNotNullFlag();
         ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
