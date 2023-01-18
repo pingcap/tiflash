@@ -191,8 +191,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
 {
-    assert(rows_in_blocks > 0);
-
     if unlikely (blocks.empty())
         return;
 
