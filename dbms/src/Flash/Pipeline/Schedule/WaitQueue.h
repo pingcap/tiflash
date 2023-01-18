@@ -24,8 +24,11 @@ namespace DB
 class WaitQueue
 {
 public:
-    // return false if the wait queue had been closed.
+    /// return false if the wait queue had been closed.
+    // this function will wait until `!waiting_tasks.empty()`
     bool take(std::list<TaskPtr> & local_waiting_tasks);
+    // this function will return immediately.
+    bool tryTake(std::list<TaskPtr> & local_waiting_tasks);
 
     void submit(TaskPtr && task);
 

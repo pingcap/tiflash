@@ -130,8 +130,17 @@ void WaitReactor::loop() noexcept
     Spinner spinner{scheduler.task_thread_pool, logger};
     std::list<TaskPtr> local_waiting_tasks;
     // Get the incremental tasks from wait queue.
-    while (likely(wait_queue.take(local_waiting_tasks)))
+    // return false if wait_queue has been closed.
+    auto take_from_wait_queue = [&]() {
+        return local_waiting_tasks.empty()
+            ? wait_queue.take(local_waiting_tasks)
+            // If the local waiting tasks are not empty, there is no need to be blocked here
+            // and we can continue to process the leftover tasks in the local waiting tasks
+            : wait_queue.tryTake(local_waiting_tasks);
+    };
+    while (take_from_wait_queue())
     {
+        assert(!local_waiting_tasks.empty());
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
         {

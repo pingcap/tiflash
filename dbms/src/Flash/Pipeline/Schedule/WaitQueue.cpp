@@ -26,7 +26,7 @@ bool WaitQueue::take(std::list<TaskPtr> & local_waiting_tasks)
         {
             if (unlikely(is_closed))
                 return false;
-            if (!waiting_tasks.empty() || !local_waiting_tasks.empty())
+            if (!waiting_tasks.empty())
                 break;
             cv.wait(lock);
         }
@@ -34,6 +34,15 @@ bool WaitQueue::take(std::list<TaskPtr> & local_waiting_tasks)
         local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
     }
     assert(!local_waiting_tasks.empty());
+    return true;
+}
+
+bool WaitQueue::tryTake(std::list<TaskPtr> & local_waiting_tasks)
+{
+    std::lock_guard lock(mu);
+    if (unlikely(is_closed))
+        return false;
+    local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
     return true;
 }
 
