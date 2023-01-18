@@ -1061,13 +1061,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         server_info.parseSysInfo(response);
         setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
         computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else
     {
         setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
         computeAndSetNumberOfPhysicalCPUCores(std::thread::hardware_concurrency(), std::thread::hardware_concurrency() / 2);
-        LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+        LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
     // print necessary grpc log.
