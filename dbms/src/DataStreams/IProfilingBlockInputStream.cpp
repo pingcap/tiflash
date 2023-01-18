@@ -413,7 +413,7 @@ Block IProfilingBlockInputStream::getTotals()
     Block res;
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         res = child.getTotals();
-        return res ? true : false;
+        return static_cast<bool>(res);
     });
     return res;
 }
@@ -426,7 +426,7 @@ Block IProfilingBlockInputStream::getExtremes()
     Block res;
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         res = child.getExtremes();
-        return res ? true : false;
+        return static_cast<bool>(res);
     });
     return res;
 }
