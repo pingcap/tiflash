@@ -77,5 +77,15 @@ std::string getThreadName()
 
 std::string getThreadNameAndID()
 {
-    return getThreadName() + "_" + DB::toString(pthread_self());
+    uint64_t thread_id;
+#if defined(__APPLE__)
+    int err = pthread_threadid_np(pthread_self(), &thread_id);
+    if (err)
+        DB::throwFromErrno("Cannot get thread id with pthread_threadid_np()", DB::ErrorCodes::PTHREAD_ERROR, err);
+#elif defined(__FreeBSD__)
+    thread_id = pthread_getthreadid_np();
+#else
+    thread_id = pthread_self();
+#endif
+    return getThreadName() + "_" + DB::toString(thread_id);
 }
