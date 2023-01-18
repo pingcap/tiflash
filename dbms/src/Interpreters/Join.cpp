@@ -2022,12 +2022,11 @@ template <typename Map>
 class NullAwareJoinHelper
 {
 public:
-    NullAwareJoinHelper() = default;
-
     NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, typename Map::SegmentType::HashTable::ConstLookupResult lookup_res, size_t max_block_size)
         : row_num(row_num)
         , step(s)
         , lookup_res(lookup_res)
+        , seg_it(nullptr, nullptr)
     {
         pace = 1;
         if (max_block_size > 0)
@@ -2341,7 +2340,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     size_t segment_size = map.getSegmentSize();
     const auto & shuffle_hash_data = shuffle_hash.getData();
 
-    std::vector<NullAwareJoinHelper<Map>> helpers(rows);
+    std::vector<NullAwareJoinHelper<Map>> helpers;
+    helpers.reserve(rows);
     std::list<NullAwareJoinHelper<Map> *> helpers_list;
     for (size_t i = 0; i < rows; ++i)
     {
@@ -2352,10 +2352,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 /// Filter out by left_conditions.
                 /// Step doesn't matter.
                 helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, nullptr, max_block_size);
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    helpers.back().template setResult<KIND>(false);
-                else
-                    helpers.back().template setResult<KIND>(true);
+                helpers.back().template setResult<KIND>(false);
                 continue;
             }
         }
@@ -2410,12 +2407,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         {
             helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, it, max_block_size);
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
-            {
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    helpers.back().template setResult<KIND>(true);
-                else
-                    helpers.back().template setResult<KIND>(false);
-            }
+                helpers.back().template setResult<KIND>(true);
             else
                 helpers_list.push_back(&helpers.back());
         }
