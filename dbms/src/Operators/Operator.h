@@ -101,7 +101,7 @@ public:
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // transform will inplace the block and if the return status is HAS_OUTPUT, this block can be used as input to subsequent operators.
     // Even if an empty block is input, transform will still return HAS_OUTPUT,
-    // because there are many operators that need the empty block as input, such as JoinProbe and WindowFunction.
+    // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
     OperatorStatus transform(Block & block);
     virtual OperatorStatus transformImpl(Block & block) = 0;
 
