@@ -57,7 +57,7 @@ PipelineTask::~PipelineTask()
         return ExecTaskStatus::ERROR;                           \
     }
 
-#define HANDLE_FINISHED_STATUS            \
+#define HANDLE_FINISH_STATUS              \
     case OperatorStatus::FINISHED:        \
     {                                     \
         pipeline_exec.reset();            \
@@ -69,6 +69,15 @@ PipelineTask::~PipelineTask()
         return ExecTaskStatus::CANCELLED; \
     }
 
+#define HANDLE_SPILLING_AND_WAITING_STATUS \
+    case OperatorStatus::WAITING:          \
+        return ExecTaskStatus::WAITING;    \
+    case OperatorStatus::SPILLING:         \
+        return ExecTaskStatus::SPILLING;
+
+#define UNEXPECTED_OP_STATUS(op_status, function_name) \
+    throw Exception(fmt::format("Unexpected op state {} at {}", magic_enum::enum_name(op_status), (function_name)));
+
 ExecTaskStatus PipelineTask::executeImpl()
 {
     HANDLE_CANCELLED
@@ -79,17 +88,14 @@ ExecTaskStatus PipelineTask::executeImpl()
         auto op_status = pipeline_exec->execute(event->getExecStatus());
         switch (op_status)
         {
-            HANDLE_FINISHED_STATUS
-        case OperatorStatus::WAITING:
-            return ExecTaskStatus::WAITING;
-        case OperatorStatus::SPILLING:
-            return ExecTaskStatus::SPILLING;
+            HANDLE_FINISH_STATUS
+            HANDLE_SPILLING_AND_WAITING_STATUS
         // After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
         // And other states are unexpected.
         case OperatorStatus::NEED_INPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            throw Exception(fmt::format("Unexpected op state {} at PipelineTask::execute", magic_enum::enum_name(op_status)));
+            UNEXPECTED_OP_STATUS(op_status, "PipelineTask::execute");
         }
     }
     HANDLE_ERROR
@@ -105,15 +111,14 @@ ExecTaskStatus PipelineTask::awaitImpl()
         auto op_status = pipeline_exec->await(event->getExecStatus());
         switch (op_status)
         {
-            HANDLE_FINISHED_STATUS
-        case OperatorStatus::WAITING:
-            return ExecTaskStatus::WAITING;
+            HANDLE_FINISH_STATUS
+            HANDLE_SPILLING_AND_WAITING_STATUS
         // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
         // And other states are unexpected.
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            throw Exception(fmt::format("Unexpected op state {} at PipelineTask::await", magic_enum::enum_name(op_status)));
+            UNEXPECTED_OP_STATUS(op_status, "PipelineTask::await");
         }
     }
     HANDLE_ERROR
@@ -129,9 +134,8 @@ ExecTaskStatus PipelineTask::spillImpl()
         auto op_status = pipeline_exec->spill(event->getExecStatus());
         switch (op_status)
         {
-            HANDLE_FINISHED_STATUS
-        case OperatorStatus::SPILLING:
-            return ExecTaskStatus::SPILLING;
+            HANDLE_FINISH_STATUS
+            HANDLE_SPILLING_AND_WAITING_STATUS
         // After `pipeline_exec->spill`,
         // - `NEED_INPUT` means that pipeline_exec need data to spill.
         // - `HAS_OUTPUT` means that pipeline_exec has restored data, and ready for ouput.
@@ -140,7 +144,7 @@ ExecTaskStatus PipelineTask::spillImpl()
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            throw Exception(fmt::format("Unexpected op state {} at PipelineTask::spill", magic_enum::enum_name(op_status)));
+            UNEXPECTED_OP_STATUS(op_status, "PipelineTask::spill");
         }
     }
     HANDLE_ERROR
@@ -148,6 +152,8 @@ ExecTaskStatus PipelineTask::spillImpl()
 
 #undef HANDLE_CANCELLED
 #undef HANDLE_ERROR
-#undef HANDLE_FINISHED_STATUS
+#undef HANDLE_FINISH_STATUS
+#undef HANDLE_SPILLING_AND_WAITING_STATUS
+#undef UNEXPECTED_OP_STATUS
 
 } // namespace DB

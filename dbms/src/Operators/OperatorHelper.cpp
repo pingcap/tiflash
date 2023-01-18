@@ -25,6 +25,7 @@ void assertOperatorStatus(
 {
     switch (status)
     {
+    // finish status, spilling status and waiting status can be returned in all method of operator.
     case OperatorStatus::FINISHED:
     case OperatorStatus::CANCELLED:
     case OperatorStatus::SPILLING:
@@ -32,9 +33,9 @@ void assertOperatorStatus(
         return;
     default:
     {
-        for (auto it = expect_running_statuses.begin(); it != expect_running_statuses.end(); ++it)
+        for (const auto & expect_running_status : expect_running_statuses)
         {
-            if (*it == status)
+            if (expect_running_status == status)
                 return;
         }
         RUNTIME_ASSERT(false, "Unexpected operator status {}", magic_enum::enum_name(status));

@@ -22,8 +22,8 @@ namespace DB
 {
 /**
  * All interfaces of the operator may return the following state.
- * - finish status, spilling status and waiting status can be returned in all function of operator.
- * - operator may return a different running status depending on the function.
+ * - finish status, spilling status and waiting status can be returned in all method of operator.
+ * - operator may return a different running status depending on the method.
 */
 enum class OperatorStatus
 {
@@ -122,7 +122,8 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
-    virtual OperatorStatus prepare() { return OperatorStatus::NEED_INPUT; }
+    OperatorStatus prepare();
+    virtual OperatorStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }
 
     OperatorStatus write(Block && block);
     virtual OperatorStatus writeImpl(Block && block) = 0;

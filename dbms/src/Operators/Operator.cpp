@@ -84,6 +84,16 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     return op_status;
 }
 
+OperatorStatus SinkOp::prepare()
+{
+    // TODO collect operator profile info here.
+    auto op_status = prepareImpl();
+#ifndef NDEBUG
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+#endif
+    return op_status;
+}
+
 OperatorStatus SinkOp::write(Block && block)
 {
 #ifndef NDEBUG
