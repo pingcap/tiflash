@@ -138,7 +138,8 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
 
-    global_context->column_file_schema_map_with_lock = std::make_shared<DM::ColumnFileSchemaMapWithLock>(*global_context);
+    auto column_file_schema_map_with_lock = std::make_shared<DM::ColumnFileSchemaMapWithLock>(*global_context);
+    global_context->setColumnFileSchemaMapWithLock(column_file_schema_map_with_lock);
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)

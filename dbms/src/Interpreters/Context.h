@@ -180,11 +180,12 @@ private:
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
+    std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> column_file_schema_map_with_lock;
+
     /// Use copy constructor or createGlobal() instead
     Context();
 
 public:
-    std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> column_file_schema_map_with_lock;
     /// Create initial Context with ContextShared and etc.
     static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
     static Context createGlobal();
@@ -512,6 +513,17 @@ public:
     {
         return disaggregated_mode == DisaggregatedMode::Storage;
     }
+
+    const std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> & getColumnFileSchemaMapWithLock() const
+    {
+        return column_file_schema_map_with_lock;
+    }
+
+    void setColumnFileSchemaMapWithLock(std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> & column_file_schema_map_with_lock_)
+    {
+        column_file_schema_map_with_lock = column_file_schema_map_with_lock_;
+    }
+
 
 private:
     /** Check if the current client has access to the specified database.

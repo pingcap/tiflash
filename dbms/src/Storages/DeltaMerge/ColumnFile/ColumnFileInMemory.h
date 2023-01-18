@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 namespace DB
@@ -53,14 +52,7 @@ public:
     explicit ColumnFileInMemory(const ColumnFileSchemaPtr & schema_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , cache(cache_ ? cache_ : std::make_shared<Cache>(schema_->getSchema()))
-    {
-        GET_METRIC(tiflash_column_file_info, column_file_memory_count).Increment();
-    }
-
-    ~ColumnFileInMemory() override
-    {
-        GET_METRIC(tiflash_column_file_info, column_file_memory_count).Decrement();
-    }
+    {}
 
     Type getType() const override { return Type::INMEMORY_FILE; }
 

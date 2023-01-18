@@ -195,7 +195,7 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
     if (!success)
     {
         auto new_digest = calcDigest(block);
-        auto schema = context.db_context.column_file_schema_map_with_lock->find(new_digest);
+        auto schema = context.db_context.getColumnFileSchemaMapWithLock()->find(new_digest);
 
         std::shared_ptr<ColumnFileInMemory> new_column_file;
         // Create a new column file.
@@ -203,7 +203,7 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
         {
             // 说明 schema 调整，更新最新的 schema
             schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
-            context.db_context.column_file_schema_map_with_lock->insert(new_digest, schema);
+            context.db_context.getColumnFileSchemaMapWithLock()->insert(new_digest, schema);
         }
         new_column_file = std::make_shared<ColumnFileInMemory>(schema);
         // Must append the empty `new_column_file` to `column_files` before appending data to it,

@@ -964,7 +964,7 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
         {
             BlockUPtr block = std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot));
             auto digest = calcDigest(*block);
-            auto schema = global_context.column_file_schema_map_with_lock->find(digest);
+            auto schema = global_context.getColumnFileSchemaMapWithLock()->find(digest);
             if (schema)
             {
                 // check if the block schema is the same or just sha-256 of schema is the same
