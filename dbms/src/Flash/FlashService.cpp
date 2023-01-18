@@ -224,10 +224,19 @@ grpc::Status FlashService::Coprocessor(
     if (!check_result.ok())
         return check_result;
 
-    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
-    GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    if (calldata)
+    {
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    }
+
     if (!tryToResetMaxThreadsMetrics())
     {
         GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
@@ -235,10 +244,18 @@ grpc::Status FlashService::Coprocessor(
     }
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
-        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        if (calldata)
+        {
+            GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+            GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+        }
+        else
+        {
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+            GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+            GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+        }
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
