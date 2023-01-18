@@ -16,11 +16,8 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
-<<<<<<< HEAD
-=======
 #include <Common/VariantOp.h>
 #include <Common/getNumberOfLogicalCPUCores.h>
->>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
 #include <Flash/BatchCoprocessorHandler.h>

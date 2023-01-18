@@ -1049,9 +1049,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
 
-<<<<<<< HEAD
-    CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
-=======
     /// get CPU/memory/disk info of this server
     if (tiflash_instance_wrap.proxy_helper)
     {
@@ -1070,7 +1067,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
         LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
->>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
 
     // print necessary grpc log.
     grpc_log = &Poco::Logger::get("grpc");

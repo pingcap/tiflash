@@ -29,17 +29,12 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
     , estimated_thread_usage(0)
     , log(&Poco::Logger::get("MinTSOScheduler"))
 {
-<<<<<<< HEAD
-    auto cores = getNumberOfPhysicalCPUCores();
-    active_set_soft_limit = (cores + 2) / 2; /// at least 1
-=======
     auto cores = static_cast<size_t>(getNumberOfLogicalCPUCores() / 2);
     if (active_set_soft_limit == 0 || active_set_soft_limit > 10 * cores)
     {
         /// set active_set_soft_limit to a reasonable value
         active_set_soft_limit = (cores + 2) / 2; /// at least 1
     }
->>>>>>> 966e7e228e (Get correct cpu cores in k8s pod (#6430))
     if (isDisabled())
     {
         LOG_FMT_INFO(log, "MinTSOScheduler is disabled!");
