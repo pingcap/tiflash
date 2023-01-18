@@ -2131,7 +2131,7 @@ public:
         {
             bool to_end = false;
 
-            typename Map::SegmentType::HashTable::const_iterator end;
+            typename Map::SegmentType::HashTable::const_iterator end(nullptr, nullptr);
             while (current_offset - offset.first < pace)
             {
                 while (seg_it.isNull())
