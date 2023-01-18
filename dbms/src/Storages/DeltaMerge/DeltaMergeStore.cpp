@@ -1398,7 +1398,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
     // Don't do compact on starting up.
-    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
     bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()
@@ -1918,9 +1918,18 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_bg).Increment();
+
     Stopwatch watch_seg_split;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_bg).Observe(watch_seg_split.elapsedSeconds());
+    });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
@@ -2070,9 +2079,13 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
+    if (!is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge_bg_gc).Increment();
     Stopwatch watch_seg_merge;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (!is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge_bg_gc).Observe(watch_seg_merge.elapsedSeconds());
+    });
 
     auto left_range = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
@@ -2170,13 +2183,13 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     switch (run_thread)
     {
     case TaskRunThread::BackgroundThreadPool:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge).Increment();
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg).Increment();
         break;
     case TaskRunThread::Foreground:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
         break;
     case TaskRunThread::ForegroundRPC:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg_rpc).Increment();
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_manual).Increment();
         break;
     case TaskRunThread::BackgroundGCThread:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
@@ -2190,13 +2203,13 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         switch (run_thread)
         {
         case TaskRunThread::BackgroundThreadPool:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge).Observe(watch_delta_merge.elapsedSeconds());
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg).Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::Foreground:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg).Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::ForegroundRPC:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg_rpc).Observe(watch_delta_merge.elapsedSeconds());
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_manual).Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::BackgroundGCThread:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc).Observe(watch_delta_merge.elapsedSeconds());
