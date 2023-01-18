@@ -58,7 +58,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
         }
         else
         {
-            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID());
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID(), table_scan.getColumns());
         }
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());

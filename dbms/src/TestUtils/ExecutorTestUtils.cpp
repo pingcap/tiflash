@@ -116,9 +116,7 @@ void ExecutorTest::initializeClientInfo()
 void ExecutorTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
-    context.context.setDAGContext(&dag_context);
-    context.context.setInterpreterTest();
-    context.context.setMockStorage(context.mockStorage());
+    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
 
     // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
@@ -128,9 +126,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test_with_delta_merge", concurrency);
-    context.context.setDAGContext(&dag_context);
-    context.context.setExecutorTest();
-    context.context.setMockStorage(context.mockStorage());
+    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
@@ -235,40 +231,37 @@ void ExecutorTest::enablePipeline(bool is_enable)
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     const std::shared_ptr<tipb::DAGRequest> & request,
-    size_t concurrency)
+    size_t concurrency,
+    bool enable_memory_tracker)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    return executeStreams(&dag_context);
+    return executeStreams(&dag_context, enable_memory_tracker);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool enable_memory_tracker)
 {
-    context.context.setExecutorTest();
-    context.context.setMockStorage(context.mockStorage());
-    context.context.setDAGContext(dag_context);
+    TiFlashTestEnv::setUpTestContext(context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
-Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request,
+                                                   size_t concurrency,
+                                                   bool enable_memory_tracker)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    context.context.setExecutorTest();
-    context.context.setMockStorage(context.mockStorage());
-    context.context.setDAGContext(&dag_context);
+    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return blocks;
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)
 {
     DAGProperties properties;
-    // disable mpp
-    context.context.setExecutorTest();
     properties.is_mpp_query = false;
     properties.start_ts = 1;
     auto [query_tasks, func_wrap_output_stream] = compileQuery(

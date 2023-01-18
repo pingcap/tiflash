@@ -214,8 +214,7 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    MockTableScan)";
+   MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
 
         expected = R"(
@@ -292,9 +291,8 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    Limit, limit = 10
-     MockTableScan)";
+   Limit, limit = 10
+    MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -321,10 +319,9 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    MergeSorting, limit = 10
-     PartialSorting: limit = 10
-      MockTableScan)";
+   MergeSorting, limit = 10
+    PartialSorting: limit = 10
+     MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -351,12 +348,10 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    Expression: <projection>
-     Expression: <expr after aggregation>
-      Aggregating
-       Concat
-        MockTableScan)";
+   Expression: <projection>
+    Expression: <expr after aggregation>
+     Aggregating
+      MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -380,8 +375,7 @@ MockExchangeSender
  Expression: <final projection>
   Expression: <expr after aggregation>
    Aggregating
-    Concat
-     MockTableScan)";
+    MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -1084,10 +1078,9 @@ Expression: <final projection>
   Filter
    Expression: <expr after aggregation>
     Aggregating
-     Concat
-      Expression: <before aggregation>
-       Filter
-        MockTableScan)";
+     Expression: <before aggregation>
+      Filter
+       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
