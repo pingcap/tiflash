@@ -49,6 +49,8 @@
     M(Revision)                                 \
     M(PSMVCCNumSnapshots)                       \
     M(PSMVCCSnapshotsList)                      \
+    M(PSMVCCNumDelta)                           \
+    M(PSMVCCNumBase)                            \
     M(RWLockWaitingReaders)                     \
     M(RWLockWaitingWriters)                     \
     M(RWLockActiveReaders)                      \

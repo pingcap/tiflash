@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnsNumber.h>
+#include <Common/Logger.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeMyDuration.h>
@@ -21,11 +22,11 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
 
 #include <limits>
-
 namespace DB::tests
 {
 namespace
@@ -157,6 +158,21 @@ public:
                     {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
                      createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}),
                 TiFlashException);
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testReturnNull(const Input & input, int fraction)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, {}, fraction) : createDateTimeColumn({{}}, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
         };
         inner_test(true);
         inner_test(false);
@@ -923,31 +939,32 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({{}, 20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    ASSERT_THROW(
+
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({MAX_UINT8}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
-    ASSERT_THROW(
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({MAX_UINT16}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
-    ASSERT_THROW(
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({MAX_UINT32}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    ASSERT_THROW(
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{}, {}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({{}, -20211026160859}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-        TiFlashException);
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
 }
 CATCH
 
@@ -1195,15 +1212,15 @@ try
     // mysql: null, warning.
     // tiflash: null, no warning.
     // tidb: 0000-00-00 00:00:00
-    // testThrowException<Float32, MyDateTime>(0, 6);
-    testThrowException<Float32, MyDateTime>(12.213, 6);
-    testThrowException<Float32, MyDateTime>(-12.213, 6);
-    testThrowException<Float32, MyDateTime>(MAX_FLOAT32, 6);
-    testThrowException<Float32, MyDateTime>(MIN_FLOAT32, 6);
+    testReturnNull<Float32, MyDateTime>(0, 6);
+    testReturnNull<Float32, MyDateTime>(12.213, 6);
+    testReturnNull<Float32, MyDateTime>(-12.213, 6);
+    testReturnNull<Float32, MyDateTime>(MAX_FLOAT32, 6);
+    testReturnNull<Float32, MyDateTime>(MIN_FLOAT32, 6);
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
     // testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
-    testThrowException<Float32, MyDateTime>(-111, 6);
+    testReturnNull<Float32, MyDateTime>(-111, 6);
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
     // testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
@@ -1211,15 +1228,15 @@ try
     // mysql: null, warning.
     // tiflash: null, no warning.
     // tidb: 0000-00-00 00:00:00
-    // testThrowException<Float64, MyDateTime>(0, 6);
-    testThrowException<Float64, MyDateTime>(12.213, 6);
-    testThrowException<Float64, MyDateTime>(-12.213, 6);
-    testThrowException<Float64, MyDateTime>(MAX_FLOAT64, 6);
-    testThrowException<Float64, MyDateTime>(MIN_FLOAT64, 6);
+    // testReturnNull<Float64, MyDateTime>(0, 6);
+    testReturnNull<Float64, MyDateTime>(12.213, 6);
+    testReturnNull<Float64, MyDateTime>(-12.213, 6);
+    testReturnNull<Float64, MyDateTime>(MAX_FLOAT64, 6);
+    testReturnNull<Float64, MyDateTime>(MIN_FLOAT64, 6);
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
     // testNotOnlyNull<Float64, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
-    testThrowException<Float64, MyDateTime>(-111, 6);
+    testReturnNull<Float64, MyDateTime>(-111, 6);
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
     // testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
