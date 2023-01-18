@@ -67,7 +67,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     }
 }
 
-BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
+BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -76,12 +76,8 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
 
     prepareForExecute(context);
 
-    ProcessList::EntryPtr process_list_entry;
-    if (likely(!internal))
-    {
-        process_list_entry = getProcessListEntry(context, dag_context);
-        logQuery(dag.str(context.getSettingsRef().log_queries_cut_to_length), context, logger);
-    }
+    auto process_list_entry = getProcessListEntry(context, dag_context);
+    logQuery(dag.str(context.getSettingsRef().log_queries_cut_to_length), context, logger);
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
@@ -93,29 +89,28 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
     res.process_list_entry = process_list_entry;
 
     prepareForInputStream(context, QueryProcessingStage::Complete, res.in);
-    if (likely(!internal))
-        logQueryPipeline(logger, res.in);
+    logQueryPipeline(logger, res.in);
 
     return res;
 }
 } // namespace
 
-BlockIO executeQuery(Context & context, bool internal)
+BlockIO executeAsBlockIO(Context & context)
 {
     if (context.getSettingsRef().enable_planner)
     {
         PlanQuerySource plan(context);
-        return executeDAG(plan, context, internal);
+        return doExecuteAsBlockIO(plan, context);
     }
     else
     {
         DAGQuerySource dag(context);
-        return executeDAG(dag, context, internal);
+        return doExecuteAsBlockIO(dag, context);
     }
 }
 
-QueryExecutorPtr queryExecute(Context & context, bool internal)
+QueryExecutorPtr queryExecute(Context & context)
 {
-    return std::make_unique<DataStreamExecutor>(executeQuery(context, internal));
+    return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context));
 }
 } // namespace DB

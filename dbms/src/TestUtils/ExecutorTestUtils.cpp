@@ -100,7 +100,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
 
     // Don't care regions information in interpreter tests.
-    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    auto query_executor = queryExecute(context.context);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 
@@ -109,7 +109,7 @@ void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_stri
     DAGContext dag_context(*request, "interpreter_test_with_delta_merge", concurrency);
     TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Don't care regions information in interpreter tests.
-    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    auto query_executor = queryExecute(context.context);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 
@@ -207,31 +207,30 @@ void ExecutorTest::enablePlanner(bool is_enable)
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     const std::shared_ptr<tipb::DAGRequest> & request,
-    size_t concurrency,
-    bool enable_memory_tracker)
+    size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    return executeStreams(&dag_context, enable_memory_tracker);
+    return executeStreams(&dag_context);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool enable_memory_tracker)
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
 {
     TiFlashTestEnv::setUpTestContext(context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(context.context)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
-Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request,
-                                                   size_t concurrency,
-                                                   bool enable_memory_tracker)
+Blocks ExecutorTest::getExecuteStreamsReturnBlocks(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(context.context)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return blocks;
 }
 
