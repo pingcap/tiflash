@@ -133,55 +133,6 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
     res.setColumns(std::move(mutable_columns));
 }
 
-// Deprecated
-[[maybe_unused]] static inline void decodeColumnsByCol(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
-{
-    if (!rows_to_read)
-        return;
-
-    auto && mutable_columns = res.mutateColumns();
-    for (auto && column : mutable_columns)
-    {
-        if (reserve_size > 0)
-            column->reserve(std::max(rows_to_read, reserve_size));
-        else
-            column->reserve(rows_to_read + column->size());
-    }
-
-    std::vector<size_t> column_batch;
-    {
-        size_t sz{};
-        readVarUInt(sz, istr);
-        column_batch.resize(sz);
-        for (size_t i = 0; i < sz; ++i)
-        {
-            readVarUInt(column_batch[i], istr);
-        }
-        assert(std::accumulate(column_batch.begin(), column_batch.end(), 0, [](auto c, auto & e) { return c + e; }) == int(rows_to_read));
-    }
-
-    for (size_t i = 0; i < res.columns(); ++i)
-    {
-        for (const auto & sz : column_batch)
-        {
-            if (!sz)
-                continue;
-            /// Data
-            res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
-                *mutable_columns[i],
-                [&](const IDataType::SubstreamPath &) {
-                    return &istr;
-                },
-                sz,
-                0,
-                {},
-                {});
-        }
-    }
-
-    res.setColumns(std::move(mutable_columns));
-}
-
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
     return decodeColumnsByBlock(istr, res, rows_to_read, reserve_size);
