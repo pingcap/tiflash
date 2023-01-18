@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
-#include <Common/getNumberOfCPUCores.h>
+#include <Common/getNumberOfLogicalCPUCores.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
