@@ -22,7 +22,6 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
