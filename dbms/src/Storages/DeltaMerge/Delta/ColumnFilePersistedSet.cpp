@@ -15,6 +15,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
@@ -22,8 +23,6 @@
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
-
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
 {

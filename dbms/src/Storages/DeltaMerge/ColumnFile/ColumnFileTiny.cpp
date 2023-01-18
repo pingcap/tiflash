@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 #include <memory>
-
-#include "Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h"
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
 
 namespace DB
 {
@@ -218,7 +216,6 @@ ColumnTinyFilePtr ColumnFileTiny::writeColumnFile(DMContext & context, const Blo
     // Create a new column file.
     if (schema == nullptr)
     {
-        // 说明 schema 调整，更新最新的 schema
         schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
         context.db_context.getColumnFileSchemaMapWithLock()->insert(new_digest, schema);
     }

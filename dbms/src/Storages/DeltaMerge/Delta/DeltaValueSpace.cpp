@@ -24,8 +24,6 @@
 
 #include <ext/scope_guard.h>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
 namespace DB
 {
 namespace DM

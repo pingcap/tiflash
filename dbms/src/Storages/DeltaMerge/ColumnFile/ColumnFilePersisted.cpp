@@ -21,9 +21,6 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-#include "Storages/DeltaMerge/DeltaMergeHelpers.h"
-
 namespace DB
 {
 namespace DM
@@ -51,9 +48,7 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     UInt32 cols;
     readIntBinary(cols, buf);
     if (!cols)
-    {
         return {};
-    }
     auto schema = std::make_shared<Block>();
     for (size_t i = 0; i < cols; ++i)
     {
@@ -65,7 +60,6 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
         readStringBinary(type_name, buf);
         schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().getOrSet(type_name), name, column_id));
     }
-
     return schema;
 }
 

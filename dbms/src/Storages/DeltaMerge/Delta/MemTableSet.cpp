@@ -28,7 +28,6 @@ namespace DM
 {
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
-    // 这里有必要额外判断一遍嘛？感觉不是很需要？为什么会又刚好一样了呢？是指做了两遍 ddl 的场景么？
     if (!column_files.empty())
     {
         // As we are now appending a new column file (which can be used for new appends),
@@ -201,7 +200,6 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
         // Create a new column file.
         if (schema == nullptr)
         {
-            // 说明 schema 调整，更新最新的 schema
             schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
             context.db_context.getColumnFileSchemaMapWithLock()->insert(new_digest, schema);
         }

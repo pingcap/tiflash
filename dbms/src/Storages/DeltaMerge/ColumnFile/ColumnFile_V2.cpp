@@ -14,9 +14,8 @@
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
-
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
 
 namespace DB
 {

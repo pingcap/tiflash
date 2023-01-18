@@ -20,10 +20,9 @@
 #include <Interpreters/Context.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <common/types.h>
 #include <openssl/base.h>
 #include <openssl/sha.h>
-
-#include "common/types.h"
 
 namespace DB
 {
