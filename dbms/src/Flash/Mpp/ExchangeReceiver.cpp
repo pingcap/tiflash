@@ -423,7 +423,6 @@ void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
     ++live_connections;
-    is_local_conn_alive = true;
 }
 
 template <typename RPCContext>
@@ -462,6 +461,9 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 },
                 [this]() {
                     this->connectionLocalDone();
+                },
+                [this]() {
+                    this->setLocalAlive();
                 },
                 ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
@@ -830,6 +832,14 @@ void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
     std::lock_guard lock(mu);
     is_local_conn_alive = false;
     cv.notify_all();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setLocalAlive()
+{
+    std::lock_guard lock(mu);
+    RUNTIME_CHECK_MSG(!is_local_conn_alive, "is_local_conn_alive should only be set once");
+    is_local_conn_alive = true;
 }
 
 template <typename RPCContext>

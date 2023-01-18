@@ -146,8 +146,6 @@ private:
         const String & local_err_msg,
         const LoggerPtr & log);
 
-    void connectionLocalDone();
-
     void waitAllConnectionDone();
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
 
@@ -165,6 +163,9 @@ private:
     void addLocalConnectionNum();
     void addSyncConnectionNum();
     void addAsyncConnectionNum(Int32 conn_num);
+
+    void connectionLocalDone();
+    void setLocalAlive();
 
     bool isReceiverForTiFlashStorage()
     {

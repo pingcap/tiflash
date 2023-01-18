@@ -24,10 +24,12 @@ struct LocalRequestHandler
         MemoryTracker * recv_mem_tracker_,
         std::function<void(bool, const String &)> && notify_write_done_,
         std::function<void()> && notify_close_,
+        std::function<void()> && set_alive_,
         ReceiverChannelWriter && channel_writer_)
         : recv_mem_tracker(recv_mem_tracker_)
         , notify_write_done(std::move(notify_write_done_))
         , notify_close(std::move(notify_close_))
+        , set_alive(std::move(set_alive_))
         , channel_writer(std::move(channel_writer_))
     {}
 
@@ -47,9 +49,15 @@ struct LocalRequestHandler
         notify_close();
     }
 
+    void setAlive() const
+    {
+        set_alive();
+    }
+
     MemoryTracker * recv_mem_tracker;
     std::function<void(bool, const String &)> notify_write_done;
     std::function<void()> notify_close;
+    std::function<void()> set_alive;
     ReceiverChannelWriter channel_writer;
 };
 } // namespace DB

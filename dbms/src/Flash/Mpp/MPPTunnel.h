@@ -265,6 +265,9 @@ public:
         , local_request_handler(local_request_handler_)
         , is_done(false)
     {
+        // Do not change the order of these two clause as setAlive may throw Exception.
+        // When Exception is throwed, live_connection should not be added.
+        local_request_handler.setAlive();
         add_local_conn_num();
     }
 
