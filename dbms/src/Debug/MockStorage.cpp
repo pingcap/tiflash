@@ -362,6 +362,35 @@ CutColumnInfo getCutColumnInfo(size_t rows, Int64 partition_id, Int64 partition_
     return {start, cur_rows};
 }
 
+ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns)
+{
+    if (used_columns.empty())
+        /// if used columns is not set, just return all the columns
+        return all_columns;
+    ColumnsWithTypeAndName res;
+    for (const auto & column_with_type_and_name : all_columns)
+    {
+        bool contains = false;
+        for (const auto & column : used_columns)
+        {
+            if (column.id == column_with_type_and_name.column_id)
+            {
+                contains = true;
+                break;
+            }
+        }
+        if (contains)
+        {
+            res.push_back(
+                ColumnWithTypeAndName(
+                    column_with_type_and_name.column,
+                    column_with_type_and_name.type,
+                    column_with_type_and_name.name));
+        }
+    }
+    return res;
+}
+
 ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num)
 {
     auto table_id = table_scan.getLogicalTableID();
@@ -378,26 +407,10 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableSca
 
         CutColumnInfo cut_info = getCutColumnInfo(rows, partition_id, partition_num);
 
-        ColumnsWithTypeAndName res;
-        for (const auto & column_with_type_and_name : columns_with_type_and_name)
+        ColumnsWithTypeAndName res = getUsedColumns(table_scan.getColumns(), columns_with_type_and_name);
+        for (auto & column_with_type_and_name : res)
         {
-            bool contains = false;
-            for (const auto & column : table_scan.getColumns())
-            {
-                if (column.id == column_with_type_and_name.column_id)
-                {
-                    contains = true;
-                    break;
-                }
-            }
-            if (contains)
-            {
-                res.push_back(
-                    ColumnWithTypeAndName(
-                        column_with_type_and_name.column->cut(cut_info.first, cut_info.second),
-                        column_with_type_and_name.type,
-                        column_with_type_and_name.name));
-            }
+            column_with_type_and_name.column = column_with_type_and_name.column->cut(cut_info.first, cut_info.second);
         }
         return res;
     }
