@@ -173,8 +173,9 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return ::testing::AssertionSuccess();
 }
 
+using MyRow = std::vector<Field>;
 /// size of each column should be the same
-std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
+std::multiset<MyRow> columnsToRowSet(const ColumnsWithTypeAndName & cols)
 {
     if (cols.empty())
         return {};
@@ -182,18 +183,19 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         return {};
 
     size_t cols_size = cols.size();
-    std::vector<Row> rows{cols[0].column->size()};
+    std::vector<MyRow> rows{cols[0].column->size()};
 
     for (auto & r : rows)
     {
-        r.resize(cols_size, true);
+        r.reserve(cols_size);
+        r.resize(cols_size);
     }
 
     for (auto const & [col_id, col] : ext::enumerate(cols))
     {
         for (size_t i = 0, size = col.column->size(); i < size; ++i)
         {
-            new (rows[i].place(col_id)) Field((*col.column)[i]);
+            rows[i][col_id] = Field((*col.column)[i]);
         }
     }
     return {std::make_move_iterator(rows.begin()), std::make_move_iterator(rows.end())};
@@ -226,7 +228,7 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
     auto const expected_row_set = columnsToRowSet(expected);
     auto const actual_row_set = columnsToRowSet(actual);
 
-    // if (expected_row_set != actual_row_set)
+    if (expected_row_set != actual_row_set)
     {
         FmtBuffer buf;
 
@@ -260,7 +262,7 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         }
         buf.append("...\n");
 
-        // return testing::AssertionFailure() << buf.toString();
+        return testing::AssertionFailure() << buf.toString();
     }
 
     return testing::AssertionSuccess();
