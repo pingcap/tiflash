@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,9 +81,9 @@ public:
         ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request));
     }
 
-    static std::queue<tipb::ExecType> checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) ;
+    static std::queue<tipb::ExecType> checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request);
     void checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const;
-    void addExpr(std::queue<const tipb::Expr *> & exprs, const tipb::Expr *  expr) const;
+    void addExpr(std::queue<const tipb::Expr *> & exprs, const tipb::Expr * expr) const;
 
     /// Prepare some names
     const String db_name{"test_db"};
@@ -120,7 +120,7 @@ void ExecutorCollation::addExpr(std::queue<const tipb::Expr *> & exprs, const ti
         addExpr(exprs, &(expr->children(i)));
 }
 
-std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) 
+std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request)
 {
     std::queue<tipb::ExecType> exec_collation_absent;
 
@@ -128,7 +128,7 @@ std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared
 #define CHECK(probe_type, exec_type)               \
     do                                             \
     {                                              \
-        if ((probe_type).collate() == 0)             \
+        if ((probe_type).collate() == 0)           \
         {                                          \
             exec_collation_absent.push(exec_type); \
             return true;                           \

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -200,7 +200,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
 }
 
-void PhysicalPlan::buildFinalProjection(const String & column_prefix[[maybe_unused]], bool is_root)
+void PhysicalPlan::buildFinalProjection(const String & column_prefix [[maybe_unused]], bool is_root)
 {
     const auto & final_projection = is_root
         ? PhysicalProjection::buildRootFinal(

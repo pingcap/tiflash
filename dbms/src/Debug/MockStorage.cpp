@@ -40,7 +40,7 @@ void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & 
 
 namespace
 {
-template<typename T>
+template <typename T>
 void fillEnumColumnInfo(const DataTypeEnum<T> * enum_type, TiDB::ColumnInfo & column_info)
 {
     for (const auto & element : enum_type->getValues())
