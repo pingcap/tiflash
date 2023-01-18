@@ -241,10 +241,13 @@ bool DeltaValueSpace::compact(DMContext & context)
         log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
-    // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
-    compaction_task->prepare(context, wbs, reader);
+    {
+        // do compaction task
+        const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
+        compaction_task->prepare(context, wbs, reader);
+        log_storage_snap.reset(); // release the snapshot ASAP
+    }
 
     {
         std::scoped_lock lock(mutex);
@@ -263,7 +266,12 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_FMT_DEBUG(log, "{} Compact stop because structure got updated", simpleInfo());
             return false;
         }
-
+        // Reset to the index of first file that can be compacted if the minor compaction succeed,
+        // and it may trigger another minor compaction if there is still too many column files.
+        // This process will stop when there is no more minor compaction to be done.
+        auto first_compact_index = compaction_task->getFirsCompactIndex();
+        RUNTIME_ASSERT(first_compact_index != std::numeric_limits<size_t>::max(), log, "first_compact_index is invalid");
+        last_try_compact_column_files.store(first_compact_index);
         LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
     }
     wbs.writeRemoves();
