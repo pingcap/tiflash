@@ -204,7 +204,7 @@ void MPPTunnel::connectSync(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained, std::function<void()> && add_local_conn_num)
+void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained)
 {
     {
         std::unique_lock lk(mu);
@@ -214,12 +214,12 @@ void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_re
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id, std::move(add_local_conn_num));
+            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_fine_grained_sender;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id, std::move(add_local_conn_num));
+            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_sender;
         }
 

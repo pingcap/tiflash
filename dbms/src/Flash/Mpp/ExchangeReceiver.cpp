@@ -359,7 +359,9 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     }
     catch (...)
     {
+        std::lock_guard lock(mu);
         RUNTIME_ASSERT(live_connections == 0, "We should wait the close of all connections");
+        RUNTIME_ASSERT(!is_local_conn_alive, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
 }
@@ -422,7 +424,9 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
+    RUNTIME_ASSERT(!is_local_conn_alive, "is_local_conn_alive should only be set once");
     ++live_connections;
+    is_local_conn_alive = true;
 }
 
 template <typename RPCContext>
@@ -463,7 +467,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                     this->connectionLocalDone();
                 },
                 [this]() {
-                    this->setLocalAlive();
+                    this->addLocalConnectionNum();
                 },
                 ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
@@ -471,10 +475,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 req,
                 req.source_index,
                 local_request_handler,
-                enable_fine_grained_shuffle_flag,
-                [this]() {
-                    this->addLocalConnectionNum();
-                });
+                enable_fine_grained_shuffle_flag);
         }
         else
         {
@@ -832,14 +833,6 @@ void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
     std::lock_guard lock(mu);
     is_local_conn_alive = false;
     cv.notify_all();
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::setLocalAlive()
-{
-    std::lock_guard lock(mu);
-    RUNTIME_CHECK_MSG(!is_local_conn_alive, "is_local_conn_alive should only be set once");
-    is_local_conn_alive = true;
 }
 
 template <typename RPCContext>

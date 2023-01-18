@@ -165,7 +165,6 @@ private:
     void addAsyncConnectionNum(Int32 conn_num);
 
     void connectionLocalDone();
-    void setLocalAlive();
 
     bool isReceiverForTiFlashStorage()
     {

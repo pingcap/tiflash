@@ -258,17 +258,13 @@ public:
         LocalRequestHandler & local_request_handler_,
         const LoggerPtr & log_,
         MemoryTrackerPtr & memory_tracker_,
-        const String & tunnel_id_,
-        std::function<void()> && add_local_conn_num)
+        const String & tunnel_id_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, nullptr)
         , source_index(source_index_)
         , local_request_handler(local_request_handler_)
         , is_done(false)
     {
-        // Do not change the order of these two clause as setAlive may throw Exception.
-        // When Exception is throwed, live_connection should not be added.
         local_request_handler.setAlive();
-        add_local_conn_num();
     }
 
     ~LocalTunnelSender() override
@@ -334,7 +330,6 @@ private:
     size_t source_index;
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
-    std::mutex mu;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -409,7 +404,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained, std::function<void()> && add_local_conn_num);
+    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
