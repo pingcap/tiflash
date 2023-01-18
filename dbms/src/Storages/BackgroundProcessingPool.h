@@ -81,7 +81,7 @@ public:
     using TaskHandle = std::shared_ptr<TaskInfo>;
 
 
-    BackgroundProcessingPool(int size_);
+    BackgroundProcessingPool(int size_, std::string thread_prefix_);
 
     size_t getNumberOfThreads() const { return size; }
 
@@ -109,6 +109,7 @@ private:
     using Threads = std::vector<std::thread>;
 
     const size_t size;
+    const std::string thread_prefix;
     static constexpr double sleep_seconds = 10;
     static constexpr double sleep_seconds_random_part = 1.0;
 
@@ -124,7 +125,7 @@ private:
     std::condition_variable wake_event;
 
 
-    void threadFunction();
+    void threadFunction(size_t thread_idx);
 };
 
 using BackgroundProcessingPoolPtr = std::shared_ptr<BackgroundProcessingPool>;

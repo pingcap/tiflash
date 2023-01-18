@@ -22,6 +22,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <limits>
 #include <memory>
 
 #include "dm_basic_include.h"
@@ -351,6 +352,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         // The second task is a trivial move for a ColumnFileDeleteRange.
         // The third task is a trivial move for and a ColumnFileTiny.
         const auto & tasks = compaction_task->getTasks();
+        ASSERT_EQ(compaction_task->getFirsCompactIndex(), 0);
         ASSERT_EQ(tasks.size(), 3);
         ASSERT_EQ(tasks[0].to_compact.size(), 3);
         ASSERT_EQ(tasks[0].is_trivial_move, false);
@@ -380,9 +382,13 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     }
     // now the column files in persisted_file_set should be: T_300, D_0_100, T_100, T_100
     {
+        // generate but not commit
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
+        // generate and commit
         PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         compaction_task->prepare(dmContext(), wbs, reader);
         ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
@@ -408,6 +414,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;
+                ASSERT_NE(minor_compaction_task->getFirsCompactIndex(), std::numeric_limits<size_t>::max());
                 minor_compaction_task->prepare(dmContext(), wbs, reader);
                 minor_compaction_task->commit(persisted_file_set, wbs);
             }
