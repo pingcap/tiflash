@@ -23,6 +23,7 @@
 namespace DB
 {
 constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE = 1024 * 1024 * 128; // 128MB
+const char * HashPartitionWriterLabels[] = {"HashPartitionWriter", "HashPartitionWriter-V1"};
 
 template <class ExchangeWriterPtr>
 HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
@@ -159,7 +160,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
         const auto & block = blocks.back();
         {
             // check schema
-            assertBlockSchema(expected_types, block, "HashPartitionWriter-V1");
+            assertBlockSchema(expected_types, block, HashPartitionWriterLabels[MPPDataPacketV1]);
         }
         auto && dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
         HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
@@ -168,13 +169,9 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
             auto & columns = dest_tbl_cols[part_id];
-            // check column size
+            if unlikely (!columns.front())
+                continue;
             size_t expect_size = columns.front()->size();
-            for (auto && col : columns)
-            {
-                auto size = col->size();
-                RUNTIME_CHECK(size == expect_size, size, expect_size);
-            }
             total_rows += expect_size;
             dest_columns[part_id].emplace_back(std::move(columns));
         }

@@ -90,32 +90,25 @@ struct CHBlockChunkCodecV1
         if constexpr (isBlockType<ColumnsHolder>())
         {
             const Block & block = columns_holder;
-            const auto rows = block.rows();
-            total_rows += rows;
-            for (size_t col_index = 0; col_index < block.columns(); ++col_index)
+            if (const auto rows = block.rows(); rows)
             {
-                auto && col_type_name = block.getByPosition(col_index);
-                bytes += col_type_name.column->byteSize();
-                RUNTIME_ASSERT(rows == col_type_name.column->size());
+                block.checkNumberOfRows();
+                total_rows += rows;
+                bytes += block.bytes();
             }
         }
         else
         {
-            if (columns_holder.front())
+            // check each column
+            if likely (columns_holder.front())
             {
                 const auto rows = columns_holder.front()->size();
                 total_rows += rows;
                 for (const auto & elem : columns_holder)
                 {
-                    bytes += elem->byteSize();
+                    RUNTIME_ASSERT(elem);
                     RUNTIME_ASSERT(rows == elem->size());
-                }
-            }
-            else
-            {
-                for (const auto & elem : columns_holder)
-                {
-                    RUNTIME_ASSERT(!elem);
+                    bytes += elem->byteSize();
                 }
             }
         }
@@ -138,13 +131,6 @@ struct CHBlockChunkCodecV1
     }
 
     template <typename ColumnsHolder>
-    size_t getRowsByColumns(ColumnsHolder && columns_holder)
-    {
-        size_t rows = columns_holder.front()->size();
-        return rows;
-    }
-
-    template <typename ColumnsHolder>
     constexpr static bool isBlockType()
     {
         return std::is_same_v<std::remove_const_t<std::remove_reference_t<ColumnsHolder>>, Block>;
@@ -155,11 +141,14 @@ struct CHBlockChunkCodecV1
     {
         if constexpr (isBlockType<ColumnsHolder>())
         {
-            size_t rows = columns_holder.rows();
+            const Block & block = columns_holder;
+            size_t rows = block.rows();
             return rows;
         }
         else
         {
+            if unlikely (!columns_holder.front())
+                return 0;
             size_t rows = columns_holder.front()->size();
             return rows;
         }
@@ -241,9 +230,9 @@ struct CHBlockChunkCodecV1
 
         getColumnEncodeInfo(batch_columns, column_encode_bytes, rows);
 
-        if unlikely (rows <= 0 && !always_keep_header)
+        if unlikely (0 == rows && !always_keep_header)
         {
-            return "";
+            return {};
         }
 
         // compression method flag; NONE, LZ4, ZSTD, defined in `CompressionMethodByte`

@@ -290,7 +290,7 @@ try
         blocks.emplace_back(prepareUniformBlock(block_rows));
         blocks.emplace_back(prepareUniformBlock(0));
     }
-    Block header = blocks.back();
+    const auto & header = blocks.back().cloneEmpty();
 
     for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
@@ -550,20 +550,20 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const size_t batch_send_min_limit = 16;
+    const size_t batch_send_min_limit = 1024 * 1024 * 1024;
     const uint16_t part_num = 4;
+
+    // 1. Build Blocks.
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+    {
+        blocks.emplace_back(prepareUniformBlock(block_rows));
+        blocks.emplace_back(prepareUniformBlock(0));
+    }
+    const auto & header = blocks.back().cloneEmpty();
 
     for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
-        // 1. Build Blocks.
-        std::vector<Block> blocks;
-        for (size_t i = 0; i < block_num; ++i)
-        {
-            blocks.emplace_back(prepareUniformBlock(block_rows));
-            blocks.emplace_back(prepareUniformBlock(0));
-        }
-        Block header = blocks.back();
-
         // 2. Build MockExchangeWriter.
         std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
         auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
@@ -582,6 +582,7 @@ try
             mode);
         for (const auto & block : blocks)
             dag_writer->write(block);
+        dag_writer->write(header); // write empty
         dag_writer->flush();
 
         // 4. Start to check write_report.
