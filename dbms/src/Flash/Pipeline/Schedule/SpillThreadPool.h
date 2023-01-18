@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/Task/Task.h>
 #include <Flash/Pipeline/Schedule/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <thread>
 #include <vector>

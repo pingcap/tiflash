@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Flash/Pipeline/Schedule/Task/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {

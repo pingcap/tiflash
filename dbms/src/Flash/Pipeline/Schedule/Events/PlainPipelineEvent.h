@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Event/PipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Events/PipelineEvent.h>
 
 namespace DB
 {

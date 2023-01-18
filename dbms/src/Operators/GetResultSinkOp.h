@@ -20,6 +20,8 @@
 namespace DB
 {
 class PhysicalGetResultSink;
+// The sink operator for getting the execution results.
+// Now BlockInputStreamSourceOp is used in unit tests.
 class GetResultSinkOp : public SinkOp
 {
 public:

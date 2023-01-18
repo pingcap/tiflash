@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Pipeline/Schedule/Event/Event.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
 

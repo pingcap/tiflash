@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 #include <common/likely.h>
 

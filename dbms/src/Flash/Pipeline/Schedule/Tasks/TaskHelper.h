@@ -17,7 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Pipeline/Schedule/Task/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <magic_enum.hpp>
 

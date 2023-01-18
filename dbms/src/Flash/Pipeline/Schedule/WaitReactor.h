@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/Task/Task.h>
-#include <Flash/Pipeline/Schedule/WaitQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 
 #include <list>
 #include <thread>
@@ -42,7 +42,7 @@ private:
     void loop() noexcept;
 
 private:
-    WaitQueue wait_queue;
+    WaitingTaskList waiting_task_list;
 
     LoggerPtr logger = Logger::get();
 

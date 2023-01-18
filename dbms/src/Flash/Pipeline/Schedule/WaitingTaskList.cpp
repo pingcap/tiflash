@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/WaitQueue.h>
+#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 #include <assert.h>
 #include <common/likely.h>
 
 namespace DB
 {
-bool WaitQueue::take(std::list<TaskPtr> & local_waiting_tasks)
+bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks)
 {
     {
         std::unique_lock lock(mu);
@@ -37,7 +37,7 @@ bool WaitQueue::take(std::list<TaskPtr> & local_waiting_tasks)
     return true;
 }
 
-bool WaitQueue::tryTake(std::list<TaskPtr> & local_waiting_tasks)
+bool WaitingTaskList::tryTake(std::list<TaskPtr> & local_waiting_tasks)
 {
     std::lock_guard lock(mu);
     if (unlikely(is_closed))
@@ -46,7 +46,7 @@ bool WaitQueue::tryTake(std::list<TaskPtr> & local_waiting_tasks)
     return true;
 }
 
-void WaitQueue::close()
+void WaitingTaskList::close()
 {
     {
         std::lock_guard lock(mu);
@@ -55,7 +55,7 @@ void WaitQueue::close()
     cv.notify_all();
 }
 
-void WaitQueue::submit(TaskPtr && task)
+void WaitingTaskList::submit(TaskPtr && task)
 {
     assert(task);
     {
@@ -65,7 +65,7 @@ void WaitQueue::submit(TaskPtr && task)
     cv.notify_one();
 }
 
-void WaitQueue::submit(std::list<TaskPtr> & tasks)
+void WaitingTaskList::submit(std::list<TaskPtr> & tasks)
 {
     if (tasks.empty())
         return;

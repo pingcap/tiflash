@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-#include <Flash/Pipeline/Schedule/Task/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/WaitReactor.h>
 #include <assert.h>
 #include <common/likely.h>
@@ -102,7 +102,7 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
 
 void WaitReactor::close()
 {
-    wait_queue.close();
+    waiting_task_list.close();
 }
 
 void WaitReactor::waitForStop()
@@ -113,12 +113,12 @@ void WaitReactor::waitForStop()
 
 void WaitReactor::submit(TaskPtr && task)
 {
-    wait_queue.submit(std::move(task));
+    waiting_task_list.submit(std::move(task));
 }
 
 void WaitReactor::submit(std::list<TaskPtr> & tasks)
 {
-    wait_queue.submit(tasks);
+    waiting_task_list.submit(tasks);
 }
 
 void WaitReactor::loop() noexcept
@@ -129,16 +129,16 @@ void WaitReactor::loop() noexcept
 
     Spinner spinner{scheduler.task_thread_pool, logger};
     std::list<TaskPtr> local_waiting_tasks;
-    // Get the incremental tasks from wait queue.
-    // return false if wait_queue has been closed.
-    auto take_from_wait_queue = [&]() {
+    // Get the incremental tasks from waiting_task_list.
+    // return false if waiting_task_list has been closed.
+    auto take_from_waiting_task_list = [&]() {
         return local_waiting_tasks.empty()
-            ? wait_queue.take(local_waiting_tasks)
+            ? waiting_task_list.take(local_waiting_tasks)
             // If the local waiting tasks are not empty, there is no need to be blocked here
             // and we can continue to process the leftover tasks in the local waiting tasks
-            : wait_queue.tryTake(local_waiting_tasks);
+            : waiting_task_list.tryTake(local_waiting_tasks);
     };
-    while (take_from_wait_queue())
+    while (take_from_waiting_task_list())
     {
         assert(!local_waiting_tasks.empty());
         auto task_it = local_waiting_tasks.begin();
