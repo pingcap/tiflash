@@ -23,7 +23,7 @@ class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
 // Wrap the BlockInputStream of pull model as the source operator of push model.
-// Now BlockInputStreamSourceOp is used by `PhysicalMockExchangeReceiver/PhysicalMockTableScan` which are only used in unit test.
+// Now it is used by `PhysicalMockExchangeReceiver/PhysicalMockTableScan` which are only used in unit test.
 class BlockInputStreamSourceOp : public SourceOp
 {
 public:
