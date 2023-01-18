@@ -2039,16 +2039,9 @@ public:
         has_result = false;
     }
 
-    template <ASTTableJoin::Kind KIND>
-    void setResult(bool matched)
+    void setResult(bool res)
     {
-        static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
-                      || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
-
-        if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-            result = std::make_pair(false, matched);
-        else
-            result = std::make_pair(false, !matched);
+        result = std::make_pair(false, res);
     }
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -2352,7 +2345,10 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 /// Filter out by left_conditions.
                 /// Step doesn't matter.
                 helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, nullptr, max_block_size);
-                helpers.back().template setResult<KIND>(false);
+                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+                    helpers.back().setResult(false);
+                else
+                    helpers.back().setResult(true);
                 continue;
             }
         }
@@ -2407,7 +2403,12 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         {
             helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, it, max_block_size);
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
-                helpers.back().template setResult<KIND>(true);
+            {
+                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+                    helpers.back().setResult(true);
+                else
+                    helpers.back().setResult(false);
+            }
             else
                 helpers_list.push_back(&helpers.back());
         }
