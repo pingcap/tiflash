@@ -44,6 +44,12 @@ public:
     OperatorStatus spill(PipelineExecutorStatus & exec_status);
 
 private:
+    OperatorStatus executeImpl(PipelineExecutorStatus & exec_status);
+
+    OperatorStatus awaitImpl(PipelineExecutorStatus & exec_status);
+
+    OperatorStatus spillImpl(PipelineExecutorStatus & exec_status);
+
     OperatorStatus fetchBlock(
         Block & block,
         size_t & start_transform_op_index,

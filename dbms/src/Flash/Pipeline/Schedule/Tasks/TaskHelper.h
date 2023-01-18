@@ -38,7 +38,7 @@ namespace DB
     ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
 
 #define UNEXPECTED_STATUS(logger, status) \
-    RUNTIME_ASSERT(false, (logger), "Unexpected task state {}", magic_enum::enum_name(status));
+    RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
 
 static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 

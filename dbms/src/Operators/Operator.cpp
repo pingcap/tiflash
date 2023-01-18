@@ -13,63 +13,75 @@
 // limitations under the License.
 
 #include <Operators/Operator.h>
+#include <Operators/OperatorHelper.h>
 
 namespace DB
 {
 OperatorStatus Operator::await()
 {
     // TODO collect operator profile info here.
-    return awaitImpl();
+    auto op_status = awaitImpl();
+#ifndef NDEBUG
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+#endif
+    return op_status;
 }
 
 OperatorStatus Operator::spill()
 {
     // TODO collect operator profile info here.
-    return spillImpl();
+    auto op_status = spillImpl();
+#ifndef NDEBUG
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+#endif
+    return op_status;
 }
 
 OperatorStatus SourceOp::read(Block & block)
 {
     // TODO collect operator profile info here.
     assert(!block);
-    auto status = readImpl(block);
+    auto op_status = readImpl(block);
 #ifndef NDEBUG
     if (block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
+    assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
-    return status;
+    return op_status;
 }
 
 OperatorStatus TransformOp::transform(Block & block)
 {
     // TODO collect operator profile info here.
-    auto status = transformImpl(block);
+    auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    return status;
+    return op_status;
 }
 
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     // TODO collect operator profile info here.
     assert(!block);
-    auto status = tryOutputImpl(block);
+    auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
     if (block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    return status;
+    return op_status;
 }
 
 OperatorStatus SinkOp::write(Block && block)
@@ -82,6 +94,10 @@ OperatorStatus SinkOp::write(Block && block)
     }
 #endif
     // TODO collect operator profile info here.
-    return writeImpl(std::move(block));
+    auto op_status = writeImpl(std::move(block));
+#ifndef NDEBUG
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+#endif
+    return op_status;
 }
 } // namespace DB

@@ -22,8 +22,8 @@ namespace DB
 {
 /**
  * All interfaces of the operator may return the following state.
- * - finish status, spilling status and waiting status can be returned in all interfaces of operator.
- * - operator may return a different running status depending on the interface.
+ * - finish status, spilling status and waiting status can be returned in all function of operator.
+ * - operator may return a different running status depending on the function.
 */
 enum class OperatorStatus
 {

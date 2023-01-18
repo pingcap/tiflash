@@ -71,6 +71,9 @@ void SpillThreadPool::handleTask(TaskPtr && task, const LoggerPtr & log)
     case ExecTaskStatus::RUNNING:
         scheduler.task_thread_pool.submit(std::move(task));
         break;
+    case ExecTaskStatus::WAITING:
+        scheduler.wait_reactor.submit(std::move(task));
+        break;
     case ExecTaskStatus::SPILLING:
         submit(std::move(task));
         break;

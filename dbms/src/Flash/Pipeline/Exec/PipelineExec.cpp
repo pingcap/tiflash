@@ -14,6 +14,7 @@
 
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Operators/OperatorHelper.h>
 
 namespace DB
 {
@@ -21,6 +22,15 @@ namespace DB
     if (unlikely((exec_status).isCancelled())) \
         return OperatorStatus::CANCELLED;
 
+OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
+{
+    auto op_status = executeImpl(exec_status);
+#ifndef NDEBUG
+    // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+#endif
+    return op_status;
+}
 /**
  *  sink_op   transform_op    ...   transform_op   source_op
  *
@@ -28,7 +38,7 @@ namespace DB
  *                                                          │ block
  *    write◄────transform◄─── ... ◄───transform◄────────────┘
  */
-OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
 {
     Block block;
     size_t start_transform_op_index = 0;
@@ -77,6 +87,15 @@ OperatorStatus PipelineExec::fetchBlock(
 
 OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
 {
+    auto op_status = awaitImpl(exec_status);
+#ifndef NDEBUG
+    // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
+    assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
+#endif
+    return op_status;
+}
+OperatorStatus PipelineExec::awaitImpl(PipelineExecutorStatus & exec_status)
+{
     CHECK_IS_CANCELLED(exec_status);
 
     auto op_status = sink_op->await();
@@ -94,6 +113,16 @@ OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
 }
 
 OperatorStatus PipelineExec::spill(PipelineExecutorStatus & exec_status)
+{
+    auto op_status = spillImpl(exec_status);
+#ifndef NDEBUG
+    // - `NEED_INPUT` means that pipeline_exec need data to spill.
+    // - `HAS_OUTPUT` means that pipeline_exec has restored data, and ready for ouput.
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+#endif
+    return op_status;
+}
+OperatorStatus PipelineExec::spillImpl(PipelineExecutorStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
 
