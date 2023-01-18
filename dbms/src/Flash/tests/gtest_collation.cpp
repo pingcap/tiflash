@@ -81,9 +81,9 @@ public:
         ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request));
     }
 
-    std::queue<tipb::ExecType> checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const;
+    static std::queue<tipb::ExecType> checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) ;
     void checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const;
-    void addExpr(std::queue<const tipb::Expr *> & exprs, const tipb::Expr * const expr) const;
+    void addExpr(std::queue<const tipb::Expr *> & exprs, const tipb::Expr *  expr) const;
 
     /// Prepare some names
     const String db_name{"test_db"};
@@ -120,15 +120,15 @@ void ExecutorCollation::addExpr(std::queue<const tipb::Expr *> & exprs, const ti
         addExpr(exprs, &(expr->children(i)));
 }
 
-std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const
+std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) 
 {
     std::queue<tipb::ExecType> exec_collation_absent;
 
-    auto checkExecutor = [&](const tipb::Executor & executor) -> bool {
+    auto check_executor = [&](const tipb::Executor & executor) -> bool {
 #define CHECK(probe_type, exec_type)               \
     do                                             \
     {                                              \
-        if (probe_type.collate() == 0)             \
+        if ((probe_type).collate() == 0)             \
         {                                          \
             exec_collation_absent.push(exec_type); \
             return true;                           \
@@ -200,7 +200,7 @@ std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared
         return true; /// Alawys traverse the executors
     };
 
-    traverseExecutors(dag_request.get(), checkExecutor);
+    traverseExecutors(dag_request.get(), check_executor);
     return exec_collation_absent;
 }
 
@@ -214,7 +214,7 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
             addExpr(exprs, &(field.Get(i)));
     };
 
-    auto collectExprs = [&](const tipb::Executor & executor) -> bool {
+    auto collect_exprs = [&](const tipb::Executor & executor) -> bool {
         tipb::ExecType type = executor.tp();
 
         switch (type)
@@ -280,7 +280,7 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
     };
 
     /// Firstly, collect scalar functions
-    traverseExecutors(dag_request.get(), collectExprs);
+    traverseExecutors(dag_request.get(), collect_exprs);
 
     /// Secondly, check collation of scalar functions
     while (!exprs.empty())

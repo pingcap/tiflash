@@ -102,13 +102,12 @@ public:
                         ColumnWithTypeAndName column;
                         String type_name;
                         std::tie(column, type_name) = getColumnAndTypeName(i, j, i % 2, test_data.type);
-
+                        auto columns = {column};
                         auto table_name = "t" + std::to_string(table_id++);
-                        context.addMockTable({"test_db", table_name}, {{"d1", DataTypeFactory::instance().get(type_name)}}, {column});
+                        context.addMockTable({"test_db", table_name}, {{"d1", DataTypeFactory::instance().get(type_name)}}, columns);
                         auto request = context.scan("test_db", table_name).build(context);
                         // TODO: bug in compare blocks in non-restrict mode.
-                        executeAndAssertColumnsEqual(request, {column});
-                    }
+                        ASSERT_COLUMNS_EQ_UR(columns, executeStreams(request));                    }
                 }
             }
         }
@@ -140,13 +139,13 @@ try
 {
     // The enum8 field will be converted to enum16
     auto type = DataTypeFactory::instance().get("Enum16('a' = 1,'b' = 2,'c' = 3)");
-    auto column = ColumnGenerator::instance().generate({100, type->getName(), RANDOM, "test", 128});
-    context.addMockTable({"test", "enum16"}, {{"e1", type}}, {column});
+    auto columns = {ColumnGenerator::instance().generate({100, type->getName(), RANDOM, "test", 128})};
+    context.addMockTable({"test", "enum16"}, {{"e1", type}},columns);
     auto request = context.scan("test", "enum16").build(context);
-    executeAndAssertColumnsEqual(request, {column});
+    ASSERT_COLUMNS_EQ_UR(columns, executeStreams(request));
 
     request = context.scan("test", "enum16").filter(Not_eq(col("e1"), lit(Field(static_cast<Int64>(0))))).build(context);
-    executeAndAssertColumnsEqual(request, {column});
+    ASSERT_COLUMNS_EQ_UR(columns, executeStreams(request));
 }
 CATCH
 
