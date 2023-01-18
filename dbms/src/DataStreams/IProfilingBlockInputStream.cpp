@@ -221,7 +221,7 @@ static bool handleOverflowMode(OverflowMode mode, const String & message, int co
 };
 
 
-bool IProfilingBlockInputStream::checkTimeLimit()
+bool IProfilingBlockInputStream::checkTimeLimit() const
 {
     if (limits.max_execution_time != 0
         && info.total_stopwatch.elapsed() > static_cast<UInt64>(limits.max_execution_time.totalMicroseconds()) * 1000)
@@ -413,9 +413,7 @@ Block IProfilingBlockInputStream::getTotals()
     Block res;
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         res = child.getTotals();
-        if (res)
-            return true;
-        return false;
+        return res ? true : false;
     });
     return res;
 }
@@ -428,9 +426,7 @@ Block IProfilingBlockInputStream::getExtremes()
     Block res;
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         res = child.getExtremes();
-        if (res)
-            return true;
-        return false;
+        return res ? true : false;
     });
     return res;
 }
