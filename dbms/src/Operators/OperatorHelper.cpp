@@ -32,7 +32,7 @@ void assertOperatorStatus(
         return;
     default:
     {
-	    for(auto it = expect_running_statuses.begin(); it != expect_running_statuses.end(); ++it)
+        for (auto it = expect_running_statuses.begin(); it != expect_running_statuses.end(); ++it)
         {
             if (*it == status)
                 return;

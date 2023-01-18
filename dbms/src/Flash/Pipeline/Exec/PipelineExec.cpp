@@ -100,16 +100,16 @@ OperatorStatus PipelineExec::awaitImpl(PipelineExecutorStatus & exec_status)
 
     auto op_status = sink_op->await();
     if (op_status != OperatorStatus::NEED_INPUT)
-        return op_status;
+        return prepareSpillOpIfNeed(op_status, sink_op);
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
         auto op_status = (*it)->await();
         if (op_status != OperatorStatus::NEED_INPUT)
-            return op_status;
+            return prepareSpillOpIfNeed(op_status, *it);
     }
-    return source_op->await();
+    return prepareSpillOpIfNeed(source_op->await(), source_op);
 }
 
 OperatorStatus PipelineExec::spill(PipelineExecutorStatus & exec_status)
