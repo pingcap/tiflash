@@ -363,10 +363,10 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
 {
-    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(db, table, mock_column_infos, columns, concurrency_hint);
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
+    addMockTable(db, table, columnInfos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const NamesAndTypes & names_and_types, ColumnsWithTypeAndName columns, size_t concurrency_hint)
@@ -394,10 +394,10 @@ void MockDAGRequestContext::addMockTableSchema(const MockTableName & name, const
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
 {
-    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(name, mock_column_infos, columns, concurrency_hint);
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
+    addMockTable(name, columnInfos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint)

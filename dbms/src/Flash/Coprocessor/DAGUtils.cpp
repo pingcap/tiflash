@@ -876,6 +876,8 @@ String getFieldTypeName(Int32 tp)
         return "Varchar";
     case TiDB::TypeString:
         return "String";
+    case TiDB::TypeEnum:
+        return "Enum";
     default:
         throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
     }

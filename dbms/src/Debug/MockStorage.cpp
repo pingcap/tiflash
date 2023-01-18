@@ -14,6 +14,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/dataTypeToTP.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -37,6 +38,20 @@ void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & 
     addTableInfo(name, columnInfos);
 }
 
+namespace
+{
+template<typename T>
+void fillEnumColumnInfo(const DataTypeEnum<T> * enum_type, TiDB::ColumnInfo & column_info)
+{
+    for (const auto & element : enum_type->getValues())
+    {
+        if (!element.first.empty() && element.second == 0)
+            throw Exception(fmt::format("Enum value can't be set to 0"));
+        column_info.elems.emplace_back(element.first, element.second);
+    }
+}
+} // namespace
+
 void MockStorage::addTableSchemaForComplexType(const String & name, const MockColumnInfoVec & columnInfos, const NamesAndTypes & names_and_types)
 {
     name_to_id_map[name] = MockTableIdGenerator::instance().nextTableId();
@@ -57,13 +72,10 @@ void MockStorage::addTableSchemaForComplexType(const String & name, const MockCo
         column_info.id = col_id++;
         auto type = name_and_type.type;
         if (type->isNullable())
-        {
             type = removeNullable(type);
-        }
         else
-        {
             column_info.setNotNullFlag();
-        }
+
         if (type->isDecimal())
         {
             if (const auto * dec_type = typeid_cast<const DataTypeDecimal<Decimal32> *>(type.get()))
@@ -87,7 +99,17 @@ void MockStorage::addTableSchemaForComplexType(const String & name, const MockCo
                 column_info.decimal = dec_type->getScale();
             }
         }
-
+        if (type->isEnum())
+        {
+            if (const auto * enum_type = typeid_cast<const DataTypeEnum<Int8> *>(type.get()))
+            {
+                fillEnumColumnInfo<Int8>(enum_type, column_info);
+            }
+            else if (const auto * enum_type = typeid_cast<const DataTypeEnum<Int16> *>(type.get()))
+            {
+                fillEnumColumnInfo<Int16>(enum_type, column_info);
+            }
+        }
         column_infos.push_back(std::move(column_info));
     }
     table_info.columns.swap(column_infos);

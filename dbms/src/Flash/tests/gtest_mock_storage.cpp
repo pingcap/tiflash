@@ -135,5 +135,20 @@ try
 }
 CATCH
 
+TEST_F(MockStorageTestRunner, Enum)
+try
+{
+    // The enum8 field will be converted to enum16
+    auto type = DataTypeFactory::instance().get("Enum16('a' = 1,'b' = 2,'c' = 3)");
+    auto column = ColumnGenerator::instance().generate({100, type->getName(), RANDOM, "test", 128});
+    context.addMockTable({"test", "enum16"}, {{"e1", type}}, {column});
+    auto request = context.scan("test", "enum16").build(context);
+    executeAndAssertColumnsEqual(request, {column});
+
+    request = context.scan("test", "enum16").filter(Not_eq(col("e1"), lit(Field(static_cast<Int64>(0))))).build(context);
+    executeAndAssertColumnsEqual(request, {column});
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

@@ -177,7 +177,7 @@ public:
     }
     /// mock column table scan
     // The following two methods can add nullable table column schema with simple type.
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint = 0);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
     // The following two methods can add nullable table columns with simple type.
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);

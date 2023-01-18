@@ -200,7 +200,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
 }
 
-void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_root)
+void PhysicalPlan::buildFinalProjection(const String & column_prefix[[maybe_unused]], bool is_root)
 {
     const auto & final_projection = is_root
         ? PhysicalProjection::buildRootFinal(
