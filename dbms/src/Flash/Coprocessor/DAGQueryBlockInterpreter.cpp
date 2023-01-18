@@ -277,8 +277,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
 
     const Settings & settings = context.getSettingsRef();
-    size_t max_block_size_for_cross_join = settings.max_block_size;
-    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
+    size_t max_block_size = settings.max_block_size;
+    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
@@ -295,7 +295,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         other_filter_column_name,
         other_eq_filter_from_in_column_name,
         other_condition_expr,
-        max_block_size_for_cross_join,
+        max_block_size,
         match_helper_name);
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);

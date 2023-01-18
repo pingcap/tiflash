@@ -302,7 +302,7 @@ private:
     ExpressionActionsPtr other_condition_ptr;
 
     ASTTableJoin::Strictness original_strictness;
-    size_t max_block_size_for_cross_join;
+    size_t max_block_size;
     /** Blocks of "right" table.
       */
     BlocksList blocks;

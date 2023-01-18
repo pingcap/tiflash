@@ -150,7 +150,7 @@ Join::Join(
     , other_eq_filter_from_in_column(other_eq_filter_from_in_column_)
     , other_condition_ptr(other_condition_ptr_)
     , original_strictness(strictness)
-    , max_block_size_for_cross_join(max_block_size_)
+    , max_block_size(max_block_size_)
     , build_table_state(BuildTableState::SUCCEED)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
@@ -1127,7 +1127,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
-        if (KIND == ASTTableJoin::Kind::Anti)
+        if constexpr (KIND == ASTTableJoin::Kind::Anti)
             /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
             /// away because it might failed in other condition, so we add the matched rows to the result, but set (*filter)[i] = 0
             /// to indicate that the row is matched during probe stage, this will be used in handleOtherConditions
@@ -1138,7 +1138,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
     static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, ProbeProcessInfo & probe_process_info)
     {
-        if (KIND == ASTTableJoin::Kind::Inner)
+        if constexpr (KIND == ASTTableJoin::Kind::Inner)
         {
             (*offsets)[i] = current_offset;
         }
@@ -1909,13 +1909,13 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         right_table_rows += block_right.rows();
 
     size_t left_rows_per_iter = std::max(rows_left, 1);
-    if (max_block_size_for_cross_join > 0 && right_table_rows > 0 && other_condition_ptr != nullptr
+    if (max_block_size > 0 && right_table_rows > 0 && other_condition_ptr != nullptr
         && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
     {
         /// if other_condition is not null, and all right columns maybe added during join, try to use multiple iter
         /// to make memory usage under control, for anti semi cross join that is converted by not in subquery,
         /// it is likely that other condition may filter out most of the rows
-        left_rows_per_iter = std::max(max_block_size_for_cross_join / right_table_rows, 1);
+        left_rows_per_iter = std::max(max_block_size / right_table_rows, 1);
     }
 
     std::vector<size_t> right_column_index;
@@ -2022,16 +2022,18 @@ template <typename Map>
 class NullAwareJoinHelper
 {
 public:
-    NullAwareJoinHelper()
-    {
-    }
+    NullAwareJoinHelper() = default;
 
-    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, typename Map::SegmentType::HashTable::ConstLookupResult lookup_res)
+    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, typename Map::SegmentType::HashTable::ConstLookupResult lookup_res, size_t max_block_size)
         : row_num(row_num)
         , step(s)
         , lookup_res(lookup_res)
     {
         pace = 1;
+        if (max_block_size > 0)
+            max_pace = max_block_size;
+        else
+            max_pace = 8196;
         null_pos = 0;
         null_list = nullptr;
         current_segment = 0;
@@ -2057,9 +2059,9 @@ public:
                       || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
 
         size_t num_columns_to_add = added_columns.size() - left_columns;
-        if (KIND == ASTTableJoin::Kind::NullAware_LeftAnti || KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftAnti || KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
         {
-            // The last column is match_helper.
+            /// The last column is match_helper.
             num_columns_to_add -= 1;
         }
 
@@ -2138,7 +2140,7 @@ public:
             bool to_end = false;
 
             typename Map::SegmentType::HashTable::const_iterator end;
-            while (current_offset - offset.second < pace)
+            while (current_offset - offset.first < pace)
             {
                 while (seg_it.isNull())
                 {
@@ -2220,10 +2222,7 @@ public:
             if ((*eq_null_map)[i])
             {
                 has_result = true;
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    result = std::make_pair(true, false);
-                else
-                    result = std::make_pair(true, false);
+                result = std::make_pair(true, false);
                 return true;
             }
             if (eq_column[i])
@@ -2249,15 +2248,12 @@ public:
 
         for (size_t i = offset.first; i < offset.second; i++)
         {
-            // Only care about null because if the equal expr can be true, the result
-            // should be got during probing hash table, not here.
+            /// Only care about null because if the equal expr can be true, the result
+            /// should be got during probing hash table, not here.
             if ((*null_map)[i])
             {
                 has_result = true;
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    result = std::make_pair(true, false);
-                else
-                    result = std::make_pair(true, false);
+                result = std::make_pair(true, false);
                 return true;
             }
         }
@@ -2272,37 +2268,37 @@ public:
     std::pair<bool, bool> getResult()
     {
         if (unlikely(!has_result))
-            throw Exception("null aware join result is not ready.");
+            throw Exception("null aware join result is not ready");
         return result;
     }
 
 private:
-    static const size_t MAX_PACE = 4096;
     inline void increasePace()
     {
-        pace = std::max(pace << 1, MAX_PACE);
+        pace = std::max(pace << 1, max_pace);
     }
 
     size_t row_num;
     NullAwareJoinHelperStep step;
     size_t pace;
+    size_t max_pace;
     std::pair<size_t, size_t> offset;
 
-    // Null list
+    /// Null list
     size_t null_pos;
     Join::RowRefList * null_list;
 
-    // Hash table
+    /// Hash table
     typename Map::SegmentType::HashTable::ConstLookupResult lookup_res;
     size_t current_segment;
     typename Map::SegmentType::HashTable::const_iterator seg_it;
 
     bool has_result;
-    // (is_null, result)
+    /// (is_null, result)
     std::pair<bool, bool> result;
 };
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_null_map>
 void NO_INLINE joinBlockImplNullAwareInternal(
     const Map & map,
     Block & block,
@@ -2320,6 +2316,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     bool enable_fine_grained_shuffle,
     size_t fine_grained_shuffle_count)
 {
+    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
+                  || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
+
     size_t rows = block.rows();
     KeyGetter key_getter(key_columns, key_sizes, collators);
     std::vector<std::string> sort_key_containers;
@@ -2346,72 +2345,86 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     std::list<NullAwareJoinHelper<Map> *> helpers_list;
     for (size_t i = 0; i < rows; ++i)
     {
-        if (filter_null_map && (*filter_null_map)[i])
+        if constexpr (has_filter_null_map)
         {
-            // Step doesn't matter.
-            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, nullptr);
-            helpers.back().template setResult<KIND>(false);
-            continue;
+            if ((*filter_null_map)[i])
+            {
+                /// Filter out by left_conditions.
+                /// Step doesn't matter.
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, nullptr, max_block_size);
+                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+                    helpers.back().template setResult<KIND>(false);
+                else
+                    helpers.back().template setResult<KIND>(true);
+                continue;
+            }
         }
-        if (null_map && (*null_map)[i])
+        if constexpr (has_null_map)
         {
-            // TODO: fast path, if all null and STRICTNESS is any and the result set is not empty, the result should be null.
-            helpers.emplace_back(i, NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST, nullptr);
-            helpers_list.push_back(&helpers.back());
+            if ((*null_map)[i])
+            {
+                /// TODO: fast path, if all null and STRICTNESS is any and the result set is not empty, the result should be null.
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST, nullptr, max_block_size);
+                helpers_list.push_back(&helpers.back());
+                continue;
+            }
+        }
+
+        auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+        auto key = keyHolderGetKey(key_holder);
+        size_t hash_value = 0;
+        bool zero_flag = ZeroTraits::check(key);
+        if (segment_size > 0 && !zero_flag)
+        {
+            hash_value = map.hash(key);
+        }
+
+        size_t segment_index = 0;
+        if (enable_fine_grained_shuffle)
+        {
+            RUNTIME_CHECK(segment_size > 0);
+            /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
+            /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
+            /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
+            /// 1. In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id by '% fine_grained_shuffle_count'
+            /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
+            /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
+            auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
+            if likely (fine_grained_shuffle_count == segment_size)
+                segment_index = packet_stream_id;
+            else
+                segment_index = packet_stream_id % segment_size;
         }
         else
         {
-            auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
-            auto key = keyHolderGetKey(key_holder);
-            size_t hash_value = 0;
-            bool zero_flag = ZeroTraits::check(key);
             if (segment_size > 0 && !zero_flag)
             {
-                hash_value = map.hash(key);
+                segment_index = hash_value % segment_size;
             }
+        }
 
-            size_t segment_index = 0;
-            if (enable_fine_grained_shuffle)
+        auto & internal_map = map.getSegmentTable(segment_index);
+        /// do not require segment lock because in join, the hash table can not be changed in probe stage.
+        auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
+        if (it != internal_map.end())
+        {
+            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, it, max_block_size);
+            if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
-                RUNTIME_CHECK(segment_size > 0);
-                /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
-                /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
-                /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
-                /// 1. In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id by '% fine_grained_shuffle_count'
-                /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
-                /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
-                auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
-                if likely (fine_grained_shuffle_count == segment_size)
-                    segment_index = packet_stream_id;
-                else
-                    segment_index = packet_stream_id % segment_size;
-            }
-            else
-            {
-                if (segment_size > 0 && !zero_flag)
-                {
-                    segment_index = hash_value % segment_size;
-                }
-            }
-
-            auto & internal_map = map.getSegmentTable(segment_index);
-            /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
-            if (it != internal_map.end())
-            {
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, it);
-                if (STRICTNESS == ASTTableJoin::Strictness::Any)
+                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     helpers.back().template setResult<KIND>(true);
                 else
-                    helpers_list.push_back(&helpers.back());
+                    helpers.back().template setResult<KIND>(false);
             }
             else
-            {
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST, nullptr);
                 helpers_list.push_back(&helpers.back());
-            }
-            keyHolderDiscardKey(key_holder);
         }
+        else
+        {
+            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST, nullptr, max_block_size);
+            helpers_list.push_back(&helpers.back());
+        }
+        keyHolderDiscardKey(key_holder);
     }
 
     size_t block_columns = block.columns();
@@ -2511,14 +2524,128 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else
             {
-                // If eq_column is not nullable, it should use Anti/LeftAnti/LeftSemi instead.
-                // Should throw exception here or just run it slowly?
+                /// If eq_column is not nullable, it should use Anti/LeftAnti/LeftSemi instead.
+                /// Should throw exception here or just run it slowly?
                 throw Exception("Should not reach here, the eq column for null aware semi join must be nullable");
             }
         }
     }
+    RUNTIME_ASSERT(helpers.size() == rows, "NullAwareJoinHelper size must be equal to block size");
+    std::unique_ptr<IColumn::Filter> filter;
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        filter = std::make_unique<IColumn::Filter>(rows);
 
-    // TODO: use the result of helpers to generate block.
+    size_t num_columns_to_add = block_columns - left_columns;
+
+    MutableColumns added_columns;
+    added_columns.reserve(num_columns_to_add);
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+    {
+        const ColumnWithTypeAndName & src_column = block.getByPosition(i + left_columns);
+        added_columns.push_back(src_column.column->cloneEmpty());
+    }
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        auto res = helpers[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        {
+            if (!res.first && res.second)
+            {
+                /// If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                for (size_t j = 0; j < num_columns_to_add; ++j)
+                    added_columns[j]->insertDefault();
+            }
+            else
+            {
+                /// If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
+            }
+        }
+        else
+        {
+            for (size_t j = 0; j < num_columns_to_add - 1; ++j)
+                added_columns[j]->insertDefault();
+            if (res.first)
+                added_columns[num_columns_to_add - 1]->insert(FIELD_NULL);
+            else if (res.second)
+                added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_1);
+            else
+                added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_0);
+        }
+    }
+
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+    {
+        block.safeGetByPosition(i + left_columns).column = std::move(added_columns[i]);
+    }
+
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
+    }
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
+void NO_INLINE joinBlockImplNullAwareCast(
+    const Map & map,
+    Block & block,
+    size_t left_columns,
+    const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
+    size_t max_block_size,
+    String other_filter_column,
+    String other_eq_filter_from_in_column,
+    ExpressionActionsPtr other_condition_ptr,
+    const ColumnRawPtrs & key_columns,
+    const Sizes & key_sizes,
+    ConstNullMapPtr null_map,
+    ConstNullMapPtr filter_null_map,
+    const TiDB::TiDBCollators & collators,
+    bool enable_fine_grained_shuffle,
+    size_t fine_grained_shuffle_count)
+{
+#define func(has_null_map, has_filter_null_map)                                                          \
+    joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_null_map>( \
+        map,                                                                                             \
+        block,                                                                                           \
+        left_columns,                                                                                    \
+        null_lists,                                                                                      \
+        max_block_size,                                                                                  \
+        other_filter_column,                                                                             \
+        other_eq_filter_from_in_column,                                                                  \
+        other_condition_ptr,                                                                             \
+        key_columns,                                                                                     \
+        key_sizes,                                                                                       \
+        null_map,                                                                                        \
+        filter_null_map,                                                                                 \
+        collators,                                                                                       \
+        enable_fine_grained_shuffle,                                                                     \
+        fine_grained_shuffle_count);
+
+    if (null_map)
+    {
+        if (filter_null_map)
+        {
+            func(true, true);
+        }
+        else
+        {
+            func(true, false);
+        }
+    }
+    else
+    {
+        if (filter_null_map)
+        {
+            func(false, true);
+        }
+        else
+        {
+            func(false, false);
+        }
+    }
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
@@ -2543,7 +2670,6 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
         }
     }
 
-    /// Keys with NULL value in any column won't join to anything.
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
@@ -2556,34 +2682,32 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
 
-    std::vector<size_t> right_table_column_indexes;
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(src_column);
-        right_table_column_indexes.push_back(i + existing_columns);
     }
 
     switch (type)
     {
-#define M(TYPE)                                                                                                                                             \
-    case Join::Type::TYPE:                                                                                                                                  \
-        joinBlockImplNullAwareInternal<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
-            *maps.TYPE,                                                                                                                                     \
-            block,                                                                                                                                          \
-            existing_columns,                                                                                                                               \
-            rows_not_inserted_to_map,                                                                                                                       \
-            max_block_size_for_cross_join,                                                                                                                  \
-            other_filter_column,                                                                                                                            \
-            other_eq_filter_from_in_column,                                                                                                                 \
-            other_condition_ptr,                                                                                                                            \
-            key_columns,                                                                                                                                    \
-            key_sizes,                                                                                                                                      \
-            null_map,                                                                                                                                       \
-            filter_null_map,                                                                                                                                \
-            collators,                                                                                                                                      \
-            enable_fine_grained_shuffle,                                                                                                                    \
-            fine_grained_shuffle_count);                                                                                                                    \
+#define M(TYPE)                                                                                                                                         \
+    case Join::Type::TYPE:                                                                                                                              \
+        joinBlockImplNullAwareCast<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
+            *maps.TYPE,                                                                                                                                 \
+            block,                                                                                                                                      \
+            existing_columns,                                                                                                                           \
+            rows_not_inserted_to_map,                                                                                                                   \
+            max_block_size,                                                                                                                             \
+            other_filter_column,                                                                                                                        \
+            other_eq_filter_from_in_column,                                                                                                             \
+            other_condition_ptr,                                                                                                                        \
+            key_columns,                                                                                                                                \
+            key_sizes,                                                                                                                                  \
+            null_map,                                                                                                                                   \
+            filter_null_map,                                                                                                                            \
+            collators,                                                                                                                                  \
+            enable_fine_grained_shuffle,                                                                                                                \
+            fine_grained_shuffle_count);                                                                                                                \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
