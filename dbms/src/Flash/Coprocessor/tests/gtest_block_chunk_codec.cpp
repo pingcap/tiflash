@@ -95,7 +95,7 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         {
             // encode nothing if no rows
             auto codec = CHBlockChunkCodecV1{header, false};
-            auto str = codec.encode(mode);
+            auto str = codec.encode(header, mode);
             ASSERT_TRUE(str.empty());
             ASSERT_EQ(codec.encoded_rows, 0);
             ASSERT_EQ(codec.compressed_size, 0);
@@ -104,7 +104,7 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         {
             // encode header schema if no rows
             auto codec = CHBlockChunkCodecV1{header, true};
-            auto str = codec.encode(mode);
+            auto str = codec.encode(header, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, 0);
 

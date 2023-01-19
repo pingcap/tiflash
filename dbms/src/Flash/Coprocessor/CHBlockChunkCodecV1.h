@@ -30,7 +30,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode);
 extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
 
-struct CHBlockChunkCodecV1
+struct CHBlockChunkCodecV1 : boost::noncopyable
 {
     using Self = CHBlockChunkCodecV1;
 
@@ -51,7 +51,7 @@ struct CHBlockChunkCodecV1
     std::string encode(const Columns & columns, CompressionMethod compression_method);
     std::string encode(const std::vector<Columns> & columns, CompressionMethod compression_method);
     std::string encode(std::vector<Columns> && columns, CompressionMethod compression_method);
-    std::string encode(CompressionMethod compression_method);
+    std::string encode(const Block & block, CompressionMethod compression_method, bool check_schema = true);
     std::string encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema = true);
     //
     static Block decode(const Block & header, std::string_view str);

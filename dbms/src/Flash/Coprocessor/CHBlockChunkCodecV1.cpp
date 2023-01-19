@@ -240,9 +240,9 @@ struct CHBlockChunkCodecV1Impl
         : inner(inner_)
     {}
 
-    std::string encode(CompressionMethod compression_method)
+    std::string encode(const Block & block, CompressionMethod compression_method)
     {
-        return encodeImpl(inner.header, compression_method);
+        return encodeImpl(block, compression_method);
     }
     std::string encode(const std::vector<Block> & blocks, CompressionMethod compression_method)
     {
@@ -433,9 +433,23 @@ CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, bool always_keep
 {
 }
 
-std::string CHBlockChunkCodecV1::encode(CompressionMethod compression_method)
+static void checkSchema(const Block & header, const Block & block)
 {
-    return CHBlockChunkCodecV1Impl{*this}.encode(compression_method);
+    CodecUtils::checkColumnSize(header.columns(), block.columns());
+    for (size_t column_index = 0; column_index < header.columns(); ++column_index)
+    {
+        auto && type_name = block.getByPosition(column_index).type->getName();
+        CodecUtils::checkDataTypeName(column_index, header.getByPosition(column_index).type->getName(), type_name);
+    }
+}
+
+std::string CHBlockChunkCodecV1::encode(const Block & block, CompressionMethod compression_method, bool check_schema)
+{
+    if (check_schema)
+    {
+        checkSchema(header, block);
+    }
+    return CHBlockChunkCodecV1Impl{*this}.encode(block, compression_method);
 }
 
 void CHBlockChunkCodecV1::clear()
@@ -475,12 +489,7 @@ std::string CHBlockChunkCodecV1::encode(const std::vector<Block> & blocks, Compr
     {
         for (auto && block : blocks)
         {
-            CodecUtils::checkColumnSize(header.columns(), block.columns());
-            for (size_t column_index = 0; column_index < header.columns(); ++column_index)
-            {
-                auto && type_name = block.getByPosition(column_index).type->getName();
-                CodecUtils::checkDataTypeName(column_index, header.getByPosition(column_index).type->getName(), type_name);
-            }
+            checkSchema(header, block);
         }
     }
 

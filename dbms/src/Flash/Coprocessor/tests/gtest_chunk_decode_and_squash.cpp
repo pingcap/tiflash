@@ -124,7 +124,7 @@ public:
             else
             {
                 auto codec = CHBlockChunkCodecV1{block, true};
-                auto && str = codec.encode(CompressionMethod::LZ4);
+                auto && str = codec.encode(block, CompressionMethod::LZ4);
                 assert(!str.empty());
                 assert(static_cast<CompressionMethodByte>(str[0]) == CompressionMethodByte::LZ4);
                 encode_str_vec.push_back(std::move(str));
