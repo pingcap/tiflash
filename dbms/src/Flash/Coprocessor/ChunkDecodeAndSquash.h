@@ -31,7 +31,7 @@ public:
     std::optional<Block> flush();
 
 private:
-    std::optional<Block> decodeAndSquashWithCompressionImpl(ReadBuffer & istr);
+    std::optional<Block> decodeAndSquashV1Impl(ReadBuffer & istr);
 
 private:
     CHBlockChunkCodec codec;

@@ -40,15 +40,15 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_
     if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
     {
         ReadBufferFromString istr(sv.substr(1, sv.size() - 1));
-        return decodeAndSquashWithCompressionImpl(istr);
+        return decodeAndSquashV1Impl(istr);
     }
 
     ReadBufferFromString istr(sv);
     auto && compress_buffer = CompressedCHBlockChunkReadBuffer(istr);
-    return decodeAndSquashWithCompressionImpl(compress_buffer);
+    return decodeAndSquashV1Impl(compress_buffer);
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressionImpl(ReadBuffer & istr)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuffer & istr)
 {
     std::optional<Block> res;
 
