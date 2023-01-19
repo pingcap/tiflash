@@ -159,8 +159,6 @@ void ExpressionAction::prepare(Block & sample_block)
                 all_const = false;
         }
 
-        ColumnPtr new_column;
-
         /// If all arguments are constants, and function is suitable to be executed in 'prepare' stage - execute function.
         if (all_const && function->isSuitableForConstantFolding())
         {
@@ -481,9 +479,6 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
 
     if (action.type == ExpressionAction::APPLY_FUNCTION)
     {
-        if (sample_block.has(action.result_name))
-            throw Exception("Column '" + action.result_name + "' already exists", ErrorCodes::DUPLICATE_COLUMN);
-
         ColumnsWithTypeAndName arguments(action.argument_names.size());
         for (size_t i = 0; i < action.argument_names.size(); ++i)
         {

@@ -133,6 +133,7 @@ Join::Join(
     const String & right_filter_column_,
     const String & other_filter_column_,
     const String & other_eq_filter_from_in_column_,
+    const String & null_aware_eq_condition_column_,
     ExpressionActionsPtr other_condition_ptr_,
     size_t max_block_size_,
     const String & match_helper_name)
@@ -150,6 +151,7 @@ Join::Join(
     , right_filter_column(right_filter_column_)
     , other_filter_column(other_filter_column_)
     , other_eq_filter_from_in_column(other_eq_filter_from_in_column_)
+    , null_aware_eq_condition_column(null_aware_eq_condition_column_)
     , other_condition_ptr(other_condition_ptr_)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
@@ -160,8 +162,8 @@ Join::Join(
 {
     if (isNullAwareSemiFamily(kind))
     {
-        if (unlikely(other_condition_ptr == nullptr || other_eq_filter_from_in_column.empty()))
-            throw Exception("Not supported: null aware semi join with empty other_eq_filter_from_in");
+        if (unlikely(other_condition_ptr == nullptr || null_aware_eq_condition_column.empty()))
+            throw Exception("Not supported: null aware semi join with empty null_aware_eq_condition_column");
         if (!other_filter_column.empty())
             strictness = ASTTableJoin::Strictness::All;
         else
@@ -2148,7 +2150,7 @@ public:
                     end = map.getSegmentTable(current_segment).end();
 
                     if (seg_it == end)
-                        seg_it = typename Map::SegmentType::HashTable::const_iterator();
+                        seg_it = typename Map::SegmentType::HashTable::const_iterator(nullptr, nullptr);
                 }
                 if (to_end)
                     break;
@@ -2174,7 +2176,7 @@ public:
 
                 ++seg_it;
                 if (seg_it == end)
-                    seg_it = typename Map::SegmentType::HashTable::const_iterator();
+                    seg_it = typename Map::SegmentType::HashTable::const_iterator(nullptr, nullptr);
             }
             if (to_end && offset.first == current_offset)
             {
@@ -2299,7 +2301,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
     String other_filter_column,
-    String other_eq_filter_from_in_column,
+    String null_aware_eq_condition_column,
     ExpressionActionsPtr other_condition_ptr,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
@@ -2458,7 +2460,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
             other_condition_ptr->execute(exec_block);
 
-            auto eq_column = block.getByName(other_eq_filter_from_in_column).column;
+            auto eq_column = block.getByName(null_aware_eq_condition_column).column;
             if (eq_column->isColumnConst())
                 eq_column = eq_column->convertToFullColumnIfConst();
             if (eq_column->isColumnNullable())
@@ -2590,7 +2592,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
     String other_filter_column,
-    String other_eq_filter_from_in_column,
+    String null_aware_eq_condition_column,
     ExpressionActionsPtr other_condition_ptr,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
@@ -2608,7 +2610,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         null_lists,                                                                                      \
         max_block_size,                                                                                  \
         other_filter_column,                                                                             \
-        other_eq_filter_from_in_column,                                                                  \
+        null_aware_eq_condition_column,                                                                  \
         other_condition_ptr,                                                                             \
         key_columns,                                                                                     \
         key_sizes,                                                                                       \
@@ -2693,7 +2695,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
             other_filter_column,                                                                                                                        \
-            other_eq_filter_from_in_column,                                                                                                             \
+            null_aware_eq_condition_column,                                                                                                             \
             other_condition_ptr,                                                                                                                        \
             key_columns,                                                                                                                                \
             key_sizes,                                                                                                                                  \

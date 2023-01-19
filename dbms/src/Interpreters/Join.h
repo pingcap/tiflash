@@ -104,6 +104,7 @@ public:
          const String & right_filter_column = "",
          const String & other_filter_column = "",
          const String & other_eq_filter_from_in_column = "",
+         const String & null_aware_eq_condition_column = "",
          ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0,
          const String & match_helper_name = "");
@@ -327,6 +328,7 @@ private:
     String right_filter_column;
     String other_filter_column;
     String other_eq_filter_from_in_column;
+    String null_aware_eq_condition_column;
     ExpressionActionsPtr other_condition_ptr;
 
     ASTTableJoin::Strictness original_strictness;

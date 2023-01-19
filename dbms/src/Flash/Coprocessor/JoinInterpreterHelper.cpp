@@ -149,15 +149,21 @@ JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypeP
 
 JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
 {
-    if (unlikely(join.left_join_keys_size() != join.right_join_keys_size()))
+    int left_keys_size = join.left_null_aware_join_keys_size() > 0 ? join.left_null_aware_join_keys_size() : join.left_join_keys_size();
+    int right_keys_size = join.right_null_aware_join_keys_size() > 0 ? join.right_null_aware_join_keys_size() : join.right_join_keys_size();
+
+    const auto & left_join_keys = join.left_null_aware_join_keys_size() > 0 ? join.left_null_aware_join_keys() : join.left_join_keys();
+    const auto & right_join_keys = join.right_null_aware_join_keys_size() > 0 ? join.right_null_aware_join_keys() : join.right_join_keys();
+
+    if (unlikely(left_keys_size != right_keys_size))
         throw TiFlashException("size of join.left_join_keys != size of join.right_join_keys", Errors::Coprocessor::BadRequest);
     JoinKeyTypes join_key_types;
-    for (int i = 0; i < join.left_join_keys_size(); ++i)
+    for (int i = 0; i < left_keys_size; ++i)
     {
-        if (unlikely(!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i))))
+        if (unlikely(!exprHasValidFieldType(left_join_keys[i]) || !exprHasValidFieldType(right_join_keys[i])))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
-        auto left_type = getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type());
-        auto right_type = getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type());
+        auto left_type = getDataTypeByFieldTypeForComputingLayer(left_join_keys[i].field_type());
+        auto right_type = getDataTypeByFieldTypeForComputingLayer(right_join_keys[i].field_type());
         join_key_types.emplace_back(geCommonTypeForJoinOn(left_type, right_type));
     }
     return join_key_types;
@@ -183,13 +189,16 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
     return collators;
 }
 
-std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
+std::tuple<ExpressionActionsPtr, String, String, String> doGenJoinOtherConditionAction(
     const Context & context,
-    const tipb::Join & join,
-    const NamesAndTypes & source_columns)
+    const TiFlashJoin & tiflash_join,
+    const NamesAndTypes & source_columns,
+    const Names & probe_key_names,
+    const Names & build_key_names)
 {
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
-        return {nullptr, "", ""};
+    const tipb::Join & join = tiflash_join.join;
+    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && join.left_null_aware_join_keys_size() == 0)
+        return {nullptr, "", "", ""};
 
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
     ExpressionActionsChain chain;
@@ -216,7 +225,9 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
         filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
 
-    return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition)};
+    String column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+
+    return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition), std::move(column_for_null_aware_eq_condition)};
 }
 } // namespace
 
@@ -340,11 +351,13 @@ NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     return join_output_columns;
 }
 
-std::tuple<ExpressionActionsPtr, String, String> TiFlashJoin::genJoinOtherConditionAction(
+std::tuple<ExpressionActionsPtr, String, String, String> TiFlashJoin::genJoinOtherConditionAction(
     const Context & context,
     const Block & left_input_header,
     const Block & right_input_header,
-    const ExpressionActionsPtr & probe_side_prepare_join) const
+    const ExpressionActionsPtr & probe_side_prepare_join,
+    const Names & probe_key_names,
+    const Names & build_key_names) const
 {
     auto columns_for_other_join_filter
         = genColumnsForOtherJoinFilter(
@@ -352,7 +365,7 @@ std::tuple<ExpressionActionsPtr, String, String> TiFlashJoin::genJoinOtherCondit
             right_input_header,
             probe_side_prepare_join);
 
-    return doGenJoinOtherConditionAction(context, join, columns_for_other_join_filter);
+    return doGenJoinOtherConditionAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
 }
 
 std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(

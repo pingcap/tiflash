@@ -161,6 +161,12 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+    String appendNullAwareJoinEqColumn(
+        ExpressionActionsChain & chain,
+        const Names & probe_key_names,
+        const Names & build_key_names,
+        const TiDB::TiDBCollators & collators);
+
     void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step) const;
 
     void appendCastAfterWindow(

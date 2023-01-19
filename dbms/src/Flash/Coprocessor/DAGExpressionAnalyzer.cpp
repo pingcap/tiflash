@@ -999,24 +999,22 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         for (const auto & c : filters)
             filter_vector.push_back(&c);
         filter_column_name = appendWhere(chain, filter_vector);
-    }
-    /// remove useless columns to avoid duplicate columns
-    /// as when compiling the key/filter expression, the origin
-    /// streams may be added some columns that have the
-    /// same name on left streams and right streams, for
-    /// example, if the join condition is something like:
-    /// id + 1 = id + 1,
-    /// the left streams and the right streams will have the
-    /// same constant column for `1`
-    /// Note that the origin left streams and right streams
-    /// will never have duplicated columns because in
-    /// DAGQueryBlockInterpreter we add qb_column_prefix in
-    /// final project step, so if the join condition is not
-    /// literal expression, the key names should never be
-    /// duplicated. In the above example, the final key names should be
-    /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
-    if (ret)
-    {
+
+        /// remove useless columns to avoid duplicate columns
+        /// as when compiling the key/filter expression, the origin
+        /// streams may be added some columns that have the
+        /// same name on left streams and right streams, for
+        /// example, if the join condition is something like:
+        /// id + 1 = id + 1,
+        /// the left streams and the right streams will have the
+        /// same constant column for `1`
+        /// Note that the origin left streams and right streams
+        /// will never have duplicated columns because in
+        /// DAGQueryBlockInterpreter we add qb_column_prefix in
+        /// final project step, so if the join condition is not
+        /// literal expression, the key names should never be
+        /// duplicated. In the above example, the final key names should be
+        /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
@@ -1033,6 +1031,43 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         }
     }
     return ret;
+}
+
+String DAGExpressionAnalyzer::appendNullAwareJoinEqColumn(
+    ExpressionActionsChain & chain,
+    const Names & probe_key_names,
+    const Names & build_key_names,
+    const TiDB::TiDBCollators & collators)
+{
+    if (probe_key_names.empty())
+        return "";
+    RUNTIME_ASSERT(probe_key_names.size() == build_key_names.size());
+
+    auto & last_step = initAndGetLastStep(chain);
+
+    String column_for_null_aware_eq_condition;
+    if (probe_key_names.size() == 1)
+    {
+        Names arg_names(2);
+        arg_names.push_back(probe_key_names[0]);
+        arg_names.push_back(build_key_names[0]);
+        const TiDB::TiDBCollatorPtr & collator = collators.empty() ? nullptr : collators[0];
+        column_for_null_aware_eq_condition = applyFunction("equal", arg_names, last_step.actions, collator);
+    }
+    else
+    {
+        Names and_arg_names(probe_key_names.size());
+        for (size_t i = 0; i < probe_key_names.size(); ++i)
+        {
+            Names arg_names(2);
+            arg_names.push_back(probe_key_names[i]);
+            arg_names.push_back(build_key_names[i]);
+            const TiDB::TiDBCollatorPtr & collator = i < collators.size() ? collators[i] : nullptr;
+            and_arg_names.push_back(applyFunction("equal", arg_names, last_step.actions, collator));
+        }
+        column_for_null_aware_eq_condition = applyFunction("and", and_arg_names, last_step.actions, nullptr);
+    }
+    return column_for_null_aware_eq_condition;
 }
 
 void DAGExpressionAnalyzer::appendCastAfterWindow(

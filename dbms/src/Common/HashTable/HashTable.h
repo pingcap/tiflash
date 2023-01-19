@@ -645,7 +645,6 @@ protected:
         friend class HashTable;
 
     public:
-        iterator_base() = default;
         iterator_base(Container * container_, cell_type * ptr_)
             : container(container_)
             , ptr(ptr_)
