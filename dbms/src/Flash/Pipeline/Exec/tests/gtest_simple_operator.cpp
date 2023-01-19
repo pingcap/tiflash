@@ -48,8 +48,8 @@ public:
     }
 
     std::pair<PhysicalPlanNodePtr, PipelineExecPtr> build(
-        const std::shared_ptr<tipb::DAGRequest> & request, 
-        ResultHandler result_handler, 
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        ResultHandler result_handler,
         PipelineExecutorStatus & exec_status)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);

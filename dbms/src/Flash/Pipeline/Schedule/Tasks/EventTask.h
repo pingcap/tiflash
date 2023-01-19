@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <memory.h>
@@ -27,7 +27,7 @@ class EventTask : public Task
 {
 public:
     EventTask(
-        MemoryTrackerPtr mem_tracker_, 
+        MemoryTrackerPtr mem_tracker_,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
 
@@ -43,34 +43,34 @@ protected:
     ExecTaskStatus spillImpl() override;
     virtual ExecTaskStatus doSpillImpl() { return ExecTaskStatus::RUNNING; };
 
-    virtual void finalize() {};
+    virtual void finalize(){};
 
 private:
-    template<typename Action>
+    template <typename Action>
     ExecTaskStatus doTaskAction(Action && action)
     {
         if (unlikely(exec_status.isCancelled()))
         {
             finalize();
-            return ExecTaskStatus::CANCELLED;   
+            return ExecTaskStatus::CANCELLED;
         }
         try
         {
-            auto status = action(); 
+            auto status = action();
             switch (status)
-            { 
-            case FINISH_STATUS: 
-                finalize(); 
-            default: 
-                return status; 
-            } 
+            {
+            case FINISH_STATUS:
+                finalize();
+            default:
+                return status;
+            }
         }
-        catch (...)                                                 
+        catch (...)
         {
-            finalize();                                             
-            assert(event);                                          
-            event->toError(getCurrentExceptionMessage(true, true)); 
-            return ExecTaskStatus::ERROR;                           
+            finalize();
+            assert(event);
+            event->toError(getCurrentExceptionMessage(true, true));
+            return ExecTaskStatus::ERROR;
         }
     }
 

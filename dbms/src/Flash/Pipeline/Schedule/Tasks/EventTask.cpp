@@ -17,7 +17,7 @@
 namespace DB
 {
 EventTask::EventTask(
-    MemoryTrackerPtr mem_tracker_, 
+    MemoryTrackerPtr mem_tracker_,
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_)
     : Task(std::move(mem_tracker_))

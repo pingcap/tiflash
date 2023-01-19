@@ -58,7 +58,7 @@ public:
 
     bool isCancelled()
     {
-        return is_cancelled;
+        return is_cancelled.load(std::memory_order_acquire);
     }
 
 private:

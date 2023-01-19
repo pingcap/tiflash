@@ -64,7 +64,7 @@ protected:
     {
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<BaseTask>(getExecStatus(), shared_from_this(), counter));
+            tasks.push_back(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
         scheduleTasks(tasks);
         return false;
     }
@@ -118,7 +118,7 @@ protected:
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<RunTask>(getExecStatus(), shared_from_this()));
+            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
         scheduleTasks(tasks);
         return false;
     }
@@ -167,7 +167,7 @@ protected:
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<WaitCancelTask>(getExecStatus(), shared_from_this()));
+            tasks.push_back(std::make_unique<WaitCancelTask>(exec_status, shared_from_this()));
         scheduleTasks(tasks);
         return false;
     }
@@ -231,6 +231,41 @@ protected:
     void finishImpl() override
     {
         throw Exception("finishImpl");
+    }
+};
+
+class ThrowExceptionTask : public EventTask
+{
+public:
+    ThrowExceptionTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_)
+        : EventTask(nullptr, exec_status_, event_)
+    {}
+
+protected:
+    ExecTaskStatus doExecuteImpl() override
+    {
+        throw Exception("throw exception");
+    }
+};
+
+class ThrowExceptionTaskEvent : public Event
+{
+public:
+    explicit ThrowExceptionTaskEvent(PipelineExecutorStatus & exec_status_)
+        : Event(exec_status_, nullptr)
+    {}
+
+protected:
+    // Returns true meaning no task is scheduled.
+    bool scheduleImpl() override
+    {
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < 10; ++i)
+            tasks.push_back(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
+        scheduleTasks(tasks);
+        return false;
     }
 };
 } // namespace
@@ -427,6 +462,30 @@ try
     auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
     events.push_back(run_event);
     auto crash_event = std::make_shared<CrashEvent>(exec_status);
+    crash_event->addInput(run_event);
+    events.push_back(crash_event);
+
+    for (size_t i = 0; i < 100; ++i)
+        events.push_back(std::make_shared<WaitCancelEvent>(exec_status, /*with_tasks=*/true));
+
+    schedule(events);
+    wait(exec_status);
+    auto err_msg = exec_status.getErrMsg();
+    ASSERT_TRUE(!err_msg.empty());
+}
+CATCH
+
+TEST_F(EventTestRunner, throw_exception_task)
+try
+{
+    PipelineExecutorStatus exec_status;
+    std::vector<EventPtr> events;
+    // crash_event <-- run_event should run first,
+    // otherwise the thread pool will be filled up by WaitCancelEvent/WaitCancelTask,
+    // resulting in a period of time before RunEvent/RunTask/CrashEvent will run.
+    auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
+    events.push_back(run_event);
+    auto crash_event = std::make_shared<ThrowExceptionTaskEvent>(exec_status);
     crash_event->addInput(run_event);
     events.push_back(crash_event);
 

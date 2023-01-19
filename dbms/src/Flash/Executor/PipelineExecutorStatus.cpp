@@ -67,6 +67,6 @@ void PipelineExecutorStatus::onEventFinish()
 
 void PipelineExecutorStatus::cancel()
 {
-    is_cancelled = true;
+    is_cancelled.store(true, std::memory_order_release);
 }
 } // namespace DB

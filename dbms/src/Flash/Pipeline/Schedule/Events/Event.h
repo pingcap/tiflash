@@ -69,8 +69,6 @@ protected:
 
     bool isCancelled();
 
-    PipelineExecutorStatus & getExecStatus() { return exec_status; }
-
 private:
     void finish() noexcept;
 
