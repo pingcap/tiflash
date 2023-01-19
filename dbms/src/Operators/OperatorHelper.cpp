@@ -25,10 +25,9 @@ void assertOperatorStatus(
 {
     switch (status)
     {
-    // finish status, spilling status and waiting status can be returned in all method of operator.
+    // finish status and waiting status can be returned in all method of operator.
     case OperatorStatus::FINISHED:
     case OperatorStatus::CANCELLED:
-    case OperatorStatus::SPILLING:
     case OperatorStatus::WAITING:
         return;
     default:

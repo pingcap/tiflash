@@ -40,9 +40,6 @@ protected:
     ExecTaskStatus awaitImpl() override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
-    ExecTaskStatus spillImpl() override;
-    virtual ExecTaskStatus doSpillImpl() { return ExecTaskStatus::RUNNING; };
-
     virtual void finalize(){};
 
 private:

@@ -24,16 +24,12 @@ namespace DB
  *               ▲
  *               │
  *  ┌────────────────────────┐
- *  │     ┌───RUNNING───┐    │
- *  │     │             │    │
- *  │     ▼             ▼    │
- *  │ WATITING◄─────►SPLLING │
+ *  │ WATITING◄─────►RUNNING │
  *  └────────────────────────┘
  */
 enum class ExecTaskStatus
 {
     WAITING,
-    SPILLING,
     RUNNING,
     FINISHED,
     ERROR,
@@ -59,11 +55,6 @@ public:
         assert(getMemTracker().get() == current_memory_tracker);
         return executeImpl();
     }
-    ExecTaskStatus spill() noexcept
-    {
-        assert(getMemTracker().get() == current_memory_tracker);
-        return spillImpl();
-    }
     // Avoid allocating memory in `await` if possible.
     ExecTaskStatus await() noexcept
     {
@@ -74,7 +65,6 @@ public:
 protected:
     virtual ExecTaskStatus executeImpl() = 0;
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
-    virtual ExecTaskStatus spillImpl() { return ExecTaskStatus::RUNNING; }
 
 private:
     MemoryTrackerPtr mem_tracker;

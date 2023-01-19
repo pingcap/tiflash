@@ -22,7 +22,7 @@ namespace DB
 {
 /**
  * All interfaces of the operator may return the following state.
- * - finish status, spilling status and waiting status can be returned in all method of operator.
+ * - finish status and waiting status can be returned in all method of operator.
  * - operator may return a different running status depending on the method.
 */
 enum class OperatorStatus
@@ -30,8 +30,6 @@ enum class OperatorStatus
     /// finish status
     FINISHED,
     CANCELLED,
-    /// spilling status
-    SPILLING,
     /// waiting status
     WAITING,
     /// running status
@@ -51,11 +49,6 @@ public:
     // - `NEED_INPUT` means that the data that the operator is waiting for has been prepared.
     OperatorStatus await();
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
-    // running status may return are
-    // - `NEED_INPUT` means that operator need data to spill.
-    // - `HAS_OUTPUT` means that operator has restored data, and ready for ouput.
-    OperatorStatus spill();
-    virtual OperatorStatus spillImpl() { throw Exception("Unsupport"); }
 
     virtual String getName() const = 0;
 

@@ -43,29 +43,14 @@ public:
 
     OperatorStatus await();
 
-    OperatorStatus spill();
-
 private:
     OperatorStatus executeImpl();
 
     OperatorStatus awaitImpl();
 
-    OperatorStatus spillImpl();
-
     OperatorStatus fetchBlock(
         Block & block,
         size_t & start_transform_op_index);
-
-    template <typename Op>
-    void setSpillingOpIfNeeded(OperatorStatus op_status, const Op & op)
-    {
-        assert(op);
-        if (op_status == OperatorStatus::SPILLING)
-        {
-            assert(!spilling_op);
-            spilling_op.emplace(op.get());
-        }
-    }
 
 private:
     PipelineExecutorStatus & exec_status;
@@ -73,9 +58,6 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
-
-    // hold the operator which is ready for spilling.
-    std::optional<Operator *> spilling_op;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.

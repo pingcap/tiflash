@@ -44,9 +44,4 @@ ExecTaskStatus EventTask::awaitImpl()
     return doTaskAction([&] { return doAwaitImpl(); });
 }
 
-ExecTaskStatus EventTask::spillImpl()
-{
-    return doTaskAction([&] { return doSpillImpl(); });
-}
-
 } // namespace DB

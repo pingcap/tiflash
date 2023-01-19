@@ -33,8 +33,6 @@ protected:
 
     ExecTaskStatus doAwaitImpl() override;
 
-    ExecTaskStatus doSpillImpl() override;
-
     void finalize() override;
 
 private:

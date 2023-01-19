@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/SpillThreadPool.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/WaitReactor.h>
@@ -25,18 +24,13 @@ namespace DB
 struct TaskSchedulerConfig
 {
     size_t task_thread_pool_size;
-    size_t spill_thread_pool_size;
 };
 
 /**
  * ┌─────────────────────┐
  * │  task scheduler     │
  * │                     │
- * │ ┌─────────────────┐ │
- * │ │spill thread pool│ │
- * │ └──────▲──┬───────┘ │
- * │        │  │         │
- * │ ┌──────┴──▼──────┐  │
+ * │ ┌────────────────┐  │
  * │ │task thread pool│  │
  * │ └──────▲──┬──────┘  │
  * │        │  │         │
@@ -48,7 +42,6 @@ struct TaskSchedulerConfig
  * 
  * A globally shared execution scheduler, used by pipeline executor.
  * - task thread pool: for operator compute.
- * - spill thread pool: for spilling disk.
  * - wait reactor: for polling asynchronous io status, etc.
  */
 class TaskScheduler
@@ -67,12 +60,9 @@ private:
 
     WaitReactor wait_reactor;
 
-    SpillThreadPool spill_thread_pool;
-
     LoggerPtr logger = Logger::get();
 
     friend class TaskThreadPool;
     friend class WaitReactor;
-    friend class SpillThreadPool;
 };
 } // namespace DB

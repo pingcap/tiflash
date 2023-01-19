@@ -54,14 +54,10 @@ OperatorStatus PipelineExec::executeImpl()
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
         if (op_status != OperatorStatus::HAS_OUTPUT)
-        {
-            setSpillingOpIfNeeded(op_status, transform_op);
             return op_status;
-        }
     }
     CHECK_IS_CANCELLED;
     op_status = sink_op->write(std::move(block));
-    setSpillingOpIfNeeded(op_status, sink_op);
     return op_status;
 }
 
@@ -73,10 +69,7 @@ OperatorStatus PipelineExec::fetchBlock(
     CHECK_IS_CANCELLED;
     auto op_status = sink_op->prepare();
     if (op_status != OperatorStatus::NEED_INPUT)
-    {
-        setSpillingOpIfNeeded(op_status, sink_op);
         return op_status;
-    }
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         CHECK_IS_CANCELLED;
@@ -84,7 +77,6 @@ OperatorStatus PipelineExec::fetchBlock(
         op_status = transform_op->tryOutput(block);
         if (op_status != OperatorStatus::NEED_INPUT)
         {
-            setSpillingOpIfNeeded(op_status, transform_op);
             // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
             start_transform_op_index = index + 1;
             return op_status;
@@ -93,7 +85,6 @@ OperatorStatus PipelineExec::fetchBlock(
     CHECK_IS_CANCELLED;
     start_transform_op_index = 0;
     op_status = source_op->read(block);
-    setSpillingOpIfNeeded(op_status, source_op);
     return op_status;
 }
 
@@ -112,45 +103,16 @@ OperatorStatus PipelineExec::awaitImpl()
 
     auto op_status = sink_op->await();
     if (op_status != OperatorStatus::NEED_INPUT)
-    {
-        setSpillingOpIfNeeded(op_status, sink_op);
         return op_status;
-    }
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
         op_status = (*it)->await();
         if (op_status != OperatorStatus::NEED_INPUT)
-        {
-            setSpillingOpIfNeeded(op_status, *it);
             return op_status;
-        }
     }
     op_status = source_op->await();
-    setSpillingOpIfNeeded(op_status, source_op);
-    return op_status;
-}
-
-OperatorStatus PipelineExec::spill()
-{
-    auto op_status = spillImpl();
-#ifndef NDEBUG
-    // - `NEED_INPUT` means that pipeline_exec need data to spill.
-    // - `HAS_OUTPUT` means that pipeline_exec has restored data, and ready for ouput.
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
-#endif
-    return op_status;
-}
-OperatorStatus PipelineExec::spillImpl()
-{
-    CHECK_IS_CANCELLED;
-
-    assert(spilling_op);
-    assert(*spilling_op);
-    auto op_status = (*spilling_op)->spill();
-    if (op_status != OperatorStatus::SPILLING)
-        spilling_op.reset();
     return op_status;
 }
 

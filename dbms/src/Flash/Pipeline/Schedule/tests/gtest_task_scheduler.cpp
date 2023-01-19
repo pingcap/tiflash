@@ -126,61 +126,11 @@ private:
     Waiter & waiter;
 };
 
-class SimpleSpillingTask : public Task
-{
-public:
-    explicit SimpleSpillingTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
-    {}
-
-    ~SimpleSpillingTask()
-    {
-        waiter.notify();
-    }
-
-protected:
-    ExecTaskStatus executeImpl() override
-    {
-        if (loop_count > 0)
-        {
-            if ((loop_count % 2) == 0)
-                return ExecTaskStatus::SPILLING;
-            else
-            {
-                --loop_count;
-                return ExecTaskStatus::RUNNING;
-            }
-        }
-        return ExecTaskStatus::FINISHED;
-    }
-
-    ExecTaskStatus spillImpl() override
-    {
-        if (loop_count > 0)
-        {
-            if ((loop_count % 2) == 0)
-            {
-                --loop_count;
-                return ExecTaskStatus::SPILLING;
-            }
-            else
-                return ExecTaskStatus::RUNNING;
-        }
-        return ExecTaskStatus::FINISHED;
-    }
-
-private:
-    int loop_count = 10 + random() % 10;
-    Waiter & waiter;
-};
-
 enum class TraceTaskStatus
 {
     initing,
     running,
     waiting,
-    spilling,
 };
 class MemoryTraceTask : public Task
 {
@@ -207,9 +157,6 @@ protected:
             status = TraceTaskStatus::waiting;
             return ExecTaskStatus::WAITING;
         case TraceTaskStatus::waiting:
-            status = TraceTaskStatus::spilling;
-            return ExecTaskStatus::SPILLING;
-        case TraceTaskStatus::spilling:
         {
             status = TraceTaskStatus::running;
             CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
@@ -218,13 +165,6 @@ protected:
         default:
             __builtin_unreachable();
         }
-    }
-
-    ExecTaskStatus spillImpl() override
-    {
-        assert(status == TraceTaskStatus::spilling);
-        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
-        return ExecTaskStatus::RUNNING;
     }
 
     ExecTaskStatus awaitImpl() override
@@ -249,35 +189,13 @@ public:
 protected:
     ExecTaskStatus executeImpl() override
     {
-        switch (status)
-        {
-        case TraceTaskStatus::initing:
-            status = TraceTaskStatus::waiting;
-            return ExecTaskStatus::WAITING;
-        case TraceTaskStatus::waiting:
-            status = TraceTaskStatus::spilling;
-            return ExecTaskStatus::SPILLING;
-        case TraceTaskStatus::spilling:
-            status = TraceTaskStatus::waiting;
-            return ExecTaskStatus::WAITING;
-        default:
-            __builtin_unreachable();
-        }
-    }
-
-    ExecTaskStatus spillImpl() override
-    {
-        assert(status == TraceTaskStatus::spilling);
-        return ExecTaskStatus::RUNNING;
+        return ExecTaskStatus::WAITING;
     }
 
     ExecTaskStatus awaitImpl() override
     {
         return ExecTaskStatus::RUNNING;
     }
-
-private:
-    TraceTaskStatus status{TraceTaskStatus::initing};
 };
 } // namespace
 
@@ -288,7 +206,7 @@ public:
 
     void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
     {
-        TaskSchedulerConfig config{thread_num, thread_num};
+        TaskSchedulerConfig config{thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
@@ -323,20 +241,6 @@ try
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, simple_spilling_task)
-try
-{
-    for (size_t task_num = 1; task_num < 100; ++task_num)
-    {
-        Waiter waiter(task_num);
-        std::vector<TaskPtr> tasks;
-        for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<SimpleSpillingTask>(waiter));
-        submitAndWait(tasks, waiter);
-    }
-}
-CATCH
-
 TEST_F(TaskSchedulerTestRunner, test_memory_trace)
 try
 {
@@ -357,8 +261,8 @@ CATCH
 TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
-    auto do_test = [](size_t task_thread_pool_size, size_t spill_thread_pool_size, size_t task_num) {
-        TaskSchedulerConfig config{task_thread_pool_size, spill_thread_pool_size};
+    auto do_test = [](size_t task_thread_pool_size, size_t task_num) {
+        TaskSchedulerConfig config{task_thread_pool_size};
         TaskScheduler task_scheduler{config};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
@@ -368,12 +272,9 @@ try
     std::vector<size_t> thread_nums{1, 5, 10, 100};
     for (auto task_thread_pool_size : thread_nums)
     {
-        for (auto spill_thread_pool_size : thread_nums)
-        {
-            std::vector<size_t> task_nums{0, 1, 5, 10, 100, 200};
-            for (auto task_num : task_nums)
-                do_test(task_thread_pool_size, spill_thread_pool_size, task_num);
-        }
+        std::vector<size_t> task_nums{0, 1, 5, 10, 100, 200};
+        for (auto task_num : task_nums)
+            do_test(task_thread_pool_size, task_num);
     }
 }
 CATCH

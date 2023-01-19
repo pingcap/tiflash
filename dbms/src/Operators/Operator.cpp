@@ -27,16 +27,6 @@ OperatorStatus Operator::await()
     return op_status;
 }
 
-OperatorStatus Operator::spill()
-{
-    // TODO collect operator profile info here.
-    auto op_status = spillImpl();
-#ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
-#endif
-    return op_status;
-}
-
 OperatorStatus SourceOp::read(Block & block)
 {
     // TODO collect operator profile info here.

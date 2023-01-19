@@ -47,10 +47,6 @@ void PipelineTask::finalize()
     case OperatorStatus::WAITING:         \
     {                                     \
         return ExecTaskStatus::WAITING;   \
-    }                                     \
-    case OperatorStatus::SPILLING:        \
-    {                                     \
-        return ExecTaskStatus::SPILLING;  \
     }
 
 #define UNEXPECTED_OP_STATUS(op_status, function_name) \
@@ -85,25 +81,6 @@ ExecTaskStatus PipelineTask::doAwaitImpl()
         return ExecTaskStatus::RUNNING;
     default:
         UNEXPECTED_OP_STATUS(op_status, "PipelineTask::await");
-    }
-}
-
-ExecTaskStatus PipelineTask::doSpillImpl()
-{
-    assert(pipeline_exec);
-    auto op_status = pipeline_exec->spill();
-    switch (op_status)
-    {
-        HANDLE_NOT_RUNNING_STATUS
-    // After `pipeline_exec->spill`,
-    // - `NEED_INPUT` means that pipeline_exec need data to spill.
-    // - `HAS_OUTPUT` means that pipeline_exec has restored data, and ready for ouput.
-    // And other states are unexpected.
-    case OperatorStatus::NEED_INPUT:
-    case OperatorStatus::HAS_OUTPUT:
-        return ExecTaskStatus::RUNNING;
-    default:
-        UNEXPECTED_OP_STATUS(op_status, "PipelineTask::spill");
     }
 }
 

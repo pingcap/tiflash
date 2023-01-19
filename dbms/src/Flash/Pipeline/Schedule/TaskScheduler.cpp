@@ -25,7 +25,6 @@ namespace DB
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
     : task_thread_pool(*this, config.task_thread_pool_size)
     , wait_reactor(*this)
-    , spill_thread_pool(*this, config.spill_thread_pool_size)
 {
 }
 
@@ -33,11 +32,9 @@ TaskScheduler::~TaskScheduler()
 {
     task_thread_pool.close();
     wait_reactor.close();
-    spill_thread_pool.close();
 
     task_thread_pool.waitForStop();
     wait_reactor.waitForStop();
-    spill_thread_pool.waitForStop();
 }
 
 void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
@@ -48,7 +45,6 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     // The memory tracker is set by the caller.
     std::vector<TaskPtr> running_tasks;
     std::list<TaskPtr> waiting_tasks;
-    std::vector<TaskPtr> spilling_tasks;
     for (auto & task : tasks)
     {
         assert(task);
@@ -62,9 +58,6 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
         case ExecTaskStatus::WAITING:
             waiting_tasks.push_back(std::move(task));
             break;
-        case ExecTaskStatus::SPILLING:
-            spilling_tasks.push_back(std::move(task));
-            break;
         case FINISH_STATUS:
             task.reset();
             break;
@@ -75,7 +68,6 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     tasks.clear();
     task_thread_pool.submit(running_tasks);
     wait_reactor.submit(waiting_tasks);
-    spill_thread_pool.submit(spilling_tasks);
 }
 
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;

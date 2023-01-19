@@ -86,9 +86,6 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log)
     case ExecTaskStatus::WAITING:
         scheduler.wait_reactor.submit(std::move(task));
         break;
-    case ExecTaskStatus::SPILLING:
-        scheduler.spill_thread_pool.submit(std::move(task));
-        break;
     case FINISH_STATUS:
         task.reset();
         break;

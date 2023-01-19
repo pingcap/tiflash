@@ -58,7 +58,7 @@ void ExecutorTest::SetUp()
 {
     initializeContext();
     initializeClientInfo();
-    TaskSchedulerConfig config{8, 8};
+    TaskSchedulerConfig config{8};
     assert(!TaskScheduler::instance);
     TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
 }

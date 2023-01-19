@@ -1285,9 +1285,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
-        TaskSchedulerConfig config{
-            get_pool_size(settings.pipeline_task_thread_pool_size),
-            get_pool_size(settings.pipeline_spill_thread_pool_size)};
+        TaskSchedulerConfig config{get_pool_size(settings.pipeline_task_thread_pool_size)};
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
