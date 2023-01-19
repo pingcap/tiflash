@@ -48,6 +48,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     // The memory tracker is set by the caller.
     std::vector<TaskPtr> running_tasks;
     std::list<TaskPtr> waiting_tasks;
+    std::vector<TaskPtr> spilling_tasks;
     for (auto & task : tasks)
     {
         assert(task);
@@ -55,11 +56,14 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
         auto status = task->await();
         switch (status)
         {
+        case ExecTaskStatus::RUNNING:
+            running_tasks.push_back(std::move(task));
+            break;
         case ExecTaskStatus::WAITING:
             waiting_tasks.push_back(std::move(task));
             break;
-        case ExecTaskStatus::RUNNING:
-            running_tasks.push_back(std::move(task));
+        case ExecTaskStatus::SPILLING:
+            spilling_tasks.push_back(std::move(task));
             break;
         case FINISH_STATUS:
             task.reset();
@@ -71,6 +75,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
     tasks.clear();
     task_thread_pool.submit(running_tasks);
     wait_reactor.submit(waiting_tasks);
+    spill_thread_pool.submit(spilling_tasks);
 }
 
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;
