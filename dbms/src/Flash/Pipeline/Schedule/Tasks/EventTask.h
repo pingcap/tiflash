@@ -69,7 +69,7 @@ private:
         {
             finalize();
             assert(event);
-            event->toError(getCurrentExceptionMessage(true, true));
+            exec_status.toError(getCurrentExceptionMessage(true, true));
             return ExecTaskStatus::ERROR;
         }
     }

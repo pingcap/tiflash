@@ -55,8 +55,6 @@ public:
 
     bool withoutInput();
 
-    void toError(std::string && err_msg);
-
 protected:
     // Returns true meaning no task is scheduled.
     virtual bool scheduleImpl() { return true; }
@@ -66,8 +64,6 @@ protected:
     virtual void finishImpl() {}
 
     void scheduleTasks(std::vector<TaskPtr> & tasks);
-
-    bool isCancelled();
 
 private:
     void finish() noexcept;

@@ -22,16 +22,11 @@
 namespace DB
 {
 // if any exception throw here, we should pass err msg and cancel the query.
-#define CATCH                                            \
-    catch (...)                                          \
-    {                                                    \
-        toError(getCurrentExceptionMessage(true, true)); \
+#define CATCH                                                        \
+    catch (...)                                                      \
+    {                                                                \
+        exec_status.toError(getCurrentExceptionMessage(true, true)); \
     }
-
-bool Event::isCancelled()
-{
-    return exec_status.isCancelled();
-}
 
 void Event::addInput(const EventPtr & input)
 {
@@ -88,7 +83,7 @@ void Event::finish() noexcept
     }
     CATCH
     // If query has already been cancelled, it will not trigger outputs.
-    if (likely(!isCancelled()))
+    if (likely(!exec_status.isCancelled()))
     {
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
@@ -99,7 +94,7 @@ void Event::finish() noexcept
         }
     }
     // Release all output, so that the event that did not call `finishImpl`
-    // because of `isCancelled()` will be destructured before the end of `exec_status.wait`.
+    // because of `exec_status.isCancelled()` will be destructured before the end of `exec_status.wait`.
     outputs.clear();
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
     // we have to call `exec_status.onEventFinish()` here,
@@ -124,11 +119,6 @@ void Event::onTaskFinish() noexcept
     assert(cur_value >= 1);
     if (1 == cur_value)
         finish();
-}
-
-void Event::toError(std::string && err_msg)
-{
-    exec_status.toError(std::move(err_msg));
 }
 
 void Event::switchStatus(EventStatus from, EventStatus to)
