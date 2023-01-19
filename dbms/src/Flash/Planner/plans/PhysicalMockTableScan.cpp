@@ -35,18 +35,10 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
     auto & dag_context = *context.getDAGContext();
-    size_t max_streams = dag_context.initialize_concurrency;
+    size_t max_streams = getMockSourceStreamConcurrency(dag_context.initialize_concurrency, context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID()));
     assert(max_streams > 0);
 
-    // Interpreter test will not use columns in MockStorage
-    if (context.isInterpreterTest())
-    {
-        schema = genNamesAndTypes(table_scan, "mock_table_scan");
-        auto columns_with_type_and_name = getColumnWithTypeAndName(schema);
-        for (size_t i = 0; i < max_streams; ++i)
-            mock_streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size));
-    }
-    else if (context.mockStorage()->useDeltaMerge())
+    if (context.mockStorage()->useDeltaMerge())
     {
         assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
@@ -64,7 +56,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
         }
         else
         {
-            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID());
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID(), table_scan.getColumns());
         }
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
@@ -111,7 +103,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 
 void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
-    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
+    assert(pipeline.streams.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 

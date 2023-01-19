@@ -15,8 +15,6 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -95,6 +93,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -102,58 +101,45 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
         aggregation_keys,
         aggregation_collators,
         aggregate_descriptions,
-        is_final_agg);
+        is_final_agg,
+        spill_config);
 
     if (fine_grained_shuffle.enable())
     {
         /// For fine_grained_shuffle, just do aggregation in streams independently
-        RUNTIME_CHECK(pipeline.streams_with_non_joined_data.empty());
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
                 params,
-                context.getFileProvider(),
                 true,
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
-    else if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    else if (pipeline.streams.size() > 1)
     {
         /// If there are several sources, then we perform parallel aggregation
         const Settings & settings = context.getSettingsRef();
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
-            pipeline.streams_with_non_joined_data,
+            BlockInputStreams{},
             params,
-            context.getFileProvider(),
             true,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
 
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
 
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
     }
     else
     {
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-
-        if (!pipeline.streams_with_non_joined_data.empty())
-            inputs.push_back(pipeline.streams_with_non_joined_data.at(0));
-
-        pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
-
+        assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
+            pipeline.firstStream(),
             params,
-            context.getFileProvider(),
             true,
             log->identifier());
     }

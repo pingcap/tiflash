@@ -66,8 +66,10 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> cutStreams(Co
 
 std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(Context & context, size_t max_streams, DB::LoggerPtr log, const TiDBTableScan & table_scan);
 
+size_t getMockSourceStreamConcurrency(size_t max_streams, size_t scan_concurrency_hint);
+
 template <typename SourceType>
-std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id, Int64 table_id = 0)
+std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id, Int64 table_id = 0, const ColumnInfos & used_columns = {})
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
     if constexpr (std::is_same_v<SourceType, MockExchangeReceiverInputStream>)
@@ -75,6 +77,15 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     else
         columns_with_type_and_name = context.mockStorage()->getColumns(table_id);
 
+    columns_with_type_and_name = getUsedColumns(used_columns, columns_with_type_and_name);
+
     return cutStreams<SourceType>(context, columns_with_type_and_name, max_streams, log);
 }
+
+std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreamsForExchangeReceiver(
+    Context & context,
+    const String & executor_id,
+    const LoggerPtr & log,
+    const tipb::ExchangeReceiver & exchange_receiver,
+    size_t fine_grained_stream_count);
 } // namespace DB
