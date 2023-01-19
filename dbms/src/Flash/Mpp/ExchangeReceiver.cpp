@@ -831,6 +831,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 {
     std::lock_guard lock(mu);
+    RUNTIME_ASSERT(is_local_conn_alive, "is_local_conn_alive should be true");
     is_local_conn_alive = false;
     cv.notify_all();
 }
