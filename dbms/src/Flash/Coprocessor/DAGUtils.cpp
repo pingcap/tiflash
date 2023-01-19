@@ -162,13 +162,13 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
-    {tipb::ScalarFuncSig::GreatestString, "greatest"},
+    {tipb::ScalarFuncSig::GreatestString, "tidbGreatestString"},
     {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
     {tipb::ScalarFuncSig::LeastInt, "tidbLeast"},
     {tipb::ScalarFuncSig::LeastReal, "tidbLeast"},
-    {tipb::ScalarFuncSig::LeastString, "least"},
+    {tipb::ScalarFuncSig::LeastString, "tidbLeastString"},
     {tipb::ScalarFuncSig::LeastDecimal, "least"},
     {tipb::ScalarFuncSig::LeastTime, "least"},
 
@@ -876,6 +876,8 @@ String getFieldTypeName(Int32 tp)
         return "Varchar";
     case TiDB::TypeString:
         return "String";
+    case TiDB::TypeEnum:
+        return "Enum";
     default:
         throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
     }
