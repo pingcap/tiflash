@@ -80,13 +80,10 @@ public:
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
-    Context * getContext() { return context; }
-
 protected:
     std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
     grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
-    Context * context = nullptr;
     IServer & server;
     const TiFlashSecurityConfig & security_config;
     Poco::Logger * log;

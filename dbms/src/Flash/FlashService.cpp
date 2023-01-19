@@ -196,6 +196,7 @@ grpc::Status FlashService::Coprocessor(
     if (!check_result.ok())
         return check_result;
 
+    auto [context, status] = createDBContext(grpc_context);
     auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
     return ::grpc::Status::OK;
