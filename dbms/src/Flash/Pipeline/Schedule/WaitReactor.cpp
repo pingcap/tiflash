@@ -91,7 +91,6 @@ private:
     int16_t spin_count = 0;
 
     std::vector<TaskPtr> running_tasks;
-    std::vector<TaskPtr> spilling_tasks;
 };
 } // namespace
 

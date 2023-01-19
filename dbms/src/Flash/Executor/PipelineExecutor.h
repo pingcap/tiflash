@@ -31,17 +31,14 @@ using Pipelines = std::vector<PipelinePtr>;
  *                                            ┌─────────────────────┐
  *                                            │  task scheduler     │
  *           generate          submit tasks   │                     │
- *  pipeline ────────►  event1 ─────────────► │ ┌─────────────────┐ │
- *                                            │ │spill thread pool│ │
- *                        │ trigger           │ └──────▲──┬───────┘ │
- *                        ▼                   │        │  │         │
- *                             submit tasks   │ ┌──────┴──▼──────┐  │
- *                      event2 ─────────────► │ │task thread pool│  │
- *                                            │ └──────▲──┬──────┘  │
- *                        │ trigger           │        │  │         │
- *                        ▼                   │   ┌────┴──▼────┐    │
- *                             submit tasks   │   │wait reactor│    │
- *                      event3 ─────────────► │   └────────────┘    │
+ *  pipeline ────────►  event1 ─────────────► │                     │
+ *                                            │ ┌────────────────┐  │
+ *                        │ trigger           │ │task thread pool│  │
+ *                        ▼                   │ └──────▲──┬──────┘  │
+ *                             submit tasks   │        │  │         │
+ *                      event2 ─────────────► │   ┌────┴──▼────┐    │
+ *                                            │   │wait reactor│    │
+ *                                            │   └────────────┘    │
  *                                            │                     │
  *                                            └─────────────────────┘
  * 
