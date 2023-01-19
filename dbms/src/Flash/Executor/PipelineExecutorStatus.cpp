@@ -31,7 +31,7 @@ String PipelineExecutorStatus::getErrMsg()
     return err_msg;
 }
 
-void PipelineExecutorStatus::toError(String && err_msg_)
+void PipelineExecutorStatus::onErrorOccurred(String && err_msg_)
 {
     {
         std::lock_guard lock(mu);

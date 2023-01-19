@@ -40,6 +40,7 @@ protected:
     ExecTaskStatus awaitImpl() override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
+    // Used to release held resources, just like `Event::finishImpl`.
     virtual void finalize(){};
 
 private:
@@ -66,7 +67,7 @@ private:
         {
             finalize();
             assert(event);
-            exec_status.toError(getCurrentExceptionMessage(true, true));
+            exec_status.onErrorOccurred(getCurrentExceptionMessage(true, true));
             return ExecTaskStatus::ERROR;
         }
     }

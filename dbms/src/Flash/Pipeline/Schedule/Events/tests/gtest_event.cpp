@@ -189,7 +189,7 @@ protected:
     // Returns true meaning no task is scheduled.
     bool scheduleImpl() override
     {
-        exec_status.toError(err_msg);
+        exec_status.onErrorOccurred(err_msg);
         return true;
     }
 };

@@ -66,11 +66,11 @@ try
         status.onEventSchedule();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
-            status.toError(std::move(err_msg));
+            status.onErrorOccurred(std::move(err_msg));
             status.onEventFinish();
         });
         status.wait();
-        status.toError("unexpect exception");
+        status.onErrorOccurred("unexpect exception");
         auto actual_err_msg = status.getErrMsg();
         ASSERT_TRUE(!actual_err_msg.empty());
         ASSERT_EQ(actual_err_msg, expect_err_msg);

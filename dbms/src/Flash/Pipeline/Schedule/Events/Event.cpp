@@ -22,10 +22,10 @@
 namespace DB
 {
 // if any exception throw here, we should pass err msg and cancel the query.
-#define CATCH                                                        \
-    catch (...)                                                      \
-    {                                                                \
-        exec_status.toError(getCurrentExceptionMessage(true, true)); \
+#define CATCH                                                                \
+    catch (...)                                                              \
+    {                                                                        \
+        exec_status.onErrorOccurred(getCurrentExceptionMessage(true, true)); \
     }
 
 void Event::addInput(const EventPtr & input)

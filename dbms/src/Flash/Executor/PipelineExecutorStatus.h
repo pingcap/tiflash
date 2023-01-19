@@ -35,7 +35,7 @@ public:
 
     void onEventFinish();
 
-    void toError(String && err_msg_);
+    void onErrorOccurred(String && err_msg_);
 
     void wait();
 
@@ -49,7 +49,7 @@ public:
         }
         if (is_timeout)
         {
-            toError(timeout_err_msg);
+            onErrorOccurred(timeout_err_msg);
             throw Exception(timeout_err_msg);
         }
     }
