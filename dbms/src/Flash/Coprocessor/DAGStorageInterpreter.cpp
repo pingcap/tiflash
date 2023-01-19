@@ -331,7 +331,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
 
-    auto remote_requests = buildRemoteRequests();
+    auto remote_requests = buildRemoteRequests(scan_context);
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
@@ -737,7 +737,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         }
         catch (RegionException & e)
         {
-            mvcc_query_info->scan_context->total_local_region_num -= e.unavailable_region.size();
+            query_info.mvcc_query_info->scan_context->total_local_region_num -= e.unavailable_region.size();
             /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
@@ -1013,7 +1013,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`
-std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
+std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::ScanContextPtr & scan_context)
 {
     std::vector<RemoteRequest> remote_requests;
     std::unordered_map<Int64, Int64> region_id_to_table_id_map;
@@ -1037,7 +1037,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         const auto & retry_regions = retry_regions_map[physical_table_id];
         if (retry_regions.empty())
             continue;
-        mvcc_query_info->scan_context->total_remote_region_num += retry_regions.size();
+        scan_context->total_remote_region_num += retry_regions.size();
         // Append the region into DAGContext to return them to the upper layer.
         // The upper layer should refresh its cache about these regions.
         for (const auto & r : retry_regions)
