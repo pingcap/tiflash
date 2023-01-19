@@ -117,6 +117,5 @@ private:
     CallStatus state; // The current serving state.
     std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
-    double waiting_task_time_ms = 0;
 };
 } // namespace DB
