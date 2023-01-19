@@ -346,7 +346,6 @@ struct CHBlockChunkCodecV1Impl
     }
     void encodeColumn(const Block & block, WriteBuffer * ostr_ptr)
     {
-        assert(&block == &inner.header);
         return encodeColumnImpl(block, ostr_ptr);
     }
     void encodeColumn(const std::vector<Block> & blocks, WriteBuffer * ostr_ptr)

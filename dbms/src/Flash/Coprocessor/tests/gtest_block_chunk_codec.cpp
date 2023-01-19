@@ -18,9 +18,6 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <gtest/gtest.h>
 
-#include <cstddef>
-
-#include "Core/Block.h"
 
 namespace DB::tests
 {
@@ -47,11 +44,6 @@ void test_enocde_release_data(VecCol && batch_columns, const Block & header, con
     // encode and release columns
     const auto mode = CompressionMethod::LZ4;
 
-    for (auto && columns : batch_columns)
-    {
-        for (auto && col : columns)
-            ASSERT_TRUE(col);
-    }
     auto codec = CHBlockChunkCodecV1{header, false};
     auto str = codec.encode(std::forward<VecCol>(batch_columns), mode);
     ASSERT_FALSE(str.empty());
@@ -120,6 +112,15 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         }
         {
             auto codec = CHBlockChunkCodecV1{header, false};
+            auto str = codec.encode(blocks.front(), mode);
+            ASSERT_FALSE(str.empty());
+            ASSERT_EQ(codec.encoded_rows, blocks.front().rows());
+            auto decoded_block = CHBlockChunkCodecV1::decode(header, str);
+            ASSERT_EQ(blocks.front().rows(), decoded_block.rows());
+        }
+        {
+            // test encode blocks
+            auto codec = CHBlockChunkCodecV1{header, false};
             auto str = codec.encode(blocks, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, total_rows);
@@ -158,6 +159,14 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         for (size_t i = 0; i < block_num; ++i)
             batch_columns.emplace_back(prepareBlock(rows).mutateColumns());
         batch_columns.emplace_back(prepareBlock(0).mutateColumns());
+        {
+            auto tmp = prepareBlock(0).mutateColumns();
+            for (auto && col : tmp)
+            {
+                col.reset();
+            }
+            batch_columns.emplace_back(std::move(tmp));
+        }
         test_enocde_release_data(std::move(batch_columns), header, total_rows);
     }
     {
@@ -165,6 +174,14 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         for (size_t i = 0; i < block_num; ++i)
             batch_columns.emplace_back(prepareBlock(rows).getColumns());
         batch_columns.emplace_back(prepareBlock(0).getColumns());
+        {
+            auto tmp = prepareBlock(0).getColumns();
+            for (auto && col : tmp)
+            {
+                col.reset();
+            }
+            batch_columns.emplace_back(std::move(tmp));
+        }
         test_enocde_release_data(std::move(batch_columns), header, total_rows);
     }
 }
