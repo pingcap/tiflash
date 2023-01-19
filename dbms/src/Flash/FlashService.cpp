@@ -154,7 +154,7 @@ grpc::Status FlashService::Coprocessor(
     ::mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
@@ -224,12 +224,7 @@ grpc::Status FlashService::Coprocessor(
     if (!check_result.ok())
         return check_result;
 
-    if (calldata)
-    {
-        GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-    }
-    else
+    if (!calldata)
     {
         GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -244,10 +239,13 @@ grpc::Status FlashService::Coprocessor(
     }
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
-        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
-        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+        if (!calldata)
+        {
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+            GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+            GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+        }
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
@@ -299,6 +297,8 @@ grpc::Status FlashService::Coprocessor(
         calldata->attachTunnel(tunnel);
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
+        GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
     else
