@@ -244,18 +244,10 @@ grpc::Status FlashService::Coprocessor(
     }
     Stopwatch watch;
     SCOPE_EXIT({
-        if (calldata)
-        {
-            GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
-        }
-        else
-        {
-            GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
-            GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
-            GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
-        }
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
