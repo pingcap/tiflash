@@ -366,19 +366,11 @@ grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_con
     // For coprocessor/mpp test, we don't care about security config.
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
-    {
-        auto err = std::make_unique<mpp::Error>();
-        err->set_msg("error status");
-        response->set_allocated_error(err.release());
         return status;
-    }
-    if likely (!context->isMPPTest() && !context->isCopTest())
-    {
-        if (!security_config.checkGrpcContext(grpc_context))
-        {
-            return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-        }
-    }
+
+    if (!security_config.checkGrpcContext(grpc_context))
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+
     std::string peer = grpc_context->peer();
     Int64 pos = peer.find(':');
     if (pos == -1)
