@@ -16,7 +16,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/VariantOp.h>
 #include <Common/getNumberOfLogicalCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
