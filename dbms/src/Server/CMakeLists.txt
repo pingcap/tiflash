@@ -32,6 +32,7 @@ add_library (clickhouse-server-lib
     NotFoundHandler.cpp
     PingRequestHandler.cpp
     RootRequestHandler.cpp
+    ServerInfo.cpp
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp

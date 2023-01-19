@@ -15,8 +15,9 @@
 #pragma once
 
 #include <daemon/BaseDaemon.h>
+#include <Server/IServer.h>
+#include <Server/ServerInfo.h>
 
-#include "IServer.h"
 
 /** Server provides three interfaces:
   * 1. HTTP - simple interface for any applications.
@@ -69,6 +70,8 @@ private:
     std::unique_ptr<Context> global_context;
 
     TiFlashSecurityConfig security_config;
+
+    ServerInfo server_info;
 
     class FlashGrpcServerHolder;
     class TcpHttpServersHolder;
