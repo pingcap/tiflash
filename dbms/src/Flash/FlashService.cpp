@@ -88,10 +88,9 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
 
     GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
@@ -122,10 +121,9 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
 
     GET_METRIC(tiflash_coprocessor_request_count, type_super_batch).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
@@ -158,10 +156,9 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
@@ -196,17 +193,15 @@ grpc::Status FlashService::Coprocessor(
                                      ::mpp::IsAliveResponse * response [[maybe_unused]])
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
 
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
         return status;
     }
-
     auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
     return ::grpc::Status::OK;
@@ -231,14 +226,18 @@ grpc::Status FlashService::Coprocessor(
     // We need to find it out and bind the grpc stream with it.
     LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    if (!calldata)
     {
-        return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
+        GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
     }
-    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
-    GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+
     if (!tryToResetMaxThreadsMetrics())
     {
         GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
@@ -246,10 +245,13 @@ grpc::Status FlashService::Coprocessor(
     }
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
-        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        if (!calldata)
+        {
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+            GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+            GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+        }
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
@@ -299,6 +301,8 @@ grpc::Status FlashService::Coprocessor(
     if (calldata)
     {
         calldata->attachTunnel(tunnel);
+        GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
@@ -311,9 +315,6 @@ grpc::Status FlashService::Coprocessor(
         tunnel->waitForFinish();
         LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }
-
-    // TODO: Check if there are errors in task.
-
     return grpc::Status::OK;
 }
 
@@ -326,10 +327,9 @@ grpc::Status FlashService::Coprocessor(
     // CancelMPPTask cancels the query of the task.
     LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
     GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
     Stopwatch watch;
@@ -361,6 +361,25 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     return default_val;
 }
 
+grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const
+{
+    // For coprocessor/mpp test, we don't care about security config.
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+
+    if (!security_config.checkGrpcContext(grpc_context))
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+
+    std::string peer = grpc_context->peer();
+    Int64 pos = peer.find(':');
+    if (pos == -1)
+    {
+        return grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer);
+    }
+    return grpc::Status::OK;
+}
+
 std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
 {
     try
@@ -375,10 +394,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         std::string quota_key = getClientMetaVarWithDefault(grpc_context, "quota_key", "");
         std::string peer = grpc_context->peer();
         Int64 pos = peer.find(':');
-        if (pos == -1)
-        {
-            return std::make_tuple(context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
-        }
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
@@ -430,10 +445,9 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
 ::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
 }

@@ -37,6 +37,11 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 EstablishCallData::~EstablishCallData()
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
+    if (stopwatch)
+    {
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(stopwatch->elapsedSeconds());
+    }
 }
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
