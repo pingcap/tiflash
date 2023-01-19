@@ -41,8 +41,9 @@ bool FastAddPeerContext::AsyncTasks::addTask(Key k, Func f)
     auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
     if (res)
     {
+        Element::C start = std::chrono::system_clock::now();
         std::scoped_lock l(mtx);
-        futures[k] = p->get_future();
+        records[k] = Element(start, p->get_future());
     }
     return res;
 }
@@ -50,29 +51,33 @@ bool FastAddPeerContext::AsyncTasks::addTask(Key k, Func f)
 bool FastAddPeerContext::AsyncTasks::isScheduled(Key key) const
 {
     std::scoped_lock l(mtx);
-    return futures.count(key);
+    return records.count(key);
 }
 
 bool FastAddPeerContext::AsyncTasks::isReady(Key key) const
 {
     using namespace std::chrono_literals;
     std::scoped_lock l(mtx);
-    if (!futures.count(key))
+    if (!records.count(key))
         return false;
-    if (futures.at(key).wait_for(0ms) == std::future_status::ready)
+    if (records.at(key).fut.wait_for(0ms) == std::future_status::ready)
     {
         return true;
     }
     return false;
 }
 
+bool FastAddPeerContext::AsyncTasks::isTimeout(Key key) {
+    
+}
+
 FastAddPeerRes FastAddPeerContext::AsyncTasks::fetchResult(Key key)
 {
     std::unique_lock<std::mutex> l(mtx);
-    auto it = futures.find(key);
-    auto fut = std::move(it->second);
-    futures.erase(it);
+    auto it = records.find(key);
+    auto record = std::move(it->second);
+    records.erase(it);
     l.unlock();
-    return fut.get();
+    return record.fut.get();
 }
 } // namespace DB

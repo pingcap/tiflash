@@ -50,15 +50,28 @@ struct FastAddPeerContext::AsyncTasks
 {
     using Key = uint64_t;
     using Func = std::function<FastAddPeerRes()>;
-
-    explicit AsyncTasks(uint64_t pool_size)
+    struct Element
     {
+        using C = std::chrono::time_point<std::chrono::system_clock>;
+        Element() {}
+        Element(C s, std::future<FastAddPeerRes> && f)
+            : start_time(s)
+            , fut(std::move(f))
+        {}
+
+        C start_time;
+        std::future<FastAddPeerRes> fut;
+    };
+
+    explicit AsyncTasks(uint64_t pool_size, uint64_t task_timeout)
+    {
+        timeout = task_timeout;
         // We use a very big queue.
         thread_pool = std::make_unique<ThreadPool>(pool_size, pool_size, 300);
     }
-    explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
+    explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size, uint64_t task_timeout)
     {
-        // We use a very big queue.
+        timeout = task_timeout;
         thread_pool = std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size);
     }
     bool addTask(Key k, Func f);
@@ -67,8 +80,9 @@ struct FastAddPeerContext::AsyncTasks
     FastAddPeerRes fetchResult(Key key);
 
 protected:
-    std::map<Key, std::future<FastAddPeerRes>> futures;
+    std::map<Key, Element> records;
     std::unique_ptr<ThreadPool> thread_pool;
+    uint64_t timeout;
     mutable std::mutex mtx;
 };
 
