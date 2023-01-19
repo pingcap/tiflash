@@ -43,7 +43,7 @@ OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
     Block block;
     size_t start_transform_op_index = 0;
     auto op_status = fetchBlock(block, start_transform_op_index, exec_status);
-    // If the state `fetchBlock` returns isn't `HAS_OUTPUT`, it means that `fetchBlock` did not return a block and is an exception state.
+    // If the status `fetchBlock` returns isn't `HAS_OUTPUT`, it means that `fetchBlock` did not return a block.
     if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
 
@@ -51,12 +51,18 @@ OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
     for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
         CHECK_IS_CANCELLED(exec_status);
-        auto op_status = transform_ops[transform_op_index]->transform(block);
+        const auto & transform_op = transform_ops[transform_op_index];
+        op_status = transform_op->transform(block);
         if (op_status != OperatorStatus::HAS_OUTPUT)
-            return prepareSpillOpIfNeed(op_status, transform_ops[transform_op_index]);
+        {
+            setSpillingOpIfNeeded(op_status, transform_op);
+            return op_status;
+        }
     }
     CHECK_IS_CANCELLED(exec_status);
-    return prepareSpillOpIfNeed(sink_op->write(std::move(block)), sink_op);
+    op_status = sink_op->write(std::move(block));
+    setSpillingOpIfNeeded(op_status, sink_op);
+    return op_status;
 }
 
 // try fetch block from transform_ops and source_op.
@@ -68,21 +74,28 @@ OperatorStatus PipelineExec::fetchBlock(
     CHECK_IS_CANCELLED(exec_status);
     auto op_status = sink_op->prepare();
     if (op_status != OperatorStatus::NEED_INPUT)
-        return prepareSpillOpIfNeed(op_status, sink_op);
+    {
+        setSpillingOpIfNeeded(op_status, sink_op);
+        return op_status;
+    }
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         CHECK_IS_CANCELLED(exec_status);
-        auto op_status = transform_ops[index]->tryOutput(block);
+        const auto & transform_op = transform_ops[index];
+        op_status = transform_op->tryOutput(block);
         if (op_status != OperatorStatus::NEED_INPUT)
         {
+            setSpillingOpIfNeeded(op_status, transform_op);
             // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
             start_transform_op_index = index + 1;
-            return prepareSpillOpIfNeed(op_status, transform_ops[index]);
+            return op_status;
         }
     }
     CHECK_IS_CANCELLED(exec_status);
     start_transform_op_index = 0;
-    return prepareSpillOpIfNeed(source_op->read(block), source_op);
+    op_status = source_op->read(block);
+    setSpillingOpIfNeeded(op_status, source_op);
+    return op_status;
 }
 
 OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
@@ -100,16 +113,24 @@ OperatorStatus PipelineExec::awaitImpl(PipelineExecutorStatus & exec_status)
 
     auto op_status = sink_op->await();
     if (op_status != OperatorStatus::NEED_INPUT)
-        return prepareSpillOpIfNeed(op_status, sink_op);
+    {
+        setSpillingOpIfNeeded(op_status, sink_op);
+        return op_status;
+    }
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
-        auto op_status = (*it)->await();
+        op_status = (*it)->await();
         if (op_status != OperatorStatus::NEED_INPUT)
-            return prepareSpillOpIfNeed(op_status, *it);
+        {
+            setSpillingOpIfNeeded(op_status, *it);
+            return op_status;
+        }
     }
-    return prepareSpillOpIfNeed(source_op->await(), source_op);
+    op_status = source_op->await();
+    setSpillingOpIfNeeded(op_status, source_op);
+    return op_status;
 }
 
 OperatorStatus PipelineExec::spill(PipelineExecutorStatus & exec_status)
@@ -126,11 +147,11 @@ OperatorStatus PipelineExec::spillImpl(PipelineExecutorStatus & exec_status)
 {
     CHECK_IS_CANCELLED(exec_status);
 
-    assert(ready_spill_op);
-    assert(*ready_spill_op);
-    auto op_status = (*ready_spill_op)->spill();
+    assert(spilling_op);
+    assert(*spilling_op);
+    auto op_status = (*spilling_op)->spill();
     if (op_status != OperatorStatus::SPILLING)
-        ready_spill_op.reset();
+        spilling_op.reset();
     return op_status;
 }
 

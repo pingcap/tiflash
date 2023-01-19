@@ -44,12 +44,12 @@ public:
         switch (status)
         {
         case ExecTaskStatus::RUNNING:
-            ready_execute_tasks.push_back(std::move(task));
+            running_tasks.push_back(std::move(task));
             return true;
         case ExecTaskStatus::WAITING:
             return false;
         case ExecTaskStatus::SPILLING:
-            ready_spill_tasks.push_back(std::move(task));
+            spilling_tasks.push_back(std::move(task));
             return true;
         case FINISH_STATUS:
             task.reset();
@@ -62,20 +62,20 @@ public:
     // return false if there are no ready task to submit.
     bool submitReadyTasks()
     {
-        if (ready_execute_tasks.empty() && ready_spill_tasks.empty())
+        if (running_tasks.empty() && spilling_tasks.empty())
             return false;
 
-        task_thread_pool.submit(ready_execute_tasks);
-        ready_execute_tasks.clear();
-        spill_thread_pool.submit(ready_spill_tasks);
-        ready_spill_tasks.clear();
+        task_thread_pool.submit(running_tasks);
+        running_tasks.clear();
+        spill_thread_pool.submit(spilling_tasks);
+        spilling_tasks.clear();
         spin_count = 0;
         return true;
     }
 
     void tryYield()
     {
-        assert(ready_execute_tasks.empty() && ready_spill_tasks.empty());
+        assert(running_tasks.empty() && spilling_tasks.empty());
         ++spin_count;
 
         if (spin_count != 0 && spin_count % 64 == 0)
@@ -98,8 +98,8 @@ private:
 
     int16_t spin_count = 0;
 
-    std::vector<TaskPtr> ready_execute_tasks;
-    std::vector<TaskPtr> ready_spill_tasks;
+    std::vector<TaskPtr> running_tasks;
+    std::vector<TaskPtr> spilling_tasks;
 };
 } // namespace
 

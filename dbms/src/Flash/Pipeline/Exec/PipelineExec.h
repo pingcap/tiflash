@@ -55,18 +55,15 @@ private:
         size_t & start_transform_op_index,
         PipelineExecutorStatus & exec_status);
 
-    // It will only be called by `executeImpl` and `awaitImpl`.
-    // Because the spilling state will only be transferred from spilling status and running status.
     template <typename Op>
-    OperatorStatus prepareSpillOpIfNeed(OperatorStatus op_status, const Op & op)
+    void setSpillingOpIfNeeded(OperatorStatus op_status, const Op & op)
     {
         assert(op);
         if (op_status == OperatorStatus::SPILLING)
         {
-            assert(!ready_spill_op);
-            ready_spill_op.emplace(op.get());
+            assert(!spilling_op);
+            spilling_op.emplace(op.get());
         }
-        return op_status;
     }
 
 private:
@@ -75,7 +72,7 @@ private:
     SinkOpPtr sink_op;
 
     // hold the operator which is ready for spilling.
-    std::optional<Operator *> ready_spill_op;
+    std::optional<Operator *> spilling_op;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.
