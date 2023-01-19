@@ -156,26 +156,40 @@ void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
 void SchemaDiff::deserialize(const String & data)
 {
     Poco::JSON::Parser parser;
-    Poco::Dynamic::Var result = parser.parse(data);
-    auto obj = result.extract<Poco::JSON::Object::Ptr>();
-    version = obj->getValue<Int64>("version");
-    type = static_cast<SchemaActionType>(obj->getValue<Int32>("type"));
-    schema_id = obj->getValue<Int64>("schema_id");
-    table_id = obj->getValue<Int64>("table_id");
-
-    old_table_id = obj->getValue<Int64>("old_table_id");
-    old_schema_id = obj->getValue<Int64>("old_schema_id");
-
-    affected_opts.clear();
-    auto affected_arr = obj->getArray("affected_options");
-    if (!affected_arr.isNull())
+    try
     {
-        for (size_t i = 0; i < affected_arr->size(); i++)
+        Poco::Dynamic::Var result = parser.parse(data);
+        if (result.isEmpty())
         {
-            auto affected_opt_json = affected_arr->getObject(i);
-            AffectedOption affected_option(affected_opt_json);
-            affected_opts.emplace_back(affected_option);
+            throw Exception("The schema diff deserialize failed " + data);
         }
+        auto obj = result.extract<Poco::JSON::Object::Ptr>();
+        version = obj->getValue<Int64>("version");
+        type = static_cast<SchemaActionType>(obj->getValue<Int32>("type"));
+        schema_id = obj->getValue<Int64>("schema_id");
+        table_id = obj->getValue<Int64>("table_id");
+
+        old_table_id = obj->getValue<Int64>("old_table_id");
+        old_schema_id = obj->getValue<Int64>("old_schema_id");
+
+        regenerate_schema_map = obj->getValue<bool>("regenerate_schema_map");
+
+        affected_opts.clear();
+        auto affected_arr = obj->getArray("affected_options");
+        if (!affected_arr.isNull())
+        {
+            for (size_t i = 0; i < affected_arr->size(); i++)
+            {
+                auto affected_opt_json = affected_arr->getObject(i);
+                AffectedOption affected_option(affected_opt_json);
+                affected_opts.emplace_back(affected_option);
+            }
+        }
+    }
+    catch (...)
+    {
+        LOG_INFO(&Poco::Logger::get("SchemaDiff"), "failed to deserialize {}", data);
+        throw;
     }
 }
 

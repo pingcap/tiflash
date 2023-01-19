@@ -1019,8 +1019,8 @@ CodecFlag ColumnInfo::getCodecFlag() const
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, ct, w) \
-    case Type##tt:          \
+#define M(tt, v, cf, ct) \
+    case Type##tt:       \
         return getCodecFlagBase<CodecFlag##cf>(hasUnsignedFlag());
         COLUMN_TYPES(M)
 #undef M
@@ -1171,6 +1171,15 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     for (int i = 0; i < tipb_column_info.elems_size(); ++i)
         tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
     return tidb_column_info;
+}
+
+std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos)
+{
+    std::vector<ColumnInfo> tidb_column_infos;
+    tidb_column_infos.reserve(tipb_column_infos.size());
+    for (const auto & tipb_column_info : tipb_column_infos)
+        tidb_column_infos.emplace_back(toTiDBColumnInfo(tipb_column_info));
+    return tidb_column_infos;
 }
 
 } // namespace TiDB

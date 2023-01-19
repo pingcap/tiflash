@@ -15,13 +15,14 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
 namespace DB
 {
+class DAGContext;
+
 template <class ExchangeWriterPtr>
 class BroadcastOrPassThroughWriter : public DAGResponseWriter
 {
@@ -34,14 +35,13 @@ public:
     void flush() override;
 
 private:
-    void encodeThenWriteBlocks();
+    void writeBlocks();
 
 private:
     Int64 batch_send_min_limit;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 
 } // namespace DB

@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Coprocessor/MockSourceStream.h>
+#include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalTableScan.h>
@@ -41,7 +41,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
     const LoggerPtr & log,
     const TiDBTableScan & table_scan)
 {
-    auto schema = genNamesAndTypes(table_scan, "table_scan");
+    auto schema = genNamesAndTypesForTableScan(table_scan);
     auto physical_table_scan = std::make_shared<PhysicalTableScan>(
         executor_id,
         schema,
@@ -53,12 +53,24 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
 
 void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
+    assert(pipeline.streams.empty());
 
-    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
-    storage_interpreter.execute(pipeline);
+    if (context.isDisaggregatedComputeMode())
+    {
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        disaggregated_tiflash_interpreter.execute(pipeline);
+        buildProjection(context, pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        storage_interpreter.execute(pipeline);
+        buildProjection(context, pipeline, storage_interpreter.analyzer->getCurrentInputColumns());
+    }
+}
 
-    const auto & storage_schema = storage_interpreter.analyzer->getCurrentInputColumns();
+void PhysicalTableScan::buildProjection(Context & context, DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
+{
     RUNTIME_CHECK(
         storage_schema.size() == schema.size(),
         storage_schema.size(),

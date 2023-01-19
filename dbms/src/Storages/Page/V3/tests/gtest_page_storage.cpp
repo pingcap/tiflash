@@ -426,6 +426,28 @@ try
         ASSERT_GT(page_maps.count(5), 0);
         ASSERT_EQ(page_maps[5].isValid(), false);
     }
+    {
+        // Read with id can also fetch the fieldOffsets
+        auto page_4 = page_storage->readImpl(TEST_NAMESPACE_ID, 4, nullptr, nullptr, false);
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+    }
+    {
+        // Read with ids can also fetch the fieldOffsets
+        PageIds page_ids{4};
+        auto pages = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
+        ASSERT_EQ(pages.size(), 1);
+        ASSERT_GT(pages.count(4), 0);
+        auto page_4 = pages[4];
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+    }
 }
 CATCH
 
@@ -1243,9 +1265,22 @@ CATCH
 TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
 try
 {
+    NamespaceId ns_id1 = TEST_NAMESPACE_ID;
+    NamespaceId ns_id2 = TEST_NAMESPACE_ID + 1;
+    {
+        WriteBatch wb(ns_id1);
+        wb.putExternal(20, 0);
+        page_storage->write(std::move(wb));
+    }
+    {
+        WriteBatch wb(ns_id2);
+        wb.putExternal(20, 0);
+        page_storage->write(std::move(wb));
+    }
+
     auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.ns_id = ns_id1;
     callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
@@ -1273,7 +1308,7 @@ try
     // mock table created while gc is running
     {
         ExternalPageCallbacks new_callbacks;
-        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
+        new_callbacks.ns_id = ns_id2;
         new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)

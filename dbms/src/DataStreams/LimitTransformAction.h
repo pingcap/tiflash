@@ -11,22 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#pragma once
 
-#include <Common/ClickHouseRevision.h>
-#include <DataStreams/NativeBlockInputStream.h>
-#include <DataStreams/TemporaryFileStream.h>
+#include <Core/Block.h>
 
 namespace DB
 {
-TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_)
-    : file_provider{file_provider_}
-    , file_in(file_provider, path, EncryptionPath(path, ""))
-    , compressed_in(file_in)
-    , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get()))
-{}
-
-TemporaryFileStream::~TemporaryFileStream()
+struct LimitTransformAction
 {
-    file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
-}
+public:
+    LimitTransformAction(
+        const Block & header_,
+        size_t limit_);
+
+    bool transform(Block & block);
+    Block getHeader() const;
+    size_t getLimit() const;
+
+private:
+    Block header;
+    size_t limit;
+    size_t pos = 0;
+};
 } // namespace DB

@@ -32,9 +32,9 @@ public:
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
     }
 };
 
@@ -213,8 +213,7 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    MockTableScan)";
+   MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
 
         expected = R"(
@@ -291,9 +290,8 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    Limit, limit = 10
-     MockTableScan)";
+   Limit, limit = 10
+    MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -320,10 +318,9 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    MergeSorting, limit = 10
-     PartialSorting: limit = 10
-      MockTableScan)";
+   MergeSorting, limit = 10
+    PartialSorting: limit = 10
+     MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -350,12 +347,10 @@ Union: <for test>
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    Expression: <projection>
-     Expression: <expr after aggregation>
-      Aggregating
-       Concat
-        MockTableScan)";
+   Expression: <projection>
+    Expression: <expr after aggregation>
+     Aggregating
+      MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -379,8 +374,7 @@ MockExchangeSender
  Expression: <final projection>
   Expression: <expr after aggregation>
    Aggregating
-    Concat
-     MockTableScan)";
+    MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 
@@ -451,7 +445,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_3>
+    HashJoinProbe: <join probe, join_executor_id = Join_3, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -669,7 +663,7 @@ try
     {
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
+ Expression x 8: <final projection>
   Expression: <expr after window>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     MergeSorting: <enable fine grained shuffle>, limit = 0
@@ -723,6 +717,108 @@ Union: <for test>
 }
 CATCH
 
+TEST_F(PlannerInterpreterExecuteTest, FineGrainedShuffleJoin)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    {
+        // Join Source.
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", enable);
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")},
+                                    enable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+    {
+        // Join Source.
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r", disable);
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")},
+                                    disable)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
+TEST_F(PlannerInterpreterExecuteTest, FineGrainedShuffleAgg)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    {
+        DAGRequestBuilder receiver1 = context.receive("sender_1", enable);
+        auto request = receiver1
+                           .aggregation({Max(col("s1"))}, {col("s2")}, enable)
+                           .build(context);
+        String expected = R"(
+Union: <for test>
+ Expression x 8: <final projection>
+  Expression: <expr after aggregation>
+   Aggregating: <enable fine grained shuffle>
+    Expression: <before aggregation>
+     MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        DAGRequestBuilder receiver1 = context.receive("sender_1", disable);
+        auto request = receiver1
+                           .aggregation({Max(col("s1"))}, {col("s2")}, disable)
+                           .build(context);
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <expr after aggregation>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <before aggregation>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
 TEST_F(PlannerInterpreterExecuteTest, Join)
 try
 {
@@ -757,13 +853,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -799,13 +895,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -842,14 +938,14 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6>
+     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
       Expression: <final projection>
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -885,7 +981,7 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
          Expression: <final projection>
           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -916,13 +1012,10 @@ CreatingSets
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
        Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2>
+        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
          Expression: <append join key and join filters for probe side>
           Expression: <final projection>
-           MockTableScan
-      Expression x 10: <before aggregation>
-       Expression: <remove useless column after join>
-        NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -958,13 +1051,10 @@ CreatingSets
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <before aggregation>
             Expression: <remove useless column after join>
-             HashJoinProbe: <join probe, join_executor_id = Join_2>
+             HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
               Expression: <append join key and join filters for probe side>
                Expression: <final projection>
-                MockExchangeReceiver
-           Expression x 20: <before aggregation>
-            Expression: <remove useless column after join>
-             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+                MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }
@@ -987,10 +1077,9 @@ Expression: <final projection>
   Filter
    Expression: <expr after aggregation>
     Aggregating
-     Concat
-      Expression: <before aggregation>
-       Filter
-        MockTableScan)";
+     Expression: <before aggregation>
+      Filter
+       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 

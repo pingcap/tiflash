@@ -33,6 +33,7 @@ struct ColumnGeneratorOpts
     size_t size;
     String type_name;
     DataDistribution distribution;
+    String name = "";
     size_t string_max_size = 128;
 };
 
@@ -42,6 +43,7 @@ public:
     ColumnWithTypeAndName generate(const ColumnGeneratorOpts & opts);
 
 private:
+    ColumnWithTypeAndName generateNullMapColumn(const ColumnGeneratorOpts & opts);
     std::mt19937_64 rand_gen;
     std::uniform_int_distribution<Int64> int_rand_gen = std::uniform_int_distribution<Int64>(0, 128);
     std::uniform_real_distribution<double> real_rand_gen;
@@ -53,16 +55,20 @@ private:
     struct tm randomLocalTime();
     String randomDate();
     String randomDateTime();
+    String randomDuration();
     String randomDecimal(uint64_t prec, uint64_t scale);
 
     DataTypePtr createDecimalType();
 
+    void genBool(MutableColumnPtr & col);
     void genInt(MutableColumnPtr & col);
     void genUInt(MutableColumnPtr & col);
     void genFloat(MutableColumnPtr & col);
     void genString(MutableColumnPtr & col);
     void genDate(MutableColumnPtr & col);
     void genDateTime(MutableColumnPtr & col);
+    void genDuration(MutableColumnPtr & col);
     void genDecimal(MutableColumnPtr & col, DataTypePtr & data_type);
+    void genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_type);
 };
 } // namespace DB::tests

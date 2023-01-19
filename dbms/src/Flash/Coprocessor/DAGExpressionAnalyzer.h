@@ -19,7 +19,6 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -101,11 +100,6 @@ public:
         const std::vector<NameAndTypePair> & columns) const;
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
-
-    void appendJoin(
-        ExpressionActionsChain & chain,
-        SubqueryForSet & join_query,
-        const NamesAndTypesList & columns_added_by_join) const;
 
     // Generate a project action for non-root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same, and
@@ -286,7 +280,7 @@ private:
     bool buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+        const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,

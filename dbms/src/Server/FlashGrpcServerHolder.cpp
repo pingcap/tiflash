@@ -11,9 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
 
+// In order to include grpc::SecureServerCredentials which used in
+// sslServerCredentialsWithFetcher()
+// We implement sslServerCredentialsWithFetcher() to set config fetcher
+// to auto reload sslServerCredentials
+#include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
 
 namespace DB
 {
@@ -79,20 +85,54 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
 }
 } // namespace
 
-FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::LayeredConfiguration & config_, TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config, const LoggerPtr & log_)
+static grpc_ssl_certificate_config_reload_status
+sslServerCertificateConfigCallback(
+    void * arg,
+    grpc_ssl_server_certificate_config ** config)
+{
+    if (config == nullptr)
+    {
+        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_FAIL;
+    }
+    auto * context = static_cast<Context *>(arg);
+    auto options = context->getSecurityConfig()->readAndCacheSslCredentialOptions();
+    grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
+    *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
+                                                        &pem_key_cert_pair,
+                                                        1);
+    return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
+}
+
+grpc_server_credentials * grpcSslServerCredentialsCreateWithFetcher(
+    grpc_ssl_client_certificate_request_type client_certificate_request,
+    Context * context)
+{
+    grpc_ssl_server_credentials_options * options = grpc_ssl_server_credentials_create_options_using_config_fetcher(
+        client_certificate_request,
+        sslServerCertificateConfigCallback,
+        reinterpret_cast<void *>(context));
+    return grpc_ssl_server_credentials_create_with_options(options);
+}
+
+std::shared_ptr<grpc::ServerCredentials> sslServerCredentialsWithFetcher(Context & context)
+{
+    grpc_server_credentials * c_creds = grpcSslServerCredentialsCreateWithFetcher(
+        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY,
+        &context);
+    return std::shared_ptr<grpc::ServerCredentials>(
+        new grpc::SecureServerCredentials(c_creds));
+}
+
+FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::LayeredConfiguration & config_, const TiFlashRaftConfig & raft_config, const LoggerPtr & log_)
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
     background_task.begin();
     grpc::ServerBuilder builder;
-    if (security_config.has_tls_config)
+
+    if (!context.isTest() && context.getSecurityConfig()->hasTlsConfig())
     {
-        grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-        auto options = security_config.readAndCacheSecurityInfo();
-        server_cred.pem_root_certs = options.pem_root_certs;
-        server_cred.pem_key_cert_pairs.push_back(
-            grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
-        builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
+        builder.AddListeningPort(raft_config.flash_server_addr, sslServerCredentialsWithFetcher(context));
     }
     else
     {
@@ -105,7 +145,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
         flash_service = std::make_unique<AsyncFlashService>();
     else
         flash_service = std::make_unique<FlashService>();
-    flash_service->init(security_config, context);
+    flash_service->init(context);
 
     diagnostics_service = std::make_unique<DiagnosticsService>(context, config_);
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
@@ -205,7 +245,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     }
 }
 
-void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
+void FlashGrpcServerHolder::setMockStorage(MockStorage * mock_storage)
 {
     flash_service->setMockStorage(mock_storage);
 }

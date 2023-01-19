@@ -42,7 +42,7 @@ void DataTypeNumberBase<T>::serializeTextEscaped(const IColumn & column, size_t 
 template <typename T>
 static void deserializeText(IColumn & column, ReadBuffer & istr)
 {
-    T x;
+    T x{};
 
     if constexpr (std::is_integral_v<T> && std::is_arithmetic_v<T>)
         readIntTextUnsafe(x, istr);
@@ -198,7 +198,7 @@ template <typename T>
 void DataTypeNumberBase<T>::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
     /// ColumnVector<T>::value_type is a narrower type. For example, UInt8, when the Field type is UInt64
-    typename ColumnVector<T>::value_type x = get<typename NearestFieldType<FieldType>::Type>(field);
+    auto x = get<typename NearestFieldType<FieldType>::Type>(field);
     writeBinary(x, ostr);
 }
 
@@ -214,15 +214,6 @@ template <typename T>
 void DataTypeNumberBase<T>::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeBinary(static_cast<const ColumnVector<T> &>(column).getData()[row_num], ostr);
-    // if (likely(widened))
-    // {
-    //     using WidestType = typename NearestFieldType<T>::Type;
-    //     writeBinary(static_cast<T>(static_cast<const ColumnVector<WidestType> &>(column).getData()[row_num]), ostr);
-    // }
-    // else
-    // {
-    //     writeBinary(static_cast<const ColumnVector<T> &>(column).getData()[row_num], ostr);
-    // }
 }
 
 template <typename T>
@@ -231,18 +222,6 @@ void DataTypeNumberBase<T>::deserializeBinary(IColumn & column, ReadBuffer & ist
     typename ColumnVector<T>::value_type x;
     readBinary(x, istr);
     static_cast<ColumnVector<T> &>(column).getData().push_back(x);
-    // if (likely(widened))
-    // {
-    //     using WidestType = typename NearestFieldType<T>::Type;
-    //     typename ColumnVector<WidestType>::value_type y;
-    //     readBinary(y, istr);
-    //     x = static_cast<T>(y);
-    // }
-    // else
-    // {
-    //     readBinary(x, istr);
-    // }
-    // static_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 
 template <typename T>
@@ -266,51 +245,6 @@ void DataTypeNumberBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer &
     x.resize(initial_size + limit);
     size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(typename ColumnVector<T>::value_type) * limit);
     x.resize(initial_size + size / sizeof(typename ColumnVector<T>::value_type));
-}
-
-template <typename T>
-void DataTypeNumberBase<T>::serializeWidenBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
-{
-    if (!widened)
-        return serializeBinaryBulk(column, ostr, offset, limit);
-
-    const typename ColumnVector<T>::Container & x = typeid_cast<const ColumnVector<T> &>(column).getData();
-
-    size_t size = x.size();
-
-    if (limit == 0 || offset + limit > size)
-        limit = size - offset;
-
-    using WidestType = typename NearestFieldType<T>::Type;
-    typename ColumnVector<WidestType>::Container y(limit);
-    for (size_t i = 0; i < limit; i++)
-    {
-        y[i] = static_cast<WidestType>(x[offset + i]);
-    }
-
-    ostr.write(reinterpret_cast<const char *>(&y[0]), sizeof(typename ColumnVector<WidestType>::value_type) * limit);
-}
-
-template <typename T>
-void DataTypeNumberBase<T>::deserializeWidenBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
-{
-    if (!widened)
-        return deserializeBinaryBulk(column, istr, limit, avg_value_size_hint);
-
-    typename ColumnVector<T>::Container & x = typeid_cast<ColumnVector<T> &>(column).getData();
-    size_t initial_size = x.size();
-    x.resize(initial_size + limit);
-
-    using WidestType = typename NearestFieldType<T>::Type;
-    typename ColumnVector<WidestType>::Container y(limit);
-    size_t size = istr.readBig(reinterpret_cast<char *>(&y[0]), sizeof(typename ColumnVector<WidestType>::value_type) * limit);
-    size_t elem_size = size / sizeof(typename ColumnVector<WidestType>::value_type);
-    for (size_t i = 0; i < elem_size; i++)
-    {
-        x[initial_size + i] = static_cast<T>(y[i]);
-    }
-
-    x.resize(initial_size + elem_size);
 }
 
 template <typename T>

@@ -15,13 +15,14 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
 namespace DB
 {
+class DAGContext;
+
 template <class ExchangeWriterPtr>
 class HashPartitionWriter : public DAGResponseWriter
 {
@@ -36,9 +37,9 @@ public:
     void flush() override;
 
 private:
-    void partitionAndEncodeThenWriteBlocks();
+    void partitionAndWriteBlocks();
 
-    void writePackets(TrackedMppDataPacketPtrs & packets);
+    void writePartitionBlocks(std::vector<Blocks> & partition_blocks);
 
 private:
     Int64 batch_send_min_limit;
@@ -48,7 +49,6 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 
 } // namespace DB

@@ -29,9 +29,9 @@
 
 #include <shared_mutex>
 
-
 namespace DB
 {
+struct ProbeProcessInfo;
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -120,7 +120,9 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    void joinBlock(Block & block) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
+
+    void checkTypes(const Block & block) const;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
@@ -128,6 +130,8 @@ public:
     bool hasTotals() const { return static_cast<bool>(totals); };
 
     void joinTotals(Block & block) const;
+
+    bool needReturnNonJoinedData() const;
 
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
@@ -148,15 +152,36 @@ public:
     bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
+    size_t getProbeConcurrency() const
+    {
+        std::unique_lock lock(probe_mutex);
+        return probe_concurrency;
+    }
+    void setProbeConcurrency(size_t concurrency)
+    {
+        std::unique_lock lock(probe_mutex);
+        probe_concurrency = concurrency;
+        active_probe_concurrency = probe_concurrency;
+    }
+    void finishOneProbe()
+    {
+        std::unique_lock lock(probe_mutex);
+        active_probe_concurrency--;
+        if (active_probe_concurrency == 0)
+            probe_cv.notify_all();
+    }
+    void waitUntilAllProbeFinished()
+    {
+        std::unique_lock lock(probe_mutex);
+        probe_cv.wait(lock, [&]() {
+            return active_probe_concurrency == 0;
+        });
+    }
+
     size_t getBuildConcurrency() const
     {
         std::shared_lock lock(rwlock);
         return getBuildConcurrencyInternal();
-    }
-    size_t getNotJoinedStreamConcurrency() const
-    {
-        std::shared_lock lock(rwlock);
-        return getNotJoinedStreamConcurrencyInternal();
     }
 
     enum BuildTableState
@@ -190,7 +215,6 @@ public:
             : RowRef(block_, row_num_)
         {}
     };
-
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
       * For implementation of RIGHT and FULL JOINs.
@@ -273,6 +297,7 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
+
 private:
     friend class NonJoinedBlockInputStream;
 
@@ -288,6 +313,13 @@ private:
     bool use_nulls;
 
     size_t build_concurrency;
+
+    mutable std::mutex probe_mutex;
+    std::condition_variable probe_cv;
+    size_t probe_concurrency;
+    size_t active_probe_concurrency;
+
+private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
@@ -318,6 +350,7 @@ private:
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
+
 
 private:
     Type type = Type::EMPTY;
@@ -356,10 +389,6 @@ private:
             throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
         return build_concurrency;
     }
-    size_t getNotJoinedStreamConcurrencyInternal() const
-    {
-        return getBuildConcurrencyInternal();
-    }
 
     /// Initialize map implementations for various join types.
     void initMapImpl(Type type_);
@@ -383,7 +412,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & block, const Maps & maps) const;
+    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & probe_process_info) const;
 
     /** Handle non-equal join conditions
       *
@@ -402,5 +431,22 @@ private:
 using JoinPtr = std::shared_ptr<Join>;
 using Joins = std::vector<JoinPtr>;
 
+struct ProbeProcessInfo
+{
+    Block block;
+    UInt64 max_block_size;
+    size_t start_row;
+    size_t end_row;
+    bool all_rows_joined_finish;
+
+    ProbeProcessInfo(UInt64 max_block_size_)
+        : max_block_size(max_block_size_)
+        , all_rows_joined_finish(true){};
+
+    void resetBlock(Block && block_);
+    void updateStartRow();
+};
+
+void convertColumnToNullable(ColumnWithTypeAndName & column);
 
 } // namespace DB

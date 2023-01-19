@@ -14,6 +14,19 @@
 
 #pragma once
 
-/// Get number of CPU cores without hyper-threading.
-/// Note: do not support environment under resource isolation mechanism like Docker, CGroup.
-unsigned getNumberOfPhysicalCPUCores();
+#include <Core/Block.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <tipb/select.pb.h>
+
+namespace DB::MPPTunnelSetHelper
+{
+TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
+
+TrackedMppDataPacketPtr toFineGrainedPacket(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    const std::vector<tipb::FieldType> & field_types);
+} // namespace DB::MPPTunnelSetHelper

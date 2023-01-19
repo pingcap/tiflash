@@ -18,6 +18,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
+#include <Core/SpillConfig.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -27,7 +28,6 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
-#include <DataStreams/LimitByBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedBlockInputStream.h>
@@ -51,6 +51,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/RegionQueryInfo.h>
@@ -498,9 +499,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
     {
         /// Now we will compose block streams that perform the necessary actions.
 
-        /// Do I need to aggregate in a separate row rows that have not passed max_rows_to_group_by.
-        bool aggregate_overflow_row = expressions.need_aggregate && query.group_by_with_totals && settings.max_rows_to_group_by && settings.group_by_overflow_mode == OverflowMode::ANY && settings.totals_mode != TotalsMode::AFTER_HAVING_EXCLUSIVE;
-
         /// Do I need to immediately finalize the aggregate functions after the aggregation?
         bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState && !query.group_by_with_totals;
 
@@ -524,7 +522,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 executeWhere(pipeline, expressions.before_where);
 
             if (expressions.need_aggregate)
-                executeAggregation(pipeline, expressions.before_aggregation, context.getFileProvider(), aggregate_overflow_row, aggregate_final);
+                executeAggregation(pipeline, expressions.before_aggregation, aggregate_final);
             else
             {
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -558,10 +556,10 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             {
                 /// If you need to combine aggregated results from multiple servers
                 if (!expressions.first_stage)
-                    executeMergeAggregated(pipeline, aggregate_overflow_row, aggregate_final);
+                    executeMergeAggregated(pipeline, aggregate_final);
 
                 if (!aggregate_final)
-                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having, aggregate_overflow_row);
+                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having);
                 else if (expressions.has_having)
                     executeHaving(pipeline, expressions.before_having);
 
@@ -575,7 +573,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 need_second_distinct_pass = query.distinct && pipeline.hasMoreThanOneStream();
 
                 if (query.group_by_with_totals && !aggregate_final)
-                    executeTotalsAndHaving(pipeline, false, nullptr, aggregate_overflow_row);
+                    executeTotalsAndHaving(pipeline, false, nullptr);
             }
 
             if (expressions.has_order_by)
@@ -614,12 +612,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
               */
             if (need_second_distinct_pass)
                 executeDistinct(pipeline, false, expressions.selected_columns);
-
-            if (expressions.has_limit_by)
-            {
-                executeExpression(pipeline, expressions.before_limit_by);
-                executeLimitBy(pipeline);
-            }
 
             /** We must do projection after DISTINCT because projection may remove some columns.
               */
@@ -805,7 +797,8 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
-        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso);
+        auto scan_context = std::make_shared<DM::ScanContext>();
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso, scan_context);
 
         const String & request_str = settings.regions;
 
@@ -847,7 +840,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
             if (query_info.mvcc_query_info->regions_query_info.empty())
                 throw Exception("[InterpreterSelectQuery::executeFetchColumns] no region query", ErrorCodes::LOGICAL_ERROR);
-            query_info.mvcc_query_info->concurrent = 0.0;
         }
 
         /// PARTITION SELECT only supports MergeTree family now.
@@ -878,7 +870,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                     if (likely(!select_query->no_kvstore))
                     {
                         auto table_info = managed_storage->getTableInfo();
-                        learner_read_snapshot = doLearnerRead(table_info.id, *query_info.mvcc_query_info, max_streams, false, context, log);
+                        learner_read_snapshot = doLearnerRead(table_info.id, *query_info.mvcc_query_info, false, context, log);
                     }
                 }
             }
@@ -955,7 +947,7 @@ void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionA
 }
 
 
-void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool final)
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, /*req_id=*/"");
@@ -982,7 +974,8 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
-    Aggregator::Params params(header, keys, aggregates, overflow_row, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
+    SpillConfig spill_config(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider());
+    Aggregator::Params params(header, keys, aggregates, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, spill_config, settings.max_block_size);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
@@ -991,7 +984,6 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             pipeline.streams,
             pipeline.streams_with_non_joined_data,
             params,
-            file_provider,
             final,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads
@@ -1018,14 +1010,13 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, /*req_id=*/""),
             params,
-            file_provider,
             final,
             /*req_id=*/"");
     }
 }
 
 
-void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool final)
 {
     Names key_names;
     AggregateDescriptions aggregates;
@@ -1052,9 +1043,9 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool ov
       *  but it can work more slowly.
       */
 
-    Aggregator::Params params(header, keys, aggregates, overflow_row);
-
     const Settings & settings = context.getSettingsRef();
+
+    Aggregator::Params params(header, keys, aggregates, SpillConfig(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider()), settings.max_block_size);
 
     if (!settings.distributed_aggregation_memory_efficient)
     {
@@ -1087,7 +1078,7 @@ void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const Expression
 }
 
 
-void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression, bool overflow_row)
+void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression)
 {
     executeUnion(pipeline);
 
@@ -1095,11 +1086,9 @@ void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool ha
 
     pipeline.firstStream() = std::make_shared<TotalsHavingBlockInputStream>(
         pipeline.firstStream(),
-        overflow_row,
         expression,
         has_having ? query.having_expression->getColumnName() : "",
-        settings.totals_mode,
-        settings.totals_auto_threshold);
+        settings.totals_mode);
 }
 
 
@@ -1175,7 +1164,7 @@ void InterpreterSelectQuery::executeOrder(Pipeline & pipeline)
         settings.max_block_size,
         limit,
         settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
+        SpillConfig(context.getTemporaryPath(), "sort", settings.max_spilled_size_per_spill, context.getFileProvider()),
         /*req_id=*/"");
 }
 
@@ -1284,26 +1273,9 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     if (query.limit_length)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, 0, /*req_id=*/"", false);
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, /*req_id=*/"");
         });
     }
-}
-
-
-void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline) // NOLINT
-{
-    if (!query.limit_by_value || !query.limit_by_expression_list)
-        return;
-
-    Names columns;
-    for (const auto & elem : query.limit_by_expression_list->children)
-        columns.emplace_back(elem->getColumnName());
-
-    auto value = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*query.limit_by_value).value);
-
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<LimitByBlockInputStream>(stream, value, columns);
-    });
 }
 
 
@@ -1341,25 +1313,8 @@ void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
     /// If there is LIMIT
     if (query.limit_length)
     {
-        /** Rare case:
-          *  if there is no WITH TOTALS and there is a subquery in FROM, and there is WITH TOTALS on one of the levels,
-          *  then when using LIMIT, you should read the data to the end, rather than cancel the query earlier,
-          *  because if you cancel the query, we will not get `totals` data from the remote server.
-          *
-          * Another case:
-          *  if there is WITH TOTALS and there is no ORDER BY, then read the data to the end,
-          *  otherwise TOTALS is counted according to incomplete data.
-          */
-        bool always_read_till_end = false;
-
-        if (query.group_by_with_totals && !query.order_expression_list)
-            always_read_till_end = true;
-
-        if (!query.group_by_with_totals && hasWithTotalsInAnySubqueryInFromClause(query))
-            always_read_till_end = true;
-
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, limit_offset, /*req_id=*/"", always_read_till_end);
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, /*req_id=*/"");
         });
     }
 }

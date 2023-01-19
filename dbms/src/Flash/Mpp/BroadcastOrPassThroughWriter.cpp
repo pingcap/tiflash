@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
@@ -30,14 +31,13 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 {
     rows_in_blocks = 0;
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-    chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
 
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        encodeThenWriteBlocks();
+        writeBlocks();
 }
 
 template <class ExchangeWriterPtr>
@@ -54,27 +54,18 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        encodeThenWriteBlocks();
+        writeBlocks();
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
 {
     if (unlikely(blocks.empty()))
         return;
 
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-    while (!blocks.empty())
-    {
-        const auto & block = blocks.back();
-        chunk_codec_stream->encode(block, 0, block.rows());
-        blocks.pop_back();
-        tracked_packet->addChunk(chunk_codec_stream->getString());
-        chunk_codec_stream->clear();
-    }
-    assert(blocks.empty());
+    writer->broadcastOrPassThroughWrite(blocks);
+    blocks.clear();
     rows_in_blocks = 0;
-    writer->broadcastOrPassThroughWrite(std::move(tracked_packet));
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;
