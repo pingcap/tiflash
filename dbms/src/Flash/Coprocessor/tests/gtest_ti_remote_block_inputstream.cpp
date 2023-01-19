@@ -239,7 +239,7 @@ struct MockReceiverContext
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
-    void establishMPPConnectionLocal(const MockReceiverContext::Request &, size_t, LocalRequestHandler &, bool, std::function<void()> &&) {}
+    void establishMPPConnectionLocal(const MockReceiverContext::Request &, size_t, LocalRequestHandler &, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
