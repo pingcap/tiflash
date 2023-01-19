@@ -56,7 +56,7 @@ public:
     // only used for test to get the result blocks.
     void addGetResultSink(ResultHandler result_handler);
 
-    PipelineExecGroup toExecGroup(Context & context, size_t concurrency);
+    PipelineExecGroup toExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 

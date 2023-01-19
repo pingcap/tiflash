@@ -21,7 +21,7 @@
 
 namespace DB
 {
-class PipelineExecutorStatus
+class PipelineExecutorStatus : private boost::noncopyable
 {
 public:
     static constexpr auto empty_err_msg = "error without err msg";

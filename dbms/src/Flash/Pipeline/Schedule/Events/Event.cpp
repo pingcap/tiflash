@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
@@ -26,6 +27,11 @@ namespace DB
     {                                                    \
         toError(getCurrentExceptionMessage(true, true)); \
     }
+
+bool Event::isCancelled()
+{
+    return exec_status.isCancelled();
+}
 
 void Event::addInput(const EventPtr & input)
 {

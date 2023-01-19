@@ -36,10 +36,11 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
     sink_op = std::move(sink_op_);
 }
 
-PipelineExecPtr PipelineExecBuilder::build()
+PipelineExecPtr PipelineExecBuilder::build(PipelineExecutorStatus & exec_status)
 {
     assert(source_op && sink_op);
     return std::make_unique<PipelineExec>(
+        exec_status,
         std::move(source_op),
         std::move(transform_ops),
         std::move(sink_op));
@@ -66,12 +67,12 @@ void PipelineExecGroupBuilder::init(size_t init_concurrency)
     group.resize(concurrency);
 }
 
-PipelineExecGroup PipelineExecGroupBuilder::build()
+PipelineExecGroup PipelineExecGroupBuilder::build(PipelineExecutorStatus & exec_status)
 {
     assert(concurrency > 0);
     PipelineExecGroup pipeline_exec_group;
     for (auto & builder : group)
-        pipeline_exec_group.push_back(builder.build());
+        pipeline_exec_group.push_back(builder.build(exec_status));
     return pipeline_exec_group;
 }
 

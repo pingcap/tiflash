@@ -29,31 +29,32 @@ class PipelineExec
 {
 public:
     PipelineExec(
+        PipelineExecutorStatus & exec_status_,
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
         SinkOpPtr && sink_op_)
-        : source_op(std::move(source_op_))
+        : exec_status(exec_status_)
+        , source_op(std::move(source_op_))
         , transform_ops(std::move(transform_ops_))
         , sink_op(std::move(sink_op_))
     {}
 
-    OperatorStatus execute(PipelineExecutorStatus & exec_status);
+    OperatorStatus execute();
 
-    OperatorStatus await(PipelineExecutorStatus & exec_status);
+    OperatorStatus await();
 
-    OperatorStatus spill(PipelineExecutorStatus & exec_status);
+    OperatorStatus spill();
 
 private:
-    OperatorStatus executeImpl(PipelineExecutorStatus & exec_status);
+    OperatorStatus executeImpl();
 
-    OperatorStatus awaitImpl(PipelineExecutorStatus & exec_status);
+    OperatorStatus awaitImpl();
 
-    OperatorStatus spillImpl(PipelineExecutorStatus & exec_status);
+    OperatorStatus spillImpl();
 
     OperatorStatus fetchBlock(
         Block & block,
-        size_t & start_transform_op_index,
-        PipelineExecutorStatus & exec_status);
+        size_t & start_transform_op_index);
 
     template <typename Op>
     void setSpillingOpIfNeeded(OperatorStatus op_status, const Op & op)
@@ -67,6 +68,8 @@ private:
     }
 
 private:
+    PipelineExecutorStatus & exec_status;
+
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;

@@ -74,13 +74,13 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
     addPlanNode(get_result_sink);
 }
 
-PipelineExecGroup Pipeline::toExecGroup(Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::toExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
         plan_node->buildPipelineExec(builder, context, concurrency);
-    return builder.build();
+    return builder.build(exec_status);
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)

@@ -18,6 +18,8 @@
 
 namespace DB
 {
+class PipelineExecutorStatus;
+
 struct PipelineExecBuilder
 {
     SourceOpPtr source_op;
@@ -30,7 +32,7 @@ struct PipelineExecBuilder
 
     Block getHeader() const;
 
-    PipelineExecPtr build();
+    PipelineExecPtr build(PipelineExecutorStatus & exec_status);
 };
 
 struct PipelineExecGroupBuilder
@@ -54,7 +56,7 @@ struct PipelineExecGroupBuilder
         }
     }
 
-    PipelineExecGroup build();
+    PipelineExecGroup build(PipelineExecutorStatus & exec_status);
 
     Block getHeader();
 };

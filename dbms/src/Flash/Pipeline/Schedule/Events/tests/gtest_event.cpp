@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -22,30 +24,25 @@ namespace DB::tests
 {
 namespace
 {
-class BaseTask : public Task
+class BaseTask : public EventTask
 {
 public:
-    BaseTask(const EventPtr & event_, std::atomic_int64_t & counter_)
-        : Task(nullptr)
-        , event(event_)
+    BaseTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_,
+        std::atomic_int64_t & counter_)
+        : EventTask(nullptr, exec_status_, event_)
         , counter(counter_)
     {}
 
-    ~BaseTask()
-    {
-        event->onTaskFinish();
-        event.reset();
-    }
-
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus doExecuteImpl() override
     {
         --counter;
         return ExecTaskStatus::FINISHED;
     }
 
 private:
-    EventPtr event;
     std::atomic_int64_t & counter;
 };
 
@@ -67,7 +64,7 @@ protected:
     {
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<BaseTask>(shared_from_this(), counter));
+            tasks.push_back(std::make_unique<BaseTask>(getExecStatus(), shared_from_this(), counter));
         scheduleTasks(tasks);
         return false;
     }
@@ -81,22 +78,17 @@ private:
     std::atomic_int64_t & counter;
 };
 
-class RunTask : public Task
+class RunTask : public EventTask
 {
 public:
-    explicit RunTask(const EventPtr & event_)
-        : Task(nullptr)
-        , event(event_)
+    RunTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_)
+        : EventTask(nullptr, exec_status_, event_)
     {}
 
-    ~RunTask()
-    {
-        event->onTaskFinish();
-        event.reset();
-    }
-
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus doExecuteImpl() override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -104,7 +96,6 @@ protected:
     }
 
 private:
-    EventPtr event;
     int loop_count = 5;
 };
 
@@ -127,7 +118,7 @@ protected:
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<RunTask>(shared_from_this()));
+            tasks.push_back(std::make_unique<RunTask>(getExecStatus(), shared_from_this()));
         scheduleTasks(tasks);
         return false;
     }
@@ -136,33 +127,21 @@ private:
     bool with_tasks;
 };
 
-class WaitCancelTask : public Task
+class WaitCancelTask : public EventTask
 {
 public:
-    explicit WaitCancelTask(const EventPtr & event_)
-        : Task(nullptr)
-        , event(event_)
+    explicit WaitCancelTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_)
+        : EventTask(nullptr, exec_status_, event_)
     {}
 
-    ~WaitCancelTask()
-    {
-        event->onTaskFinish();
-        event.reset();
-    }
-
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus doExecuteImpl() override
     {
-        while (!event->isCancelled())
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            return ExecTaskStatus::RUNNING;
-        }
-        return ExecTaskStatus::CANCELLED;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        return ExecTaskStatus::RUNNING;
     }
-
-private:
-    EventPtr event;
 };
 
 class WaitCancelEvent : public Event
@@ -188,7 +167,7 @@ protected:
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<WaitCancelTask>(shared_from_this()));
+            tasks.push_back(std::make_unique<WaitCancelTask>(getExecStatus(), shared_from_this()));
         scheduleTasks(tasks);
         return false;
     }

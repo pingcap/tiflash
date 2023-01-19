@@ -18,13 +18,13 @@
 
 namespace DB
 {
-#define CHECK_IS_CANCELLED(exec_status)        \
-    if (unlikely((exec_status).isCancelled())) \
+#define CHECK_IS_CANCELLED                   \
+    if (unlikely(exec_status.isCancelled())) \
         return OperatorStatus::CANCELLED;
 
-OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::execute()
 {
-    auto op_status = executeImpl(exec_status);
+    auto op_status = executeImpl();
 #ifndef NDEBUG
     // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
@@ -38,11 +38,11 @@ OperatorStatus PipelineExec::execute(PipelineExecutorStatus & exec_status)
  *                                                          │ block
  *    write◄────transform◄─── ... ◄───transform◄────────────┘
  */
-OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::executeImpl()
 {
     Block block;
     size_t start_transform_op_index = 0;
-    auto op_status = fetchBlock(block, start_transform_op_index, exec_status);
+    auto op_status = fetchBlock(block, start_transform_op_index);
     // If the status `fetchBlock` returns isn't `HAS_OUTPUT`, it means that `fetchBlock` did not return a block.
     if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
@@ -50,7 +50,7 @@ OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
     // start from the next transform after fetched block transform.
     for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
-        CHECK_IS_CANCELLED(exec_status);
+        CHECK_IS_CANCELLED;
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
         if (op_status != OperatorStatus::HAS_OUTPUT)
@@ -59,7 +59,7 @@ OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
             return op_status;
         }
     }
-    CHECK_IS_CANCELLED(exec_status);
+    CHECK_IS_CANCELLED;
     op_status = sink_op->write(std::move(block));
     setSpillingOpIfNeeded(op_status, sink_op);
     return op_status;
@@ -68,10 +68,9 @@ OperatorStatus PipelineExec::executeImpl(PipelineExecutorStatus & exec_status)
 // try fetch block from transform_ops and source_op.
 OperatorStatus PipelineExec::fetchBlock(
     Block & block,
-    size_t & start_transform_op_index,
-    PipelineExecutorStatus & exec_status)
+    size_t & start_transform_op_index)
 {
-    CHECK_IS_CANCELLED(exec_status);
+    CHECK_IS_CANCELLED;
     auto op_status = sink_op->prepare();
     if (op_status != OperatorStatus::NEED_INPUT)
     {
@@ -80,7 +79,7 @@ OperatorStatus PipelineExec::fetchBlock(
     }
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
-        CHECK_IS_CANCELLED(exec_status);
+        CHECK_IS_CANCELLED;
         const auto & transform_op = transform_ops[index];
         op_status = transform_op->tryOutput(block);
         if (op_status != OperatorStatus::NEED_INPUT)
@@ -91,25 +90,25 @@ OperatorStatus PipelineExec::fetchBlock(
             return op_status;
         }
     }
-    CHECK_IS_CANCELLED(exec_status);
+    CHECK_IS_CANCELLED;
     start_transform_op_index = 0;
     op_status = source_op->read(block);
     setSpillingOpIfNeeded(op_status, source_op);
     return op_status;
 }
 
-OperatorStatus PipelineExec::await(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::await()
 {
-    auto op_status = awaitImpl(exec_status);
+    auto op_status = awaitImpl();
 #ifndef NDEBUG
     // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
     return op_status;
 }
-OperatorStatus PipelineExec::awaitImpl(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::awaitImpl()
 {
-    CHECK_IS_CANCELLED(exec_status);
+    CHECK_IS_CANCELLED;
 
     auto op_status = sink_op->await();
     if (op_status != OperatorStatus::NEED_INPUT)
@@ -133,9 +132,9 @@ OperatorStatus PipelineExec::awaitImpl(PipelineExecutorStatus & exec_status)
     return op_status;
 }
 
-OperatorStatus PipelineExec::spill(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::spill()
 {
-    auto op_status = spillImpl(exec_status);
+    auto op_status = spillImpl();
 #ifndef NDEBUG
     // - `NEED_INPUT` means that pipeline_exec need data to spill.
     // - `HAS_OUTPUT` means that pipeline_exec has restored data, and ready for ouput.
@@ -143,9 +142,9 @@ OperatorStatus PipelineExec::spill(PipelineExecutorStatus & exec_status)
 #endif
     return op_status;
 }
-OperatorStatus PipelineExec::spillImpl(PipelineExecutorStatus & exec_status)
+OperatorStatus PipelineExec::spillImpl()
 {
-    CHECK_IS_CANCELLED(exec_status);
+    CHECK_IS_CANCELLED;
 
     assert(spilling_op);
     assert(*spilling_op);

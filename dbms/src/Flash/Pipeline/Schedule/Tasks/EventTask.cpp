@@ -12,32 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 
 namespace DB
 {
-class PipelineTask : public EventTask
+EventTask::EventTask(
+    MemoryTrackerPtr mem_tracker_, 
+    PipelineExecutorStatus & exec_status_,
+    const EventPtr & event_)
+    : Task(std::move(mem_tracker_))
+    , exec_status(exec_status_)
+    , event(event_)
 {
-public:
-    PipelineTask(
-        MemoryTrackerPtr mem_tracker_,
-        PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_,
-        PipelineExecPtr && pipeline_exec_);
+    assert(event);
+}
 
-protected:
-    ExecTaskStatus doExecuteImpl() override;
+EventTask::~EventTask()
+{
+    assert(event);
+    event->onTaskFinish();
+    event.reset();
+}
 
-    ExecTaskStatus doAwaitImpl() override;
+ExecTaskStatus EventTask::executeImpl()
+{
+    return doTaskAction([&] { return doExecuteImpl(); });
+}
 
-    ExecTaskStatus doSpillImpl() override;
+ExecTaskStatus EventTask::awaitImpl()
+{
+    return doTaskAction([&] { return doAwaitImpl(); });
+}
 
-    void finalize() override;
+ExecTaskStatus EventTask::spillImpl()
+{
+    return doTaskAction([&] { return doSpillImpl(); });
+}
 
-private:
-    PipelineExecPtr pipeline_exec;
-};
 } // namespace DB

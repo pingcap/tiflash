@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <atomic>
@@ -34,6 +33,8 @@ enum class EventStatus
 class Event;
 using EventPtr = std::shared_ptr<Event>;
 using Events = std::vector<EventPtr>;
+
+class PipelineExecutorStatus;
 
 class Event : public std::enable_shared_from_this<Event>
 {
@@ -54,14 +55,7 @@ public:
 
     bool withoutInput();
 
-    bool isCancelled()
-    {
-        return exec_status.isCancelled();
-    }
-
     void toError(std::string && err_msg);
-
-    PipelineExecutorStatus & getExecStatus() { return exec_status; }
 
 protected:
     // Returns true meaning no task is scheduled.
@@ -72,6 +66,10 @@ protected:
     virtual void finishImpl() {}
 
     void scheduleTasks(std::vector<TaskPtr> & tasks);
+
+    bool isCancelled();
+
+    PipelineExecutorStatus & getExecStatus() { return exec_status; }
 
 private:
     void finish() noexcept;

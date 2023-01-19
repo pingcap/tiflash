@@ -47,7 +47,10 @@ public:
                                      toNullableVec<Int64>("s4", {1, 1, {}})});
     }
 
-    std::pair<PhysicalPlanNodePtr, PipelineExecPtr> build(const std::shared_ptr<tipb::DAGRequest> & request, ResultHandler result_handler)
+    std::pair<PhysicalPlanNodePtr, PipelineExecPtr> build(
+        const std::shared_ptr<tipb::DAGRequest> & request, 
+        ResultHandler result_handler, 
+        PipelineExecutorStatus & exec_status)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
         context.context.setDAGContext(&dag_context);
@@ -63,7 +66,7 @@ public:
             assert(plan);
             plan->buildPipelineExec(group_builder, context.context, /*concurrency=*/1);
         });
-        auto result = group_builder.build();
+        auto result = group_builder.build(exec_status);
         assert(result.size() == 1);
         return {std::move(plan_tree), std::move(result.back())};
     }
@@ -76,9 +79,9 @@ public:
         ResultHandler result_handler{[&blocks](const Block & block) {
             blocks.push_back(block);
         }};
-        auto [plan, op_pipeline] = build(request, result_handler);
         PipelineExecutorStatus exec_status;
-        while (op_pipeline->execute(exec_status) != OperatorStatus::FINISHED)
+        auto [plan, op_pipeline] = build(request, result_handler, exec_status);
+        while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
         }
         ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
@@ -96,10 +99,10 @@ try
 
     ResultHandler result_handler{[](const Block &) {
     }};
-    auto [_, op_pipeline] = build(request, result_handler);
     PipelineExecutorStatus exec_status;
+    auto [_, op_pipeline] = build(request, result_handler, exec_status);
     exec_status.cancel();
-    ASSERT_EQ(op_pipeline->execute(exec_status), OperatorStatus::CANCELLED);
+    ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
 }
 CATCH
 
