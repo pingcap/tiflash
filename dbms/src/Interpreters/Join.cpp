@@ -976,7 +976,14 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     if (!isCrossJoin(kind))
     {
         /// Fill the hash table.
-        if (getFullness(kind) || isNullAwareSemiFamily(kind))
+        if (isNullAwareSemiFamily(kind))
+        {
+            if (strictness == ASTTableJoin::Strictness::Any)
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index], enable_fine_grained_shuffle);
+            else
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index], enable_fine_grained_shuffle);
+        }
+        else if (getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
                 insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index], enable_fine_grained_shuffle);
@@ -2044,6 +2051,7 @@ public:
 
     void setResult(bool res)
     {
+        has_result = true;
         result = std::make_pair(false, res);
     }
 
@@ -2099,7 +2107,7 @@ public:
                         break;
                     }
                     null_pos += 1;
-                    null_list = null_lists[null_pos - 1].get();
+                    null_list = null_lists[null_pos - 1]->next;
                 }
                 if (to_end)
                     break;
@@ -2460,14 +2468,14 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
             other_condition_ptr->execute(exec_block);
 
-            auto eq_column = block.getByName(null_aware_eq_condition_column).column;
+            auto eq_column = exec_block.getByName(null_aware_eq_condition_column).column;
             if (eq_column->isColumnConst())
                 eq_column = eq_column->convertToFullColumnIfConst();
             if (eq_column->isColumnNullable())
             {
-                const auto * nullable_column = checkAndGetColumn<ColumnNullable>(eq_column.get());
-                const auto & eq_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
-                ConstNullMapPtr eq_null_map = &nullable_column->getNullMapData();
+                const auto * nullable_eq_column = checkAndGetColumn<ColumnNullable>(eq_column.get());
+                const auto & eq_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_eq_column->getNestedColumnPtr().get())->getData();
+                ConstNullMapPtr eq_null_map = &nullable_eq_column->getNullMapData();
                 if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
                 {
                     auto it = helpers_list.begin();
@@ -2483,14 +2491,14 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 }
                 else
                 {
-                    auto other_column = block.getByName(other_filter_column).column;
+                    auto other_column = exec_block.getByName(other_filter_column).column;
                     if (other_column->isColumnConst())
-                        other_column = eq_column->convertToFullColumnIfConst();
+                        other_column = other_column->convertToFullColumnIfConst();
                     if (other_column->isColumnNullable())
                     {
                         const auto * nullable_other_column = checkAndGetColumn<ColumnNullable>(other_column.get());
                         const auto & other_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())->getData();
-                        ConstNullMapPtr other_null_map = &nullable_column->getNullMapData();
+                        ConstNullMapPtr other_null_map = &nullable_other_column->getNullMapData();
                         auto it = helpers_list.begin();
                         while (it != helper_it)
                         {
@@ -2806,14 +2814,14 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
         joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::All>(block, maps_all);
     else if (kind == ASTTableJoin::Kind::NullAware_Anti && strictness == ASTTableJoin::Strictness::Any)
         joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::Any>(block, maps_any);
-    else if (kind == ASTTableJoin::Kind::NullAware_LeftSemi && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any);
     else if (kind == ASTTableJoin::Kind::NullAware_LeftSemi && strictness == ASTTableJoin::Strictness::All)
         joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::All>(block, maps_all);
-    else if (kind == ASTTableJoin::Kind::NullAware_LeftAnti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::Any>(block, maps_any);
+    else if (kind == ASTTableJoin::Kind::NullAware_LeftSemi && strictness == ASTTableJoin::Strictness::Any)
+        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any);
     else if (kind == ASTTableJoin::Kind::NullAware_LeftAnti && strictness == ASTTableJoin::Strictness::All)
         joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::All>(block, maps_all);
+    else if (kind == ASTTableJoin::Kind::NullAware_LeftAnti && strictness == ASTTableJoin::Strictness::Any)
+        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::Any>(block, maps_any);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 

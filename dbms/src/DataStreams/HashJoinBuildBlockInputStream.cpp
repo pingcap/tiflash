@@ -42,7 +42,11 @@ void HashJoinBuildBlockInputStream::appendInfo(FmtBuffer & buffer) const
         {ASTTableJoin::Kind::Cross_Right, "Cross_Right"},
         {ASTTableJoin::Kind::Cross_Anti, "Cross_Anti"},
         {ASTTableJoin::Kind::Cross_LeftSemi, "Cross_LeftSemi"},
-        {ASTTableJoin::Kind::Cross_LeftAnti, "Cross_LeftAnti"}};
+        {ASTTableJoin::Kind::Cross_LeftAnti, "Cross_LeftAnti"},
+        {ASTTableJoin::Kind::NullAware_Anti, "NullAware_Anti"},
+        {ASTTableJoin::Kind::NullAware_LeftSemi, "NullAware_LeftSemi"},
+        {ASTTableJoin::Kind::NullAware_LeftAnti, "NullAware_LeftAnti"},
+    };
     auto join_type_it = join_type_map.find(join->getKind());
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);

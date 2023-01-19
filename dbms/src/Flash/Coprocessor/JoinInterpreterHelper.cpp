@@ -368,7 +368,7 @@ std::tuple<ExpressionActionsPtr, String, String, String> TiFlashJoin::genJoinOth
     return doGenJoinOtherConditionAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
 }
 
-std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
+std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const Context & context,
     const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -383,9 +383,10 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
     Names key_names;
+    Names original_key_names;
     String filter_column_name;
-    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, left, is_right_out_join, filters, filter_column_name);
-    return {chain.getLastActions(), std::move(key_names), std::move(filter_column_name)};
+    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, original_key_names, left, is_right_out_join, filters, filter_column_name);
+    return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
 }
 } // namespace JoinInterpreterHelper
 } // namespace DB

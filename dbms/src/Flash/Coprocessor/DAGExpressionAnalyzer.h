@@ -156,6 +156,7 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const JoinKeyTypes & join_key_types,
         Names & key_names,
+        Names & original_key_names,
         bool left,
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
@@ -288,7 +289,7 @@ private:
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const ColumnInfos & table_scan_columns);
 
-    std::pair<bool, Names> buildJoinKey(
+    std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const JoinKeyTypes & join_key_types,
