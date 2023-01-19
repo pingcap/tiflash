@@ -190,7 +190,7 @@ private:
     std::condition_variable cv;
     /// should lock `mu` when visit these members
     Int32 live_connections;
-    bool is_local_conn_alive;
+    Int32 live_local_connections;
     ExchangeReceiverState state;
     String err_msg;
 

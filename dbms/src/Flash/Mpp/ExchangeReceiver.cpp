@@ -316,7 +316,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
     , live_connections(0)
-    , is_local_conn_alive(false)
+    , live_local_connections(0)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -361,7 +361,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     {
         std::lock_guard lock(mu);
         RUNTIME_ASSERT(live_connections == 0, "We should wait the close of all connections");
-        RUNTIME_ASSERT(!is_local_conn_alive, "We should wait the close of local connection");
+        RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
 }
@@ -387,7 +387,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone(std::unique_lock<std::mutex> & lock)
 {
     auto pred = [&] {
-        return !is_local_conn_alive;
+        return live_local_connections == 0;
     };
     cv.wait(lock, pred);
 }
@@ -424,9 +424,8 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
-    RUNTIME_ASSERT(!is_local_conn_alive, "is_local_conn_alive should only be set once");
     ++live_connections;
-    is_local_conn_alive = true;
+    ++live_local_connections;
 }
 
 template <typename RPCContext>
@@ -831,8 +830,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 {
     std::lock_guard lock(mu);
-    RUNTIME_ASSERT(is_local_conn_alive, "is_local_conn_alive should be true");
-    is_local_conn_alive = false;
+    --live_local_connections;
     cv.notify_all();
 }
 
