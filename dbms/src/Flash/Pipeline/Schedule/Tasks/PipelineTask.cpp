@@ -71,9 +71,13 @@ PipelineTask::~PipelineTask()
 
 #define HANDLE_SPILLING_AND_WAITING_STATUS \
     case OperatorStatus::WAITING:          \
+    {                                      \
         return ExecTaskStatus::WAITING;    \
+    }                                      \
     case OperatorStatus::SPILLING:         \
-        return ExecTaskStatus::SPILLING;
+    {                                      \
+        return ExecTaskStatus::SPILLING;   \
+    }
 
 #define UNEXPECTED_OP_STATUS(op_status, function_name) \
     throw Exception(fmt::format("Unexpected op state {} at {}", magic_enum::enum_name(op_status), (function_name)));
