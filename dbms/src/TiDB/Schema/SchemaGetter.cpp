@@ -156,7 +156,8 @@ void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
 void SchemaDiff::deserialize(const String & data)
 {
     Poco::JSON::Parser parser;
-    try {
+    try
+    {
         Poco::Dynamic::Var result = parser.parse(data);
         if (result.isEmpty())
         {
@@ -184,7 +185,9 @@ void SchemaDiff::deserialize(const String & data)
                 affected_opts.emplace_back(affected_option);
             }
         }
-    } catch (...) {
+    }
+    catch (...)
+    {
         LOG_INFO(&Poco::Logger::get("SchemaDiff"), "failed to deserialize {}", data);
         throw;
     }
