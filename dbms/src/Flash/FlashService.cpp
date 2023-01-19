@@ -197,6 +197,10 @@ grpc::Status FlashService::Coprocessor(
         return check_result;
 
     auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
     auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
     return ::grpc::Status::OK;
@@ -359,9 +363,17 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
 grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const
 {
     // For coprocessor/mpp test, we don't care about security config.
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        auto err = std::make_unique<mpp::Error>();
+        err->set_msg("error status");
+        response->set_allocated_error(err.release());
+        return status;
+    }
     if likely (!context->isMPPTest() && !context->isCopTest())
     {
-        if (!security_config->checkGrpcContext(grpc_context))
+        if (!security_config.checkGrpcContext(grpc_context))
         {
             return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
         }
