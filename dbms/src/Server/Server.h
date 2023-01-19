@@ -15,7 +15,7 @@
 #pragma once
 
 #include <daemon/BaseDaemon.h>
-#include <IServer.h>
+#include <Server/IServer.h>
 #include <Server/ServerInfo.h>
 
 
