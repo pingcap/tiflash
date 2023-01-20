@@ -177,6 +177,9 @@ void SchemaDiff::deserialize(const String & data)
             regenerate_schema_map = obj->getValue<bool>("regenerate_schema_map");
         }
 
+        // Note If you want to add new fields here, please firstly check if it is present.
+        // Otherwise it will break when doing upgrading test.
+
         affected_opts.clear();
         auto affected_arr = obj->getArray("affected_options");
         if (!affected_arr.isNull())
