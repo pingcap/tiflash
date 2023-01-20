@@ -1586,6 +1586,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
             if (ColumnPtr converted = col->convertToFullColumnIfConst())
                 col = converted;
 
+            /// convert left columns (except keys) to Nullable
             if (std::end(key_names_left) == std::find(key_names_left.begin(), key_names_left.end(), block.getByPosition(i).name))
                 convertColumnToNullable(block.getByPosition(i));
         }
