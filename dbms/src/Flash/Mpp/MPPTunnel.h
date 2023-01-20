@@ -265,13 +265,18 @@ public:
         , local_request_handler(local_request_handler_)
         , is_done(false)
     {
-        add_local_conn_num();
+        local_request_handler.setAlive();
     }
 
     ~LocalTunnelSender() override
     {
         RUNTIME_ASSERT(is_done, "Local tunnel is destructed before called by cancel() or finish()");
-        closeLocalConnection();
+
+        // It should only be called in the destructor.
+        //
+        // This function is used to hold the destruction of receiver so that the push operation
+        // of local tunnel is always valid(valid means pushing data to an alive reveiver).
+        local_request_handler.closeConnection();
     }
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -289,12 +294,12 @@ public:
 
     void cancelWith(const String & reason) override
     {
-        prepareToCloseLocalTunnel(true, reason);
+        finishWrite(true, reason);
     }
 
     bool finish() override
     {
-        prepareToCloseLocalTunnel(false, "");
+        finishWrite(false, "");
         return true;
     }
 
@@ -305,7 +310,7 @@ private:
     {
         if (packet->hasError())
         {
-            prepareToCloseLocalTunnel(true, packet->error());
+            finishWrite(true, packet->error());
             return true;
         }
         return false;
@@ -313,7 +318,7 @@ private:
 
     // Need to tell receiver that the local tunnel will be closed and the receiver should
     // close channels otherwise the MPPTask may hang.
-    void prepareToCloseLocalTunnel(bool meet_error, const String & local_err_msg)
+    void finishWrite(bool meet_error, const String & local_err_msg)
     {
         bool expect = false;
         if (is_done.compare_exchange_strong(expect, true))

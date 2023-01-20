@@ -148,8 +148,6 @@ private:
         const String & local_err_msg,
         const LoggerPtr & log);
 
-    void connectionLocalDone();
-
     void waitAllConnectionDone();
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
 
@@ -174,6 +172,8 @@ private:
     void setUpLocalConnection(const Request & req);
     void setUpSyncConnection(Request && req);
     void setUpAsyncConnection(std::vector<Request> && async_requests);
+
+    void connectionLocalDone();
 
     bool isReceiverForTiFlashStorage()
     {

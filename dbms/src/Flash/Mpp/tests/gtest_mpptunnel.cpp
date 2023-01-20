@@ -197,6 +197,7 @@ public:
                 [this]() {
                     this->connectionLocalDone();
                 },
+                []() {},
                 ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
             tunnel->connectLocal(0, local_request_handler, false, [this] {
                 addLocalConnectionNum();
@@ -654,6 +655,7 @@ try
         nullptr,
         [](bool, const String &) {},
         []() {},
+        []() {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
     tunnels[0]->connectLocal(0, local_req_handler, false, []() {});
     GTEST_FAIL();
@@ -671,6 +673,7 @@ try
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
+        []() {},
         []() {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
     tunnels[0]->connectLocal(0, local_req_handler, false, []() {});

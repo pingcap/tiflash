@@ -104,7 +104,9 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     }
     catch (...)
     {
+        std::lock_guard lock(mu);
         RUNTIME_ASSERT(live_connections == 0, "We should wait the close of all connections");
+        RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
 }
@@ -218,6 +220,9 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnection(const Request & req)
         [this]() {
             this->connectionLocalDone();
         },
+        [this]() {
+            this->addLocalConnectionNum();
+        },
         ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
     rpc_context->establishMPPConnectionLocal(
@@ -241,6 +246,37 @@ void ExchangeReceiverBase<RPCContext>::setUpSyncConnection(Request && req)
     });
     ++thread_count;
 }
+    //         LocalRequestHandler local_request_handler(
+    //             getMemoryTracker(),
+    //             [this](bool meet_error, const String & local_err_msg) {
+    //                 this->connectionDone(meet_error, local_err_msg, exc_log);
+    //             },
+    //             [this]() {
+    //                 this->connectionLocalDone();
+    //             },
+    //             [this]() {
+    //                 this->addLocalConnectionNum();
+    //             },
+    //             ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+
+    //         rpc_context->establishMPPConnectionLocal(
+    //             req,
+    //             req.source_index,
+    //             local_request_handler,
+    //             enable_fine_grained_shuffle_flag);
+    //     }
+    //     else
+    //     {
+    //         thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
+    //             if (enable_fine_grained_shuffle_flag)
+    //                 readLoop<true>(req);
+    //             else
+    //                 readLoop<false>(req);
+    //         });
+
+    //         ++thread_count;
+    //     }
+    // }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request> && async_requests)
