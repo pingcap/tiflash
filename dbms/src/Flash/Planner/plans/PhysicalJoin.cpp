@@ -229,10 +229,10 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
         probeSideTransform(probe_pipeline, context);
     }
 
-    doSchemaProject(pipeline, context);
+    doSchemaProject(pipeline);
 }
 
-void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline, Context & context)
+void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
 {
     /// add a project to remove all the useless column
     NamesWithAliases schema_project_cols;
@@ -243,7 +243,7 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline, Context & context)
         schema_project_cols.emplace_back(c.name, c.name);
     }
     assert(!schema_project_cols.empty());
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
+    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
     assert(schema_project && !schema_project->getActions().empty());
     executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }

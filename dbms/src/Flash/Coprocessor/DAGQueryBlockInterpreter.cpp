@@ -702,7 +702,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 {
     if (project_cols.empty())
         return;
-    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
+    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), project_cols);
     executeExpression(pipeline, project, log, extra_info);
 }
 

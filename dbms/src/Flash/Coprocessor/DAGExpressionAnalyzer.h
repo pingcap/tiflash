@@ -333,7 +333,6 @@ private:
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     const Context & context;
-    Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
 };

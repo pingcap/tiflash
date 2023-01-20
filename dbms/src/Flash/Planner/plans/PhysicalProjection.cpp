@@ -35,7 +35,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
     assert(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
     NamesAndTypes schema;
     for (const auto & expr : projection.exprs())
@@ -64,7 +64,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     assert(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
     auto final_project_aliases = analyzer.genNonRootFinalProjectAliases(column_prefix);
     project_actions->add(ExpressionAction::project(final_project_aliases));
 
@@ -101,7 +101,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     assert(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
     NamesWithAliases final_project_aliases = analyzer.buildFinalProjection(
         project_actions,
