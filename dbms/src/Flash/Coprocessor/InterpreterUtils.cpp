@@ -187,7 +187,7 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     assert(push_down_filter.hasValue());
 
     ExpressionActionsChain chain;
-    analyzer.initChain(chain, analyzer.getCurrentInputColumns());
+    analyzer.initChain(chain);
     String filter_column_name = analyzer.appendWhere(chain, push_down_filter.conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();

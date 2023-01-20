@@ -212,9 +212,9 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     if (!has_need_cast_column)
         return {false, nullptr, nullptr};
 
-    auto original_source_columns = analyzer.getCurrentInputColumns();
     ExpressionActionsChain chain;
-    analyzer.initChain(chain, original_source_columns);
+    analyzer.initChain(chain);
+    auto original_source_columns = analyzer.getCurrentInputColumns();
     // execute timezone cast or duration cast if needed for local table scan
     if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
     {

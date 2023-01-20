@@ -194,7 +194,7 @@ void appendWindowDescription(
 
 ExpressionActionsChain::Step & DAGExpressionAnalyzer::initAndGetLastStep(ExpressionActionsChain & chain) const
 {
-    initChain(chain, getCurrentInputColumns());
+    initChain(chain);
     return chain.getLastStep();
 }
 
@@ -985,7 +985,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
 {
-    initChain(chain, getCurrentInputColumns());
+    initChain(chain);
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
@@ -1297,10 +1297,11 @@ String DAGExpressionAnalyzer::alignReturnType(
     return updated_name;
 }
 
-void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
+void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain) const
 {
     if (chain.steps.empty())
     {
+        const auto & columns = getCurrentInputColumns();
         NamesAndTypesList column_list;
         std::unordered_set<String> column_name_set;
         for (const auto & col : columns)

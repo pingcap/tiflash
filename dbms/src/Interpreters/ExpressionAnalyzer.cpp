@@ -2129,7 +2129,7 @@ void ExpressionAnalyzer::assertAggregation() const
         throw Exception("No aggregation", ErrorCodes::LOGICAL_ERROR);
 }
 
-void ExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const
+void ExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns)
 {
     if (chain.steps.empty())
     {

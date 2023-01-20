@@ -94,9 +94,7 @@ public:
     SortDescription getWindowSortDescription(
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
 
-    void initChain(
-        ExpressionActionsChain & chain,
-        const std::vector<NameAndTypePair> & columns) const;
+    void initChain(ExpressionActionsChain & chain) const;
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
