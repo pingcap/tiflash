@@ -98,6 +98,7 @@ public:
         , req_info(req_info_)
         , log(log_)
         , mode(mode_)
+        , tag(nullptr)
     {}
 
     // "write" means writing the packet to the channel which is a MPMCQueue.
@@ -111,12 +112,20 @@ public:
     template <bool enable_fine_grained_shuffle>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
+    template <bool enable_fine_grained_shuffle>
+    GRPCReceiveQueueRes tryWrite(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+
+    template <bool enable_fine_grained_shuffle>
+    GRPCReceiveQueueRes tryReWrite();
+
 private:
     bool splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
 
+    // We must call this function before calling tryWrite().
     template <typename AsyncReader>
-    void createGRPCReceiveQueues(const std::shared_ptr<AsyncReader> & reader)
+    void enableTryWriteMode(const std::shared_ptr<AsyncReader> & reader, void * tag_)
     {
+        tag = tag_;
         for (auto & channel_ptr : *msg_channels)
             grpc_recv_queues.emplace_back(channel_ptr, reader->client_context.c_call(), log);
     }
@@ -138,11 +147,22 @@ private:
     bool writeFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
     bool writeNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
 
+    GRPCReceiveQueueRes tryWriteFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
+    GRPCReceiveQueueRes tryWriteNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
+
+    GRPCReceiveQueueRes tryWrite(size_t index, std::shared_ptr<ReceivedMessage> && msg);
+
     std::atomic<Int64> * data_size_in_queue;
     std::vector<MsgChannelPtr> * msg_channels;
-    std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queues;
     String req_info;
     const LoggerPtr log;
     ReceiverMode mode;
+    std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queues;
+
+    // This tag is used for tryWrite
+    void * tag;
+
+    // Push data may fail, so we need to save the message and re-push it at the proper time.
+    std::pair<size_t, std::shared_ptr<ReceivedMessage>> rewrite_msg;
 };
 } // namespace DB

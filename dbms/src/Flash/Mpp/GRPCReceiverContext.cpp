@@ -279,14 +279,13 @@ void GRPCReceiverContext::establishMPPConnectionLocal(
     const ExchangeRecvRequest & request,
     size_t source_index,
     LocalRequestHandler & local_request_handler,
-    bool is_fine_grained,
-    std::function<void()> && add_local_conn_num)
+    bool is_fine_grained)
 {
     RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
-    tunnel->connectLocal(source_index, local_request_handler, is_fine_grained, std::move(add_local_conn_num));
+    tunnel->connectLocal(source_index, local_request_handler, is_fine_grained);
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const

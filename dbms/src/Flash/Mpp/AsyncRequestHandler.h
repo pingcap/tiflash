@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
@@ -28,6 +30,7 @@ enum class AsyncRequestStage
     WAIT_READ,
     WAIT_FINISH,
     WAIT_RETRY,
+    WAIT_REWRITE,
     FINISHED,
 };
 
@@ -51,20 +54,22 @@ public:
         Request && req,
         const String & req_id,
         std::atomic<Int64> * data_size_in_queue,
-        std::function<void()> && add_live_conn)
+        std::function<void()> && add_live_conn,
+        std::function<void(bool, const String &, const LoggerPtr &)> && close_conn_)
         : rpc_context(context)
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(std::move(req))
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , meet_error(false)
         , has_data(false)
         , retry_times(0)
         , stage(AsyncRequestStage::NEED_INIT)
         , finish_status(RPCContext::getStatusOK())
         , log(Logger::get(req_id, req_info))
         , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ReceiverMode::Async)
+        , close_conn(std::move(close_conn_))
     {
-        packet = std::make_shared<TrackedMppDataPacket>();
+        // TODO create ReceiverChannelWriter
+        // TODO handle the full situation
         add_live_conn();
         start();
     }
@@ -83,6 +88,9 @@ public:
         case AsyncRequestStage::WAIT_READ:
             processWaitRead(ok);
             break;
+        case AsyncRequestStage::WAIT_REWRITE:
+            // TODO re-write
+            break;
         case AsyncRequestStage::WAIT_FINISH:
             processWaitFinish();
             break;
@@ -90,61 +98,6 @@ public:
             __builtin_unreachable();
         }
     }
-
-    // TODO remove it
-    // handle will be called by ExchangeReceiver::reactor.
-    // void handle()
-    // {
-    //     std::string err_info;
-    //     LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
-    //     switch (stage)
-    //     {
-    //     case AsyncRequestStage::WAIT_READ:
-    //         LOG_TRACE(log, "Received {} packets.", read_packet_index);
-    //         if (read_packet_index > 0)
-    //             has_data = true;
-    //         if (auto error_message = getErrorFromPackets(); !error_message.empty())
-    //             setDone(fmt::format("Exchange receiver meet error : {}", error_message));
-    //         else if (!sendPackets())
-    //             setDone("Exchange receiver meet error : push packets fail");
-    //         else if (read_packet_index < batch_packet_count)
-    //         {
-    //             stage = AsyncRequestStage::WAIT_FINISH;
-    //             reader->finish(finish_status, thisAsUnaryCallback());
-    //         }
-    //         else
-    //         {
-    //             read_packet_index = 0;
-    //             reader->read(packets[0], thisAsUnaryCallback());
-    //         }
-    //         break;
-    //     case AsyncRequestStage::WAIT_FINISH:
-    //         if (finish_status.ok())
-    //             setDone("");
-    //         else
-    //         {
-    //             LOG_WARNING(
-    //                 log,
-    //                 "Finish fail. err code: {}, err msg: {}, retry time {}",
-    //                 finish_status.error_code(),
-    //                 finish_status.error_message(),
-    //                 retry_times);
-    //             retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
-    //         }
-    //         break;
-    //     default:
-    //         __builtin_unreachable();
-    //     }
-    // }
-
-    bool finished() const
-    {
-        return stage == AsyncRequestStage::FINISHED;
-    }
-
-    bool meetError() const { return meet_error; }
-    const String & getErrMsg() const { return err_msg; }
-    const LoggerPtr & getLog() const { return log; }
 
 private:
     void processWaitMakeReader(bool ok)
@@ -160,13 +113,13 @@ private:
         else
         {
             stage = AsyncRequestStage::WAIT_READ;
-            reader->read(packet, thisAsUnaryCallback());
+            read();
         }
     }
 
     void processWaitRead(bool ok)
     {
-        if (!ok)
+        if (unlikely(!ok))
         {
             stage = AsyncRequestStage::WAIT_FINISH;
             reader->finish(finish_status, thisAsUnaryCallback());
@@ -177,39 +130,48 @@ private:
 
         if (auto error_message = getErrorFromPacket(); unlikely(!error_message.empty()))
         {
-            setDone(fmt::format("Exchange receiver meet error : {}", error_message));
+            closeConnection(fmt::format("Exchange receiver meet error : {}", error_message));
             return;
         }
 
         // TODO write here
         if (unlikely(!sendPacket()))
         {
-            setDone("Exchange receiver meet error : push packets fail");
+            closeConnection("Exchange receiver meet error : push packets fail");
             return;
         }
 
-        reader->read(packet, thisAsUnaryCallback());
-        // TODO remove it
-        // if (!ok packets[read_packet_index - 1]->hasError())
-        //     notifyReactor();
-        // else
-        //     reader->read(packets[read_packet_index], thisAsUnaryCallback());
+        read();
     }
 
     void processWaitFinish()
     {
-        if (finish_status.ok())
-            setDone("");
+        if (likely(finish_status.ok()))
+            closeConnection("");
         else
         {
-            LOG_WARNING(
-                log,
-                "Finish fail. err code: {}, err msg: {}, retry time {}",
-                finish_status.error_code(),
-                finish_status.error_message(),
-                retry_times);
-            retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
+            // As AsyncRequestHandler may have been destructed after close_conn is called;
+            // we need to copy some data for LOG_WARNING after a while.
+            LoggerPtr copy_log = log;
+            Status copy_finish_status = finish_status;
+            int copy_retry_times = retry_times;
+
+            if (!retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message())))
+            {
+                LOG_WARNING(
+                    copy_log,
+                    "Finish fail. err code: {}, err msg: {}, retry time {}",
+                    copy_finish_status.error_code(),
+                    copy_finish_status.error_message(),
+                    copy_retry_times);
+            }
         }
+    }
+
+    void read()
+    {
+        packet = std::make_shared<TrackedMppDataPacket>();
+        reader->read(packet, thisAsUnaryCallback());
     }
 
     String getErrorFromPacket()
@@ -221,18 +183,6 @@ private:
         if (unlikely(packet->hasError()))
             return packet->error();
 
-        // TODO remove it
-        // // step 1: check if there is error packet
-        // // only the last packet may has error, see execute().
-        // if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
-        //     return packets[read_packet_index - 1]->error();
-        // // step 2: check memory overflow error
-        // for (size_t i = 0; i < read_packet_index; ++i)
-        // {
-        //     packets[i]->recomputeTrackedMem();
-        //     if (packets[i]->hasError())
-        //         return packets[i]->error();
-        // }
         return "";
     }
 
@@ -241,14 +191,10 @@ private:
         return !has_data && retry_times + 1 < max_retry_times;
     }
 
-    void setDone(String && msg)
+    void closeConnection(String && msg)
     {
-        if (!msg.empty())
-        {
-            meet_error = true;
-            err_msg = std::move(msg);
-        }
         stage = AsyncRequestStage::FINISHED;
+        close_conn(!msg.empty(), msg, log);
     }
 
     void start()
@@ -274,16 +220,14 @@ private:
         }
         else
         {
-            setDone(std::move(done_msg));
+            closeConnection(std::move(done_msg));
             return false;
         }
     }
 
     bool sendPacket()
     {
-        // TODO write here
-        packet = std::make_shared<TrackedMppDataPacket>();
-        return true; // TODO reconsider it
+        return channel_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
     }
 
     // in case of potential multiple inheritances.
@@ -300,9 +244,7 @@ private:
     Request request;
 
     String req_info;
-    bool meet_error;
     bool has_data;
-    String err_msg;
     int retry_times;
     AsyncRequestStage stage;
 
@@ -312,5 +254,9 @@ private:
     LoggerPtr log;
     ReceiverChannelWriter channel_writer;
     std::mutex mu;
+
+    // Do not use any variable in AsyncRequestHandler after close_conn is called,
+    // because AsyncRequestHandler may have been destructed by ExchangeReceiver at that time.
+    std::function<void(bool, const String &, const LoggerPtr &)> close_conn;
 };
 } // namespace DB

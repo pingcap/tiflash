@@ -80,7 +80,7 @@ public:
         return nullptr;
     }
 
-    std::optional<GRPCKickFunc> getKickFuncForTest() override
+    std::optional<GRPCKickFunc> getGRPCSendKickFuncForTest() override
     {
         return [&](KickSendTag * tag) {
             {

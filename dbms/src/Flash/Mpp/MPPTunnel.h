@@ -210,7 +210,7 @@ public:
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(queue_size, func)
     {}
@@ -258,8 +258,7 @@ public:
         LocalRequestHandler & local_request_handler_,
         const LoggerPtr & log_,
         MemoryTrackerPtr & memory_tracker_,
-        const String & tunnel_id_,
-        std::function<void()> && add_local_conn_num)
+        const String & tunnel_id_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, nullptr)
         , source_index(source_index_)
         , local_request_handler(local_request_handler_)
@@ -415,7 +414,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained, std::function<void()> && add_local_conn_num);
+    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);

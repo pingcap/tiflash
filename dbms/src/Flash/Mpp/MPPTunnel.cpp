@@ -204,7 +204,7 @@ void MPPTunnel::connectSync(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained, std::function<void()> && add_local_conn_num)
+void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained)
 {
     {
         std::unique_lock lk(mu);
@@ -214,12 +214,12 @@ void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_re
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id, std::move(add_local_conn_num));
+            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_fine_grained_sender;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id, std::move(add_local_conn_num));
+            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
             tunnel_sender = local_tunnel_sender;
         }
 
@@ -239,7 +239,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", magic_enum::enum_name(mode));
         RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
 
-        auto kick_func_for_test = call_data->getKickFuncForTest();
+        auto kick_func_for_test = call_data->getGRPCSendKickFuncForTest();
         if (unlikely(kick_func_for_test.has_value()))
         {
             async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value(), &data_size_in_queue);

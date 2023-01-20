@@ -178,6 +178,7 @@ void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
 {
     std::lock_guard lock(mu);
     ++live_connections;
+    ++thread_count;
 }
 
 template <typename RPCContext>
@@ -229,10 +230,7 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnection(const Request & req)
         req,
         req.source_index,
         local_request_handler,
-        enable_fine_grained_shuffle_flag,
-        [this]() {
-            this->addLocalConnectionNum();
-        });
+        enable_fine_grained_shuffle_flag);
 }
 
 template <typename RPCContext>
@@ -244,39 +242,7 @@ void ExchangeReceiverBase<RPCContext>::setUpSyncConnection(Request && req)
         else
             readLoop<false>(req);
     });
-    ++thread_count;
 }
-    //         LocalRequestHandler local_request_handler(
-    //             getMemoryTracker(),
-    //             [this](bool meet_error, const String & local_err_msg) {
-    //                 this->connectionDone(meet_error, local_err_msg, exc_log);
-    //             },
-    //             [this]() {
-    //                 this->connectionLocalDone();
-    //             },
-    //             [this]() {
-    //                 this->addLocalConnectionNum();
-    //             },
-    //             ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
-
-    //         rpc_context->establishMPPConnectionLocal(
-    //             req,
-    //             req.source_index,
-    //             local_request_handler,
-    //             enable_fine_grained_shuffle_flag);
-    //     }
-    //     else
-    //     {
-    //         thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
-    //             if (enable_fine_grained_shuffle_flag)
-    //                 readLoop<true>(req);
-    //             else
-    //                 readLoop<false>(req);
-    //         });
-
-    //         ++thread_count;
-    //     }
-    // }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request> && async_requests)
@@ -302,6 +268,9 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
                 &data_size_in_queue,
                 [this]() {
                     this->addAsyncConnectionNum();
+                },
+                [this](bool meet_error, const String & local_err_msg, const LoggerPtr &log) {
+                    this->connectionDone(meet_error, local_err_msg, log);
                 })
         );
     }
@@ -316,6 +285,9 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
                 &data_size_in_queue,
                 [this]() {
                     this->addAsyncConnectionNum();
+                },
+                [this](bool meet_error, const String & local_err_msg, const LoggerPtr &log) {
+                    this->connectionDone(meet_error, local_err_msg, log);
                 })
         );
     }
