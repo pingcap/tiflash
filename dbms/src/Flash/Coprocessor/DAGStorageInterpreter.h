@@ -118,7 +118,6 @@ private:
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
     const TableID logical_table_id;
-    const Settings & settings;
     TMTContext & tmt;
 
     /// Intermediate variables shared by multiple member functions

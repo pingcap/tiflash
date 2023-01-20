@@ -19,7 +19,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Settings.h>
 
 #include <ext/collection_cast.h>
 #include <ext/range.h>
