@@ -29,6 +29,8 @@ using ExecutorBinderPtr = mock::ExecutorBinderPtr;
 using TableInfo = TiDB::TableInfo;
 struct ASTTablesInSelectQueryElement;
 
+class ASTSelectQuery;
+
 enum class QueryTaskType
 {
     DAG,
