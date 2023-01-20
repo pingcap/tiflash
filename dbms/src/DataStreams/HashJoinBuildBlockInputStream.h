@@ -15,7 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 
 namespace DB

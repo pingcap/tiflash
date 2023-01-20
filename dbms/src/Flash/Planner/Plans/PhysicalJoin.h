@@ -63,7 +63,7 @@ private:
 
     void buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams);
 
-    void doSchemaProject(DAGPipeline & pipeline, Context & context);
+    void doSchemaProject(DAGPipeline & pipeline);
 
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

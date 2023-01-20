@@ -81,7 +81,7 @@ private:
 
     std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
-    std::vector<RemoteRequest> buildRemoteRequests();
+    std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
     TableLockHolders releaseAlterLocks();
 
@@ -118,7 +118,6 @@ private:
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
     const TableID logical_table_id;
-    const Settings & settings;
     TMTContext & tmt;
 
     /// Intermediate variables shared by multiple member functions
