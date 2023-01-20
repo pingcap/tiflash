@@ -42,7 +42,6 @@
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>

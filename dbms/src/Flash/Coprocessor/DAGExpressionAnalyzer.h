@@ -25,7 +25,6 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/WindowDescription.h>
 #include <Storages/Transaction/TMTStorages.h>
 
