@@ -30,7 +30,7 @@ struct AdderNonJoined;
 template <typename Mapped>
 struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 {
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right)
+    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *&, const size_t)
     {
         for (size_t j = 0; j < num_columns_left; ++j)
             /// should fill the key column with key columns from right block
@@ -48,10 +48,13 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 template <typename Mapped>
 struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 {
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right)
+    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *& next_element_in_row_list, const size_t max_row_added)
     {
         size_t rows_added = 0;
-        for (auto current = &static_cast<const typename Mapped::Base_t &>(mapped); current != nullptr; current = current->next)
+        auto current = &static_cast<const typename Mapped::Base_t &>(mapped);
+        if unlikely (next_element_in_row_list != nullptr)
+            current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
+        for (; rows_added < max_row_added && current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_left; ++j)
                 /// should fill the key column with key columns from right block
@@ -62,8 +65,9 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 
             for (size_t j = 0; j < num_columns_right; ++j)
                 columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
-            rows_added++;
+            ++rows_added;
         }
+        next_element_in_row_list = current;
         return rows_added;
     }
 };
@@ -216,7 +220,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     /// first add rows that is not in the hash table
     while (current_not_mapped_row != nullptr)
     {
-        rows_added++;
+        ++rows_added;
         for (size_t j = 0; j < num_columns_left; ++j)
             /// should fill the key column with key columns from right block
             /// but we don't care about the key column now so just insert a default value is ok.
@@ -249,7 +253,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
     auto end = map.getSegmentTable(current_segment).end();
 
-    for (; *it != end || current_segment + step < map.getSegmentSize(); ++(*it))
+    for (; *it != end || current_segment + step < map.getSegmentSize();)
     {
         if (*it == end)
         {
@@ -268,15 +272,25 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
                 break;
         }
         if ((*it)->getMapped().getUsed())
-            continue;
-
-        rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right);
-
-        if (rows_added >= max_block_size)
         {
             ++(*it);
-            break;
+            continue;
         }
+
+        rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, max_block_size - rows_added);
+        assert(rows_added <= max_block_size);
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        {
+            ++(*it);
+        }
+        else if (next_element_in_row_list == nullptr)
+        {
+            /// next_element_in_row_list == nullptr means current row_list is done, so move the iterator
+            ++(*it);
+        }
+
+        if (rows_added == max_block_size)
+            break;
     }
     return rows_added;
 }
