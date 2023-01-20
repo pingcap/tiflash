@@ -81,7 +81,7 @@ private:
 
     std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
-    std::vector<RemoteRequest> buildRemoteRequests();
+    std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
     TableLockHolders releaseAlterLocks();
 

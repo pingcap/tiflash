@@ -318,18 +318,19 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    mvcc_query_info->scan_context = scan_context;
+
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        auto scan_context = std::make_shared<DM::ScanContext>();
-        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
-        mvcc_query_info->scan_context = scan_context;
         buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
     }
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
 
-    auto remote_requests = buildRemoteRequests();
+    auto remote_requests = buildRemoteRequests(scan_context);
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
@@ -735,6 +736,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         }
         catch (RegionException & e)
         {
+            query_info.mvcc_query_info->scan_context->total_local_region_num -= e.unavailable_region.size();
             /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
@@ -767,6 +769,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
+    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
@@ -1009,7 +1012,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`
-std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
+std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::ScanContextPtr & scan_context)
 {
     std::vector<RemoteRequest> remote_requests;
     std::unordered_map<Int64, Int64> region_id_to_table_id_map;
@@ -1033,7 +1036,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         const auto & retry_regions = retry_regions_map[physical_table_id];
         if (retry_regions.empty())
             continue;
-
+        scan_context->total_remote_region_num += retry_regions.size();
         // Append the region into DAGContext to return them to the upper layer.
         // The upper layer should refresh its cache about these regions.
         for (const auto & r : retry_regions)
