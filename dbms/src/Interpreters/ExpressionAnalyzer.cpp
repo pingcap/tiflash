@@ -2196,7 +2196,6 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
         JoinPtr join = std::make_shared<Join>(
             join_key_names_left,
             join_key_names_right,
-            settings.join_use_nulls,
             join_params.kind,
             join_params.strictness,
             "" /*req_id=*/,

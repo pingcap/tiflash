@@ -93,7 +93,6 @@ class Join
 public:
     Join(const Names & key_names_left_,
          const Names & key_names_right_,
-         bool use_nulls_,
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
@@ -149,7 +148,6 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
-    bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
     size_t getProbeConcurrency() const
