@@ -2038,7 +2038,6 @@ public:
         , lookup_res(lookup_res)
         , seg_it(nullptr, nullptr)
     {
-        pace = 1;
         if (max_block_size > 0)
             max_pace = max_block_size;
         else
@@ -2056,7 +2055,7 @@ public:
     }
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    bool fillColumns(MutableColumns & added_columns, size_t left_columns, const Map & map, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset)
+    bool fillColumns(MutableColumns & added_columns, size_t left_columns, const Map & map, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace)
     {
         static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                       || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -2064,7 +2063,7 @@ public:
         size_t num_columns_to_add = added_columns.size() - left_columns;
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftAnti || KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
         {
-            /// The last column is match_helper.
+            /// The last column is `match_helper`.
             num_columns_to_add -= 1;
         }
 
@@ -2074,13 +2073,7 @@ public:
         {
         case NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE:
         {
-            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-            {
-                for (size_t j = 0; j < num_columns_to_add; ++j)
-                    added_columns[j + left_columns]->insertFrom(*lookup_res->getMapped().block->getByPosition(j).column.get(), lookup_res->getMapped().row_num);
-                ++current_offset;
-            }
-            else if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
             {
                 for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(lookup_res->getMapped()); current != nullptr; current = current->next)
                 {
@@ -2088,6 +2081,11 @@ public:
                         added_columns[j + left_columns]->insertFrom(*current->block->getByPosition(j).column.get(), current->row_num);
                     ++current_offset;
                 }
+            }
+            else
+            {
+                /// STRICTNESS = Any should not reach here.
+                RUNTIME_ASSERT(false, "Should not reach here if strictness is any");
             }
 
             step = NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST;
@@ -2097,7 +2095,7 @@ public:
         case NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST:
         {
             bool to_end = false;
-            for (size_t i = 0; i < pace; ++i)
+            for (size_t i = 0; i < max_pace; ++i)
             {
                 while (null_list == nullptr)
                 {
@@ -2143,7 +2141,7 @@ public:
             bool to_end = false;
 
             typename Map::SegmentType::HashTable::const_iterator end(nullptr, nullptr);
-            while (current_offset - offset.first < pace)
+            while (current_offset - offset.first < max_pace)
             {
                 while (seg_it.isNull())
                 {
@@ -2201,8 +2199,6 @@ public:
         }
 
         offset.second = current_offset;
-
-        increasePace();
         return false;
     }
 
@@ -2276,14 +2272,8 @@ public:
     }
 
 private:
-    inline void increasePace()
-    {
-        pace = std::max(pace << 1, max_pace);
-    }
-
     size_t row_num;
     NullAwareJoinHelperStep step;
-    size_t pace;
     size_t max_pace;
     std::pair<size_t, size_t> offset;
 
@@ -2421,7 +2411,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                     helpers.back().setResult(false);
             }
             else
+            {
                 helpers_list.push_back(&helpers.back());
+            }
         }
         else
         {
@@ -2434,6 +2426,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     size_t block_columns = block.columns();
     while (!helpers_list.empty())
     {
+        size_t max_pace = max_block_size / helpers_list.size();
         MutableColumns columns;
         columns.reserve(block_columns);
         for (size_t i = 0; i < block_columns; ++i)
@@ -2446,7 +2439,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         while (helper_it != helpers_list.end())
         {
             size_t previous_offset = current_offset;
-            if ((*helper_it)->template fillColumns<KIND, STRICTNESS>(columns, left_columns, map, null_lists, current_offset))
+            if ((*helper_it)->template fillColumns<KIND, STRICTNESS>(columns, left_columns, map, null_lists, current_offset, max_pace))
             {
                 helper_it = helpers_list.erase(helper_it);
                 continue;
