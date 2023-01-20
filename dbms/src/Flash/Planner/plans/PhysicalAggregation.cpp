@@ -45,7 +45,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
     NamesAndTypes aggregated_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
@@ -64,7 +64,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             collators);
     }
 
-    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns);
     analyzer.reset(aggregated_columns);
     analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.

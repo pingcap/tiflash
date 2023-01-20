@@ -485,7 +485,7 @@ void ExpressionAnalyzer::analyzeAggregation()
     if (select_query && (select_query->group_expression_list || select_query->having_expression))
         has_aggregation = true;
 
-    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(source_columns, settings);
+    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(source_columns);
 
     if (select_query)
     {
@@ -1480,7 +1480,7 @@ void ExpressionAnalyzer::makeSetsForIndexImpl(const ASTPtr & node, const Block &
                 {
                     NamesAndTypesList temp_columns = source_columns;
                     temp_columns.insert(temp_columns.end(), columns_added_by_join.begin(), columns_added_by_join.end());
-                    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(temp_columns, settings);
+                    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(temp_columns);
                     getRootActions(func->arguments->children.at(0), true, false, temp_actions);
 
                     Block sample_block_with_calculated_columns = temp_actions->getSampleBlock();
@@ -1742,7 +1742,7 @@ struct ExpressionAnalyzer::ScopeStack
                 all_columns.push_back(col);
         }
 
-        stack.back().actions = std::make_shared<ExpressionActions>(all_columns, settings);
+        stack.back().actions = std::make_shared<ExpressionActions>(all_columns);
     }
 
     size_t getColumnLevel(const std::string & name)
@@ -2129,12 +2129,11 @@ void ExpressionAnalyzer::assertAggregation() const
         throw Exception("No aggregation", ErrorCodes::LOGICAL_ERROR);
 }
 
-void ExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const
+void ExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns)
 {
     if (chain.steps.empty())
     {
-        chain.settings = settings;
-        chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns, settings));
+        chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns));
     }
 }
 
@@ -2405,7 +2404,7 @@ void ExpressionAnalyzer::getActionsBeforeAggregation(const ASTPtr & ast, Express
 
 ExpressionActionsPtr ExpressionAnalyzer::getActions(bool project_result)
 {
-    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(source_columns, settings);
+    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(source_columns);
     NamesWithAliases result_columns;
     Names result_names;
 
@@ -2448,7 +2447,7 @@ ExpressionActionsPtr ExpressionAnalyzer::getActions(bool project_result)
 
 ExpressionActionsPtr ExpressionAnalyzer::getConstActions()
 {
-    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(NamesAndTypesList(), settings);
+    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(NamesAndTypesList());
 
     getRootActions(ast, true, true, actions);
 

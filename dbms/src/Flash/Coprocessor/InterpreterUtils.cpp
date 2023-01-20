@@ -68,13 +68,12 @@ void executeUnion(
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
-    const Context & context,
     const NamesWithAliases & project_cols)
 {
     NamesAndTypesList input_column;
     for (const auto & column : stream->getHeader())
         input_column.emplace_back(column.name, column.type);
-    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
+    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column);
     project->add(ExpressionAction::project(project_cols));
     return project;
 }
@@ -188,7 +187,7 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     assert(push_down_filter.hasValue());
 
     ExpressionActionsChain chain;
-    analyzer.initChain(chain, analyzer.getCurrentInputColumns());
+    analyzer.initChain(chain);
     String filter_column_name = analyzer.appendWhere(chain, push_down_filter.conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();

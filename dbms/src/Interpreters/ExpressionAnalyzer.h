@@ -262,7 +262,7 @@ private:
                                       NameSet & required_joined_columns);
 
     /// columns - the columns that are present before the transformations begin.
-    void initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const;
+    static void initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns);
 
     void assertSelect() const;
     void assertAggregation() const;
