@@ -82,10 +82,7 @@ struct ProbeProcessInfo;
   *
   * Default values for outer joins (LEFT, RIGHT, FULL):
   *
-  * Behaviour is controlled by 'join_use_nulls' settings.
-  * If it is false, we substitute (global) default value for the data type, for non-joined rows
-  *  (zero, empty string, etc. and NULL for Nullable data types).
-  * If it is true, we always generate Nullable column and substitute NULLs for non-joined rows,
+  * Always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
 class Join
@@ -135,7 +132,6 @@ public:
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
       * Use only after all calls to joinBlock was done.
-      * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
     BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
@@ -306,9 +302,6 @@ private:
     const Names key_names_left;
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
-
-    /// Substitute NULLs for non-JOINed rows.
-    bool use_nulls;
 
     size_t build_concurrency;
 
