@@ -39,7 +39,6 @@ extern const char force_context_path[];
 } // namespace FailPoints
 namespace tests
 {
-
 class SchemaSyncTest : public ::testing::Test
 {
 public:
@@ -178,6 +177,14 @@ private:
 protected:
     Context & global_ctx;
 };
+
+TEST_F(SchemaSyncTest, SchemaDiff)
+try
+{
+    SchemaDiff diff;
+    std::string data = "{\"version\":40,\"type\":31,\"schema_id\":69,\"table_id\":71,\"old_table_id\":0,\"old_schema_id\":0,\"affected_options\":null}";
+    diff.deserialize(data);
+}
 
 TEST_F(SchemaSyncTest, RenameTables)
 try
