@@ -28,7 +28,6 @@ void registerStorageMerge(StorageFactory & factory);
 void registerStorageBuffer(StorageFactory & factory);
 void registerStorageMemory(StorageFactory & factory);
 void registerStorageSet(StorageFactory & factory);
-void registerStorageJoin(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
 
@@ -46,7 +45,6 @@ void registerStorages()
     registerStorageBuffer(factory);
     registerStorageMemory(factory);
     registerStorageSet(factory);
-    registerStorageJoin(factory);
     registerStorageView(factory);
     registerStorageMaterializedView(factory);
 }

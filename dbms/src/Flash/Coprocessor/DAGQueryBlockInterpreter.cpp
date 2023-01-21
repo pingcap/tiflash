@@ -265,7 +265,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
-        true,
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
