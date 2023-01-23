@@ -39,7 +39,6 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
-    , batch_send_min_limit_mem_size(batch_send_min_limit_)
     , data_codec_version(data_codec_version_)
     , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
@@ -55,10 +54,11 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     case MPPDataPacketV1:
     default:
     {
-        if (batch_send_min_limit_mem_size < 0)
+        // make `batch_send_min_limit` always GT 0
+        if (batch_send_min_limit <= 0)
         {
             // set upper limit if not specified
-            batch_send_min_limit_mem_size = std::min(MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE, 1024 * 64 * partition_num /* 64KB * partition-num */);
+            batch_send_min_limit = 8 * 1024 * partition_num /* 8K * partition-num */;
         }
         for (const auto & field_type : dag_context.result_field_types)
         {
@@ -101,7 +101,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
         mem_size_in_blocks += block.bytes();
         blocks.push_back(block);
     }
-    if (mem_size_in_blocks > batch_send_min_limit_mem_size)
+    if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit
+        || mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE)
         partitionAndWriteBlocksV1();
 }
 
@@ -144,9 +145,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
 {
     assert(rows_in_blocks > 0);
     assert(mem_size_in_blocks > 0);
-
-    if unlikely (blocks.empty())
-        return;
+    assert(!blocks.empty());
 
     HashBaseWriterHelper::materializeBlocks(blocks);
     // All blocks are same, use one block's meta info as header

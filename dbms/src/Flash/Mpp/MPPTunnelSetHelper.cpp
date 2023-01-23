@@ -30,7 +30,7 @@ TrackedMppDataPacketPtr ToPacket(
 
     auto && codec = CHBlockChunkCodecV1{
         header,
-        false /*scape empty part*/,
+        false /*escape empty part*/,
     };
 
     auto && res = codec.encode(std::move(part_columns), method);
@@ -43,7 +43,7 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types, MPPDataPacketVersion version)
+TrackedMppDataPacketPtr ToPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types, MPPDataPacketVersion version)
 {
     assert(version == MPPDataPacketV0);
 
@@ -104,7 +104,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr toFineGrainedPacket(
+TrackedMppDataPacketPtr ToFineGrainedPacket(
     const Block & header,
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,

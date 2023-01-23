@@ -86,7 +86,7 @@ struct MockWriter
 
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        auto packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0);
+        auto packet = MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0);
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();

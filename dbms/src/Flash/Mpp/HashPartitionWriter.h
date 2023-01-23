@@ -58,7 +58,6 @@ private:
     uint16_t partition_num;
     // support data compression
     int64_t mem_size_in_blocks{};
-    int64_t batch_send_min_limit_mem_size;
     DataTypes expected_types;
     MPPDataPacketVersion data_codec_version;
     CompressionMethod compression_method{};

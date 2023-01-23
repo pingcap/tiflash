@@ -135,6 +135,7 @@ struct MockExchangeWriter
         MPPDataPacketVersion version,
         CompressionMethod method)
     {
+        assert(version > MPPDataPacketV0);
         method = isLocal(part_id) ? CompressionMethod::NONE : method;
         size_t original_size = 0;
         auto tracked_packet = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, method, original_size);
@@ -167,11 +168,11 @@ struct MockExchangeWriter
     }
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0), 0);
+        checker(MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0), 0);
     }
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
-        checker(MPPTunnelSetHelper::toPacket(blocks, result_field_types, MPPDataPacketV0), part_id);
+        checker(MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0), part_id);
     }
     void fineGrainedShuffleWrite(
         const Block & header,
@@ -181,7 +182,7 @@ struct MockExchangeWriter
         size_t num_columns,
         int16_t part_id)
     {
-        auto tracked_packet = MPPTunnelSetHelper::toFineGrainedPacket(
+        auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacket(
             header,
             scattered,
             bucket_idx,
