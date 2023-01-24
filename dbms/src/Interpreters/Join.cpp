@@ -1914,7 +1914,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
     }
 
     /// NOTE It would be better to use `reserve`, as well as `replicate` methods to duplicate the values of the left block.
-    size_t right_table_rows = 1;
+    size_t right_table_rows = 0;
     for (const Block & block_right : blocks)
         right_table_rows += block_right.rows();
 
