@@ -116,7 +116,6 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
-    bool use_nulls_,
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
     const String & req_id,
@@ -135,7 +134,6 @@ Join::Join(
     , strictness(strictness_)
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
-    , use_nulls(use_nulls_)
     , build_concurrency(0)
     , probe_concurrency(0)
     , active_probe_concurrency(0)
@@ -507,7 +505,7 @@ void Join::setSampleBlock(const Block & block)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
+    if (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full)
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
 
@@ -932,7 +930,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
+    if (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full)
     {
         for (size_t i = getFullness(kind) ? keys_size : 0; i < size; ++i)
         {
@@ -1588,12 +1586,9 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
             if (ColumnPtr converted = col->convertToFullColumnIfConst())
                 col = converted;
 
-            /// If use_nulls, convert left columns (except keys) to Nullable.
-            if (use_nulls)
-            {
-                if (std::end(key_names_left) == std::find(key_names_left.begin(), key_names_left.end(), block.getByPosition(i).name))
-                    convertColumnToNullable(block.getByPosition(i));
-            }
+            /// convert left columns (except keys) to Nullable
+            if (std::end(key_names_left) == std::find(key_names_left.begin(), key_names_left.end(), block.getByPosition(i).name))
+                convertColumnToNullable(block.getByPosition(i));
         }
     }
 

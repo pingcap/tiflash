@@ -111,18 +111,14 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
     for (size_t i = 0; i < num_columns_right; ++i)
         column_indices_right.push_back(num_columns_left + i);
 
-    /// If use_nulls, convert left columns to Nullable.
-    if (parent.use_nulls)
+    for (size_t i = 0; i < num_columns_left; ++i)
     {
-        for (size_t i = 0; i < num_columns_left; ++i)
-        {
-            const auto & column_with_type_and_name = result_sample_block.getByPosition(column_indices_left[i]);
-            if (parent.key_names_left.end() == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
-                /// if it is not the key, then convert to nullable, if it is key, then just keep the original type
-                /// actually we don't care about the key column now refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-                /// for detailed explanation
-                convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
-        }
+        const auto & column_with_type_and_name = result_sample_block.getByPosition(column_indices_left[i]);
+        if (parent.key_names_left.end() == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
+            /// if it is not the key, then convert to nullable, if it is key, then just keep the original type
+            /// actually we don't care about the key column now refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
+            convertColumnToNullable(result_sample_block.getByPosition(column_indices_left[i]));
     }
 
     columns_left.resize(num_columns_left);
