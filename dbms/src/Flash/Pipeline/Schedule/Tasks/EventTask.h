@@ -18,7 +18,6 @@
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include <memory.h>
 
 namespace DB
 {

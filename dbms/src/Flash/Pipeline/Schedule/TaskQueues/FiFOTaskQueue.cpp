@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <assert.h>
 #include <common/likely.h>
 

@@ -127,10 +127,10 @@ private:
     bool with_tasks;
 };
 
-class WaitCancelTask : public EventTask
+class DeadLoopTask : public EventTask
 {
 public:
-    explicit WaitCancelTask(
+    DeadLoopTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
         : EventTask(nullptr, exec_status_, event_)
@@ -144,10 +144,10 @@ protected:
     }
 };
 
-class WaitCancelEvent : public Event
+class DeadLoopEvent : public Event
 {
 public:
-    WaitCancelEvent(
+    DeadLoopEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_tasks_)
         : Event(exec_status_, nullptr)
@@ -167,7 +167,7 @@ protected:
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<WaitCancelTask>(exec_status, shared_from_this()));
+            tasks.push_back(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
         scheduleTasks(tasks);
         return false;
     }
@@ -176,14 +176,14 @@ private:
     bool with_tasks;
 };
 
-class ToErrEvent : public Event
+class OnErrEvent : public Event
 {
 public:
-    explicit ToErrEvent(PipelineExecutorStatus & exec_status_)
+    explicit OnErrEvent(PipelineExecutorStatus & exec_status_)
         : Event(exec_status_, nullptr)
     {}
 
-    static constexpr auto err_msg = "error from ToErrEvent";
+    static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
     // Returns true meaning no task is scheduled.
@@ -215,25 +215,6 @@ protected:
     }
 };
 
-class CrashEvent : public Event
-{
-public:
-    explicit CrashEvent(PipelineExecutorStatus & exec_status_)
-        : Event(exec_status_, nullptr)
-    {}
-
-protected:
-    bool scheduleImpl() override
-    {
-        throw Exception("scheduleImpl");
-    }
-
-    void finishImpl() override
-    {
-        throw Exception("finishImpl");
-    }
-};
-
 class ThrowExceptionTask : public EventTask
 {
 public:
@@ -246,27 +227,69 @@ public:
 protected:
     ExecTaskStatus doExecuteImpl() override
     {
-        throw Exception("throw exception");
+        throw Exception("throw exception in doExecuteImpl");
     }
 };
 
-class ThrowExceptionTaskEvent : public Event
+class ThrowExceptionEvent : public Event
 {
 public:
-    explicit ThrowExceptionTaskEvent(PipelineExecutorStatus & exec_status_)
+    ThrowExceptionEvent(
+        PipelineExecutorStatus & exec_status_,
+        bool with_task_)
         : Event(exec_status_, nullptr)
+        , with_task(with_task_)
     {}
 
 protected:
-    // Returns true meaning no task is scheduled.
     bool scheduleImpl() override
     {
+        if (!with_task)
+            throw Exception("throw exception in scheduleImpl");
+
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
             tasks.push_back(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
         scheduleTasks(tasks);
         return false;
     }
+
+    void finishImpl() override
+    {
+        if (!with_task)
+            throw Exception("throw exception in finishImpl");
+    }
+
+private:
+    bool with_task;
+};
+
+class ManyTasksEvent : public Event
+{
+public:
+    ManyTasksEvent(
+        PipelineExecutorStatus & exec_status_,
+        size_t task_num_)
+        : Event(exec_status_, nullptr)
+        , task_num(task_num_)
+    {}
+
+protected:
+    // Returns true meaning no task is scheduled.
+    bool scheduleImpl() override
+    {
+        if (0 == task_num)
+            return true;
+
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < task_num; ++i)
+            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        scheduleTasks(tasks);
+        return false;
+    }
+
+private:
+    size_t task_num;
 };
 } // namespace
 
@@ -344,7 +367,7 @@ try
             schedule(all_events);
         }
         wait(exec_status);
-        ASSERT_TRUE(0 == counter);
+        ASSERT_EQ(0, counter);
         assertNoErr(exec_status);
     };
     for (size_t group_num = 1; group_num < 50; group_num += 11)
@@ -387,12 +410,12 @@ try
             std::vector<EventPtr> events;
             for (size_t i = 0; i < event_batch_num; ++i)
             {
-                auto wait_cancel_event = std::make_shared<WaitCancelEvent>(exec_status, with_tasks);
-                events.push_back(wait_cancel_event);
-                // Expected to_err_event will not be triggered.
-                auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
-                to_err_event->addInput(wait_cancel_event);
-                events.push_back(to_err_event);
+                auto dead_loop_event = std::make_shared<DeadLoopEvent>(exec_status, with_tasks);
+                events.push_back(dead_loop_event);
+                // Expected on_err_event will not be triggered.
+                auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
+                on_err_event->addInput(dead_loop_event);
+                events.push_back(on_err_event);
             }
             schedule(events, with_tasks ? nullptr : thread_manager);
         }
@@ -412,23 +435,23 @@ CATCH
 TEST_F(EventTestRunner, err)
 try
 {
-    auto do_test = [&](bool with_tasks, size_t wait_cancel_event_num) {
+    auto do_test = [&](bool with_tasks, size_t dead_loop_event_num) {
         PipelineExecutorStatus exec_status;
         auto thread_manager = newThreadManager();
         {
             std::vector<EventPtr> events;
-            for (size_t i = 0; i < wait_cancel_event_num; ++i)
-                events.push_back(std::make_shared<WaitCancelEvent>(exec_status, with_tasks));
+            for (size_t i = 0; i < dead_loop_event_num; ++i)
+                events.push_back(std::make_shared<DeadLoopEvent>(exec_status, with_tasks));
             schedule(events, with_tasks ? nullptr : thread_manager);
         }
         {
-            auto to_err_event = std::make_shared<ToErrEvent>(exec_status);
-            assert(to_err_event->withoutInput());
-            to_err_event->schedule();
+            auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
+            assert(on_err_event->withoutInput());
+            on_err_event->schedule();
         }
         wait(exec_status);
         auto err_msg = exec_status.getErrMsg();
-        ASSERT_EQ(err_msg, ToErrEvent::err_msg) << err_msg;
+        ASSERT_EQ(err_msg, OnErrEvent::err_msg) << err_msg;
         thread_manager->wait();
     };
     for (size_t i = 1; i < 100; i += 7)
@@ -451,51 +474,45 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, crash)
+TEST_F(EventTestRunner, throw_exception)
 try
 {
-    PipelineExecutorStatus exec_status;
-    std::vector<EventPtr> events;
-    // crash_event <-- run_event should run first,
-    // otherwise the thread pool will be filled up by WaitCancelEvent/WaitCancelTask,
-    // resulting in a period of time before RunEvent/RunTask/CrashEvent will run.
-    auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
-    events.push_back(run_event);
-    auto crash_event = std::make_shared<CrashEvent>(exec_status);
-    crash_event->addInput(run_event);
-    events.push_back(crash_event);
+    std::vector<bool> with_tasks{false, true};
+    for (auto with_task : with_tasks)
+    {
+        PipelineExecutorStatus exec_status;
+        std::vector<EventPtr> events;
+        // throw_exception_event <-- run_event should run first,
+        // otherwise the thread pool will be filled up by DeadLoopEvent/DeadLoopTask,
+        // resulting in a period of time before RunEvent/RunTask/ThrowExceptionEvent will run.
+        auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
+        events.push_back(run_event);
+        auto crash_event = std::make_shared<ThrowExceptionEvent>(exec_status, with_task);
+        crash_event->addInput(run_event);
+        events.push_back(crash_event);
 
-    for (size_t i = 0; i < 100; ++i)
-        events.push_back(std::make_shared<WaitCancelEvent>(exec_status, /*with_tasks=*/true));
+        for (size_t i = 0; i < 100; ++i)
+            events.push_back(std::make_shared<DeadLoopEvent>(exec_status, /*with_tasks=*/true));
 
-    schedule(events);
-    wait(exec_status);
-    auto err_msg = exec_status.getErrMsg();
-    ASSERT_TRUE(!err_msg.empty());
+        schedule(events);
+        wait(exec_status);
+        auto err_msg = exec_status.getErrMsg();
+        ASSERT_TRUE(!err_msg.empty());
+    }
 }
 CATCH
 
-TEST_F(EventTestRunner, throw_exception_task)
+TEST_F(EventTestRunner, many_tasks)
 try
 {
-    PipelineExecutorStatus exec_status;
-    std::vector<EventPtr> events;
-    // crash_event <-- run_event should run first,
-    // otherwise the thread pool will be filled up by WaitCancelEvent/WaitCancelTask,
-    // resulting in a period of time before RunEvent/RunTask/CrashEvent will run.
-    auto run_event = std::make_shared<RunEvent>(exec_status, /*with_tasks=*/true);
-    events.push_back(run_event);
-    auto crash_event = std::make_shared<ThrowExceptionTaskEvent>(exec_status);
-    crash_event->addInput(run_event);
-    events.push_back(crash_event);
-
-    for (size_t i = 0; i < 100; ++i)
-        events.push_back(std::make_shared<WaitCancelEvent>(exec_status, /*with_tasks=*/true));
-
-    schedule(events);
-    wait(exec_status);
-    auto err_msg = exec_status.getErrMsg();
-    ASSERT_TRUE(!err_msg.empty());
+    for (size_t i = 0; i < 200; i += 7)
+    {
+        PipelineExecutorStatus exec_status;
+        auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
+        event->schedule();
+        wait(exec_status);
+        assertNoErr(exec_status);
+    }
 }
 CATCH
 

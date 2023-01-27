@@ -16,40 +16,31 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
-#include <thread>
-#include <vector>
+#include <deque>
+#include <mutex>
 
 namespace DB
 {
-class TaskScheduler;
-
-class TaskThreadPool
+class FIFOTaskQueue : public TaskQueue
 {
 public:
-    TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num);
+    void submit(TaskPtr && task) override;
 
-    void close();
+    void submit(std::vector<TaskPtr> & tasks) override;
 
-    void waitForStop();
+    bool take(TaskPtr & task) override;
 
-    void submit(TaskPtr && task);
+    bool empty() override;
 
-    void submit(std::vector<TaskPtr> & tasks);
-
-private:
-    void loop(size_t thread_no) noexcept;
-
-    void handleTask(TaskPtr & task, const LoggerPtr & log);
+    void close() override;
 
 private:
-    TaskQueuePtr task_queue;
+    std::mutex mu;
+    std::condition_variable cv;
+    bool is_closed = false;
+    std::deque<TaskPtr> task_queue;
 
     LoggerPtr logger = Logger::get();
-
-    TaskScheduler & scheduler;
-
-    std::vector<std::thread> threads;
 };
 } // namespace DB

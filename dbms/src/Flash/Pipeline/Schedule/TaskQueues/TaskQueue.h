@@ -14,19 +14,16 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
-#include <deque>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace DB
 {
-class TaskQueue;
-using TaskQueuePtr = std::unique_ptr<TaskQueue>;
-
+// TODO support more kind of TaskQueue, such as
+// - multi-level feedback queue
+// - resource group queue
 class TaskQueue
 {
 public:
@@ -43,30 +40,6 @@ public:
 
     virtual void close() = 0;
 };
+using TaskQueuePtr = std::unique_ptr<TaskQueue>;
 
-// TODO support more kind of TaskQueue, such as
-// - multi-level feedback queue
-// - resource group queue
-
-class FIFOTaskQueue : public TaskQueue
-{
-public:
-    void submit(TaskPtr && task) override;
-
-    void submit(std::vector<TaskPtr> & tasks) override;
-
-    bool take(TaskPtr & task) override;
-
-    bool empty() override;
-
-    void close() override;
-
-private:
-    std::mutex mu;
-    std::condition_variable cv;
-    bool is_closed = false;
-    std::deque<TaskPtr> task_queue;
-
-    LoggerPtr logger = Logger::get("FIFOTaskQueue");
-};
 } // namespace DB

@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
@@ -24,7 +25,8 @@
 namespace DB
 {
 TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
-    : scheduler(scheduler_)
+    : task_queue(std::make_unique<FIFOTaskQueue>())
+    , scheduler(scheduler_)
 {
     RUNTIME_CHECK(thread_num > 0);
     threads.reserve(thread_num);

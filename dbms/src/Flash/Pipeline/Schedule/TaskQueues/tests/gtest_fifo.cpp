@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Pipeline/Schedule/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -37,14 +37,14 @@ public:
 };
 } // namespace
 
-class TaskQueueTestRunner : public ::testing::Test
+class FIFOTestRunner : public ::testing::Test
 {
 };
 
-TEST_F(TaskQueueTestRunner, fifo)
+TEST_F(FIFOTestRunner, base)
 try
 {
-    TaskQueuePtr queue = std::make_unique<FIFOTaskQueue>();
+    FIFOTaskQueue queue;
 
     auto thread_manager = newThreadManager();
     size_t valid_task_num = 1000;
@@ -52,17 +52,17 @@ try
     // submit valid task
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < valid_task_num; ++i)
-            queue->submit(std::make_unique<IndexTask>(i));
+            queue.submit(std::make_unique<IndexTask>(i));
         // Close the queue after all valid tasks have been consumed.
-        while (!queue->empty())
+        while (!queue.empty())
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        queue->close();
+        queue.close();
     });
     // take valid task
     thread_manager->schedule(false, "take", [&]() {
         TaskPtr task;
         size_t expect_index = 0;
-        while (queue->take(task))
+        while (queue.take(task))
         {
             ASSERT_TRUE(task);
             auto * index_task = static_cast<IndexTask *>(task.get());
@@ -74,9 +74,9 @@ try
     thread_manager->wait();
 
     // No tasks are taken after the queue is closed.
-    queue->submit(std::make_unique<IndexTask>(valid_task_num));
+    queue.submit(std::make_unique<IndexTask>(valid_task_num));
     TaskPtr task;
-    ASSERT_FALSE(queue->take(task));
+    ASSERT_FALSE(queue.take(task));
 }
 CATCH
 
