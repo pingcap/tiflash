@@ -1002,22 +1002,24 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         for (const auto & c : filters)
             filter_vector.push_back(&c);
         filter_column_name = appendWhere(chain, filter_vector);
-
-        /// remove useless columns to avoid duplicate columns
-        /// as when compiling the key/filter expression, the origin
-        /// streams may be added some columns that have the
-        /// same name on left streams and right streams, for
-        /// example, if the join condition is something like:
-        /// id + 1 = id + 1,
-        /// the left streams and the right streams will have the
-        /// same constant column for `1`
-        /// Note that the origin left streams and right streams
-        /// will never have duplicated columns because in
-        /// DAGQueryBlockInterpreter we add qb_column_prefix in
-        /// final project step, so if the join condition is not
-        /// literal expression, the key names should never be
-        /// duplicated. In the above example, the final key names should be
-        /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
+    }
+    /// remove useless columns to avoid duplicate columns
+    /// as when compiling the key/filter expression, the origin
+    /// streams may be added some columns that have the
+    /// same name on left streams and right streams, for
+    /// example, if the join condition is something like:
+    /// id + 1 = id + 1,
+    /// the left streams and the right streams will have the
+    /// same constant column for `1`
+    /// Note that the origin left streams and right streams
+    /// will never have duplicated columns because in
+    /// DAGQueryBlockInterpreter we add qb_column_prefix in
+    /// final project step, so if the join condition is not
+    /// literal expression, the key names should never be
+    /// duplicated. In the above example, the final key names should be
+    /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
+    if (ret)
+    {
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);

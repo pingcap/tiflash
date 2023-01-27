@@ -225,7 +225,9 @@ std::tuple<ExpressionActionsPtr, String, String, String> doGenJoinOtherCondition
         filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
 
-    String column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+    String column_for_null_aware_eq_condition;
+    if (join.left_null_aware_join_keys_size() > 0)
+        column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
 
     return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition), std::move(column_for_null_aware_eq_condition)};
 }
