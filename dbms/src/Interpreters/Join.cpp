@@ -711,7 +711,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
             for (auto index : segment_index_info[segment_index])
             {
-                /// for right/full out join, need to record the rows not inserted to map
+                /// for right/full out join or null-aware semi join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, index);
             }
