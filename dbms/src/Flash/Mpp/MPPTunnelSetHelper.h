@@ -13,16 +13,20 @@
 // limitations under the License.
 
 #pragma once
-#include <iostream>
 
-namespace DB
+#include <Core/Block.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <tipb/select.pb.h>
+
+namespace DB::MPPTunnelSetHelper
 {
-struct Token;
-std::ostream & operator<<(std::ostream & stream, const Token & what);
+TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
 
-struct Expected;
-std::ostream & operator<<(std::ostream & stream, const Expected & what);
-
-}
-
-#include <Core/iostream_debug_helpers.h>
+TrackedMppDataPacketPtr toFineGrainedPacket(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    const std::vector<tipb::FieldType> & field_types);
+} // namespace DB::MPPTunnelSetHelper

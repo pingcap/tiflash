@@ -123,4 +123,17 @@ void MergedTaskPool::push(const MergedTaskPtr & t)
     std::lock_guard lock(mtx);
     merged_task_pool.push_back(t);
 }
+
+bool MergedTaskPool::has(UInt64 pool_id)
+{
+    std::lock_guard lock(mtx);
+    for (const auto & t : merged_task_pool)
+    {
+        if (t->containPool(pool_id))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace DB::DM

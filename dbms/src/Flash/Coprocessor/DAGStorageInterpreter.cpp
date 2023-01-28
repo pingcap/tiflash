@@ -212,9 +212,9 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     if (!has_need_cast_column)
         return {false, nullptr, nullptr};
 
-    auto original_source_columns = analyzer.getCurrentInputColumns();
     ExpressionActionsChain chain;
-    analyzer.initChain(chain, original_source_columns);
+    analyzer.initChain(chain);
+    auto original_source_columns = analyzer.getCurrentInputColumns();
     // execute timezone cast or duration cast if needed for local table scan
     if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
     {
@@ -231,7 +231,7 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
         for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
             project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
         assert(!project_for_remote_read.empty());
-        ExpressionActionsPtr project_for_cop_read = std::make_shared<ExpressionActions>(original_source_columns, analyzer.getContext().getSettingsRef());
+        ExpressionActionsPtr project_for_cop_read = std::make_shared<ExpressionActions>(original_source_columns);
         project_for_cop_read->add(ExpressionAction::project(project_for_remote_read));
 
         return {true, extra_cast, project_for_cop_read};
@@ -295,9 +295,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , max_streams(max_streams_)
     , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
-    , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
-    , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
+    , mvcc_query_info(new MvccQueryInfo(true, context.getSettingsRef().read_tso))
 {
     if (unlikely(!hasRegionToRead(dagContext(), table_scan)))
     {
@@ -319,18 +318,19 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    mvcc_query_info->scan_context = scan_context;
+
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        auto scan_context = std::make_shared<DM::ScanContext>();
-        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
-        mvcc_query_info->scan_context = scan_context;
-        buildLocalStreams(pipeline, settings.max_block_size);
+        buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
     }
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
 
-    auto remote_requests = buildRemoteRequests();
+    auto remote_requests = buildRemoteRequests(scan_context);
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
@@ -403,11 +403,11 @@ void DAGStorageInterpreter::prepare()
         learner_read_snapshot = doCopLearnerRead();
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
-    storages_with_structure_lock = getAndLockStorages(settings.schema_version);
+    storages_with_structure_lock = getAndLockStorages(context.getSettingsRef().schema_version);
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan(settings.max_columns_to_read);
+    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan(context.getSettingsRef().max_columns_to_read);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
@@ -736,6 +736,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         }
         catch (RegionException & e)
         {
+            query_info.mvcc_query_info->scan_context->total_local_region_num -= e.unavailable_region.size();
             /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
@@ -768,6 +769,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
+    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
@@ -1010,7 +1012,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`
-std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
+std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::ScanContextPtr & scan_context)
 {
     std::vector<RemoteRequest> remote_requests;
     std::unordered_map<Int64, Int64> region_id_to_table_id_map;
@@ -1034,7 +1036,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         const auto & retry_regions = retry_regions_map[physical_table_id];
         if (retry_regions.empty())
             continue;
-
+        scan_context->total_remote_region_num += retry_regions.size();
         // Append the region into DAGContext to return them to the upper layer.
         // The upper layer should refresh its cache about these regions.
         for (const auto & r : retry_regions)
