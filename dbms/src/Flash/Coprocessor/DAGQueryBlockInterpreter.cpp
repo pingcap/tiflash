@@ -42,7 +42,6 @@
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -266,7 +265,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
-        true,
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
@@ -703,7 +701,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 {
     if (project_cols.empty())
         return;
-    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
+    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), project_cols);
     executeExpression(pipeline, project, log, extra_info);
 }
 

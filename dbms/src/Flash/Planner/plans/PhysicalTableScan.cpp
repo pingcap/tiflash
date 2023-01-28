@@ -59,17 +59,17 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
-        buildProjection(context, pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+        buildProjection(pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
         storage_interpreter.execute(pipeline);
-        buildProjection(context, pipeline, storage_interpreter.analyzer->getCurrentInputColumns());
+        buildProjection(pipeline, storage_interpreter.analyzer->getCurrentInputColumns());
     }
 }
 
-void PhysicalTableScan::buildProjection(Context & context, DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
+void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
 {
     RUNTIME_CHECK(
         storage_schema.size() == schema.size(),
@@ -89,7 +89,7 @@ void PhysicalTableScan::buildProjection(Context & context, DAGPipeline & pipelin
     }
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
+    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
 }
 

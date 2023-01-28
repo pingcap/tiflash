@@ -33,7 +33,7 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     assert(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr before_filter_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr before_filter_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
     std::vector<const tipb::Expr *> conditions;
     for (const auto & c : selection.conditions())
