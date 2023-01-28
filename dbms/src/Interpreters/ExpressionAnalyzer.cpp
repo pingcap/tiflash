@@ -53,7 +53,6 @@
 #include <Poco/String.h>
 #include <Poco/Util/Application.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageJoin.h>
 #include <Storages/StorageMemory.h>
 #include <Storages/StorageSet.h>
 
@@ -2175,20 +2174,6 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
     {
         auto database_table = getDatabaseAndTableNameFromIdentifier(static_cast<const ASTIdentifier &>(*table_to_join.database_and_table_name));
         StoragePtr table = context.tryGetTable(database_table.first, database_table.second);
-
-        if (table)
-        {
-            auto * storage_join = dynamic_cast<StorageJoin *>(table.get());
-
-            if (storage_join)
-            {
-                storage_join->assertCompatible(join_params.kind, join_params.strictness);
-                /// TODO Check the set of keys.
-
-                JoinPtr & join = storage_join->getJoin();
-                subquery_for_set.join = join;
-            }
-        }
     }
 
     if (!subquery_for_set.join)
@@ -2196,7 +2181,6 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
         JoinPtr join = std::make_shared<Join>(
             join_key_names_left,
             join_key_names_right,
-            settings.join_use_nulls,
             join_params.kind,
             join_params.strictness,
             "" /*req_id=*/,
@@ -2580,7 +2564,7 @@ void ExpressionAnalyzer::collectJoinedColumns(NameSet & joined_columns, NamesAnd
         {
             joined_columns.insert(col.name);
 
-            bool make_nullable = settings.join_use_nulls && (table_join.kind == ASTTableJoin::Kind::Left || table_join.kind == ASTTableJoin::Kind::Cross_Left || table_join.kind == ASTTableJoin::Kind::Full);
+            bool make_nullable = table_join.kind == ASTTableJoin::Kind::Left || table_join.kind == ASTTableJoin::Kind::Cross_Left || table_join.kind == ASTTableJoin::Kind::Full;
             joined_columns_name_type.emplace_back(col.name, make_nullable ? makeNullable(col.type) : col.type);
         }
     }

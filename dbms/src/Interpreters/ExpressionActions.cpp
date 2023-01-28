@@ -200,7 +200,7 @@ void ExpressionAction::prepare(Block & sample_block)
         /// in case of coprocessor task, the join is always not null, but if the query comes from
         /// clickhouse client, the join maybe null, skip updating column type if join is null
         // todo find a new way to update the column type so the type can always be updated.
-        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right && join->useNulls())
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
         {
             /// update the column type for left block
             std::unordered_set<String> keys;
