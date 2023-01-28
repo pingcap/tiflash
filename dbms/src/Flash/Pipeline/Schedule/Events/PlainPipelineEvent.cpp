@@ -21,7 +21,7 @@ namespace DB
 bool PlainPipelineEvent::scheduleImpl()
 {
     assert(pipeline);
-    auto pipeline_exec_group = pipeline->toExecGroup(exec_status, context, concurrency);
+    auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     assert(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());

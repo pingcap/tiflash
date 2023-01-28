@@ -74,7 +74,7 @@ void Pipeline::addGetResultSink(ResultHandler result_handler)
     addPlanNode(get_result_sink);
 }
 
-PipelineExecGroup Pipeline::toExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
