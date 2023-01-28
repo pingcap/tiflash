@@ -722,7 +722,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
      *  To simultaneously query more remote servers,
      *  instead of max_threads, max_distributed_connections is used.
      */
-    bool is_remote = false;
     if (storage && storage->isRemote())
     {
         is_remote = true;

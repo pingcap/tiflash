@@ -571,7 +571,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return InterpreterInsertQuery(
                    insert,
                    create.is_temporary ? context.getSessionContext() : context,
-                   context.getSettingsRef().insert_allow_materialized_columns)
+                   0)
             .execute();
     }
 
