@@ -154,10 +154,6 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     initSettings();
     const Settings & settings = context.getSettingsRef();
 
-    if (settings.max_subquery_depth && subquery_depth > settings.max_subquery_depth)
-        throw Exception("Too deep subqueries. Maximum: " + settings.max_subquery_depth.toString(),
-                        ErrorCodes::TOO_DEEP_SUBQUERIES);
-
     max_streams = settings.max_threads;
 
     const auto & table_expression = query.table();
@@ -697,8 +693,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
          */
         Context subquery_context = context;
         Settings subquery_settings = context.getSettings();
-        subquery_settings.max_result_rows = 0;
-        subquery_settings.max_result_bytes = 0;
         /// The calculation of extremes does not make sense and is not necessary (if you do it, then the extremes of the subquery can be taken for whole query).
         subquery_settings.extremes = false;
         subquery_context.setSettings(subquery_settings);
@@ -716,15 +710,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
     }
 
     const Settings & settings = context.getSettingsRef();
-
-    /// Limitation on the number of columns to read.
-    /// It's not applied in 'dry_run' mode, because the query could be analyzed without removal of unnecessary columns.
-    if (!dry_run && settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
-        throw Exception("Limit for number of columns to read exceeded. "
-                        "Requested: "
-                            + toString(required_columns.size())
-                            + ", maximum: " + settings.max_columns_to_read.toString(),
-                        ErrorCodes::TOO_MANY_COLUMNS);
 
     size_t limit_length = 0;
     size_t limit_offset = 0;
@@ -889,40 +874,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         pipeline.transform([&](auto & stream) {
             stream->addTableLock(table_lock);
         });
-
-        /// Set the limits and quota for reading data, the speed and time of the query.
-        {
-            IProfilingBlockInputStream::LocalLimits limits;
-            limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-            limits.size_limits = SizeLimits(settings.max_rows_to_read, settings.max_bytes_to_read, settings.read_overflow_mode);
-            limits.max_execution_time = settings.max_execution_time;
-            limits.timeout_overflow_mode = settings.timeout_overflow_mode;
-
-            /** Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
-              *  because the initiating server has a summary of the execution of the request on all servers.
-              *
-              * But limits on data size to read and maximum execution time are reasonable to check both on initiator and
-              *  additionally on each remote server, because these limits are checked per block of data processed,
-              *  and remote servers may process way more blocks of data than are received by initiator.
-              */
-            if (to_stage == QueryProcessingStage::Complete)
-            {
-                limits.min_execution_speed = settings.min_execution_speed;
-                limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
-            }
-
-            QuotaForIntervals & quota = context.getQuota();
-
-            pipeline.transform([&](auto & stream) {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
-                {
-                    p_stream->setLimits(limits);
-
-                    if (to_stage == QueryProcessingStage::Complete)
-                        p_stream->setQuota(quota);
-                }
-            });
-        }
     }
     else
         throw Exception("Logical error in InterpreterSelectQuery: nowhere to read", ErrorCodes::LOGICAL_ERROR);
@@ -1047,26 +998,15 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
 
     Aggregator::Params params(header, keys, aggregates, SpillConfig(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider()), settings.max_block_size);
 
-    if (!settings.distributed_aggregation_memory_efficient)
-    {
-        /// We union several sources into one, parallelizing the work.
-        executeUnion(pipeline);
+    pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(
+        pipeline.streams,
+        params,
+        final,
+        max_streams,
+        settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
+        /*req_id=*/"");
 
-        /// Now merge the aggregated blocks
-        pipeline.firstStream() = std::make_shared<MergingAggregatedBlockInputStream>(pipeline.firstStream(), params, final, settings.max_threads);
-    }
-    else
-    {
-        pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(
-            pipeline.streams,
-            params,
-            final,
-            max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
-            /*req_id=*/"");
-
-        pipeline.streams.resize(1);
-    }
+    pipeline.streams.resize(1);
 }
 
 
@@ -1143,15 +1083,7 @@ void InterpreterSelectQuery::executeOrder(Pipeline & pipeline)
     const Settings & settings = context.getSettingsRef();
 
     pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, /*req_id=*/"", limit);
-
-        /// Limits on sorting
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        sorting_stream->setLimits(limits);
-
-        stream = sorting_stream;
+        stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, /*req_id=*/"", limit);
     });
 
     /// If there are several streams, we merge them into one
