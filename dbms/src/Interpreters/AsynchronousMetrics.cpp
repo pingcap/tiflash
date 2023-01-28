@@ -121,7 +121,7 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
 
 FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
 {
-    RUNTIME_CHECK(!context.isDisaggregatedComputeMode());
+    RUNTIME_ASSERT(!context.isDisaggregatedComputeMode());
     // Get from RegionPersister
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
