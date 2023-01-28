@@ -15,8 +15,6 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -47,7 +45,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
     NamesAndTypes aggregated_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
@@ -66,7 +64,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             collators);
     }
 
-    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns);
     analyzer.reset(aggregated_columns);
     analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
@@ -95,6 +93,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -102,7 +101,8 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
         aggregation_keys,
         aggregation_collators,
         aggregate_descriptions,
-        is_final_agg);
+        is_final_agg,
+        spill_config);
 
     if (fine_grained_shuffle.enable())
     {
@@ -111,7 +111,6 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
                 params,
-                context.getFileProvider(),
                 true,
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
@@ -125,7 +124,6 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             pipeline.streams,
             BlockInputStreams{},
             params,
-            context.getFileProvider(),
             true,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
@@ -138,16 +136,10 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
     }
     else
     {
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-
-        pipeline.streams.resize(1);
-
+        assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
+            pipeline.firstStream(),
             params,
-            context.getFileProvider(),
             true,
             log->identifier());
     }

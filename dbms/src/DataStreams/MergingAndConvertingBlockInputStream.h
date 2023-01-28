@@ -258,17 +258,6 @@ private:
 
         parallel_merge_data->condvar.notify_all();
     }
-
-    static Block popBlocksListFront(BlocksList & blocks)
-    {
-        if (!blocks.empty())
-        {
-            Block out_block = blocks.front();
-            blocks.pop_front();
-            return out_block;
-        }
-        return {};
-    }
 };
 
 #undef AggregationMethodName

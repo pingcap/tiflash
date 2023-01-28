@@ -61,9 +61,6 @@ add_executable(bench_libcommon
 
 target_link_libraries(bench_libcommon benchmark::benchmark_main common m memcpy)
 
-add_executable (dump_variable dump_variable.cpp)
-target_link_libraries (dump_variable clickhouse_common_io)
-
 if (ARCH_AMD64)
     set_source_files_properties(
             gtest_crc64.cpp
