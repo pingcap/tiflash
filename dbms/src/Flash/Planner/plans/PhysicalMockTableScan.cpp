@@ -121,29 +121,29 @@ void PhysicalMockTableScan::updateStreams(Context & context)
 {
     mock_streams.clear();
     assert(context.mockStorage()->tableExistsForDeltaMerge(table_id));
-    mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &push_down_filter));
+    mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, filter_conditions));
 }
 
-bool PhysicalMockTableScan::pushDownFilter(Context & context, const String & filter_executor_id, const tipb::Selection & selection)
+bool PhysicalMockTableScan::filterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection)
 {
-    if (unlikely(hasPushDownFilter()))
+    if (unlikely(hasFilterConditions()))
     {
         return false;
     }
-    push_down_filter = PushDownFilter::pushDownFilterFrom(filter_executor_id, selection);
+    filter_conditions = FilterConditions::filterConditionsFrom(filter_executor_id, selection);
     updateStreams(context);
     return true;
 }
 
-bool PhysicalMockTableScan::hasPushDownFilter() const
+bool PhysicalMockTableScan::hasFilterConditions() const
 {
-    return push_down_filter.hasValue();
+    return filter_conditions->hasValue();
 }
 
-const String & PhysicalMockTableScan::getPushDownFilterId() const
+const String & PhysicalMockTableScan::getFilterConditionsId() const
 {
-    assert(hasPushDownFilter());
-    return push_down_filter.executor_id;
+    assert(hasFilterConditions());
+    return filter_conditions->executor_id;
 }
 
 Int64 PhysicalMockTableScan::getLogicalTableID() const

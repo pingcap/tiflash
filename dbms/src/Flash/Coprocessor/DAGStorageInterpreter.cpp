@@ -287,11 +287,11 @@ String genErrMsgForLocalRead(
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
     const TiDBTableScan & table_scan_,
-    const PushDownFilter & push_down_filter_,
+    const FilterConditions & filter_conditions_,
     size_t max_streams_)
     : context(context_)
     , table_scan(table_scan_)
-    , push_down_filter(push_down_filter_)
+    , filter_conditions(filter_conditions_)
     , max_streams(max_streams_)
     , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
@@ -370,11 +370,11 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
-    /// handle pushed down filter for local and remote table scan.
-    if (push_down_filter.hasValue())
+    /// handle filter conditions for local and remote table scan.
+    if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(remote_read_streams_start_index, push_down_filter, *analyzer, log, pipeline);
-        recordProfileStreams(pipeline, push_down_filter.executor_id);
+        ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
+        recordProfileStreams(pipeline, filter_conditions.executor_id);
     }
 }
 
@@ -612,7 +612,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         /// to avoid null point exception
         query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            push_down_filter.conditions,
+            filter_conditions.conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
@@ -1047,7 +1047,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            push_down_filter,
+            filter_conditions,
             log));
     }
     return remote_requests;

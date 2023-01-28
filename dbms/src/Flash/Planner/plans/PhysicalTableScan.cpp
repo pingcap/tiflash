@@ -57,13 +57,13 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
 
     if (context.isDisaggregatedComputeMode())
     {
-        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, *filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
         buildProjection(pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
     else
     {
-        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, max_streams);
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, *filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
         buildProjection(pipeline, storage_interpreter.analyzer->getCurrentInputColumns());
     }
@@ -103,27 +103,27 @@ const Block & PhysicalTableScan::getSampleBlock() const
     return sample_block;
 }
 
-bool PhysicalTableScan::pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection)
+bool PhysicalTableScan::filterConditions(const String & filter_executor_id, const tipb::Selection & selection)
 {
-    /// Since there is at most one selection on the table scan, pushDownFilter will only be called at most once.
-    /// So in this case hasPushDownFilter() is always false.
-    if (unlikely(hasPushDownFilter()))
+    /// Since there is at most one selection on the table scan, filterConditions will only be called at most once.
+    /// So in this case hasFilterConditions() is always false.
+    if (unlikely(hasFilterConditions()))
     {
         return false;
     }
 
-    push_down_filter = PushDownFilter::pushDownFilterFrom(filter_executor_id, selection);
+    filter_conditions = FilterConditions::filterConditionsFrom(filter_executor_id, selection);
     return true;
 }
 
-bool PhysicalTableScan::hasPushDownFilter() const
+bool PhysicalTableScan::hasFilterConditions() const
 {
-    return push_down_filter.hasValue();
+    return filter_conditions->hasValue();
 }
 
-const String & PhysicalTableScan::getPushDownFilterId() const
+const String & PhysicalTableScan::getFilterConditionsId() const
 {
-    assert(hasPushDownFilter());
-    return push_down_filter.executor_id;
+    assert(hasFilterConditions());
+    return filter_conditions->executor_id;
 }
 } // namespace DB
