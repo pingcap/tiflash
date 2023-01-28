@@ -773,10 +773,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         if (max_streams == 0)
             throw Exception("Logical error: zero number of streams requested", ErrorCodes::LOGICAL_ERROR);
 
-        /// If necessary, we request more sources than the number of threads - to distribute the work evenly over the threads.
-        if (max_streams > 1 && !is_remote)
-            max_streams *= settings.max_streams_to_max_threads_ratio;
-
         query_analyzer->makeSetsForIndex();
 
         SelectQueryInfo query_info;
