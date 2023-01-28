@@ -177,16 +177,6 @@ struct Settings
     M(SettingSeconds, http_receive_timeout, DEFAULT_HTTP_READ_BUFFER_TIMEOUT, "HTTP receive timeout")                                                                                                                                   \
     M(SettingBool, use_index_for_in_with_subqueries, true, "Try using an index if there is a subquery or a table expression on the right side of the IN operator.")                                                                     \
                                                                                                                                                                                                                                         \
-    M(SettingBool, empty_result_for_aggregation_by_empty_set, false, "Return empty result when aggregating without keys on empty set.")                                                                                                 \
-                                                                                                                                                                                                                                        \
-    /** Limits during query execution are part of the settings. \
-      * Used to provide a more safe execution of queries from the user interface. \
-      * Basically, limits are checked for each block (not every row). That is, the limits can be slightly violated. \
-      * Almost all limits apply only to SELECTs. \
-      * Almost all limits apply to each stream individually. \
-      */                                                                                                                                                                                                                                \
-                                                                                                                                                                                                                                        \
-                                                                                                                                                                                                                                        \
     M(SettingUInt64, max_bytes_before_external_group_by, 0, "")                                                                                                                                                                         \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, max_bytes_before_external_sort, 0, "")                                                                                                                                                                             \
