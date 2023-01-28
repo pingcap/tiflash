@@ -221,7 +221,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         if (res.in)
         {
-            prepareForInputStream(context, stage, res.in);
+            prepareForInputStream(context, res.in);
         }
 
         if (res.out)
@@ -388,7 +388,6 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
 
 void prepareForInputStream(
     Context & context,
-    QueryProcessingStage::Enum stage,
     const BlockInputStreamPtr & in)
 {
     assert(in);

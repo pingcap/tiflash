@@ -559,7 +559,7 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void * aggregation_method_impl{};
 
-    /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
+    /** Specialization for the case when there are no keys.
       */
     AggregatedDataWithoutKey without_key = nullptr;
 
@@ -890,10 +890,6 @@ public:
         size_t aggregates_size;
         Int64 local_delta_memory = 0;
 
-        /// The settings of approximate calculation of GROUP BY.
-        const size_t max_rows_to_group_by;
-        const OverflowMode group_by_overflow_mode;
-
         /// Two-level aggregation settings (used for a large number of keys).
         /** With how many keys or the size of the aggregation state in bytes,
           *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
@@ -918,8 +914,6 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const AggregateDescriptions & aggregates_,
-            size_t max_rows_to_group_by_,
-            OverflowMode group_by_overflow_mode_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
@@ -932,8 +926,6 @@ public:
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
-            , max_rows_to_group_by(max_rows_to_group_by_)
-            , group_by_overflow_mode(group_by_overflow_mode_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
@@ -951,7 +943,7 @@ public:
                const SpillConfig & spill_config,
                UInt64 max_block_size_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, OverflowMode::THROW, 0, 0, 0, false, spill_config, max_block_size_, collators_)
+            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -983,7 +975,7 @@ public:
     using AggregateColumnsConstData = std::vector<const ColumnAggregateFunction::Container *>;
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
-    /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
+    /// Process one block. Return false if the processing should be aborted.
     bool executeOnBlock(
         const Block & block,
         AggregatedDataVariants & result,
@@ -1292,14 +1284,6 @@ protected:
 
     void destroyWithoutKey(
         AggregatedDataVariants & result) const;
-
-
-    /** Checks constraints on the maximum number of keys for aggregation.
-      * If it is exceeded, then, depending on the group_by_overflow_mode, either
-      * - throws an exception;
-      * - returns false, which means that execution must be aborted;
-      */
-    bool checkLimits(size_t result_size) const;
 };
 
 /** Get the aggregation variant by its type. */
