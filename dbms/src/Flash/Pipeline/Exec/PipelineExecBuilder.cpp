@@ -24,14 +24,14 @@ void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
     assert(source_op && transform_op);
-    Block header = getHeader();
+    Block header = getCurrentHeader();
     transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
 }
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
     assert(!sink_op && sink_op_);
-    Block header = getHeader();
+    Block header = getCurrentHeader();
     sink_op_->setHeader(header);
     sink_op = std::move(sink_op_);
 }
@@ -46,7 +46,7 @@ PipelineExecPtr PipelineExecBuilder::build(PipelineExecutorStatus & exec_status)
         std::move(sink_op));
 }
 
-Block PipelineExecBuilder::getHeader() const
+Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
         return sink_op->getHeader();
@@ -76,9 +76,9 @@ PipelineExecGroup PipelineExecGroupBuilder::build(PipelineExecutorStatus & exec_
     return pipeline_exec_group;
 }
 
-Block PipelineExecGroupBuilder::getHeader()
+Block PipelineExecGroupBuilder::getCurrentHeader()
 {
     assert(!group.empty());
-    return group.back().getHeader();
+    return group.back().getCurrentHeader();
 }
 } // namespace DB

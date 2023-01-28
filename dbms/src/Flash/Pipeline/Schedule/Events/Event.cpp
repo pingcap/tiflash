@@ -21,7 +21,7 @@
 
 namespace DB
 {
-// if any exception throw here, we should pass err msg and cancel the query.
+// if any exception throw here, we should record err msg and then cancel the query.
 #define CATCH                                                                \
     catch (...)                                                              \
     {                                                                        \
@@ -123,7 +123,7 @@ void Event::onTaskFinish() noexcept
 
 void Event::switchStatus(EventStatus from, EventStatus to)
 {
-    RUNTIME_CHECK(status.compare_exchange_strong(from, to));
+    RUNTIME_ASSERT(status.compare_exchange_strong(from, to));
 }
 
 #undef CATCH

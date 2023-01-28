@@ -22,9 +22,7 @@ bool PlainPipelineEvent::scheduleImpl()
 {
     assert(pipeline);
     auto pipeline_exec_group = pipeline->toExecGroup(exec_status, context, concurrency);
-    if (pipeline_exec_group.empty())
-        return true;
-
+    assert(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());
     for (auto & pipline_exec : pipeline_exec_group)

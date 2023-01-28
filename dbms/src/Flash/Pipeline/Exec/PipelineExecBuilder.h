@@ -30,7 +30,7 @@ struct PipelineExecBuilder
     void appendTransformOp(TransformOpPtr && transform_op);
     void setSinkOp(SinkOpPtr && sink_op_);
 
-    Block getHeader() const;
+    Block getCurrentHeader() const;
 
     PipelineExecPtr build(PipelineExecutorStatus & exec_status);
 };
@@ -58,6 +58,6 @@ struct PipelineExecGroupBuilder
 
     PipelineExecGroup build(PipelineExecutorStatus & exec_status);
 
-    Block getHeader();
+    Block getCurrentHeader();
 };
 } // namespace DB
