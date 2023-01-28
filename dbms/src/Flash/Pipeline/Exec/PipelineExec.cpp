@@ -47,7 +47,7 @@ OperatorStatus PipelineExec::executeImpl()
     if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
 
-    // start from the next transform after fetched block transform.
+    // start from the next transform op after fetched block transform op.
     for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
         CHECK_IS_CANCELLED;
