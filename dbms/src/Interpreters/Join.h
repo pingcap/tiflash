@@ -276,7 +276,7 @@ public:
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
         std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
         std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
-        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> serialized;
         // TODO: add more cases like Aggregator
     };
 
@@ -326,8 +326,6 @@ private:
     BlocksList blocks;
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
-    /// keep original block for concurrent build
-    Blocks original_blocks;
 
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN

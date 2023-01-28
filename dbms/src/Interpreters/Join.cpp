@@ -859,7 +859,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         total_input_build_rows += block.rows();
         blocks.push_back(block);
         stored_block = &blocks.back();
-        original_blocks.push_back(block);
     }
     insertFromBlockInternal(stored_block, stream_index);
 }
@@ -1106,7 +1105,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
     static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, ProbeProcessInfo & probe_process_info)
     {
-        if (KIND == ASTTableJoin::Kind::Inner)
+        if constexpr (KIND == ASTTableJoin::Kind::Inner)
         {
             (*offsets)[i] = current_offset;
         }
@@ -1485,7 +1484,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             }
             else
             {
-                /// strictness = ALL && kind = Anti should not happens
+                /// original strictness = ALL && kind = Anti should not happen
                 row_filter[index] = filter[index];
             }
             if (row_filter[index])
@@ -1618,13 +1617,12 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     {
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.safeGetByPosition(i);
 
-        /// Don't insert column if it's in left block.
         if (!block.has(src_column.name))
-        {
-            added_columns.push_back(src_column.column->cloneEmpty());
-            added_columns.back()->reserve(src_column.column->size());
-            right_indexes.push_back(num_columns_to_skip + i);
-        }
+            throw Exception("block from probe side has a column with the same name: " + src_column.name + "as a column in sample_block_with_columns_to_add");
+
+        added_columns.push_back(src_column.column->cloneEmpty());
+        added_columns.back()->reserve(src_column.column->size());
+        right_indexes.push_back(num_columns_to_skip + i);
     }
 
     size_t rows = block.rows();
@@ -1632,8 +1630,8 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter;
 
-    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
-        || kind == ASTTableJoin::Kind::Anti)
+    if constexpr (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
+                  || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
@@ -1689,7 +1687,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
             for (size_t i = 0; i < existing_columns; ++i)
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
         }
-
 
         /// If ALL ... JOIN - we replicate all the columns except the new ones.
         if (offsets_to_replicate)
@@ -1892,7 +1889,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
     for (size_t start = 0; start <= rows_left; start += left_rows_per_iter)
     {
         size_t end = std::min(start + left_rows_per_iter, rows_left);
-        MutableColumns dst_columns(num_existing_columns + num_columns_to_add);
+        MutableColumns dst_columns(block.columns());
         for (size_t i = 0; i < block.columns(); i++)
         {
             dst_columns[i] = block.getByPosition(i).column->cloneEmpty();
