@@ -38,7 +38,7 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    bool filterConditions(const String & filter_executor_id, const tipb::Selection & selection);
+    bool setFilterConditions(const String & filter_executor_id, const tipb::Selection & selection);
 
     bool hasFilterConditions() const;
 
@@ -49,7 +49,7 @@ private:
     void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
 
 private:
-    FilterConditionsPtr filter_conditions;
+    FilterConditions filter_conditions;
 
     TiDBTableScan tidb_table_scan;
 

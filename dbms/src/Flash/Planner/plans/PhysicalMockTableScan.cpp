@@ -121,10 +121,10 @@ void PhysicalMockTableScan::updateStreams(Context & context)
 {
     mock_streams.clear();
     assert(context.mockStorage()->tableExistsForDeltaMerge(table_id));
-    mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, filter_conditions));
+    mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &filter_conditions));
 }
 
-bool PhysicalMockTableScan::filterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection)
+bool PhysicalMockTableScan::setFilterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection)
 {
     if (unlikely(hasFilterConditions()))
     {
@@ -137,13 +137,13 @@ bool PhysicalMockTableScan::filterConditions(Context & context, const String & f
 
 bool PhysicalMockTableScan::hasFilterConditions() const
 {
-    return filter_conditions->hasValue();
+    return filter_conditions.hasValue();
 }
 
 const String & PhysicalMockTableScan::getFilterConditionsId() const
 {
     assert(hasFilterConditions());
-    return filter_conditions->executor_id;
+    return filter_conditions.executor_id;
 }
 
 Int64 PhysicalMockTableScan::getLogicalTableID() const

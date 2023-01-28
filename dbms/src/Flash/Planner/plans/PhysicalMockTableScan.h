@@ -51,7 +51,7 @@ public:
     void initStreams(Context & context);
 
     // for delta-merge test
-    bool filterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection);
+    bool setFilterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection);
 
     bool hasFilterConditions() const;
 
@@ -65,7 +65,7 @@ private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
 private:
-    FilterConditionsPtr filter_conditions;
+    FilterConditions filter_conditions;
     Block sample_block;
 
     BlockInputStreams mock_streams;

@@ -21,8 +21,6 @@
 
 namespace DB
 {
-struct FilterConditions;
-using FilterConditionsPtr = std::shared_ptr<FilterConditions>;
 
 /** This struct FilterConditions is used to store the filter conditions of the selection whose child is a table scan.
   * Those conditions will be used to construct roght index in storage engine.
@@ -30,9 +28,9 @@ using FilterConditionsPtr = std::shared_ptr<FilterConditions>;
   */
 struct FilterConditions
 {
-    static FilterConditionsPtr filterConditionsFrom(const String & executor_id, const tipb::Executor * executor);
+    static FilterConditions filterConditionsFrom(const String & executor_id, const tipb::Executor * executor);
 
-    static FilterConditionsPtr filterConditionsFrom(const String & executor_id, const tipb::Selection & selection);
+    static FilterConditions filterConditionsFrom(const String & executor_id, const tipb::Selection & selection);
 
     FilterConditions() = default;
 

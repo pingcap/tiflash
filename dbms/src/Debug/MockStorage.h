@@ -82,7 +82,7 @@ public:
 
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
-    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, FilterConditionsPtr filter_conditions = nullptr);
+    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions = nullptr);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 

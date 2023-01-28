@@ -193,13 +193,13 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 
     if (context.isDisaggregatedComputeMode())
     {
-        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, *filter_conditions, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
         analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
     }
     else
     {
-        DAGStorageInterpreter storage_interpreter(context, table_scan, *filter_conditions, max_streams);
+        DAGStorageInterpreter storage_interpreter(context, table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
 
         analyzer = std::move(storage_interpreter.analyzer);

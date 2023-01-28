@@ -49,22 +49,22 @@ tipb::Executor * FilterConditions::constructSelectionForRemoteRead(tipb::Executo
     }
 }
 
-FilterConditionsPtr FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Executor * executor)
+FilterConditions FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Executor * executor)
 {
     if (!executor || !executor->has_selection())
     {
-        return std::make_shared<FilterConditions>();
+        return {"", {}};
     }
 
     return filterConditionsFrom(executor_id, executor->selection());
 }
 
-FilterConditionsPtr FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Selection & selection)
+FilterConditions FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Selection & selection)
 {
     std::vector<const tipb::Expr *> conditions;
     for (const auto & condition : selection.conditions())
         conditions.push_back(&condition);
 
-    return std::make_shared<FilterConditions>(executor_id, conditions);
+    return {executor_id, conditions};
 }
 } // namespace DB

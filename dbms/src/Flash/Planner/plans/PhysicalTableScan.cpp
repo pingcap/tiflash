@@ -57,13 +57,13 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
 
     if (context.isDisaggregatedComputeMode())
     {
-        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, *filter_conditions, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
         buildProjection(pipeline, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
     else
     {
-        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, *filter_conditions, max_streams);
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
         buildProjection(pipeline, storage_interpreter.analyzer->getCurrentInputColumns());
     }
@@ -103,9 +103,9 @@ const Block & PhysicalTableScan::getSampleBlock() const
     return sample_block;
 }
 
-bool PhysicalTableScan::filterConditions(const String & filter_executor_id, const tipb::Selection & selection)
+bool PhysicalTableScan::setFilterConditions(const String & filter_executor_id, const tipb::Selection & selection)
 {
-    /// Since there is at most one selection on the table scan, filterConditions will only be called at most once.
+    /// Since there is at most one selection on the table scan, setFilterConditions() will only be called at most once.
     /// So in this case hasFilterConditions() is always false.
     if (unlikely(hasFilterConditions()))
     {
@@ -118,12 +118,12 @@ bool PhysicalTableScan::filterConditions(const String & filter_executor_id, cons
 
 bool PhysicalTableScan::hasFilterConditions() const
 {
-    return filter_conditions->hasValue();
+    return filter_conditions.hasValue();
 }
 
 const String & PhysicalTableScan::getFilterConditionsId() const
 {
     assert(hasFilterConditions());
-    return filter_conditions->executor_id;
+    return filter_conditions.executor_id;
 }
 } // namespace DB
