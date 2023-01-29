@@ -1617,7 +1617,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     {
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.safeGetByPosition(i);
 
-        if (!block.has(src_column.name))
+        if (block.has(src_column.name))
             throw Exception("block from probe side has a column with the same name: " + src_column.name + "as a column in sample_block_with_columns_to_add");
 
         added_columns.push_back(src_column.column->cloneEmpty());
