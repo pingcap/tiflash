@@ -55,8 +55,6 @@ void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr & f)
     {
         return;
     }
-    //size_t max_row_id = *std::max_element(data, data + size);
-    //RUNTIME_CHECK(max_row_id < filter.size(), max_row_id, filter.size());
     if (!f)
     {
         for (UInt32 i = 0; i < size; i++)
@@ -89,8 +87,6 @@ bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     auto end = filter.cbegin() + start + limit;
     if (all_match || std::find(begin, end, false) == end)
     {
-        //static const UInt8 match = 1;
-        //f.assign(static_cast<size_t>(limit), match);
         return true;
     }
     else
