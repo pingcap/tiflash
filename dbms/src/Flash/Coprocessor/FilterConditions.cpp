@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <common/likely.h>
 
 namespace DB
 {
-PushDownFilter::PushDownFilter(
+FilterConditions::FilterConditions(
     const String & executor_id_,
     const std::vector<const tipb::Expr *> & conditions_)
     : executor_id(executor_id_)
@@ -27,12 +27,12 @@ PushDownFilter::PushDownFilter(
     if (unlikely(conditions.empty() != executor_id.empty()))
     {
         throw TiFlashException(
-            "for PushDownFilter, conditions and executor_id should both be empty or neither should be empty",
+            "for FilterConditions, conditions and executor_id should both be empty or neither should be empty",
             Errors::Coprocessor::BadRequest);
     }
 }
 
-tipb::Executor * PushDownFilter::constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const
+tipb::Executor * FilterConditions::constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const
 {
     if (hasValue())
     {
@@ -49,17 +49,17 @@ tipb::Executor * PushDownFilter::constructSelectionForRemoteRead(tipb::Executor 
     }
 }
 
-PushDownFilter PushDownFilter::pushDownFilterFrom(const String & executor_id, const tipb::Executor * executor)
+FilterConditions FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Executor * executor)
 {
     if (!executor || !executor->has_selection())
     {
         return {"", {}};
     }
 
-    return pushDownFilterFrom(executor_id, executor->selection());
+    return filterConditionsFrom(executor_id, executor->selection());
 }
 
-PushDownFilter PushDownFilter::pushDownFilterFrom(const String & executor_id, const tipb::Selection & selection)
+FilterConditions FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Selection & selection)
 {
     std::vector<const tipb::Expr *> conditions;
     for (const auto & condition : selection.conditions())
