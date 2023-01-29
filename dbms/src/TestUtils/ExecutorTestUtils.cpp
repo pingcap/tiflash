@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
@@ -51,6 +52,24 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type)
     default:
         throw Exception("Unsupport type");
     }
+}
+
+void ExecutorTest::SetUp()
+{
+    initializeContext();
+    initializeClientInfo();
+    TaskSchedulerConfig config{8};
+    assert(!TaskScheduler::instance);
+    TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+}
+
+void ExecutorTest::TearDown()
+{
+    if (context.mockStorage())
+        context.mockStorage()->clear();
+
+    assert(TaskScheduler::instance);
+    TaskScheduler::instance.reset();
 }
 
 DAGContext & ExecutorTest::getDAGContext()
@@ -117,7 +136,7 @@ void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+    WRAP_FOR_TEST_BEGIN
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
@@ -153,7 +172,7 @@ void ExecutorTest::executeExecutor(
             ASSERT_TRUE(assert_func(res)) << test_info_msg();
         }
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
+    WRAP_FOR_TEST_END
 }
 
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
@@ -203,6 +222,11 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 void ExecutorTest::enablePlanner(bool is_enable)
 {
     context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+}
+
+void ExecutorTest::enablePipeline(bool is_enable)
+{
+    context.context.setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(

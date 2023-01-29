@@ -14,9 +14,14 @@
 
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
+#include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
+#include <Flash/Executor/PipelineExecutor.h>
+#include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -35,6 +40,7 @@ namespace FailPoints
 {
 extern const char random_interpreter_failpoint[];
 } // namespace FailPoints
+
 namespace
 {
 void prepareForExecute(Context & context)
@@ -98,6 +104,37 @@ BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
 
     return res;
 }
+
+std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool internal)
+{
+    RUNTIME_ASSERT(context.getDAGContext());
+    auto & dag_context = *context.getDAGContext();
+    const auto & logger = dag_context.log;
+    RUNTIME_ASSERT(logger);
+
+    if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request))
+        return {};
+
+    prepareForExecute(context);
+
+    ProcessList::EntryPtr process_list_entry;
+    if (likely(!internal))
+    {
+        process_list_entry = getProcessListEntry(context, dag_context);
+        logQuery(dag_context.dummy_query_string, context, logger);
+    }
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
+
+    PhysicalPlan physical_plan{context, logger->identifier()};
+    physical_plan.build(dag_context.dag_request);
+    physical_plan.outputAndOptimize();
+    auto pipeline = physical_plan.toPipeline();
+    auto executor = std::make_unique<PipelineExecutor>(process_list_entry, context, pipeline);
+    if (likely(!internal))
+        LOG_DEBUG(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
+    return {std::move(executor)};
+}
 } // namespace
 
 BlockIO executeAsBlockIO(Context & context, bool internal)
@@ -116,6 +153,14 @@ BlockIO executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
+    // now only support pipeline model in executor/interpreter test.
+    if ((context.isExecutorTest() || context.isInterpreterTest())
+        && context.getSettingsRef().enable_planner
+        && context.getSettingsRef().enable_pipeline)
+    {
+        if (auto res = executeAsPipeline(context, internal); res)
+            return std::move(*res);
+    }
     return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context, internal));
 }
 } // namespace DB

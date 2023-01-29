@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,11 +62,6 @@ public:
                                    toNullableVec<MyDate>("col7", col_mydate),
                                    toNullableVec<MyDateTime>("col8", col_mydatetime),
                                    toNullableVec<String>("col9", col_string)});
-    }
-
-    void TearDown() override
-    {
-        context.mockStorage()->clear();
     }
 
     ColumnWithInt64 col_id{1, 2, 3, 4, 5, 6, 7, 8, 9};
