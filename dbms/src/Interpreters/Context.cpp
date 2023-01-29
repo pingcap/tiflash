@@ -206,6 +206,8 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
+    std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
+
     explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
@@ -1842,6 +1844,17 @@ SharedQueriesPtr Context::getSharedQueries()
         shared->shared_queries = std::make_shared<SharedQueries>();
     return shared->shared_queries;
 }
+
+const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchemas() const
+{
+    return shared->shared_block_schemas;
+}
+
+void Context::setSharedBlockSchemas(std::shared_ptr<DB::DM::SharedBlockSchemas> & shared_block_schemas_)
+{
+    shared->shared_block_schemas = shared_block_schemas_;
+}
+
 
 size_t Context::getMaxStreams() const
 {

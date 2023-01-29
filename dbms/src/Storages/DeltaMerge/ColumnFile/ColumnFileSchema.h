@@ -24,13 +24,31 @@
 #include <openssl/base.h>
 #include <openssl/sha.h>
 
+#include "boost/container_hash/hash_fwd.hpp"
+
+namespace std
+{
+using Digest = UInt256;
+template <>
+struct hash<Digest>
+{
+    size_t operator()(const Digest & digest) const
+    {
+        size_t seed = 0;
+        boost::hash_combine(seed, boost::hash_value(digest.a));
+        boost::hash_combine(seed, boost::hash_value(digest.b));
+        boost::hash_combine(seed, boost::hash_value(digest.c));
+        boost::hash_combine(seed, boost::hash_value(digest.d));
+        return seed;
+    }
+};
+} // namespace std
+
 namespace DB
 {
 namespace DM
 {
 using Digest = UInt256;
-
-Digest calcDigest(const Block & schema);
 class ColumnFileSchema
 {
 private:
@@ -56,7 +74,7 @@ public:
 
     String toString() const
     {
-        return "{schema:" + (schema ? schema.dumpStructure() : "none");
+        return "{schema:" + (schema ? schema.dumpStructure() : "none") + "}";
     }
 
     const Block & getSchema() const { return schema; }
@@ -65,38 +83,33 @@ public:
 
 using ColumnFileSchemaPtr = std::shared_ptr<ColumnFileSchema>;
 
-
-struct HashForDigest
+class SharedBlockSchemas
 {
-    size_t operator()(const Digest & k) const
-    {
-        return k.a ^ k.b ^ k.c ^ k.d;
-    }
-};
-
-class ColumnFileSchemaMapWithLock
-{ // 应该做成一个单例么？
 private:
-    std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>, HashForDigest> column_file_schema_map;
+    // we use sha256 to generate Digest for each ColumnFileSchema as the key of column_file_schemas,
+    // to minimize the possibility of two different schemas having the same key in column_file_schemas.
+    // Besides, we use weak_ptr to ensure we can remove the ColumnFileSchema,
+    // when no one use it, to avoid too much memory usage.
+    std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
     std::mutex mutex;
     BackgroundProcessingPool::TaskHandle handle;
     BackgroundProcessingPool & background_pool;
 
 public:
-    explicit ColumnFileSchemaMapWithLock(DB::Context & context)
+    explicit SharedBlockSchemas(DB::Context & context)
         : background_pool(context.getBackgroundPool())
     {
         handle = background_pool.addTask([&, this] {
             std::lock_guard<std::mutex> lock(mutex);
-            for (auto it = column_file_schema_map.begin(); it != column_file_schema_map.end();)
+            for (auto iter = column_file_schemas.begin(); iter != column_file_schemas.end();)
             {
-                if (it->second.expired())
+                if (iter->second.expired())
                 {
-                    it = column_file_schema_map.erase(it);
+                    iter = column_file_schemas.erase(iter);
                 }
                 else
                 {
-                    ++it;
+                    ++iter;
                 }
             }
             return true;
@@ -104,7 +117,7 @@ public:
                                          false);
     }
 
-    ~ColumnFileSchemaMapWithLock()
+    ~SharedBlockSchemas()
     {
         background_pool.removeTask(handle);
     }
@@ -112,8 +125,8 @@ public:
     ColumnFileSchemaPtr find(const Digest & digest)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        auto it = column_file_schema_map.find(digest);
-        if (it == column_file_schema_map.end())
+        auto it = column_file_schemas.find(digest);
+        if (it == column_file_schemas.end())
             return nullptr;
         return it->second.lock();
     }
@@ -121,13 +134,13 @@ public:
     void insert(const Digest & digest, const ColumnFileSchemaPtr & schema)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        column_file_schema_map.emplace(digest, schema);
+        column_file_schemas.emplace(digest, schema);
     }
 
     size_t size()
     {
         std::lock_guard<std::mutex> lock(mutex);
-        return column_file_schema_map.size();
+        return column_file_schemas.size();
     }
 };
 } // namespace DM

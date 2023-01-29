@@ -19,6 +19,40 @@ namespace DB
 {
 namespace DM
 {
+Digest hashSchema(const Block & schema)
+{
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    unsigned char digest_bytes[32];
+
+    const auto & data = schema.getColumnsWithTypeAndName();
+    for (const auto & column_with_type_and_name : data)
+    {
+        const auto & type = column_with_type_and_name.type->getTypeId();
+        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(&type), sizeof(type));
+
+        const auto & name = column_with_type_and_name.name.c_str();
+        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(name), strlen(name));
+
+        const auto & column_id = column_with_type_and_name.column_id;
+        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(&column_id), sizeof(column_id));
+
+        const auto & default_value = column_with_type_and_name.default_value.toString();
+        const auto & default_value_c_str = default_value.c_str();
+        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(default_value_c_str), strlen(default_value_c_str));
+    }
+
+    SHA256_Final(digest_bytes, &ctx);
+
+    Digest digest;
+    digest.a = *(reinterpret_cast<uint64_t *>(digest_bytes));
+    digest.b = *(reinterpret_cast<uint64_t *>(digest_bytes + 8));
+    digest.c = *(reinterpret_cast<uint64_t *>(digest_bytes + 16));
+    digest.d = *(reinterpret_cast<uint64_t *>(digest_bytes + 24));
+
+    return digest;
+}
+
 void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context)
 {
     const IDataType * to_type_ptr = to_type.get();

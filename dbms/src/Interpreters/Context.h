@@ -109,7 +109,7 @@ namespace DM
 class MinMaxIndexCache;
 class DeltaIndexManager;
 class GlobalStoragePool;
-class ColumnFileSchemaMapWithLock;
+class SharedBlockSchemas;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 
@@ -179,9 +179,6 @@ private:
     DAGContext * dag_context = nullptr;
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
-
-    std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> column_file_schema_map_with_lock;
-
     /// Use copy constructor or createGlobal() instead
     Context();
 
@@ -514,16 +511,8 @@ public:
         return disaggregated_mode == DisaggregatedMode::Storage;
     }
 
-    const std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> & getColumnFileSchemaMapWithLock() const
-    {
-        return column_file_schema_map_with_lock;
-    }
-
-    void setColumnFileSchemaMapWithLock(std::shared_ptr<DB::DM::ColumnFileSchemaMapWithLock> & column_file_schema_map_with_lock_)
-    {
-        column_file_schema_map_with_lock = column_file_schema_map_with_lock_;
-    }
-
+    const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
+    void setSharedBlockSchemas(std::shared_ptr<DB::DM::SharedBlockSchemas> & shared_block_schemas_);
 
 private:
     /** Check if the current client has access to the specified database.

@@ -1193,8 +1193,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
 
-    auto column_file_schema_map_with_lock = std::make_shared<DM::ColumnFileSchemaMapWithLock>(*global_context);
-    global_context->setColumnFileSchemaMapWithLock(column_file_schema_map_with_lock);
+    auto shared_block_schemas = std::make_shared<DM::SharedBlockSchemas>(*global_context);
+    global_context->setSharedBlockSchemas(shared_block_schemas);
 
     {
         // Note that this must do before initialize schema sync service.

@@ -962,15 +962,24 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
         if (cache_blocks.empty())
         {
             BlockUPtr block = std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot));
-            auto digest = calcDigest(*block);
-            auto schema = global_context.getColumnFileSchemaMapWithLock()->find(digest);
+            auto digest = hashSchema(*block);
+            auto schema = global_context.getSharedBlockSchemas()->find(digest);
             if (schema)
             {
-                // check if the block schema is the same or just sha-256 of schema is the same
+                // Because we use sha256 to calculate the hash of schema, so schemas has extremely low probability of collision
+                // while we can't guarantee that there will be no collision forever,
+                // so we choose to check when schema changes
+                // to check if the schema is truly same or just sha-256 of schema is the same.
+                // Considering there is extremely low probability for same digest but different schema,
+                // we choose just throw exception when this happens.
+                // If unfortunately it happens,
+                // we can rename some columns in this table and then restart tiflash to workaround.
                 if (!isSameSchema(*block, schema->getSchema()))
                 {
-                    // 确认一下这边用什么报错方式，直接 core 嘛？
-                    LOG_ERROR(log, "new table's schema's digest is the same as one previous table schemas' digest, but schema info is not the same, please change the new tables' schema, whose table_info is ", tidb_table_info);
+                    throw Exception("new table's schema's digest is the same as one previous table schemas' digest, \
+                    but schema info is not the same .So please change the new tables' schema, whose table_info is "
+                                        + tidb_table_info.serialize() + ". The collisioned schema is " + schema->toString(),
+                                    ErrorCodes::LOGICAL_ERROR);
                 }
             }
 
