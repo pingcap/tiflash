@@ -68,6 +68,7 @@ struct SegmentSnapshot : private boost::noncopyable
 
     dtpb::DisaggregatedSegment serializeToRemoteProtocol(
         PageId segment_id,
+        UInt64 segment_epoch,
         const RowKeyRange & segment_range,
         const RowKeyRanges & read_ranges) const;
 

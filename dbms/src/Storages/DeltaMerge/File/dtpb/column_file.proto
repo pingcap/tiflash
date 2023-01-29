@@ -73,16 +73,18 @@ message ColumnFileRemote {
 
 message DisaggregatedSegment {
     uint64 segment_id = 1;
-    bytes key_range = 2;
-    repeated ColumnFileBig stable_pages = 3;
+    uint64 segment_epoch = 2;
+    bytes key_range = 3;
+
+    repeated ColumnFileBig stable_pages = 10;
     // serialized array of ColumnFileRemote
-    repeated ColumnFileRemote column_files_persisted = 4;
+    repeated ColumnFileRemote column_files_persisted = 11;
 
     // TODO: We should defer mem_table resolution to a later request.
     // bool has_mem_table = 5;
-    repeated ColumnFileRemote column_files_memtable = 5;
+    repeated ColumnFileRemote column_files_memtable = 12;
 
-    repeated bytes read_key_ranges = 6;
+    repeated bytes read_key_ranges = 21;
 }
 
 message DisaggregatedPhysicalTable {
