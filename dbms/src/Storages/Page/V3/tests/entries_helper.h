@@ -44,7 +44,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, toDebugString(id_entry.second));
+            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, id_entry.second->toDebugString());
         },
         ", ");
     buf.append("]");
@@ -52,24 +52,24 @@ inline String toString(const PageIDAndEntriesV3 & entries)
 }
 
 
-inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
+inline bool isSameEntry(const PageEntryV3Ptr & lhs, const PageEntryV3Ptr & rhs)
 {
     // Maybe need more fields check later
-    return (lhs.file_id == rhs.file_id && lhs.offset == rhs.offset && lhs.size == rhs.size);
+    return (lhs->getFileId() == rhs->getFileId() && lhs->getOffset() == rhs->getOffset() && lhs->getSize() == rhs->getSize());
 }
 
 inline ::testing::AssertionResult entryCompare(
     const char * lhs_expr,
     const char * rhs_expr,
-    const PageEntryV3 & lhs,
-    const PageEntryV3 & rhs)
+    const PageEntryV3Ptr & lhs,
+    const PageEntryV3Ptr & rhs)
 {
     // Maybe need more fields check later
     if (isSameEntry(lhs, rhs))
     {
         return ::testing::AssertionSuccess();
     }
-    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, toDebugString(lhs), toDebugString(rhs), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs->toDebugString(), rhs->toDebugString(), false);
 }
 
 #define ASSERT_SAME_ENTRY(val1, val2) ASSERT_PRED_FORMAT2(entryCompare, val1, val2)
@@ -80,7 +80,7 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * dir_expr,
     const char * page_id_expr,
     const char * snap_expr,
-    const PageEntryV3 & expected_entry,
+    const PageEntryV3Ptr & expected_entry,
     const PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
@@ -102,8 +102,8 @@ inline ::testing::AssertionResult getEntryCompare(
         return testing::internal::EqFailure(
             expected_entry_expr,
             actual_expr.c_str(),
-            toDebugString(expected_entry),
-            toDebugString(entry),
+            expected_entry->toDebugString(),
+            entry->toDebugString(),
             false);
     };
     String error;
@@ -165,8 +165,8 @@ inline ::testing::AssertionResult getEntriesCompare(
                     return testing::internal::EqFailure(
                         expect_expr.c_str(),
                         actual_expr.c_str(),
-                        toDebugString(expected_id_entry.second),
-                        toDebugString(actual_id_entry.second),
+                        expected_id_entry.second->toDebugString(),
+                        actual_id_entry.second->toDebugString(),
                         false);
                 }
             }
@@ -222,7 +222,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     try
     {
         auto id_entry = dir->getByIDOrNull(page_id, snap);
-        if (!id_entry.second.isValid())
+        if (!id_entry.second->isValid())
             return ::testing::AssertionSuccess();
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got <{}.{}, {}>",
@@ -231,7 +231,7 @@ inline ::testing::AssertionResult getEntryNotExist(
             snap_expr,
             id_entry.first.high,
             id_entry.first.low,
-            toDebugString(id_entry.second));
+            id_entry.second->toDebugString());
     }
     catch (DB::Exception & ex)
     {

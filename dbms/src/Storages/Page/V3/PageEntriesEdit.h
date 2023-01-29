@@ -148,7 +148,7 @@ public:
         records.reserve(capacity);
     }
 
-    void put(PageIdV3Internal page_id, const PageEntryV3 & entry)
+    void put(PageIdV3Internal page_id, const PageEntryV3Ptr & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::PUT;
@@ -165,7 +165,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3 & entry)
+    void upsertPage(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3Ptr & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::UPSERT;
@@ -212,7 +212,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varEntry(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    void varEntry(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3Ptr & entry, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_ENTRY;
@@ -244,7 +244,7 @@ public:
         PageIdV3Internal page_id;
         PageIdV3Internal ori_page_id;
         PageVersion version;
-        PageEntryV3 entry;
+        PageEntryV3Ptr entry;
         Int64 being_ref_count;
 
         EditRecord()
@@ -252,6 +252,7 @@ public:
             , page_id(0)
             , ori_page_id(0)
             , version(0, 0)
+            , entry(makeInvalidPageEntry())
             , being_ref_count(1)
         {}
     };
@@ -265,7 +266,7 @@ public:
             rec.page_id,
             rec.ori_page_id,
             rec.version,
-            DB::PS::V3::toDebugString(rec.entry),
+            rec.entry->toDebugString(),
             rec.being_ref_count);
     }
 

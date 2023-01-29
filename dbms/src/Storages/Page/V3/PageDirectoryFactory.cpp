@@ -66,7 +66,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
             // So we need to use `getLastEntry` instead of `getEntry(version)` here.
             if (auto entry = entries->getLastEntry(std::nullopt); entry)
             {
-                blob_stats->restoreByEntry(*entry);
+                blob_stats->restoreByEntry(entry);
             }
         }
 
@@ -116,7 +116,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileP
             // So we need to use `getLastEntry` instead of `getEntry(version)` here.
             if (auto entry = entries->getLastEntry(std::nullopt); entry)
             {
-                blob_stats->restoreByEntry(*entry);
+                blob_stats->restoreByEntry(entry);
             }
         }
 

@@ -315,16 +315,17 @@ private:
                                    version.sequence, //
                                    version.epoch, //
                                    entry_or_del.isDelete(), //
-                                   entry.file_id, //
-                                   entry.offset, //
-                                   entry.size, //
-                                   entry.checksum, //
-                                   entry.field_offsets.size() //
+                                   entry->getFileId(), //
+                                   entry->getOffset(), //
+                                   entry->getSize(), //
+                                   entry->getCheckSum(), //
+                                   entry->getFieldOffsets().size() //
                 );
-                if (!entry.field_offsets.empty())
+                if (!entry->getFieldOffsets().empty())
                 {
                     page_str.append("          field offset:\n");
-                    for (const auto & [offset, crc] : entry.field_offsets)
+                    const auto & field_offsets = entry->getFieldOffsets();
+                    for (const auto & [offset, crc] : field_offsets)
                     {
                         page_str.fmtAppend("            offset: {} crc: 0x{:X}\n", offset, crc);
                     }
@@ -423,7 +424,7 @@ private:
                 try
                 {
                     PageIDAndEntryV3 to_read_entry;
-                    const PageEntryV3 & entry = entry_or_del.entry;
+                    const auto & entry = entry_or_del.entry;
                     PageIDAndEntriesV3 to_read;
                     to_read_entry.first = page_internal_id;
                     to_read_entry.second = entry;
@@ -431,9 +432,9 @@ private:
                     to_read.emplace_back(to_read_entry);
                     blob_store.read(to_read);
 
-                    if (!entry.field_offsets.empty())
+                    if (!entry->getFieldOffsets().empty())
                     {
-                        DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
+                        DB::PageStorage::FieldIndices indices(entry->getFieldOffsets().size());
                         std::iota(std::begin(indices), std::end(indices), 0);
 
                         BlobStore::FieldReadInfos infos;
@@ -485,7 +486,7 @@ private:
                     try
                     {
                         PageIDAndEntryV3 to_read_entry;
-                        const PageEntryV3 & entry = entry_or_del.entry;
+                        const auto & entry = entry_or_del.entry;
                         PageIDAndEntriesV3 to_read;
                         to_read_entry.first = internal_id;
                         to_read_entry.second = entry;
@@ -493,9 +494,9 @@ private:
                         to_read.emplace_back(to_read_entry);
                         blob_store.read(to_read);
 
-                        if (enable_fo_check && !entry.field_offsets.empty())
+                        if (enable_fo_check && !entry->getFieldOffsets().empty())
                         {
-                            DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
+                            DB::PageStorage::FieldIndices indices(entry->getFieldOffsets().size());
                             std::iota(std::begin(indices), std::end(indices), 0);
 
                             BlobStore::FieldReadInfos infos;

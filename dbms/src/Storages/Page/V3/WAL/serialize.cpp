@@ -37,47 +37,56 @@ inline void deserializeVersionFrom(ReadBuffer & buf, PageVersion & version)
     readIntBinary(version.epoch, buf);
 }
 
-inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
+inline void serializeEntryTo(const PageEntryV3Ptr & entry, WriteBuffer & buf)
 {
-    writeIntBinary(entry.file_id, buf);
-    writeIntBinary(entry.offset, buf);
-    writeIntBinary(entry.size, buf);
-    writeIntBinary(entry.padded_size, buf);
-    writeIntBinary(entry.checksum, buf);
-    writeIntBinary(entry.tag, buf);
+    writeIntBinary(entry->getFileId(), buf);
+    writeIntBinary(entry->getOffset(), buf);
+    writeIntBinary(entry->getSize(), buf);
+    writeIntBinary(entry->getPaddedSize(), buf);
+    writeIntBinary(entry->getCheckSum(), buf);
+    writeIntBinary(entry->getTag(), buf);
     // fieldsOffset TODO: compression on `fieldsOffset`
-    writeIntBinary(entry.field_offsets.size(), buf);
-    for (const auto & [off, checksum] : entry.field_offsets)
+    const auto & field_offsets = entry->getFieldOffsets();
+    writeIntBinary(field_offsets.size(), buf);
+    for (const auto & [off, checksum] : field_offsets)
     {
         writeIntBinary(off, buf);
         writeIntBinary(checksum, buf);
     }
 }
 
-inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
+inline PageEntryV3Ptr deserializeEntryFrom(ReadBuffer & buf)
 {
-    readIntBinary(entry.file_id, buf);
-    readIntBinary(entry.offset, buf);
-    readIntBinary(entry.size, buf);
-    readIntBinary(entry.padded_size, buf);
-    readIntBinary(entry.checksum, buf);
-    readIntBinary(entry.tag, buf);
-    // fieldsOffset
+    BlobFileId file_id;
+    BlobFileOffset offset;
+    PageSize size;
+    PageSize padded_size;
+    UInt64 checksum;
+    UInt64 tag;
     PageFieldOffsetChecksums field_offsets;
+
+    readIntBinary(file_id, buf);
+    readIntBinary(offset, buf);
+    readIntBinary(size, buf);
+    readIntBinary(padded_size, buf);
+    readIntBinary(checksum, buf);
+    readIntBinary(tag, buf);
     UInt64 size_field_offsets = 0;
     readIntBinary(size_field_offsets, buf);
     if (size_field_offsets != 0)
     {
-        entry.field_offsets.reserve(size_field_offsets);
+        field_offsets.reserve(size_field_offsets);
         PageFieldOffset field_offset;
         UInt64 field_checksum;
         for (size_t i = 0; i < size_field_offsets; ++i)
         {
             readIntBinary(field_offset, buf);
             readIntBinary(field_checksum, buf);
-            entry.field_offsets.emplace_back(field_offset, field_checksum);
+            field_offsets.emplace_back(field_offset, field_checksum);
         }
     }
+
+    return makePageEntry(file_id, size, padded_size, tag, offset, checksum, std::move(field_offsets));
 }
 
 void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
@@ -108,7 +117,7 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     deserializeVersionFrom(buf, rec.version);
     readIntBinary(rec.being_ref_count, buf);
 
-    deserializeEntryFrom(buf, rec.entry);
+    rec.entry = deserializeEntryFrom(buf);
     edit.appendRecord(rec);
 }
 
@@ -121,7 +130,7 @@ void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
     writeIntBinary(record.page_id, buf);
     writeIntBinary(record.ori_page_id, buf);
     serializeVersionTo(record.version, buf);
-    assert(record.entry.file_id == INVALID_BLOBFILE_ID);
+    assert(!record.entry || record.entry->getFileId() == INVALID_BLOBFILE_ID);
 }
 
 void deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)

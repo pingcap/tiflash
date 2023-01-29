@@ -354,7 +354,7 @@ if (ENABLE_TESTS)
                 DESTINATION ".")
     endif ()
 
-    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
+    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)
     add_check(gtests_dbms)
 
     add_target_pch("pch-dbms.h" gtests_dbms)

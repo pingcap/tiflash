@@ -41,10 +41,10 @@ BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig &
 {
 }
 
-void BlobStats::restoreByEntry(const PageEntryV3 & entry)
+void BlobStats::restoreByEntry(const PageEntryV3Ptr & entry)
 {
-    auto stat = blobIdToStat(entry.file_id);
-    stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
+    auto stat = blobIdToStat(entry->getFileId());
+    stat->restoreSpaceMap(entry->getOffset(), entry->getDiskSize());
 }
 
 std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(String blob_name)
