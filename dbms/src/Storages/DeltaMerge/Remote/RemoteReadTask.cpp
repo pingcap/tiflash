@@ -233,7 +233,11 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextTaskForPrepare()
             insertTask(seg_task, ready_lock);
             return true;
         }
-        return false;
+        // If there exist some task that will become "DataReady", then we should
+        // wait. Else we should return true to end the wait.
+        bool has_more_tasks = (ready_segment_tasks.count(SegmentReadTaskState::Init) > 0
+                               || ready_segment_tasks.count(SegmentReadTaskState::Receiving) > 0);
+        return !has_more_tasks;
     });
     return seg_task;
 }
@@ -265,7 +269,7 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
         if (auto iter = ready_segment_tasks.find(SegmentReadTaskState::DataReady); iter != ready_segment_tasks.end())
         {
             if (iter->second.empty())
-                return false;
+                return false; // yield and wait for next check
             seg_task = iter->second.front();
             iter->second.pop_front();
             if (iter->second.empty())
@@ -274,7 +278,7 @@ RemoteSegmentReadTaskPtr RemoteReadTask::nextReadyTask()
             }
             return true;
         }
-        return false;
+        return false; // yield and wait for next check
     });
 
     return seg_task;

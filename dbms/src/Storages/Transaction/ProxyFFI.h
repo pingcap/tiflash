@@ -133,7 +133,7 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
 // 0: try, but can fail.
 // 1: try until succeed.
 uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term);
-RawCppPtr CreateWriteBatch();
+RawCppPtr CreateWriteBatch(const EngineStoreServerWrap *);
 void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value);
 void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id);
 uint64_t WriteBatchSize(RawVoidPtr ptr);
@@ -141,8 +141,8 @@ uint8_t WriteBatchIsEmpty(RawVoidPtr ptr);
 void WriteBatchMerge(RawVoidPtr lhs, RawVoidPtr rhs);
 void WriteBatchClear(RawVoidPtr ptr);
 void ConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr);
-PageWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
-PageAndCppStrWithViewVec HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
+CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
+RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
 void PurgePageStorage(const EngineStoreServerWrap * server);
 CppStrWithView SeekPSKey(const EngineStoreServerWrap * server, BaseBuffView raw_page_id);
 uint8_t IsPSEmpty(const EngineStoreServerWrap * server);

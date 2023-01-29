@@ -64,6 +64,8 @@ public:
         int extra_table_id_index_,
         std::string_view req_id);
 
+    ~RemoteSegmentThreadInputStream() override;
+
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
@@ -89,6 +91,10 @@ private:
     const ReadMode read_mode;
     const int extra_table_id_index;
     TableID physical_table_id;
+
+    Stopwatch watch;
+    double seconds_pop;
+    double seconds_build;
 
     size_t total_rows = 0;
     bool done = false;
