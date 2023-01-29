@@ -859,6 +859,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         total_input_build_rows += block.rows();
         blocks.push_back(block);
         stored_block = &blocks.back();
+        original_blocks.push_back(block);
     }
     insertFromBlockInternal(stored_block, stream_index);
 }
