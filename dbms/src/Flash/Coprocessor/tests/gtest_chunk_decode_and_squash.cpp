@@ -123,10 +123,10 @@ public:
             }
             else
             {
-                auto codec = CHBlockChunkCodecV1{block, true};
+                auto codec = CHBlockChunkCodecV1{block};
                 auto && str = codec.encode(block, CompressionMethod::LZ4);
-                assert(!str.empty());
-                assert(static_cast<CompressionMethodByte>(str[0]) == CompressionMethodByte::LZ4);
+                if (!str.empty())
+                    assert(static_cast<CompressionMethodByte>(str[0]) == CompressionMethodByte::LZ4);
                 encode_str_vec.push_back(std::move(str));
                 encode_str_use_compression.emplace_back(true);
             }

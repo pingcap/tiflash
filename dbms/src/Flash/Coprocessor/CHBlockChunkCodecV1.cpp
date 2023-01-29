@@ -240,11 +240,11 @@ struct CHBlockChunkCodecV1Impl
         : inner(inner_)
     {}
 
-    std::string encode(const Block & block, CompressionMethod compression_method)
+    CHBlockChunkCodecV1::EncodeRes encode(const Block & block, CompressionMethod compression_method)
     {
         return encodeImpl(block, compression_method);
     }
-    std::string encode(const std::vector<Block> & blocks, CompressionMethod compression_method)
+    CHBlockChunkCodecV1::EncodeRes encode(const std::vector<Block> & blocks, CompressionMethod compression_method)
     {
         return encodeImpl(blocks, compression_method);
     }
@@ -356,15 +356,17 @@ struct CHBlockChunkCodecV1Impl
         }
     }
     template <typename VecColumns>
-    std::string encodeImpl(VecColumns && batch_columns, CompressionMethod compression_method)
+    CHBlockChunkCodecV1::EncodeRes encodeImpl(VecColumns && batch_columns, CompressionMethod compression_method)
     {
         size_t column_encode_bytes = 0;
-        size_t rows = 0;
+        const size_t rows = ({
+            size_t rows = 0;
+            // Calculate total rows and check data valid
+            calcColumnEncodeInfo(batch_columns, column_encode_bytes, rows);
+            rows;
+        });
 
-        // Calculate total rows and check data valid
-        calcColumnEncodeInfo(batch_columns, column_encode_bytes, rows);
-
-        if unlikely (0 == rows && !inner.always_keep_header)
+        if unlikely (0 == rows)
         {
             // no rows and no need to encode header
             return {};
@@ -405,10 +407,9 @@ struct CHBlockChunkCodecV1Impl
 
         // Encode header
         EncodeHeader(*ostr_ptr, inner.header, rows);
-        if (rows > 0)
-        {
-            encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
-        }
+        // Encode column data
+        encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
+
         // Flush rest buffer
         if (compress_codec)
         {
@@ -425,10 +426,9 @@ struct CHBlockChunkCodecV1Impl
     }
 };
 
-CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, bool always_keep_header_)
+CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_)
     : header(header_)
     , header_size(ApproxBlockHeaderBytes(header))
-    , always_keep_header(always_keep_header_)
 {
 }
 
@@ -442,7 +442,7 @@ static void checkSchema(const Block & header, const Block & block)
     }
 }
 
-std::string CHBlockChunkCodecV1::encode(const Block & block, CompressionMethod compression_method, bool check_schema)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const Block & block, CompressionMethod compression_method, bool check_schema)
 {
     if (check_schema)
     {
@@ -458,31 +458,31 @@ void CHBlockChunkCodecV1::clear()
     compressed_size = 0;
 }
 
-std::string CHBlockChunkCodecV1::encode(const MutableColumns & columns, CompressionMethod compression_method)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const MutableColumns & columns, CompressionMethod compression_method)
 {
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(columns, compression_method);
 }
-std::string CHBlockChunkCodecV1::encode(const Columns & columns, CompressionMethod compression_method)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const Columns & columns, CompressionMethod compression_method)
 {
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(columns, compression_method);
 }
-std::string CHBlockChunkCodecV1::encode(const std::vector<MutableColumns> & columns, CompressionMethod compression_method)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const std::vector<MutableColumns> & columns, CompressionMethod compression_method)
 {
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(columns, compression_method);
 }
-std::string CHBlockChunkCodecV1::encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method)
 {
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(std::move(columns), compression_method);
 }
-std::string CHBlockChunkCodecV1::encode(const std::vector<Columns> & columns, CompressionMethod compression_method)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const std::vector<Columns> & columns, CompressionMethod compression_method)
 {
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(std::move(columns), compression_method);
 }
-std::string CHBlockChunkCodecV1::encode(std::vector<Columns> && columns, CompressionMethod compression_method)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::vector<Columns> && columns, CompressionMethod compression_method)
 {
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(std::move(columns), compression_method);
 }
-std::string CHBlockChunkCodecV1::encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema)
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema)
 {
     if (check_schema)
     {

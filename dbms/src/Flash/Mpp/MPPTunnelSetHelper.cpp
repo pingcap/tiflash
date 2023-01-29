@@ -30,7 +30,6 @@ TrackedMppDataPacketPtr ToPacket(
 
     auto && codec = CHBlockChunkCodecV1{
         header,
-        false /*escape empty part*/,
     };
 
     auto && res = codec.encode(std::move(part_columns), method);
@@ -75,7 +74,6 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
 
     auto && codec = CHBlockChunkCodecV1{
         header,
-        true /*keep header even if no rows*/,
     };
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
 
@@ -88,10 +86,11 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
             columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
 
         auto && res = codec.encode(columns, method);
-        assert(!res.empty());
-
-        tracked_packet->addChunk(std::move(res));
-        tracked_packet->getPacket().add_stream_ids(stream_idx);
+        if (!res.empty())
+        {
+            tracked_packet->addChunk(std::move(res));
+            tracked_packet->getPacket().add_stream_ids(stream_idx);
+        }
 
         for (size_t col_id = 0; col_id < num_columns; ++col_id)
         {
@@ -126,12 +125,14 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
         for (size_t col_id = 0; col_id < num_columns; ++col_id)
             columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
         auto block = header.cloneWithColumns(std::move(columns));
-
-        // encode into packet
-        codec_stream->encode(block, 0, block.rows());
-        tracked_packet->addChunk(codec_stream->getString());
-        tracked_packet->getPacket().add_stream_ids(stream_idx);
-        codec_stream->clear();
+        if (block.rows())
+        {
+            // encode into packet
+            codec_stream->encode(block, 0, block.rows());
+            tracked_packet->addChunk(codec_stream->getString());
+            tracked_packet->getPacket().add_stream_ids(stream_idx);
+            codec_stream->clear();
+        }
 
         // disassemble the block back to scatter columns
         columns = block.mutateColumns();

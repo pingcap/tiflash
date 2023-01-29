@@ -33,26 +33,26 @@ extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, Wr
 struct CHBlockChunkCodecV1 : boost::noncopyable
 {
     using Self = CHBlockChunkCodecV1;
+    using EncodeRes = std::string;
 
     const Block & header;
     const size_t header_size;
-    const bool always_keep_header;
 
     size_t encoded_rows{};
     size_t original_size{};
     size_t compressed_size{};
 
     void clear();
-    explicit CHBlockChunkCodecV1(const Block & header_, bool always_keep_header_);
+    explicit CHBlockChunkCodecV1(const Block & header_);
     //
-    std::string encode(const MutableColumns & columns, CompressionMethod compression_method);
-    std::string encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method);
-    std::string encode(const std::vector<MutableColumns> & columns, CompressionMethod compression_method);
-    std::string encode(const Columns & columns, CompressionMethod compression_method);
-    std::string encode(const std::vector<Columns> & columns, CompressionMethod compression_method);
-    std::string encode(std::vector<Columns> && columns, CompressionMethod compression_method);
-    std::string encode(const Block & block, CompressionMethod compression_method, bool check_schema = true);
-    std::string encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema = true);
+    EncodeRes encode(const MutableColumns & columns, CompressionMethod compression_method);
+    EncodeRes encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method);
+    EncodeRes encode(const std::vector<MutableColumns> & columns, CompressionMethod compression_method);
+    EncodeRes encode(const Columns & columns, CompressionMethod compression_method);
+    EncodeRes encode(const std::vector<Columns> & columns, CompressionMethod compression_method);
+    EncodeRes encode(std::vector<Columns> && columns, CompressionMethod compression_method);
+    EncodeRes encode(const Block & block, CompressionMethod compression_method, bool check_schema = true);
+    EncodeRes encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema = true);
     //
     static Block decode(const Block & header, std::string_view str);
 };

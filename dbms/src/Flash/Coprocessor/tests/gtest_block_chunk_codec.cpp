@@ -44,7 +44,9 @@ void test_enocde_release_data(VecCol && batch_columns, const Block & header, con
     // encode and release columns
     const auto mode = CompressionMethod::LZ4;
 
-    auto codec = CHBlockChunkCodecV1{header, false};
+    auto codec = CHBlockChunkCodecV1{
+        header,
+    };
     auto str = codec.encode(std::forward<VecCol>(batch_columns), mode);
     ASSERT_FALSE(str.empty());
     ASSERT_EQ(codec.encoded_rows, total_rows);
@@ -86,7 +88,9 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
     {
         {
             // encode nothing if no rows
-            auto codec = CHBlockChunkCodecV1{header, false};
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
             auto str = codec.encode(header, mode);
             ASSERT_TRUE(str.empty());
             ASSERT_EQ(codec.encoded_rows, 0);
@@ -94,24 +98,9 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
             ASSERT_EQ(codec.original_size, 0);
         }
         {
-            // encode header schema if no rows
-            auto codec = CHBlockChunkCodecV1{header, true};
-            auto str = codec.encode(header, mode);
-            ASSERT_FALSE(str.empty());
-            ASSERT_EQ(codec.encoded_rows, 0);
-
-            if (mode == CompressionMethod::NONE)
-                ASSERT_EQ(codec.compressed_size, 0);
-            else
-                ASSERT_NE(codec.compressed_size, 0);
-
-            ASSERT_NE(codec.original_size, 0);
-
-            auto decoded_block = CHBlockChunkCodecV1::decode(header, str);
-            ASSERT_EQ(0, decoded_block.rows());
-        }
-        {
-            auto codec = CHBlockChunkCodecV1{header, false};
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
             auto str = codec.encode(blocks.front(), mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, blocks.front().rows());
@@ -120,7 +109,9 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         }
         {
             // test encode blocks
-            auto codec = CHBlockChunkCodecV1{header, false};
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
             auto str = codec.encode(blocks, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, total_rows);
@@ -137,7 +128,9 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         }
         {
             auto columns = prepareBlock(rows).getColumns();
-            auto codec = CHBlockChunkCodecV1{header, false};
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
             auto str = codec.encode(columns, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, rows);
@@ -146,7 +139,9 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         }
         {
             auto columns = prepareBlock(rows).mutateColumns();
-            auto codec = CHBlockChunkCodecV1{header, false};
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
             auto str = codec.encode(columns, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, rows);

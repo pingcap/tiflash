@@ -653,7 +653,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
 
-    switch (packet.version())
+    switch (auto version = packet.version(); version)
     {
     case DB::MPPDataPacketV0:
     {
@@ -674,7 +674,6 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     {
         for (const auto * chunk : recv_msg->chunks)
         {
-            assert(!chunk->empty());
             auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
             if (!result || !result->rows())
                 continue;
@@ -685,7 +684,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     }
     default:
     {
-        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", packet.version());
+        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
         break;
     }
     }
