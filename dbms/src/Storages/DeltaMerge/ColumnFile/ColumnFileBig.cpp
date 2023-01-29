@@ -139,11 +139,10 @@ std::pair<size_t, size_t> ColumnFileBigReader::readRowsRepeatedly(MutableColumns
         const auto & pk_column = columns[0];
 
         auto [offset, rows] = copyColumnsData(columns, pk_column, output_cols, rows_start_in_block, rows_in_block_limit, range);
-        // For DMFile, records are sorted by row key. Only the first block and the last block will be filtered by range.
-        // It will read a continuous piece of data here.
+        // For DMFile, records are sorted by row key. Only the prefix blocks and the suffix blocks will be filtered by range.
+        // It will read a continuous piece of data here. Update `actual_offset` after first successful read of data.
         if (actual_read == 0 && rows > 0)
         {
-            // First successful read of data, update `actual_offset`.
             auto rows_before_block_index = block_index == 0 ? 0 : cached_block_rows_end[block_index - 1];
             actual_offset = rows_before_block_index + offset;
         }
@@ -207,11 +206,10 @@ std::pair<size_t, size_t> ColumnFileBigReader::readRowsOnce(MutableColumns & out
         auto read_limit_in_block = read_end_for_cur_block - read_offset;
 
         auto [offset, rows] = copyColumnsData(cur_block_data, cur_block_data[0], output_cols, read_start_in_block, read_limit_in_block, range);
-        // For DMFile, records are sorted by row key. Only the first block and the last block will be filtered by range.
-        // It will read a continuous piece of data here.
+        // For DMFile, records are sorted by row key. Only the prefix blocks and the suffix blocks will be filtered by range.
+        // It will read a continuous piece of data here. Update `actual_offset` after first successful read of data.
         if (actual_read == 0 && rows > 0)
         {
-            // First successful read of data, update `actual_offset`.
             actual_offset = rows_before_cur_block + offset;
         }
         actual_read += rows;
