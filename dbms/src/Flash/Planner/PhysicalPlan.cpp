@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,24 +16,26 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
+#include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
+#include <Flash/Planner/Plans/PhysicalExchangeSender.h>
+#include <Flash/Planner/Plans/PhysicalFilter.h>
+#include <Flash/Planner/Plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalLimit.h>
+#include <Flash/Planner/Plans/PhysicalMockExchangeReceiver.h>
+#include <Flash/Planner/Plans/PhysicalMockExchangeSender.h>
+#include <Flash/Planner/Plans/PhysicalMockTableScan.h>
+#include <Flash/Planner/Plans/PhysicalProjection.h>
+#include <Flash/Planner/Plans/PhysicalTableScan.h>
+#include <Flash/Planner/Plans/PhysicalTopN.h>
+#include <Flash/Planner/Plans/PhysicalWindow.h>
+#include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Flash/Planner/optimize.h>
-#include <Flash/Planner/plans/PhysicalAggregation.h>
-#include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
-#include <Flash/Planner/plans/PhysicalExchangeSender.h>
-#include <Flash/Planner/plans/PhysicalFilter.h>
-#include <Flash/Planner/plans/PhysicalJoin.h>
-#include <Flash/Planner/plans/PhysicalLimit.h>
-#include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
-#include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
-#include <Flash/Planner/plans/PhysicalMockTableScan.h>
-#include <Flash/Planner/plans/PhysicalProjection.h>
-#include <Flash/Planner/plans/PhysicalTableScan.h>
-#include <Flash/Planner/plans/PhysicalTopN.h>
-#include <Flash/Planner/plans/PhysicalWindow.h>
-#include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
@@ -252,7 +254,7 @@ void PhysicalPlan::addRootFinalProjectionIfNeed()
     }
 }
 
-void PhysicalPlan::outputAndOptimize()
+PhysicalPlanNodePtr PhysicalPlan::outputAndOptimize()
 {
     RUNTIME_ASSERT(!root_node, log, "root_node should be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
@@ -274,6 +276,8 @@ void PhysicalPlan::outputAndOptimize()
 
     if (!dagContext().return_executor_id)
         fillOrderForListBasedExecutors(dagContext(), root_node);
+
+    return root_node;
 }
 
 String PhysicalPlan::toString() const
@@ -282,9 +286,28 @@ String PhysicalPlan::toString() const
     return PhysicalPlanVisitor::visitToString(root_node);
 }
 
-void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     assert(root_node);
-    root_node->transform(pipeline, context, max_streams);
+    root_node->buildBlockInputStream(pipeline, context, max_streams);
+}
+
+PipelinePtr PhysicalPlan::toPipeline()
+{
+    assert(root_node);
+    PipelineBuilder builder;
+    root_node->buildPipeline(builder);
+    root_node.reset();
+    auto pipeline = builder.build();
+    auto to_string = [&]() -> String {
+        FmtBuffer buffer;
+        pipeline->toTreeString(buffer);
+        return buffer.toString();
+    };
+    LOG_DEBUG(
+        log,
+        "build pipeline dag: \n{}",
+        to_string());
+    return pipeline;
 }
 } // namespace DB
