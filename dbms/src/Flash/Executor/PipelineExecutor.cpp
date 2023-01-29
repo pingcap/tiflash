@@ -80,4 +80,10 @@ int PipelineExecutor::estimateNewThreadCount()
 {
     return 0;
 }
+
+UInt64 PipelineExecutor::collectCPUTime()
+{
+    // TODO support collectCPUTime
+    return 0;
+}
 } // namespace DB
