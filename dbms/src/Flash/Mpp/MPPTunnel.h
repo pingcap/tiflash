@@ -332,11 +332,45 @@ private:
     std::atomic_bool is_done;
 };
 
+// TODO remove it in the future
+class LocalTunnelSenderUnrefined : public TunnelSender
+{
+public:
+    using Base = TunnelSender;
+    using Base::Base;
+
+    LocalTunnelSenderUnrefined(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
+    , send_queue(queue_size) {}
+
+    TrackedMppDataPacketPtr readForLocal();
+
+    bool push(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
+    }
+
+    void cancelWith(const String & reason) override
+    {
+        send_queue.cancelWith(reason);
+    }
+
+    bool finish() override
+    {
+        return send_queue.finish();
+    }
+
+private:
+    bool cancel_reason_sent = false;
+    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
+};
+
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
 using SyncTunnelSenderPtr = std::shared_ptr<SyncTunnelSender>;
 using AsyncTunnelSenderPtr = std::shared_ptr<AsyncTunnelSender>;
 using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender<false>>;
 using LocalTunnelFineGrainedSenderPtr = std::shared_ptr<LocalTunnelSender<true>>;
+using LocalTunnelSenderUnrefinedPtr = std::shared_ptr<LocalTunnelSenderUnrefined>;
 
 /**
  * MPPTunnel represents the sender of an exchange connection.
@@ -409,6 +443,8 @@ public:
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
 
+    void connectUnrefinedLocal(PacketWriter * writer);
+
     // wait until all the data has been transferred.
     void waitForFinish();
 
@@ -424,6 +460,7 @@ public:
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
     LocalTunnelSenderPtr getLocalTunnelSender() { return local_tunnel_sender; }
     LocalTunnelFineGrainedSenderPtr getLocalTunnelFineGrainedSender() { return local_tunnel_fine_grained_sender; }
+    LocalTunnelSenderUnrefinedPtr getLocalTunnelSenderUnrefined() { return local_tunnel_sender_unrefined; }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -474,6 +511,7 @@ private:
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderPtr local_tunnel_sender;
     LocalTunnelFineGrainedSenderPtr local_tunnel_fine_grained_sender;
+    LocalTunnelSenderUnrefinedPtr local_tunnel_sender_unrefined;
     std::atomic<Int64> data_size_in_queue;
 };
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;

@@ -392,4 +392,50 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
         sendJob(writer);
     });
 }
+
+// TODO remove it in the future
+void MPPTunnel::connectUnrefinedLocal(PacketWriter * writer)
+{
+    {
+        std::unique_lock lk(mu);
+        if (status != TunnelStatus::Unconnected)
+            throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
+
+        LOG_TRACE(log, "ready to connect");
+
+        RUNTIME_ASSERT(writer == nullptr, log);
+        local_tunnel_sender_unrefined = std::make_shared<LocalTunnelSenderUnrefined>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
+        tunnel_sender = local_tunnel_sender_unrefined;
+
+        status = TunnelStatus::Connected;
+        cv_for_status_changed.notify_all();
+    }
+    LOG_DEBUG(log, "connected");
+}
+
+std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSenderUnrefined::readForLocal()
+{
+    TrackedMppDataPacketPtr res;
+    auto result = send_queue.pop(res);
+    if (result == MPMCQueueResult::OK)
+    {
+        MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
+
+        // switch tunnel's memory tracker into receiver's
+        res->switchMemTracker(current_memory_tracker);
+        return res;
+    }
+    else if (result == MPMCQueueResult::CANCELLED)
+    {
+        RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        if (!cancel_reason_sent)
+        {
+            cancel_reason_sent = true;
+            res = std::make_shared<TrackedMppDataPacket>(getPacketWithError(send_queue.getCancelReason()), current_memory_tracker);
+            return res;
+        }
+    }
+    consumerFinish("");
+    return nullptr;
+}
 } // namespace DB

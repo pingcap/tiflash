@@ -86,6 +86,8 @@ public:
 
     bool supportAsync(const ExchangeRecvRequest & request) const;
 
+    ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
+
     ExchangePacketReaderPtr makeSyncReader(const ExchangeRecvRequest & request) const;
 
     void makeAsyncReader(
@@ -102,6 +104,8 @@ public:
     void fillSchema(DAGSchema & schema) const;
 
     void establishMPPConnectionLocal(const ExchangeRecvRequest & request, size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+
+    std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalUnrefined(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager) const;
 
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
     void sendMPPTaskToTiFlashStorageNode(

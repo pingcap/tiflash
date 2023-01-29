@@ -288,6 +288,98 @@ void GRPCReceiverContext::establishMPPConnectionLocal(
     tunnel->connectLocal(source_index, local_request_handler, is_fine_grained);
 }
 
+// TODO remove it in the future
+std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocalUnrefined(
+    const ::mpp::EstablishMPPConnectionRequest * request,
+    const std::shared_ptr<MPPTaskManager> & task_manager) const
+{
+    std::chrono::seconds timeout(10);
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
+    {
+        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+    }
+    if (!tunnel->isLocal())
+    {
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
+    }
+    tunnel->connectUnrefinedLocal(nullptr);
+    return std::make_tuple(tunnel, grpc::Status::OK);
+}
+
+// TODO remove it in the future
+struct LocalExchangePacketReader : public ExchangePacketReader
+{
+    LocalTunnelSenderUnrefinedPtr local_tunnel_sender;
+
+    explicit LocalExchangePacketReader(const LocalTunnelSenderUnrefinedPtr & local_tunnel_sender_)
+        : local_tunnel_sender(local_tunnel_sender_)
+    {}
+
+    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
+    ~LocalExchangePacketReader() override
+    {
+        if (local_tunnel_sender)
+        {
+            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
+            local_tunnel_sender->consumerFinish("Receiver exists");
+            local_tunnel_sender.reset();
+        }
+    }
+
+    bool read(TrackedMppDataPacketPtr & packet) override
+    {
+        TrackedMppDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
+        bool success = tmp_packet != nullptr;
+        if (success)
+            packet = tmp_packet;
+        return success;
+    }
+
+    void cancel(const String & reason) override
+    {
+        if (local_tunnel_sender)
+        {
+            local_tunnel_sender->consumerFinish(fmt::format("Receiver cancelled, reason: {}", reason));
+            local_tunnel_sender.reset();
+        }
+    }
+
+    grpc::Status finish() override
+    {
+        if (local_tunnel_sender)
+        {
+            local_tunnel_sender->consumerFinish("Receiver finished!");
+            local_tunnel_sender.reset();
+        }
+        return ::grpc::Status::OK;
+    }
+};
+
+// TODO remove it in the future
+ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
+{
+    if (request.is_local)
+    {
+        auto [tunnel, status] = establishMPPConnectionLocalUnrefined(request.req.get(), task_manager);
+        if (!status.ok())
+        {
+            throw Exception("Exchange receiver meet error : " + status.error_message());
+        }
+        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderUnrefined());
+    }
+    else
+    {
+        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+        reader->reader = cluster->rpc_client->sendStreamRequest(
+            request.req->sender_meta().address(),
+            &reader->client_context,
+            *reader->call);
+        return reader;
+    }
+}
+
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const
 {
     auto reader = std::make_shared<GrpcExchangePacketReader>(request);

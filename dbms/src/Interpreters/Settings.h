@@ -365,7 +365,8 @@ struct Settings
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
     M(SettingUInt64, max_spilled_size_per_spill, 1024ULL * 1024 * 1024, "Max spilled data size per spill, 1GB as the default value.")                                                                                                   \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_planner, true, "Enable planner")
+    M(SettingBool, enable_planner, true, "Enable planner") \
+    M(SettingBool, enable_refined_local_tunnel, true, "Enable refined local tunnel")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
