@@ -108,15 +108,7 @@ void orderStreams(
         extra_info = enableFineGrainedShuffleExtraInfo;
 
     pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
-
-        /// Limits on sorting
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        sorting_stream->setLimits(limits);
-
-        stream = sorting_stream;
+        stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
         stream->setExtraInfo(extra_info);
     });
 

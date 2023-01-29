@@ -168,37 +168,6 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
     return has_region_to_read;
 }
 
-void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
-{
-    const Settings & settings = context.getSettingsRef();
-
-    IProfilingBlockInputStream::LocalLimits limits;
-    limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-    limits.size_limits = SizeLimits(settings.max_rows_to_read, settings.max_bytes_to_read, settings.read_overflow_mode);
-    limits.max_execution_time = settings.max_execution_time;
-    limits.timeout_overflow_mode = settings.timeout_overflow_mode;
-
-    /** Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
-          *  because the initiating server has a summary of the execution of the request on all servers.
-          *
-          * But limits on data size to read and maximum execution time are reasonable to check both on initiator and
-          *  additionally on each remote server, because these limits are checked per block of data processed,
-          *  and remote servers may process way more blocks of data than are received by initiator.
-          */
-    limits.min_execution_speed = settings.min_execution_speed;
-    limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
-
-    QuotaForIntervals & quota = context.getQuota();
-
-    pipeline.transform([&](auto & stream) {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
-        {
-            p_stream->setLimits(limits);
-            p_stream->setQuota(quota);
-        }
-    });
-}
-
 // add timezone cast for timestamp type, this is used to support session level timezone
 // <has_cast, extra_cast, project_for_remote_read>
 std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterTs(
@@ -361,8 +330,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     for (const auto & lock : drop_locks)
         dagContext().addTableLock(lock);
 
-    /// Set the limits and quota for reading data, the speed and time of the query.
-    setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
@@ -407,7 +374,7 @@ void DAGStorageInterpreter::prepare()
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan(context.getSettingsRef().max_columns_to_read);
+    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan();
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
@@ -958,16 +925,8 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
 {
-    // todo handle alias column
-    if (max_columns_to_read && table_scan.getColumnSize() > max_columns_to_read)
-    {
-        throw TiFlashException(
-            fmt::format("Limit for number of columns to read exceeded. Requested: {}, maximum: {}", table_scan.getColumnSize(), max_columns_to_read),
-            Errors::BroadcastJoin::TooManyColumns);
-    }
-
     Names required_columns_tmp;
     NamesAndTypes source_columns_tmp;
     std::vector<ExtraCastAfterTSMode> need_cast_column;
