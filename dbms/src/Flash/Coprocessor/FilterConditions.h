@@ -23,7 +23,7 @@ namespace DB
 {
 
 /** This struct FilterConditions is used to store the filter conditions of the selection whose child is a table scan.
-  * Those conditions will be used to construct roght index in storage engine.
+  * Those conditions will be used to construct rough index in storage engine.
   * And those conditions will be pushed down to the remote read request.
   */
 struct FilterConditions
