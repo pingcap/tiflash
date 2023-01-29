@@ -221,7 +221,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         if (res.in)
         {
-            prepareForInputStream(context, stage, res.in);
+            prepareForInputStream(context, res.in);
         }
 
         if (res.out)
@@ -388,7 +388,6 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
 
 void prepareForInputStream(
     Context & context,
-    QueryProcessingStage::Enum stage,
     const BlockInputStreamPtr & in)
 {
     assert(in);
@@ -396,19 +395,6 @@ void prepareForInputStream(
     {
         stream->setProgressCallback(context.getProgressCallback());
         stream->setProcessListElement(context.getProcessListElement());
-
-        /// Limits on the result, the quota on the result, and also callback for progress.
-        /// Limits apply only to the final result.
-        if (stage == QueryProcessingStage::Complete)
-        {
-            IProfilingBlockInputStream::LocalLimits limits;
-            limits.mode = IProfilingBlockInputStream::LIMITS_CURRENT;
-            const auto & settings = context.getSettingsRef();
-            limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
-
-            stream->setLimits(limits);
-            stream->setQuota(context.getQuota());
-        }
     }
 }
 
