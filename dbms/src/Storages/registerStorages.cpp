@@ -25,7 +25,6 @@ void registerStorageDeltaMerge(StorageFactory & factory);
 void registerStorageStripeLog(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
 void registerStorageMerge(StorageFactory & factory);
-void registerStorageBuffer(StorageFactory & factory);
 void registerStorageMemory(StorageFactory & factory);
 void registerStorageSet(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
@@ -42,7 +41,6 @@ void registerStorages()
     registerStorageStripeLog(factory);
     registerStorageNull(factory);
     registerStorageMerge(factory);
-    registerStorageBuffer(factory);
     registerStorageMemory(factory);
     registerStorageSet(factory);
     registerStorageView(factory);

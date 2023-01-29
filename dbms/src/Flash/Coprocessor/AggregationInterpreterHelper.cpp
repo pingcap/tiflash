@@ -98,8 +98,6 @@ Aggregator::Params buildParams(
         before_agg_header,
         keys,
         aggregate_descriptions,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
         settings.max_bytes_before_external_group_by,
