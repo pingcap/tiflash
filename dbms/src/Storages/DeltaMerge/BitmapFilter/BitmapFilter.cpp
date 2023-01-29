@@ -18,9 +18,8 @@
 
 namespace DB::DM
 {
-BitmapFilter::BitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, bool default_value)
+BitmapFilter::BitmapFilter(UInt32 size_, bool default_value)
     : filter(size_, default_value)
-    , snap(snapshot_)
     , all_match(default_value)
 {}
 
@@ -94,11 +93,6 @@ bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
         std::copy(begin, end, f.begin());
         return false;
     }
-}
-
-SegmentSnapshotPtr & BitmapFilter::snapshot()
-{
-    return snap;
 }
 
 void BitmapFilter::runOptimize()

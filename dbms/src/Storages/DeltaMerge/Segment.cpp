@@ -2292,7 +2292,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
         expected_block_size,
         /*need_row_id*/ true);
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
-    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, segment_snap, /*default_value*/ false);
+    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
     LOG_DEBUG(log, "total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
@@ -2400,10 +2400,10 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     if (all_match)
     {
         LOG_DEBUG(log, "all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
-        return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), segment_snap, /*default_value*/ true);
+        return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
-    auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), segment_snap, /*default_value*/ false);
+    auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ false);
     UInt32 preceded_dmfile_rows = 0;
     for (size_t i = 0; i < dmfiles.size(); i++)
     {
@@ -2450,6 +2450,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
 }
 
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitmap_filter,
+                                                        const SegmentSnapshotPtr & segment_snap,
                                                         const DMContext & dm_context,
                                                         const ColumnDefines & columns_to_read,
                                                         const RowKeyRanges & read_ranges,
@@ -2457,7 +2458,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
-    auto & segment_snap = bitmap_filter->snapshot();
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
@@ -2523,6 +2523,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
 
     return getBitmapFilterInputStream(
         std::move(bitmap_filter),
+        segment_snap,
         dm_context,
         columns_to_read,
         real_ranges,

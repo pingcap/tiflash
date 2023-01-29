@@ -621,6 +621,7 @@ public:
                                                 UInt64 max_version,
                                                 size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(BitmapFilterPtr && bitmap_filter,
+                                                   const SegmentSnapshotPtr & segment_snap,
                                                    const DMContext & dm_context,
                                                    const ColumnDefines & columns_to_read,
                                                    const RowKeyRanges & read_ranges,
