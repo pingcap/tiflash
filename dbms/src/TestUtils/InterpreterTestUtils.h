@@ -15,6 +15,7 @@
 #pragma once
 
 #include <TestUtils/ExecutorTestUtils.h>
+
 #include <unordered_map>
 #include <vector>
 
@@ -37,10 +38,14 @@ protected:
     void setRecord() { just_record = true; }
 
 private:
+    // The following steps update the expected results of cases in bulk
+    // 1. manually delete the *.out file
+    // 2. call setRecord()
+    // 3. run unit test cases
     bool just_record = false;
+
     // <func_name, vector<result>>
     std::unordered_map<String, std::vector<String>> case_expect_results;
-
     size_t expect_result_index = 0;
 };
 

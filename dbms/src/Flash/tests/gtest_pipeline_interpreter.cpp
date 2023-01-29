@@ -24,7 +24,7 @@ class PipelineInterpreterExecuteTest : public DB::tests::InterpreterTestUtils
 public:
     void initializeContext() override
     {
-        ExecutorTest::initializeContext();
+        InterpreterTestUtils::initializeContext();
 
         enablePlanner(true);
         enablePipeline(true);

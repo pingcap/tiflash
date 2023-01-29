@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Debug/MockStorage.h>
 #include <Flash/executeQuery.h>
-#include <TestUtils/InterpreterTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 #include <Poco/File.h>
 #include <Poco/FileStream.h>
-#include <Common/StringUtils/StringUtils.h>
+#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/executorSerializer.h>
 
 #include <string>
 
@@ -27,7 +27,8 @@ namespace DB::tests
 {
 namespace
 {
-std::vector<std::string> stringSplit(const String & str, char delim) {
+std::vector<std::string> stringSplit(const String & str, char delim)
+{
     std::stringstream ss(str);
     std::string item;
     std::vector<std::string> elems;
@@ -50,7 +51,7 @@ String getOutputPath()
         file.createFile();
     return out_path;
 }
-}
+} // namespace
 
 void InterpreterTestUtils::initExpectResults()
 {
@@ -89,7 +90,8 @@ void InterpreterTestUtils::appendExpectResults()
         const auto & func_key = func_case.first;
         for (size_t i = 0; i < func_case.second.size(); ++i)
         {
-            fos << func_key << "\n~result_index: " << i << '\n' << func_case.second[i] << "\n@\n";
+            fos << func_key << "\n~result_index: " << i << '\n'
+                << func_case.second[i] << "\n@\n";
         }
     }
 }
@@ -132,7 +134,7 @@ void InterpreterTestUtils::runAndAssert(
     auto func_key = fmt::format("~func_name: {}", test_func_name);
 
     DAGContext dag_context(
-        *request, 
+        *request,
         "interpreter_test",
         concurrency);
     TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
@@ -150,7 +152,8 @@ void InterpreterTestUtils::runAndAssert(
 
     auto it = case_expect_results.find(func_key);
     if (it == case_expect_results.end())
-        FAIL() << "can not find expect result\n" << test_info_msg();
+        FAIL() << "can not find expect result\n"
+               << test_info_msg();
 
     const auto & func_expect_results = it->second;
     assert(func_expect_results.size() > cur_result_index);
