@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,11 @@ namespace DB
 {
 namespace tests
 {
-
 class LimitExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
+    static constexpr size_t big_table_rows = 200;
+
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -30,6 +31,13 @@ public:
         context.addMockTable({db_name, table_name},
                              {{col_name, TiDB::TP::TypeString}},
                              {toNullableVec<String>(col_name, col0)});
+
+        ColumnWithNullableString col;
+        for (size_t i = 0; i < big_table_rows; ++i)
+            col.emplace_back("a");
+        context.addMockTable({"test", "bigtable"},
+                             {{"col", TiDB::TP::TypeString}},
+                             {toNullableVec<String>("col", col)});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(size_t limit_num)
@@ -65,9 +73,9 @@ try
         else
             expect_cols = {toNullableVec<String>(col_name, ColumnWithNullableString(col0.begin(), col0.begin() + limit_num))};
 
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+        WRAP_FOR_TEST_BEGIN
         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
+        WRAP_FOR_TEST_END
 
         executeAndAssertRowsEqual(request, std::min(limit_num, col_data_num));
     }
@@ -80,6 +88,17 @@ try
     String query = "select * from test_db.projection_test_table limit 1";
     auto cols = {toNullableVec<String>(col_name, ColumnWithNullableString(col0.begin(), col0.begin() + 1))};
     ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
+}
+CATCH
+
+TEST_F(LimitExecutorTestRunner, BigTable)
+try
+{
+    for (size_t limit = 1; limit < 2 * big_table_rows; limit += 7)
+    {
+        auto request = context.scan("test", "bigtable").limit(limit).build(context);
+        executeAndAssertRowsEqual(request, std::min(limit, big_table_rows));
+    }
 }
 CATCH
 
