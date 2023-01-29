@@ -763,10 +763,9 @@ try
 Limit, limit = 10
  Expression: <final projection>
   Aggregating
-   Concat
-    Expression: <before aggregation>
-     Filter: <execute where>
-      MockTableScan)";
+   Expression: <before aggregation>
+    Filter: <execute where>
+     MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
     }
 

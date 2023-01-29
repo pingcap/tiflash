@@ -37,9 +37,9 @@ public:
     void flush() override;
 
 private:
-    void partitionAndEncodeThenWriteBlocks();
+    void partitionAndWriteBlocks();
 
-    void writePackets(TrackedMppDataPacketPtrs & packets);
+    void writePartitionBlocks(std::vector<Blocks> & partition_blocks);
 
 private:
     Int64 batch_send_min_limit;
@@ -49,7 +49,6 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 
 } // namespace DB

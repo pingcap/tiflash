@@ -45,7 +45,6 @@ void executeUnion(
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
-    const Context & context,
     const NamesWithAliases & project_cols);
 
 void executeExpression(

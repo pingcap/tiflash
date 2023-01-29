@@ -40,7 +40,7 @@ PhysicalPlanNodePtr PhysicalTopN::build(
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr before_sort_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr before_sort_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
     auto order_columns = analyzer.buildOrderColumns(before_sort_actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
