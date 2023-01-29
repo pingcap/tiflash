@@ -25,7 +25,6 @@
 
 namespace DB::PS::V3
 {
-
 class BlobStats
 {
 public:
@@ -185,7 +184,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    void restoreByEntry(const PageEntryV3 & entry);
+    void restoreByEntry(const PageEntryV3Ptr & entry);
     void restore();
     friend class PageDirectoryFactory;
 

@@ -169,21 +169,20 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
         case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
-            PageEntryV3 entry;
-
             auto [blob_id, offset_in_file] = getPosFromStats(write.size);
 
-            entry.file_id = blob_id;
-            entry.size = write.size;
-            entry.tag = write.tag;
-            entry.offset = offset_in_file;
+            auto file_id = blob_id;
+            auto size = write.size;
+            auto tag = write.tag;
+            auto offset = offset_in_file;
             // padding size won't work on big write batch
-            entry.padded_size = 0;
+            PageSize padded_size = 0;
+            PageFieldOffsetChecksums field_offsets{};
 
             BufferBase::Buffer data_buf = write.read_buffer->buffer();
 
             digest.update(data_buf.begin(), write.size);
-            entry.checksum = digest.checksum();
+            auto checksum = digest.checksum();
 
             UInt64 field_begin, field_end;
 
@@ -200,7 +199,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             if (!write.offsets.empty())
             {
                 // we can swap from WriteBatch instead of copying
-                entry.field_offsets.swap(write.offsets);
+                field_offsets.swap(write.offsets);
             }
 
             try
@@ -215,6 +214,13 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
                 throw e;
             }
 
+            PageEntryV3Ptr entry = makePageEntry(file_id, //
+                                                 offset,
+                                                 size,
+                                                 padded_size,
+                                                 tag,
+                                                 checksum,
+                                                 std::move(field_offsets));
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
@@ -314,24 +320,26 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
-            PageEntryV3 entry;
 
             write.read_buffer->readStrict(buffer_pos, write.size);
 
-            entry.file_id = blob_id;
-            entry.size = write.size;
-            entry.tag = write.tag;
-            entry.offset = offset_in_file + offset_in_allocated;
+            BlobFileId file_id = blob_id;
+            auto size = write.size;
+            auto tag = write.tag;
+            auto offset = offset_in_file + offset_in_allocated;
+            PageSize padded_size = 0;
+            PageFieldOffsetChecksums field_offsets{};
+
             offset_in_allocated += write.size;
 
             // The last put write
             if (offset_in_allocated == all_page_data_size)
             {
-                entry.padded_size = replenish_size;
+                padded_size = replenish_size;
             }
 
             digest.update(buffer_pos, write.size);
-            entry.checksum = digest.checksum();
+            auto checksum = digest.checksum();
 
             UInt64 field_begin, field_end;
 
@@ -348,10 +356,18 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             if (!write.offsets.empty())
             {
                 // we can swap from WriteBatch instead of copying
-                entry.field_offsets.swap(write.offsets);
+                field_offsets.swap(write.offsets);
             }
 
             buffer_pos += write.size;
+
+            PageEntryV3Ptr entry = makePageEntry(file_id, //
+                                                 offset,
+                                                 size,
+                                                 padded_size,
+                                                 tag,
+                                                 checksum,
+                                                 std::move(field_offsets));
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
@@ -410,20 +426,20 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
     std::set<BlobFileId> blob_updated;
     for (const auto & entry : del_entries)
     {
-        blob_updated.insert(entry.file_id);
+        blob_updated.insert(entry->getFileId());
         // External page size is 0
-        if (entry.size == 0)
+        if (entry->getSize() == 0)
         {
             continue;
         }
 
         try
         {
-            removePosFromStats(entry.file_id, entry.offset, entry.getTotalSize());
+            removePosFromStats(entry->getFileId(), entry->getOffset(), entry->getDiskSize());
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("while removing entry [entry={}]", toDebugString(entry)));
+            e.addMessage(fmt::format("while removing entry [entry={}]", entry->toDebugString()));
             e.rethrow();
         }
     }
@@ -563,7 +579,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     std::sort(
         to_read.begin(),
         to_read.end(),
-        [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
+        [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry->getOffset() < b.entry->getOffset(); });
 
     // allocate data_buf that can hold all pages with specify fields
 
@@ -575,7 +591,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         std::sort(fields.begin(), fields.end());
         for (const auto field_index : fields)
         {
-            buf_size += entry.getFieldSize(field_index);
+            buf_size += entry->getFieldSize(field_index);
         }
     }
 
@@ -600,18 +616,19 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         for (const auto field_index : fields)
         {
             // TODO: Continuously fields can read by one system call.
-            const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
+            const auto [beg_offset, end_offset] = entry->getFieldOffsets(field_index);
             const auto size_to_read = end_offset - beg_offset;
-            auto blob_file = read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+            auto blob_file = read(page_id_v3, entry->getFileId(), entry->getOffset() + beg_offset, write_offset, size_to_read, read_limiter);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
             {
-                const auto expect_checksum = entry.field_offsets[field_index].second;
+                const auto & field_offsets = entry->getFieldOffsets();
+                const auto expect_checksum = field_offsets[field_index].second;
                 ChecksumClass digest;
                 digest.update(write_offset, size_to_read);
                 auto field_checksum = digest.checksum();
-                if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
+                if (unlikely(entry->getSize() != 0 && field_checksum != expect_checksum))
                 {
                     throw Exception(
                         fmt::format("Reading with fields meet checksum not match "
@@ -624,7 +641,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                                     field_index,
                                     beg_offset,
                                     size_to_read,
-                                    toDebugString(entry),
+                                    entry->toDebugString(),
                                     blob_file->getPath()),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
                 }
@@ -663,14 +680,14 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
     // Sort in ascending order by offset in file.
     std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
-        return a.second.offset < b.second.offset;
+        return a.second->getOffset() < b.second->getOffset();
     });
 
     // allocate data_buf that can hold all pages
     size_t buf_size = 0;
     for (const auto & p : entries)
     {
-        buf_size += p.second.size;
+        buf_size += p.second->getSize();
     }
 
     // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
@@ -697,40 +714,41 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     PageMap page_map;
     for (const auto & [page_id_v3, entry] : entries)
     {
-        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, pos, entry.size, read_limiter);
+        auto blob_file = read(page_id_v3, entry->getFileId(), entry->getOffset(), pos, entry->getSize(), read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
             ChecksumClass digest;
-            digest.update(pos, entry.size);
+            digest.update(pos, entry->getSize());
             auto checksum = digest.checksum();
-            if (unlikely(entry.size != 0 && checksum != entry.checksum))
+            if (unlikely(entry->getSize() != 0 && checksum != entry->getCheckSum()))
             {
                 throw Exception(
                     fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
                                 page_id_v3,
-                                entry.checksum,
+                                entry->getCheckSum(),
                                 checksum,
-                                toDebugString(entry),
+                                entry->toDebugString(),
                                 blob_file->getPath()),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
         Page page(page_id_v3);
-        page.data = ByteBuffer(pos, pos + entry.size);
+        page.data = ByteBuffer(pos, pos + entry->getSize());
         page.mem_holder = mem_holder;
 
         // Calculate the field_offsets from page entry
-        for (size_t index = 0; index < entry.field_offsets.size(); index++)
+        const auto & field_offsets = entry->getFieldOffsets();
+        for (size_t index = 0; index < field_offsets.size(); index++)
         {
-            const auto offset = entry.field_offsets[index].first;
+            const auto offset = field_offsets[index].first;
             page.field_offsets.emplace(index, offset);
         }
 
         page_map.emplace(page_id_v3.low, std::move(page));
 
-        pos += entry.size;
+        pos += entry->getSize();
     }
 
     if (unlikely(pos != data_buf + buf_size))
@@ -745,9 +763,9 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
     const auto & [page_id_v3, entry] = id_entry;
-    const size_t buf_size = entry.size;
+    const size_t buf_size = entry->getSize();
 
-    if (!entry.isValid())
+    if (!entry->isValid())
     {
         Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
         return page_not_found;
@@ -767,20 +785,20 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         free(p, buf_size);
     });
 
-    auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+    auto blob_file = read(page_id_v3, entry->getFileId(), entry->getOffset(), data_buf, buf_size, read_limiter);
     if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
     {
         ChecksumClass digest;
-        digest.update(data_buf, entry.size);
+        digest.update(data_buf, entry->getSize());
         auto checksum = digest.checksum();
-        if (unlikely(entry.size != 0 && checksum != entry.checksum))
+        if (unlikely(entry->getSize() != 0 && checksum != entry->getCheckSum()))
         {
             throw Exception(
                 fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
                             page_id_v3,
-                            entry.checksum,
+                            entry->getCheckSum(),
                             checksum,
-                            toDebugString(entry),
+                            entry->toDebugString(),
                             blob_file->getPath()),
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
@@ -791,9 +809,10 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     page.mem_holder = mem_holder;
 
     // Calculate the field_offsets from page entry
-    for (size_t index = 0; index < entry.field_offsets.size(); index++)
+    const auto & field_offsets = entry->getFieldOffsets();
+    for (size_t index = 0; index < field_offsets.size(); index++)
     {
-        const auto offset = entry.field_offsets[index].first;
+        const auto offset = field_offsets[index].first;
         page.field_offsets.emplace(index, offset);
     }
 
@@ -1075,7 +1094,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             {
                 (void)page_id;
                 (void)version;
-                biggest_page_size = std::max(biggest_page_size, entry.size);
+                biggest_page_size = std::max(biggest_page_size, entry->getSize());
             }
         }
         alloc_size = std::max(alloc_size, biggest_page_size);
@@ -1113,7 +1132,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             ///   1. reclaim unneeded space allocated from current blob stat if `offset_in_data` < `alloc_size`;
             ///   2. update `remaining_page_size`;
             /// After writing data into the current blob file, we reuse the original buffer for future write.
-            if (offset_in_data + entry.size > alloc_size)
+            if (offset_in_data + entry->getSize() > alloc_size)
             {
                 assert(file_offset_begin == 0);
                 // Remove the span that is not actually used
@@ -1135,22 +1154,28 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 remaining_page_size -= next_alloc_size;
                 std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size);
             }
-            assert(offset_in_data + entry.size <= alloc_size);
+            assert(offset_in_data + entry->getSize() <= alloc_size);
 
             // Read the data into buffer by old entry
-            read(page_id, file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
+            read(page_id, file_id, entry->getOffset(), data_pos, entry->getSize(), read_limiter, /*background*/ true);
 
             // Most vars of the entry is not changed, but the file id and offset
             // need to be updated.
-            PageEntryV3 new_entry = entry;
-            new_entry.file_id = blobfile_id;
-            new_entry.offset = file_offset_begin + offset_in_data;
-            new_entry.padded_size = 0; // reset padded size to be zero
+            PageSize new_padded_size = 0; // reset padded size to be zero
+            auto new_offset = file_offset_begin + offset_in_data;
+            auto field_offsets = entry->getFieldOffsets();
 
-            offset_in_data += new_entry.size;
-            data_pos += new_entry.size;
-
+            PageEntryV3Ptr new_entry = makePageEntry(blobfile_id, //
+                                                     entry->getSize(),
+                                                     new_padded_size,
+                                                     entry->getTag(),
+                                                     new_offset,
+                                                     entry->getCheckSum(),
+                                                     std::move(field_offsets));
             edit.upsertPage(page_id, version, new_entry);
+
+            offset_in_data += new_entry->getSize();
+            data_pos += new_entry->getSize();
         }
     }
 

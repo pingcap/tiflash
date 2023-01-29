@@ -83,7 +83,7 @@ struct EntryOrDelete
 {
     bool is_delete = true;
     Int64 being_ref_count = 1;
-    PageEntryV3 entry;
+    PageEntryV3Ptr entry;
 
     static EntryOrDelete newDelete()
     {
@@ -93,7 +93,7 @@ struct EntryOrDelete
             .entry = {}, // meaningless
         };
     }
-    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
+    static EntryOrDelete newNormalEntry(const PageEntryV3Ptr & entry)
     {
         return EntryOrDelete{
             .is_delete = false,
@@ -101,7 +101,7 @@ struct EntryOrDelete
             .entry = entry,
         };
     }
-    static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3Ptr & entry)
     {
         return EntryOrDelete{
             .is_delete = false,
@@ -110,7 +110,7 @@ struct EntryOrDelete
         };
     }
 
-    static EntryOrDelete newFromRestored(PageEntryV3 entry, Int64 being_ref_count)
+    static EntryOrDelete newFromRestored(PageEntryV3Ptr entry, Int64 being_ref_count)
     {
         return EntryOrDelete{
             .is_delete = false,
@@ -127,7 +127,7 @@ struct EntryOrDelete
         return fmt::format(
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             is_delete,
-            ::DB::PS::V3::toDebugString(entry),
+            entry->toDebugString(),
             being_ref_count);
     }
 };
@@ -160,13 +160,13 @@ public:
         return std::lock_guard(m);
     }
 
-    void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
+    void createNewEntry(const PageVersion & ver, const PageEntryV3Ptr & entry);
 
     // Commit the upsert entry after full gc.
     // Return a PageId, if the page id is valid, it means it rewrite a RefPage into
     // a normal Page. Caller must call `derefAndClean` to decrease the ref-count of
     // the returing page id.
-    [[nodiscard]] PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
+    [[nodiscard]] PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3Ptr & entry);
 
     bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id);
 
@@ -177,13 +177,13 @@ public:
     std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
-    resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
+    resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3Ptr * entry);
 
     Int64 incrRefCount(const PageVersion & ver);
 
-    std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+    PageEntryV3Ptr getEntry(UInt64 seq) const;
 
-    std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
+    PageEntryV3Ptr getLastEntry(std::optional<UInt64> seq) const;
 
     bool isVisible(UInt64 seq) const;
 

@@ -127,7 +127,7 @@ protected:
     {
         return d->getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap, true).low;
     }
-    static PageEntryV3 getEntry(const PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
+    static PageEntryV3Ptr getEntry(const PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
     {
         return d->getByID(buildV3Id(TEST_NAMESPACE_ID, page_id), snap).second;
     }
@@ -144,7 +144,7 @@ try
     auto snap0 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, 1, snap0);
 
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -154,7 +154,7 @@ try
     auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
 
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
@@ -171,7 +171,7 @@ try
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
-    PageEntryV3 entry2_v2{.file_id = 2 + 102, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry2_v2 = makePageEntry(2 + 102, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
@@ -192,7 +192,7 @@ try
     auto snap0 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snap0);
 
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = PS::V3::makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry1);
@@ -202,7 +202,7 @@ try
     auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
 
-    PageEntryV3 entry2{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x1234, .checksum = 0x4567};
+    auto entry2 = makePageEntry(1, 1024, 0, 0, 0x1234, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry2);
@@ -220,7 +220,7 @@ try
 
     // Put identical page within one `edit`
     page_id++;
-    PageEntryV3 entry3{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x12345, .checksum = 0x4567};
+    auto entry3 = makePageEntry(1, 1024, 0, 0, 0x12345, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry1);
@@ -241,8 +241,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyPutDelRead)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -254,8 +254,8 @@ try
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
 
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry4{.file_id = 4, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry3 = makePageEntry(3, 1024, 0, 0, 0x123, 0x4567);
+    auto entry4 = makePageEntry(4, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
@@ -286,8 +286,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyUpdateOnRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -305,14 +305,14 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
     // Update on ref page is not allowed
-    PageEntryV3 entry_updated{.file_id = 999, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
+    auto entry_updated = makePageEntry(999, 16, 0, 0, 0x123, 0x123);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry_updated);
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
 
-    PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
+    auto entry_updated2 = makePageEntry(777, 16, 0, 0, 0x123, 0x123);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_updated2);
@@ -324,8 +324,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyDeleteOnRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -374,8 +374,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyRefOnRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -412,8 +412,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyDuplicatedRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -479,8 +479,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyCollapseDuplicatedRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -518,7 +518,7 @@ TEST_F(PageDirectoryTest, RefWontDeadLock)
     PageEntriesEdit edit;
     {
         // 1. batch.putExternal(0, 0);
-        PageEntryV3 entry1;
+        auto entry1 = makePageEntry(0, 0, 0, 0, 0, 0);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 0), entry1);
 
         // 2. batch.putRefPage(1, 0);
@@ -589,9 +589,9 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
 TEST_F(PageDirectoryTest, RefToDeletedPage)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
+    auto entry3 = makePageEntry(3, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -612,7 +612,7 @@ CATCH
 TEST_F(PageDirectoryTest, RefToDeletedPageTwoHops)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
@@ -666,7 +666,7 @@ TEST_F(PageDirectoryTest, NewRefAfterDelThreeHops)
 try
 {
     // Fix issue: https://github.com/pingcap/tiflash/issues/5570
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 951), entry1);
@@ -715,7 +715,7 @@ TEST_F(PageDirectoryTest, NewRefAfterDelRandom)
 try
 {
     PageId id = 50;
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, id), entry1);
@@ -811,9 +811,9 @@ try
         if (gc_or_not)
             dir->gcInMemEntries(/*return_removed_entries=*/false);
         auto snap = dir->createSnapshot();
-        for (const auto & id : visible_page_ids)
+        for (const auto & page_id : visible_page_ids)
         {
-            ASSERT_ENTRY_EQ(entry1, dir, id, snap);
+            ASSERT_ENTRY_EQ(entry1, dir, page_id, snap);
         }
     }
 }
@@ -913,9 +913,9 @@ try
         {
             dir->gcInMemEntries(/*return_removed_entries=*/false);
             const auto all_ids = dir->getAllPageIds();
-            for (const auto & id : visible_page_ids)
+            for (const auto & page_id : visible_page_ids)
             {
-                EXPECT_GT(all_ids.count(buildV3Id(TEST_NAMESPACE_ID, id)), 0) << fmt::format("cur_id:{}, all_id:{}, visible_ids:{}", id, all_ids, visible_page_ids);
+                EXPECT_GT(all_ids.count(buildV3Id(TEST_NAMESPACE_ID, page_id)), 0) << fmt::format("cur_id:{}, all_id:{}, visible_ids:{}", id, all_ids, visible_page_ids);
             }
         }
         auto snap = dir->createSnapshot();
@@ -932,7 +932,8 @@ try
 {
     {
         PageEntriesEdit edit;
-        edit.put(buildV3Id(TEST_NAMESPACE_ID, 9), PageEntryV3{});
+        auto entry = makePageEntry(0, 0, 0, 0, 0, 0);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 9), entry);
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
     }
@@ -995,12 +996,12 @@ class PageDirectoryGCTest : public PageDirectoryTest
 {
 };
 
-#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                                                          \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    {                                                                                                                                            \
-        PageEntriesEdit edit;                                                                                                                    \
-        edit.put(buildV3Id(TEST_NAMESPACE_ID, (PAGE_ID)), entry_v##VERSION);                                                                     \
-        dir->apply(std::move(edit));                                                                                                             \
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                    \
+    auto entry_v##VERSION = makePageEntry((BLOB_FILE_ID), (VERSION), 0, 0, 0x123, 0x4567); \
+    {                                                                                      \
+        PageEntriesEdit edit;                                                              \
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, (PAGE_ID)), entry_v##VERSION);               \
+        dir->apply(std::move(edit));                                                       \
     }
 // Insert an entry into mvcc directory
 #define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
@@ -1022,7 +1023,7 @@ TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
     PageId page_id2 = 52;
     PageId page_id3 = 53;
 
-    PageEntryV3 last_entry_for_0;
+    auto last_entry_for_0 = makePageEntry(0, 0, 0, 0, 0, 0);
     constexpr size_t num_edits_test = 50000;
     for (size_t i = 0; i < num_edits_test; ++i)
     {
@@ -1045,7 +1046,7 @@ TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
         EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
     }
 
-    PageEntryV3 last_entry_for_2;
+    auto last_entry_for_2 = makePageEntry(0, 0, 0, 0, 0, 0);
     for (size_t i = 0; i < num_edits_test; ++i)
     {
         {
@@ -1290,7 +1291,7 @@ try
     INSERT_ENTRY_ACQ_SNAP(page_id, 5);
     INSERT_ENTRY(another_page_id, 6);
     INSERT_ENTRY(another_page_id, 7);
-    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry_v8 = makePageEntry(1, 8, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, page_id));
@@ -1400,17 +1401,17 @@ try
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
-        for (const auto & [page_id, ver, entry] : entries)
+        for (const auto & [c_page_id, ver, entry] : entries)
         {
-            gc_migrate_entries.upsertPage(page_id, ver, entry);
+            gc_migrate_entries.upsertPage(c_page_id, ver, entry);
         }
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
         (void)file_id;
-        for (const auto & [page_id, ver, entry] : entries)
+        for (const auto & [c_page_id, ver, entry] : entries)
         {
-            gc_migrate_entries.upsertPage(page_id, ver, entry);
+            gc_migrate_entries.upsertPage(c_page_id, ver, entry);
         }
     }
 
@@ -1456,17 +1457,17 @@ try
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
-        for (const auto & [page_id, ver, entry] : entries)
+        for (const auto & [c_page_id, ver, entry] : entries)
         {
-            gc_migrate_entries.upsertPage(page_id, ver, entry);
+            gc_migrate_entries.upsertPage(c_page_id, ver, entry);
         }
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
         (void)file_id;
-        for (const auto & [page_id, ver, entry] : entries)
+        for (const auto & [c_page_id, ver, entry] : entries)
         {
-            gc_migrate_entries.upsertPage(page_id, ver, entry);
+            gc_migrate_entries.upsertPage(c_page_id, ver, entry);
         }
     }
 
@@ -1483,7 +1484,7 @@ TEST_F(PageDirectoryGCTest, GCOnRefedEntries)
 try
 {
     // 10->entry1, 11->10=>11->entry1; del 10->entry1
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
@@ -1520,7 +1521,7 @@ TEST_F(PageDirectoryGCTest, GCOnRefedEntries2)
 try
 {
     // 10->entry1, 11->10=>11->entry1; del 10->entry1
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
@@ -1563,7 +1564,7 @@ TEST_F(PageDirectoryGCTest, RewriteRefedId)
 try
 {
     // 10->entry1, 11->10, 12->10
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
@@ -1586,8 +1587,8 @@ try
         EXPECT_TRUE(outdated_entries.empty());
     }
 
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
+    auto entry3 = makePageEntry(2, 1024, 0, 0, 0x123 + 1024, 0x4567);
     {
         // this will return ref page 11 and 12 that need to be rewritten
         // to new blob file.
@@ -1648,7 +1649,7 @@ TEST_F(PageDirectoryGCTest, RewriteRefedIdWithConcurrentDelete)
 try
 {
     // 10->entry1, 11->10, 12->10
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry1 = makePageEntry(1, 1024, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
@@ -1671,8 +1672,8 @@ try
         EXPECT_TRUE(outdated_entries.empty());
     }
 
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    auto entry2 = makePageEntry(2, 1024, 0, 0, 0x123, 0x4567);
+    auto entry3 = makePageEntry(2, 1024, 0, 0, 0x123 + 1024, 0x4567);
     {
         // this will return ref page 11 and 12 that need to be rewritten
         // to new blob file.
@@ -1844,10 +1845,10 @@ try
         return d;
     };
 
-    PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_1_v2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_2_v1{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_2_v2{.file_id = 2, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry_1_v1 = makePageEntry(1, 1, 0, 0, 0x123, 0x4567);
+    auto entry_1_v2 = makePageEntry(1, 2, 0, 0, 0x123, 0x4567);
+    auto entry_2_v1 = makePageEntry(2, 1, 0, 0, 0x123, 0x4567);
+    auto entry_2_v2 = makePageEntry(2, 2, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -1875,8 +1876,8 @@ try
 
     // 10->ext, 11->10, del 10->ext
     // 50->entry, 51->50, 52->51=>50, del 50
-    PageEntryV3 entry_50{.file_id = 1, .size = 50, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_60{.file_id = 1, .size = 90, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry_50 = makePageEntry(1, 50, 0, 0, 0x123, 0x4567);
+    auto entry_60 = makePageEntry(1, 90, 0, 0, 0x123, 0x4567);
     {
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
@@ -2037,14 +2038,14 @@ try
     BlobFileId file_id1 = 1;
     BlobFileId file_id2 = 5;
 
-    const auto & path = getTemporaryPath();
-    createIfNotExist(path);
-    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
-    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
+    const auto & temp_path = getTemporaryPath();
+    createIfNotExist(temp_path);
+    Poco::File(fmt::format("{}/{}{}", temp_path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", temp_path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
 
-    PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x100, .checksum = 0x4567};
-    PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x400, .checksum = 0x4567};
+    auto entry_1_v1 = makePageEntry(file_id1, 7890, 0, 0, 0x123, 0x4567);
+    auto entry_5_v1 = makePageEntry(file_id2, 255, 0, 0, 0x100, 0x4567);
+    auto entry_5_v2 = makePageEntry(file_id2, 255, 0, 0, 0x400, 0x4567);
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -2088,11 +2089,11 @@ try
 
         // The entry_1_v1 should be restored to stats
         auto stat_for_file_1 = stats.blobIdToStat(file_id1, /*ignore_not_exist*/ false);
-        EXPECT_TRUE(stat_for_file_1->smap->isMarkUsed(entry_1_v1.offset, entry_1_v1.size));
+        EXPECT_TRUE(stat_for_file_1->smap->isMarkUsed(entry_1_v1->getOffset(), entry_1_v1->getSize()));
         auto stat_for_file_5 = stats.blobIdToStat(file_id2, /*ignore_not_exist*/ false);
         // entry_5_v1 should not be restored to stats
-        EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_5_v1.offset, entry_5_v1.size));
-        EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_5_v2.offset, entry_5_v2.size));
+        EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_5_v1->getOffset(), entry_5_v1->getSize()));
+        EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_5_v2->getOffset(), entry_5_v2->getSize()));
     }
 }
 CATCH
@@ -2100,8 +2101,8 @@ CATCH
 TEST_F(PageDirectoryGCTest, CleanAfterDecreaseRef)
 try
 {
-    PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto entry_50_1 = makePageEntry(1, 7890, 0, 0, 0x123, 0x4567);
+    auto entry_50_2 = makePageEntry(2, 7890, 0, 0, 0x123, 0x4567);
 
     auto restore_from_edit = [](PageEntriesEdit & edit) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();

@@ -40,7 +40,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersion, PageEntryV3>>;
+using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersion, PageEntryV3Ptr>>;
 
 class BlobStore : private Allocator<false>
 {
@@ -71,10 +71,10 @@ public:
     struct FieldReadInfo
     {
         PageIdV3Internal page_id;
-        PageEntryV3 entry;
+        PageEntryV3Ptr entry;
         std::vector<size_t> fields;
 
-        FieldReadInfo(PageIdV3Internal id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+        FieldReadInfo(PageIdV3Internal id_, const PageEntryV3Ptr & entry_, std::vector<size_t> fields_)
             : page_id(id_)
             , entry(entry_)
             , fields(std::move(fields_))

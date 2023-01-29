@@ -22,8 +22,6 @@
 
 namespace DB::PS::V3::tests
 {
-
-
 class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -88,30 +86,27 @@ try
     }
 
     {
-        stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id1,
-            .size = 128,
-            .padded_size = 0,
-            .tag = 0,
-            .offset = 1024,
-            .checksum = 0x4567,
-        });
-        stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id1,
-            .size = 512,
-            .padded_size = 0,
-            .tag = 0,
-            .offset = 2048,
-            .checksum = 0x4567,
-        });
-        stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id2,
-            .size = 512,
-            .padded_size = 0,
-            .tag = 0,
-            .offset = 2048,
-            .checksum = 0x4567,
-        });
+        stats.restoreByEntry(makePageEntry(
+            file_id1,
+            128,
+            0,
+            0,
+            1024,
+            0x4567));
+        stats.restoreByEntry(makePageEntry(
+            file_id1,
+            512,
+            0,
+            0,
+            2048,
+            0x4567));
+        stats.restoreByEntry(makePageEntry(
+            file_id2,
+            512,
+            0,
+            0,
+            2048,
+            0x4567));
         stats.restore();
     }
 

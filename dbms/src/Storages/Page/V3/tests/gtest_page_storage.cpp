@@ -1169,10 +1169,10 @@ CATCH
 TEST_F(PageStorageTest, WriteReadGcExternalPage)
 try
 {
-    WriteBatch batch;
     {
         // External 0, 1024
         // Ref 1->0
+        WriteBatch batch;
         batch.putExternal(0, 0);
         batch.putRefPage(1, 0);
         batch.putExternal(1024, 0);
