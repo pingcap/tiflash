@@ -63,7 +63,6 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
 
 void prepareForInputStream(
     Context & context,
-    QueryProcessingStage::Enum stage,
     const BlockInputStreamPtr & in);
 
 } // namespace DB

@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ add_headers_and_sources(clickhouse_common_io src/IO)
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)
 add_headers_and_sources(dbms src/DataStreams)
+add_headers_and_sources(dbms src/Operators)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
