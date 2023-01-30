@@ -101,7 +101,6 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 
     column_indices_left.reserve(num_columns_left);
     column_indices_right.reserve(num_columns_right);
-    BoolVec is_key_column_in_left_block(num_columns_left, false);
 
     for (size_t i = 0; i < num_columns_left; ++i)
     {

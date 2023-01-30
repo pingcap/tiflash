@@ -175,8 +175,9 @@ public:
 
     size_t getBuildConcurrency() const
     {
-        std::shared_lock lock(rwlock);
-        return getBuildConcurrencyInternal();
+        if (unlikely(build_concurrency == 0))
+            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+        return build_concurrency;
     }
 
     enum BuildTableState
@@ -225,7 +226,7 @@ public:
         using Base::Base;
         using Base_t = Base;
         void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
-        bool getUsed() const { return used; }
+        bool getUsed() const { return used.load(std::memory_order_relaxed); }
     };
 
     template <typename Base>
@@ -291,7 +292,6 @@ public:
 
     // only use for left semi joins.
     const String match_helper_name;
-
 
 private:
     friend class NonJoinedBlockInputStream;
@@ -375,13 +375,6 @@ private:
     bool initialized = false;
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
-
-    size_t getBuildConcurrencyInternal() const
-    {
-        if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
-        return build_concurrency;
-    }
 
     /// Initialize map implementations for various join types.
     void initMapImpl(Type type_);
