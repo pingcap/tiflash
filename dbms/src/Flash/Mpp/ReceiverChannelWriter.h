@@ -19,6 +19,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <memory>
 
 namespace DB
 {
@@ -101,6 +102,12 @@ public:
         , tag(nullptr)
     {}
 
+    ~ReceiverChannelWriter()
+    {
+        for (auto * recv_queue_ptr : grpc_recv_queues)
+            delete recv_queue_ptr;
+    }
+
     // "write" means writing the packet to the channel which is a MPMCQueue.
     //
     // If enable_fine_grained_shuffle:
@@ -127,7 +134,7 @@ private:
     {
         tag = tag_;
         for (auto & channel_ptr : *msg_channels)
-            grpc_recv_queues.emplace_back(channel_ptr, reader->client_context.c_call(), log);
+            grpc_recv_queues.push_back(new GRPCReceiveQueue<ReceivedMessage>(channel_ptr, reader->client_context.c_call(), log));
     }
 
     static const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
@@ -150,19 +157,22 @@ private:
     GRPCReceiveQueueRes tryWriteFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
     GRPCReceiveQueueRes tryWriteNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
 
-    GRPCReceiveQueueRes tryWrite(size_t index, std::shared_ptr<ReceivedMessage> && msg);
+    GRPCReceiveQueueRes tryWriteImpl(size_t index, std::shared_ptr<ReceivedMessage> && msg);
+    GRPCReceiveQueueRes tryRewriteImpl(size_t index, std::shared_ptr<ReceivedMessage> & msg);
 
     std::atomic<Int64> * data_size_in_queue;
     std::vector<MsgChannelPtr> * msg_channels;
     String req_info;
     const LoggerPtr log;
     ReceiverMode mode;
-    std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queues;
+
+    // Because of the deleted copy constructor, we have to type it as pointer.
+    std::vector<GRPCReceiveQueue<ReceivedMessage> *> grpc_recv_queues;
 
     // This tag is used for tryWrite
     void * tag;
 
     // Push data may fail, so we need to save the message and re-push it at the proper time.
-    std::pair<size_t, std::shared_ptr<ReceivedMessage>> rewrite_msg;
+    std::map<size_t, std::shared_ptr<ReceivedMessage>> rewrite_msgs;
 };
 } // namespace DB

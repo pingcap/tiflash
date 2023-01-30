@@ -40,11 +40,7 @@ class TestGRPCReceiveQueue;
 class KickReceiveTag : public grpc::internal::CompletionQueueTag
 {
 public:
-    explicit KickReceiveTag(void * tag_)
-        : tag(tag_)
-    {}
-
-    void * getTag() const {
+    void * getTag() {
         std::lock_guard lock(mu);
         return tag;
     }
@@ -109,13 +105,13 @@ public:
 
     const String & getCancelReason() const
     {
-        return recv_queue.getCancelReason();
+        return recv_queue->getCancelReason();
     }
 
     // Cancel the send queue, and set the cancel reason
     bool cancelWith(const String & reason)
     {
-        auto ret = recv_queue.cancelWith(reason);
+        auto ret = recv_queue->cancelWith(reason);
         if (ret)
             handleTheRemainingTags();
         return ret;
@@ -123,7 +119,7 @@ public:
 
     bool finish()
     {
-        auto ret = recv_queue.finish();
+        auto ret = recv_queue->finish();
         if (ret)
             handleTheRemainingTags();
         return ret;
@@ -134,7 +130,7 @@ public:
     template <typename U>
     bool pop(U && data)
     {
-        auto ret = recv_queue.pop(std::forward<U>(data)) == MPMCQueueResult::OK;
+        auto ret = recv_queue->pop(std::forward<U>(data)) == MPMCQueueResult::OK;
         if (ret)
             kickCompletionQueue();
         return ret;
@@ -148,7 +144,7 @@ public:
     template <typename U>
     GRPCReceiveQueueRes push(U && data, void * new_tag)
     {
-        MPMCQueueResult res = recv_queue.tryPush(data);
+        MPMCQueueResult res = recv_queue->tryPush(data);
         if (res == MPMCQueueResult::FULL)
         {
             // tryPush and push_back must be protected by lock at the same time.
@@ -163,7 +159,7 @@ public:
             //                   will be executed. So the tag will not be kicked
             //                   into completion queue forever.
             std::lock_guard lock(mu);
-            res = recv_queue.tryPush(data);
+            res = recv_queue->tryPush(data);
             if (res == MPMCQueueResult::FULL)
                 holdTheTagNoLock(new_tag);
         }
@@ -192,7 +188,10 @@ private:
     {
         auto iter = kick_recv_tags_map.find(tag);
         if (iter == kick_recv_tags_map.end())
-            kick_recv_tags_map.emplace(tag, KickReceiveTag(tag));
+        {
+            kick_recv_tags_map[tag];
+            kick_recv_tags_map[tag].setTag(tag);
+        }
         else
             iter->second.setTag(tag);
     }

@@ -19,7 +19,8 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
-#include "common/defines.h"
+#include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <common/defines.h>
 
 namespace DB
 {
@@ -56,8 +57,8 @@ public:
         std::atomic<Int64> * data_size_in_queue,
         std::function<void()> && add_live_conn,
         std::function<void(bool, const String &, const LoggerPtr &)> && close_conn_)
-        : rpc_context(context)
-        , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
+        : cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
+        , rpc_context(context)
         , request(std::move(req))
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , has_data(false)
@@ -89,7 +90,7 @@ public:
             processWaitRead(ok);
             break;
         case AsyncRequestStage::WAIT_REWRITE:
-            // TODO re-write
+            processWaitReWrite();
             break;
         case AsyncRequestStage::WAIT_FINISH:
             processWaitFinish();
@@ -113,7 +114,7 @@ private:
         else
         {
             stage = AsyncRequestStage::WAIT_READ;
-            read();
+            startAsyncRead();
         }
     }
 
@@ -134,14 +135,38 @@ private:
             return;
         }
 
-        // TODO write here
-        if (unlikely(!sendPacket()))
+        GRPCReceiveQueueRes send_res = sendPacket();
+
+        if (unlikely(sendPacketHasError(send_res)))
         {
             closeConnection("Exchange receiver meet error : push packets fail");
             return;
         }
 
-        read();
+        if (unlikely(isChannelFull(send_res)))
+        {
+            stage = AsyncRequestStage::WAIT_REWRITE;
+            return;
+        }
+
+        startAsyncRead();
+    }
+
+    void processWaitReWrite()
+    {
+        GRPCReceiveQueueRes res = channel_writer.tryReWrite<enable_fine_grained_shuffle>();
+
+        if (unlikely(sendPacketHasError(res)))
+        {
+            closeConnection("Exchange receiver meet error : push packets fail");
+            return;
+        }
+
+        if (unlikely(isChannelFull(res)))
+            return;
+
+        stage = AsyncRequestStage::WAIT_READ;
+        startAsyncRead();
     }
 
     void processWaitFinish()
@@ -168,7 +193,7 @@ private:
         }
     }
 
-    void read()
+    void startAsyncRead()
     {
         packet = std::make_shared<TrackedMppDataPacket>();
         reader->read(packet, thisAsUnaryCallback());
@@ -203,7 +228,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
-        rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
+        rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
     }
 
     bool retryOrDone(String done_msg)
@@ -225,9 +250,19 @@ private:
         }
     }
 
-    bool sendPacket()
+    GRPCReceiveQueueRes sendPacket()
     {
         return channel_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
+    }
+
+    bool sendPacketHasError(GRPCReceiveQueueRes res)
+    {
+        return (res == GRPCReceiveQueueRes::CANCELLED || res == GRPCReceiveQueueRes::FINISHED);
+    }
+
+    bool isChannelFull(GRPCReceiveQueueRes res)
+    {
+        return res == GRPCReceiveQueueRes::FULL;
     }
 
     // in case of potential multiple inheritances.

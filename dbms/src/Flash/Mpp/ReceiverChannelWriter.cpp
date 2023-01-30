@@ -36,6 +36,13 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]]
 }
 
 bool loopJudge(GRPCReceiveQueueRes res) { return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL); }
+
+// result can not be changed from FULL to OK
+void updateResult(GRPCReceiveQueueRes & dst, GRPCReceiveQueueRes & src)
+{
+    if (likely(!(dst == GRPCReceiveQueueRes::FULL && src == GRPCReceiveQueueRes::OK)))
+        dst = src;
+}
 } // namespace
 
 template <bool enable_fine_grained_shuffle>
@@ -184,8 +191,9 @@ GRPCReceiveQueueRes ReceiverChannelWriter::tryWriteFineGrain(size_t source_index
             resp_ptr,
             std::move(chunks[i]));
 
-        // TODO res's update has flaw
-        res = tryWrite(i, std::move(recv_msg));
+        GRPCReceiveQueueRes write_res = tryWriteImpl(i, std::move(recv_msg));
+
+        updateResult(res, write_res);
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
 
         // Only the first ExchangeReceiverInputStream need to handle resp.
@@ -213,7 +221,7 @@ GRPCReceiveQueueRes ReceiverChannelWriter::tryWriteNonFineGrain(size_t source_in
             resp_ptr,
             std::move(chunks));
 
-        res = tryWrite(0, std::move(recv_msg));
+        res = tryWriteImpl(0, std::move(recv_msg));
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
     }
     return res;
@@ -222,14 +230,46 @@ GRPCReceiveQueueRes ReceiverChannelWriter::tryWriteNonFineGrain(size_t source_in
 template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelWriter::tryReWrite()
 {
-    // TODO
-}
+    GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
+    auto iter = rewrite_msgs.begin();
 
-GRPCReceiveQueueRes ReceiverChannelWriter::tryWrite(size_t index, std::shared_ptr<ReceivedMessage> && msg)
-{
-    GRPCReceiveQueueRes res = grpc_recv_queues[index].push(std::move(msg), tag);
-    if (res == GRPCReceiveQueueRes::FULL)
-        rewrite_msg = std::make_pair(index, std::move(msg));
+    while (loopJudge(res) && (iter != rewrite_msgs.end()))
+    {
+        GRPCReceiveQueueRes write_res = tryRewriteImpl(iter->first, iter->second);
+        if (write_res == GRPCReceiveQueueRes::OK)
+        {
+            auto tmp_iter = iter;
+            ++iter;
+            rewrite_msgs.erase(tmp_iter);
+        }
+        else
+            ++iter;
+
+        updateResult(res, write_res);
+        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
+    }
+
     return res;
 }
+
+GRPCReceiveQueueRes ReceiverChannelWriter::tryWriteImpl(size_t index, std::shared_ptr<ReceivedMessage> && msg)
+{
+    GRPCReceiveQueueRes res = grpc_recv_queues[index]->push(std::move(msg), tag);
+    if (res == GRPCReceiveQueueRes::FULL)
+        rewrite_msgs.insert({index, std::move(msg)});
+    return res;
+}
+
+GRPCReceiveQueueRes ReceiverChannelWriter::tryRewriteImpl(size_t index, std::shared_ptr<ReceivedMessage> & msg)
+{
+    GRPCReceiveQueueRes res = grpc_recv_queues[index]->push(msg, tag);
+    return res;
+}
+
+template GRPCReceiveQueueRes ReceiverChannelWriter::tryReWrite<true>();
+template GRPCReceiveQueueRes ReceiverChannelWriter::tryReWrite<false>();
+template GRPCReceiveQueueRes ReceiverChannelWriter::tryWrite<true>(size_t, const TrackedMppDataPacketPtr &);
+template GRPCReceiveQueueRes ReceiverChannelWriter::tryWrite<false>(size_t, const TrackedMppDataPacketPtr &);
+template bool ReceiverChannelWriter::write<true>(size_t, const TrackedMppDataPacketPtr &);
+template bool ReceiverChannelWriter::write<false>(size_t, const TrackedMppDataPacketPtr &);
 } // namespace DB
