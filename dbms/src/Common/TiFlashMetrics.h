@@ -262,8 +262,8 @@ namespace DB
     M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                          \
         F(type_send, {{"type", "send_queue"}}),                                                                                           \
         F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
-    M(tiflash_mpp_resource, "resource used by mpp task", Histogram,                                                                       \
-        F(type_cpu_time, {{"type", "cpu_time"}}, ExpBuckets{0.0005, 2, 20}))                                                              \
+    M(tiflash_mpp_resource, "resource used by mpp task", Counter,                                                                         \
+        F(type_cpu_time, {{"type", "cpu_time"}}))                                                                                         \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

@@ -412,7 +412,7 @@ void MPPTask::runImpl()
         }
         auto cpu_time = query_executor_holder->collectCPUTime();
         LOG_INFO(log, "finish with cpu time: {} [cpu core num * ns]", cpu_time);
-        GET_METRIC(tiflash_mpp_resource, type_cpu_time).Observe(cpu_time);
+        GET_METRIC(tiflash_mpp_resource, type_cpu_time).Increment(cpu_time);
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(
