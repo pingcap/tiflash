@@ -17,7 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/RegionQueryInfo.h>
@@ -44,7 +44,7 @@ public:
     DAGStorageInterpreter(
         Context & context_,
         const TiDBTableScan & table_scan,
-        const PushDownFilter & push_down_filter_,
+        const FilterConditions & filter_conditions_,
         size_t max_streams_);
 
     DISALLOW_MOVE(DAGStorageInterpreter);
@@ -111,7 +111,7 @@ private:
 
     Context & context;
     const TiDBTableScan & table_scan;
-    const PushDownFilter & push_down_filter;
+    const FilterConditions & filter_conditions;
     const size_t max_streams;
     LoggerPtr log;
 
