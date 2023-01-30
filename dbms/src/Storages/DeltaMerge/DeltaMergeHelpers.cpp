@@ -28,8 +28,8 @@ Digest hashSchema(const Block & schema)
     const auto & data = schema.getColumnsWithTypeAndName();
     for (const auto & column_with_type_and_name : data)
     {
-        const auto & type = column_with_type_and_name.type->getTypeId();
-        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(&type), sizeof(type));
+        const auto & type = column_with_type_and_name.type->getName();
+        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(type.c_str()), type.size());
 
         const auto & name = column_with_type_and_name.name;
         SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(name.c_str()), size(name));
