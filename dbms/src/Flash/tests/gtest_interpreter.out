@@ -1,4 +1,4 @@
-~func_name: SingleQueryBlock
+~test_suite_name: SingleQueryBlock
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -15,7 +15,7 @@ Union: <for test>
            Filter: <execute where>
             MockTableScan
 @
-~func_name: SingleQueryBlock
+~test_suite_name: SingleQueryBlock
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -32,7 +32,7 @@ Union: <for test>
            Filter: <execute where>
             MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -45,7 +45,7 @@ Union: <for test>
        Expression: <final projection>
         MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -60,7 +60,7 @@ Union: <for test>
          Expression: <final projection>
           MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -79,7 +79,7 @@ Union: <for test>
              Expression: <final projection>
               MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 3
 ~result:
 Union: <for test>
@@ -106,7 +106,7 @@ Union: <for test>
                      Expression: <final projection>
                       MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 4
 ~result:
 Union: <for test>
@@ -119,7 +119,7 @@ Union: <for test>
        Expression: <final projection>
         MockExchangeReceiver
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 5
 ~result:
 Union: <for test>
@@ -133,7 +133,7 @@ Union: <for test>
         Expression: <final projection>
          MockExchangeReceiver
 @
-~func_name: Window
+~test_suite_name: Window
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -148,7 +148,7 @@ Union: <for test>
          Expression: <final projection>
           MockTableScan
 @
-~func_name: Window
+~test_suite_name: Window
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -165,7 +165,7 @@ Union: <for test>
            Expression: <final projection>
             MockTableScan
 @
-~func_name: Window
+~test_suite_name: Window
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -186,7 +186,7 @@ Union: <for test>
                Expression: <final projection>
                 MockTableScan
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -199,7 +199,7 @@ Union: <for test>
        Expression: <final projection>
         MockExchangeReceiver
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -210,7 +210,7 @@ Union: <for test>
      PartialSorting x 10: limit = 10
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -225,7 +225,7 @@ Union: <for test>
          Expression: <final projection>
           MockExchangeReceiver
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 3
 ~result:
 Union: <for test>
@@ -236,7 +236,7 @@ Union: <for test>
      PartialSorting x 10: limit = 10
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleJoin
+~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 0
 ~result:
 CreatingSets
@@ -252,7 +252,7 @@ CreatingSets
      Expression: <final projection>
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleJoin
+~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 1
 ~result:
 CreatingSets
@@ -268,7 +268,7 @@ CreatingSets
      Expression: <final projection>
       MockTableScan
 @
-~func_name: FineGrainedShuffleJoin
+~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 2
 ~result:
 CreatingSets
@@ -284,7 +284,7 @@ CreatingSets
      Expression: <final projection>
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleAgg
+~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -292,7 +292,7 @@ Union: <for test>
   Aggregating: <enable fine grained shuffle>
    MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleAgg
+~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -301,7 +301,7 @@ Union: <for test>
    ParallelAggregating, max_threads: 10, final: true
     MockExchangeReceiver x 10
 @
-~func_name: Join
+~test_suite_name: Join
 ~result_index: 0
 ~result:
 CreatingSets
@@ -325,7 +325,7 @@ CreatingSets
      Expression: <final projection>
       MockTableScan
 @
-~func_name: Join
+~test_suite_name: Join
 ~result_index: 1
 ~result:
 CreatingSets
@@ -349,7 +349,7 @@ CreatingSets
      Expression: <final projection>
       MockExchangeReceiver
 @
-~func_name: Join
+~test_suite_name: Join
 ~result_index: 2
 ~result:
 CreatingSets
@@ -374,7 +374,7 @@ CreatingSets
       Expression: <final projection>
        MockExchangeReceiver
 @
-~func_name: JoinThenAgg
+~test_suite_name: JoinThenAgg
 ~result_index: 0
 ~result:
 CreatingSets
@@ -392,7 +392,7 @@ CreatingSets
        Expression: <final projection>
         MockTableScan
 @
-~func_name: JoinThenAgg
+~test_suite_name: JoinThenAgg
 ~result_index: 1
 ~result:
 CreatingSets
@@ -411,7 +411,7 @@ CreatingSets
         Expression: <final projection>
          MockTableScan
 @
-~func_name: JoinThenAgg
+~test_suite_name: JoinThenAgg
 ~result_index: 2
 ~result:
 CreatingSets
@@ -436,7 +436,7 @@ CreatingSets
               Expression: <final projection>
                MockExchangeReceiver
 @
-~func_name: ListBase
+~test_suite_name: ListBase
 ~result_index: 0
 ~result:
 Limit, limit = 10
@@ -446,7 +446,7 @@ Limit, limit = 10
     Filter: <execute where>
      MockTableScan
 @
-~func_name: ListBase
+~test_suite_name: ListBase
 ~result_index: 1
 ~result:
 Union: <for test>

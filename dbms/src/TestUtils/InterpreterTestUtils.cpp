@@ -71,9 +71,9 @@ void InterpreterTestUtils::initExpectResults()
         {
             auto spilts = stringSplit(buf, '~');
             assert(spilts.size() == 3);
-            auto func_key = fmt::format("~{}", Poco::trim(spilts[0]));
+            auto suite_key = fmt::format("~{}", Poco::trim(spilts[0]));
             auto unit_result = fmt::format("~{}", Poco::trim(spilts[2]));
-            case_expect_results[func_key].push_back(unit_result);
+            case_expect_results[suite_key].push_back(unit_result);
         }
     }
 }
@@ -85,13 +85,13 @@ void InterpreterTestUtils::appendExpectResults()
 
     auto out_path = getOutputPath();
     Poco::FileOutputStream fos(out_path, std::ios::out | std::ios::app);
-    for (const auto & func_case : case_expect_results)
+    for (const auto & suite_entry : case_expect_results)
     {
-        const auto & func_key = func_case.first;
-        for (size_t i = 0; i < func_case.second.size(); ++i)
+        const auto & suite_key = suite_entry.first;
+        for (size_t i = 0; i < suite_entry.second.size(); ++i)
         {
-            fos << func_key << "\n~result_index: " << i << '\n'
-                << func_case.second[i] << "\n@\n";
+            fos << suite_key << "\n~result_index: " << i << '\n'
+                << suite_entry.second[i] << "\n@\n";
         }
     }
 }
@@ -114,8 +114,8 @@ void InterpreterTestUtils::runAndAssert(
 {
     const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
     assert(test_info);
-    String test_func_name = test_info->name();
-    assert(!test_func_name.empty());
+    String test_suite_name = test_info->name();
+    assert(!test_suite_name.empty());
     auto dag_request_str = Poco::trim(ExecutorSerializer().serialize(request.get()));
     auto test_info_msg = [&]() {
         return fmt::format(
@@ -123,15 +123,15 @@ void InterpreterTestUtils::runAndAssert(
             "    file: {}\n"
             "    line: {}\n"
             "    test_case_name: {}\n"
-            "    test_func_name: {}\n"
+            "    test_suite_name: {}\n"
             "    dag_request: \n{}",
             test_info->file(),
             test_info->line(),
             test_info->test_case_name(),
-            test_func_name,
+            test_suite_name,
             dag_request_str);
     };
-    auto func_key = fmt::format("~func_name: {}", test_func_name);
+    auto suite_key = fmt::format("~test_suite_name: {}", test_suite_name);
 
     DAGContext dag_context(
         *request,
@@ -145,12 +145,12 @@ void InterpreterTestUtils::runAndAssert(
 
     if (just_record)
     {
-        assert(case_expect_results[func_key].size() == cur_result_index);
-        case_expect_results[func_key].push_back(compare_result);
+        assert(case_expect_results[suite_key].size() == cur_result_index);
+        case_expect_results[suite_key].push_back(compare_result);
         return;
     }
 
-    auto it = case_expect_results.find(func_key);
+    auto it = case_expect_results.find(suite_key);
     if (it == case_expect_results.end())
         FAIL() << "can not find expect result\n"
                << test_info_msg();
@@ -161,4 +161,3 @@ void InterpreterTestUtils::runAndAssert(
     ASSERT_EQ(expect_string, compare_result) << test_info_msg();
 }
 } // namespace DB::tests
-

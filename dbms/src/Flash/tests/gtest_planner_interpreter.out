@@ -1,4 +1,4 @@
-~func_name: StrangeQuery
+~test_suite_name: StrangeQuery
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -8,7 +8,7 @@ Union: <for test>
     Filter
      MockTableScan
 @
-~func_name: StrangeQuery
+~test_suite_name: StrangeQuery
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -27,7 +27,7 @@ Union: <for test>
              Limit x 10, limit = 10
               MockTableScan
 @
-~func_name: StrangeQuery
+~test_suite_name: StrangeQuery
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -46,7 +46,7 @@ Union: <for test>
              PartialSorting x 10: limit = 10
               MockTableScan
 @
-~func_name: SingleQueryBlock
+~test_suite_name: SingleQueryBlock
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -64,7 +64,7 @@ Union: <for test>
             Filter
              MockTableScan
 @
-~func_name: SingleQueryBlock
+~test_suite_name: SingleQueryBlock
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -81,14 +81,14 @@ Union: <for test>
            Filter
             MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 0
 ~result:
 Expression: <final projection>
  Limit, limit = 10
   MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -99,20 +99,20 @@ Union: <for test>
      Limit x 5, limit = 10
       MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 2
 ~result:
 Expression: <final projection>
  MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 3
 ~result:
 Union: <for test>
  Expression x 5: <final projection>
   MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 4
 ~result:
 Expression: <final projection>
@@ -120,7 +120,7 @@ Expression: <final projection>
   Aggregating
    MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 5
 ~result:
 Union: <for test>
@@ -130,7 +130,7 @@ Union: <for test>
     ParallelAggregating, max_threads: 5, final: true
      MockTableScan x 5
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 6
 ~result:
 Expression: <final projection>
@@ -138,7 +138,7 @@ Expression: <final projection>
   PartialSorting: limit = 10
    MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 7
 ~result:
 Union: <for test>
@@ -149,14 +149,14 @@ Union: <for test>
      PartialSorting x 5: limit = 10
       MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 8
 ~result:
 Expression: <final projection>
  Filter
   MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 9
 ~result:
 Union: <for test>
@@ -164,7 +164,7 @@ Union: <for test>
   Filter
    MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 10
 ~result:
 Union: <for test>
@@ -178,7 +178,7 @@ Union: <for test>
         Limit x 10, limit = 10
          MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 11
 ~result:
 Expression: <final projection>
@@ -187,7 +187,7 @@ Expression: <final projection>
    Limit, limit = 10
     MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 12
 ~result:
 Union: <for test>
@@ -201,7 +201,7 @@ Union: <for test>
         PartialSorting x 10: limit = 10
          MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 13
 ~result:
 Expression: <final projection>
@@ -211,7 +211,7 @@ Expression: <final projection>
     PartialSorting: limit = 10
      MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 14
 ~result:
 Union: <for test>
@@ -225,7 +225,7 @@ Union: <for test>
         ParallelAggregating, max_threads: 10, final: true
          MockTableScan x 10
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 15
 ~result:
 Expression: <final projection>
@@ -236,7 +236,7 @@ Expression: <final projection>
      Aggregating
       MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 16
 ~result:
 Union: <for test>
@@ -247,7 +247,7 @@ Union: <for test>
      ParallelAggregating, max_threads: 10, final: true
       MockTableScan x 10
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 17
 ~result:
 MockExchangeSender
@@ -256,7 +256,7 @@ MockExchangeSender
    Aggregating
     MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 18
 ~result:
 Union: <for test>
@@ -268,7 +268,7 @@ Union: <for test>
       PartialSorting x 10: limit = 10
        MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 19
 ~result:
 MockExchangeSender
@@ -277,7 +277,7 @@ MockExchangeSender
    PartialSorting: limit = 10
     MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 20
 ~result:
 Union: <for test>
@@ -289,7 +289,7 @@ Union: <for test>
       Limit x 10, limit = 10
        MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 21
 ~result:
 MockExchangeSender
@@ -297,7 +297,7 @@ MockExchangeSender
   Limit, limit = 10
    MockTableScan
 @
-~func_name: ParallelQuery
+~test_suite_name: ParallelQuery
 ~result_index: 22
 ~result:
 CreatingSets
@@ -317,7 +317,7 @@ CreatingSets
      Expression: <final projection>
       MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -327,7 +327,7 @@ Union: <for test>
     Expression: <projection>
      MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -340,7 +340,7 @@ Union: <for test>
        Expression: <projection>
         MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -356,7 +356,7 @@ Union: <for test>
           Expression: <projection>
            MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 3
 ~result:
 Union: <for test>
@@ -378,7 +378,7 @@ Union: <for test>
                 Expression: <projection>
                  MockTableScan
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 4
 ~result:
 Union: <for test>
@@ -388,7 +388,7 @@ Union: <for test>
     Expression: <projection>
      MockExchangeReceiver
 @
-~func_name: MultipleQueryBlockWithSource
+~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 5
 ~result:
 Union: <for test>
@@ -399,7 +399,7 @@ Union: <for test>
      Expression: <projection>
       MockExchangeReceiver
 @
-~func_name: Window
+~test_suite_name: Window
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -412,7 +412,7 @@ Union: <for test>
        PartialSorting x 10: limit = 0
         MockTableScan
 @
-~func_name: Window
+~test_suite_name: Window
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -425,7 +425,7 @@ Union: <for test>
        PartialSorting x 10: limit = 0
         MockTableScan
 @
-~func_name: Window
+~test_suite_name: Window
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -440,7 +440,7 @@ Union: <for test>
          PartialSorting x 10: limit = 0
           MockTableScan
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -451,7 +451,7 @@ Union: <for test>
      PartialSorting: <enable fine grained shuffle>: limit = 0
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -462,7 +462,7 @@ Union: <for test>
      PartialSorting x 10: limit = 10
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 2
 ~result:
 Union: <for test>
@@ -475,7 +475,7 @@ Union: <for test>
        PartialSorting x 10: limit = 0
         MockExchangeReceiver
 @
-~func_name: FineGrainedShuffle
+~test_suite_name: FineGrainedShuffle
 ~result_index: 3
 ~result:
 Union: <for test>
@@ -486,7 +486,7 @@ Union: <for test>
      PartialSorting x 10: limit = 10
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleJoin
+~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 0
 ~result:
 CreatingSets
@@ -502,7 +502,7 @@ CreatingSets
      Expression: <final projection>
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleJoin
+~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 1
 ~result:
 CreatingSets
@@ -518,7 +518,7 @@ CreatingSets
      Expression: <final projection>
       MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleAgg
+~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 0
 ~result:
 Union: <for test>
@@ -528,7 +528,7 @@ Union: <for test>
     Expression: <before aggregation>
      MockExchangeReceiver
 @
-~func_name: FineGrainedShuffleAgg
+~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 1
 ~result:
 Union: <for test>
@@ -539,7 +539,7 @@ Union: <for test>
      Expression x 10: <before aggregation>
       MockExchangeReceiver
 @
-~func_name: Join
+~test_suite_name: Join
 ~result_index: 0
 ~result:
 CreatingSets
@@ -563,7 +563,7 @@ CreatingSets
      Expression: <final projection>
       MockTableScan
 @
-~func_name: Join
+~test_suite_name: Join
 ~result_index: 1
 ~result:
 CreatingSets
@@ -587,7 +587,7 @@ CreatingSets
      Expression: <final projection>
       MockExchangeReceiver
 @
-~func_name: Join
+~test_suite_name: Join
 ~result_index: 2
 ~result:
 CreatingSets
@@ -612,7 +612,7 @@ CreatingSets
       Expression: <final projection>
        MockExchangeReceiver
 @
-~func_name: JoinThenAgg
+~test_suite_name: JoinThenAgg
 ~result_index: 0
 ~result:
 CreatingSets
@@ -632,7 +632,7 @@ CreatingSets
          Expression: <final projection>
           MockTableScan
 @
-~func_name: JoinThenAgg
+~test_suite_name: JoinThenAgg
 ~result_index: 1
 ~result:
 CreatingSets
@@ -653,7 +653,7 @@ CreatingSets
           Expression: <final projection>
            MockTableScan
 @
-~func_name: JoinThenAgg
+~test_suite_name: JoinThenAgg
 ~result_index: 2
 ~result:
 CreatingSets
@@ -679,7 +679,7 @@ CreatingSets
                Expression: <final projection>
                 MockExchangeReceiver
 @
-~func_name: ListBase
+~test_suite_name: ListBase
 ~result_index: 0
 ~result:
 Expression: <final projection>
@@ -691,7 +691,7 @@ Expression: <final projection>
       Filter
        MockTableScan
 @
-~func_name: ListBase
+~test_suite_name: ListBase
 ~result_index: 1
 ~result:
 Union: <for test>
