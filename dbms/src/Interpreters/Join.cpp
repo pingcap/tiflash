@@ -748,6 +748,8 @@ void insertFromBlockImplType(
             insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
         else if (null_map)
             insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
+        else if (filter_null_map)
+            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
         else
             insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
     }
@@ -759,6 +761,8 @@ void insertFromBlockImplType(
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
         else if (null_map)
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
+        else if (filter_null_map)
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
         else
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, filter_null_map, rows_not_inserted_to_map, stream_index, pool);
     }
@@ -821,6 +825,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     auto column = block.getByName(filter_column).column;
     if (column->isColumnConst())
         column = column->convertToFullColumnIfConst();
+    const PaddedPODArray<UInt8> * column_data;
     if (column->isColumnNullable())
     {
         const auto & column_nullable = static_cast<const ColumnNullable &>(*column);
@@ -839,18 +844,22 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 
             null_map_holder = std::move(mutable_null_map_holder);
         }
+        column_data = &static_cast<const ColumnVector<UInt8> *>(column_nullable.getNestedColumnPtr().get())->getData();
+    }
+    else
+    {
+        if (!null_map_holder)
+        {
+            null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
+        }
+        column_data = &static_cast<const ColumnVector<UInt8> *>(column.get())->getData();
     }
 
-    if (!null_map_holder)
-    {
-        null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
-    }
     MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
     PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
 
-    const auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
-    for (size_t i = 0, size = nested_column->size(); i < size; ++i)
-        mutable_null_map[i] |= (!nested_column->getInt(i));
+    for (size_t i = 0, size = column_data->size(); i < size; ++i)
+        mutable_null_map[i] |= !(*column_data)[i];
 
     null_map_holder = std::move(mutable_null_map_holder);
 
