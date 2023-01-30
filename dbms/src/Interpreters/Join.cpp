@@ -38,6 +38,8 @@ namespace FailPoints
 {
 extern const char random_join_build_failpoint[];
 extern const char random_join_prob_failpoint[];
+extern const char exception_mpp_hash_build[];
+extern const char exception_mpp_hash_probe[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -135,6 +137,7 @@ Join::Join(
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
+    , active_build_concurrency(0)
     , probe_concurrency(0)
     , active_probe_concurrency(0)
     , collators(collators_)
@@ -145,7 +148,6 @@ Join::Join(
     , other_condition_ptr(other_condition_ptr_)
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
-    , build_table_state(BuildTableState::SUCCEED)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
@@ -165,11 +167,14 @@ Join::Join(
     LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
-void Join::setBuildTableState(BuildTableState state_)
+void Join::meetError()
 {
-    std::lock_guard lk(build_table_mutex);
-    build_table_state = state_;
-    build_table_cv.notify_all();
+    std::lock_guard lk(build_probe_mutex);
+    if (meet_error)
+        return;
+    meet_error = true;
+    build_cv.notify_all();
+    probe_cv.notify_all();
 }
 
 bool CanAsColumnString(const IColumn * column)
@@ -1992,16 +1997,51 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
     }
 }
 
+void Join::finishOneProbe()
+{
+    std::unique_lock lock(build_probe_mutex);
+    if (active_probe_concurrency == 1)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+    }
+    --active_probe_concurrency;
+    if (active_probe_concurrency == 0)
+        probe_cv.notify_all();
+}
+void Join::finishOneBuild()
+{
+    std::unique_lock lock(build_probe_mutex);
+    if (active_build_concurrency == 1)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
+    }
+    --active_build_concurrency;
+    if (active_build_concurrency == 0)
+        build_cv.notify_all();
+}
+
+void Join::waitUntilAllProbeFinished() const
+{
+    std::unique_lock lock(build_probe_mutex);
+    probe_cv.wait(lock, [&]() {
+        return meet_error || active_probe_concurrency == 0;
+    });
+    if (meet_error)
+        throw Exception("Join meet error before all probe finished!");
+}
+
+void Join::waitUntilAllBuildFinished() const
+{
+    std::unique_lock lk(build_probe_mutex);
+
+    build_cv.wait(lk, [&]() { return meet_error || active_build_concurrency == 0; });
+    if (meet_error) /// throw this exception once failed to build the hash table
+        throw Exception("Build failed before join probe!");
+}
+
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
-    // ck will use this function to generate header, that's why here is a check.
-    {
-        std::unique_lock lk(build_table_mutex);
-
-        build_table_cv.wait(lk, [&]() { return build_table_state != BuildTableState::WAITING; });
-        if (build_table_state == BuildTableState::FAILED) /// throw this exception once failed to build the hash table
-            throw Exception("Build failed before join probe!");
-    }
+    waitUntilAllBuildFinished();
 
     std::shared_lock lock(rwlock);
 
