@@ -75,7 +75,7 @@ bool isGroupByCollationSensitive(const Context & context)
 Aggregator::Params buildParams(
     const Context & context,
     const Block & before_agg_header,
-    size_t before_agg_streams_size,
+    size_t agg_concurrency,
     const Names & key_names,
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
@@ -90,7 +90,8 @@ Aggregator::Params buildParams(
 
     const Settings & settings = context.getSettingsRef();
 
-    bool allow_to_use_two_level_group_by = isAllowToUseTwoLevelGroupBy(before_agg_streams_size, settings);
+    bool allow_to_use_two_level_group_by = isAllowToUseTwoLevelGroupBy(agg_concurrency, settings);
+    auto total_two_level_threshold_bytes = allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0);
 
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
@@ -98,9 +99,11 @@ Aggregator::Params buildParams(
         before_agg_header,
         keys,
         aggregate_descriptions,
+        /// do not use the average value for key count threshold, because for a random distributed data, the key count
+        /// in every threads should almost be the same
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
+        getAverageThreshold(total_two_level_threshold_bytes, agg_concurrency),
+        getAverageThreshold(settings.max_bytes_before_external_group_by, agg_concurrency),
         !is_final_agg,
         spill_config,
         context.getSettingsRef().max_block_size,

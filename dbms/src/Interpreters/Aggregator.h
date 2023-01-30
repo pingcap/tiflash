@@ -718,7 +718,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     case Type::NAME:                                                                                       \
     {                                                                                                      \
         const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
-        return ptr->data.size() + (without_key != nullptr);                                                \
+        return ptr->data.size();                                                                           \
     }
 
             APPLY_FOR_AGGREGATED_VARIANTS(M)
@@ -727,6 +727,33 @@ struct AggregatedDataVariants : private boost::noncopyable
         default:
             throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
+    }
+
+    size_t bytesCount() const
+    {
+        size_t bytes_count = 0;
+        switch (type)
+        {
+        case Type::EMPTY:
+        case Type::without_key:
+            break;
+
+#define M(NAME, IS_TWO_LEVEL)                                                                              \
+    case Type::NAME:                                                                                       \
+    {                                                                                                      \
+        const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
+        return ptr->data.getBufferSizeInBytes();                                                           \
+    }
+
+            APPLY_FOR_AGGREGATED_VARIANTS(M)
+#undef M
+
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+        }
+        for (const auto & pool : aggregates_pools)
+            bytes_count += pool->size();
+        return bytes_count;
     }
 
     const char * getMethodName() const
@@ -888,7 +915,6 @@ public:
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
-        Int64 local_delta_memory = 0;
 
         /// Two-level aggregation settings (used for a large number of keys).
         /** With how many keys or the size of the aggregation state in bytes,
@@ -904,7 +930,6 @@ public:
         /// Return empty result when aggregating without keys on empty set.
         bool empty_result_for_aggregation_by_empty_set;
 
-        const std::string tmp_path;
         SpillConfig spill_config;
 
         UInt64 max_block_size;
@@ -980,8 +1005,8 @@ public:
         const Block & block,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        Int64 & local_delta_memory);
+        AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
+    );
 
     /** Convert the aggregation data structure into a block.
       * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
@@ -1020,6 +1045,7 @@ public:
     void finishSpill();
     BlockInputStreams restoreSpilledData();
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
+    void setContainsTwoLevelAggregatedData(bool value) { contains_two_level_aggregated_data = value; }
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1064,10 +1090,7 @@ protected:
 
     bool all_aggregates_has_trivial_destructor = false;
 
-    /// How many RAM were used to process the query before processing the first block.
-    Int64 memory_usage_before_aggregation = 0;
-
-    std::atomic<Int64> local_memory_usage = 0;
+    std::atomic<bool> contains_two_level_aggregated_data = false;
 
     std::mutex mutex;
 
