@@ -25,14 +25,19 @@ namespace DB
 class ClusterIdHolder : public ext::Singleton<ClusterIdHolder>
 {
 public:
-    void initClusterId(const std::string & cluster_id_)
+    void init(const std::string & cluster_id_)
     {
         std::lock_guard lock(mu);
         RUNTIME_ASSERT(!initialized, "Cannot be initialized cluster id more than once");
         cluster_id = cluster_id_;
     }
 
-    const std::string & getClusterId() const
+    void initDefault()
+    {
+        init("default");
+    }
+
+    const std::string & get() const
     {
         std::lock_guard lock(mu);
         RUNTIME_ASSERT(initialized, "cluster id not yet initialized");

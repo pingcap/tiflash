@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/ClusterIdHolder.h>
 #include <Common/UnifiedLogFormatter.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -84,6 +85,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
     global_context->setTemporaryPath(getTemporaryPath());
 
+    ClusterIdHolder::instance().initDefault();
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
