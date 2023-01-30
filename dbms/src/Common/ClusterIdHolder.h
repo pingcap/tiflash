@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/nocopyable.h>
 
+#include <mutex>
 #include <string>
 
 namespace DB
@@ -33,17 +35,23 @@ public:
         return inst;
     }
 
-    void setClusterId(const std::string & set_cluster_id)
+    void initClusterId(const std::string & cluster_id_)
     {
-        cluster_id = set_cluster_id;
+        std::lock_guard lock(mu);
+        RUNTIME_ASSERT(!initialized, "Cannot be initialized cluster id more than once");
+        cluster_id = cluster_id_;
     }
 
     const std::string & getClusterId() const
     {
+        std::lock_guard lock(mu);
+        RUNTIME_ASSERT(initialized, "cluster id not yet initialized");
         return cluster_id;
     }
 
 private:
-    std::string cluster_id = "default";
+    mutable std::mutex mu;
+    std::string cluster_id;
+    bool initialized = false;
 };
-}
+} // namespace DB
