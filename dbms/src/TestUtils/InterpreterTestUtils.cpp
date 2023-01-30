@@ -161,3 +161,4 @@ void InterpreterTestUtils::runAndAssert(
     ASSERT_EQ(expect_string, compare_result) << test_info_msg();
 }
 } // namespace DB::tests
+
