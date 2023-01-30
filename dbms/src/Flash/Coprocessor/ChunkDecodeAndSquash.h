@@ -27,7 +27,11 @@ public:
     CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
     ~CHBlockChunkDecodeAndSquash() = default;
     std::optional<Block> decodeAndSquash(const String &);
+    std::optional<Block> decodeAndSquashV1(std::string_view);
     std::optional<Block> flush();
+
+private:
+    std::optional<Block> decodeAndSquashV1Impl(ReadBuffer & istr);
 
 private:
     CHBlockChunkCodec codec;

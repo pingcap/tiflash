@@ -18,6 +18,7 @@
 #include <common/defines.h>
 #include <immintrin.h>
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -37,11 +38,7 @@ ALWAYS_INLINE static inline void * avx2_inline_memcpy(void * __restrict dst_, co
 
 #define MEM_CP_END(n) tiflash_compiler_builtin_memcpy(dst + size - (n), src + size - (n), (n));
 #define MEM_CP_HEAD(n) tiflash_compiler_builtin_memcpy(dst, src, (n));
-#ifdef AVX2_MEMCPY_USE_PREFETCH
 #define PREFETCH(addr) __builtin_prefetch(addr)
-#else
-#define PREFETCH(addr)
-#endif
 
     constexpr int block32_size = details::BLOCK32_SIZE;
 
@@ -58,7 +55,7 @@ ALWAYS_INLINE static inline void * avx2_inline_memcpy(void * __restrict dst_, co
                 }
                 /// No bytes remaining.
             }
-            else if (unlikely(size <= 4))
+            else if (unlikely(size < 4))
             {
                 /// Chunks of 2..3 bytes.
                 details::memcpy_ignore_overlap<2>(dst, src, size);
@@ -95,7 +92,11 @@ ALWAYS_INLINE static inline void * avx2_inline_memcpy(void * __restrict dst_, co
             dst -= offset;
             src -= offset;
             size += offset;
+            assert(size_t(dst) % block32_size == 0);
         }
+
+        // TODO: use non-temporal way(mark data unlikely to be used again soon) to minimize caching for large memory size(bigger than L2/L3 cache size) if necessary.
+        // TODO: check whether source address is aligned to 32 and use specific aligned instructions if necessary.
 
         /// Aligned unrolled copy.
         while (size >= block32_size * loop_block32_cnt)

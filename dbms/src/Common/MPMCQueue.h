@@ -108,8 +108,7 @@ public:
     template <typename Duration>
     ALWAYS_INLINE Result popTimeout(T & obj, const Duration & timeout)
     {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
+        auto deadline = SteadyClock::now() + timeout;
         return popObj<true>(obj, &deadline);
     }
 
@@ -138,8 +137,7 @@ public:
     template <typename U, typename Duration>
     ALWAYS_INLINE Result pushTimeout(U && u, const Duration & timeout)
     {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
+        auto deadline = SteadyClock::now() + timeout;
         return pushObj<true>(std::forward<U>(u), &deadline);
     }
 
@@ -162,8 +160,7 @@ public:
     template <typename... Args, typename Duration>
     ALWAYS_INLINE Result emplaceTimeout(Args &&... args, const Duration & timeout)
     {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
+        auto deadline = SteadyClock::now() + timeout;
         return emplaceObj<true>(&deadline, std::forward<Args>(args)...);
     }
 
@@ -222,7 +219,8 @@ public:
     }
 
 private:
-    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+    using SteadyClock = std::chrono::steady_clock;
+    using TimePoint = SteadyClock::time_point;
     using WaitingNode = MPMCQueueDetail::WaitingNode;
 
     void notifyAll()

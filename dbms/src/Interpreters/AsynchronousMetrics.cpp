@@ -82,8 +82,8 @@ void AsynchronousMetrics::run()
 
     /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
     const auto get_next_minute = [] {
-        return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::system_clock>(
-                   std::chrono::system_clock::now() + std::chrono::minutes(1))
+        return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::steady_clock>(
+                   std::chrono::steady_clock::now() + std::chrono::minutes(1))
             + std::chrono::seconds(30);
     };
 
