@@ -19,8 +19,11 @@ add_headers_and_sources(clickhouse_functions ./GatherUtils)
 add_headers_and_sources(clickhouse_functions ./Conditional)
 add_headers_and_sources(clickhouse_functions ${TiFlash_BINARY_DIR}/dbms/src/Functions)
 
-check_then_add_sources_compile_flag (TIFLASH_ENABLE_AVX_SUPPORT "-mavx2" CollationStringOptimized.cpp)
-check_then_add_sources_compile_flag (TIFLASH_COMPILER_MOVBE_SUPPORT "-mmovbe" CollationStringOptimized.cpp)
+check_then_add_sources_compile_flag (
+    TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
+    "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
+    CollationStringOptimized.cpp
+)
 
 list(REMOVE_ITEM clickhouse_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp)
 list(REMOVE_ITEM clickhouse_functions_headers IFunction.h FunctionFactory.h FunctionHelpers.h)

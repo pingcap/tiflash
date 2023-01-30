@@ -30,7 +30,6 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_in_creating_set_input_stream[];
-extern const char exception_mpp_hash_build[];
 } // namespace FailPoints
 namespace ErrorCodes
 {
@@ -120,7 +119,7 @@ void CreatingSetsBlockInputStream::createAll()
             for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
-                    elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
+                    elem.second.join->setInitActiveBuildConcurrency();
             }
         }
         Stopwatch watch;
@@ -238,13 +237,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             }
         }
 
-
-        if (subquery.join)
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
-            subquery.join->setBuildTableState(Join::BuildTableState::SUCCEED);
-        }
-
         if (table_out)
             table_out->writeSuffix();
 
@@ -294,7 +286,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         std::unique_lock lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
-            subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
+            subquery.join->meetError();
         LOG_ERROR(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
     }
 }

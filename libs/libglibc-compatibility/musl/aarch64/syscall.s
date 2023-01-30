@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/PDTiKVClient.h>
-
-namespace DB
-{
-
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-}
-
-std::atomic<Timestamp> PDClientHelper::cached_gc_safe_point = 0;
-std::atomic<std::chrono::time_point<std::chrono::steady_clock>> PDClientHelper::safe_point_last_update_time;
-
-} // namespace DB
+.global __syscall
+.hidden __syscall
+.type __syscall,%function
+__syscall:
+	uxtw x8,w0
+	mov x0,x1
+	mov x1,x2
+	mov x2,x3
+	mov x3,x4
+	mov x4,x5
+	mov x5,x6
+	mov x6,x7
+	svc 0
+	ret
