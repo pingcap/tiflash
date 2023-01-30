@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
@@ -53,11 +53,11 @@ public:
     void initStreams(Context & context);
 
     // for delta-merge test
-    bool pushDownFilter(Context & context, const String & filter_executor_id, const tipb::Selection & selection);
+    bool setFilterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection);
 
-    bool hasPushDownFilter() const;
+    bool hasFilterConditions() const;
 
-    const String & getPushDownFilterId() const;
+    const String & getFilterConditionsId() const;
 
     Int64 getLogicalTableID() const;
 
@@ -67,7 +67,7 @@ private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
 private:
-    PushDownFilter push_down_filter;
+    FilterConditions filter_conditions;
     Block sample_block;
 
     BlockInputStreams mock_streams;
