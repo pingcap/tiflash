@@ -48,14 +48,14 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
     if (plan->tp() == PlanType::TableScan)
     {
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
-        return physical_table_scan->pushDownFilter(executor_id, selection);
+        return physical_table_scan->setFilterConditions(executor_id, selection);
     }
     if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
         if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
         {
-            return physical_mock_table_scan->pushDownFilter(context, executor_id, selection);
+            return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
         }
     }
     return false;
@@ -71,8 +71,8 @@ void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlan
             if (plan->tp() == PlanType::TableScan)
             {
                 auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
-                if (physical_table_scan->hasPushDownFilter())
-                    list_based_executors_order.push_back(physical_table_scan->getPushDownFilterId());
+                if (physical_table_scan->hasFilterConditions())
+                    list_based_executors_order.push_back(physical_table_scan->getFilterConditionsId());
                 list_based_executors_order.push_back(physical_table_scan->execId());
             }
             else

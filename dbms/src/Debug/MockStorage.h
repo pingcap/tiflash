@@ -14,7 +14,7 @@
 #pragma once
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
@@ -82,7 +82,7 @@ public:
 
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
-    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter = nullptr);
+    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions = nullptr);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 
