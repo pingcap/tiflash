@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/ClusterIdHolder.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
 #include <prometheus/counter.h>
@@ -263,7 +264,7 @@ namespace DB
         F(type_send, {{"type", "send_queue"}}),                                                                                           \
         F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
     M(tiflash_mpp_resource, "resource used by mpp task", Counter,                                                                         \
-        F(type_cpu_time, {{"type", "cpu_time"}}))                                                                                         \
+        F(type_cpu_time, {{"type", "cpu_time"}, {"cluster_id", ClusterIdHolder::instance().getClusterId()}}))                             \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

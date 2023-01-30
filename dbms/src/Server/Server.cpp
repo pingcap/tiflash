@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/ClusterIdHolder.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
@@ -1084,8 +1085,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// The config value in global settings can only be used from here because we just loaded it from config file.
     ///
 
-    /// Initialize the background & blockable background thread pool.
     Settings & settings = global_context->getSettingsRef();
+    /// Initialize the cluster id of tiflash server.
+    ClusterIdHolder::instance().setClusterId(settings.cluster_id);
+
+    /// Initialize the background & blockable background thread pool.
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
