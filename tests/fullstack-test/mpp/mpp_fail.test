@@ -138,15 +138,15 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; set @@tidb_broadcast_join_threshold_count=0; set @@tidb_broadcast_join_threshold_size=0; select * from t1 left join t t2 on t1.id = t2.id;
 {#REGEXP}.*Fail point FailPoints::exception_mpp_hash_probe is triggered.*
 => DBGInvoke __disable_fail_point(exception_mpp_hash_probe)
-## sleep 2 seconds to make sure all the tiflash running thread is finished
+## sleep 2 seconds to make sure all the running compute threads are finished
 mysql> select sleep(2)
 +----------+
 | sleep(2) |
 +----------+
 |        0 |
 +----------+
-## note 1. this test only works if dynamic thread pool is enabled, if dynamic thread pool is not enabled, the result may be false negative, it works now because dynamic thread pool is enabled by default
-##      2. currenly, there is no long live threads that use the dynamic thread pool, so the expected value is 0, need to update the reference if someday some long live threads are using dynamic thread pool
+## note 1. this test only works if dynamic thread pool is enabled, the result may be false negative if dynamic thread pool is not enabled, it works now because dynamic thread pool is enabled by default
+##      2. currenly, there are no long live threads that use the dynamic thread pool, so the expected value is 0, need to update the reference if someday some long live threads are using dynamic thread pool
 => DBGInvoke get_active_threads_in_dynamic_thread_pool()
 ┌─get_active_threads_in_dynamic_thread_pool()─┐
 │ 0                                           │
