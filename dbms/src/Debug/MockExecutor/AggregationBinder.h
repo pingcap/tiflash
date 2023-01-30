@@ -14,22 +14,25 @@
 
 #pragma once
 
-#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
-#include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Parsers/ASTFunction.h>
 
 namespace DB::mock
 {
+class ExchangeSenderBinder;
+class ExchangeReceiverBinder;
+
 class AggregationBinder : public ExecutorBinder
 {
 public:
-    AggregationBinder(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, ASTs && agg_exprs_, ASTs && gby_exprs_, bool is_final_mode_)
+    AggregationBinder(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, ASTs && agg_exprs_, ASTs && gby_exprs_, bool is_final_mode_, uint64_t fine_grained_shuffle_stream_count_)
         : ExecutorBinder(index_, "aggregation_" + std::to_string(index_), output_schema_)
         , has_uniq_raw_res(has_uniq_raw_res_)
         , need_append_project(need_append_project_)
         , agg_exprs(std::move(agg_exprs_))
         , gby_exprs(std::move(gby_exprs_))
         , is_final_mode(is_final_mode_)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
 
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
@@ -51,6 +54,7 @@ protected:
     std::vector<ASTPtr> gby_exprs;
     bool is_final_mode;
     DAGSchema output_schema_for_partial_agg;
+    uint64_t fine_grained_shuffle_stream_count;
 
 private:
     void buildGroupBy(tipb::Aggregation * agg, int32_t collator_id, const Context & context) const;
@@ -58,6 +62,6 @@ private:
     void buildAggFunc(tipb::Expr * agg_func, const ASTFunction * func, int32_t collator_id) const;
 };
 
-ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs);
+ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count = 0);
 
 } // namespace DB::mock

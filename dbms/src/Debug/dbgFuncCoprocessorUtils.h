@@ -13,20 +13,10 @@
 // limitations under the License.
 
 #pragma once
-#include <Core/BlockUtils.h>
-#include <DataStreams/BlocksListBlockInputStream.h>
-#include <DataStreams/SquashingBlockInputStream.h>
-#include <Debug/DAGProperties.h>
-#include <Flash/Coprocessor/ArrowChunkCodec.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Core/Types.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
-#include <Poco/StringTokenizer.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -34,6 +24,10 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 }
+class Context;
+struct DAGProperties;
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
 std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type);
 DAGSchema getSelectSchema(Context & context);

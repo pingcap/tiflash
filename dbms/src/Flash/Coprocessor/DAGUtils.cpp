@@ -435,7 +435,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
     {tipb::ScalarFuncSig::RegexpLikeSig, "regexp_like"},
     {tipb::ScalarFuncSig::RegexpInStrSig, "regexp_instr"},
-    // {tipb::ScalarFuncSig::RegexpReplaceSig, "regexp_replace"},
+    {tipb::ScalarFuncSig::RegexpReplaceSig, "regexp_replace"},
     {tipb::ScalarFuncSig::RegexpSubstrSig, "regexp_substr"},
 
     {tipb::ScalarFuncSig::JsonExtractSig, "json_extract"},
@@ -677,7 +677,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Trim3Args, "tidbTrim"},
     {tipb::ScalarFuncSig::LTrim, "tidbLTrim"},
     {tipb::ScalarFuncSig::RTrim, "tidbRTrim"},
-    //{tipb::ScalarFuncSig::UnHex, "cast"},
+    {tipb::ScalarFuncSig::UnHex, "tidbUnHex"},
     {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},

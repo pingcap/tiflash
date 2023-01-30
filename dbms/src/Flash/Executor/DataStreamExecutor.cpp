@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,13 +42,13 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
     }
 }
 
-void DataStreamExecutor::cancel(bool is_kill)
+void DataStreamExecutor::cancel()
 {
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(data_stream.get()); p_stream)
-        p_stream->cancel(is_kill);
+        p_stream->cancel(/*kill=*/false);
 }
 
-String DataStreamExecutor::dump() const
+String DataStreamExecutor::toString() const
 {
     FmtBuffer fb;
     data_stream->dumpTree(fb);

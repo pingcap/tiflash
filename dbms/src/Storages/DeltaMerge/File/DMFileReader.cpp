@@ -353,7 +353,7 @@ Block DMFileReader::read()
 {
     Stopwatch watch;
     SCOPE_EXIT(
-        scan_context->total_dmfile_read_time_ms += watch.elapsedMilliseconds(););
+        scan_context->total_dmfile_read_time_ns += watch.elapsed(););
 
     // Go to next available pack.
     size_t skip_rows;

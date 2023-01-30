@@ -514,6 +514,57 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
     return ReturnType(true);
 }
 
+Block mergeBlocks(Blocks && blocks)
+{
+    if (blocks.empty())
+    {
+        return {};
+    }
+
+    if (blocks.size() == 1)
+    {
+        return std::move(blocks[0]);
+    }
+
+    auto & first_block = blocks[0];
+    size_t result_rows = 0;
+    for (const auto & block : blocks)
+    {
+        result_rows += block.rows();
+    }
+
+    MutableColumns dst_columns(first_block.columns());
+
+    for (size_t i = 0; i < first_block.columns(); ++i)
+    {
+        dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
+        dst_columns[i]->reserve(result_rows);
+    }
+
+    for (size_t i = 1; i < blocks.size(); ++i)
+    {
+        if (likely(blocks[i].rows() > 0))
+        {
+            assert(blocksHaveEqualStructure(first_block, blocks[i]));
+            for (size_t column = 0; column < blocks[i].columns(); ++column)
+            {
+                dst_columns[column]->insertRangeFrom(*blocks[i].getByPosition(column).column, 0, blocks[i].rows());
+            }
+        }
+    }
+    return first_block.cloneWithColumns(std::move(dst_columns));
+}
+
+Block popBlocksListFront(BlocksList & blocks)
+{
+    if (!blocks.empty())
+    {
+        Block out_block = blocks.front();
+        blocks.pop_front();
+        return out_block;
+    }
+    return {};
+}
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 {

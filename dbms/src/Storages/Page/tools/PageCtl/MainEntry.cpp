@@ -15,7 +15,13 @@
 #include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 #include <Storages/Page/tools/PageCtl/PageStorageCtlV2.h>
 #include <Storages/Page/tools/PageCtl/PageStorageCtlV3.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic warning "-Wdeprecated-declarations"
+
 #include <boost_wrapper/program_options.h>
+
+#pragma GCC diagnostic pop
 
 #include <iostream>
 namespace DB

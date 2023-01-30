@@ -67,7 +67,8 @@ Block FilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filte
     /// Until non-empty block after filtering or end of stream.
     while (true)
     {
-        res = children.back()->read();
+        FilterPtr child_filter = nullptr;
+        res = children.back()->read(child_filter, true);
 
         if (!res)
             return res;
@@ -76,6 +77,7 @@ Block FilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filte
         {
             if (return_filter)
                 res_filter = &filter;
+
             return res;
         }
     }

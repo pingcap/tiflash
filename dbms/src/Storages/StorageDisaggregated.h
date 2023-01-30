@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -29,7 +30,6 @@
 
 namespace DB
 {
-
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
 // Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),
@@ -40,15 +40,7 @@ public:
     StorageDisaggregated(
         Context & context_,
         const TiDBTableScan & table_scan_,
-        const PushDownFilter & push_down_filter_)
-        : IStorage()
-        , context(context_)
-        , table_scan(table_scan_)
-        , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
-        , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
-        , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id())
-        , push_down_filter(push_down_filter_)
-    {}
+        const FilterConditions & filter_conditions_);
 
     std::string getName() const override
     {
@@ -81,15 +73,14 @@ private:
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void pushDownFilter(DAGPipeline & pipeline);
+    void filterConditions(DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;
     const TiDBTableScan & table_scan;
     LoggerPtr log;
-    uint64_t sender_target_task_start_ts;
-    int64_t sender_target_task_task_id;
-    const PushDownFilter & push_down_filter;
+    MPPTaskId sender_target_mpp_task_id;
+    const FilterConditions & filter_conditions;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
 };

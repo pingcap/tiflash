@@ -168,7 +168,11 @@ private:
 
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
+using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
+Block mergeBlocks(Blocks && blocks);
+
+Block popBlocksListFront(BlocksList & blocks);
 
 /// Compare number of columns, data types, column types, column names, and values of constant columns.
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs);

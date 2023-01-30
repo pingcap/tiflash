@@ -14,6 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Storages/MutableSupport.h>
 #include <common/logger_useful.h>
@@ -25,14 +26,14 @@ RemoteRequest RemoteRequest::build(
     DAGContext & dag_context,
     const TiDBTableScan & table_scan,
     const TiDB::TableInfo & table_info,
-    const PushDownFilter & push_down_filter,
+    const FilterConditions & filter_conditions,
     const LoggerPtr & log)
 {
     LOG_INFO(log, "{}", printRetryRegions(retry_regions, table_info.id));
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
-    auto * executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
+    auto * executor = filter_conditions.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
 
     {
         tipb::Executor * ts_exec = executor;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Core/TiFlashDisaggregatedMode.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Storages/StorageDisaggregated.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -69,8 +70,8 @@ try
     TiFlashTestEnv::getGlobalContext().setDAGContext(dag_context.get());
     TiDBTableScan tidb_table_scan(&table_scan, table_scan.executor_id(), *dag_context);
 
-    PushDownFilter filter;
-    StorageDisaggregated storage(TiFlashTestEnv::getGlobalContext(), tidb_table_scan, filter);
+    FilterConditions filter_conditions;
+    StorageDisaggregated storage(TiFlashTestEnv::getGlobalContext(), tidb_table_scan, filter_conditions);
 
     uint64_t store_id;
     std::vector<pingcap::kv::RegionVerID> region_ids;

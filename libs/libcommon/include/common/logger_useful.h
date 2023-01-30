@@ -26,6 +26,12 @@
 #define QUERY_PREVIEW_LENGTH 160
 #endif
 
+namespace DB
+{
+/// Tracing logs are filtered by SourceFilterChannel.
+inline constexpr auto tracing_log_source = "mpp_task_tracing";
+} // namespace DB
+
 namespace LogFmtDetails
 {
 // https://stackoverflow.com/questions/8487986/file-macro-shows-full-path/54335644#54335644

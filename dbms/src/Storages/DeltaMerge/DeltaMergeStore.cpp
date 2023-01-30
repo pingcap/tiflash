@@ -405,10 +405,11 @@ void DeltaMergeStore::shutdown()
         return;
 
     LOG_TRACE(log, "Shutdown DeltaMerge start");
-    // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
-    // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
+    // Must shutdown storage path pool to make sure the DMFile remove callbacks
+    // won't remove dmfiles unexpectly.
+    path_pool->shutdown();
+    // shutdown storage pool and clean up the local DMFile remove callbacks
     storage_pool->shutdown();
-    storage_pool->dataUnregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
 
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);
@@ -919,7 +920,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         req_info,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1004,7 +1006,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)

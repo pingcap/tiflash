@@ -16,6 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/SegmentReadTransformAction.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -39,11 +40,11 @@ public:
         const String & req_id)
         : task_pool(task_pool_)
         , header(toEmptyBlock(columns_to_read_))
-        , extra_table_id_index(extra_table_id_index)
-        , physical_table_id(physical_table_id)
+        , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(req_id))
         , ref_no(0)
         , task_pool_added(false)
+
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -87,23 +88,13 @@ protected:
             task_pool->popBlock(res);
             if (res)
             {
-                if (extra_table_id_index != InvalidColumnID)
+                if (action.transform(res))
                 {
-                    const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
-                    ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
-                    size_t row_number = res.rows();
-                    auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
-                    col.column = std::move(col_data);
-                    res.insert(extra_table_id_index, std::move(col));
-                }
-                if (!res.rows())
-                {
-                    continue;
+                    return res;
                 }
                 else
                 {
-                    total_rows += res.rows();
-                    return res;
+                    continue;
                 }
             }
             else
@@ -116,7 +107,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
+        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, action.totalRows());
     }
 
     void addReadTaskPoolToScheduler()
@@ -132,13 +123,11 @@ protected:
 private:
     SegmentReadTaskPoolPtr task_pool;
     Block header;
-    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
-    const int extra_table_id_index;
+    SegmentReadTransformAction action;
+
     bool done = false;
-    TableID physical_table_id;
     LoggerPtr log;
     int64_t ref_no;
-    size_t total_rows = 0;
     bool task_pool_added;
 };
 } // namespace DB::DM

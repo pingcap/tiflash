@@ -19,6 +19,9 @@
 
 namespace DB
 {
+
+using FilterPtr = IColumn::Filter *;
+
 struct FilterTransformAction
 {
 public:
@@ -40,4 +43,5 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 };
+
 } // namespace DB

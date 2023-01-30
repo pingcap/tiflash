@@ -121,6 +121,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
     M(random_tunnel_init_rpc_failure_failpoint)         \
+    M(random_receiver_local_msg_push_failure_failpoint) \
     M(random_receiver_sync_msg_push_failure_failpoint)  \
     M(random_receiver_async_msg_push_failure_failpoint) \
     M(random_limit_check_failpoint)                     \

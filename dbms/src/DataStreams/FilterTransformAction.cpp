@@ -20,6 +20,7 @@
 #include <DataStreams/FilterTransformAction.h>
 
 #include "Columns/IColumn.h"
+#include <algorithm>
 
 namespace DB
 {
@@ -90,6 +91,8 @@ bool FilterTransformAction::transform(Block & block, IColumn::Filter & filter, b
     size_t columns = block.columns();
     size_t rows = block.rows();
     ColumnPtr column_of_filter = block.safeGetByPosition(filter_column).column;
+
+    RUNTIME_CHECK_MSG(!child_filter || child_filter->size() == rows, "Unexpected child filter size");
 
     /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
         *  and now - are calculated. That is, not all cases are covered by the code above.

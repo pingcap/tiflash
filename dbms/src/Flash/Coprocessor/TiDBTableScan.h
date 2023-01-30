@@ -14,11 +14,13 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Storages/Transaction/TypeMapping.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
-
+class DAGContext;
 using ColumnInfos = std::vector<TiDB::ColumnInfo>;
 
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`

@@ -19,7 +19,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
@@ -294,7 +293,7 @@ private:
         Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
 
-        scan_context->total_dmfile_rough_set_index_load_time_ms += watch.elapsedMilliseconds();
+        scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();
     }
 
 private:

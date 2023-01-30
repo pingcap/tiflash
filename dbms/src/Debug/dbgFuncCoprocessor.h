@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Debug/DBGInvoker.h>
-#include <Debug/dbgQueryExecutor.h>
 namespace DB
 {
 class Context;

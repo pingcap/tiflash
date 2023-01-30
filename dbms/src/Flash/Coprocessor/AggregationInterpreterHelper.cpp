@@ -79,7 +79,8 @@ Aggregator::Params buildParams(
     const Names & key_names,
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
-    bool is_final_agg)
+    bool is_final_agg,
+    const SpillConfig & spill_config)
 {
     ColumnNumbers keys;
     for (const auto & name : key_names)
@@ -97,14 +98,12 @@ Aggregator::Params buildParams(
         before_agg_header,
         keys,
         aggregate_descriptions,
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
         settings.max_bytes_before_external_group_by,
         !is_final_agg,
-        context.getTemporaryPath(),
+        spill_config,
+        context.getSettingsRef().max_block_size,
         has_collator ? collators : TiDB::dummy_collators);
 }
 
