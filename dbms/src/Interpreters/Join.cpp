@@ -470,6 +470,8 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 {
     if (unlikely(build_concurrency > 0))
         throw Exception("Logical error: `setBuildConcurrencyAndInitPool` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
+    /// do not set active_build_concurrency because in compile stage, `joinBlock` will be called to get generate header, if active_build_concurrency
+    /// is set here, `joinBlock` will hang when used to get header
     build_concurrency = std::max(1, build_concurrency_);
 
     for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
