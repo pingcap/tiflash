@@ -17,7 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/RegionQueryInfo.h>
@@ -44,7 +44,7 @@ public:
     DAGStorageInterpreter(
         Context & context_,
         const TiDBTableScan & table_scan,
-        const PushDownFilter & push_down_filter_,
+        const FilterConditions & filter_conditions_,
         size_t max_streams_);
 
     DISALLOW_MOVE(DAGStorageInterpreter);
@@ -79,7 +79,7 @@ private:
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
+    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
 
     std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
@@ -111,7 +111,7 @@ private:
 
     Context & context;
     const TiDBTableScan & table_scan;
-    const PushDownFilter & push_down_filter;
+    const FilterConditions & filter_conditions;
     const size_t max_streams;
     LoggerPtr log;
 

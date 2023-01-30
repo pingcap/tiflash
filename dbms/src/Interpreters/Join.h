@@ -277,7 +277,7 @@ public:
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
         std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
         std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
-        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> serialized;
         // TODO: add more cases like Aggregator
     };
 
