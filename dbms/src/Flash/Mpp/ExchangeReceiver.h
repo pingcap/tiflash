@@ -158,6 +158,8 @@ private:
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
+    Int32 getAliveConnectionNumNolock();
+
 private:
     void prepareMsgChannels();
     void addLocalConnectionNum();
@@ -165,6 +167,7 @@ private:
     void addAsyncConnectionNum(Int32 conn_num);
 
     void connectionLocalDone();
+    void handleConnectionAfterException();
 
     bool isReceiverForTiFlashStorage()
     {
@@ -180,6 +183,7 @@ private:
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;
+    const Int32 expect_created_connections;
 
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
@@ -189,8 +193,10 @@ private:
     std::mutex mu;
     std::condition_variable cv;
     /// should lock `mu` when visit these members
-    Int32 live_connections;
     Int32 live_local_connections;
+    Int32 actual_created_connections;
+    Int32 closed_connections;
+    bool setup_all_conns_success;
     ExchangeReceiverState state;
     String err_msg;
 

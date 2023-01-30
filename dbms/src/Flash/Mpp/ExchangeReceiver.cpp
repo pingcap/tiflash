@@ -314,9 +314,12 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
+    , expect_created_connections(source_num)
     , thread_manager(newThreadManager())
-    , live_connections(0)
     , live_local_connections(0)
+    , actual_created_connections(0)
+    , closed_connections(0)
+    , setup_all_conns_success(true)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -334,6 +337,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     }
     catch (...)
     {
+        handleConnectionAfterException();
         try
         {
             cancel();
@@ -360,10 +364,28 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     catch (...)
     {
         std::lock_guard lock(mu);
-        RUNTIME_ASSERT(live_connections == 0, "We should wait the close of all connections");
+        RUNTIME_ASSERT(getAliveConnectionNumNolock() == 0, "We should wait the close of all connections");
         RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
+}
+
+template <typename RPCContext>
+Int32 ExchangeReceiverBase<RPCContext>::getAliveConnectionNumNolock()
+{
+    if (likely(setup_all_conns_success))
+        return expect_created_connections - closed_connections;
+    return actual_created_connections - closed_connections;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
+{
+    std::lock_guard lock(mu);
+    setup_all_conns_success = false;
+
+    // some connectionDone may have been blocked, wake them up and recheck the condition.
+    cv.notify_all();
 }
 
 template <typename RPCContext>
@@ -371,7 +393,7 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
     std::unique_lock lock(mu);
     auto pred = [&] {
-        return live_connections == 0;
+        return getAliveConnectionNumNolock() == 0;
     };
     cv.wait(lock, pred);
 
@@ -424,7 +446,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
-    ++live_connections;
+    ++actual_created_connections;
     ++live_local_connections;
 }
 
@@ -432,14 +454,14 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
 {
     std::lock_guard lock(mu);
-    ++live_connections;
+    ++actual_created_connections;
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum(Int32 conn_num)
 {
     std::lock_guard lock(mu);
-    live_connections += conn_num;
+    actual_created_connections += conn_num;
 }
 
 template <typename RPCContext>
@@ -793,7 +815,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    Int32 copy_live_conn = -1;
+    Int32 alive_connection_num;
     {
         std::lock_guard lock(mu);
 
@@ -804,7 +826,24 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
             if (err_msg.empty())
                 err_msg = local_err_msg;
         }
-        copy_live_conn = --live_connections;
+
+        ++closed_connections;
+
+        // alive_connection_num may be incorrect.
+        // Because when setting up connections, one created connection may finish the task
+        // very quickly and exit before all connections have been set up.
+        // If all connections are created successfully, it's fine. However, we may fail to
+        // set up a connection after this quick closed connection has been closed. Then the
+        // variable alive_connection_num may be incorrect.
+        // For example:
+        //   1. expect_conn_num = 2 (connection names: connection_1, connection_2)
+        //   2. create connection_1
+        //   3. connection_1 done and call connectionDone() function
+        //   4. alive_connection_num is 1 after calculated.
+        //      (However, connection_2 has not been created yet, then we get an incorrect alive_connection_num)
+        //
+        // incorrect alive_connection_num only affect the log, and in terms of the programme's correctness, there is no bug.
+        alive_connection_num = getAliveConnectionNumNolock();
     }
 
     LOG_DEBUG(
@@ -812,18 +851,21 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
         meet_error,
         local_err_msg,
-        copy_live_conn);
+        alive_connection_num);
 
-    if (copy_live_conn == 0)
+    if (alive_connection_num == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (copy_live_conn < 0)
-        throw Exception("live_connections should not be less than 0!");
+    else if (alive_connection_num < 0)
+        throw Exception("alive_connection_num should not be less than 0!");
 
-    if (meet_error || copy_live_conn == 0)
+    if (meet_error || alive_connection_num == 0)
+    {
+        LOG_INFO(exc_log, "receiver finished");
         finishAllMsgChannels();
+    }
 }
 
 template <typename RPCContext>
