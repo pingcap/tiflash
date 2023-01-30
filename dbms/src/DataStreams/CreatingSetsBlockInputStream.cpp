@@ -30,7 +30,6 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_in_creating_set_input_stream[];
-extern const char exception_mpp_hash_build[];
 } // namespace FailPoints
 namespace ErrorCodes
 {

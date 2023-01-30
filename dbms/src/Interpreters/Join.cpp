@@ -2034,10 +2034,11 @@ void Join::waitUntilAllProbeFinished() const
 
 void Join::waitUntilAllBuildFinished() const
 {
-    std::unique_lock lk(build_probe_mutex);
-
-    build_cv.wait(lk, [&]() { return meet_error || active_build_concurrency == 0; });
-    if (meet_error) /// throw this exception once failed to build the hash table
+    std::unique_lock lock(build_probe_mutex);
+    build_cv.wait(lock, [&]() {
+        return meet_error || active_build_concurrency == 0;
+    });
+    if (meet_error)
         throw Exception("Build failed before join probe!");
 }
 
