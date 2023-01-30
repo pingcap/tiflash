@@ -114,14 +114,13 @@ void orderStreams(
 
     if (enable_fine_grained_shuffle)
     {
-        size_t merge_sort_concurrency = enable_fine_grained_shuffle ? std::min(max_streams, pipeline.streams.size()) : 1;
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<MergeSortingBlockInputStream>(
                 stream,
                 order_descr,
                 settings.max_block_size,
                 limit,
-                getAverageThreshold(settings.max_bytes_before_external_sort, merge_sort_concurrency),
+                getAverageThreshold(settings.max_bytes_before_external_sort, std::min(max_streams, pipeline.streams.size())),
                 SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));

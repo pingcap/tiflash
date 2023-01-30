@@ -824,9 +824,7 @@ bool Aggregator::executeOnBlock(
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
       */
     if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
-    {
         result.convertToTwoLevel();
-    }
 
     /** Flush data to disk if too much RAM is consumed.
       * Data can only be flushed to disk if a two-level aggregation is supported.
