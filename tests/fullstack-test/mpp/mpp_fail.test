@@ -146,7 +146,7 @@ mysql> select sleep(2)
 |        0 |
 +----------+
 ## note 1. this test only works if dynamic thread pool is enabled, the result may be false negative if dynamic thread pool is not enabled, it works now because dynamic thread pool is enabled by default
-##      2. currenly, there are no long live threads that use the dynamic thread pool, so the expected value is 0, need to update the reference if someday some long live threads are using dynamic thread pool
+##      2. currently, there are no long live threads that use the dynamic thread pool, so the expected value is 0, need to update the reference if someday some long live threads are using dynamic thread pool
 => DBGInvoke get_active_threads_in_dynamic_thread_pool()
 ┌─get_active_threads_in_dynamic_thread_pool()─┐
 │ 0                                           │
