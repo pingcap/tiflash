@@ -15,26 +15,16 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/nocopyable.h>
 
+#include <ext/singleton.h>
 #include <mutex>
 #include <string>
 
 namespace DB
 {
-class ClusterIdHolder
+class ClusterIdHolder : public ext::Singleton<ClusterIdHolder>
 {
 public:
-    ClusterIdHolder() = default;
-
-    DISALLOW_COPY_AND_MOVE(ClusterIdHolder);
-
-    static ClusterIdHolder & instance()
-    {
-        static ClusterIdHolder inst; // Instantiated on first use.
-        return inst;
-    }
-
     void initClusterId(const std::string & cluster_id_)
     {
         std::lock_guard lock(mu);
