@@ -168,11 +168,11 @@ struct MockExchangeWriter
     }
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        checker(MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0), 0);
+        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
     }
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
-        checker(MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0), part_id);
+        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), part_id);
     }
     void fineGrainedShuffleWrite(
         const Block & header,
@@ -182,14 +182,13 @@ struct MockExchangeWriter
         size_t num_columns,
         int16_t part_id)
     {
-        auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacket(
+        auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacketV0(
             header,
             scattered,
             bucket_idx,
             fine_grained_shuffle_stream_count,
             num_columns,
-            result_field_types,
-            MPPDataPacketV0);
+            result_field_types);
         checker(tracked_packet, part_id);
     }
 

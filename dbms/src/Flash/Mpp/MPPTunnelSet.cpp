@@ -112,7 +112,10 @@ template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks)
 {
     RUNTIME_CHECK(!tunnels.empty());
-    auto tracked_packet = MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0);
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    if (!tracked_packet)
+        return;
+
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     // TODO avoid copy packet for broadcast.
@@ -142,11 +145,9 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::partitionWrite(Blocks & blocks, int16_t partition_id)
 {
-    auto tracked_packet = MPPTunnelSetHelper::ToPacket(blocks, result_field_types, MPPDataPacketV0);
-
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    if (!tracked_packet)
         return;
-
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     tunnels[partition_id]->write(std::move(tracked_packet));
@@ -223,14 +224,13 @@ void MPPTunnelSetBase<Tunnel>::fineGrainedShuffleWrite(
     size_t num_columns,
     int16_t partition_id)
 {
-    auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacket(
+    auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacketV0(
         header,
         scattered,
         bucket_idx,
         fine_grained_shuffle_stream_count,
         num_columns,
-        result_field_types,
-        MPPDataPacketV0);
+        result_field_types);
 
     if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
         return;

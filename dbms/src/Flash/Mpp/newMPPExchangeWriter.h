@@ -23,7 +23,7 @@
 namespace DB
 {
 template <class ExchangeWriterPtr>
-std::unique_ptr<DAGResponseWriter> NewMPPExchangeWriter(
+std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     const ExchangeWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
