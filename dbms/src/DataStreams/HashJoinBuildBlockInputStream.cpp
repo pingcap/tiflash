@@ -19,11 +19,22 @@ namespace DB
 {
 Block HashJoinBuildBlockInputStream::readImpl()
 {
-    Block block = children.back()->read();
-    if (!block)
+    try
+    {
+        Block block = children.back()->read();
+        if (!block)
+        {
+            join->finishOneBuild();
+            return block;
+        }
+        join->insertFromBlock(block, concurrency_build_index);
         return block;
-    join->insertFromBlock(block, concurrency_build_index);
-    return block;
+    }
+    catch (...)
+    {
+        join->meetError();
+        throw;
+    }
 }
 
 void HashJoinBuildBlockInputStream::appendInfo(FmtBuffer & buffer) const
