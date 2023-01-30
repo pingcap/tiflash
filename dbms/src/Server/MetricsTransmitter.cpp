@@ -57,8 +57,8 @@ void MetricsTransmitter::run()
         /// To avoid time drift and transmit values exactly each interval:
         ///  next time aligned to system seconds
         /// (60s -> every minute at 00 seconds, 5s -> every minute:[00, 05, 15 ... 55]s, 3600 -> every hour:00:00
-        return std::chrono::system_clock::time_point(
-            (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()) / seconds) * seconds
+        return std::chrono::steady_clock::time_point(
+            (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()) / seconds) * seconds
             + std::chrono::seconds(seconds));
     };
 

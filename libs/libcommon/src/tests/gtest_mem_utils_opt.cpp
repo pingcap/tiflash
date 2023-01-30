@@ -26,8 +26,6 @@
 #include <string_view>
 #include <utility>
 
-#include "../../libmemcpy/folly/FollyMemcpy.h"
-
 #if defined(TIFLASH_ENABLE_AVX_SUPPORT)
 
 void TestFunc(size_t size)
@@ -229,6 +227,28 @@ TEST(MemUtilsTestOPT, Memcopy)
     {
         TestMemCopyFunc<0>(size, mem_utils::avx2_inline_memcpy);
         TestMemCopyFunc<0>(size, sse2_inline_memcpy);
+    }
+}
+
+void TestMemByteCount(size_t size)
+{
+    char target = 8;
+    std::string oa(size + 100, target);
+    char * start = oa.data();
+    for (auto * pos = start; pos < start + 32; ++pos)
+    {
+        ASSERT_EQ(mem_utils::avx2_byte_count(pos, size, target), size);
+        std::memset(pos, target - 1, size);
+        ASSERT_EQ(mem_utils::avx2_byte_count(pos, size, target), 0);
+        std::memset(pos, target, size);
+    }
+}
+
+TEST(MemUtilsTestOPT, MemByteCount)
+{
+    for (size_t size = 0; size <= 32 * 6; ++size)
+    {
+        TestMemByteCount(size);
     }
 }
 

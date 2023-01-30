@@ -380,8 +380,6 @@ if (ARCH_AMD64)
     else()
         add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
     endif()
-
-    check_cxx_compiler_flag("-mmovbe" TIFLASH_COMPILER_MOVBE_SUPPORT)
 else()
     add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
 endif()
