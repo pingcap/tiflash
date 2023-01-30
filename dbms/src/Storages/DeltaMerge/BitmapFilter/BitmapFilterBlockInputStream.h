@@ -44,7 +44,9 @@ protected:
         FilterPtr filter_ignored;
         return readImpl(filter_ignored, false);
     }
-
+    // When all rows in block are not filtered out,
+    // `res_filter` will be set to null.
+    // The caller needs to do handle this situation.
     Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 private:
