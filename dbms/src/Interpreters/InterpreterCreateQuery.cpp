@@ -217,7 +217,7 @@ static ColumnsAndDefaults parseColumns(const ASTExpressionList & column_list_ast
             {
                 const auto & final_column_name = col_decl.name;
                 const auto tmp_column_name = final_column_name + "_tmp";
-                const auto data_type_ptr = columns.back().type.get();
+                const auto * const data_type_ptr = columns.back().type.get();
 
                 default_expr_list->children.emplace_back(setAlias(makeASTFunction("CAST", std::make_shared<ASTIdentifier>(tmp_column_name), std::make_shared<ASTLiteral>(Field(data_type_ptr->getName()))),
                                                                   final_column_name));
@@ -236,8 +236,8 @@ static ColumnsAndDefaults parseColumns(const ASTExpressionList & column_list_ast
 
         for (auto & column : defaulted_columns)
         {
-            const auto name_and_type_ptr = column.first;
-            const auto col_decl_ptr = column.second;
+            auto * const name_and_type_ptr = column.first;
+            auto * const col_decl_ptr = column.second;
 
             const auto & column_name = col_decl_ptr->name;
             const auto has_explicit_type = nullptr != col_decl_ptr->type;
@@ -307,8 +307,8 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns)
         column_declaration->name = column.name;
 
         StringPtr type_name = std::make_shared<String>(column.type->getName());
-        auto pos = type_name->data();
-        const auto end = pos + type_name->size();
+        auto * pos = type_name->data();
+        auto * const end = pos + type_name->size();
 
         ParserIdentifierWithOptionalParameters storage_p;
         column_declaration->type = parseQuery(storage_p, pos, end, "data type", 0);
@@ -331,8 +331,8 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
         column_declaration->name = column.name;
 
         StringPtr type_name = std::make_shared<String>(column.type->getName());
-        auto pos = type_name->data();
-        const auto end = pos + type_name->size();
+        auto * pos = type_name->data();
+        auto * const end = pos + type_name->size();
 
         ParserIdentifierWithOptionalParameters storage_p;
         column_declaration->type = parseQuery(storage_p, pos, end, "data type", 0);
@@ -472,7 +472,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     {
         // Table SQL definition is available even if the table is detached
         auto query = context.getCreateTableQuery(database_name, table_name);
-        auto & as_create = typeid_cast<const ASTCreateQuery &>(*query);
+        const auto & as_create = typeid_cast<const ASTCreateQuery &>(*query);
         create = as_create; // Copy the saved create query, but use ATTACH instead of CREATE
         create.attach = true;
     }
@@ -571,7 +571,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return InterpreterInsertQuery(
                    insert,
                    create.is_temporary ? context.getSessionContext() : context,
-                   context.getSettingsRef().insert_allow_materialized_columns)
+                   false)
             .execute();
     }
 

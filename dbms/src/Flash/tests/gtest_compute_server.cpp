@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
@@ -34,6 +35,24 @@ public:
             {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
             {toNullableVec<Int32>("s1", {1, {}, 10000000, 10000000}), toNullableVec<String>("s2", {"apple", {}, "banana", "test"}), toNullableVec<String>("s3", {"apple", {}, "banana", "test"})});
 
+        /// agg table with 200 rows
+        std::vector<std::optional<TypeTraits<int>::FieldType>> agg_s1(200);
+        std::vector<std::optional<String>> agg_s2(200);
+        std::vector<std::optional<String>> agg_s3(200);
+        for (size_t i = 0; i < 200; ++i)
+        {
+            if (i % 30 != 0)
+            {
+                agg_s1[i] = i % 20;
+                agg_s2[i] = {fmt::format("val_{}", i % 10)};
+                agg_s3[i] = {fmt::format("val_{}", i)};
+            }
+        }
+        context.addMockTable(
+            {"test_db", "test_table_2"},
+            {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
+            {toNullableVec<Int32>("s1", agg_s1), toNullableVec<String>("s2", agg_s2), toNullableVec<String>("s3", agg_s3)});
+
         /// for join
         context.addMockTable(
             {"test_db", "l_table"},
@@ -43,8 +62,45 @@ public:
             {"test_db", "r_table"},
             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
             {toNullableVec<String>("s", {"banana", {}, "banana"}), toNullableVec<String>("join_c", {"apple", {}, "banana"})});
+
+        /// join left table with 200 rows
+        std::vector<std::optional<TypeTraits<int>::FieldType>> join_s1(200);
+        std::vector<std::optional<String>> join_s2(200);
+        std::vector<std::optional<String>> join_s3(200);
+        for (size_t i = 0; i < 200; ++i)
+        {
+            if (i % 20 != 0)
+            {
+                agg_s1[i] = i % 5;
+                agg_s2[i] = {fmt::format("val_{}", i % 6)};
+                agg_s3[i] = {fmt::format("val_{}", i)};
+            }
+        }
+        context.addMockTable(
+            {"test_db", "l_table_2"},
+            {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
+            {toNullableVec<Int32>("s1", agg_s1), toNullableVec<String>("s2", agg_s2), toNullableVec<String>("s3", agg_s3)});
+
+        /// join right table with 100 rows
+        std::vector<std::optional<TypeTraits<int>::FieldType>> join_r_s1(100);
+        std::vector<std::optional<String>> join_r_s2(100);
+        std::vector<std::optional<String>> join_r_s3(100);
+        for (size_t i = 0; i < 100; ++i)
+        {
+            if (i % 20 != 0)
+            {
+                join_r_s1[i] = i % 6;
+                join_r_s2[i] = {fmt::format("val_{}", i % 7)};
+                join_r_s3[i] = {fmt::format("val_{}", i)};
+            }
+        }
+        context.addMockTable(
+            {"test_db", "r_table_2"},
+            {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
+            {toNullableVec<Int32>("s1", join_r_s1), toNullableVec<String>("s2", join_r_s2), toNullableVec<String>("s3", join_r_s3)});
     }
 };
+
 
 TEST_F(ComputeServerRunner, runAggTasks)
 try
@@ -445,5 +501,69 @@ try
     }
 }
 CATCH
+
+TEST_F(ComputeServerRunner, runFineGrainedShuffleJoinTest)
+try
+{
+    startServers(3);
+    constexpr size_t join_type_num = 7;
+    constexpr tipb::JoinType join_types[join_type_num] = {
+        tipb::JoinType::TypeInnerJoin,
+        tipb::JoinType::TypeLeftOuterJoin,
+        tipb::JoinType::TypeRightOuterJoin,
+        tipb::JoinType::TypeSemiJoin,
+        tipb::JoinType::TypeAntiSemiJoin,
+        tipb::JoinType::TypeLeftOuterSemiJoin,
+        tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+    };
+    // fine-grained shuffle is enabled.
+    constexpr uint64_t enable = 8;
+    constexpr uint64_t disable = 0;
+
+    for (auto join_type : join_types)
+    {
+        std::cout << "JoinType: " << static_cast<int>(join_type) << std::endl;
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        auto request = context
+                           .scan("test_db", "l_table_2")
+                           .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, disable)
+                           .project({col("l_table_2.s1"), col("l_table_2.s2"), col("l_table_2.s3")});
+        const auto expected_cols = buildAndExecuteMPPTasks(request);
+
+        auto request2 = context
+                            .scan("test_db", "l_table_2")
+                            .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, enable)
+                            .project({col("l_table_2.s1"), col("l_table_2.s2"), col("l_table_2.s3")});
+        auto tasks = request2.buildMPPTasks(context, properties);
+        const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
+        ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, runFineGrainedShuffleAggTest)
+try
+{
+    startServers(3);
+    // fine-grained shuffle is enabled.
+    constexpr uint64_t enable = 8;
+    constexpr uint64_t disable = 0;
+    {
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        auto request = context
+                           .scan("test_db", "test_table_2")
+                           .aggregation({Max(col("s3"))}, {col("s1"), col("s2")}, disable);
+        const auto expected_cols = buildAndExecuteMPPTasks(request);
+
+        auto request2 = context
+                            .scan("test_db", "test_table_2")
+                            .aggregation({Max(col("s3"))}, {col("s1"), col("s2")}, enable);
+        auto tasks = request2.buildMPPTasks(context, properties);
+        const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
+        ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

@@ -202,7 +202,7 @@ void ExpressionAction::prepare(Block & sample_block)
         /// in case of coprocessor task, the join is always not null, but if the query comes from
         /// clickhouse client, the join maybe null, skip updating column type if join is null
         // todo find a new way to update the column type so the type can always be updated.
-        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right && join->useNulls())
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
         {
             /// update the column type for left block
             std::unordered_set<String> keys;
@@ -420,35 +420,6 @@ String ExpressionAction::toString() const
     return ss.str();
 }
 
-void ExpressionActions::checkLimits(Block & block) const
-{
-    if (settings.max_temporary_columns && block.columns() > settings.max_temporary_columns)
-        throw Exception("Too many temporary columns: " + block.dumpNames()
-                            + ". Maximum: " + settings.max_temporary_columns.toString(),
-                        ErrorCodes::TOO_MANY_TEMPORARY_COLUMNS);
-
-    if (settings.max_temporary_non_const_columns)
-    {
-        size_t non_const_columns = 0;
-        for (size_t i = 0, size = block.columns(); i < size; ++i)
-            if (block.safeGetByPosition(i).column && !block.safeGetByPosition(i).column->isColumnConst())
-                ++non_const_columns;
-
-        if (non_const_columns > settings.max_temporary_non_const_columns)
-        {
-            std::stringstream list_of_non_const_columns;
-            for (size_t i = 0, size = block.columns(); i < size; ++i)
-                if (!block.safeGetByPosition(i).column->isColumnConst())
-                    list_of_non_const_columns << "\n"
-                                              << block.safeGetByPosition(i).name;
-
-            throw Exception("Too many temporary non-const columns:" + list_of_non_const_columns.str()
-                                + ". Maximum: " + settings.max_temporary_non_const_columns.toString(),
-                            ErrorCodes::TOO_MANY_TEMPORARY_NON_CONST_COLUMNS);
-        }
-    }
-}
-
 void ExpressionActions::addInput(const ColumnWithTypeAndName & column)
 {
     input_columns.emplace_back(column.name, column.type);
@@ -508,10 +479,7 @@ void ExpressionActions::prependProjectInput()
 void ExpressionActions::execute(Block & block) const
 {
     for (const auto & action : actions)
-    {
         action.execute(block);
-        checkLimits(block);
-    }
 }
 
 void ExpressionActions::executeOnTotals(Block & block) const
@@ -721,8 +689,6 @@ void ExpressionActions::finalize(const Names & output_columns)
     }
 
     actions.swap(new_actions);
-
-    checkLimits(sample_block);
 }
 
 
@@ -749,7 +715,7 @@ std::string ExpressionActions::dumpActions() const
 BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
 {
     for (const auto & action : actions)
-        if (action.join && (action.join->getKind() == ASTTableJoin::Kind::Full || action.join->getKind() == ASTTableJoin::Kind::Right))
+        if (action.join && (action.join->needReturnNonJoinedData()))
             return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
 
     return {};
@@ -761,7 +727,7 @@ void ExpressionActionsChain::addStep()
         throw Exception("Cannot add action to empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);
 
     ColumnsWithTypeAndName columns = steps.back().actions->getSampleBlock().getColumnsWithTypeAndName();
-    steps.push_back(Step(std::make_shared<ExpressionActions>(columns, settings)));
+    steps.push_back(Step(std::make_shared<ExpressionActions>(columns)));
 }
 
 void ExpressionActionsChain::finalize()

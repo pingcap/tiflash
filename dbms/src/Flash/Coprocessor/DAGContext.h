@@ -194,7 +194,7 @@ public:
         , dummy_ast(makeDummyQuery())
         , initialize_concurrency(concurrency)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-        , is_mpp_task(true)
+        , is_mpp_task(false)
         , is_root_mpp_task(false)
         , log(Logger::get(log_identifier))
         , flags(dag_request->flags())

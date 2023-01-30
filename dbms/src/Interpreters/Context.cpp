@@ -27,6 +27,7 @@
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockStorage.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
@@ -50,6 +51,7 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -124,6 +126,7 @@ struct ContextShared
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
 
+    std::optional<ServerInfo> server_info;
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
@@ -244,6 +247,13 @@ struct ContextShared
             return;
         shutdown_called = true;
 
+        if (global_storage_pool)
+        {
+            // shutdown the gc task of global storage pool before
+            // shutting down the tables.
+            global_storage_pool->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.
@@ -321,6 +331,14 @@ const ProcessList & Context::getProcessList() const
     return shared->process_list;
 }
 
+void Context::setServerInfo(const ServerInfo & server_info)
+{
+    shared->server_info = server_info;
+}
+const std::optional<ServerInfo> & Context::getServerInfo() const
+{
+    return shared->server_info;
+}
 
 Databases Context::getDatabases() const
 {
@@ -1831,7 +1849,7 @@ size_t Context::getMaxStreams() const
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (isExecutorTest())
+        if (isExecutorTest() || isInterpreterTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {
@@ -1839,8 +1857,6 @@ size_t Context::getMaxStreams() const
             max_streams = 1;
         }
     }
-    if (max_streams > 1)
-        max_streams *= settings.max_streams_to_max_threads_ratio;
     if (max_streams == 0)
         max_streams = 1;
     if (unlikely(max_streams != 1 && is_cop_request))
@@ -1879,6 +1895,16 @@ void Context::setExecutorTest()
     test_mode = executor_test;
 }
 
+bool Context::isInterpreterTest() const
+{
+    return test_mode == interpreter_test;
+}
+
+void Context::setInterpreterTest()
+{
+    test_mode = interpreter_test;
+}
+
 bool Context::isCopTest() const
 {
     return test_mode == cop_test;
@@ -1894,12 +1920,12 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
-void Context::setMockStorage(MockStorage & mock_storage_)
+void Context::setMockStorage(MockStorage * mock_storage_)
 {
     mock_storage = mock_storage_;
 }
 
-MockStorage Context::mockStorage() const
+MockStorage * Context::mockStorage() const
 {
     return mock_storage;
 }

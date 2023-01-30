@@ -80,7 +80,7 @@ static void writeRegionDataToStorage(
         TableStructureLockHolder lock;
         try
         {
-            lock = storage->lockStructureForShare(getThreadName());
+            lock = storage->lockStructureForShare(getThreadNameAndID());
         }
         catch (DB::Exception & e)
         {
@@ -454,7 +454,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         TableStructureLockHolder lock;
         try
         {
-            lock = storage->lockStructureForShare(getThreadName());
+            lock = storage->lockStructureForShare(getThreadNameAndID());
         }
         catch (DB::Exception & e)
         {
@@ -516,7 +516,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         }
         // Get a structure read lock. It will throw exception if the table has been dropped,
         // the caller should handle this situation.
-        auto table_lock = storage->lockStructureForShare(getThreadName());
+        auto table_lock = storage->lockStructureForShare(getThreadNameAndID());
         dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         // only dt storage engine support `getSchemaSnapshotAndBlockForDecoding`, other engine will throw exception
         std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);

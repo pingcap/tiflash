@@ -41,8 +41,6 @@ public:
 private:
     void batchWriteFineGrainedShuffle();
 
-    void writePackets(TrackedMppDataPacketPtrs & packets);
-
     void initScatterColumns();
 
 private:
@@ -52,7 +50,6 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks = 0;
     uint16_t partition_num;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
 

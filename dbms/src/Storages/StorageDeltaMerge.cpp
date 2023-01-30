@@ -1493,6 +1493,9 @@ void StorageDeltaMerge::startup()
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
+// Avoid calling virtual function `shutdown` in destructor,
+// we should use this function instead.
+// https://stackoverflow.com/a/12093250/4412495
 void StorageDeltaMerge::shutdownImpl()
 {
     bool v = false;

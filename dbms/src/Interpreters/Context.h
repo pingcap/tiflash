@@ -18,11 +18,11 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
-#include <Debug/MockStorage.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -99,9 +99,9 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
-using MockStorage = DB::tests::MockStorage;
 class TiFlashSecurityConfig;
 using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
+class MockStorage;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -164,12 +164,13 @@ private:
         non_test,
         mpp_test,
         cop_test,
+        interpreter_test,
         executor_test,
         cancel_test
     };
     TestMode test_mode = non_test;
 
-    MockStorage mock_storage;
+    MockStorage * mock_storage = nullptr;
     MockMPPServerInfo mpp_server_info{};
 
     TimezoneInfo timezone_info;
@@ -460,6 +461,9 @@ public:
     String getDefaultProfileName() const;
     String getSystemProfileName() const;
 
+    void setServerInfo(const ServerInfo & server_info);
+    const std::optional<ServerInfo> & getServerInfo() const;
+
     /// Base path for format schemas
     String getFormatSchemaPath() const;
     void setFormatSchemaPath(const String & path);
@@ -483,12 +487,14 @@ public:
     void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
+    bool isInterpreterTest() const;
+    void setInterpreterTest();
     void setCopTest();
     bool isCopTest() const;
     bool isTest() const;
 
-    void setMockStorage(MockStorage & mock_storage_);
-    MockStorage mockStorage() const;
+    void setMockStorage(MockStorage * mock_storage_);
+    MockStorage * mockStorage() const;
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 

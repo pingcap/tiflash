@@ -40,7 +40,7 @@ public:
     StorageDisaggregated(
         Context & context_,
         const TiDBTableScan & table_scan_,
-        const PushDownFilter & push_down_filter_);
+        const FilterConditions & filter_conditions_);
 
     std::string getName() const override
     {
@@ -73,14 +73,14 @@ private:
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void pushDownFilter(DAGPipeline & pipeline);
+    void filterConditions(DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;
     const TiDBTableScan & table_scan;
     LoggerPtr log;
     MPPTaskId sender_target_mpp_task_id;
-    const PushDownFilter & push_down_filter;
+    const FilterConditions & filter_conditions;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
 };

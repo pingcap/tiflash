@@ -116,7 +116,6 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
-    bool use_nulls_,
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
     const String & req_id,
@@ -135,8 +134,9 @@ Join::Join(
     , strictness(strictness_)
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
-    , use_nulls(use_nulls_)
     , build_concurrency(0)
+    , probe_concurrency(0)
+    , active_probe_concurrency(0)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -472,7 +472,7 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
     // init for non-joined-streams.
     if (getFullness(kind))
     {
-        for (size_t i = 0; i < getNotJoinedStreamConcurrencyInternal(); ++i)
+        for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
             rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
 }
@@ -505,7 +505,7 @@ void Join::setSampleBlock(const Block & block)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
+    if (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full)
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
 
@@ -850,7 +850,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrencyInternal());
-    assert(stream_index < getNotJoinedStreamConcurrencyInternal());
 
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -931,7 +930,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
+    if (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full)
     {
         for (size_t i = getFullness(kind) ? keys_size : 0; i < size; ++i)
         {
@@ -1214,7 +1213,10 @@ void NO_INLINE joinBlockImplTypeCase(
                 /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
                 /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
                 auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
-                segment_index = packet_stream_id % segment_size;
+                if likely (fine_grained_shuffle_count == segment_size)
+                    segment_index = packet_stream_id;
+                else
+                    segment_index = packet_stream_id % segment_size;
             }
             else
             {
@@ -1584,12 +1586,9 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
             if (ColumnPtr converted = col->convertToFullColumnIfConst())
                 col = converted;
 
-            /// If use_nulls, convert left columns (except keys) to Nullable.
-            if (use_nulls)
-            {
-                if (std::end(key_names_left) == std::find(key_names_left.begin(), key_names_left.end(), block.getByPosition(i).name))
-                    convertColumnToNullable(block.getByPosition(i));
-            }
+            /// convert left columns (except keys) to Nullable
+            if (std::end(key_names_left) == std::find(key_names_left.begin(), key_names_left.end(), block.getByPosition(i).name))
+                convertColumnToNullable(block.getByPosition(i));
         }
     }
 
@@ -2089,6 +2088,11 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
     }
 
     return block;
+}
+
+bool Join::needReturnNonJoinedData() const
+{
+    return getFullness(kind);
 }
 
 void Join::joinTotals(Block & block) const

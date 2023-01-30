@@ -24,27 +24,36 @@
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+
 #include <boost/noncopyable.hpp>
 
 namespace DB
 {
+class DAGContext;
+
 template <typename Tunnel>
 class MPPTunnelSetBase : private boost::noncopyable
 {
 public:
     using TunnelPtr = std::shared_ptr<Tunnel>;
-    explicit MPPTunnelSetBase(const String & req_id)
-        : log(Logger::get(req_id))
-    {}
+    MPPTunnelSetBase(DAGContext & dag_context, const String & req_id);
 
     // this is a root mpp writing.
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
-    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet);
+    void broadcastOrPassThroughWrite(Blocks & blocks);
     // this is a partition writing.
-    void partitionWrite(TrackedMppDataPacketPtr && packet, int16_t partition_id);
+    void partitionWrite(Blocks & blocks, int16_t partition_id);
+    // this is a fine grained shuffle writing.
+    void fineGrainedShuffleWrite(
+        const Block & header,
+        std::vector<IColumn::ScatterColumns> & scattered,
+        size_t bucket_idx,
+        UInt64 fine_grained_shuffle_stream_count,
+        size_t num_columns,
+        int16_t partition_id);
     /// this is a execution summary writing.
-    /// for both broadcast writing and partition writing, only
+    /// for both broadcast writing and partition/fine grained shuffle writing, only
     /// return meaningful execution summary for the first tunnel,
     /// because in TiDB, it does not know enough information
     /// about the execution details for the mpp query, it just
@@ -73,6 +82,8 @@ private:
     std::vector<TunnelPtr> tunnels;
     std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
     const LoggerPtr log;
+
+    std::vector<tipb::FieldType> result_field_types;
 
     int external_thread_cnt = 0;
 };

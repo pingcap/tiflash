@@ -21,6 +21,7 @@
 #include <common/defines.h>
 #include <common/types.h>
 
+#include <cstring>
 #include <iostream>
 #include <optional>
 
@@ -499,21 +500,66 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSub
     return std::optional<StringRef>(StringRef(matched_str.data(), matched_str.size()));
 }
 
-static inline void checkInstrArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
+template <bool thread_safe>
+void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur)
+{
+    if (occur > 1 || byte_pos != 1)
+    {
+        res_data.resize(res_data.size() + 1);
+        res_data[res_offset++] = '\0';
+        return;
+    }
+
+    StringPieceType expr_sp(subject, subject_size);
+    StringPieceType matched_str;
+    bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
+    if (!success)
+    {
+        res_data.resize(res_data.size() + 1);
+    }
+    else
+    {
+        res_data.resize(res_data.size() + repl.size + 1);
+        memcpy(&res_data[res_offset], repl.data, repl.size);
+        res_offset += repl.size;
+    }
+
+    res_data[res_offset++] = '\0';
+}
+
+namespace FunctionsRegexp
+{
+inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+{
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+}
+
+inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
     RUNTIME_CHECK_MSG(!(ret_op != 0 && ret_op != 1), "Incorrect argument to regexp function: return_option must be 1 or 0");
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+    checkArgPos(utf8_total_len, subject_size, pos);
 }
 
-static inline void checkSubstrArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+    checkArgPos(utf8_total_len, subject_size, pos);
 }
 
-static inline void makeOccurValid(Int64 & occur)
+inline void checkArgsReplace(Int64 utf8_total_len, size_t subject_size, Int64 pos)
+{
+    checkArgPos(utf8_total_len, subject_size, pos);
+}
+
+inline void makeOccurValid(Int64 & occur)
 {
     occur = occur < 1 ? 1 : occur;
 }
+
+inline void makeReplaceOccurValid(Int64 & occur)
+{
+    occur = occur < 0 ? 1 : occur;
+}
+} // namespace FunctionsRegexp
 
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
@@ -558,12 +604,94 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substrImpl
 }
 
 template <bool thread_safe>
+void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos)
+{
+    size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
+    StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
+    StringPieceType matched_str;
+    size_t prior_offset = 0;
+
+    while (true)
+    {
+        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
+        if (!success)
+            break;
+
+        auto skipped_byte_size = static_cast<Int64>(matched_str.data() - (subject + prior_offset));
+        res_data.resize(res_data.size() + skipped_byte_size);
+        memcpy(&res_data[res_offset], subject + prior_offset, skipped_byte_size); // copy the skipped bytes
+        res_offset += skipped_byte_size;
+
+        res_data.resize(res_data.size() + repl.size);
+        memcpy(&res_data[res_offset], repl.data, repl.size); // replace the matched string
+        res_offset += repl.size;
+
+        prior_offset = expr_sp.data() - subject;
+    }
+
+    size_t suffix_byte_size = subject_size - prior_offset;
+    res_data.resize(res_data.size() + suffix_byte_size + 1);
+    memcpy(&res_data[res_offset], subject + prior_offset, suffix_byte_size); // Copy suffix string
+    res_offset += suffix_byte_size;
+    res_data[res_offset++] = 0;
+}
+
+template <bool thread_safe>
+void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur)
+{
+    size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
+    StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
+    StringPieceType matched_str;
+
+    while (occur > 0)
+    {
+        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
+        if (!success)
+        {
+            res_data.resize(res_data.size() + subject_size + 1);
+            memcpy(&res_data[res_offset], subject, subject_size);
+            res_offset += subject_size;
+            res_data[res_offset++] = 0;
+            return;
+        }
+
+        --occur;
+    }
+
+    auto prefix_byte_size = static_cast<Int64>(matched_str.data() - subject);
+    res_data.resize(res_data.size() + prefix_byte_size);
+    memcpy(&res_data[res_offset], subject, prefix_byte_size); // Copy prefix string
+    res_offset += prefix_byte_size;
+
+    res_data.resize(res_data.size() + repl.size);
+    memcpy(&res_data[res_offset], repl.data, repl.size); // Replace the matched string
+    res_offset += repl.size;
+
+    const char * suffix_str = subject + prefix_byte_size + matched_str.size();
+    size_t suffix_byte_size = subject_size - prefix_byte_size - matched_str.size();
+    res_data.resize(res_data.size() + suffix_byte_size + 1);
+    memcpy(&res_data[res_offset], suffix_str, suffix_byte_size); // Copy suffix string
+    res_offset += suffix_byte_size;
+
+    res_data[res_offset++] = 0;
+}
+
+template <bool thread_safe>
+void OptimizedRegularExpressionImpl<thread_safe>::replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur)
+{
+    if (occur == 0)
+        return replaceAllImpl(subject, subject_size, res_data, res_offset, repl, byte_pos);
+    else
+        return replaceOneImpl(subject, subject_size, res_data, res_offset, repl, byte_pos, occur);
+}
+
+template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
     ;
-    checkInstrArgs(utf8_total_len, subject_size, pos, ret_op);
-    makeOccurValid(occur);
+    FunctionsRegexp::checkArgsInstr(utf8_total_len, subject_size, pos, ret_op);
+    FunctionsRegexp::makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
         return processInstrEmptyStringExpr(subject, subject_size, pos, occur);
@@ -576,14 +704,39 @@ template <bool thread_safe>
 std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
-    checkSubstrArgs(utf8_total_len, subject_size, pos);
-    makeOccurValid(occur);
+    FunctionsRegexp::checkArgsSubstr(utf8_total_len, subject_size, pos);
+    FunctionsRegexp::makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
         return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
 
     size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
     return substrImpl(subject, subject_size, byte_pos, occur);
+}
+
+template <bool thread_safe>
+void OptimizedRegularExpressionImpl<thread_safe>::replace(
+    const char * subject,
+    size_t subject_size,
+    DB::ColumnString::Chars_t & res_data,
+    DB::ColumnString::Offset & res_offset,
+    const StringRef & repl,
+    Int64 pos,
+    Int64 occur)
+{
+    Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
+    ;
+    FunctionsRegexp::checkArgsReplace(utf8_total_len, subject_size, pos);
+    FunctionsRegexp::makeReplaceOccurValid(occur);
+
+    if (unlikely(subject_size == 0))
+    {
+        processReplaceEmptyStringExpr(subject, subject_size, res_data, res_offset, repl, pos, occur);
+        return;
+    }
+
+    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
+    replaceImpl(subject, subject_size, res_data, res_offset, repl, byte_pos, occur);
 }
 
 #undef MIN_LENGTH_FOR_STRSTR

@@ -621,6 +621,7 @@ size_t PageStorage::getNumberOfPages()
     }
 }
 
+// For debugging purpose
 std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceId /*ns_id*/)
 {
     const auto & concrete_snap = getConcreteSnapshot();

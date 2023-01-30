@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
+#include <Flash/Mpp/MPPTunnelSetHelper.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
@@ -58,8 +59,9 @@ bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & righ
 
 struct MockWriter
 {
-    explicit MockWriter(PacketQueuePtr queue_)
-        : queue(queue_)
+    MockWriter(DAGContext & dag_context, PacketQueuePtr queue_)
+        : result_field_types(dag_context.result_field_types)
+        , queue(queue_)
     {}
 
     static ExecutionSummary mockExecutionSummary()
@@ -75,15 +77,17 @@ struct MockWriter
         summary.scan_context->total_dmfile_skipped_packs = 2;
         summary.scan_context->total_dmfile_scanned_rows = 8000;
         summary.scan_context->total_dmfile_skipped_rows = 15000;
-        summary.scan_context->total_dmfile_rough_set_index_load_time_ms = 10;
-        summary.scan_context->total_dmfile_read_time_ms = 200;
-        summary.scan_context->total_create_snapshot_time_ms = 5;
+        summary.scan_context->total_dmfile_rough_set_index_load_time_ns = 10;
+        summary.scan_context->total_dmfile_read_time_ns = 200;
+        summary.scan_context->total_create_snapshot_time_ns = 5;
+        summary.scan_context->total_local_region_num = 10;
+        summary.scan_context->total_remote_region_num = 5;
         return summary;
     }
 
-    void partitionWrite(TrackedMppDataPacketPtr &&, uint16_t) { FAIL() << "cannot reach here."; }
-    void broadcastOrPassThroughWrite(TrackedMppDataPacketPtr && packet)
+    void broadcastOrPassThroughWrite(Blocks & blocks)
     {
+        auto packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types);
         ++total_packets;
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
@@ -117,6 +121,8 @@ struct MockWriter
     }
     uint16_t getPartitionNum() const { return 1; }
 
+    std::vector<tipb::FieldType> result_field_types;
+
     PacketQueuePtr queue;
     bool add_summary = false;
     size_t total_packets = 0;
@@ -137,6 +143,7 @@ struct MockReceiverContext
         int source_index = 0;
         int send_task_id = 0;
         int recv_task_id = -1;
+        bool is_local = false;
     };
 
     struct Reader
@@ -201,22 +208,22 @@ struct MockReceiverContext
         }
     }
 
-    Request makeRequest(int index) const
+    static Request makeRequest(int index)
     {
         return {index, index, -1};
     }
 
-    std::shared_ptr<Reader> makeReader(const Request &)
+    std::shared_ptr<Reader> makeSyncReader(const Request &)
     {
         return std::make_shared<Reader>(queue);
     }
 
-    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
+    static void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
     {
         throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
     }
 
-    void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
+    static void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
     {
         throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
     }
@@ -226,12 +233,15 @@ struct MockReceiverContext
         return ::grpc::Status();
     }
 
-    bool supportAsync(const Request &) const { return false; }
+    static bool supportAsync(const Request &) { return false; }
+
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
+
+    void establishMPPConnectionLocal(const MockReceiverContext::Request &, size_t, LocalRequestHandler &, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
@@ -437,7 +447,7 @@ public:
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
-        auto writer = std::make_shared<MockWriter>(queue_ptr);
+        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr);
         prepareQueue(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
 
@@ -454,7 +464,7 @@ public:
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
-        auto writer = std::make_shared<MockWriter>(queue_ptr);
+        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr);
         prepareQueueV2(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
         auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr);

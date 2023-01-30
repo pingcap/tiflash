@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ void MPPTaskTestUtils::SetUpTestCase()
 void MPPTaskTestUtils::TearDown()
 {
     MockComputeServerManager::instance().reset();
+    ExecutorTest::TearDown();
 }
 
 void MPPTaskTestUtils::startServers()
@@ -98,7 +99,7 @@ ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<t
     auto schema = getSelectSchema(context);
     for (const auto & chunk : dag_response->chunks())
         blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
-    return mergeBlocks(blocks).getColumnsWithTypeAndName();
+    return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
