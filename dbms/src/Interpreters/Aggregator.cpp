@@ -177,7 +177,7 @@ void AggregatedDataVariants::convertToTwoLevel()
     default:
         throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
     }
-    aggregator->setContainsTwoLevelAggregatedData(true);
+    aggregator->useTwoLevelHashTable();
 }
 
 
@@ -817,7 +817,7 @@ bool Aggregator::executeOnBlock(
     /// 1. some other threads already convert to two level
     /// 2. the result size exceeds threshold
     bool worth_convert_to_two_level
-        = contains_two_level_aggregated_data || (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
+        = use_two_level_hash_table || (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
         || (params.group_by_two_level_threshold_bytes && result_size_bytes >= params.group_by_two_level_threshold_bytes);
 
     /** Converting to a two-level data structure.

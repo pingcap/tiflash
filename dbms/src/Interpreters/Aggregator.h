@@ -1045,7 +1045,7 @@ public:
     void finishSpill();
     BlockInputStreams restoreSpilledData();
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
-    void setContainsTwoLevelAggregatedData(bool value) { contains_two_level_aggregated_data = value; }
+    void useTwoLevelHashTable() { use_two_level_hash_table = true; }
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1090,7 +1090,7 @@ protected:
 
     bool all_aggregates_has_trivial_destructor = false;
 
-    std::atomic<bool> contains_two_level_aggregated_data = false;
+    std::atomic<bool> use_two_level_hash_table = false;
 
     std::mutex mutex;
 
