@@ -123,7 +123,7 @@ ALWAYS_INLINE inline bool memcmp_eq_fixed_size(const char * a, const char * b)
             ret
 
         */
-        return std::memcmp(a, b, k) == 0;
+        return __builtin_memcmp(a, b, k) == 0;
     }
     else if constexpr (k > 8)
     {

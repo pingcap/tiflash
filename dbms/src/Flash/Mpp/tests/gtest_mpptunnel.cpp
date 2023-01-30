@@ -39,7 +39,7 @@ namespace
 {
 TrackedMppDataPacketPtr newDataPacket(const String & data)
 {
-    auto data_packet_ptr = std::make_shared<TrackedMppDataPacket>();
+    auto data_packet_ptr = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     data_packet_ptr->getPacket().set_data(data);
     return data_packet_ptr;
 }
