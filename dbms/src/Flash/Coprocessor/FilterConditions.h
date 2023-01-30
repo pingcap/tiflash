@@ -21,15 +21,20 @@
 
 namespace DB
 {
-struct PushDownFilter
+
+/** This struct FilterConditions is used to store the filter conditions of the selection whose child is a table scan.
+  * Those conditions will be used to construct rough index in storage engine.
+  * And those conditions will be pushed down to the remote read request.
+  */
+struct FilterConditions
 {
-    static PushDownFilter pushDownFilterFrom(const String & executor_id, const tipb::Executor * executor);
+    static FilterConditions filterConditionsFrom(const String & executor_id, const tipb::Executor * executor);
 
-    static PushDownFilter pushDownFilterFrom(const String & executor_id, const tipb::Selection & selection);
+    static FilterConditions filterConditionsFrom(const String & executor_id, const tipb::Selection & selection);
 
-    PushDownFilter() = default;
+    FilterConditions() = default;
 
-    PushDownFilter(
+    FilterConditions(
         const String & executor_id_,
         const std::vector<const tipb::Expr *> & conditions_);
 
@@ -40,4 +45,5 @@ struct PushDownFilter
     String executor_id;
     std::vector<const tipb::Expr *> conditions;
 };
+
 } // namespace DB

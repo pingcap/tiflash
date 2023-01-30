@@ -19,8 +19,8 @@ namespace DB
 {
 namespace
 {
-// Removes all rows outside of specified range of Block.
-void cut(Block & block, size_t rows, size_t limit, size_t pos)
+// Removes all rows outside specified range of Block.
+void cut(Block & block, size_t rows [[maybe_unused]], size_t limit, size_t pos)
 {
     assert(rows + limit > pos);
     size_t pop_back_cnt = pos - limit;

@@ -12,17 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
+#include <common/defines.h>
+#include <fiu.h>
+#include <fmt/format.h>
 
+#include <array>
 #include <memory>
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char invalid_mpp_version[];
+} // namespace FailPoints
+
 mpp::MPPDataPacket getPacketWithError(String reason)
 {
     mpp::MPPDataPacket data;
     auto err = std::make_unique<mpp::Error>();
+    err->set_mpp_version(DB::GetMppVersion());
     err->set_msg(std::move(reason));
     data.set_allocated_error(err.release());
     return data;
@@ -36,6 +48,38 @@ void trimStackTrace(String & message)
         message.resize(stack_trace_pos);
         Poco::trimRightInPlace(message);
     }
+}
+
+// Latest mpp-version supported by TiFlash
+static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
+static MppVersion MinMppVersion = MppVersion::MppVersionV0;
+
+// Check mpp-version is illegal
+bool CheckMppVersion(int64_t mpp_version)
+{
+    fiu_do_on(FailPoints::invalid_mpp_version, {
+        mpp_version = -1;
+    });
+    return mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion;
+}
+
+std::string GenMppVersionErrorMessage(int64_t mpp_version)
+{
+    fiu_do_on(FailPoints::invalid_mpp_version, {
+        mpp_version = -1;
+    });
+    auto err_msg = fmt::format("Invalid mpp version {}, TiFlash expects version: min {}, max {}, should upgrade {}",
+                               mpp_version,
+                               MinMppVersion,
+                               NewestMppVersion,
+                               (mpp_version < MinMppVersion) ? "TiDB/planner" : "TiFlash");
+    return err_msg;
+}
+
+// Get latest mpp-version supported by TiFlash
+int64_t GetMppVersion()
+{
+    return (NewestMppVersion);
 }
 
 } // namespace DB

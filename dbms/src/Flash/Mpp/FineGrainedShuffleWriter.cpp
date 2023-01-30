@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
@@ -21,6 +22,9 @@
 
 namespace DB
 {
+
+const char * FineGrainedShuffleWriterLabels[] = {"FineGrainedShuffleWriter", "FineGrainedShuffleWriter-V1"};
+
 template <class ExchangeWriterPtr>
 FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     ExchangeWriterPtr writer_,
@@ -28,7 +32,9 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     TiDB::TiDBCollators collators_,
     DAGContext & dag_context_,
     uint64_t fine_grained_shuffle_stream_count_,
-    UInt64 fine_grained_shuffle_batch_size_)
+    UInt64 fine_grained_shuffle_batch_size_,
+    MPPDataPacketVersion data_codec_version_,
+    tipb::CompressionMode compression_mode_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
@@ -37,6 +43,8 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
     , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
     , hash(0)
+    , data_codec_version(data_codec_version_)
+    , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -60,6 +68,23 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
     partition_key_containers_for_reuse.resize(collators.size());
     initScatterColumns();
+
+    switch (data_codec_version)
+    {
+    case MPPDataPacketV0:
+        break;
+    case MPPDataPacketV1:
+    default:
+    {
+        for (const auto & field_type : dag_context.result_field_types)
+        {
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+        }
+        assertBlockSchema(expected_types, header, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
+        break;
+    }
+    }
+
     prepared = true;
 }
 
@@ -107,9 +132,12 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::initScatterColumns()
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
+template <MPPDataPacketVersion version>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleImpl()
 {
-    if (likely(!blocks.empty()))
+    if (blocks.empty())
+        return;
+
     {
         assert(rows_in_blocks > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
@@ -118,6 +146,11 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
+            if constexpr (version != MPPDataPacketV0)
+            {
+                // check schema
+                assertBlockSchema(expected_types, block, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
+            }
             HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
             blocks.pop_back();
         }
@@ -132,9 +165,30 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
                 bucket_idx,
                 fine_grained_shuffle_stream_count,
                 num_columns,
-                part_id);
+                part_id,
+                data_codec_version,
+                compression_method);
         }
         rows_in_blocks = 0;
+    }
+}
+
+template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
+{
+    switch (data_codec_version)
+    {
+    case MPPDataPacketV0:
+    {
+        batchWriteFineGrainedShuffleImpl<MPPDataPacketV0>();
+        break;
+    }
+    case MPPDataPacketV1:
+    default:
+    {
+        batchWriteFineGrainedShuffleImpl<MPPDataPacketV1>();
+        break;
+    }
     }
 }
 

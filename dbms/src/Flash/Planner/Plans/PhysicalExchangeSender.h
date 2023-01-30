@@ -39,11 +39,13 @@ public:
         const std::vector<Int64> & partition_col_ids_,
         const TiDB::TiDBCollators & collators_,
         const tipb::ExchangeType & exchange_type_,
-        const FineGrainedShuffle & fine_grained_shuffle_)
+        const FineGrainedShuffle & fine_grained_shuffle_,
+        const tipb::CompressionMode & compression_mode_)
         : PhysicalUnary(executor_id_, PlanType::ExchangeSender, schema_, req_id, child_)
         , partition_col_ids(partition_col_ids_)
         , partition_col_collators(collators_)
         , exchange_type(exchange_type_)
+        , compression_mode(compression_mode_)
         , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
@@ -57,6 +59,7 @@ private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators partition_col_collators;
     tipb::ExchangeType exchange_type;
+    tipb::CompressionMode compression_mode;
 
     FineGrainedShuffle fine_grained_shuffle;
 };

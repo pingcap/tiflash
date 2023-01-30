@@ -16,16 +16,7 @@
 
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <tipb/select.pb.h>
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-#include <boost/noncopyable.hpp>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -41,10 +32,15 @@ public:
     // this is a root mpp writing.
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
+    // data codec version V0
     void broadcastOrPassThroughWrite(Blocks & blocks);
     // this is a partition writing.
+    // data codec version V0
     void partitionWrite(Blocks & blocks, int16_t partition_id);
+    // data codec version > V0
+    void partitionWrite(const Block & header, std::vector<MutableColumns> && part_columns, int16_t partition_id, MPPDataPacketVersion version, CompressionMethod compression_method);
     // this is a fine grained shuffle writing.
+    // data codec version V0
     void fineGrainedShuffleWrite(
         const Block & header,
         std::vector<IColumn::ScatterColumns> & scattered,
@@ -52,6 +48,15 @@ public:
         UInt64 fine_grained_shuffle_stream_count,
         size_t num_columns,
         int16_t partition_id);
+    void fineGrainedShuffleWrite(
+        const Block & header,
+        std::vector<IColumn::ScatterColumns> & scattered,
+        size_t bucket_idx,
+        UInt64 fine_grained_shuffle_stream_count,
+        size_t num_columns,
+        int16_t partition_id,
+        MPPDataPacketVersion version,
+        CompressionMethod compression_method);
     /// this is a execution summary writing.
     /// for both broadcast writing and partition/fine grained shuffle writing, only
     /// return meaningful execution summary for the first tunnel,
@@ -77,6 +82,9 @@ public:
     }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
+
+private:
+    bool isLocal(size_t index) const;
 
 private:
     std::vector<TunnelPtr> tunnels;
