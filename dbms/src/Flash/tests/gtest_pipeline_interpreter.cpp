@@ -32,7 +32,7 @@ public:
         // The following steps update the expected results of cases in bulk
         // 1. manually delete the gtest_pipeline_interpreter.out
         // 2. call setRecord()
-        // 3. ./gtests_dbms --gtest_filter=InterpreterExecuteTest.*
+        // 3. ./gtests_dbms --gtest_filter=PipelineInterpreterExecuteTest.*
         // setRecord();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
