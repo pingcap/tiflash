@@ -37,13 +37,11 @@ namespace DB
 {
 namespace PS::V3::tests
 {
-
-
-#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                               \
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                                                          \
     auto entry_v##VERSION = makePageEntry(/* file_id */ (BLOBID), /* size */ (VERSION), /* padded_size */ 0, /* tag */ 0, /* offset */ 0x123, /* checksum */ 0x4567); \
     entries.createNewEntry(PageVersion(VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
-#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                          \
+#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                                                     \
     auto entry_gc_v##VERSION##_##EPOCH = makePageEntry(/* file_id */ 2, /* size */ 100 * (VERSION) + (EPOCH), /* padded_size */ 0, /* tag */ 0, /* offset */ 0x234, /* checksum */ 0x5678); \
     (void)entries.createUpsertEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 

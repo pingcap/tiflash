@@ -18,8 +18,7 @@ namespace DB
 {
 namespace PS::V3
 {
-
- size_t PageEntryV3::getFieldSize(size_t index) const
+size_t PageEntryV3::getFieldSize(size_t index) const
 {
     const auto & field_offsets = getFieldOffsets();
     RUNTIME_CHECK_MSG(index < field_offsets.size(), //
@@ -51,12 +50,12 @@ std::pair<size_t, size_t> PageEntryV3::getFieldOffsets(size_t index) const
 
 
 PageEntryV3Ptr makePageEntry(BlobFileId file_id, //
-                                    PageSize size,
-                                    PageSize padded_size,
-                                    UInt64 tag,
-                                    BlobFileOffset offset,
-                                    UInt64 checksum,
-                                    PageFieldOffsetChecksums && field_offsets)
+                             PageSize size,
+                             PageSize padded_size,
+                             UInt64 tag,
+                             BlobFileOffset offset,
+                             UInt64 checksum,
+                             PageFieldOffsetChecksums && field_offsets)
 {
     if (file_id <= static_cast<BlobFileId>(std::numeric_limits<BlobFileIdTight>::max())
         && offset <= static_cast<BlobFileOffset>(std::numeric_limits<BlobFileOffsetTight>::max())
@@ -81,5 +80,5 @@ PageEntryV3Ptr makePageEntry(BlobFileId file_id, //
                                                   std::move(field_offsets));
     }
 }
-}
-}
+} // namespace PS::V3
+} // namespace DB
