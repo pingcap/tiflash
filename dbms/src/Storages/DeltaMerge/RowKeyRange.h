@@ -135,7 +135,11 @@ struct RowKeyValue
         return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
     }
 
-    RowKeyValue toPrefixNext()
+    /**
+     * Returns the key so that the range [this, this.toPrefixNext()) contains
+     * all keys with the prefix `this`.
+     */
+    RowKeyValue toPrefixNext() const
     {
         std::vector<UInt8> keys(value->begin(), value->end());
         int index = keys.size() - 1;
@@ -162,6 +166,21 @@ struct RowKeyValue
             prefix_int_value++;
         }
         return RowKeyValue(is_common_handle, prefix_value, prefix_int_value);
+    }
+
+    /**
+     * Returns the smallest row key which is larger than the current row key.
+     */
+    RowKeyValue toNext() const
+    {
+        HandleValuePtr next_value = std::make_shared<String>(value->begin(), value->end());
+        next_value->push_back(0x0);
+
+        Int64 next_int_value = int_value;
+        if (!is_common_handle && next_int_value != std::numeric_limits<Int64>::max())
+            next_int_value++;
+
+        return RowKeyValue(is_common_handle, next_value, next_int_value);
     }
 
     void serialize(WriteBuffer & buf) const
