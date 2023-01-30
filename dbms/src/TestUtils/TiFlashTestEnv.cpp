@@ -138,8 +138,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
 
-    auto shared_block_schemas = std::make_shared<DM::SharedBlockSchemas>(*global_context);
-    global_context->setSharedBlockSchemas(shared_block_schemas);
+    global_context->initializeSharedBlockSchemas();
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)

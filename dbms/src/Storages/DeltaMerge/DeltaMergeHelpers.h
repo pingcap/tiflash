@@ -245,6 +245,9 @@ inline bool isSameSchema(const Block & a, const Block & b)
     }
     return true;
 }
+
+Digest hashSchema(const Block & schema);
+
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)
 {
@@ -259,7 +262,6 @@ inline Block readNextBlock(const BlockInputStreamPtr & in)
     }
 }
 
-Digest hashSchema(const Block & schema);
 void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context);
 void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, const DataTypePtr & type, const ColumnPtr & data);
 

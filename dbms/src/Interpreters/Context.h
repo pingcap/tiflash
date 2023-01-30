@@ -512,7 +512,7 @@ public:
     }
 
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
-    void setSharedBlockSchemas(std::shared_ptr<DB::DM::SharedBlockSchemas> & shared_block_schemas_);
+    void initializeSharedBlockSchemas();
 
 private:
     /** Check if the current client has access to the specified database.

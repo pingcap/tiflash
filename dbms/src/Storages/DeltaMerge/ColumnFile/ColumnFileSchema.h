@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #pragma once
-
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
@@ -23,7 +22,7 @@
 #include <openssl/base.h>
 #include <openssl/sha.h>
 
-#include "boost/container_hash/hash_fwd.hpp"
+#include <boost/container_hash/hash_fwd.hpp>
 
 namespace std
 {
@@ -66,7 +65,8 @@ public:
 
     const DataTypePtr & getDataType(ColId column_id) const
     {
-        // Note that column_id must exist
+        /// Returns the data type of a column.
+        /// The specified column id must exist, otherwise something unexpected will happen.
         auto index = colid_to_offset.at(column_id);
         return schema.getByPosition(index).type;
     }
@@ -134,12 +134,6 @@ public:
     {
         std::lock_guard<std::mutex> lock(mutex);
         column_file_schemas.emplace(digest, schema);
-    }
-
-    size_t size()
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        return column_file_schemas.size();
     }
 };
 } // namespace DM

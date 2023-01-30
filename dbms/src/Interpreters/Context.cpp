@@ -1850,11 +1850,10 @@ const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchem
     return shared->shared_block_schemas;
 }
 
-void Context::setSharedBlockSchemas(std::shared_ptr<DB::DM::SharedBlockSchemas> & shared_block_schemas_)
+void Context::initializeSharedBlockSchemas()
 {
-    shared->shared_block_schemas = shared_block_schemas_;
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>();
 }
-
 
 size_t Context::getMaxStreams() const
 {

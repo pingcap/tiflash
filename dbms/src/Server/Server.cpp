@@ -1193,8 +1193,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
 
-    auto shared_block_schemas = std::make_shared<DM::SharedBlockSchemas>(*global_context);
-    global_context->setSharedBlockSchemas(shared_block_schemas);
+    global_context->initializeSharedBlockSchemas();
 
     {
         // Note that this must do before initialize schema sync service.
