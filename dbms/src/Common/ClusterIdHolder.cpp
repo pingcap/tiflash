@@ -12,23 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <ext/singleton.h>
-#include <mutex>
-#include <string>
+#include <Common/ClusterIdHolder.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
-class ClusterIdHolder : public ext::Singleton<ClusterIdHolder>
+void ClusterIdHolder::set(const std::string & cluster_id_)
 {
-public:
-    void set(const std::string & cluster_id_);
+    std::lock_guard lock(mu);
+    cluster_id = cluster_id_;
+}
 
-    std::string get() const;
-
-private:
-    mutable std::mutex mu;
-    std::string cluster_id{"unknown"};
-};
+std::string ClusterIdHolder::get() const
+{
+    std::lock_guard lock(mu);
+    return cluster_id;
+}
 } // namespace DB

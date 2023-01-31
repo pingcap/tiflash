@@ -1087,7 +1087,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Settings & settings = global_context->getSettingsRef();
 
     /// Initialize the cluster id of tiflash server.
-    ClusterIdHolder::instance().init(settings.cluster_id);
+    ClusterIdHolder::instance().set(settings.cluster_id);
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();

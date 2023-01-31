@@ -92,7 +92,6 @@ class ImitativeEnv
         global_context->setGlobalContext(*global_context);
         global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
 
-        ClusterIdHolder::instance().initDefault();
         global_context->initializeTiFlashMetrics();
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(encryption);
         global_context->initializeFileProvider(key_manager, encryption);
