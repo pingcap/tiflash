@@ -255,7 +255,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
-    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name, null_aware_eq_condition_column_name]
+    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name, null_aware_eq_expr, null_aware_eq_condition_column_name]
         = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
 
     const Settings & settings = context.getSettingsRef();
@@ -275,8 +275,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         build_filter_column_name,
         other_filter_column_name,
         other_eq_filter_from_in_column_name,
-        null_aware_eq_condition_column_name,
         other_condition_expr,
+        null_aware_eq_condition_column_name,
+        null_aware_eq_expr,
         max_block_size,
         match_helper_name);
 

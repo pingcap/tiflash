@@ -100,8 +100,9 @@ public:
          const String & right_filter_column = "",
          const String & other_filter_column = "",
          const String & other_eq_filter_from_in_column = "",
-         const String & null_aware_eq_condition_column = "",
          ExpressionActionsPtr other_condition_ptr = nullptr,
+         const String & null_aware_eq_column = "",
+         ExpressionActionsPtr null_aware_eq_ptr = nullptr,
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
@@ -109,8 +110,6 @@ public:
       * You must call this method before subsequent calls to insertFromBlock.
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
-
-    void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
@@ -150,7 +149,7 @@ public:
     void setInitActiveBuildConcurrency()
     {
         std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrencyInternal();
+        active_build_concurrency = getBuildConcurrency();
     }
     void finishOneBuild();
     void waitUntilAllBuildFinished() const;
@@ -314,8 +313,10 @@ private:
     String right_filter_column;
     String other_filter_column;
     String other_eq_filter_from_in_column;
-    String null_aware_eq_condition_column;
     ExpressionActionsPtr other_condition_ptr;
+
+    String null_aware_eq_column;
+    ExpressionActionsPtr null_aware_eq_ptr;
 
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;

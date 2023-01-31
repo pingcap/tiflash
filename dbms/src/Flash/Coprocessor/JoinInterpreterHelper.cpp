@@ -189,7 +189,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
     return collators;
 }
 
-std::tuple<ExpressionActionsPtr, String, String, String> doGenJoinOtherConditionAction(
+std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> doGenJoinOtherConditionAction(
     const Context & context,
     const TiFlashJoin & tiflash_join,
     const NamesAndTypes & source_columns,
@@ -198,7 +198,7 @@ std::tuple<ExpressionActionsPtr, String, String, String> doGenJoinOtherCondition
 {
     const tipb::Join & join = tiflash_join.join;
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && join.left_null_aware_join_keys_size() == 0)
-        return {nullptr, "", "", ""};
+        return {nullptr, "", "", nullptr, ""};
 
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
     ExpressionActionsChain chain;
@@ -225,11 +225,22 @@ std::tuple<ExpressionActionsPtr, String, String, String> doGenJoinOtherCondition
         filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
 
-    String column_for_null_aware_eq_condition;
-    if (join.left_null_aware_join_keys_size() > 0)
-        column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+    ExpressionActionsPtr other_cond_expr;
+    if (!chain.steps.empty())
+    {
+        other_cond_expr = chain.getLastActions();
+        chain.clear();
+    }
 
-    return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition), std::move(column_for_null_aware_eq_condition)};
+    String column_for_null_aware_eq_condition;
+    ExpressionActionsPtr null_aware_eq_expr;
+    if (join.left_null_aware_join_keys_size() > 0)
+    {
+        column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+        null_aware_eq_expr = chain.getLastActions();
+    }
+
+    return {other_cond_expr, std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition), null_aware_eq_expr, std::move(column_for_null_aware_eq_condition)};
 }
 } // namespace
 
@@ -353,7 +364,7 @@ NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     return join_output_columns;
 }
 
-std::tuple<ExpressionActionsPtr, String, String, String> TiFlashJoin::genJoinOtherConditionAction(
+std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> TiFlashJoin::genJoinOtherConditionAction(
     const Context & context,
     const Block & left_input_header,
     const Block & right_input_header,

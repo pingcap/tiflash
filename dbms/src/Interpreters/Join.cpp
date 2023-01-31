@@ -134,8 +134,9 @@ Join::Join(
     const String & right_filter_column_,
     const String & other_filter_column_,
     const String & other_eq_filter_from_in_column_,
-    const String & null_aware_eq_condition_column_,
     ExpressionActionsPtr other_condition_ptr_,
+    const String & null_aware_eq_column_,
+    ExpressionActionsPtr null_aware_eq_ptr_,
     size_t max_block_size_,
     const String & match_helper_name)
     : match_helper_name(match_helper_name)
@@ -152,24 +153,16 @@ Join::Join(
     , right_filter_column(right_filter_column_)
     , other_filter_column(other_filter_column_)
     , other_eq_filter_from_in_column(other_eq_filter_from_in_column_)
-    , null_aware_eq_condition_column(null_aware_eq_condition_column_)
     , other_condition_ptr(other_condition_ptr_)
+    , null_aware_eq_column(null_aware_eq_column_)
+    , null_aware_eq_ptr(null_aware_eq_ptr_)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    if (isNullAwareSemiFamily(kind))
-    {
-        if (unlikely(other_condition_ptr == nullptr || null_aware_eq_condition_column.empty()))
-            throw Exception("Not supported: null aware semi join with empty null_aware_eq_condition_column");
-        if (!other_filter_column.empty())
-            strictness = ASTTableJoin::Strictness::All;
-        else
-            strictness = ASTTableJoin::Strictness::Any;
-    }
-    else if (other_condition_ptr != nullptr)
+    if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -181,6 +174,8 @@ Join::Join(
         throw Exception("Not supported: non left join with left conditions");
     if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
+    if (unlikely(isNullAwareSemiFamily(kind) && (null_aware_eq_column.empty() || null_aware_eq_ptr == nullptr)))
+        throw Exception("Not supported: null-aware semi join with empty null_aware_eq_column or null_aware_eq_ptr is nullptr");
     LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
@@ -2018,36 +2013,32 @@ void Join::checkTypes(const Block & block) const
 
 enum class NullAwareJoinHelperStep
 {
-    NOTNULL_CHECK_HASH_TABLE,
+    NOTNULL_CHECK_OTHER_COND,
     NOTNULL_CHECK_NULL_LIST,
     NULL_CHECK_NULL_LIST,
     NULL_CHECK_HASH_TABLE,
+    DONE,
 };
 
 template <typename Map>
 class NullAwareJoinHelper
 {
 public:
-    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, typename Map::SegmentType::HashTable::ConstLookupResult lookup_res, size_t max_block_size)
+    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, typename Map::SegmentType::HashTable::ConstLookupResult lookup_res)
         : row_num(row_num)
         , step(s)
         , lookup_res(lookup_res)
         , seg_it(nullptr, nullptr)
     {
-        if (max_block_size > 0)
-            max_pace = max_block_size;
-        else
-            max_pace = 8196;
         null_pos = 0;
         null_list = nullptr;
         current_segment = 0;
-        has_result = false;
     }
 
-    void setResult(bool res)
+    void setResult(bool is_null, bool res)
     {
-        has_result = true;
-        result = std::make_pair(false, res);
+        step = NullAwareJoinHelperStep::DONE;
+        result = std::make_pair(is_null, res);
     }
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -2055,6 +2046,9 @@ public:
     {
         static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                       || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
+
+        if (step == NullAwareJoinHelperStep::DONE)
+            return true;
 
         size_t num_columns_to_add = added_columns.size() - left_columns;
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftAnti || KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
@@ -2067,7 +2061,7 @@ public:
 
         switch (step)
         {
-        case NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE:
+        case NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND:
         {
             if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
             {
@@ -2116,12 +2110,10 @@ public:
             {
                 if (to_end && offset.first == current_offset)
                 {
-                    has_result = true;
-
                     if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                        result = std::make_pair(false, false);
+                        setResult(false, false);
                     else
-                        result = std::make_pair(false, true);
+                        setResult(false, true);
                     return true;
                 }
             }
@@ -2182,52 +2174,50 @@ public:
             }
             if (to_end && offset.first == current_offset)
             {
-                has_result = true;
-
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    result = std::make_pair(false, false);
+                    setResult(false, false);
                 else
-                    result = std::make_pair(false, true);
+                    setResult(false, true);
                 return true;
             }
             break;
         }
+        default:
+            __builtin_unreachable();
         }
 
         offset.second = current_offset;
         return false;
     }
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool is_other_condition_nullable>
-    bool checkResult(const PaddedPODArray<UInt8> & eq_column, ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map)
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool all_keys_equal>
+    bool checkResult(ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map)
     {
         static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                       || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
 
-        for (size_t i = offset.first; i < offset.second && i < eq_column.size(); i++)
+        if (step == NullAwareJoinHelperStep::DONE)
+            return true;
+
+        for (size_t i = offset.first; i < offset.second; i++)
         {
-            if constexpr (is_other_condition_nullable)
-            {
-                if ((*other_null_map)[i])
-                    continue;
-            }
+            if (other_null_map && (*other_null_map)[i])
+                continue;
             if (!other_column[i])
                 continue;
-            if ((*eq_null_map)[i])
+            if (all_keys_equal)
             {
-                has_result = true;
-                result = std::make_pair(true, false);
+                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+                    setResult(false, true);
+                else
+                    setResult(false, false);
+                return true;
                 return true;
             }
-            if (eq_column[i])
+            if ((*eq_null_map)[i])
             {
-                RUNTIME_CHECK(step == NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST);
-                has_result = true;
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    result = std::make_pair(false, true);
-                else
-                    result = std::make_pair(false, false);
+                setResult(true, false);
                 return true;
             }
         }
@@ -2235,7 +2225,7 @@ public:
     }
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    bool checkResult(ConstNullMapPtr null_map)
+    bool checkResult(ConstNullMapPtr eq_null_map)
     {
         static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                       || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -2245,14 +2235,18 @@ public:
         {
             /// Only care about null because if the equal expr can be true, the result
             /// should be got during probing hash table, not here.
-            if ((*null_map)[i])
+            if ((*eq_null_map)[i])
             {
-                has_result = true;
-                result = std::make_pair(true, false);
+                setResult(true, false);
                 return true;
             }
         }
         return false;
+    }
+
+    inline NullAwareJoinHelperStep getStep() const
+    {
+        return step;
     }
 
     inline size_t getRowNum() const
@@ -2262,15 +2256,14 @@ public:
 
     std::pair<bool, bool> getResult()
     {
-        if (unlikely(!has_result))
-            throw Exception("null aware join result is not ready");
+        if (unlikely(step != NullAwareJoinHelperStep::DONE))
+            throw Exception("null-aware join result is not ready");
         return result;
     }
 
 private:
     size_t row_num;
     NullAwareJoinHelperStep step;
-    size_t max_pace;
     std::pair<size_t, size_t> offset;
 
     /// Null list
@@ -2282,10 +2275,151 @@ private:
     size_t current_segment;
     typename Map::SegmentType::HashTable::const_iterator seg_it;
 
-    bool has_result;
     /// (is_null, result)
     std::pair<bool, bool> result;
 };
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, bool all_keys_equal>
+void NO_INLINE joinBlockImplNullAwareInternalWork(
+    const Map & map,
+    Block & block,
+    size_t left_columns,
+    const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
+    size_t max_block_size,
+    String other_filter_column,
+    ExpressionActionsPtr other_condition_ptr,
+    String null_aware_eq_column,
+    ExpressionActionsPtr null_aware_eq_ptr,
+    std::list<NullAwareJoinHelper<Map> *> & helpers_list,
+    std::list<NullAwareJoinHelper<Map> *> * helpers_list_2)
+{
+    size_t block_columns = block.columns();
+    while (!helpers_list.empty())
+    {
+        size_t max_pace = max_block_size / helpers_list.size();
+        MutableColumns columns;
+        columns.reserve(block_columns);
+        for (size_t i = 0; i < block_columns; ++i)
+        {
+            const ColumnWithTypeAndName & src_column = block.getByPosition(i);
+            columns.emplace_back(src_column.column->cloneEmpty());
+        }
+        size_t current_offset = 0;
+        auto helper_it = helpers_list.begin();
+        while (helper_it != helpers_list.end())
+        {
+            size_t previous_offset = current_offset;
+            if ((*helper_it)->template fillColumns<KIND, STRICTNESS>(columns, left_columns, map, null_lists, current_offset, max_pace))
+            {
+                helper_it = helpers_list.erase(helper_it);
+                continue;
+            }
+            for (size_t i = 0; i < left_columns; ++i)
+            {
+                for (size_t j = previous_offset; j < current_offset; ++j)
+                {
+                    columns[i]->insertFrom(*block.getByPosition(i).column.get(), (*helper_it)->getRowNum());
+                }
+            }
+            ++helper_it;
+            if (current_offset >= max_block_size)
+                break;
+        }
+        if (current_offset > 0)
+        {
+            Block exec_block = block.cloneWithColumns(std::move(columns));
+
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+            {
+                other_condition_ptr->execute(exec_block);
+            }
+
+            ConstNullMapPtr eq_null_map = nullptr;
+            if constexpr (!all_keys_equal)
+            {
+                null_aware_eq_ptr->execute(exec_block);
+
+                auto eq_column = exec_block.getByName(null_aware_eq_column).column;
+                if (eq_column->isColumnConst())
+                    eq_column = eq_column->convertToFullColumnIfConst();
+                RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The equal column of null-aware semi join should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
+
+                const auto * nullable_eq_column = static_cast<const ColumnNullable *>(eq_column.get());
+                eq_null_map = &nullable_eq_column->getNullMapData();
+            }
+            else
+            {
+                static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
+            }
+
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+            {
+                auto it = helpers_list.begin();
+                while (it != helper_it)
+                {
+                    if ((*it)->template checkResult<KIND, STRICTNESS>(eq_null_map))
+                    {
+                        it = helpers_list.erase(it);
+                        continue;
+                    }
+                    ++it;
+                }
+            }
+            else
+            {
+                auto other_column = exec_block.getByName(other_filter_column).column;
+                if (other_column->isColumnConst())
+                    other_column = other_column->convertToFullColumnIfConst();
+                const PaddedPODArray<UInt8> * other_column_data = nullptr;
+                ConstNullMapPtr other_null_map = nullptr;
+                if (other_column->isColumnNullable())
+                {
+                    const auto * nullable_other_column = static_cast<const ColumnNullable *>(other_column.get());
+                    other_column_data = &static_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())->getData();
+                    other_null_map = &nullable_other_column->getNullMapData();
+                }
+                else
+                {
+                    other_column_data = &static_cast<const ColumnVector<UInt8> *>(checkAndGetColumn<ColumnVector<UInt8>>(other_column.get()))->getData();
+                }
+                auto it = helpers_list.begin();
+                while (it != helper_it)
+                {
+                    bool result = false;
+                    if constexpr (all_keys_equal)
+                    {
+                        result = (*it)->template checkResult<KIND, STRICTNESS, true>(eq_null_map, *other_column_data, other_null_map);
+                    }
+                    else
+                    {
+                        result = (*it)->template checkResult<KIND, STRICTNESS, false>(eq_null_map, *other_column_data, other_null_map);
+                    }
+                    if (result)
+                    {
+                        it = helpers_list.erase(it);
+                        continue;
+                    }
+
+                    ++it;
+                }
+
+                if constexpr (all_keys_equal)
+                {
+                    it = helpers_list.begin();
+                    while (it != helper_it)
+                    {
+                        if ((*it)->getStep() != NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND)
+                        {
+                            helpers_list_2->push_back(*it);
+                            it = helpers_list.erase(it);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_null_map>
 void NO_INLINE joinBlockImplNullAwareInternal(
@@ -2295,8 +2429,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
     String other_filter_column,
-    String null_aware_eq_condition_column,
     ExpressionActionsPtr other_condition_ptr,
+    String null_aware_eq_column,
+    ExpressionActionsPtr null_aware_eq_ptr,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     ConstNullMapPtr null_map,
@@ -2307,6 +2442,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
+    static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
 
     size_t rows = block.rows();
     KeyGetter key_getter(key_columns, key_sizes, collators);
@@ -2333,6 +2469,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     std::vector<NullAwareJoinHelper<Map>> helpers;
     helpers.reserve(rows);
     std::list<NullAwareJoinHelper<Map> *> helpers_list;
+    std::list<NullAwareJoinHelper<Map> *> equal_helpers_list;
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_filter_null_map)
@@ -2340,12 +2477,11 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if ((*filter_null_map)[i])
             {
                 /// Filter out by left_conditions.
-                /// Step doesn't matter.
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, nullptr, max_block_size);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, nullptr);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    helpers.back().setResult(false);
+                    helpers.back().setResult(false, false);
                 else
-                    helpers.back().setResult(true);
+                    helpers.back().setResult(false, true);
                 continue;
             }
         }
@@ -2354,7 +2490,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if ((*null_map)[i])
             {
                 /// TODO: fast path, if all null and STRICTNESS is any and the result set is not empty, the result should be null.
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST, nullptr, max_block_size);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST, nullptr);
                 helpers_list.push_back(&helpers.back());
                 continue;
             }
@@ -2398,132 +2534,59 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
         if (it != internal_map.end())
         {
-            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_HASH_TABLE, it, max_block_size);
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
+                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, it);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    helpers.back().setResult(true);
+                    helpers.back().setResult(false, true);
                 else
-                    helpers.back().setResult(false);
+                    helpers.back().setResult(false, false);
             }
             else
             {
-                helpers_list.push_back(&helpers.back());
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND, it);
+                equal_helpers_list.push_back(&helpers.back());
             }
         }
         else
         {
-            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST, nullptr, max_block_size);
+            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST, nullptr);
             helpers_list.push_back(&helpers.back());
         }
         keyHolderDiscardKey(key_holder);
     }
+    RUNTIME_ASSERT(helpers.size() == rows, "NullAwareJoinHelper size must be equal to block size");
 
     size_t block_columns = block.columns();
-    while (!helpers_list.empty())
+    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
-        size_t max_pace = max_block_size / helpers_list.size();
-        MutableColumns columns;
-        columns.reserve(block_columns);
-        for (size_t i = 0; i < block_columns; ++i)
-        {
-            const ColumnWithTypeAndName & src_column = block.getByPosition(i);
-            columns.push_back(src_column.column->cloneEmpty());
-        }
-        size_t current_offset = 0;
-        auto helper_it = helpers_list.begin();
-        while (helper_it != helpers_list.end())
-        {
-            size_t previous_offset = current_offset;
-            if ((*helper_it)->template fillColumns<KIND, STRICTNESS>(columns, left_columns, map, null_lists, current_offset, max_pace))
-            {
-                helper_it = helpers_list.erase(helper_it);
-                continue;
-            }
-            for (size_t i = 0; i < left_columns; ++i)
-            {
-                for (size_t j = previous_offset; j < current_offset; ++j)
-                {
-                    columns[i]->insertFrom(*block.getByPosition(i).column.get(), (*helper_it)->getRowNum());
-                }
-            }
-            ++helper_it;
-            if (current_offset >= max_block_size)
-                break;
-        }
-        if (current_offset > 0)
-        {
-            Block exec_block = block.cloneWithColumns(std::move(columns));
-
-            other_condition_ptr->execute(exec_block);
-
-            auto eq_column = exec_block.getByName(null_aware_eq_condition_column).column;
-            if (eq_column->isColumnConst())
-                eq_column = eq_column->convertToFullColumnIfConst();
-            if (eq_column->isColumnNullable())
-            {
-                const auto * nullable_eq_column = checkAndGetColumn<ColumnNullable>(eq_column.get());
-                const auto & eq_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_eq_column->getNestedColumnPtr().get())->getData();
-                ConstNullMapPtr eq_null_map = &nullable_eq_column->getNullMapData();
-                if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-                {
-                    auto it = helpers_list.begin();
-                    while (it != helper_it)
-                    {
-                        if ((*it)->template checkResult<KIND, STRICTNESS>(eq_null_map))
-                        {
-                            it = helpers_list.erase(it);
-                            continue;
-                        }
-                        ++it;
-                    }
-                }
-                else
-                {
-                    auto other_column = exec_block.getByName(other_filter_column).column;
-                    if (other_column->isColumnConst())
-                        other_column = other_column->convertToFullColumnIfConst();
-                    if (other_column->isColumnNullable())
-                    {
-                        const auto * nullable_other_column = checkAndGetColumn<ColumnNullable>(other_column.get());
-                        const auto & other_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())->getData();
-                        ConstNullMapPtr other_null_map = &nullable_other_column->getNullMapData();
-                        auto it = helpers_list.begin();
-                        while (it != helper_it)
-                        {
-                            if ((*it)->template checkResult<KIND, STRICTNESS, true>(eq_column_data, eq_null_map, other_column_data, other_null_map))
-                            {
-                                it = helpers_list.erase(it);
-                                continue;
-                            }
-                            ++it;
-                        }
-                    }
-                    else
-                    {
-                        const auto & other_column_data = static_cast<const ColumnVector<UInt8> *>(checkAndGetColumn<ColumnVector<UInt8>>(other_column.get()))->getData();
-                        auto it = helpers_list.begin();
-                        while (it != helper_it)
-                        {
-                            if ((*it)->template checkResult<KIND, STRICTNESS, false>(eq_column_data, eq_null_map, other_column_data, nullptr))
-                            {
-                                it = helpers_list.erase(it);
-                                continue;
-                            }
-                            ++it;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                /// If eq_column is not nullable, it should use Anti/LeftAnti/LeftSemi instead.
-                /// Should throw exception here or just run it slowly?
-                throw Exception("Should not reach here, the eq column for null aware semi join must be nullable");
-            }
-        }
+        joinBlockImplNullAwareInternalWork<KIND, STRICTNESS, Map, true>(
+            map,
+            block,
+            left_columns,
+            null_lists,
+            max_block_size,
+            other_filter_column,
+            other_condition_ptr,
+            null_aware_eq_column,
+            null_aware_eq_ptr,
+            equal_helpers_list,
+            &helpers_list);
     }
-    RUNTIME_ASSERT(helpers.size() == rows, "NullAwareJoinHelper size must be equal to block size");
+
+    joinBlockImplNullAwareInternalWork<KIND, STRICTNESS, Map, false>(
+        map,
+        block,
+        left_columns,
+        null_lists,
+        max_block_size,
+        other_filter_column,
+        other_condition_ptr,
+        null_aware_eq_column,
+        null_aware_eq_ptr,
+        helpers_list,
+        nullptr);
+
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
@@ -2589,8 +2652,9 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
     String other_filter_column,
-    String null_aware_eq_condition_column,
     ExpressionActionsPtr other_condition_ptr,
+    String null_aware_eq_column,
+    ExpressionActionsPtr null_aware_eq_ptr,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     ConstNullMapPtr null_map,
@@ -2607,8 +2671,9 @@ void NO_INLINE joinBlockImplNullAwareCast(
         null_lists,                                                                                      \
         max_block_size,                                                                                  \
         other_filter_column,                                                                             \
-        null_aware_eq_condition_column,                                                                  \
         other_condition_ptr,                                                                             \
+        null_aware_eq_column,                                                                            \
+        null_aware_eq_ptr,                                                                               \
         key_columns,                                                                                     \
         key_sizes,                                                                                       \
         null_map,                                                                                        \
@@ -2678,6 +2743,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
+        RUNTIME_CHECK_MSG(!block.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
         block.insert(src_column);
     }
 
@@ -2692,8 +2758,9 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
             other_filter_column,                                                                                                                        \
-            null_aware_eq_condition_column,                                                                                                             \
             other_condition_ptr,                                                                                                                        \
+            null_aware_eq_column,                                                                                                                       \
+            null_aware_eq_ptr,                                                                                                                          \
             key_columns,                                                                                                                                \
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \
@@ -2741,6 +2808,7 @@ void Join::finishOneProbe()
     if (active_probe_concurrency == 0)
         probe_cv.notify_all();
 }
+
 void Join::finishOneBuild()
 {
     std::unique_lock lock(build_probe_mutex);

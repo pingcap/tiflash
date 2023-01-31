@@ -108,7 +108,7 @@ struct TiFlashJoin
     /// new columns from build side prepare join actions cannot be appended.
     /// because the input that other filter accepts is
     /// {left_input_columns, right_input_columns, new_columns_from_probe_side_prepare, match_helper_name}.
-    std::tuple<ExpressionActionsPtr, String, String, String> genJoinOtherConditionAction(
+    std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> genJoinOtherConditionAction(
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,
