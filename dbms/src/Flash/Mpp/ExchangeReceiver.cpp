@@ -23,12 +23,14 @@
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
 
 #include <magic_enum.hpp>
 #include <memory>
+#include <mutex>
 
 namespace DB
 {
@@ -84,7 +86,7 @@ public:
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
-            packet = std::make_shared<TrackedMppDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
 
         start();
     }
@@ -100,7 +102,7 @@ public:
         case AsyncRequestStage::WAIT_MAKE_READER:
         {
             // Use lock to ensure reader is created already in reactor thread
-            std::unique_lock lock(mu);
+            std::lock_guard lock(mu);
             if (!ok)
             {
                 reader.reset();
@@ -230,7 +232,7 @@ private:
         stage = AsyncRequestStage::WAIT_MAKE_READER;
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
         rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
     }
 
@@ -263,7 +265,7 @@ private:
                 return false;
 
             // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         }
         return true;
     }
@@ -313,7 +315,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
-    , live_connections(source_num)
+    , live_connections(0)
+    , live_local_connections(0)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -356,6 +359,9 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     }
     catch (...)
     {
+        std::lock_guard lock(mu);
+        RUNTIME_ASSERT(live_connections == 0, "We should wait the close of all connections");
+        RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
 }
@@ -366,6 +372,22 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     std::unique_lock lock(mu);
     auto pred = [&] {
         return live_connections == 0;
+    };
+    cv.wait(lock, pred);
+
+    // The meaning of calling of connectionDone by local tunnel is to tell the receiver
+    // to close channels and the local tunnel may still alive after it calls connectionDone.
+    //
+    // In order to ensure the destructions of local tunnels are
+    // after the ExchangeReceiver, we need to wait at here.
+    waitLocalConnectionDone(lock);
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone(std::unique_lock<std::mutex> & lock)
+{
+    auto pred = [&] {
+        return live_local_connections == 0;
     };
     cv.wait(lock, pred);
 }
@@ -399,6 +421,28 @@ void ExchangeReceiverBase<RPCContext>::close()
 }
 
 template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
+{
+    std::lock_guard lock(mu);
+    ++live_connections;
+    ++live_local_connections;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
+{
+    std::lock_guard lock(mu);
+    ++live_connections;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum(Int32 conn_num)
+{
+    std::lock_guard lock(mu);
+    live_connections += conn_num;
+}
+
+template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
@@ -418,9 +462,19 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 [this](bool meet_error, const String & local_err_msg) {
                     this->connectionDone(meet_error, local_err_msg, exc_log);
                 },
+                [this]() {
+                    this->connectionLocalDone();
+                },
+                [this]() {
+                    this->addLocalConnectionNum();
+                },
                 ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
-            rpc_context->establishMPPConnectionLocal(req, req.source_index, local_request_handler, enable_fine_grained_shuffle_flag);
+            rpc_context->establishMPPConnectionLocal(
+                req,
+                req.source_index,
+                local_request_handler,
+                enable_fine_grained_shuffle_flag);
         }
         else
         {
@@ -430,6 +484,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 else
                     readLoop<false>(req);
             });
+
             ++thread_count;
         }
     }
@@ -443,6 +498,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             else
                 reactor<false>(async_requests);
         });
+
         ++thread_count;
     }
 }
@@ -461,6 +517,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
+    addAsyncConnectionNum(alive_async_connections);
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
 
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
@@ -493,6 +550,8 @@ template <typename RPCContext>
 template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
+    addSyncConnectionNum();
+
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Decrement();
@@ -516,7 +575,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
+                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
                 bool success = reader->read(packet);
                 if (!success)
                     break;
@@ -589,20 +648,45 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     if (recv_msg->chunks.empty())
         return detail;
-    auto & packet = recv_msg->packet->packet;
+    auto & packet = recv_msg->packet->getPacket();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
-    for (const String * chunk : recv_msg->chunks)
+
+    switch (auto version = packet.version(); version)
     {
-        auto result = decoder_ptr->decodeAndSquash(*chunk);
-        if (!result)
-            continue;
-        detail.rows += result->rows();
-        if likely (result->rows() > 0)
+    case DB::MPPDataPacketV0:
+    {
+        for (const auto * chunk : recv_msg->chunks)
         {
-            block_queue.push(std::move(result.value()));
+            auto result = decoder_ptr->decodeAndSquash(*chunk);
+            if (!result)
+                continue;
+            detail.rows += result->rows();
+            if likely (result->rows() > 0)
+            {
+                block_queue.push(std::move(result.value()));
+            }
         }
+        return detail;
+    }
+    case DB::MPPDataPacketV1:
+    {
+        for (const auto * chunk : recv_msg->chunks)
+        {
+            auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
+            if (!result || !result->rows())
+                continue;
+            detail.rows += result->rows();
+            block_queue.push(std::move(*result));
+        }
+        return detail;
+    }
+    default:
+    {
+        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
+        break;
+    }
     }
     return detail;
 }
@@ -642,7 +726,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     std::optional<Block> last_block = decoder_ptr->flush();
-    std::unique_lock lock(mu);
+    std::lock_guard lock(mu);
     if (this->state != DB::ExchangeReceiverState::NORMAL)
     {
         return DB::ExchangeReceiverResult::newError(0, DB::ExchangeReceiverBase<RPCContext>::name, DB::constructStatusString(this->state, this->err_msg));
@@ -712,7 +796,7 @@ template <typename RPCContext>
 bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
     assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
-    std::unique_lock lock(mu);
+    std::lock_guard lock(mu);
     if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
     {
         return false;
@@ -724,7 +808,7 @@ bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_sta
 template <typename RPCContext>
 String ExchangeReceiverBase<RPCContext>::getStatusString()
 {
-    std::unique_lock lock(mu);
+    std::lock_guard lock(mu);
     return constructStatusString(state, err_msg);
 }
 
@@ -736,7 +820,8 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
 {
     Int32 copy_live_conn = -1;
     {
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
+
         if (meet_error)
         {
             if (state == ExchangeReceiverState::NORMAL)
@@ -764,6 +849,14 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
 
     if (meet_error || copy_live_conn == 0)
         finishAllMsgChannels();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
+{
+    std::lock_guard lock(mu);
+    --live_local_connections;
+    cv.notify_all();
 }
 
 template <typename RPCContext>

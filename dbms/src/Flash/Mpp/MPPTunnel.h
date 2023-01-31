@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
@@ -30,6 +31,7 @@
 #include <common/types.h>
 
 #include <atomic>
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -261,11 +263,19 @@ public:
         , source_index(source_index_)
         , local_request_handler(local_request_handler_)
         , is_done(false)
-    {}
+    {
+        local_request_handler.setAlive();
+    }
 
     ~LocalTunnelSender() override
     {
-        closeLocalTunnel(false, "");
+        RUNTIME_ASSERT(is_done, "Local tunnel is destructed before called by cancel() or finish()");
+
+        // It should only be called in the destructor.
+        //
+        // This function is used to hold the destruction of receiver so that the push operation
+        // of local tunnel is always valid(valid means pushing data to an alive reveiver).
+        local_request_handler.closeConnection();
     }
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -278,42 +288,42 @@ public:
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
-        auto res = local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
-
-        if (unlikely(!res))
-            closeLocalTunnel(true, "Push mpp packet failed at local tunnel");
-        return res;
+        return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
     }
 
     void cancelWith(const String & reason) override
     {
-        closeLocalTunnel(true, reason);
+        finishWrite(true, reason);
     }
 
     bool finish() override
     {
-        closeLocalTunnel(false, "");
+        finishWrite(false, "");
         return true;
     }
 
 private:
+    friend class tests::TestMPPTunnel;
+
     bool checkPacketErr(TrackedMppDataPacketPtr & packet)
     {
         if (packet->hasError())
         {
-            closeLocalTunnel(true, packet->error());
+            finishWrite(true, packet->error());
             return true;
         }
         return false;
     }
 
-    void closeLocalTunnel(bool meet_error, const String & local_err_msg)
+    // Need to tell receiver that the local tunnel will be closed and the receiver should
+    // close channels otherwise the MPPTask may hang.
+    void finishWrite(bool meet_error, const String & local_err_msg)
     {
         bool expect = false;
         if (is_done.compare_exchange_strong(expect, true))
         {
             consumer_state.setMsg(local_err_msg);
-            local_request_handler.connectionLocalDone(meet_error, local_err_msg);
+            local_request_handler.writeDone(meet_error, local_err_msg);
         }
     }
 

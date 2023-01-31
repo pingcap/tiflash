@@ -511,6 +511,16 @@ public:
         return disaggregated_mode == DisaggregatedMode::Storage;
     }
 
+    // todo: remove after AutoScaler is stable.
+    void setUseAutoScaler(bool use)
+    {
+        use_autoscaler = use;
+    }
+    bool useAutoScaler() const
+    {
+        return use_autoscaler;
+    }
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
@@ -529,6 +539,7 @@ private:
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
     DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
+    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningfule in DisaggregatedComputeMode.
 };
 
 using ContextPtr = std::shared_ptr<Context>;

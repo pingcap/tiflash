@@ -96,7 +96,7 @@ String SpillerTest::spill_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("spi
 TEST_F(SpillerTest, SpilledFileAutoRemove)
 try
 {
-    auto file_name = spill_dir + "spilled_file_auto_remove";
+    auto file_name = spill_config_ptr->spill_dir + "spilled_file_auto_remove";
     {
         SpilledFile test_file(file_name, spill_config_ptr->file_provider);
         test_file.createFile();
@@ -166,11 +166,11 @@ try
     {
         auto blocks = generateBlocks(3);
         for (const auto & block : blocks)
-            ref += block.bytes();
+            ref += block.rows();
         spiller.spillBlocks(blocks, 0);
     }
     spiller.finishSpill();
-    GTEST_ASSERT_EQ(ref, spiller.spilledBlockDataSize(0));
+    GTEST_ASSERT_EQ(ref, spiller.spilledRows(0));
 }
 CATCH
 

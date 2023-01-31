@@ -116,13 +116,17 @@ struct TrackedMppDataPacket
         packet = data;
     }
 
-    explicit TrackedMppDataPacket()
+    explicit TrackedMppDataPacket(int64_t version)
         : mem_tracker_wrapper(current_memory_tracker)
-    {}
+    {
+        packet.set_version(version);
+    }
 
-    explicit TrackedMppDataPacket(MemoryTracker * memory_tracker)
+    explicit TrackedMppDataPacket(MemoryTracker * memory_tracker, int64_t version)
         : mem_tracker_wrapper(memory_tracker)
-    {}
+    {
+        packet.set_version(version);
+    }
 
     TrackedMppDataPacket(const mpp::MPPDataPacket & data, size_t size, MemoryTracker * memory_tracker)
         : mem_tracker_wrapper(size, memory_tracker)

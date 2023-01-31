@@ -138,7 +138,7 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
     }
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions)
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
@@ -154,15 +154,15 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
-    if (push_down_filter && push_down_filter->hasValue())
+    if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            push_down_filter->conditions,
+            filter_conditions->conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*push_down_filter, *analyzer);
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*filter_conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];
@@ -362,6 +362,35 @@ CutColumnInfo getCutColumnInfo(size_t rows, Int64 partition_id, Int64 partition_
     return {start, cur_rows};
 }
 
+ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns)
+{
+    if (used_columns.empty())
+        /// if used columns is not set, just return all the columns
+        return all_columns;
+    ColumnsWithTypeAndName res;
+    for (const auto & column_with_type_and_name : all_columns)
+    {
+        bool contains = false;
+        for (const auto & column : used_columns)
+        {
+            if (column.id == column_with_type_and_name.column_id)
+            {
+                contains = true;
+                break;
+            }
+        }
+        if (contains)
+        {
+            res.push_back(
+                ColumnWithTypeAndName(
+                    column_with_type_and_name.column,
+                    column_with_type_and_name.type,
+                    column_with_type_and_name.name));
+        }
+    }
+    return res;
+}
+
 ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num)
 {
     auto table_id = table_scan.getLogicalTableID();
@@ -378,26 +407,10 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableSca
 
         CutColumnInfo cut_info = getCutColumnInfo(rows, partition_id, partition_num);
 
-        ColumnsWithTypeAndName res;
-        for (const auto & column_with_type_and_name : columns_with_type_and_name)
+        ColumnsWithTypeAndName res = getUsedColumns(table_scan.getColumns(), columns_with_type_and_name);
+        for (auto & column_with_type_and_name : res)
         {
-            bool contains = false;
-            for (const auto & column : table_scan.getColumns())
-            {
-                if (column.id == column_with_type_and_name.column_id)
-                {
-                    contains = true;
-                    break;
-                }
-            }
-            if (contains)
-            {
-                res.push_back(
-                    ColumnWithTypeAndName(
-                        column_with_type_and_name.column->cut(cut_info.first, cut_info.second),
-                        column_with_type_and_name.type,
-                        column_with_type_and_name.name));
-            }
+            column_with_type_and_name.column = column_with_type_and_name.column->cut(cut_info.first, cut_info.second);
         }
         return res;
     }

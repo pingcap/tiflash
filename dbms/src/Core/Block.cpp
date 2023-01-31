@@ -555,6 +555,17 @@ Block mergeBlocks(Blocks && blocks)
     return first_block.cloneWithColumns(std::move(dst_columns));
 }
 
+Block popBlocksListFront(BlocksList & blocks)
+{
+    if (!blocks.empty())
+    {
+        Block out_block = blocks.front();
+        blocks.pop_front();
+        return out_block;
+    }
+    return {};
+}
+
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 {
     return checkBlockStructure<bool>(lhs, rhs, {});
