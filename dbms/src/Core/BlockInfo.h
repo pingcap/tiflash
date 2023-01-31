@@ -30,7 +30,7 @@ struct BlockInfo
       * After running GROUP BY ... WITH TOTALS with the max_rows_to_group_by and group_by_overflow_mode = 'any' settings,
       *  a row is inserted in the separate block with aggregated values that have not passed max_rows_to_group_by.
       * If it is such a block, then is_overflows is set to true for it.
-      * Deprecated, will throw error if is_overflows is true
+      * Overflows is now deprecated, will throw error if is_overflows is true
       */
 
     /** bucket_num:
