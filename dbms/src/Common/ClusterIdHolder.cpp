@@ -14,6 +14,8 @@
 
 #include <Common/ClusterIdHolder.h>
 #include <Common/Exception.h>
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -26,6 +28,7 @@ void ClusterIdHolder::set(const std::string & cluster_id_)
 std::string ClusterIdHolder::get() const
 {
     std::lock_guard lock(mu);
+    LOG_INFO(Logger::get(), "get cluster id: {}", cluster_id);
     return cluster_id;
 }
 } // namespace DB
