@@ -1073,6 +1073,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
+    /// Initialize the cluster id of tiflash server.
+    if (config().has(ClusterIdHolder::cluster_id_key))
+        ClusterIdHolder::instance().set(config().getString(ClusterIdHolder::cluster_id_key));
+
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -1084,15 +1091,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
     ///
-    Settings & settings = global_context->getSettingsRef();
-
-    /// Initialize the cluster id of tiflash server.
-    ClusterIdHolder::instance().set(settings.cluster_id);
-
-    /// Init TiFlash metrics.
-    global_context->initializeTiFlashMetrics();
 
     /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);

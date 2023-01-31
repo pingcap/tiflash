@@ -23,6 +23,9 @@ namespace DB
 class ClusterIdHolder : public ext::Singleton<ClusterIdHolder>
 {
 public:
+    static constexpr auto cluster_id_key = "cluster.cluster_id";
+
+public:
     void set(const std::string & cluster_id_);
 
     std::string get() const;
