@@ -38,6 +38,23 @@
 
 namespace DB
 {
+namespace
+{
+std::string getHostName() {
+  char hostname[1024];
+
+  if (::gethostname(hostname, sizeof(hostname))) {
+    return {};
+  }
+  return hostname;
+}
+
+auto microsecondsUTC()
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+}
+
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
 public:
@@ -185,15 +202,13 @@ MetricsPrometheus::MetricsPrometheus(
             std::string job_name = service_addr;
             std::replace(job_name.begin(), job_name.end(), ':', '_');
             std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = "tiflash_" + job_name;
+            job_name = fmt::format("tiflash_{}_{}", job_name, microsecondsUTC());
 
-            char hostname[1024];
-            ::gethostname(hostname, sizeof(hostname));
-
-            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
+            const auto & labels = prometheus::Gateway::GetInstanceLabel(getHostName());
+            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
 
-            LOG_INFO(log, "Enable prometheus push mode; interval ={}; addr = {}", metrics_interval, metrics_addr);
+            LOG_INFO(log, "Enable prometheus push mode; interval = {}; addr = {}", metrics_interval, metrics_addr);
         }
     }
 
