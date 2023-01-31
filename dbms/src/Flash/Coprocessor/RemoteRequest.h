@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RegionInfo.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
@@ -51,7 +51,7 @@ struct RemoteRequest
         DAGContext & dag_context,
         const TiDBTableScan & table_scan,
         const TiDB::TableInfo & table_info,
-        const PushDownFilter & push_down_filter,
+        const FilterConditions & filter_conditions,
         const LoggerPtr & log);
     static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const RegionRetryList & retry_regions);
     static std::string printRetryRegions(const RegionRetryList & retry_regions, TableID table_id);

@@ -138,7 +138,7 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
     }
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const PushDownFilter * push_down_filter)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions)
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
@@ -154,15 +154,15 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
-    if (push_down_filter && push_down_filter->hasValue())
+    if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            push_down_filter->conditions,
+            filter_conditions->conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*push_down_filter, *analyzer);
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*filter_conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];

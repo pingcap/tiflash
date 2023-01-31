@@ -15,18 +15,41 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <tipb/select.pb.h>
+
+namespace DB
+{
+enum class CompressionMethod;
+}
 
 namespace DB::MPPTunnelSetHelper
 {
-TrackedMppDataPacketPtr toPacket(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
+TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
 
-TrackedMppDataPacketPtr toFineGrainedPacket(
+TrackedMppDataPacketPtr ToPacket(
+    const Block & header,
+    std::vector<MutableColumns> && part_columns,
+    MPPDataPacketVersion version,
+    CompressionMethod compression_method,
+    size_t & original_size);
+
+TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     const Block & header,
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
     const std::vector<tipb::FieldType> & field_types);
+
+TrackedMppDataPacketPtr ToFineGrainedPacket(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    MPPDataPacketVersion version,
+    CompressionMethod compression_method,
+    size_t & original_size);
+
 } // namespace DB::MPPTunnelSetHelper
