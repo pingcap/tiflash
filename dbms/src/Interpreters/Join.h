@@ -147,31 +147,27 @@ public:
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
+    void setInitActiveBuildConcurrency()
+    {
+        std::unique_lock lock(build_probe_mutex);
+        active_build_concurrency = getBuildConcurrencyInternal();
+    }
+    void finishOneBuild();
+    void waitUntilAllBuildFinished() const;
+
     size_t getProbeConcurrency() const
     {
-        std::unique_lock lock(probe_mutex);
+        std::unique_lock lock(build_probe_mutex);
         return probe_concurrency;
     }
     void setProbeConcurrency(size_t concurrency)
     {
-        std::unique_lock lock(probe_mutex);
+        std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_concurrency = probe_concurrency;
     }
-    void finishOneProbe()
-    {
-        std::unique_lock lock(probe_mutex);
-        active_probe_concurrency--;
-        if (active_probe_concurrency == 0)
-            probe_cv.notify_all();
-    }
-    void waitUntilAllProbeFinished()
-    {
-        std::unique_lock lock(probe_mutex);
-        probe_cv.wait(lock, [&]() {
-            return active_probe_concurrency == 0;
-        });
-    }
+    void finishOneProbe();
+    void waitUntilAllProbeFinished() const;
 
     size_t getBuildConcurrency() const
     {
@@ -180,13 +176,7 @@ public:
         return build_concurrency;
     }
 
-    enum BuildTableState
-    {
-        WAITING,
-        FAILED,
-        SUCCEED
-    };
-    void setBuildTableState(BuildTableState state_);
+    void meetError();
 
     /// Reference to the row in block.
     struct RowRef
@@ -304,12 +294,17 @@ private:
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
 
-    size_t build_concurrency;
+    mutable std::mutex build_probe_mutex;
 
-    mutable std::mutex probe_mutex;
-    std::condition_variable probe_cv;
+    mutable std::condition_variable build_cv;
+    size_t build_concurrency;
+    size_t active_build_concurrency;
+
+    mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
+
+    bool meet_error = false;
 
 private:
     /// collators for the join key
@@ -356,10 +351,6 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
-
-    mutable std::mutex build_table_mutex;
-    mutable std::condition_variable build_table_cv;
-    BuildTableState build_table_state;
 
     const LoggerPtr log;
 

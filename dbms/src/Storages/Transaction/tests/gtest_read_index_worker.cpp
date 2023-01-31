@@ -381,9 +381,9 @@ void ReadIndexTest::testNormal()
             std::vector<kvrpcpb::ReadIndexRequest> reqs;
 
             reqs = {make_read_index_reqs(5, 12), make_read_index_reqs(1, 12), make_read_index_reqs(2, 12)};
-            Timepoint start = Clock::now();
+            auto start = std::chrono::steady_clock::now();
             auto resps = manager->batchReadIndex(reqs, 20);
-            auto time_cost = Clock::now() - start;
+            auto time_cost = std::chrono::steady_clock::now() - start;
             ASSERT_GE(time_cost, std::chrono::milliseconds{20}); // meet timeout
             ASSERT_EQ(resps[0].first.read_index(), 669);
             ASSERT_EQ(resps[1].first.region_error().has_region_not_found(), true); // timeout to region error not found

@@ -16,25 +16,42 @@
 #include <Columns/IColumn.h>
 #include <common/memcpy.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
+
 namespace DB
 {
-#if defined(__SSE2__) && defined(__POPCNT__)
+#if defined(__AVX2__) || defined(__SSE2__)
 /// Transform 64-byte mask to 64-bit mask.
-static UInt64 toBits64(const Int8 * bytes64)
+inline UInt64 ToBits64(const Int8 * bytes64)
 {
-    static const __m128i zero16 = _mm_setzero_si128();
+#if defined(__AVX2__)
+    const auto check_block = _mm256_setzero_si256();
+    uint64_t mask0 = mem_utils::details::get_block32_cmp_eq_mask(bytes64, check_block);
+    uint64_t mask1 = mem_utils::details::get_block32_cmp_eq_mask(bytes64 + mem_utils::details::BLOCK32_SIZE, check_block);
+    auto res = mask0 | (mask1 << mem_utils::details::BLOCK32_SIZE);
+    return ~res;
+#elif defined(__SSE2__)
+    const auto zero16 = _mm_setzero_si128();
     UInt64 res
         = static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16)))
         | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16))) << 16)
         | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32)
         | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48);
-
     return ~res;
+#endif
 }
 #endif
 
-size_t countBytesInFilter(const UInt8 * filt, size_t sz)
+ALWAYS_INLINE inline static size_t
+CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
 {
+#if defined(__AVX2__)
+    size_t size = end - start;
+    auto zero_cnt = mem_utils::details::avx2_byte_count(reinterpret_cast<const char *>(filt + start), size, 0);
+    return size - zero_cnt;
+#else
     size_t count = 0;
 
     /** NOTE: In theory, `filt` should only contain zeros and ones.
@@ -42,31 +59,38 @@ size_t countBytesInFilter(const UInt8 * filt, size_t sz)
       * It would be better to use != 0, then this does not allow SSE2.
       */
 
-    const Int8 * pos = reinterpret_cast<const Int8 *>(filt);
-    const Int8 * end = pos + sz;
+    const char * pos = reinterpret_cast<const char *>(filt);
+    pos += start;
 
-#if defined(__SSE2__) && defined(__POPCNT__)
-    const Int8 * end64 = pos + sz / 64 * 64;
-
-    for (; pos < end64; pos += 64)
-    {
-        count += __builtin_popcountll(toBits64(pos));
-    }
-    /// TODO Add duff device for tail?
-#endif
-
-    for (; pos < end; ++pos)
+    const char * end_pos = pos + (end - start);
+    for (; pos < end_pos; ++pos)
         count += *pos != 0;
 
     return count;
+#endif
+}
+
+size_t countBytesInFilter(const UInt8 * filt, size_t sz)
+{
+    return CountBytesInFilter(filt, 0, sz);
 }
 
 size_t countBytesInFilter(const IColumn::Filter & filt)
 {
-    return countBytesInFilter(filt.data(), filt.size());
+    return CountBytesInFilter(filt.data(), 0, filt.size());
 }
 
-size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map)
+static inline size_t CountBytesInFilterWithNull(const Int8 * p1, const Int8 * p2, size_t size)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < size; ++i)
+    {
+        count += (p1[i] & ~p2[i]) != 0;
+    }
+    return count;
+}
+
+static inline size_t CountBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map, size_t start, size_t end)
 {
     size_t count = 0;
 
@@ -75,23 +99,25 @@ size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * nu
       * It would be better to use != 0, then this does not allow SSE2.
       */
 
-    const Int8 * pos = reinterpret_cast<const Int8 *>(filt.data());
-    const Int8 * pos2 = reinterpret_cast<const Int8 *>(null_map);
-    const Int8 * end = pos + filt.size();
+    const Int8 * p1 = reinterpret_cast<const Int8 *>(filt.data()) + start;
+    const Int8 * p2 = reinterpret_cast<const Int8 *>(null_map) + start;
+    size_t size = end - start;
 
-#if defined(__SSE2__) && defined(__POPCNT__)
-    const Int8 * end64 = pos + filt.size() / 64 * 64;
-
-    for (; pos < end64; pos += 64, pos2 += 64)
-        count += __builtin_popcountll(toBits64(pos) & ~toBits64(pos2));
-
-        /// TODO Add duff device for tail?
+#if defined(__SSE2__) || defined(__AVX2__)
+    for (; size >= 64;)
+    {
+        count += __builtin_popcountll(ToBits64(p1) & ~ToBits64(p2));
+        p1 += 64, p2 += 64;
+        size -= 64;
+    }
 #endif
-
-    for (; pos < end; ++pos)
-        count += (*pos & ~*pos2) != 0;
-
+    count += CountBytesInFilterWithNull(p1, p2, size);
     return count;
+}
+
+size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map)
+{
+    return CountBytesInFilterWithNull(filt, null_map, 0, filt.size());
 }
 
 std::vector<size_t> countColumnsSizeInSelector(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector)
@@ -151,7 +177,7 @@ struct ResultOffsetsBuilder
 
             if (diff_offset > 0)
             {
-                auto * const res_offsets_pos = &res_offsets[offsets_size_old];
+                auto * res_offsets_pos = &res_offsets[offsets_size_old];
 
                 /// adjust offsets
                 for (size_t i = 0; i < SIMD_BYTES; ++i)
@@ -178,7 +204,6 @@ struct NoResultOffsetsBuilder
     }
 };
 
-
 template <typename T, typename ResultOffsetsBuilder>
 void filterArraysImplGeneric(
     const PaddedPODArray<T> & src_elems,
@@ -204,40 +229,36 @@ void filterArraysImplGeneric(
             res_elems.reserve((result_size_hint * src_elems.size() + size - 1) / size);
     }
 
-    const UInt8 * filt_pos = &filt[0];
-    const auto * const filt_end = filt_pos + size;
+    const UInt8 * filt_pos = filt.data();
+    const auto * filt_end = filt_pos + size;
 
-    const auto * offsets_pos = &src_offsets[0];
-    const auto * const offsets_begin = offsets_pos;
+    const auto * offsets_pos = src_offsets.data();
+    const auto * offsets_begin = offsets_pos;
 
     /// copy array ending at *end_offset_ptr
     const auto copy_array = [&](const IColumn::Offset * offset_ptr) {
-        const auto offset = offset_ptr == offsets_begin ? 0 : offset_ptr[-1];
-        const auto size = *offset_ptr - offset;
+        const auto arr_offset = offset_ptr == offsets_begin ? 0 : offset_ptr[-1];
+        const auto arr_size = *offset_ptr - arr_offset;
 
-        result_offsets_builder.insertOne(size);
+        result_offsets_builder.insertOne(arr_size);
 
         const auto elems_size_old = res_elems.size();
-        res_elems.resize(elems_size_old + size);
-        inline_memcpy(&res_elems[elems_size_old], &src_elems[offset], size * sizeof(T));
+        res_elems.resize(elems_size_old + arr_size);
+        inline_memcpy(&res_elems[elems_size_old], &src_elems[arr_offset], arr_size * sizeof(T));
     };
 
 #if __SSE2__
-    const __m128i zero_vec = _mm_setzero_si128();
-    static constexpr size_t SIMD_BYTES = 16;
-    const auto * const filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+    static constexpr size_t SIMD_BYTES = mem_utils::details::BLOCK16_SIZE;
+    const auto * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+    const auto zero_vec = _mm_setzero_si128();
 
     while (filt_pos < filt_end_aligned)
     {
         uint32_t mask = _mm_movemask_epi8(_mm_cmpgt_epi8(
-            _mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)),
+            mem_utils::details::load_block16(filt_pos),
             zero_vec));
 
-        if (mask == 0)
-        {
-            /// SIMD_BYTES consecutive rows do not pass the filter
-        }
-        else if (mask == 0xffff)
+        if (mem_utils::details::Block16Mask == mask)
         {
             /// SIMD_BYTES consecutive rows pass the filter
             const auto first = offsets_pos == offsets_begin;
