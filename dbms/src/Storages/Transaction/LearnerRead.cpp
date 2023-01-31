@@ -164,7 +164,7 @@ LearnerReadSnapshot doLearnerRead(
     const LoggerPtr & log)
 {
     assert(log != nullptr);
-    RUNTIME_ASSERT(!context.isDisaggregatedComputeMode());
+    RUNTIME_ASSERT(!(context.isDisaggregatedComputeMode() && context.useAutoScaler()));
 
     auto & tmt = context.getTMTContext();
 
