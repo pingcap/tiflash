@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
@@ -32,7 +33,7 @@ void checkPacketSize(size_t size)
 
 TrackedMppDataPacketPtr serializePacket(const tipb::SelectResponse & response)
 {
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     tracked_packet->serializeByResponse(response);
     checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
     return tracked_packet;

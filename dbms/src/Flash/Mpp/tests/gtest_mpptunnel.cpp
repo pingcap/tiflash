@@ -16,6 +16,7 @@
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <memory>
@@ -31,7 +32,7 @@ namespace
 {
 TrackedMppDataPacketPtr newDataPacket(const String & data)
 {
-    auto data_packet_ptr = std::make_shared<TrackedMppDataPacket>();
+    auto data_packet_ptr = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     data_packet_ptr->getPacket().set_data(data);
     return data_packet_ptr;
 }

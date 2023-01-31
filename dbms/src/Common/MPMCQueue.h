@@ -73,7 +73,6 @@ class MPMCQueue
 public:
     using Status = MPMCQueueStatus;
     using Result = MPMCQueueResult;
-    using SteadyClock = std::chrono::steady_clock;
 
     explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
@@ -220,7 +219,8 @@ public:
     }
 
 private:
-    using TimePoint = std::chrono::time_point<SteadyClock>;
+    using SteadyClock = std::chrono::steady_clock;
+    using TimePoint = SteadyClock::time_point;
     using WaitingNode = MPMCQueueDetail::WaitingNode;
 
     void notifyAll()

@@ -18,8 +18,12 @@
 
 namespace mem_utils::details
 {
-
-ALWAYS_INLINE static inline uint64_t avx2_byte_count(const char * src, size_t size, char target)
+#if defined(MEM_UTILS_FUNC_NO_SANITIZE)
+MEM_UTILS_FUNC_NO_SANITIZE
+#else
+ALWAYS_INLINE static inline
+#endif
+uint64_t avx2_byte_count(const char * src, size_t size, char target)
 {
     uint64_t zero_bytes_cnt = 0;
     const auto check_block32 = _mm256_set1_epi8(target);

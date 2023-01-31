@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -64,7 +65,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
     if (unlikely(blocks.empty()))
         return;
 
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     while (!blocks.empty())
     {
         const auto & block = blocks.back();
@@ -85,8 +86,11 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
         {
             local_tunnel_cnt += writer->isLocal(i);
         }
-        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_original_all).Increment(packet_bytes * tunnel_cnt);
-        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_none_local).Increment(packet_bytes * local_tunnel_cnt);
+        auto original = packet_bytes * tunnel_cnt;
+        auto local = packet_bytes * local_tunnel_cnt;
+        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_original).Increment(original);
+        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_none_compression_local).Increment(local);
+        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_passthrough_none_compression_remote).Increment(original - local);
     }
 }
 

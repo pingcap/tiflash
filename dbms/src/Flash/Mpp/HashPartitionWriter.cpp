@@ -111,18 +111,18 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndEncodeThenWriteBlocks()
 
     writePackets(tracked_packets);
 
-    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original).Increment(ori_block_mem_size);
 }
 
 static void updateHashPartitionWriterMetrics(size_t sz, bool is_local)
 {
     if (is_local)
     {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_local).Increment(sz);
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_compression_local).Increment(sz);
     }
     else
     {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_remote).Increment(sz);
+        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_compression_remote).Increment(sz);
     }
 }
 

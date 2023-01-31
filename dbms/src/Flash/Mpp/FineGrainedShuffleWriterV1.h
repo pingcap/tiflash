@@ -41,9 +41,6 @@ public:
 
 private:
     void batchWriteFineGrainedShuffle();
-
-    void writePackets(TrackedMppDataPacketPtrs & packets);
-
     void initScatterColumns();
 
 private:
@@ -63,7 +60,10 @@ private:
     WeakHash32 hash;
     IColumn::Selector selector;
     std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
-    CompressionMethod compression_method{};
+
+    // support data compression
+    DataTypes expected_types;
+    CompressionMethod compression_method;
 };
 
 } // namespace DB

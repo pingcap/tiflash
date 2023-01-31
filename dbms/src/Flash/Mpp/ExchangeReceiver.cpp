@@ -188,7 +188,7 @@ public:
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
-            packet = std::make_shared<TrackedMppDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
 
         start();
     }
@@ -371,7 +371,7 @@ private:
                     log))
                 return false;
             // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         }
         return true;
     }
@@ -587,7 +587,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
+                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
                 bool success = reader->read(packet);
                 if (!success)
                     break;
@@ -670,7 +670,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
 
-    switch (packet.version())
+    switch (auto version = packet.version(); version)
     {
     case DB::MPPDataPacketV0:
     {
@@ -691,8 +691,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     {
         for (const auto * chunk : recv_msg->chunks)
         {
-            assert(!chunk->empty());
-            auto && result = decoder_ptr->decodeAndSquashWithCompression(*chunk);
+            auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
             if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();
@@ -702,7 +701,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     }
     default:
     {
-        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", packet.version());
+        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
         break;
     }
     }

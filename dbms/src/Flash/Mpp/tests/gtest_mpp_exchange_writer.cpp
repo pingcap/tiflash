@@ -133,7 +133,7 @@ struct MockExchangeWriter
     static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void sendExecutionSummary(const tipb::SelectResponse & response)
     {
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+        auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         tracked_packet->serializeByResponse(response);
         checker(tracked_packet, 0);
     }
@@ -275,7 +275,7 @@ try
                     ASSERT_EQ(CompressionMethodByte(chunk[0]), ToCompressionMethodByte(ToInternalCompressionMethod(tipb::CompressionMode::FAST)));
                 }
 
-                auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                auto && result = decoder.decodeAndSquashV1(chunk);
                 if (!result)
                 {
                     result = decoder.flush();
@@ -540,7 +540,7 @@ try
                         ASSERT_EQ(CompressionMethodByte(chunk[0]), ToCompressionMethodByte(ToInternalCompressionMethod(mode)));
                     }
 
-                    auto && result = decoder.decodeAndSquashWithCompression(chunk);
+                    auto && result = decoder.decodeAndSquashV1(chunk);
                     if (!result)
                         continue;
                     decoded_block_rows += result->rows();

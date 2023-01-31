@@ -163,7 +163,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
     }
 
     writePackets(tracked_packets);
-    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original_all).Increment(ori_block_mem_size);
+    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original).Increment(ori_block_mem_size);
 }
 
 template <class ExchangeWriterPtr>

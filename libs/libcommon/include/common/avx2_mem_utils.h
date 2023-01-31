@@ -24,6 +24,10 @@
 #include <limits>
 #include <string_view>
 
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
+#define MEM_UTILS_FUNC_NO_SANITIZE [[maybe_unused]] static NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
+#endif
+
 namespace mem_utils::details
 {
 

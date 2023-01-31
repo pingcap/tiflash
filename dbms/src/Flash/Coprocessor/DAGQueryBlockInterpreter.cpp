@@ -771,7 +771,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = NewMPPExchangeWriter(
+        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
             dagContext().tunnel_set,
             partition_col_ids,
             partition_col_collators,

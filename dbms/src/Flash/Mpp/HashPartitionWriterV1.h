@@ -47,17 +47,19 @@ private:
     void partitionAndEncodeThenWriteBlocks();
     void partitionAndEncodeThenWriteBlocksTest();
 
-    void writePackets(TrackedMppDataPacketPtrs && packets);
-
 private:
     uint16_t partition_num;
-    Int64 partition_batch_limit;
+    Int64 batch_send_min_limit;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
-    CompressionMethod compression_method{};
+
+    // support data compression
+    CompressionMethod compression_method;
+    int64_t mem_size_in_blocks{};
+    DataTypes expected_types;
 };
 
 } // namespace DB

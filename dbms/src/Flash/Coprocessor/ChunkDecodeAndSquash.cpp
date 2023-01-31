@@ -26,38 +26,41 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
 {
 }
 
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompression(std::string_view sv)
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
 {
-    // read first byte of compression method flag which defined in `CompressionMethodByte`
-    if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
+    if unlikely (sv.empty())
     {
-        ReadBufferFromString istr(sv.substr(1, sv.size() - 1));
-        return decodeAndSquashWithCompressionImpl(istr);
-    }
-
-    ReadBufferFromString istr(sv);
-    auto && compress_buffer = CompressedCHBlockChunkReadBuffer(istr);
-    return decodeAndSquashWithCompressionImpl(compress_buffer);
-}
-
-std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashWithCompressionImpl(ReadBuffer & istr)
-{
-    std::optional<Block> res;
-
-    if (istr.eof())
-    {
+        std::optional<Block> res;
         if (accumulated_block)
             res.swap(accumulated_block);
         return res;
     }
 
+    // read first byte of compression method flag which defined in `CompressionMethodByte`
+    if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
+    {
+        ReadBufferFromString istr(sv.substr(1, sv.size() - 1));
+        return decodeAndSquashV1Impl(istr);
+    }
+
+    ReadBufferFromString istr(sv);
+    auto && compress_buffer = CompressedCHBlockChunkReadBuffer(istr);
+    return decodeAndSquashV1Impl(compress_buffer);
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuffer & istr)
+{
+    std::optional<Block> res;
+
     if (!accumulated_block)
     {
         size_t rows{};
         Block block = DecodeHeader(istr, codec.header, rows);
-        DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
-        if (block)
+        if (rows)
+        {
+            DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
             accumulated_block.emplace(std::move(block));
+        }
     }
     else
     {

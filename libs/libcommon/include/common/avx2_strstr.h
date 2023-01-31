@@ -235,12 +235,13 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
 #undef M
 }
 
-ALWAYS_INLINE static inline size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k)
-{
-#if defined(ADDRESS_SANITIZER)
-    return std::string_view{src, n}.find({needle, k}); // memchr@plt -> bcmp@plt
+#if defined(MEM_UTILS_FUNC_NO_SANITIZE)
+MEM_UTILS_FUNC_NO_SANITIZE
+#else
+ALWAYS_INLINE static inline
 #endif
-
+size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k)
+{
     const auto * p = avx2_strstr_impl(src, n, needle, k);
     return p ? p - src : std::string_view::npos;
 }
@@ -248,12 +249,14 @@ ALWAYS_INLINE static inline size_t avx2_strstr(std::string_view src, std::string
 {
     return avx2_strstr(src.data(), src.size(), needle.data(), needle.size());
 }
-ALWAYS_INLINE static inline const char * avx2_memchr(const char * src, size_t n, char target)
-{
-#if defined(ADDRESS_SANITIZER)
-    return static_cast<const char *>(std::memchr(src, target, n)); // memchr@plt
-#endif
 
+#if defined(MEM_UTILS_FUNC_NO_SANITIZE)
+MEM_UTILS_FUNC_NO_SANITIZE
+#else
+ALWAYS_INLINE static inline
+#endif
+const char * avx2_memchr(const char * src, size_t n, char target)
+{
     if (unlikely(n < 1))
     {
         return nullptr;
