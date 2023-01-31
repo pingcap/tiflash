@@ -249,11 +249,10 @@ struct TiFlashProxyConfig
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         auto disaggregated_mode = getDisaggregatedMode(config);
-        // todo: remove after AutoScaler is stable.
-        bool use_autoscaler = useAutoScaler(config);
 
         // tiflash_compute doesn't need proxy.
-        if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+        // todo: remove after AutoScaler is stable.
+        if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
             return;
 
         if (!config.has(config_prefix))
