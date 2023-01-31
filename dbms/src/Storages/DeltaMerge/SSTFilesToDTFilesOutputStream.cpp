@@ -324,7 +324,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::updateRangeFromNonEmptyBlock(Bl
     auto const block_start = rowkey_column.getRowKeyValue(0);
     auto const block_end = rowkey_column.getRowKeyValue(pk_col.column->size() - 1) //
                                .toRowKeyValue()
-                               .toPrefixNext(); // because range is right-open.
+                               .toNext(); // because range is right-open.
 
     // Note: The underlying stream ensures that one row key will not fall into two blocks (when there are multiple versions).
     // So we will never have overlapped range.

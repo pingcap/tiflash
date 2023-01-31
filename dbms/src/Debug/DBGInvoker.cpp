@@ -127,6 +127,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("gc_global_storage_pool", dbgFuncTriggerGlobalPageStorageGC);
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
+
+    regSchemalessFunc("get_active_threads_in_dynamic_thread_pool", dbgFuncActiveThreadsInDynamicThreadPool);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

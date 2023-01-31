@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,36 +14,14 @@
 
 #pragma once
 
+#include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <common/types.h>
 
 #include <memory>
-#include <utility>
 
 namespace DB
 {
-struct ExecutionResult
-{
-    bool is_success;
-    String err_msg;
-
-    void verify()
-    {
-        RUNTIME_CHECK(is_success, err_msg);
-    }
-
-    static ExecutionResult success()
-    {
-        return {true, ""};
-    }
-
-    static ExecutionResult fail(const String & err_msg)
-    {
-        RUNTIME_CHECK(!err_msg.empty());
-        return {false, err_msg};
-    }
-};
-
 class ProcessListEntry;
 using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
 
@@ -61,7 +39,7 @@ public:
 
     virtual void cancel() = 0;
 
-    virtual String dump() const = 0;
+    virtual String toString() const = 0;
 
     virtual int estimateNewThreadCount() = 0;
 

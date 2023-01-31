@@ -590,13 +590,10 @@ private:
 enum class TotalsMode
 {
     /// Count HAVING for all read rows;
-    ///  including those not in max_rows_to_group_by
-    ///  and have not passed HAVING after grouping.
     BEFORE_HAVING = 0,
     /// Count on all rows except those that have not passed HAVING;
-    ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
     AFTER_HAVING_INCLUSIVE = 1,
-    /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
+    /// Include only the rows that passed and HAVING.
     AFTER_HAVING_EXCLUSIVE = 2,
     /// Automatically select between INCLUSIVE and EXCLUSIVE,
     AFTER_HAVING_AUTO = 3,

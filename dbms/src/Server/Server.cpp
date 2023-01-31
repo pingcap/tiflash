@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
@@ -247,6 +248,10 @@ struct TiFlashProxyConfig
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
+        auto disaggregated_mode = getDisaggregatedMode(config);
+        // tiflash_compute doesn't need proxy.
+        if (disaggregated_mode == DisaggregatedMode::Compute)
+            return;
         if (!config.has(config_prefix))
             return;
 
@@ -267,7 +272,6 @@ struct TiFlashProxyConfig
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
-            auto disaggregated_mode = getDisaggregatedMode(config);
             args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
 
             for (auto && [k, v] : args_map)
@@ -842,10 +846,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
-    proxy_runner.run();
-
     if (proxy_conf.is_proxy_runnable)
     {
+        proxy_runner.run();
+
         LOG_INFO(log, "wait for tiflash proxy initializing");
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1277,6 +1281,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
+    // For test mode, TaskScheduler is controlled by test case.
+    bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
+    if (enable_pipeline)
+    {
+        auto get_pool_size = [](const auto & setting) {
+            return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+        };
+        TaskSchedulerConfig config{get_pool_size(settings.pipeline_task_thread_pool_size)};
+        assert(!TaskScheduler::instance);
+        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+    }
+    SCOPE_EXIT({
+        if (enable_pipeline)
+        {
+            assert(TaskScheduler::instance);
+            TaskScheduler::instance.reset();
+        }
+    });
+
     if (settings.enable_async_grpc_client)
     {
         auto size = settings.grpc_completion_queue_pool_size;
@@ -1357,6 +1380,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
         SCOPE_EXIT({
+            if (!proxy_conf.is_proxy_runnable)
+            {
+                tmt_context.setStatusTerminated();
+                return;
+            }
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
             {
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");

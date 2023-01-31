@@ -25,13 +25,13 @@ const String StorageDisaggregated::ExecIDPrefixForTiFlashStorageSender = "exec_i
 StorageDisaggregated::StorageDisaggregated(
     Context & context_,
     const TiDBTableScan & table_scan_,
-    const PushDownFilter & push_down_filter_)
+    const FilterConditions & filter_conditions_)
     : IStorage()
     , context(context_)
     , table_scan(table_scan_)
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
-    , push_down_filter(push_down_filter_)
+    , filter_conditions(filter_conditions_)
 {
 }
 
@@ -55,7 +55,7 @@ BlockInputStreams StorageDisaggregated::read(
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
-    pushDownFilter(pipeline);
+    filterConditions(pipeline);
 
     return pipeline.streams;
 }
@@ -173,7 +173,7 @@ tipb::Executor StorageDisaggregated::buildTableScanTiPB()
     // TODO: For now, to avoid versions of tiflash_compute nodes and tiflash_storage being different,
     // disable filter push down to avoid unsupported expression in tiflash_storage.
     // Uncomment this when we are sure versions are same.
-    // executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
+    // executor = filter_conditions.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
 
     tipb::Executor ts_exec;
     ts_exec.set_tp(tipb::ExecType::TypeTableScan);
@@ -256,7 +256,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::pushDownFilter(DAGPipeline & pipeline)
+void StorageDisaggregated::filterConditions(DAGPipeline & pipeline)
 {
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
@@ -265,12 +265,12 @@ void StorageDisaggregated::pushDownFilter(DAGPipeline & pipeline)
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
-    if (push_down_filter.hasValue())
+    if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), push_down_filter, *analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, *analyzer, log, pipeline);
 
-        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[push_down_filter.executor_id];
+        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
     }
 }
