@@ -111,7 +111,7 @@ ColumnPtr ColumnFileInMemoryReader::getVersionColumn()
     return cols_data_cache[1];
 }
 
-size_t ColumnFileInMemoryReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileInMemoryReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     memory_file.fillColumns(*col_defs, output_cols.size(), cols_data_cache);
 
