@@ -2294,16 +2294,17 @@ void NO_INLINE joinBlockImplNullAwareInternalWork(
     std::list<NullAwareJoinHelper<Map> *> * helpers_list_2)
 {
     size_t block_columns = block.columns();
+    MutableColumns columns;
+    columns.reserve(block_columns);
+
     while (!helpers_list.empty())
     {
-        size_t max_pace = max_block_size / helpers_list.size();
-        MutableColumns columns;
-        columns.reserve(block_columns);
+        columns.clear();
         for (size_t i = 0; i < block_columns; ++i)
         {
-            const ColumnWithTypeAndName & src_column = block.getByPosition(i);
-            columns.emplace_back(src_column.column->cloneEmpty());
+            columns.emplace_back(block.getByPosition(i).column->cloneEmpty());
         }
+        size_t max_pace = max_block_size / helpers_list.size();
         size_t current_offset = 0;
         auto helper_it = helpers_list.begin();
         while (helper_it != helpers_list.end())
@@ -2332,6 +2333,8 @@ void NO_INLINE joinBlockImplNullAwareInternalWork(
             if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
             {
                 other_condition_ptr->execute(exec_block);
+                /// TODO: if other condition has filtered many rows, we should consider to reconstruct
+                /// the block to reduce the cost of processing equal expression.
             }
 
             ConstNullMapPtr eq_null_map = nullptr;
@@ -2557,7 +2560,6 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     }
     RUNTIME_ASSERT(helpers.size() == rows, "NullAwareJoinHelper size must be equal to block size");
 
-    size_t block_columns = block.columns();
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
         joinBlockImplNullAwareInternalWork<KIND, STRICTNESS, Map, true>(
@@ -2591,14 +2593,12 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
 
-    size_t num_columns_to_add = block_columns - left_columns;
+    size_t num_columns_to_add = block.columns() - left_columns;
 
-    MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add);
+    MutableColumns added_columns(num_columns_to_add);
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
-        const ColumnWithTypeAndName & src_column = block.getByPosition(i + left_columns);
-        added_columns.push_back(src_column.column->cloneEmpty());
+        added_columns[i] = block.getByPosition(i + left_columns).column->cloneEmpty();
     }
 
     for (size_t i = 0; i < rows; ++i)
@@ -2634,13 +2634,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
-        block.safeGetByPosition(i + left_columns).column = std::move(added_columns[i]);
+        block.getByPosition(i + left_columns).column = std::move(added_columns[i]);
     }
 
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
     {
         for (size_t i = 0; i < left_columns; ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, -1);
     }
 }
 
