@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/ClusterIdHolder.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogFormatter.h>
 #include <Encryption/DataKeyManager.h>

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ClusterIdHolder.h>
 #include <Common/UnifiedLogFormatter.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
