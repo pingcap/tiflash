@@ -39,6 +39,7 @@ struct BlockInfo
       * Otherwise -1.
       */
 
+    // todo remove is_overflows in next major version(v7.0.0)
 #define APPLY_FOR_BLOCK_INFO_FIELDS(M) \
     M(bool, is_overflows, false, 1)    \
     M(Int32, bucket_num, -1, 2)
