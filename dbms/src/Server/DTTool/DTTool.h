@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #pragma once
-
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogFormatter.h>
 #include <Encryption/DataKeyManager.h>
