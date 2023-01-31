@@ -954,6 +954,19 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     return res;
 }
 
+static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order)
+{
+    if (is_fast_scan)
+    {
+        return ReadMode::Fast;
+    }
+    if (db_context.getSettingsRef().dt_enable_bitmap_filter && !keep_order)
+    {
+        return ReadMode::Bitmap;
+    }
+    return ReadMode::Normal;
+}
+
 BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const DB::Settings & db_settings,
                                         const ColumnDefines & columns_to_read,
@@ -1000,7 +1013,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+        getReadMode(db_context, is_fast_scan, keep_order),
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
