@@ -38,7 +38,7 @@ using diagnosticspb::SearchLogResponse;
     ::diagnosticspb::ServerInfoResponse * response)
 try
 {
-    if (context.isDisaggregatedComputeMode())
+    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
     {
         String err_msg = "tiflash compute node should be managed by AutoScaler instead of PD, this grpc should not be called be AutoScaler for now";
         LOG_ERROR(log, err_msg);

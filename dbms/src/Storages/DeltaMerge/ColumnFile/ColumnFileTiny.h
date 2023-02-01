@@ -174,7 +174,7 @@ public:
     ColumnPtr getPKColumn();
     ColumnPtr getVersionColumn();
 
-    size_t readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
+    std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
 

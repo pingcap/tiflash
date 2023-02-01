@@ -399,7 +399,7 @@ public:
 
     // Use for DeltaMergeBlockInputStream to read delta rows, and merge with stable rows.
     // This method will check whether offset and limit are valid. It only return those valid rows.
-    size_t readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range);
+    size_t readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range, std::vector<UInt32> * row_ids = nullptr);
 
     // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
     // If there are continuous blocks, they will be squashed into one block.
@@ -420,6 +420,7 @@ private:
     ColumnFileSetInputStream persisted_files_input_stream;
 
     bool persisted_files_done = false;
+    size_t read_rows = 0;
 
 public:
     DeltaValueInputStream(const DMContext & context_,
@@ -434,6 +435,15 @@ public:
     Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
 
     Block read() override
+    {
+        auto block = doRead();
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        return block;
+    }
+
+    // Read block from old to new.
+    Block doRead()
     {
         if (persisted_files_done)
             return mem_table_input_stream.read();

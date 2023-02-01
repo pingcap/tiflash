@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -214,7 +215,9 @@ public:
                                                     size_t expected_block_size,
                                                     bool enable_handle_clean_read,
                                                     bool is_fast_scan = false,
-                                                    bool enable_del_clean_read = false);
+                                                    bool enable_del_clean_read = false,
+                                                    const std::vector<IdSetPtr> & read_packs = {},
+                                                    bool need_row_id = false);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 

@@ -63,7 +63,7 @@ public:
      * written randomly in the segment range.
      */
     void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
-    void ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
     void ingestDTFileByReplace(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
     void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void deleteRangeSegment(PageId segment_id);
@@ -92,6 +92,13 @@ public:
 
     void printFinishedOperations() const;
 
+    std::vector<Block> readSegment(PageId segment_id, bool need_row_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentRowId(PageId segment_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentHandle(PageId segment_id, const RowKeyRanges & ranges);
+    void writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end);
+    RowKeyValue buildRowKeyValue(Int64 key);
+    RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+
 protected:
     std::mt19937 random;
 
@@ -113,6 +120,8 @@ protected:
      * For example, if you have changed the settings, you should grab a new DMContext.
      */
     void reloadDMContext();
+
+    std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageId segment_id);
 
 protected:
     inline static constexpr PageId NAMESPACE_ID = 100;

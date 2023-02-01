@@ -250,9 +250,12 @@ struct TiFlashProxyConfig
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         auto disaggregated_mode = getDisaggregatedMode(config);
+
         // tiflash_compute doesn't need proxy.
-        if (disaggregated_mode == DisaggregatedMode::Compute)
+        // todo: remove after AutoScaler is stable.
+        if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
             return;
+
         if (!config.has(config_prefix))
             return;
 
@@ -910,6 +913,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
+    global_context->setUseAutoScaler(useAutoScaler(config()));
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
