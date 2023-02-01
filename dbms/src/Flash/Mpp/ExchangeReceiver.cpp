@@ -472,6 +472,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 req.source_index,
                 local_request_handler,
                 enable_fine_grained_shuffle_flag);
+            --connection_uncreated_num;
         }
         else
         {
@@ -483,8 +484,8 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             });
 
             ++thread_count;
+            --connection_uncreated_num;
         }
-        --connection_uncreated_num;
     }
 
     // TODO: reduce this thread in the future.
