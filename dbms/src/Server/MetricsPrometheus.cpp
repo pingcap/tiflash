@@ -29,6 +29,7 @@
 #include <Poco/Net/SecureServerSocket.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
+#include <common/logger_useful.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
 #include <prometheus/collectable.h>
@@ -40,20 +41,21 @@ namespace DB
 {
 namespace
 {
-std::string getHostName() {
-  char hostname[1024];
-
-  if (::gethostname(hostname, sizeof(hostname))) {
-    return {};
-  }
-  return hostname;
+std::string getHostName()
+{
+    char hostname[1024];
+    if (::gethostname(hostname, sizeof(hostname)))
+    {
+        return {};
+    }
+    return hostname;
 }
 
 auto microsecondsUTC()
 {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
-}
+} // namespace
 
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
@@ -159,7 +161,7 @@ MetricsPrometheus::MetricsPrometheus(
     const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
     , async_metrics(async_metrics_)
-    , log(&Poco::Logger::get("Prometheus"))
+    , log(Logger::get("Prometheus"))
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
