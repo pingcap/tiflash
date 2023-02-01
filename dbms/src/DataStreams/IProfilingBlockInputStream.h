@@ -210,7 +210,7 @@ protected:
         children.push_back(child);
     }
 
-    uint64_t collectCPUTimeImpl(bool is_root) override;
+    uint64_t collectCPUTimeNsImpl(bool is_root) override;
 
 private:
     bool enabled_extremes = false;

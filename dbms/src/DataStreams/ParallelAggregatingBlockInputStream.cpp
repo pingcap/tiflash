@@ -235,14 +235,14 @@ void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
     buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
 }
 
-uint64_t ParallelAggregatingBlockInputStream::collectCPUTimeImpl(bool is_root)
+uint64_t ParallelAggregatingBlockInputStream::collectCPUTimeNsImpl(bool is_root)
 {
-    uint64_t cpu_time = impl ? impl->collectCPUTime(is_root) : 0;
+    uint64_t cpu_time_ns = impl ? impl->collectCPUTimeNs(is_root) : 0;
     forEachChild([&](IBlockInputStream & child) {
-        cpu_time += child.collectCPUTime(true);
+        cpu_time_ns += child.collectCPUTimeNs(true);
         return false;
     });
-    return cpu_time;
+    return cpu_time_ns;
 }
 
 } // namespace DB

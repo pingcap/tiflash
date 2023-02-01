@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Executor/ARU.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <common/types.h>
@@ -43,7 +44,7 @@ public:
 
     virtual int estimateNewThreadCount() = 0;
 
-    virtual UInt64 collectCPUTime() = 0;
+    virtual ARU collectARU() = 0;
 
 protected:
     virtual ExecutionResult execute(ResultHandler) = 0;

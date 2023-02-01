@@ -25,6 +25,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Flash/executeQuery.h>
+#include <Flash/Executor/ARU.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Storages/Transaction/LockException.h>
@@ -56,7 +57,7 @@ DAGDriver<false>::DAGDriver(
     , dag_response(dag_response_)
     , writer(nullptr)
     , internal(internal_)
-    , log(&Poco::Logger::get("DAGDriver"))
+    , log(Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -76,7 +77,7 @@ DAGDriver<true>::DAGDriver(
     , dag_response(nullptr)
     , writer(writer_)
     , internal(internal_)
-    , log(&Poco::Logger::get("DAGDriver"))
+    , log(Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -92,6 +93,7 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
+    // TODO use query executor for cop/batch cop.
     BlockIO streams = executeAsBlockIO(context, internal);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
@@ -148,6 +150,18 @@ try
             auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }
+    }
+
+    auto aru = toARU(streams.in->estimateCPUTimeNs());
+    if constexpr (!batch)
+    {
+        LOG_INFO(log, "cop finish with aru: {}", aru);
+        GET_METRIC(tiflash_aru, type_cop).Increment(aru);
+    }
+    else
+    {
+        LOG_INFO(log, "batch cop finish with aru: {}", aru);
+        GET_METRIC(tiflash_aru, type_batch).Increment(aru);
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)

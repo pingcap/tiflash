@@ -109,12 +109,12 @@ void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multi
     }
 }
 
-uint64_t IBlockInputStream::collectCPUTime(bool is_root)
+uint64_t IBlockInputStream::collectCPUTimeNs(bool is_root)
 {
     if (cpu_time_collected)
         return 0;
 
     cpu_time_collected = true;
-    return collectCPUTimeImpl(is_root);
+    return collectCPUTimeNsImpl(is_root);
 }
 } // namespace DB

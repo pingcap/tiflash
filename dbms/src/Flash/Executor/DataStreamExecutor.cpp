@@ -68,8 +68,8 @@ int DataStreamExecutor::estimateNewThreadCount()
     return data_stream->estimateNewThreadCount();
 }
 
-UInt64 DataStreamExecutor::collectCPUTime()
+ARU DataStreamExecutor::collectARU()
 {
-    return data_stream->estimateCPUTime();
+    return toARU(data_stream->estimateCPUTimeNs());
 }
 } // namespace DB

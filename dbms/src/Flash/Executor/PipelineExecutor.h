@@ -59,7 +59,7 @@ public:
 
     int estimateNewThreadCount() override;
 
-    UInt64 collectCPUTime() override;
+    ARU collectARU() override;
 
 protected:
     ExecutionResult execute(ResultHandler result_handler) override;

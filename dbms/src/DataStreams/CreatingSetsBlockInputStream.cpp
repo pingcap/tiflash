@@ -291,14 +291,14 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
 }
 
-uint64_t CreatingSetsBlockInputStream::collectCPUTimeImpl(bool /*is_root*/)
+uint64_t CreatingSetsBlockInputStream::collectCPUTimeNsImpl(bool /*is_root*/)
 {
-    uint64_t cpu_time = 0;
+    uint64_t cpu_time_ns = 0;
     forEachChild([&](IBlockInputStream & child) {
-        cpu_time += child.collectCPUTime(true);
+        cpu_time_ns += child.collectCPUTimeNs(true);
         return false;
     });
-    return cpu_time;
+    return cpu_time_ns;
 }
 
 } // namespace DB

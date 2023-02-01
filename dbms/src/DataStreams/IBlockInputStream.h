@@ -108,13 +108,13 @@ public:
         return cnt;
     }
 
-    uint64_t estimateCPUTime()
+    uint64_t estimateCPUTimeNs()
     {
         resetCPUTimeCompute();
-        return collectCPUTime(true);
+        return collectCPUTimeNs(true);
     }
 
-    uint64_t collectCPUTime(bool is_root);
+    uint64_t collectCPUTimeNs(bool is_root);
 
     virtual ~IBlockInputStream() = default;
 
@@ -175,7 +175,7 @@ public:
     virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
 protected:
-    virtual uint64_t collectCPUTimeImpl(bool /*is_root*/) { return 0; }
+    virtual uint64_t collectCPUTimeNsImpl(bool /*is_root*/) { return 0; }
 
     void resetNewThreadCountCompute()
     {

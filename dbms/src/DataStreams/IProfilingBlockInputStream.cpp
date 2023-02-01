@@ -431,14 +431,14 @@ Block IProfilingBlockInputStream::getExtremes()
     return res;
 }
 
-uint64_t IProfilingBlockInputStream::collectCPUTimeImpl(bool is_root)
+uint64_t IProfilingBlockInputStream::collectCPUTimeNsImpl(bool is_root)
 {
-    uint64_t cpu_time = is_root ? info.execution_time : 0;
+    uint64_t cpu_time_ns = is_root ? info.execution_time : 0;
     forEachChild([&](IBlockInputStream & child) {
-        cpu_time += child.collectCPUTime(false);
+        cpu_time_ns += child.collectCPUTimeNs(false);
         return false;
     });
-    return cpu_time;
+    return cpu_time_ns;
 }
 
 } // namespace DB
