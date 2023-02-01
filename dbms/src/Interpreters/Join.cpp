@@ -1743,6 +1743,8 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
             }
             total_rows += rows_right;
         }
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+            total_rows = std::min(total_rows, 1);
         return total_rows;
     }
     static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join, size_t total_right_rows, IColumn::Offsets & offsets_for_replication)
