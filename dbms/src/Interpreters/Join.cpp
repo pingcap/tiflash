@@ -2024,11 +2024,10 @@ template <typename Map>
 class NullAwareJoinHelper
 {
 public:
-    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, typename Map::SegmentType::HashTable::ConstLookupResult lookup_res)
+    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, const typename Map::mapped_type::Base_t * map_it)
         : row_num(row_num)
         , step(s)
-        , lookup_res(lookup_res)
-        , seg_it(nullptr, nullptr)
+        , map_it(map_it)
     {
         null_pos = 0;
         null_list = nullptr;
@@ -2065,11 +2064,12 @@ public:
         {
             if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
             {
-                for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(lookup_res->getMapped()); current != nullptr; current = current->next)
+                for (size_t i = 0; i < max_pace && map_it != nullptr; ++i)
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
-                        added_columns[j + left_columns]->insertFrom(*current->block->getByPosition(j).column.get(), current->row_num);
+                        added_columns[j + left_columns]->insertFrom(*map_it->block->getByPosition(j).column.get(), map_it->row_num);
                     ++current_offset;
+                    map_it = map_it->next;
                 }
             }
             else
@@ -2128,49 +2128,65 @@ public:
         {
             bool to_end = false;
 
-            typename Map::SegmentType::HashTable::const_iterator end(nullptr, nullptr);
-            while (current_offset - offset.first < max_pace)
+            /// Initialization
+            if (current_segment == 0)
             {
-                while (seg_it.isNull())
+                current_segment = 1;
+
+                seg_it = map.getSegmentTable(0).begin();
+                end_it = map.getSegmentTable(0).end();
+                if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+                    map_it = nullptr;
+            }
+
+            for (size_t i = 0; i < max_pace; ++i)
+            {
+                if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
                 {
-                    if (current_segment + 1 > map.getSegmentSize())
+                    if (map_it != nullptr)
+                    {
+                        for (size_t j = 0; j < num_columns_to_add; ++j)
+                            added_columns[j + left_columns]->insertFrom(*map_it->block->getByPosition(j).column.get(), map_it->row_num);
+                        ++current_offset;
+
+                        map_it = map_it->next;
+                        if (map_it == nullptr)
+                            ++seg_it;
+                    }
+                }
+                while (seg_it == end_it)
+                {
+                    if (current_segment >= map.getSegmentSize())
                     {
                         to_end = true;
                         break;
                     }
                     current_segment += 1;
 
-                    seg_it = map.getSegmentTable(current_segment).begin();
-                    end = map.getSegmentTable(current_segment).end();
-
-                    if (seg_it == end)
-                        seg_it = typename Map::SegmentType::HashTable::const_iterator(nullptr, nullptr);
+                    seg_it = map.getSegmentTable(current_segment - 1).begin();
+                    end_it = map.getSegmentTable(current_segment - 1).end();
                 }
                 if (to_end)
                     break;
 
-                if (end.isNull())
-                    end = map.getSegmentTable(current_segment).end();
+                if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+                {
+                    map_it = &static_cast<const typename Map::mapped_type::Base_t &>(seg_it->getMapped());
+                    for (size_t j = 0; j < num_columns_to_add; ++j)
+                        added_columns[j + left_columns]->insertFrom(*map_it->block->getByPosition(j).column.get(), map_it->row_num);
+                    ++current_offset;
 
-                if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+                    map_it = map_it->next;
+                    if (map_it == nullptr)
+                        ++seg_it;
+                }
+                else
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                         added_columns[j + left_columns]->insertFrom(*seg_it->getMapped().block->getByPosition(j).column.get(), seg_it->getMapped().row_num);
                     ++current_offset;
+                    ++seg_it;
                 }
-                else if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
-                {
-                    for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(seg_it->getMapped()); current != nullptr; current = current->next)
-                    {
-                        for (size_t j = 0; j < num_columns_to_add; ++j)
-                            added_columns[j + left_columns]->insertFrom(*current->block->getByPosition(j).column.get(), current->row_num);
-                        ++current_offset;
-                    }
-                }
-
-                ++seg_it;
-                if (seg_it == end)
-                    seg_it = typename Map::SegmentType::HashTable::const_iterator(nullptr, nullptr);
             }
             if (to_end && offset.first == current_offset)
             {
@@ -2212,7 +2228,6 @@ public:
                     setResult(false, true);
                 else
                     setResult(false, false);
-                return true;
                 return true;
             }
             if ((*eq_null_map)[i])
@@ -2270,10 +2285,13 @@ private:
     size_t null_pos;
     Join::RowRefList * null_list;
 
-    /// Hash table
-    typename Map::SegmentType::HashTable::ConstLookupResult lookup_res;
+    /// Mapped data for one cell.
+    const typename Map::mapped_type::Base_t * map_it;
+    /// Current segment id.
+    /// 0 means seg_it and end_it have not initialized.
     size_t current_segment;
     typename Map::SegmentType::HashTable::const_iterator seg_it;
+    typename Map::SegmentType::HashTable::const_iterator end_it;
 
     /// (is_null, result)
     std::pair<bool, bool> result;
@@ -2291,7 +2309,7 @@ void NO_INLINE joinBlockImplNullAwareInternalWork(
     String null_aware_eq_column,
     ExpressionActionsPtr null_aware_eq_ptr,
     std::list<NullAwareJoinHelper<Map> *> & helpers_list,
-    std::list<NullAwareJoinHelper<Map> *> * helpers_list_2)
+    std::list<NullAwareJoinHelper<Map> *> * keys_equal_failed_list)
 {
     size_t block_columns = block.columns();
     MutableColumns columns;
@@ -2413,7 +2431,8 @@ void NO_INLINE joinBlockImplNullAwareInternalWork(
                     {
                         if ((*it)->getStep() != NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND)
                         {
-                            helpers_list_2->push_back(*it);
+                            /// If step is not NOTNULL_CHECK_OTHER_COND, it means there is no row that meets other conditions.
+                            keys_equal_failed_list->push_back(*it);
                             it = helpers_list.erase(it);
                             continue;
                         }
@@ -2537,9 +2556,10 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
         if (it != internal_map.end())
         {
+            auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
-                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, it);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, map_it);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     helpers.back().setResult(false, true);
                 else
@@ -2547,7 +2567,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else
             {
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND, it);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND, map_it);
                 equal_helpers_list.push_back(&helpers.back());
             }
         }
