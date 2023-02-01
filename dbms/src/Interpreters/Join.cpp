@@ -1915,7 +1915,9 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         for (size_t i = 0; i < block.columns(); ++i)
         {
             dst_columns[i] = block.getByPosition(i).column->cloneEmpty();
-            dst_columns[i]->reserve(total_right_rows * (end - start));
+            size_t reserved_rows = total_right_rows * (end - start);
+            if likely (reserved_rows > 0)
+                dst_columns[i]->reserve(reserved_rows);
         }
         IColumn::Offset current_offset = 0;
         std::unique_ptr<IColumn::Filter> is_row_matched = std::make_unique<IColumn::Filter>(end - start);
