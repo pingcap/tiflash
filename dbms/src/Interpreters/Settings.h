@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ struct Settings
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.")                                                                                                                                                                   \
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.")                                                                                                                      \
     M(SettingInt64, batch_send_min_limit, DEFAULT_BATCH_SEND_MIN_LIMIT, "default minimal chunk size of exchanging data among TiFlash.")                                                                                                 \
+    M(SettingInt64, batch_send_min_limit_compression, -1, "default minimal chunk size of exchanging data among TiFlash when using data compression.") \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.")                                                                                                                                          \
     M(SettingUInt64, mpp_task_timeout, DEFAULT_MPP_TASK_TIMEOUT, "mpp task max endurable time.")                                                                                                                                        \
     M(SettingUInt64, mpp_task_running_timeout, DEFAULT_MPP_TASK_RUNNING_TIMEOUT, "mpp task max time that running without any progress.")                                                                                                \
@@ -248,6 +249,7 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingBool, dt_enable_read_thread, true, "Enable storage read thread or not")                                                                                                                                                    \
+    M(SettingBool, dt_enable_bitmap_filter, true, "Use bitmap filter to read data or not")                                                                                                                                              \
                                                                                                                                                                                                                                         \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
@@ -298,7 +300,9 @@ struct Settings
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
     M(SettingUInt64, max_spilled_size_per_spill, 1024ULL * 1024 * 1024, "Max spilled data size per spill, 1GB as the default value.")                                                                                                   \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_planner, true, "Enable planner")
+    M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
+    M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
+    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
 
@@ -52,10 +53,21 @@ private:
     ColumnDefines read_columns;
 };
 
+template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_)
+    explicit ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_)
+        : rows(inputs_.size(), 0)
+        , precede_stream_rows(0)
+    {
+        children.insert(children.end(), inputs_.begin(), inputs_.end());
+        current_stream = children.begin();
+    }
+
+    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_)
+        : rows(std::move(rows_))
+        , precede_stream_rows(0)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -83,6 +95,7 @@ public:
             else
             {
                 (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
                 ++current_stream;
             }
         }
@@ -99,10 +112,18 @@ public:
             res = (*current_stream)->read();
 
             if (res)
+            {
+                res.setStartOffset(res.startOffset() + precede_stream_rows);
+                if constexpr (need_row_id)
+                {
+                    res.setSegmentRowIdCol(createSegmentRowIdCol(res.startOffset(), res.rows()));
+                }
                 break;
+            }
             else
             {
                 (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
                 ++current_stream;
             }
         }
@@ -111,7 +132,20 @@ public:
     }
 
 private:
+    ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit)
+    {
+        auto seg_row_id_col = ColumnUInt32::create();
+        ColumnUInt32::Container & res = seg_row_id_col->getData();
+        res.resize(limit);
+        for (UInt64 i = 0; i < limit; ++i)
+        {
+            res[i] = i + start;
+        }
+        return seg_row_id_col;
+    }
     BlockInputStreams::iterator current_stream;
+    std::vector<size_t> rows;
+    size_t precede_stream_rows;
 };
 
 } // namespace DM
