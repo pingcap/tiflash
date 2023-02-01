@@ -709,16 +709,16 @@ void WaitCheckRegionReady(
                 const auto & region_error = resp.region_error();
                 if (region_error.has_region_not_found() || region_error.has_epoch_not_match())
                     need_retry = false;
-            }
-            if (!need_retry)
-            {
-                // `read_index` can be zero if region error happens.
-                // It is not worthy waiting applying and reading index again.
                 LOG_DEBUG(log,
                           "neglect error region {} not found {} epoch not match {}",
                           region_id,
                           region_error.has_region_not_found(),
                           region_error.has_epoch_not_match());
+            }
+            if (!need_retry)
+            {
+                // `read_index` can be zero if region error happens.
+                // It is not worthy waiting applying and reading index again.
                 // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
                 regions_to_check.emplace(region_id, resp.read_index());
                 remain_regions.erase(region_id);
