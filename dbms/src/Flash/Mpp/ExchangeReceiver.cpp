@@ -362,7 +362,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     catch (...)
     {
         std::lock_guard lock(mu);
-        RUNTIME_ASSERT(getAliveConnectionNumNolock() == 0, "We should wait the close of all connections");
+        RUNTIME_ASSERT(live_connections == 0, "We should wait the close of all connections");
         RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
@@ -383,7 +383,7 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
     std::unique_lock lock(mu);
     auto pred = [&] {
-        return getAliveConnectionNumNolock() == 0;
+        return live_connections == 0;
     };
     cv.wait(lock, pred);
 
