@@ -396,7 +396,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
-        pipeline.streams.size(),
+        std::min(max_streams, pipeline.streams.size()),
         key_names,
         collators,
         aggregate_descriptions,
