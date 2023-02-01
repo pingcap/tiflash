@@ -183,7 +183,6 @@ private:
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;
-    const Int32 expect_created_connections;
 
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
@@ -194,9 +193,8 @@ private:
     std::condition_variable cv;
     /// should lock `mu` when visit these members
     Int32 live_local_connections;
-    Int32 actual_created_connections;
-    Int32 closed_connections;
-    bool setup_all_conns_success;
+    Int32 live_connections;
+    Int32 connection_uncreated_num;
     ExchangeReceiverState state;
     String err_msg;
 

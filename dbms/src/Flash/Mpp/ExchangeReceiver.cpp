@@ -314,12 +314,10 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
-    , expect_created_connections(source_num)
     , thread_manager(newThreadManager())
     , live_local_connections(0)
-    , actual_created_connections(0)
-    , closed_connections(0)
-    , setup_all_conns_success(true)
+    , live_connections(source_num)
+    , connection_uncreated_num(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -337,9 +335,9 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     }
     catch (...)
     {
-        handleConnectionAfterException();
         try
         {
+            handleConnectionAfterException();
             cancel();
             thread_manager->wait();
         }
@@ -371,20 +369,12 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 }
 
 template <typename RPCContext>
-Int32 ExchangeReceiverBase<RPCContext>::getAliveConnectionNumNolock()
-{
-    if (likely(setup_all_conns_success))
-        return expect_created_connections - closed_connections;
-    return actual_created_connections - closed_connections;
-}
-
-template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
 {
     std::lock_guard lock(mu);
-    setup_all_conns_success = false;
+    live_connections -= connection_uncreated_num;
 
-    // some connectionDone may have been blocked, wake them up and recheck the condition.
+    // some cv may have been blocked, wake them up and recheck the condition.
     cv.notify_all();
 }
 
@@ -446,22 +436,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
-    ++actual_created_connections;
     ++live_local_connections;
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
-{
-    std::lock_guard lock(mu);
-    ++actual_created_connections;
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum(Int32 conn_num)
-{
-    std::lock_guard lock(mu);
-    actual_created_connections += conn_num;
 }
 
 template <typename RPCContext>
@@ -497,6 +472,8 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                 req.source_index,
                 local_request_handler,
                 enable_fine_grained_shuffle_flag);
+
+            --connection_uncreated_num;
         }
         else
         {
@@ -508,6 +485,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             });
 
             ++thread_count;
+            --connection_uncreated_num;
         }
     }
 
@@ -522,6 +500,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         });
 
         ++thread_count;
+        --connection_uncreated_num;
     }
 }
 
@@ -539,7 +518,6 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
-    addAsyncConnectionNum(alive_async_connections);
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
 
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
@@ -572,8 +550,6 @@ template <typename RPCContext>
 template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
-    addSyncConnectionNum();
-
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Decrement();
@@ -815,7 +791,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    Int32 alive_connection_num;
+    Int32 copy_live_connections;
     {
         std::lock_guard lock(mu);
 
@@ -827,23 +803,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
                 err_msg = local_err_msg;
         }
 
-        ++closed_connections;
-
-        // alive_connection_num may be incorrect.
-        // Because when setting up connections, one created connection may finish the task
-        // very quickly and exit before all connections have been set up.
-        // If all connections are created successfully, it's fine. However, we may fail to
-        // set up a connection after this quick closed connection has been closed. Then the
-        // variable alive_connection_num may be incorrect.
-        // For example:
-        //   1. expect_conn_num = 2 (connection names: connection_1, connection_2)
-        //   2. create connection_1
-        //   3. connection_1 done and call connectionDone() function
-        //   4. alive_connection_num is 1 after calculated.
-        //      (However, connection_2 has not been created yet, then we get an incorrect alive_connection_num)
-        //
-        // incorrect alive_connection_num only affect the log, and in terms of the programme's correctness, there is no bug.
-        alive_connection_num = getAliveConnectionNumNolock();
+        copy_live_connections = --live_connections;
     }
 
     LOG_DEBUG(
@@ -851,17 +811,17 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
         meet_error,
         local_err_msg,
-        alive_connection_num);
+        copy_live_connections);
 
-    if (alive_connection_num == 0)
+    if (copy_live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (alive_connection_num < 0)
+    else if (copy_live_connections < 0)
         throw Exception("alive_connection_num should not be less than 0!");
 
-    if (meet_error || alive_connection_num == 0)
+    if (meet_error || copy_live_connections == 0)
     {
         LOG_INFO(exc_log, "receiver finished");
         finishAllMsgChannels();
