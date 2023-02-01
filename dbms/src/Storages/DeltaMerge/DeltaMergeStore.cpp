@@ -403,10 +403,11 @@ void DeltaMergeStore::shutdown()
         return;
 
     LOG_TRACE(log, "Shutdown DeltaMerge start");
-    // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
-    // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
+    // Must shutdown storage path pool to make sure the DMFile remove callbacks
+    // won't remove dmfiles unexpectly.
+    path_pool->shutdown();
+    // shutdown storage pool and clean up the local DMFile remove callbacks
     storage_pool->shutdown();
-    storage_pool->dataUnregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
 
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);
@@ -917,7 +918,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         req_info,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -950,6 +952,19 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         res.push_back(stream);
     }
     return res;
+}
+
+static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order)
+{
+    if (is_fast_scan)
+    {
+        return ReadMode::Fast;
+    }
+    if (db_context.getSettingsRef().dt_enable_bitmap_filter && !keep_order)
+    {
+        return ReadMode::Bitmap;
+    }
+    return ReadMode::Normal;
 }
 
 BlockInputStreams DeltaMergeStore::read(const Context & db_context,
@@ -998,11 +1013,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+        getReadMode(db_context, is_fast_scan, keep_order),
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1179,7 +1195,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
     // Don't do compact on starting up.
-    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
     bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()

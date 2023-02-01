@@ -14,24 +14,8 @@
 
 #pragma once
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <DataTypes/FieldToDataType.h>
-#include <Debug/MockExecutor/AstToPBUtils.h>
-#include <Debug/MockExecutor/FuncSigMap.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Functions/FunctionFactory.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/convertFieldToType.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/TypeMapping.h>
-#include <Storages/Transaction/Types.h>
-#include <common/logger_useful.h>
-#include <common/types.h>
-#include <tipb/executor.pb.h>
-#include <tipb/select.pb.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -41,6 +25,11 @@ extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
 extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
+
+class ASTFunction;
+class ASTIdentifier;
+class Context;
+
 struct MPPCtx
 {
     Timestamp start_ts;
@@ -57,6 +46,9 @@ using MPPCtxPtr = std::shared_ptr<MPPCtx>;
 struct MPPInfo
 {
     Timestamp start_ts;
+    UInt64 query_ts;
+    UInt64 server_id;
+    UInt64 local_query_id;
     Int64 partition_id;
     Int64 task_id;
     const std::vector<Int64> sender_target_task_ids;
@@ -64,11 +56,17 @@ struct MPPInfo
 
     MPPInfo(
         Timestamp start_ts_,
+        UInt64 query_ts_,
+        UInt64 server_id_,
+        UInt64 local_query_id_,
         Int64 partition_id_,
         Int64 task_id_,
         const std::vector<Int64> & sender_target_task_ids_,
         const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
         : start_ts(start_ts_)
+        , query_ts(query_ts_)
+        , server_id(server_id_)
+        , local_query_id(local_query_id_)
         , partition_id(partition_id_)
         , task_id(task_id_)
         , sender_target_task_ids(sender_target_task_ids_)

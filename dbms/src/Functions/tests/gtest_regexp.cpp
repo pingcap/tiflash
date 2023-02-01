@@ -2244,6 +2244,17 @@ std::vector<String> getPatVec(const std::vector<T> & test_cases)
 }
 
 template <typename T>
+std::vector<String> getReplVec(const std::vector<T> & test_cases)
+{
+    std::vector<String> vecs;
+    vecs.reserve(test_cases.size());
+    for (const auto & elem : test_cases)
+        vecs.push_back(elem.replacement);
+
+    return vecs;
+}
+
+template <typename T>
 std::vector<Int64> getPosVec(const std::vector<T> & test_cases)
 {
     std::vector<Int64> vecs;
@@ -2749,7 +2760,15 @@ struct RegexpSubstrCase
         , match_type(mt)
     {}
 
-    static void setVecsWithoutNullMap(int param_num, const std::vector<RegexpSubstrCase> test_cases, std::vector<String> & results, std::vector<String> & exprs, std::vector<String> & pats, std::vector<Int64> & positions, std::vector<Int64> & occurs, std::vector<String> & match_types)
+    static void setVecsWithoutNullMap(
+        int param_num,
+        const std::vector<RegexpSubstrCase> test_cases,
+        std::vector<String> & results,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
     {
         results = getResultVec<String>(test_cases);
         switch (param_num)
@@ -2769,7 +2788,16 @@ struct RegexpSubstrCase
         }
     }
 
-    static void setVecsWithNullMap(int param_num, const std::vector<RegexpSubstrCase> test_cases, std::vector<String> & results, std::vector<std::vector<UInt8>> & null_map, std::vector<String> & exprs, std::vector<String> & pats, std::vector<Int64> & positions, std::vector<Int64> & occurs, std::vector<String> & match_types)
+    static void setVecsWithNullMap(
+        int param_num,
+        const std::vector<RegexpSubstrCase> test_cases,
+        std::vector<String> & results,
+        std::vector<std::vector<UInt8>> & null_map,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
     {
         null_map.clear();
         null_map.resize(REGEXP_SUBSTR_MAX_PARAM_NUM);
@@ -3096,74 +3124,105 @@ TEST_F(Regexp, RegexpSubstr)
     }
 }
 
-TEST_F(Regexp, testRegexpReplaceMatchType)
+struct RegexpReplaceCase
 {
-    String res;
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
-    const auto * ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "(?m)(?i)^b", "xxx", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "a\nxxx\nc");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", nullptr, res);
-    ASSERT_TRUE(res == "a\nxxx\nc");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "m", ci_collator, res);
-    ASSERT_TRUE(res == "a\nxxx\nc");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", binary_collator, res);
-    ASSERT_TRUE(res == "a\nB\nc");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "i", nullptr, res);
-    ASSERT_TRUE(res == "a\nB\nc");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "m", nullptr, res);
-    ASSERT_TRUE(res == "a\nB\nc");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "a\nB\n");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*B", "xxx", 1, 0, "s", nullptr, res);
-    ASSERT_TRUE(res == "xxx\n");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "is", nullptr, res);
-    ASSERT_TRUE(res == "xxx\n");
-}
+    RegexpReplaceCase(const String & res, const String & expr, const String & pat, const String & repl, Int64 pos = 1, Int64 occur = 1, const String & mt = "")
+        : result(res)
+        , expression(expr)
+        , pattern(pat)
+        , replacement(repl)
+        , position(pos)
+        , occurrence(occur)
+        , match_type(mt)
+    {}
 
-TEST_F(Regexp, testRegexpReplaceMySQLCases)
-{
-    // Test based on https://github.com/mysql/mysql-server/blob/mysql-cluster-8.0.17/mysql-test/t/regular_expressions_utf-8.test
-    String res;
-    DB::ReplaceRegexpImpl<false>::constant("aaa", "a", "X", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "XXX");
-    DB::ReplaceRegexpImpl<false>::constant("abc", "b", "X", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aXc");
-    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "b+", "X", 1, 1, "", nullptr, res);
-    ASSERT_TRUE(res == "aaaXccbbddaa");
-    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "b+", "X", 1, 2, "", nullptr, res);
-    ASSERT_TRUE(res == "aaabbccXddaa");
-    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "(b+)", "<\\1>", 1, 2, "", nullptr, res);
-    ASSERT_TRUE(res == "aaabbcc<bb>ddaa");
-    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "x+", "x", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aaabbccbbddaa");
-    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "b+", "x", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aaaxccxddaa");
-    DB::ReplaceRegexpImpl<false>::constant("aaab", "b", "x", 1, 2, "", nullptr, res);
-    ASSERT_TRUE(res == "aaab");
-    DB::ReplaceRegexpImpl<false>::constant("aaabccc", "b", "x", 1, 2, "", nullptr, res);
-    ASSERT_TRUE(res == "aaabccc");
-    DB::ReplaceRegexpImpl<false>::constant("abcbdb", "b", "X", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aXcXdX");
-    DB::ReplaceRegexpImpl<false>::constant("aaabcbdb", "b", "X", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aaaXcXdX");
-    DB::ReplaceRegexpImpl<false>::constant("aaabcbdb", "b", "X", 2, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aaaXcXdX");
-    DB::ReplaceRegexpImpl<false>::constant("aaabcbdb", "b", "X", 3, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aaaXcXdX");
-    DB::ReplaceRegexpImpl<false>::constant("aaa", "a", "X", 2, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aXX");
-    DB::ReplaceRegexpImpl<false>::constant("aaa", "a", "XX", 2, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "aXXXX");
-    DB::ReplaceRegexpImpl<false>::constant("c b b", "^([[:alpha:]]+)[[:space:]].*$", "\\1", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "c");
-    DB::ReplaceRegexpImpl<false>::constant("\U0001F450\U0001F450\U0001F450", ".", "a", 2, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "\U0001F450aa");
-    DB::ReplaceRegexpImpl<false>::constant("\U0001F450\U0001F450\U0001F450", ".", "a", 2, 2, "", nullptr, res);
-    ASSERT_TRUE(res == "\U0001F450\U0001F450a");
-}
+    RegexpReplaceCase(const String & res, const std::vector<UInt8> & null_map_, const String & expr, const String & pat, const String & repl, Int64 pos = 1, Int64 occur = 1, const String & mt = "")
+        : result(res)
+        , null_map(null_map_)
+        , expression(expr)
+        , pattern(pat)
+        , replacement(repl)
+        , position(pos)
+        , occurrence(occur)
+        , match_type(mt)
+    {}
 
-TEST_F(Regexp, testRegexpReplace)
+    static void setVecsWithoutNullMap(
+        int param_num,
+        const std::vector<RegexpReplaceCase> test_cases,
+        std::vector<String> & results,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<String> & repls,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
+    {
+        results = getResultVec<String>(test_cases);
+        switch (param_num)
+        {
+        case 6:
+            match_types = getMatchTypeVec(test_cases);
+        case 5:
+            occurs = getOccurVec(test_cases);
+        case 4:
+            positions = getPosVec(test_cases);
+        case 3:
+            repls = getReplVec(test_cases);
+            pats = getPatVec(test_cases);
+            exprs = getExprVec(test_cases);
+            break;
+        default:
+            throw DB::Exception("Invalid param_num");
+        }
+    }
+
+    static void setVecsWithNullMap(
+        int param_num,
+        const std::vector<RegexpReplaceCase> test_cases,
+        std::vector<String> & results,
+        std::vector<std::vector<UInt8>> & null_map,
+        std::vector<String> & exprs,
+        std::vector<String> & pats,
+        std::vector<String> repls,
+        std::vector<Int64> & positions,
+        std::vector<Int64> & occurs,
+        std::vector<String> & match_types)
+    {
+        null_map.clear();
+        null_map.resize(REGEXP_REPLACE_MAX_PARAM_NUM);
+        for (const auto & elem : test_cases)
+        {
+            null_map[EXPR_NULL_MAP_IDX].push_back(elem.null_map[EXPR_NULL_MAP_IDX]);
+            null_map[PAT_NULL_MAP_IDX].push_back(elem.null_map[PAT_NULL_MAP_IDX]);
+            null_map[POS_NULL_MAP_IDX].push_back(elem.null_map[POS_NULL_MAP_IDX]);
+            null_map[REPLACE_NULL_MAP_IDX].push_back(elem.null_map[REPLACE_NULL_MAP_IDX]);
+            null_map[OCCUR_NULL_MAP_IDX].push_back(elem.null_map[OCCUR_NULL_MAP_IDX]);
+            null_map[MATCH_TYPE_NULL_MAP_IDX].push_back(elem.null_map[MATCH_TYPE_NULL_MAP_IDX]);
+        }
+
+        setVecsWithoutNullMap(param_num, test_cases, results, exprs, pats, repls, positions, occurs, match_types);
+    }
+
+    const static UInt8 REGEXP_REPLACE_MAX_PARAM_NUM = 6;
+    const static UInt8 EXPR_NULL_MAP_IDX = 0;
+    const static UInt8 PAT_NULL_MAP_IDX = 1;
+    const static UInt8 REPLACE_NULL_MAP_IDX = 2;
+    const static UInt8 POS_NULL_MAP_IDX = 3;
+    const static UInt8 OCCUR_NULL_MAP_IDX = 4;
+    const static UInt8 MATCH_TYPE_NULL_MAP_IDX = 5;
+
+    String result;
+    std::vector<UInt8> null_map;
+    String expression;
+    String pattern;
+    String replacement;
+    Int64 position;
+    Int64 occurrence;
+    String match_type;
+};
+
+TEST_F(Regexp, RegexpReplace)
 {
     const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
     auto string_type = std::make_shared<DataTypeString>();
@@ -3211,23 +3270,23 @@ TEST_F(Regexp, testRegexpReplace)
     {
         /// test regexp_replace(str, pattern, replacement)
         ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, results[i]),
-                         executeFunction("replaceRegexpAll", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos)
         ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, results_with_pos[i]),
-                         executeFunction("replaceRegexpAll", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ)
         ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, results_with_pos_occ[i]),
-                         executeFunction("replaceRegexpAll", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i]), createConstColumn<Int64>(row_size, occ[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i]), createConstColumn<Int64>(row_size, occ[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
         ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, results_with_pos_occ_match_type[i]),
-                         executeFunction("replaceRegexpAll", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i]), createConstColumn<Int64>(row_size, occ[i]), createConstColumn<String>(row_size, match_types[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i]), createConstColumn<Int64>(row_size, occ[i]), createConstColumn<String>(row_size, match_types[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
         ASSERT_COLUMN_EQ(createConstColumn<String>(row_size, results_with_pos_occ_match_type_binary[i]),
-                         executeFunction("replaceRegexpAll", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i]), createConstColumn<Int64>(row_size, occ[i]), createConstColumn<String>(row_size, match_types[i])}, binary_collator, true));
+                         executeFunction("regexp_replace", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, replacements[i]), createConstColumn<Int64>(row_size, pos[i]), createConstColumn<Int64>(row_size, occ[i]), createConstColumn<String>(row_size, match_types[i])}, binary_collator, true));
     }
 
     /// case 2. regexp_replace(const, const, const [, const, const ,const]) with null value
@@ -3236,74 +3295,147 @@ TEST_F(Regexp, testRegexpReplace)
         /// test regexp_replace(str, pattern, replacement)
         bool null_result = input_string_nulls[i] || pattern_nulls[i] || replacement_nulls[i];
         ASSERT_COLUMN_EQ(null_result ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, results[i]),
-                         executeFunction("replaceRegexpAll", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos)
         null_result = null_result || pos_nulls[i];
         ASSERT_COLUMN_EQ(null_result ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, results_with_pos[i]),
-                         executeFunction("replaceRegexpAll", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ)
         null_result = null_result || occ_nulls[i];
         ASSERT_COLUMN_EQ(null_result ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, results_with_pos_occ[i]),
-                         executeFunction("replaceRegexpAll", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i]), occ_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, occ[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i]), occ_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, occ[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
         null_result = null_result || match_type_nulls[i];
         ASSERT_COLUMN_EQ(null_result ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, results_with_pos_occ_match_type[i]),
-                         executeFunction("replaceRegexpAll", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i]), occ_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, occ[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])}, nullptr, true));
+                         executeFunction("regexp_replace", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i]), occ_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, occ[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
         ASSERT_COLUMN_EQ(null_result ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, results_with_pos_occ_match_type_binary[i]),
-                         executeFunction("replaceRegexpAll", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i]), occ_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, occ[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])}, binary_collator, true));
+                         executeFunction("regexp_replace", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), replacement_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, replacements[i]), pos_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, pos[i]), occ_nulls[i] ? const_int64_null_column : createConstColumn<Nullable<Int64>>(row_size, occ[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])}, binary_collator, true));
     }
 
     /// case 3 regexp_replace(vector, const, const[, const, const, const])
     {
         /// test regexp_replace(str, pattern, replacement)
         ASSERT_COLUMN_EQ(createColumn<String>(vec_results),
-                         executeFunction("replaceRegexpAll", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos)
         ASSERT_COLUMN_EQ(createColumn<String>(vec_results_with_pos),
-                         executeFunction("replaceRegexpAll", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ)
         ASSERT_COLUMN_EQ(createColumn<String>(vec_results_with_pos_occ),
-                         executeFunction("replaceRegexpAll", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
         ASSERT_COLUMN_EQ(createColumn<String>(vec_results_with_pos_occ_match_type),
-                         executeFunction("replaceRegexpAll", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
         ASSERT_COLUMN_EQ(createColumn<String>(vec_results_with_pos_occ_match_type_binary),
-                         executeFunction("replaceRegexpAll", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, binary_collator, true));
+                         executeFunction("regexp_replace", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, binary_collator, true));
     }
 
     /// case 4 regexp_replace(vector, const, const[, const, const, const]) with null value
     {
         /// test regexp_replace(str, pattern, replacement)
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results, input_string_nulls),
-                         executeFunction("replaceRegexpAll", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos)
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results_with_pos, input_string_nulls),
-                         executeFunction("replaceRegexpAll", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ)
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results_with_pos_occ, input_string_nulls),
-                         executeFunction("replaceRegexpAll", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0])}, nullptr, true));
+                         executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0])}, nullptr, true));
 
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results_with_pos_occ_match_type, input_string_nulls),
-                         executeFunction("replaceRegexpAll", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, nullptr, true));
-
+                         executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, nullptr, true));
 
         /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
         ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(vec_results_with_pos_occ_match_type_binary, input_string_nulls),
-                         executeFunction("replaceRegexpAll", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, binary_collator, true));
+                         executeFunction("regexp_replace", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, replacements[0]), createConstColumn<Int64>(row_size, pos[0]), createConstColumn<Int64>(row_size, occ[0]), createConstColumn<String>(row_size, match_types[0])}, binary_collator, true));
+    }
+
+    std::vector<RegexpReplaceCase> test_cases;
+    std::vector<std::vector<UInt8>> null_maps;
+    std::vector<String> exprs;
+    std::vector<String> repls;
+    std::vector<Int64> positions;
+    std::vector<Int64> occurs;
+
+    /// case 5 regexp_replace(vector, vector, vector[, vector, vector, vector])
+    {
+        test_cases = {{"taa", "ttifl", "tifl", "aa", 1, 0, ""},
+                      {"aaaaaa", "121212", "1.", "aa", 1, 0, ""},
+                      {"aa1212", "121212", "1.", "aa", 1, 1, ""},
+                      {"12aa12", "121212", "1.", "aa", 1, 2, ""},
+                      {"1212aa", "121212", "1.", "aa", 1, 3, ""},
+                      {"121212", "121212", "1.", "aa", 1, 4, ""},
+                      {"啊ah好a哈哈", "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
+                      {"啊a哈ah好哈", "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
+                      {"啊a哈a哈哈", "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
+                      {"aa", "\n", ".", "aa", 1, 0, "s"},
+                      {"12aa34", "12\n34", ".", "aa", 3, 1, "s"}};
+        RegexpReplaceCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, repls, positions, occurs, match_types);
+        results = getResultVec<String>(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<String>(results),
+                         executeFunction(
+                             "regexp_replace",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<String>(repls),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<String>(match_types)));
+    }
+
+    /// case 6 regexp_replace(vector, vector, const[, const, const, vector]) with null value
+    {
+        test_cases = {{"taa", {0, 0, 1, 0, 0, 0}, "ttifl", "tifl", "aa", 1, 0, ""},
+                      {"aaaaaa", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 0, ""},
+                      {"aa1212", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 1, ""},
+                      {"12aa12", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 2, ""},
+                      {"1212aa", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 3, ""},
+                      {"121212", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 4, ""},
+                      {"啊ah好a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
+                      {"啊a哈ah好哈", {0, 0, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
+                      {"啊a哈a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
+                      {"aa", {0, 1, 0, 0, 0, 0}, "\n", ".", "aa", 1, 0, "s"},
+                      {"12aa34", {0, 0, 0, 0, 0, 0}, "12\n34", ".", "aa", 3, 1, "s"}};
+        RegexpReplaceCase::setVecsWithNullMap(6, test_cases, results, null_maps, exprs, patterns, repls, positions, occurs, match_types);
+        results = getResultVec<String>(test_cases);
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<String>(results, null_maps[RegexpReplaceCase::PAT_NULL_MAP_IDX]),
+                         executeFunction(
+                             "regexp_replace",
+                             createColumn<String>(exprs),
+                             createNullableVectorColumn<String>(patterns, null_maps[RegexpReplaceCase::PAT_NULL_MAP_IDX]),
+                             createColumn<String>(repls),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<String>(match_types)));
+    }
+
+    /// case 7: test some special cases
+    {
+        // test empty expr
+        ASSERT_COLUMN_EQ(createColumn<String>({"aa", "aa", "aa", "", ""}),
+                         executeFunction(
+                             "regexp_replace",
+                             {createColumn<String>({"", "", "", "", ""}),
+                              createColumn<String>({"^$", "^$", "^$", "^$", "12"}),
+                              createColumn<String>({"aa", "aa", "aa", "aa", "aa"}),
+                              createColumn<Int64>({1, 1, 1, 1, 1}),
+                              createColumn<Int64>({-1, 0, 1, 2, 3})},
+                             nullptr,
+                             true));
     }
 }
 } // namespace tests

@@ -27,6 +27,35 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 } // namespace FailPoints
 
+namespace
+{
+void addRetryRegion(const ContextPtr & context, mpp::DispatchTaskResponse * response)
+{
+    // For tiflash_compute mode, all regions are fetched from remote, so no need to refresh TiDB's region cache.
+    if (!context->isDisaggregatedComputeMode())
+    {
+        for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
+        {
+            for (const auto & region : table_region_info.second.remote_regions)
+            {
+                auto * retry_region = response->add_retry_regions();
+                retry_region->set_id(region.region_id);
+                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+                retry_region->mutable_region_epoch()->set_version(region.region_version);
+            }
+        }
+    }
+}
+
+void injectFailPointBeforeMPPTaskRun(bool is_root_task)
+{
+    if (is_root_task)
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
+    else
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
+}
+} // namespace
+
 void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {
     if (task)
@@ -53,26 +82,11 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     {
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
-
         task->prepare(task_request);
-        for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
-        {
-            for (const auto & region : table_region_info.second.remote_regions)
-            {
-                auto * retry_region = response->add_retry_regions();
-                retry_region->set_id(region.region_id);
-                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
-                retry_region->mutable_region_epoch()->set_version(region.region_version);
-            }
-        }
-        if (task->isRootMPPTask())
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
-        }
-        else
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
-        }
+
+        addRetryRegion(context, response);
+        injectFailPointBeforeMPPTaskRun(task->isRootMPPTask());
+
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }

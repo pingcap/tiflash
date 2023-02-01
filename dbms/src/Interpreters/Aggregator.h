@@ -29,6 +29,7 @@
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
 #include <Common/ThreadManager.h>
+#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
@@ -558,7 +559,7 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void * aggregation_method_impl{};
 
-    /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
+    /** Specialization for the case when there are no keys.
       */
     AggregatedDataWithoutKey without_key = nullptr;
 
@@ -728,31 +729,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         }
     }
 
-    /// The size without taking into account the row in which data is written for the calculation of TOTALS.
-    size_t sizeWithoutOverflowRow() const
-    {
-        switch (type)
-        {
-        case Type::EMPTY:
-            return 0;
-        case Type::without_key:
-            return 1;
-
-#define M(NAME, IS_TWO_LEVEL)                                                                              \
-    case Type::NAME:                                                                                       \
-    {                                                                                                      \
-        const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
-        return ptr->data.size();                                                                           \
-    }
-
-            APPLY_FOR_AGGREGATED_VARIANTS(M)
-#undef M
-
-        default:
-            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-        }
-    }
-
     const char * getMethodName() const
     {
         return getMethodName(type);
@@ -837,6 +813,13 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     bool isConvertibleToTwoLevel() const
     {
+        return isConvertibleToTwoLevel(type);
+    }
+
+    static size_t getBucketNumberForTwoLevelHashTable(Type type);
+
+    static bool isConvertibleToTwoLevel(Type type)
+    {
         switch (type)
         {
 #define M(NAME)      \
@@ -882,13 +865,9 @@ using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingBlockInputStream.)
   *
-  * In the absence of group_by_overflow_mode = 'any', the data is aggregated as usual, but the states of the aggregate functions are not finalized.
+  * The data is aggregated as usual, but the states of the aggregate functions are not finalized.
   * Later, the aggregate function states for all rows (passed through HAVING) are merged into one - this will be TOTALS.
   *
-  * If there is group_by_overflow_mode = 'any', the data is aggregated as usual, except for the keys that did not fit in max_rows_to_group_by.
-  * For these keys, the data is aggregated into one additional row - see below under the names `overflow_row`, `overflows`...
-  * Later, the aggregate function states for all rows (passed through HAVING) are merged into one,
-  *  also overflow_row is added or not added (depending on the totals_mode setting) also - this will be TOTALS.
   */
 
 
@@ -911,11 +890,6 @@ public:
         size_t aggregates_size;
         Int64 local_delta_memory = 0;
 
-        /// The settings of approximate calculation of GROUP BY.
-        const bool overflow_row; /// Do we need to put into AggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.
-        const size_t max_rows_to_group_by;
-        const OverflowMode group_by_overflow_mode;
-
         /// Two-level aggregation settings (used for a large number of keys).
         /** With how many keys or the size of the aggregation state in bytes,
           *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
@@ -931,35 +905,33 @@ public:
         bool empty_result_for_aggregation_by_empty_set;
 
         const std::string tmp_path;
+        SpillConfig spill_config;
 
+        UInt64 max_block_size;
         TiDB::TiDBCollators collators;
 
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const AggregateDescriptions & aggregates_,
-            bool overflow_row_,
-            size_t max_rows_to_group_by_,
-            OverflowMode group_by_overflow_mode_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
-            const std::string & tmp_path_,
+            const SpillConfig & spill_config_,
+            UInt64 max_block_size_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
-            , overflow_row(overflow_row_)
-            , max_rows_to_group_by(max_rows_to_group_by_)
-            , group_by_overflow_mode(group_by_overflow_mode_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
-            , tmp_path(tmp_path_)
+            , spill_config(spill_config_)
+            , max_block_size(max_block_size_)
             , collators(collators_)
         {
         }
@@ -968,9 +940,10 @@ public:
         Params(const Block & intermediate_header_,
                const ColumnNumbers & keys_,
                const AggregateDescriptions & aggregates_,
-               bool overflow_row_,
+               const SpillConfig & spill_config,
+               UInt64 max_block_size_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
+            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -995,33 +968,27 @@ public:
     Aggregator(const Params & params_, const String & req_id);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
-    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
+    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
     using AggregateColumnsConstData = std::vector<const ColumnAggregateFunction::Container *>;
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
-    /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
+    /// Process one block. Return false if the processing should be aborted.
     bool executeOnBlock(
         const Block & block,
         AggregatedDataVariants & result,
-        const FileProviderPtr & file_provider,
         ColumnRawPtrs & key_columns,
         AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        Int64 & local_delta_memory,
-        bool & no_more_keys);
+        Int64 & local_delta_memory);
 
     /** Convert the aggregation data structure into a block.
-      * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
-      *
       * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
       *  which can then be combined with other states (for distributed query processing).
       * If final = true, then columns with ready values are created as aggregate columns.
       */
     BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
-
-    ManyAggregatedDataVariants prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
 
     /** Merge several aggregation data structures and output the result as a block stream.
       */
@@ -1035,10 +1002,7 @@ public:
     using BucketToBlocks = std::map<Int32, BlocksList>;
 
     /// Merge several partially aggregated blocks into one.
-    /// Precondition: for all blocks block.info.is_overflows flag must be the same.
-    /// (either all blocks are from overflow data or none blocks are).
-    /// The resulting block has the same value of is_overflows flag.
-    Block mergeBlocks(BlocksList & blocks, bool final);
+    BlocksList mergeBlocks(BlocksList & blocks, bool final);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
@@ -1052,25 +1016,10 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void writeToTemporaryFile(AggregatedDataVariants & data_variants, const FileProviderPtr & file_provider);
-
-    bool hasTemporaryFiles() const { return !temporary_files.empty(); }
-
-    struct TemporaryFiles
-    {
-        std::vector<std::unique_ptr<Poco::TemporaryFile>> files;
-        size_t sum_size_uncompressed = 0;
-        size_t sum_size_compressed = 0;
-        mutable std::mutex mutex;
-
-        bool empty() const
-        {
-            std::lock_guard lock(mutex);
-            return files.empty();
-        }
-    };
-
-    const TemporaryFiles & getTemporaryFiles() const { return temporary_files; }
+    void spill(AggregatedDataVariants & data_variants);
+    void finishSpill();
+    BlockInputStreams restoreSpilledData();
+    bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1128,7 +1077,7 @@ protected:
     CancellationHook is_cancelled;
 
     /// For external aggregation.
-    TemporaryFiles temporary_files;
+    std::unique_ptr<Spiller> spiller;
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();
@@ -1151,19 +1100,15 @@ protected:
         size_t rows,
         ColumnRawPtrs & key_columns,
         TiDB::TiDBCollators & collators,
-        AggregateFunctionInstruction * aggregate_instructions,
-        bool no_more_keys,
-        AggregateDataPtr overflow_row) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
-    /// Specialization for a particular value no_more_keys.
-    template <bool no_more_keys, typename Method>
+    template <typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         size_t rows,
-        AggregateFunctionInstruction * aggregate_instructions,
-        AggregateDataPtr overflow_row) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(
@@ -1173,30 +1118,14 @@ protected:
         Arena * arena);
 
     template <typename Method>
-    void writeToTemporaryFileImpl(
+    void spillImpl(
         AggregatedDataVariants & data_variants,
-        Method & method,
-        IBlockOutputStream & out);
+        Method & method);
 
 protected:
     /// Merge data from hash table `src` into `dst`.
     template <typename Method, typename Table>
     void mergeDataImpl(
-        Table & table_dst,
-        Table & table_src,
-        Arena * arena) const;
-
-    /// Merge data from hash table `src` into `dst`, but only for keys that already exist in dst. In other cases, merge the data into `overflows`.
-    template <typename Method, typename Table>
-    void mergeDataNoMoreKeysImpl(
-        Table & table_dst,
-        AggregatedDataWithoutKey & overflows,
-        Table & table_src,
-        Arena * arena) const;
-
-    /// Same, but ignores the rest of the keys.
-    template <typename Method, typename Table>
-    void mergeDataOnlyExistingKeysImpl(
         Table & table_dst,
         Table & table_src,
         Arena * arena) const;
@@ -1219,11 +1148,29 @@ protected:
         bool final) const;
 
     template <typename Method, typename Table>
+    void convertToBlocksImpl(
+        Method & method,
+        Table & data,
+        std::vector<MutableColumns> & key_columns_vec,
+        std::vector<AggregateColumnsData> & aggregate_columns_vec,
+        std::vector<MutableColumns> & final_aggregate_columns_vec,
+        Arena * arena,
+        bool final) const;
+
+    template <typename Method, typename Table>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
         std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
+        Arena * arena) const;
+
+    template <typename Method, typename Table>
+    void convertToBlocksImplFinal(
+        Method & method,
+        Table & data,
+        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
     template <typename Method, typename Table>
@@ -1233,6 +1180,13 @@ protected:
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
+    template <typename Method, typename Table>
+    void convertToBlocksImplNotFinal(
+        Method & method,
+        Table & data,
+        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
+
     template <typename Filler>
     Block prepareBlockAndFill(
         AggregatedDataVariants & data_variants,
@@ -1240,8 +1194,23 @@ protected:
         size_t rows,
         Filler && filler) const;
 
+    template <typename Filler>
+    BlocksList prepareBlocksAndFill(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler) const;
+
     template <typename Method>
     Block convertOneBucketToBlock(
+        AggregatedDataVariants & data_variants,
+        Method & method,
+        Arena * arena,
+        bool final,
+        size_t bucket) const;
+
+    template <typename Method>
+    BlocksList convertOneBucketToBlocks(
         AggregatedDataVariants & data_variants,
         Method & method,
         Arena * arena,
@@ -1260,8 +1229,10 @@ protected:
         Columns & materialized_columns,
         AggregateFunctionInstructions & instructions);
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillTwoLevel(
         AggregatedDataVariants & data_variants,
         bool final,
@@ -1276,22 +1247,19 @@ protected:
         ThreadPoolManager * thread_pool,
         size_t max_threads) const;
 
-    template <bool no_more_keys, typename Method, typename Table>
+    template <typename Method, typename Table>
     void mergeStreamsImplCase(
         Block & block,
         Arena * aggregates_pool,
         Method & method,
-        Table & data,
-        AggregateDataPtr overflow_row) const;
+        Table & data) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImpl(
         Block & block,
         Arena * aggregates_pool,
         Method & method,
-        Table & data,
-        AggregateDataPtr overflow_row,
-        bool no_more_keys) const;
+        Table & data) const;
 
     void mergeWithoutKeyStreamsImpl(
         Block & block,
@@ -1316,15 +1284,6 @@ protected:
 
     void destroyWithoutKey(
         AggregatedDataVariants & result) const;
-
-
-    /** Checks constraints on the maximum number of keys for aggregation.
-      * If it is exceeded, then, depending on the group_by_overflow_mode, either
-      * - throws an exception;
-      * - returns false, which means that execution must be aborted;
-      * - sets the variable no_more_keys to true.
-      */
-    bool checkLimits(size_t result_size, bool & no_more_keys) const;
 };
 
 /** Get the aggregation variant by its type. */

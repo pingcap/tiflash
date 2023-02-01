@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,51 +17,57 @@
 
 namespace DB
 {
-LimitTransformAction::LimitTransformAction(
-    const Block & header_,
-    size_t limit_)
-    : header(header_)
-    , limit(limit_)
+namespace
 {
-}
-
-Block LimitTransformAction::getHeader() const
+// Removes all rows outside specified range of Block.
+void cut(Block & block, size_t rows [[maybe_unused]], size_t limit, size_t pos)
 {
-    return header;
+    assert(rows + limit > pos);
+    size_t pop_back_cnt = pos - limit;
+    for (auto & col : block)
+    {
+        auto mutate_col = (*std::move(col.column)).mutate();
+        mutate_col->popBack(pop_back_cnt);
+        col.column = std::move(mutate_col);
+    }
 }
+} // namespace
 
-size_t LimitTransformAction::getLimit() const
-{
-    return limit;
-}
-
-bool LimitTransformAction::transform(Block & block)
+bool LocalLimitTransformAction::transform(Block & block)
 {
     if (unlikely(!block))
         return true;
 
     /// pos - how many lines were read, including the last read block
     if (pos >= limit)
-    {
         return false;
-    }
 
     auto rows = block.rows();
     pos += rows;
-    if (pos >= rows && pos <= limit)
-    {
-        // give away the whole block
+    if (pos > limit)
+        cut(block, rows, limit, pos);
+    // for pos <= limit, give away the whole block
+    return true;
+}
+
+bool GlobalLimitTransformAction::transform(Block & block)
+{
+    if (unlikely(!block))
         return true;
-    }
-    else
-    {
-        // pos > limit
-        // give away a piece of the block
-        assert(rows + limit > pos);
-        size_t length = rows + limit - pos;
-        for (size_t i = 0; i < block.columns(); ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(0, length);
-        return true;
-    }
+
+    /// pos - how many lines were read, including the last read block
+    if (pos >= limit)
+        return false;
+
+    auto rows = block.rows();
+    size_t prev_pos = pos.fetch_add(rows);
+    if (prev_pos >= limit)
+        return false;
+
+    size_t cur_pos = prev_pos + rows;
+    if (cur_pos > limit)
+        cut(block, rows, limit, cur_pos);
+    // for pos <= limit, give away the whole block
+    return true;
 }
 } // namespace DB

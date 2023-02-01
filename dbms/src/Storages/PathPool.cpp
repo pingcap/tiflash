@@ -134,6 +134,7 @@ StoragePathPool::StoragePathPool( //
     : database(std::move(database_))
     , table(std::move(table_))
     , path_need_database_name(path_need_database_name_)
+    , shutdown_called(false)
     , global_capacity(std::move(global_capacity_))
     , file_provider(std::move(file_provider_))
     , log(Logger::get("StoragePathPool"))
@@ -161,6 +162,7 @@ StoragePathPool::StoragePathPool(StoragePathPool && rhs) noexcept
     , table(std::move(rhs.table))
     , dt_file_path_map(std::move(rhs.dt_file_path_map))
     , path_need_database_name(rhs.path_need_database_name)
+    , shutdown_called(rhs.shutdown_called.load())
     , global_capacity(std::move(rhs.global_capacity))
     , file_provider(std::move(rhs.file_provider))
     , log(std::move(rhs.log))
@@ -176,6 +178,7 @@ StoragePathPool & StoragePathPool::operator=(StoragePathPool && rhs)
         database.swap(rhs.database);
         table.swap(rhs.table);
         path_need_database_name = rhs.path_need_database_name;
+        shutdown_called = rhs.shutdown_called.load();
         global_capacity.swap(rhs.global_capacity);
         file_provider.swap(rhs.file_provider);
         log.swap(rhs.log);

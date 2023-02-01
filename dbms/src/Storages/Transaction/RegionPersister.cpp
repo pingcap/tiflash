@@ -243,7 +243,8 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
                     "RegionPersister",
                     delegator,
                     config,
-                    provider);
+                    provider,
+                    global_context.getPSBackgroundPool());
                 page_storage_v2->restore();
                 page_writer = std::make_shared<PageWriter>(global_run_mode, page_storage_v2, /*storage_v3_*/ nullptr);
                 page_reader = std::make_shared<PageReader>(global_run_mode, ns_id, page_storage_v2, /*storage_v3_*/ nullptr, /*readlimiter*/ global_context.getReadLimiter());
@@ -282,7 +283,8 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
                 "RegionPersister",
                 delegator,
                 PageStorage::getEasyGCConfig(),
-                provider);
+                provider,
+                global_context.getPSBackgroundPool());
             // V3 should not used getPSDiskDelegatorRaft
             // Because V2 will delete all invalid(unrecognized) file when it restore
             auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //

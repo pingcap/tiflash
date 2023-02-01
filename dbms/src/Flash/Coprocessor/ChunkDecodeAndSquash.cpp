@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/ReadBufferFromString.h>
 
@@ -23,6 +24,58 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
     : codec(header)
     , rows_limit(rows_limit_)
 {
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
+{
+    if unlikely (sv.empty())
+    {
+        std::optional<Block> res;
+        if (accumulated_block)
+            res.swap(accumulated_block);
+        return res;
+    }
+
+    // read first byte of compression method flag which defined in `CompressionMethodByte`
+    if (static_cast<CompressionMethodByte>(sv[0]) == CompressionMethodByte::NONE)
+    {
+        ReadBufferFromString istr(sv.substr(1, sv.size() - 1));
+        return decodeAndSquashV1Impl(istr);
+    }
+
+    ReadBufferFromString istr(sv);
+    auto && compress_buffer = CompressedCHBlockChunkReadBuffer(istr);
+    return decodeAndSquashV1Impl(compress_buffer);
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuffer & istr)
+{
+    std::optional<Block> res;
+
+    if (!accumulated_block)
+    {
+        size_t rows{};
+        Block block = DecodeHeader(istr, codec.header, rows);
+        if (rows)
+        {
+            DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
+            accumulated_block.emplace(std::move(block));
+        }
+    }
+    else
+    {
+        size_t rows{};
+        DecodeHeader(istr, codec.header, rows);
+        DecodeColumns(istr, *accumulated_block, rows, 0);
+    }
+
+    if (accumulated_block && accumulated_block->rows() >= rows_limit)
+    {
+        /// Return accumulated data and reset accumulated_block
+        res.swap(accumulated_block);
+        return res;
+    }
+    return res;
 }
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String & str)

@@ -24,6 +24,11 @@
 
 namespace DB::tests
 {
+enum class TestType
+{
+    EXECUTOR_TEST,
+    INTERPRETER_TEST,
+};
 class TiFlashTestEnv
 {
 public:
@@ -43,6 +48,7 @@ public:
     }
 
     static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr);
+    static void setUpTestContext(Context & context, DAGContext * dag_context, MockStorage * mock_storage, const TestType & test_type);
 
     // If you want to run these tests, you should set this envrionment variablle
     // For example:

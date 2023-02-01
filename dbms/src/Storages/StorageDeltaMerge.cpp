@@ -774,69 +774,7 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
 
-    auto streams = store->read(
-        context,
-        context.getSettingsRef(),
-        columns_to_read,
-        ranges,
-        num_streams,
-        /*max_version=*/mvcc_query_info.read_tso,
-        rs_operator,
-        query_info.req_id,
-        query_info.keep_order,
-        /* is_fast_scan */ query_info.is_fast_scan,
-        max_block_size,
-        parseSegmentSet(select_query.segment_expression_list),
-        extra_table_id_index);
-
-    /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context.getTMTContext(), context, global_context);
-
-    LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
-
-    return streams;
-}
-
-BlockInputStreams StorageDeltaMerge::read(
-    const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & /*processed_stage*/,
-    size_t max_block_size,
-    unsigned num_streams,
-    const ScanContextPtr & scan_context)
-{
-    auto & store = getAndMaybeInitStore();
-    // Note that `columns_to_read` should keep the same sequence as ColumnRef
-    // in `Coprocessor.TableScan.columns`, or rough set filter could be
-    // failed to parsed.
-    ColumnDefines columns_to_read;
-    size_t extra_table_id_index = InvalidColumnID;
-    setColumnsToRead(store, columns_to_read, extra_table_id_index, column_names);
-
-    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    if (select_query.raw_for_mutable) // for selraw
-    {
-        // Read without MVCC filtering and del_mark = 1 filtering
-        return store->readRaw(
-            context,
-            context.getSettingsRef(),
-            columns_to_read,
-            num_streams,
-            query_info.keep_order,
-            parseSegmentSet(select_query.segment_expression_list),
-            extra_table_id_index);
-    }
-
-    auto tracing_logger = log->getChild(query_info.req_id);
-
-    // Read with MVCC filtering
-    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
-    const auto & mvcc_query_info = *query_info.mvcc_query_info;
-
-    auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, tracing_logger);
-
-    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+    const auto & scan_context = mvcc_query_info.scan_context;
 
     auto streams = store->read(
         context,
@@ -1555,6 +1493,9 @@ void StorageDeltaMerge::startup()
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
+// Avoid calling virtual function `shutdown` in destructor,
+// we should use this function instead.
+// https://stackoverflow.com/a/12093250/4412495
 void StorageDeltaMerge::shutdownImpl()
 {
     bool v = false;

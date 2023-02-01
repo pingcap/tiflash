@@ -45,6 +45,13 @@ private:
     Container data;
     IndexByName index_by_name;
 
+    // `start_offset` is the offset of first row in this Block.
+    // It is used for calculating `segment_row_id`.
+    UInt64 start_offset = 0;
+    // `segment_row_id_col` is a virtual column that represents the records' row id in the corresponding segment.
+    // Only used for calculating MVCC-bitmap-filter.
+    ColumnPtr segment_row_id_col;
+
 public:
     BlockInfo info;
 
@@ -110,8 +117,8 @@ public:
     /// Approximate number of allocated bytes in memory - for profiling and limits.
     size_t allocatedBytes() const;
 
-    explicit operator bool() const { return !data.empty(); }
-    bool operator!() const { return data.empty(); }
+    explicit operator bool() const { return !data.empty() || segment_row_id_col != nullptr; }
+    bool operator!() const { return data.empty() && segment_row_id_col == nullptr; }
 
     /** Get a list of column names separated by commas. */
     std::string dumpNames() const;
@@ -149,6 +156,11 @@ public:
       */
     void updateHash(SipHash & hash) const;
 
+    void setStartOffset(UInt64 offset) { start_offset = offset; }
+    UInt64 startOffset() const { return start_offset; }
+    void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
+    ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
+
 private:
     void eraseImpl(size_t position);
     void initializeIndexByName();
@@ -156,7 +168,11 @@ private:
 
 using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
+using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
+Block mergeBlocks(Blocks && blocks);
+
+Block popBlocksListFront(BlocksList & blocks);
 
 /// Compare number of columns, data types, column types, column names, and values of constant columns.
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs);

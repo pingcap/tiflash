@@ -20,6 +20,11 @@
 namespace DB
 {
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
+namespace DM
+{
+class ScanContext;
+using ScanContextPtr = std::shared_ptr<ScanContext>;
+} // namespace DM
 
 struct RegionQueryInfo
 {
@@ -55,16 +60,16 @@ struct MvccQueryInfo
 
     const bool resolve_locks;
 
-    Float32 concurrent = 1.0;
-
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
     using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
     ReadIndexRes read_index_res;
 
+    DM::ScanContextPtr scan_context;
+
 public:
-    explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0);
+    explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
 };
 
 } // namespace DB

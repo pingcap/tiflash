@@ -78,11 +78,7 @@ namespace DB
         F(reason_other_error, {"reason", "other_error"}))                                                                                 \
     M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                             \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                         \
-        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
-        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                             \
-        F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                           \
-        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}))                                                       \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                     \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter,                                                        \
         F(type_cop, {{"type", "cop"}}),                                                                                                   \
         F(type_batch_cop, {{"type", "batch_cop"}}),                                                                                       \
@@ -90,6 +86,16 @@ namespace DB
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                             \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                 \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                           \
+    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter, \
+        F(type_hash_original, {"type", "hash_original"}), /*the original data size by hash exchange*/ \
+        F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}), /*the remote exchange data size by hash partition with no compression*/\
+        F(type_hash_none_compression_local, {"type", "hash_none_compression_local"}), /*the local exchange data size by hash partition with no compression*/ \
+        F(type_hash_lz4_compression, {"type", "hash_lz4_compression"}), /*the exchange data size by hash partition with lz4 compression*/ \
+        F(type_hash_zstd_compression, {"type", "hash_zstd_compression"}), /*the exchange data size by hash partition with zstd compression*/ \
+        F(type_broadcast_passthrough_original, {"type", "broadcast_passthrough_original"}), /*the original exchange data size by broadcast/passthough*/ \
+        F(type_broadcast_passthrough_none_compression_local, {"type", "broadcast_passthrough_none_compression_local"}), /*the local exchange data size by broadcast/passthough with no compression*/ \
+        F(type_broadcast_passthrough_none_compression_remote, {"type", "broadcast_passthrough_none_compression_remote"}), /*the remote exchange data size by broadcast/passthough with no compression*/ \
+    ) \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \
@@ -105,6 +111,7 @@ namespace DB
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                       \
         F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.001, 2, 20}))                                            \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                          \
+    M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                    \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                              \
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
     M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                              \
@@ -124,7 +131,7 @@ namespace DB
         F(type_seg_split_bg, {"type", "seg_split_bg"}),                                                                                   \
         F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                   \
         F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                           \
-        F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                        \
+        F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                             \
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
@@ -164,7 +171,8 @@ namespace DB
         F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_v2, {{"type", "v2"}}, ExpBuckets{0.0005, 2, 20}),                                                                          \
-        F(type_v2_compact, {{"type", "v2_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                          \
+        F(type_v2_data_compact, {{"type", "v2_data_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                \
+        F(type_v2_ver_compact, {{"type", "v2_ver_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
         /* Below are metrics for PageStorage V3 */                                                                                        \
         F(type_compact_wal, {{"type", "compact_wal"}},             ExpBuckets{0.0005, 2, 20}),                                            \
         F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                            \
@@ -261,6 +269,9 @@ namespace DB
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+    M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                              \
+        F(type_send, {{"type", "send_queue"}}),                                                                                           \
+        F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

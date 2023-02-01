@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/DynamicThreadPool.h>
 #include <Common/typeid_cast.h>
 #include <Debug/dbgFuncMisc.h>
 #include <Interpreters/Context.h>
@@ -29,8 +30,8 @@ inline size_t getReadTSOForLog(const String & line)
     {
         std::regex rx(R"((0|[1-9][0-9]*))");
         std::smatch m;
-        // Rely on that MPP task prefix "MPP<query:435802637197639681,task:1>"
-        auto pos = line.find("query:");
+        // Rely on that MPP task prefix "MPP<query:<query_ts:1671124209981679458, local_query_id:42578432, server_id:3340035, start_ts:438075169172357120>,task_id:42578433>"
+        auto pos = line.find(", start_ts:");
         if (pos != std::string::npos && regex_search(line.cbegin() + pos, line.cend(), m, rx))
         {
             return std::stoul(m[1]);
@@ -128,6 +129,19 @@ void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/,
     if (global_storage_pool)
     {
         global_storage_pool->gc();
+    }
+}
+
+void dbgFuncActiveThreadsInDynamicThreadPool(Context &, const ASTs &, DBGInvoker::Printer output)
+{
+    if (DynamicThreadPool::global_instance)
+    {
+        auto value = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();
+        output(std::to_string(static_cast<Int64>(value)));
+    }
+    else
+    {
+        output("0");
     }
 }
 } // namespace DB

@@ -19,14 +19,12 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/WindowDescription.h>
 #include <Storages/Transaction/TMTStorages.h>
 
@@ -96,9 +94,7 @@ public:
     SortDescription getWindowSortDescription(
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
 
-    void initChain(
-        ExpressionActionsChain & chain,
-        const std::vector<NameAndTypePair> & columns) const;
+    void initChain(ExpressionActionsChain & chain) const;
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
@@ -281,7 +277,7 @@ private:
     bool buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+        const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
@@ -335,7 +331,6 @@ private:
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     const Context & context;
-    Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
 };

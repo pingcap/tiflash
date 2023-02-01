@@ -165,15 +165,7 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
     else
     {
         const auto & schema_ref = *schema;
-
-        PageStorage::PageReadFields fields;
-        fields.first = data_page_id;
-        for (size_t i = 0; i < schema_ref.columns(); ++i)
-            fields.second.push_back(i);
-
-        auto page_map = page_reader.read({fields});
-        auto page = page_map[data_page_id];
-
+        auto page = page_reader.read(data_page_id);
         auto columns = schema_ref.cloneEmptyColumns();
 
         if (unlikely(columns.size() != page.fieldSize()))
@@ -232,7 +224,7 @@ ColumnPtr ColumnFileTinyReader::getVersionColumn()
     return cols_data_cache[1];
 }
 
-size_t ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
 

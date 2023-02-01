@@ -40,8 +40,11 @@ const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
 const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
-static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster)
+static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
 {
+    // Doesn't need SchemaSyncer for tiflash_compute mode.
+    if (disaggregated_compute_mode)
+        return nullptr;
     if (exist_pd_addr)
     {
         // product env
@@ -64,14 +67,14 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
-    , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
+    , kvstore(context_.isDisaggregatedComputeMode() && context_.useAutoScaler() ? nullptr : std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
     , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
                                            : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster))
+    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.isDisaggregatedComputeMode()))
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
@@ -85,8 +88,18 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 
+void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+{
+    if (!raft_config.pd_addrs.empty())
+        cluster->update(raft_config.pd_addrs, cluster_config);
+}
+
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
+    // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
+    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+        return;
+
     kvstore->restore(path_pool, proxy_helper);
     region_table.restore();
     store_status = StoreStatus::Ready;
@@ -191,6 +204,9 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
+    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+        return;
+
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";

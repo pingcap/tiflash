@@ -20,7 +20,6 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {

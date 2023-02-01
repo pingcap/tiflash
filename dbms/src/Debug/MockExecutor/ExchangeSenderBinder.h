@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 
 namespace DB::mock
@@ -21,10 +22,11 @@ namespace DB::mock
 class ExchangeSenderBinder : public ExecutorBinder
 {
 public:
-    ExchangeSenderBinder(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, const std::vector<size_t> & partition_keys_ = {})
+    ExchangeSenderBinder(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, const std::vector<size_t> & partition_keys_ = {}, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : ExecutorBinder(index, "exchange_sender_" + std::to_string(index), output)
         , type(type_)
         , partition_keys(partition_keys_)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
 
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
@@ -37,6 +39,7 @@ private:
     tipb::ExchangeType type;
     TaskMetas task_metas;
     std::vector<size_t> partition_keys;
+    uint64_t fine_grained_shuffle_stream_count;
 };
 
 ExecutorBinderPtr compileExchangeSender(ExecutorBinderPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
