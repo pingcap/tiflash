@@ -158,8 +158,6 @@ private:
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    Int32 getAliveConnectionNumNolock();
-
 private:
     void prepareMsgChannels();
     void addLocalConnectionNum();

@@ -848,7 +848,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
 
     if (meet_error || copy_live_connections == 0)
     {
-        LOG_INFO(exc_log, "receiver finished");
+        LOG_INFO(exc_log, "receiver channels finished");
         finishAllMsgChannels();
     }
 }
