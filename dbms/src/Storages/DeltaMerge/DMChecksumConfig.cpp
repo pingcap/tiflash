@@ -25,8 +25,8 @@
 namespace DB::DM
 {
 DMChecksumConfig::DMChecksumConfig(std::istream & input)
-    : embedded_checksum()
-    , debug_info()
+    : 
+     
 {
     dtpb::ChecksumConfig configuration;
     if (unlikely(!configuration.ParseFromIstream(&input)))
@@ -102,7 +102,7 @@ std::ostream & operator<<(std::ostream & output, const DMChecksumConfig & config
         {
             digest->update(name.data(), name.length());
             digest->update(checksum.data(), checksum.length());
-            auto embedded_checksum = configuration.add_embedded_checksum();
+            auto *embedded_checksum = configuration.add_embedded_checksum();
             embedded_checksum->set_name(name);
             embedded_checksum->set_checksum(checksum);
         }
@@ -113,7 +113,7 @@ std::ostream & operator<<(std::ostream & output, const DMChecksumConfig & config
     {
         for (const auto & [name, content] : config.debug_info)
         {
-            auto tmp = configuration.add_debug_info();
+            auto *tmp = configuration.add_debug_info();
             tmp->set_name(name);
             tmp->set_content(content);
         }
