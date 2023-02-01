@@ -24,8 +24,8 @@
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
-#include <Flash/executeQuery.h>
 #include <Flash/Executor/ARU.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Storages/Transaction/LockException.h>

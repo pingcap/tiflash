@@ -23,4 +23,4 @@ using ARU = UInt64;
  * Analytical Resource Unit = vcores * second * aru_rate
  */
 ARU toARU(UInt64 cpu_time_ns);
-}
+} // namespace DB
