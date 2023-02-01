@@ -130,7 +130,7 @@ DMFileReader::Stream::Stream(
     else
     {
         auto filename = reader.dmfile->colDataFileName(file_name_base);
-        estimated_size = Poco::File(filename).getSize(); 
+        estimated_size = Poco::File(filename).getSize();
     }
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
