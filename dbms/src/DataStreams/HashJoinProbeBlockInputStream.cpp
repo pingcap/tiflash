@@ -26,7 +26,6 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     , join(join_)
     , probe_index(probe_index_)
     , probe_process_info(max_block_size)
-    , squashing_transform(max_block_size)
 {
     children.push_back(input);
 
@@ -85,18 +84,7 @@ Block HashJoinProbeBlockInputStream::readImpl()
 {
     try
     {
-        // if join finished, return {} directly.
-        if (squashing_transform.isJoinFinished())
-        {
-            return Block{};
-        }
-
-        while (squashing_transform.needAppendBlock())
-        {
-            Block result_block = getOutputBlock();
-            squashing_transform.appendBlock(result_block);
-        }
-        auto ret = squashing_transform.getFinalOutputBlock();
+        Block ret = getOutputBlock();
         return ret;
     }
     catch (...)
