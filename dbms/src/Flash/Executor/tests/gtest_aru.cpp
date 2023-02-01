@@ -23,23 +23,24 @@ class TestARU : public ::testing::Test
 
 TEST_F(TestARU, base)
 {
-    auto to_acu = [](double mock_second) {
+    auto to_aru = [](double mock_second) {
         // 1 vcore * mock_second
-        UInt64 mock_cpu_time_ns = 1 * mock_second * 1000'000'000;
+        double mock_cpu_time_s = mock_second * 1000'000'000;
+        UInt64 mock_cpu_time_ns = 1 * mock_cpu_time_s;
         return toARU(mock_cpu_time_ns);
     };
-    auto base_acu = to_acu(0.1);
-    ASSERT_TRUE(base_acu > 0);
-    ASSERT_EQ(base_acu, to_acu(0.2));
-    ASSERT_EQ(base_acu, to_acu(0.3));
-    ASSERT_EQ(base_acu, to_acu(0.4));
-    ASSERT_EQ(base_acu, to_acu(0.5));
-    ASSERT_EQ(base_acu, to_acu(0.6));
-    ASSERT_EQ(base_acu, to_acu(0.7));
-    ASSERT_EQ(base_acu, to_acu(0.8));
-    ASSERT_EQ(base_acu, to_acu(0.9));
-    ASSERT_EQ(base_acu, to_acu(1));
-    ASSERT_TRUE(base_acu < to_acu(1.1));
-    ASSERT_EQ(to_acu(1.9), to_acu(1.1));
+    auto base_aru = to_aru(0.1);
+    ASSERT_TRUE(base_aru > 0);
+    ASSERT_EQ(base_aru, to_aru(0.2));
+    ASSERT_EQ(base_aru, to_aru(0.3));
+    ASSERT_EQ(base_aru, to_aru(0.4));
+    ASSERT_EQ(base_aru, to_aru(0.5));
+    ASSERT_EQ(base_aru, to_aru(0.6));
+    ASSERT_EQ(base_aru, to_aru(0.7));
+    ASSERT_EQ(base_aru, to_aru(0.8));
+    ASSERT_EQ(base_aru, to_aru(0.9));
+    ASSERT_EQ(base_aru, to_aru(1));
+    ASSERT_TRUE(base_aru < to_aru(1.1));
+    ASSERT_EQ(to_aru(1.9), to_aru(1.1));
 }
 } // namespace DB::tests

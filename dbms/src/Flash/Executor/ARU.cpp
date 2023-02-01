@@ -23,7 +23,8 @@ static constexpr double acu_rate = 1.0;
 
 UInt64 toARU(UInt64 cpu_time_ns)
 {
-    UInt64 cpu_time_s = ceil(cpu_time_ns / 1000'000'000L);
-    return cpu_time_s * acu_rate;
+    double cpu_time_s = static_cast<double>(cpu_time_ns) / 1000'000'000L;
+    auto ceil_cpu_time_s = ceil(cpu_time_s);
+    return ceil_cpu_time_s * acu_rate;
 }
 } // namespace DB
