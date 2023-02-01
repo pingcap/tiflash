@@ -18,7 +18,7 @@
 #include <Common/nocopyable.h>
 #include <Poco/ThreadPool.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/workload/PSBackground.h>
 #include <Storages/Page/workload/PSRunnable.h>
@@ -84,7 +84,7 @@ protected:
 
     void startBackgroundTimer();
 
-    void initPages(const DB::PageId & max_page_id);
+    void initPages(const DB::PageIdU64 & max_page_id);
 
     template <typename T>
     void startWriter(size_t nums_writers, std::function<void(std::shared_ptr<T>)> writer_configure = nullptr)

@@ -17,7 +17,7 @@
 #include <Common/FmtUtils.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -67,8 +67,8 @@ public:
     }
 
 protected:
-    const PageId page_id = 100;
-    VersionedPageEntries entries;
+    const PageIdU64 page_id = 100;
+    u128::VersionedPageEntries entries;
 };
 
 TEST_F(VersionedEntriesTest, InsertGet)
@@ -528,8 +528,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     INSERT_BLOBID_ENTRY(3, 8);
     INSERT_BLOBID_ENTRY(1, 11);
 
-    PageId page_id = 100;
-    auto check_for_blob_id_1 = [&](const PageIdAndVersionedEntries & entries) {
+    PageIdU64 page_id = 100;
+    auto check_for_blob_id_1 = [&](const PageDirectory<u128::PageDirectoryTrait>::GcEntries & entries) {
         auto it = entries.begin();
         ASSERT_EQ(std::get<0>(*it).low, page_id);
         ASSERT_EQ(std::get<1>(*it).sequence, 11);
@@ -537,7 +537,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     };
 
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
@@ -546,7 +546,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     }
 
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         const BlobFileId blob_id = 1;
         PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
@@ -558,7 +558,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     }
 
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         const BlobFileId blob_id = 2;
         PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
@@ -568,7 +568,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     }
 
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         const BlobFileId blob_id = 3;
         PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
@@ -579,7 +579,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 
     // {1, 2}
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({1, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
@@ -591,7 +591,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 
     // {2, 3}
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
@@ -601,7 +601,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 
     // {1, 2, 3}
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
@@ -613,7 +613,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 
     // {1, 2, 3, 100}; blob_id 100 is not exist in actual
     {
-        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 

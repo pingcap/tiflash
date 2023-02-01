@@ -51,16 +51,16 @@ public:
 
     virtual ~PageReaderImpl() = default;
 
-    virtual DB::Page read(PageId page_id) const = 0;
+    virtual DB::Page read(PageIdU64 page_id) const = 0;
 
-    virtual PageMap read(const PageIds & page_ids) const = 0;
+    virtual PageMapU64 read(const PageIdU64s & page_ids) const = 0;
 
     using PageReadFields = PageStorage::PageReadFields;
-    virtual PageMap read(const std::vector<PageReadFields> & page_fields) const = 0;
+    virtual PageMapU64 read(const std::vector<PageReadFields> & page_fields) const = 0;
 
-    virtual PageId getNormalPageId(PageId page_id) const = 0;
+    virtual PageIdU64 getNormalPageId(PageIdU64 page_id) const = 0;
 
-    virtual PageEntry getPageEntry(PageId page_id) const = 0;
+    virtual PageEntry getPageEntry(PageIdU64 page_id) const = 0;
 
     virtual PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const = 0;
 
@@ -93,28 +93,28 @@ public:
     {
     }
 
-    DB::Page read(PageId page_id) const override
+    DB::Page read(PageIdU64 page_id) const override
     {
         return storage->read(ns_id, page_id, read_limiter, snap);
     }
 
-    PageMap read(const PageIds & page_ids) const override
+    PageMapU64 read(const PageIdU64s & page_ids) const override
     {
         return storage->read(ns_id, page_ids, read_limiter, snap);
     }
 
     using PageReadFields = PageStorage::PageReadFields;
-    PageMap read(const std::vector<PageReadFields> & page_fields) const override
+    PageMapU64 read(const std::vector<PageReadFields> & page_fields) const override
     {
         return storage->read(ns_id, page_fields, read_limiter, snap);
     }
 
-    PageId getNormalPageId(PageId page_id) const override
+    PageIdU64 getNormalPageId(PageIdU64 page_id) const override
     {
         return storage->getNormalPageId(ns_id, page_id, snap);
     }
 
-    PageEntry getPageEntry(PageId page_id) const override
+    PageEntry getPageEntry(PageIdU64 page_id) const override
     {
         return storage->getEntry(ns_id, page_id, snap);
     }
@@ -179,7 +179,7 @@ public:
     {
     }
 
-    DB::Page read(PageId page_id) const override
+    DB::Page read(PageIdU64 page_id) const override
     {
         const auto & page_from_v3 = storage_v3->read(ns_id, page_id, read_limiter, toConcreteV3Snapshot(), false);
         if (page_from_v3.isValid())
@@ -189,10 +189,10 @@ public:
         return storage_v2->read(ns_id, page_id, read_limiter, toConcreteV2Snapshot());
     }
 
-    PageMap read(const PageIds & page_ids) const override
+    PageMapU64 read(const PageIdU64s & page_ids) const override
     {
         auto page_maps = storage_v3->read(ns_id, page_ids, read_limiter, toConcreteV3Snapshot(), false);
-        PageIds invalid_page_ids;
+        PageIdU64s invalid_page_ids;
         for (const auto & [query_page_id, page] : page_maps)
         {
             if (!page.isValid())
@@ -214,7 +214,7 @@ public:
     }
 
     using PageReadFields = PageStorage::PageReadFields;
-    PageMap read(const std::vector<PageReadFields> & page_fields) const override
+    PageMapU64 read(const std::vector<PageReadFields> & page_fields) const override
     {
         auto page_maps = storage_v3->read(ns_id, page_fields, read_limiter, toConcreteV3Snapshot(), false);
 
@@ -240,17 +240,17 @@ public:
         return page_maps;
     }
 
-    PageId getNormalPageId(PageId page_id) const override
+    PageIdU64 getNormalPageId(PageIdU64 page_id) const override
     {
-        PageId resolved_page_id = storage_v3->getNormalPageId(ns_id, page_id, toConcreteV3Snapshot(), false);
-        if (resolved_page_id != INVALID_PAGE_ID)
+        PageIdU64 resolved_page_id = storage_v3->getNormalPageId(ns_id, page_id, toConcreteV3Snapshot(), false);
+        if (resolved_page_id != INVALID_PAGE_U64_ID)
         {
             return resolved_page_id;
         }
         return storage_v2->getNormalPageId(ns_id, page_id, toConcreteV2Snapshot());
     }
 
-    PageEntry getPageEntry(PageId page_id) const override
+    PageEntry getPageEntry(PageIdU64 page_id) const override
     {
         PageEntry page_entry = storage_v3->getEntry(ns_id, page_id, toConcreteV3Snapshot());
         if (page_entry.file_id != INVALID_BLOBFILE_ID)
@@ -385,27 +385,27 @@ PageReader::PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_,
 
 PageReader::~PageReader() = default;
 
-DB::Page PageReader::read(PageId page_id) const
+DB::Page PageReader::read(PageIdU64 page_id) const
 {
     return impl->read(page_id);
 }
 
-PageMap PageReader::read(const PageIds & page_ids) const
+PageMapU64 PageReader::read(const PageIdU64s & page_ids) const
 {
     return impl->read(page_ids);
 }
 
-PageMap PageReader::read(const std::vector<PageStorage::PageReadFields> & page_fields) const
+PageMapU64 PageReader::read(const std::vector<PageStorage::PageReadFields> & page_fields) const
 {
     return impl->read(page_fields);
 }
 
-PageId PageReader::getNormalPageId(PageId page_id) const
+PageIdU64 PageReader::getNormalPageId(PageIdU64 page_id) const
 {
     return impl->getNormalPageId(page_id);
 }
 
-PageEntry PageReader::getPageEntry(PageId page_id) const
+PageEntry PageReader::getPageEntry(PageIdU64 page_id) const
 {
     return impl->getPageEntry(page_id);
 }
@@ -478,7 +478,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
     // We need hold mem from V2 pages after write.
     std::list<MemHolder> mem_holders;
 
-    std::set<PageId> page_ids_before_ref;
+    PageIdU64Set page_ids_before_ref;
 
     for (const auto & write : write_batch.getWrites())
     {
@@ -500,13 +500,13 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         case WriteBatchWriteType::REF:
         {
             // 1. Try to resolve normal page id
-            PageId resolved_page_id = storage_v3->getNormalPageId(ns_id,
-                                                                  write.ori_page_id,
-                                                                  /*snapshot*/ nullptr,
-                                                                  false);
+            PageIdU64 resolved_page_id = storage_v3->getNormalPageId(ns_id,
+                                                                     write.ori_page_id,
+                                                                     /*snapshot*/ nullptr,
+                                                                     false);
 
             // If the origin id is found in V3, then just apply the ref to v3
-            if (resolved_page_id != INVALID_PAGE_ID)
+            if (resolved_page_id != INVALID_PAGE_U64_ID)
             {
                 break;
             }

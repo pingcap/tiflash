@@ -18,7 +18,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V2/PageEntries.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/WriteBatch.h>
@@ -33,6 +33,10 @@ class Logger;
 
 namespace DB::PS::V2
 {
+using PageIdAndEntry = PageIdU64AndEntry;
+using PageIdAndEntries = PageIdU64AndEntries;
+using PageMap = PageMapU64;
+
 /// A light-weight object which can be created and copied cheaply.
 /// Use createWriter()/createReader() to open write/read system file.
 class PageFile : public Allocator<false>

@@ -17,8 +17,9 @@
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
@@ -84,6 +85,15 @@ public:
 
         bool equals(const StatisticsInfo & rhs) const;
     };
+
+public:
+    // Use a more easy gc config for v2 when all of its data will be transformed to v3.
+    static PageStorageConfig getEasyGCConfig()
+    {
+        PageStorageConfig gc_config;
+        gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
+        return gc_config;
+    }
 
 public:
     PageStorage(String name,

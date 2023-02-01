@@ -40,7 +40,7 @@ private:
     UInt64 bytes = 0;
 
     /// The id of data page which stores the data of this pack.
-    PageId data_page_id;
+    PageIdU64 data_page_id;
 
     /// The members below are not serialized.
 
@@ -62,7 +62,7 @@ private:
     }
 
 public:
-    ColumnFileTiny(const ColumnFileSchemaPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
+    ColumnFileTiny(const ColumnFileSchemaPtr & schema_, UInt64 rows_, UInt64 bytes_, PageIdU64 data_page_id_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , rows(rows_)
         , bytes(bytes_)
@@ -81,7 +81,7 @@ public:
     /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
     ColumnFileSchemaPtr getSchema() const { return schema; }
 
-    ColumnFileTinyPtr cloneWith(PageId new_data_page_id)
+    ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id)
     {
         auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
         new_tiny_file->data_page_id = new_data_page_id;
@@ -98,13 +98,13 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    PageId getDataPageId() const { return data_page_id; }
+    PageIdU64 getDataPageId() const { return data_page_id; }
 
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
     static ColumnFileTinyPtr writeColumnFile(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache = nullptr);
 
-    static PageId writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
+    static PageIdU64 writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
     static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
 

@@ -20,9 +20,9 @@
 #include <Encryption/RateLimiter.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -95,14 +95,14 @@ try
     // In this case, WalStore throput is very low.
     // Because we only have 5 record to write.
     size_t wb_nums = 5;
-    PageId page_id = 50;
+    PageIdU64 page_id = 50;
     size_t buff_size = 100ul * 1024;
     const size_t rate_target = buff_size - 1;
 
     char c_buff[wb_nums * buff_size];
 
     WriteBatch wbs[wb_nums];
-    PageEntriesEdit edits[wb_nums];
+    u128::PageEntriesEdit edits[wb_nums];
 
     for (size_t i = 0; i < wb_nums; ++i)
     {
@@ -154,7 +154,7 @@ try
                                                                         rate_target,
                                                                         LimiterType::UNKNOW);
 
-        PageIds page_ids;
+        std::vector<PageIdU64> page_ids;
         for (size_t i = 0; i < wb_nums; ++i)
         {
             page_ids.emplace_back(page_id + i);
@@ -394,7 +394,7 @@ try
     }
 
     {
-        PageIds page_ids = {1, 2, 5};
+        std::vector<PageIdU64> page_ids = {1, 2, 5};
         // readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true);
         auto page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
         ASSERT_EQ(page_maps[1].page_id, 1);
@@ -437,7 +437,7 @@ try
     }
     {
         // Read with ids can also fetch the fieldOffsets
-        PageIds page_ids{4};
+        std::vector<PageIdU64> page_ids{4};
         auto pages = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
         ASSERT_EQ(pages.size(), 1);
         ASSERT_GT(pages.count(4), 0);
@@ -523,7 +523,7 @@ CATCH
 TEST_F(PageStorageTest, MultipleWriteRead)
 {
     size_t page_id_max = 100;
-    for (DB::PageId page_id = 0; page_id <= page_id_max; ++page_id)
+    for (DB::PageIdU64 page_id = 0; page_id <= page_id_max; ++page_id)
     {
         std::mt19937 size_gen;
         size_gen.seed(time(nullptr));
@@ -547,7 +547,7 @@ TEST_F(PageStorageTest, MultipleWriteRead)
         page_storage->write(std::move(wb));
     }
 
-    for (DB::PageId page_id = 0; page_id <= page_id_max; ++page_id)
+    for (DB::PageIdU64 page_id = 0; page_id <= page_id_max; ++page_id)
     {
         page_storage->read(page_id);
     }
@@ -607,7 +607,7 @@ try
     char c_buff[buf_sz];
 
     const size_t num_repeat = 10;
-    PageId pid = 1;
+    PageIdU64 pid = 1;
     const char page0_byte = 0x3f;
     {
         // put page0
@@ -712,7 +712,7 @@ TEST_F(PageStorageTest, IngestFile)
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> & living_page_ids) -> void {
         times_remover_called += 1;
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(100), 0);
@@ -1192,7 +1192,7 @@ try
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> & living_page_ids) -> void {
         times_remover_called += 1;
         switch (test_stage)
         {
@@ -1289,7 +1289,7 @@ try
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
             return;
@@ -1317,7 +1317,7 @@ try
             (*ptr) += 1; // mock access the storage inside callback
             return {};
         };
-        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)
                 return;
@@ -1348,7 +1348,7 @@ try
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
             return;
@@ -1611,7 +1611,7 @@ try
         c_buff[i] = i % 0xff;
     }
 
-    PageId page_id = 120;
+    PageIdU64 page_id = 120;
     UInt64 tag = 12345;
     {
         WriteBatch batch;
@@ -1663,7 +1663,7 @@ try
         c_buff[i] = i % 0xff;
     }
 
-    PageId page_id0 = 120;
+    PageIdU64 page_id0 = 120;
     {
         WriteBatch batch;
         batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
@@ -1683,7 +1683,7 @@ try
     while (getLogFileNum() <= 1)
     {
         WriteBatch batch;
-        PageId page_id1 = 130;
+        PageIdU64 page_id1 = 130;
         batch.putPage(page_id1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }
@@ -1729,13 +1729,13 @@ try
         c_buff[i] = i % 0xff;
     }
 
-    PageId page_id0 = 120;
+    PageIdU64 page_id0 = 120;
     {
         WriteBatch batch;
         batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }
-    PageId page_id1 = 121;
+    PageIdU64 page_id1 = 121;
     {
         WriteBatch batch;
         batch.putRefPage(page_id1, page_id0);
@@ -1759,7 +1759,7 @@ try
     while (getLogFileNum() <= 1)
     {
         WriteBatch batch;
-        PageId page_id2 = 130;
+        PageIdU64 page_id2 = 130;
         batch.putPage(page_id2, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }

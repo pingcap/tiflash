@@ -77,7 +77,7 @@ public:
         options.only_list_can_gc = true;
         for (auto & root_path : delegate.listPaths())
         {
-            std::set<PageId> ids_under_path;
+            std::set<PageIdU64> ids_under_path;
             auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
             path_and_ids_vec.emplace_back(root_path, std::move(file_ids_in_current_path));
         }
@@ -104,7 +104,7 @@ public:
         , logger(std::move(log))
     {}
 
-    void operator()(const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids)
+    void operator()(const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageIdU64> & valid_ids)
     {
         // If the StoragePathPool is invalid or shutdown flag is set,
         // meaning we call `remover` after shutdowning or dropping the table,

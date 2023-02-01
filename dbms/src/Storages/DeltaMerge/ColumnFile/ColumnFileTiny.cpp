@@ -160,7 +160,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & con
     if (unlikely(!schema))
         throw Exception("Cannot deserialize DeltaPackBlock's schema", ErrorCodes::LOGICAL_ERROR);
 
-    PageId data_page_id;
+    PageIdU64 data_page_id;
     size_t rows, bytes;
 
     readIntBinary(data_page_id, buf);
@@ -213,7 +213,7 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(const DMContext & context, con
     return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, cache);
 }
 
-PageId ColumnFileTiny::writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
+PageIdU64 ColumnFileTiny::writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
     auto page_id = context.storage_pool.newLogPageId();
 

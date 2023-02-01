@@ -99,7 +99,7 @@ PageId PageEntriesView::resolveRefId(PageId page_id) const
     return is_ref ? normal_page_id : page_id;
 }
 
-std::set<PageId> PageEntriesView::validPageIds() const
+PageIdSet PageEntriesView::validPageIds() const
 {
     std::stack<PageEntriesForDeltaPtr> link_nodes;
     for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
@@ -107,7 +107,7 @@ std::set<PageId> PageEntriesView::validPageIds() const
         link_nodes.emplace(node);
     }
     // Get valid pages, from link-list's head to tail
-    std::set<PageId> valid_pages;
+    PageIdSet valid_pages;
     while (!link_nodes.empty())
     {
         PageEntriesForDeltaPtr node = link_nodes.top();

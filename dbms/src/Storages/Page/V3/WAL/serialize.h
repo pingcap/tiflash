@@ -18,9 +18,22 @@
 
 #include <string_view>
 
-namespace DB::PS::V3::ser
+namespace DB::PS::V3
 {
-String serializeTo(const PageEntriesEdit & edit);
-PageEntriesEdit deserializeFrom(std::string_view record);
-
-} // namespace DB::PS::V3::ser
+namespace u128
+{
+struct Serializer
+{
+    static String serializeTo(const PageEntriesEdit & edit);
+    static PageEntriesEdit deserializeFrom(std::string_view record);
+};
+} // namespace u128
+namespace universal
+{
+struct Serializer
+{
+    static String serializeTo(const PageEntriesEdit & edit);
+    static PageEntriesEdit deserializeFrom(std::string_view record);
+};
+} // namespace universal
+} // namespace DB::PS::V3

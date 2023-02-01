@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V2/PageEntries.h>
 
 #include <optional>
@@ -41,7 +41,7 @@ public:
     std::pair<bool, PageId> isRefId(PageId page_id) const;
 
     // For iterate over all pages
-    std::set<PageId> validPageIds() const;
+    PageIdSet validPageIds() const;
 
     // For iterate over all normal pages
     std::set<PageId> validNormalPageIds() const;

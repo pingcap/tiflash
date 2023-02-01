@@ -125,7 +125,7 @@ inline ::testing::AssertionResult getPageCompare(
     char * buff_cmp,
     const size_t buf_size,
     const Page & page_cmp,
-    const PageId & page_id)
+    const PageIdU64 & page_id)
 {
     if (page_cmp.data.size() != buf_size)
     {
@@ -256,7 +256,7 @@ try
     }
 
     {
-        PageIds page_ids = {1, 2, 3, 4};
+        std::vector<PageIdU64> page_ids = {1, 2, 3, 4};
         auto page_maps = page_reader_mix->read(page_ids);
         ASSERT_EQ(page_maps.size(), 4);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
@@ -275,10 +275,10 @@ try
 
     {
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
-        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(4, {1, 3, 4, 8, 10}));
-        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(7, {0, 1, 2}));
-        PageMap page_maps = page_reader_mix->read(read_fields);
+        read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(2, {1, 3, 6}));
+        read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(4, {1, 3, 4, 8, 10}));
+        read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(7, {0, 1, 2}));
+        PageMapU64 page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 3);
         ASSERT_EQ(page_maps[2].page_id, 2);
         ASSERT_EQ(page_maps[2].field_offsets.size(), 3);
@@ -291,7 +291,7 @@ try
     {
         // Read page ids which only exited in V2
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
+        read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(2, {1, 3, 6}));
         ASSERT_NO_THROW(page_reader_mix->read(read_fields));
     }
 
@@ -462,9 +462,9 @@ try
         ASSERT_EQ(page_reader_mix->getNormalPageId(10), 8);
 
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(10, {0, 1, 2, 6}));
+        read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(10, {0, 1, 2, 6}));
 
-        PageMap page_maps = page_reader_mix->read(read_fields);
+        PageMapU64 page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 1);
         ASSERT_EQ(page_maps[10].page_id, 10);
         ASSERT_EQ(page_maps[10].field_offsets.size(), 4);

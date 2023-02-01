@@ -16,7 +16,7 @@
 
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 #include <vector>
 
@@ -52,13 +52,13 @@ private:
     struct Write
     {
         WriteBatchWriteType type;
-        PageId page_id;
+        PageIdU64 page_id;
         UInt64 tag;
         // Page's data and size
         ReadBufferPtr read_buffer;
         PageSize size;
         // RefPage's origin page
-        PageId ori_page_id;
+        PageIdU64 ori_page_id;
         // Fields' offset inside Page's data
         PageFieldOffsetChecksums offsets;
 
@@ -88,7 +88,7 @@ public:
         , namespace_id(rhs.namespace_id)
     {}
 
-    void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         // Convert from data_sizes to the offset of each field
         PageFieldOffsetChecksums offsets;
@@ -115,7 +115,7 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    void putExternal(PageId page_id, UInt64 tag)
+    void putExternal(PageIdU64 page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
         Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, 0, {}, 0, 0, {}};
@@ -124,7 +124,7 @@ public:
 
     // Upsert a page{page_id} and writer page's data to a new PageFile{file_id}.
     // Now it's used in DataCompactor to move page's data to new file.
-    void upsertPage(PageId page_id,
+    void upsertPage(PageIdU64 page_id,
                     UInt64 tag,
                     const PageFileIdAndLevel & file_id,
                     const ReadBufferPtr & read_buffer,
@@ -139,7 +139,7 @@ public:
     // Upserting a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
     // only used for checkpoint. That page will be overwritten by WriteBatch with larger sequence,
     // so we don't need to write page's data.
-    void upsertPage(PageId page_id,
+    void upsertPage(PageIdU64 page_id,
                     UInt64 tag,
                     const PageFileIdAndLevel & file_id,
                     UInt64 page_offset,
@@ -152,13 +152,13 @@ public:
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
-    void putRefPage(PageId ref_id, PageId page_id)
+    void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
     {
         Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
     }
 
-    void delPage(PageId page_id)
+    void delPage(PageIdU64 page_id)
     {
         Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, 0, {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
@@ -235,7 +235,7 @@ public:
         return namespace_id;
     }
 
-    PageIdV3Internal getFullPageId(PageId id) const
+    PageIdV3Internal getFullPageId(PageIdU64 id) const
     {
         return buildV3Id(namespace_id, id);
     }

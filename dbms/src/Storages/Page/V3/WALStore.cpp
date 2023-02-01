@@ -19,10 +19,10 @@
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Poco/Path.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -43,7 +43,7 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     String storage_name,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
-    WALConfig config)
+    const WALConfig & config)
 {
     auto reader = WALStoreReader::create(storage_name,
                                          provider,
@@ -66,7 +66,7 @@ WALStore::WALStore(
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_,
-    WALConfig config_)
+    const WALConfig & config_)
     : storage_name(std::move(storage_name_))
     , delegator(delegator_)
     , provider(provider_)

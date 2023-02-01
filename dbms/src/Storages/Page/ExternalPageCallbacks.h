@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 #include <vector>
 
@@ -26,10 +26,10 @@ struct ExternalPageCallbacks
     // `scanner` for scanning available external page ids on disks.
     // `remover` will be called with living normal page ids after gc run a round, user should remove those
     //           external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
-    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
+    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageIdU64>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
     using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageId> & valid_normal_pages)>;
+        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageIdU64> & valid_normal_pages)>;
     ExternalPagesScanner scanner = nullptr;
     ExternalPagesRemover remover = nullptr;
     NamespaceId ns_id = MAX_NAMESPACE_ID;

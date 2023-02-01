@@ -27,7 +27,7 @@ struct ColumnFileV2
     UInt64 bytes = 0;
     BlockPtr schema;
     RowKeyRange delete_range;
-    PageId data_page_id = 0;
+    PageIdU64 data_page_id = 0;
 
     bool isDeleteRange() const { return !delete_range.none(); }
 };

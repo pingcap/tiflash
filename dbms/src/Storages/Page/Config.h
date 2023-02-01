@@ -16,7 +16,7 @@
 
 #include <Core/Types.h>
 #include <Interpreters/SettingsCommon.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
 {
