@@ -59,11 +59,6 @@ public:
         DROPPED,
     };
 
-    enum DMSingleFileFormatVersion : int
-    {
-        SINGLE_FILE_VERSION_BASE = 0,
-    };
-
     static String statusString(Status status)
     {
         switch (status)
@@ -172,12 +167,9 @@ public:
         UInt64 sub_file_stat_offset;
         UInt32 sub_file_num;
 
-        DMSingleFileFormatVersion file_format_version;
-
         Footer()
             : sub_file_stat_offset(0)
             , sub_file_num(0)
-            , file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
         {}
     };
 
@@ -321,9 +313,9 @@ private:
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
 
-    size_t colIndexSize(const FileNameBase & file_name_base) const { return subFileSize(colIndexFileName(file_name_base)); }
-    size_t colMarkSize(const FileNameBase & file_name_base) const { return subFileSize(colMarkFileName(file_name_base)); }
-    size_t colDataSize(const FileNameBase & file_name_base) const { return subFileSize(colDataFileName(file_name_base)); }
+    static size_t colIndexSize(const FileNameBase & file_name_base)  { return Poco::File(colIndexFileName(file_name_base)).getSize(); }
+    static size_t colMarkSize(const FileNameBase & file_name_base)  { return Poco::File(colMarkFileName(file_name_base)).getSize(); }
+    static size_t colDataSize(const FileNameBase & file_name_base)  { return Poco::File(colDataFileName(file_name_base)).getSize(); }
 
     bool isColIndexExist(const ColId & col_id) const;
 
@@ -376,15 +368,7 @@ private:
 
     void finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
 
-    void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
-
-    bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
-
     String subFilePath(const String & file_name) const { return path() + "/" + file_name; }
-
-    size_t subFileSize(const String & file_name) const { return sub_file_stats.at(file_name).size; }
-
-    void initializeSubFileStatsForFolderMode();
 
     void initializeIndices();
 

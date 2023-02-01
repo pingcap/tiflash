@@ -501,7 +501,6 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
 
     if (read_meta_mode.isAll())
     {
-        initializeSubFileStatsForFolderMode();
         initializeIndices();
     }
     if (auto file = Poco::File(packPropertyPath()); file.exists())
@@ -560,7 +559,6 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
         LOG_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
     }
     old_file.renameTo(new_path);
-    initializeSubFileStatsForFolderMode();
     initializeIndices();
 }
 
@@ -677,22 +675,6 @@ void DMFile::remove(const FileProviderPtr & file_provider)
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_from_disk);
         // Then clean the files on disk
         dir_file.remove(true);
-    }
-}
-
-void DMFile::initializeSubFileStatsForFolderMode()
-{
-    Poco::File directory{path()};
-    std::vector<std::string> sub_files{};
-    directory.list(sub_files);
-    for (const auto & name : sub_files)
-    {
-        if (endsWith(name, details::DATA_FILE_SUFFIX) || endsWith(name, details::INDEX_FILE_SUFFIX)
-            || endsWith(name, details::MARK_FILE_SUFFIX))
-        {
-            auto size = Poco::File(path() + "/" + name).getSize();
-            sub_file_stats.emplace(name, SubFileStat{0, size});
-        }
     }
 }
 

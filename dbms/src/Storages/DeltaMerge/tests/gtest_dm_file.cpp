@@ -44,7 +44,6 @@ namespace tests
 {
 enum class DMFileMode
 {
-    SingleFile,
     DirectoryLegacy,
     DirectoryChecksum
 };
@@ -56,9 +55,6 @@ String paramToString(const ::testing::TestParamInfo<DMFileMode> & info)
     String name;
     switch (mode)
     {
-    case DMFileMode::SingleFile:
-        name = "single_file";
-        break;
     case DMFileMode::DirectoryLegacy:
         name = "folder";
         break;
@@ -886,7 +882,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFileTest,
-                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 
@@ -1315,7 +1311,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFileDDLTest,
-                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 } // namespace tests
