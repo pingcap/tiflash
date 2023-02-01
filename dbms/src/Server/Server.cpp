@@ -1078,8 +1078,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize the cluster id of tiflash server.
-    if (config().has(ClusterIdHolder::cluster_id_key))
-        ClusterIdHolder::instance().set(config().getString(ClusterIdHolder::cluster_id_key));
+    auto cluster_id = config().getString(ClusterIdHolder::cluster_id_key, "default");
+    ClusterIdHolder::instance().set(cluster_id);
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
