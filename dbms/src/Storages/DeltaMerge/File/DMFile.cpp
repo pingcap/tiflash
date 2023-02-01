@@ -142,7 +142,6 @@ DMFilePtr DMFile::restore(
     if (!poco_file.exists())
         return nullptr;
 
-    bool single_file_mode = poco_file.isFile();
     DMFilePtr dmfile(new DMFile(
         file_id,
         page_id,
@@ -151,10 +150,7 @@ DMFilePtr DMFile::restore(
         &Poco::Logger::get("DMFile")));
     if (!read_meta_mode.isNone())
     {
-        if (!single_file_mode)
-        {
-            dmfile->readConfiguration(file_provider);
-        }
+        dmfile->readConfiguration(file_provider);
         dmfile->readMetadata(file_provider, read_meta_mode);
     }
     return dmfile;
