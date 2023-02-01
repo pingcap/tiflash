@@ -881,6 +881,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         total_input_build_rows += block.rows();
         blocks.push_back(block);
         stored_block = &blocks.back();
+        original_blocks.push_back(block);
     }
     insertFromBlockInternal(stored_block, stream_index);
 }
@@ -2016,7 +2017,7 @@ enum class NullAwareJoinHelperStep
     NOTNULL_CHECK_OTHER_COND,
     NOTNULL_CHECK_NULL_LIST,
     NULL_CHECK_NULL_LIST,
-    NULL_CHECK_HASH_TABLE,
+    NULL_CHECK_ALL_BLOCKS,
     DONE,
 };
 
@@ -2024,15 +2025,16 @@ template <typename Map>
 class NullAwareJoinHelper
 {
 public:
-    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, const typename Map::mapped_type::Base_t * map_it)
+    NullAwareJoinHelper(size_t row_num, NullAwareJoinHelperStep s, const typename Map::mapped_type::Base_t * map_it, const BlocksList & right_blocks)
         : row_num(row_num)
         , step(s)
+        , null_pos(0)
+        , null_list(nullptr)
         , map_it(map_it)
-    {
-        null_pos = 0;
-        null_list = nullptr;
-        current_segment = 0;
-    }
+        , right_blocks_index(0)
+        , right_blocks_iter(right_blocks.begin())
+        , right_blocks_end_iter(right_blocks.end())
+    {}
 
     void setResult(bool is_null, bool res)
     {
@@ -2041,7 +2043,7 @@ public:
     }
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    bool fillColumns(MutableColumns & added_columns, size_t left_columns, const Map & map, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace)
+    bool fillColumns(MutableColumns & added_columns, size_t left_columns, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace)
     {
         static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                       || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -2106,6 +2108,7 @@ public:
 
                 null_list = null_list->next;
             }
+
             if (step == NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST)
             {
                 if (to_end && offset.first == current_offset)
@@ -2120,74 +2123,39 @@ public:
             else if (step == NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST)
             {
                 if (to_end)
-                    step = NullAwareJoinHelperStep::NULL_CHECK_HASH_TABLE;
+                    step = NullAwareJoinHelperStep::NULL_CHECK_ALL_BLOCKS;
             }
             break;
         }
-        case NullAwareJoinHelperStep::NULL_CHECK_HASH_TABLE:
+        case NullAwareJoinHelperStep::NULL_CHECK_ALL_BLOCKS:
         {
             bool to_end = false;
-
-            /// Initialization
-            if (current_segment == 0)
+            if (right_blocks_iter == right_blocks_end_iter)
             {
-                current_segment = 1;
-
-                seg_it = map.getSegmentTable(0).begin();
-                end_it = map.getSegmentTable(0).end();
-                if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
-                    map_it = nullptr;
+                to_end = true;
             }
-
-            for (size_t i = 0; i < max_pace; ++i)
+            for (size_t i = 0; i < max_pace && !to_end; ++i)
             {
-                if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+                while (right_blocks_index >= right_blocks_iter->rows())
                 {
-                    if (map_it != nullptr)
-                    {
-                        for (size_t j = 0; j < num_columns_to_add; ++j)
-                            added_columns[j + left_columns]->insertFrom(*map_it->block->getByPosition(j).column.get(), map_it->row_num);
-                        ++current_offset;
-
-                        map_it = map_it->next;
-                        if (map_it == nullptr)
-                            ++seg_it;
-                    }
-                }
-                while (seg_it == end_it)
-                {
-                    if (current_segment >= map.getSegmentSize())
+                    ++right_blocks_iter;
+                    right_blocks_index = 0;
+                    if (right_blocks_iter == right_blocks_end_iter)
                     {
                         to_end = true;
                         break;
                     }
-                    current_segment += 1;
-
-                    seg_it = map.getSegmentTable(current_segment - 1).begin();
-                    end_it = map.getSegmentTable(current_segment - 1).end();
                 }
                 if (to_end)
                     break;
 
-                if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
-                {
-                    map_it = &static_cast<const typename Map::mapped_type::Base_t &>(seg_it->getMapped());
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
-                        added_columns[j + left_columns]->insertFrom(*map_it->block->getByPosition(j).column.get(), map_it->row_num);
-                    ++current_offset;
+                for (size_t j = 0; j < num_columns_to_add; ++j)
+                    added_columns[j + left_columns]->insertFrom(*right_blocks_iter->getByPosition(j).column.get(), right_blocks_index);
+                ++current_offset;
 
-                    map_it = map_it->next;
-                    if (map_it == nullptr)
-                        ++seg_it;
-                }
-                else
-                {
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
-                        added_columns[j + left_columns]->insertFrom(*seg_it->getMapped().block->getByPosition(j).column.get(), seg_it->getMapped().row_num);
-                    ++current_offset;
-                    ++seg_it;
-                }
+                ++right_blocks_index;
             }
+
             if (to_end && offset.first == current_offset)
             {
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
@@ -2287,11 +2255,10 @@ private:
 
     /// Mapped data for one cell.
     const typename Map::mapped_type::Base_t * map_it;
-    /// Current segment id.
-    /// 0 means seg_it and end_it have not initialized.
-    size_t current_segment;
-    typename Map::SegmentType::HashTable::const_iterator seg_it;
-    typename Map::SegmentType::HashTable::const_iterator end_it;
+
+    size_t right_blocks_index;
+    BlocksList::const_iterator right_blocks_iter;
+    BlocksList::const_iterator right_blocks_end_iter;
 
     /// (is_null, result)
     std::pair<bool, bool> result;
@@ -2299,7 +2266,6 @@ private:
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, bool all_keys_equal>
 void NO_INLINE joinBlockImplNullAwareInternalWork(
-    const Map & map,
     Block & block,
     size_t left_columns,
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
@@ -2328,7 +2294,7 @@ void NO_INLINE joinBlockImplNullAwareInternalWork(
         while (helper_it != helpers_list.end())
         {
             size_t previous_offset = current_offset;
-            if ((*helper_it)->template fillColumns<KIND, STRICTNESS>(columns, left_columns, map, null_lists, current_offset, max_pace))
+            if ((*helper_it)->template fillColumns<KIND, STRICTNESS>(columns, left_columns, null_lists, current_offset, max_pace))
             {
                 helper_it = helpers_list.erase(helper_it);
                 continue;
@@ -2448,6 +2414,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const Map & map,
     Block & block,
     size_t left_columns,
+    const BlocksList & right_blocks,
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
     String other_filter_column,
@@ -2499,7 +2466,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if ((*filter_null_map)[i])
             {
                 /// Filter out by left_conditions.
-                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, nullptr);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, nullptr, right_blocks);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     helpers.back().setResult(false, false);
                 else
@@ -2512,7 +2479,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if ((*null_map)[i])
             {
                 /// TODO: fast path, if all null and STRICTNESS is any and the result set is not empty, the result should be null.
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST, nullptr);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NULL_CHECK_NULL_LIST, nullptr, right_blocks);
                 helpers_list.push_back(&helpers.back());
                 continue;
             }
@@ -2559,7 +2526,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
-                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, map_it);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::DONE, map_it, right_blocks);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     helpers.back().setResult(false, true);
                 else
@@ -2567,13 +2534,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else
             {
-                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND, map_it);
+                helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_OTHER_COND, map_it, right_blocks);
                 equal_helpers_list.push_back(&helpers.back());
             }
         }
         else
         {
-            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST, nullptr);
+            helpers.emplace_back(i, NullAwareJoinHelperStep::NOTNULL_CHECK_NULL_LIST, nullptr, right_blocks);
             helpers_list.push_back(&helpers.back());
         }
         keyHolderDiscardKey(key_holder);
@@ -2583,7 +2550,6 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
         joinBlockImplNullAwareInternalWork<KIND, STRICTNESS, Map, true>(
-            map,
             block,
             left_columns,
             null_lists,
@@ -2597,7 +2563,6 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     }
 
     joinBlockImplNullAwareInternalWork<KIND, STRICTNESS, Map, false>(
-        map,
         block,
         left_columns,
         null_lists,
@@ -2669,6 +2634,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const Map & map,
     Block & block,
     size_t left_columns,
+    const BlocksList & right_blocks,
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
     String other_filter_column,
@@ -2688,6 +2654,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         map,                                                                                             \
         block,                                                                                           \
         left_columns,                                                                                    \
+        right_blocks,                                                                                    \
         null_lists,                                                                                      \
         max_block_size,                                                                                  \
         other_filter_column,                                                                             \
@@ -2775,6 +2742,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             *maps.TYPE,                                                                                                                                 \
             block,                                                                                                                                      \
             existing_columns,                                                                                                                           \
+            blocks,                                                                                                                                     \
             rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
             other_filter_column,                                                                                                                        \
