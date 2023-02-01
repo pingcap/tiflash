@@ -273,8 +273,10 @@ namespace DB
     M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                          \
         F(type_send, {{"type", "send_queue"}}),                                                                                           \
         F(type_receive, {{"type", "recv_queue"}}))                                                                                        \
-    M(tiflash_mpp_resource, "resource used by mpp task", Counter,                                                                         \
-        F(type_cpu_time, {{"type", "cpu_time"}, {"cluster_id", ClusterIdHolder::instance().get()}}))                                      \
+    M(tiflash_aru, "resource used by tiflash compute", Counter,                                                                           \
+        F(type_mpp, {{"type", "mpp"}, {"cluster_id", ClusterIdHolder::instance().get()}}),                                                \
+        F(type_cop, {{"type", "cop"}, {"cluster_id", ClusterIdHolder::instance().get()}}),                                                \
+        F(type_batch, {{"type", "batch"}, {"cluster_id", ClusterIdHolder::instance().get()}}))                                            \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
