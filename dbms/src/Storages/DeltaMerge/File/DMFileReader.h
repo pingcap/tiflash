@@ -164,6 +164,7 @@ private:
     const size_t rows_threshold_per_read;
 
     size_t next_pack_id = 0;
+    size_t next_row_offset = 0;
 
     FileProviderPtr file_provider;
 

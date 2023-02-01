@@ -260,6 +260,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
         scan_context->total_dmfile_skipped_packs += 1;
         scan_context->total_dmfile_skipped_rows += pack_stats[next_pack_id].rows;
     }
+    next_row_offset += skip_rows;
     return next_pack_id < use_packs.size();
 }
 
@@ -289,6 +290,7 @@ Block DMFileReader::read()
         return {};
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
+    size_t start_row_offset = next_row_offset;
     // When read_one_pack_every_time is true, we can just read one pack every time.
     // 0 means no limit
     size_t read_pack_limit = read_one_pack_every_time ? 1 : 0;
@@ -324,11 +326,13 @@ Block DMFileReader::read()
             deleted_rows += 1;
         }
     }
+    next_row_offset += read_rows;
 
     if (read_rows == 0)
         return {};
 
     Block res;
+    res.setStartOffset(start_row_offset);
 
     size_t read_packs = next_pack_id - start_pack_id;
 
