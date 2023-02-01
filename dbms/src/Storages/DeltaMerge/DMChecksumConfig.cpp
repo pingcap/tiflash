@@ -25,8 +25,6 @@
 namespace DB::DM
 {
 DMChecksumConfig::DMChecksumConfig(std::istream & input)
-    :
-
 {
     dtpb::ChecksumConfig configuration;
     if (unlikely(!configuration.ParseFromIstream(&input)))
