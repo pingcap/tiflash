@@ -36,8 +36,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 
     // black_hole is used to consume data manually.
     // we use SCOPE_EXIT to ensure the release of memory area.
-    auto * black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
-    SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
+    auto * black_hole = reinterpret_cast<char *>(::operator new(DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
+    SCOPE_EXIT({ ::operator delete(black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
     };
@@ -47,7 +47,6 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
 
     LOG_INFO(logger, "bytes on disk: {}", dmfile->getBytesOnDisk());
-    LOG_INFO(logger, "single file: {}", dmfile->isSingleFileMode());
 
     // if the DMFile has a config file, there may be additional debugging information
     // we also log the content of dmfile checksum config
@@ -81,43 +80,41 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     if (args.check)
     {
         // for directory mode file, we can consume each file to check its integrity.
-        if (!dmfile->isSingleFileMode())
+
+        auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
+        auto file = Poco::File{prefix};
+        std::vector<std::string> sub;
+        file.list(sub);
+        for (auto & i : sub)
         {
-            auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
-            auto file = Poco::File{prefix};
-            std::vector<std::string> sub;
-            file.list(sub);
-            for (auto & i : sub)
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
             {
-                if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
+                auto full_path = prefix;
+                full_path += "/";
+                full_path += i;
+                LOG_INFO(logger, "checking {}: ", i);
+                if (dmfile->getConfiguration())
                 {
-                    auto full_path = prefix;
-                    full_path += "/";
-                    full_path += i;
-                    LOG_INFO(logger, "checking {}: ", i);
-                    if (dmfile->getConfiguration())
-                    {
-                        consume(*DB::createReadBufferFromFileBaseByFileProvider(
-                            fp,
-                            full_path,
-                            DB::EncryptionPath(full_path, i),
-                            dmfile->getConfiguration()->getChecksumFrameLength(),
-                            nullptr,
-                            dmfile->getConfiguration()->getChecksumAlgorithm(),
-                            dmfile->getConfiguration()->getChecksumFrameLength()));
-                    }
-                    else
-                    {
-                        consume(*DB::createReadBufferFromFileBaseByFileProvider(
-                            fp,
-                            full_path,
-                            DB::EncryptionPath(full_path, i),
-                            DBMS_DEFAULT_BUFFER_SIZE,
-                            0,
-                            nullptr));
-                    }
-                    LOG_INFO(logger, "[success]");
+                    consume(*DB::createReadBufferFromFileBaseByFileProvider(
+                        fp,
+                        full_path,
+                        DB::EncryptionPath(full_path, i),
+                        dmfile->getConfiguration()->getChecksumFrameLength(),
+                        nullptr,
+                        dmfile->getConfiguration()->getChecksumAlgorithm(),
+                        dmfile->getConfiguration()->getChecksumFrameLength()));
                 }
+                else
+                {
+                    consume(*DB::createReadBufferFromFileBaseByFileProvider(
+                        fp,
+                        full_path,
+                        DB::EncryptionPath(full_path, i),
+                        DBMS_DEFAULT_BUFFER_SIZE,
+                        0,
+                        nullptr));
+                }
+                LOG_INFO(logger, "[success]");
             }
         }
         // for both directory file and single mode file, we can read out all blocks from the file.

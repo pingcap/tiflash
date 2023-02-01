@@ -51,12 +51,6 @@ using DMFiles = std::vector<DMFilePtr>;
 class DMFile : private boost::noncopyable
 {
 public:
-    enum Mode : int
-    {
-        SINGLE_FILE,
-        FOLDER,
-    };
-
     enum Status : int
     {
         WRITABLE,
@@ -192,7 +186,7 @@ public:
     using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationOpt configuration = std::nullopt);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -212,7 +206,7 @@ public:
 
     // static helper function for getting path
     static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);
-    static String getNGCPath(const String & parent_path, UInt64 file_id, DMFile::Status status, bool is_single_mode);
+    static String getNGCPath(const String & parent_path, UInt64 file_id, DMFile::Status status);
 
     bool canGC();
     void enableGC();
@@ -266,7 +260,6 @@ public:
         throw Exception("Column [" + DB::toString(col_id) + "] not found in dm file [" + path() + "]");
     }
     bool isColumnExist(ColId col_id) const { return column_stats.find(col_id) != column_stats.end(); }
-    bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
 
     /*
      * TODO: This function is currently unused. We could use it when:
@@ -301,21 +294,17 @@ private:
     DMFile(UInt64 file_id_,
            UInt64 page_id_,
            String parent_path_,
-           Mode mode_,
            Status status_,
            Poco::Logger * log_,
            DMConfigurationOpt configuration_ = std::nullopt)
         : file_id(file_id_)
         , page_id(page_id_)
         , parent_path(std::move(parent_path_))
-        , mode(mode_)
         , status(status_)
         , configuration(std::move(configuration_))
         , log(log_)
     {
     }
-
-    bool isFolderMode() const { return mode == Mode::FOLDER; }
 
     // Do not gc me.
     String ngcPath() const;
@@ -332,8 +321,6 @@ private:
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
 
-    size_t colIndexOffset(const FileNameBase & file_name_base) const { return subFileOffset(colIndexFileName(file_name_base)); }
-    size_t colMarkOffset(const FileNameBase & file_name_base) const { return subFileOffset(colMarkFileName(file_name_base)); }
     size_t colIndexSize(const FileNameBase & file_name_base) const { return subFileSize(colIndexFileName(file_name_base)); }
     size_t colMarkSize(const FileNameBase & file_name_base) const { return subFileSize(colMarkFileName(file_name_base)); }
     size_t colDataSize(const FileNameBase & file_name_base) const { return subFileSize(colDataFileName(file_name_base)); }
@@ -388,15 +375,12 @@ private:
     void setStatus(Status status_) { status = status_; }
 
     void finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
-    void finalizeForSingleFileMode(WriteBuffer & buffer);
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
 
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
-    String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
-
-    size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? sub_file_stats.at(file_name).offset : 0; }
+    String subFilePath(const String & file_name) const { return path() + "/" + file_name; }
 
     size_t subFileSize(const String & file_name) const { return sub_file_stats.at(file_name).size; }
 
@@ -416,7 +400,6 @@ private:
     ColumnStats column_stats;
     std::unordered_set<ColId> column_indices;
 
-    Mode mode;
     Status status;
     DMConfigurationOpt configuration; // configuration
 

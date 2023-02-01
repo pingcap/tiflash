@@ -127,9 +127,9 @@ std::ostream & operator<<(std::ostream & output, const DMChecksumConfig & config
     return output;
 }
 
-std::optional<DMChecksumConfig> DMChecksumConfig::fromDBContext(const Context & context, bool is_single_file)
+std::optional<DMChecksumConfig> DMChecksumConfig::fromDBContext(const Context & context)
 {
-    return !is_single_file && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
+    return STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
         ? std::make_optional<DM::DMChecksumConfig>(DMChecksumConfig{context})
         : std::nullopt;
 };
