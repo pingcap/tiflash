@@ -163,9 +163,6 @@ private:
 private:
     void prepareMsgChannels();
     void addLocalConnectionNum();
-    void addSyncConnectionNum();
-    void addAsyncConnectionNum(Int32 conn_num);
-
     void connectionLocalDone();
     void handleConnectionAfterException();
 

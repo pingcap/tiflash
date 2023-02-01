@@ -492,6 +492,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     // TODO: reduce this thread in the future.
     if (!async_requests.empty())
     {
+        auto async_conn_num = async_requests.size();
         thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] {
             if (enable_fine_grained_shuffle_flag)
                 reactor<true>(async_requests);
@@ -500,7 +501,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         });
 
         ++thread_count;
-        --connection_uncreated_num;
+        connection_uncreated_num -= async_conn_num;
     }
 }
 
