@@ -281,10 +281,10 @@ public:
     static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
-        if (tunnel->local_tunnel_sender)
-            tunnel->local_tunnel_sender->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_sender)
-            tunnel->local_tunnel_fine_grained_sender->is_done.store(true);
+        if (tunnel->local_tunnel_sender_v2)
+            tunnel->local_tunnel_sender_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_fine_grained_sender_v2)
+            tunnel->local_tunnel_fine_grained_sender_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)

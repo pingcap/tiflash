@@ -475,7 +475,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                     },
                     ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
-                rpc_context->establishMPPConnectionLocal(
+                rpc_context->establishMPPConnectionLocalV2(
                     req,
                     req.source_index,
                     local_request_handler,
