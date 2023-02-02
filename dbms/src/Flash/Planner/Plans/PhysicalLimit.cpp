@@ -58,7 +58,7 @@ void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, 
     auto input_header = group_builder.getCurrentHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LimitTransformOp>(global_limit, log->identifier()));
+        builder.appendTransformOp(std::make_unique<LimitTransformOp>(group_builder.exec_status, global_limit, log->identifier()));
     });
 }
 
