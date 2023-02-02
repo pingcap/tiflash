@@ -41,6 +41,12 @@ private:
     std::atomic_int32_t active_producer = -1;
 };
 
+/**
+ * SharedQueueSourceOp <────┐                    ┌───── SharedQueueSinkOp
+ * SharedQueueSourceOp <────┼─── SharedQueue <───┼───── SharedQueueSinkOp
+ * SharedQueueSourceOp <────┘                    └───── SharedQueueSinkOp
+*/
+
 class SharedQueueSinkOp : public SinkOp
 {
 public:
