@@ -97,7 +97,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        bool enable_refined_local_,
+        Int32 local_tunnel_version_,
         const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
@@ -200,7 +200,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    bool enable_refined_local;
+    Int32 local_tunnel_version;
 
     std::atomic<Int64> data_size_in_queue;
 

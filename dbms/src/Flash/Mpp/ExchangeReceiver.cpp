@@ -308,7 +308,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
-    bool enable_refined_local_,
+    Int32 local_tunnel_version_,
     const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
@@ -322,7 +322,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
-    , enable_refined_local(enable_refined_local_)
+    , local_tunnel_version(local_tunnel_version_)
     , data_size_in_queue(0)
     , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
@@ -454,7 +454,11 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             async_requests.push_back(std::move(req));
         else if (req.is_local)
         {
-            if (enable_refined_local)
+            if (local_tunnel_version == 1)
+            {
+                setUpConnectionWithReadLoop(std::move(req));
+            }
+            else
             {
                 LOG_INFO(exc_log, "refined local tunnel is enabled");
                 String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
@@ -478,11 +482,6 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
                     local_request_handler,
                     enable_fine_grained_shuffle_flag);
                 --connection_uncreated_num;
-            }
-            else
-            {
-                LOG_INFO(exc_log, "refined local tunnel is disabled");
-                setUpConnectionWithReadLoop(std::move(req));
             }
         }
         else

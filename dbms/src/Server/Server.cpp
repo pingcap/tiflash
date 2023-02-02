@@ -1174,6 +1174,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
     global_context->setDeltaIndexManager(delta_index_cache_size);
 
+    if (global_context->getSettings().local_tunnel_version == 1)
+        LOG_INFO(log, "enable local tunnel version 1");
+    else
+        LOG_INFO(log, "enable local tunnel version 2");
+
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
