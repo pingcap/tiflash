@@ -66,7 +66,6 @@ private:
     size_t probe_index;
     ProbeProcessInfo probe_process_info;
     BlockInputStreamPtr non_joined_stream;
-    SquashingHashJoinBlockTransform squashing_transform;
     ProbeStatus status{ProbeStatus::PROBE};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
