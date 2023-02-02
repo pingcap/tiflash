@@ -40,6 +40,12 @@ void PhysicalGetResultSink::buildPipelineExecImpl(PipelineExecGroupBuilder & gro
     }
     else
     {
+        /**
+         * Use SharedQueue to union input to 1 concurrency.
+         * n sink <-- n transform <-- n source
+         *             v
+         * 1 sink <-- 1 shared queue source <-- n shared queue sink <-- n transform <-- n source
+         */
         auto shared_queue = SharedQueue::build(cur_concurrency, 1);
         group_builder.transform([&](auto & builder) {
             builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(group_builder.exec_status, shared_queue));
