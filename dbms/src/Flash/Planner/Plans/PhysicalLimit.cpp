@@ -53,7 +53,7 @@ void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & 
     }
 }
 
-void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalLimit::buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     auto input_header = group_builder.getCurrentHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);

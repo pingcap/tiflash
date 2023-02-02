@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/ColumnGenerator.h>
 #include <Operators/SharedQueue.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 

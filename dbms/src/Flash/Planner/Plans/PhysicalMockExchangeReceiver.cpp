@@ -63,7 +63,7 @@ void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipel
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockExchangeReceiver::buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     group_builder.addGroup(mock_streams.size());
     size_t i = 0;

@@ -23,10 +23,12 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
     ResultHandler && result_handler,
     const PhysicalPlanNodePtr & child)
 {
-    return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, std::move(result_handler));
+    auto get_result_sink = std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, std::move(result_handler));
+    get_result_sink->disableRestoreConcurrency();
+    return get_result_sink;
 }
 
-void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalGetResultSink::buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     auto cur_concurrency = group_builder.getCurrentConcurrency();
     assert(cur_concurrency >= 1);

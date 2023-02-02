@@ -143,7 +143,7 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalProjection::buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     if (project_actions && !project_actions->getActions().empty())
     {

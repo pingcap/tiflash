@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/SharedQueue.h>
+
 #include <magic_enum.hpp>
 
 namespace DB
@@ -25,7 +26,7 @@ SharedQueuePtr SharedQueue::build(size_t producer, size_t consumer)
 }
 
 SharedQueue::SharedQueue(
-    size_t queue_size, 
+    size_t queue_size,
     size_t init_producer)
     : queue(queue_size)
     , active_producer(init_producer)
@@ -60,55 +61,55 @@ OperatorStatus SharedQueueSinkOp::writeImpl(Block && block)
     return awaitImpl();
 }
 
-    OperatorStatus SharedQueueSinkOp::awaitImpl()
-    {
-        if (!res)
-            return OperatorStatus::NEED_INPUT;
-        
-        auto queue_result = shared_queue->tryPush(std::move(*res));
-        switch(queue_result)
-        {
-        case MPMCQueueResult::FULL:
-            return OperatorStatus::WAITING;
-        case MPMCQueueResult::OK:
-            res.reset();
-            return OperatorStatus::NEED_INPUT;
-        default:
-            // queue result can not be finish/cancelled/empty here.
-            RUNTIME_ASSERT(false, "Unexpected queue result: {}", magic_enum::enum_name(queue_result));
-        }
-    }
+OperatorStatus SharedQueueSinkOp::awaitImpl()
+{
+    if (!res)
+        return OperatorStatus::NEED_INPUT;
 
-    OperatorStatus SharedQueueSourceOp::readImpl(Block & block)
+    auto queue_result = shared_queue->tryPush(std::move(*res));
+    switch (queue_result)
     {
-        auto await_status = awaitImpl();
-        if (await_status == OperatorStatus::HAS_OUTPUT)
-        {
-            block = std::move(*res);
-            res.reset();
-        }
-        return await_status;
+    case MPMCQueueResult::FULL:
+        return OperatorStatus::WAITING;
+    case MPMCQueueResult::OK:
+        res.reset();
+        return OperatorStatus::NEED_INPUT;
+    default:
+        // queue result can not be finish/cancelled/empty here.
+        RUNTIME_ASSERT(false, "Unexpected queue result: {}", magic_enum::enum_name(queue_result));
     }
+}
 
-    OperatorStatus SharedQueueSourceOp::awaitImpl()
+OperatorStatus SharedQueueSourceOp::readImpl(Block & block)
+{
+    auto await_status = awaitImpl();
+    if (await_status == OperatorStatus::HAS_OUTPUT)
     {
-        if (res)
-            return OperatorStatus::HAS_OUTPUT;
-        
-        Block block;
-        auto queue_result = shared_queue->tryPop(block);
-        switch(queue_result)
-        {
-        case MPMCQueueResult::EMPTY:
-            return OperatorStatus::WAITING;
-        case MPMCQueueResult::OK:
-            res.emplace(std::move(block));
-            return OperatorStatus::HAS_OUTPUT;
-        case MPMCQueueResult::FINISHED:
-            return OperatorStatus::FINISHED;
-        default:
-            // queue result can not be cancelled/full here.
-            RUNTIME_ASSERT(false, "Unexpected queue result: {}", magic_enum::enum_name(queue_result));
-        }
+        block = std::move(*res);
+        res.reset();
     }
+    return await_status;
+}
+
+OperatorStatus SharedQueueSourceOp::awaitImpl()
+{
+    if (res)
+        return OperatorStatus::HAS_OUTPUT;
+
+    Block block;
+    auto queue_result = shared_queue->tryPop(block);
+    switch (queue_result)
+    {
+    case MPMCQueueResult::EMPTY:
+        return OperatorStatus::WAITING;
+    case MPMCQueueResult::OK:
+        res.emplace(std::move(block));
+        return OperatorStatus::HAS_OUTPUT;
+    case MPMCQueueResult::FINISHED:
+        return OperatorStatus::FINISHED;
+    default:
+        // queue result can not be cancelled/full here.
+        RUNTIME_ASSERT(false, "Unexpected queue result: {}", magic_enum::enum_name(queue_result));
+    }
+}
 } // namespace DB

@@ -16,11 +16,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
+#include <Operators/SharedQueue.h>
 
 namespace DB
 {
@@ -88,7 +90,31 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     }
 }
 
-void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency)
+{
+    buildPipelineExecImpl(group_builder, context, concurrency);
+    if (is_restore_concurrency)
+    {
+        auto cur_concurrency = group_builder.getCurrentConcurrency();
+        context.getDAGContext()->updateFinalConcurrency(cur_concurrency, concurrency);
+        auto final_concurrency = context.getDAGContext()->final_concurrency;
+        if (final_concurrency > 1 && cur_concurrency == 1)
+        {
+            auto shared_queue = SharedQueue::build(cur_concurrency, final_concurrency);
+            // sink op of builder must be empty.
+            group_builder.transform([&](auto & builder) {
+                builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(shared_queue));
+            });
+            auto cur_header = group_builder.getCurrentHeader();
+            group_builder.addGroup(final_concurrency);
+            group_builder.transform([&](auto & builder) {
+                builder.setSourceOp(std::make_unique<SharedQueueSourceOp>(cur_header, shared_queue));
+            });
+        }
+    }
+}
+
+void PhysicalPlanNode::buildPipelineExecImpl(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
 {
     throw Exception("Unsupport");
 }

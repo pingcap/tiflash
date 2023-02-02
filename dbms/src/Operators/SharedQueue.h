@@ -16,9 +16,9 @@
 
 #include <Common/MPMCQueue.h>
 #include <Operators/Operator.h>
-#include <magic_enum.hpp>
 
 #include <atomic>
+#include <magic_enum.hpp>
 
 namespace DB
 {

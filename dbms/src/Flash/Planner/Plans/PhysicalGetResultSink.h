@@ -48,12 +48,11 @@ public:
         throw Exception("Unsupport");
     }
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
-
 private:
     ResultHandler result_handler;
 
 private:
+    void buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
     void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
     {
         throw Exception("Unsupport");
