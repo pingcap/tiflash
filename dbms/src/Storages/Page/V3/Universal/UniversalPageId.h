@@ -16,11 +16,21 @@
 
 #include <Common/RedactHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
 
 namespace DB
 {
 class UniversalPageId final
 {
+public:
+    static inline UniversalPageId toFullUniversalPageId(const String & prefix, PageIdU64 page_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeString(prefix, buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
+        return buff.releaseStr();
+    }
+
 public:
     UniversalPageId() = default;
 

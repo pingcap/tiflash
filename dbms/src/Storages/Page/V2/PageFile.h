@@ -18,7 +18,6 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V2/PageEntries.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/WriteBatch.h>

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_headers_and_sources(page_storage_v3 ./)
-add_headers_and_sources(page_storage_v3 spacemap)
+add_headers_and_sources(page_storage_v3 ./spacemap)
 
 
 list(APPEND page_storage_v3_sources

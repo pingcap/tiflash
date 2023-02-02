@@ -41,7 +41,7 @@ public:
     std::pair<bool, PageId> isRefId(PageId page_id) const;
 
     // For iterate over all pages
-    PageIdSet validPageIds() const;
+    std::set<PageId> validPageIds() const;
 
     // For iterate over all normal pages
     std::set<PageId> validNormalPageIds() const;
