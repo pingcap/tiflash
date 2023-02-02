@@ -467,7 +467,7 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     assert(col_size >= end);
     assert(col_size > begin);
 
-    bool is_same = true;
+    bool is_same [[maybe_unused]] = true;
 
     for (size_t i = 1; i < col_num; ++i)
     {
