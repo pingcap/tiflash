@@ -19,16 +19,37 @@
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalGetResultSink::build(
-    ResultHandler result_handler,
+    ResultHandler && result_handler,
     const PhysicalPlanNodePtr & child)
 {
-    return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, result_handler);
+    auto get_result_sink = std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, std::move(result_handler));
+    get_result_sink->disableRestoreConcurrency();
+    return get_result_sink;
 }
 
-void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalGetResultSink::buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<GetResultSinkOp>(*this));
-    });
+    auto cur_concurrency = group_builder.getCurrentConcurrency();
+    assert(cur_concurrency >= 1);
+    if (cur_concurrency == 1)
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<GetResultSinkOp>(std::move(result_handler)));
+        });
+    }
+    else
+    {
+        auto shared_queue = SharedQueue::build(cur_concurrency, 1);
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(shared_queue));
+        });
+        auto cur_header = group_builder.getCurrentHeader();
+        group_builder.addGroup(1);
+        assert(1 == group_builder.getCurrentConcurrency());
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::make_unique<SharedQueueSourceOp>(cur_header, shared_queue));
+            builder.setSinkOp(std::make_unique<GetResultSinkOp>(std::move(result_handler)));
+        });
+    }
 }
 } // namespace DB

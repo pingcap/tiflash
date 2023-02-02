@@ -47,7 +47,7 @@ public:
                                      toNullableVec<Int64>("s4", {1, 1, {}})});
     }
 
-    std::pair<PhysicalPlanNodePtr, PipelineExecPtr> build(
+    PipelineExecPtr build(
         const std::shared_ptr<tipb::DAGRequest> & request,
         ResultHandler result_handler,
         PipelineExecutorStatus & exec_status)
@@ -59,7 +59,7 @@ public:
         PhysicalPlan physical_plan{context.context, ""};
         physical_plan.build(request.get());
         assert(!result_handler.isIgnored());
-        auto plan_tree = PhysicalGetResultSink::build(result_handler, physical_plan.outputAndOptimize());
+        auto plan_tree = PhysicalGetResultSink::build(std::move(result_handler), physical_plan.outputAndOptimize());
 
         PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
@@ -67,8 +67,8 @@ public:
             plan->buildPipelineExec(group_builder, context.context, /*concurrency=*/1);
         });
         auto result = group_builder.build(exec_status);
-        assert(result.size() == 1);
-        return {std::move(plan_tree), std::move(result.back())};
+        assert(result.back().size() == 1);
+        return std::move(result.back().back());
     }
 
     void executeAndAssert(
@@ -80,7 +80,7 @@ public:
             blocks.push_back(block);
         }};
         PipelineExecutorStatus exec_status;
-        auto [plan, op_pipeline] = build(request, result_handler, exec_status);
+        auto op_pipeline = build(request, result_handler, exec_status);
         while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
         }
@@ -100,7 +100,7 @@ try
     ResultHandler result_handler{[](const Block &) {
     }};
     PipelineExecutorStatus exec_status;
-    auto [_, op_pipeline] = build(request, result_handler, exec_status);
+    auto op_pipeline = build(request, result_handler, exec_status);
     exec_status.cancel();
     ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
 }

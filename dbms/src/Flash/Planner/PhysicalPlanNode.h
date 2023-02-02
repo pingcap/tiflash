@@ -58,9 +58,9 @@ public:
 
     virtual size_t childrenSize() const = 0;
 
-    virtual void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
+    void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency);
 
     virtual void buildPipeline(PipelineBuilder & builder);
 
@@ -81,6 +81,7 @@ public:
     String toSimpleString();
 
 protected:
+    virtual void buildPipelineExecImpl(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);

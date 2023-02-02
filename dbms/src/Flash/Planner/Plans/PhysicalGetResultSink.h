@@ -19,13 +19,11 @@
 
 namespace DB
 {
-class GetResultSinkOp;
-
 class PhysicalGetResultSink : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
-        ResultHandler result_handler,
+        ResultHandler && result_handler,
         const PhysicalPlanNodePtr & child);
 
     PhysicalGetResultSink(
@@ -33,9 +31,9 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        ResultHandler result_handler_)
+        ResultHandler && result_handler_)
         : PhysicalUnary(executor_id_, PlanType::GetResult, schema_, req_id, child_)
-        , result_handler(result_handler_)
+        , result_handler(std::move(result_handler_))
     {
         assert(!result_handler.isIgnored());
     }
@@ -50,15 +48,11 @@ public:
         throw Exception("Unsupport");
     }
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
-
 private:
-    friend class GetResultSinkOp;
-
-    std::mutex mu;
     ResultHandler result_handler;
 
 private:
+void buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
     void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
     {
         throw Exception("Unsupport");
