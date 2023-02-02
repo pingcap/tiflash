@@ -192,7 +192,7 @@ public:
                     fb.fmtAppend("E{}", w.page_id);
                     break;
                 default:
-                    fb.fmtAppend("Unknow {}", w.page_id);
+                    fb.fmtAppend("Unknown {}", w.page_id);
                     break;
                 };
             },
