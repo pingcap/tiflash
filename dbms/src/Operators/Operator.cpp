@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/Operator.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB
 {
+#define CHECK_IS_CANCELLED                   \
+    if (unlikely(exec_status.isCancelled())) \
+        return OperatorStatus::CANCELLED;
+
 OperatorStatus Operator::await()
 {
+    CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
     auto op_status = awaitImpl();
 #ifndef NDEBUG
@@ -29,6 +36,7 @@ OperatorStatus Operator::await()
 
 OperatorStatus SourceOp::read(Block & block)
 {
+    CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
     assert(!block);
     auto op_status = readImpl(block);
@@ -45,6 +53,7 @@ OperatorStatus SourceOp::read(Block & block)
 
 OperatorStatus TransformOp::transform(Block & block)
 {
+    CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
@@ -60,6 +69,7 @@ OperatorStatus TransformOp::transform(Block & block)
 
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
+    CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
     assert(!block);
     auto op_status = tryOutputImpl(block);
@@ -76,6 +86,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 
 OperatorStatus SinkOp::prepare()
 {
+    CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
     auto op_status = prepareImpl();
 #ifndef NDEBUG
@@ -86,6 +97,7 @@ OperatorStatus SinkOp::prepare()
 
 OperatorStatus SinkOp::write(Block && block)
 {
+    CHECK_IS_CANCELLED
 #ifndef NDEBUG
     if (block)
     {
@@ -100,4 +112,7 @@ OperatorStatus SinkOp::write(Block && block)
 #endif
     return op_status;
 }
+
+#undef CHECK_IS_CANCELLED
+
 } // namespace DB

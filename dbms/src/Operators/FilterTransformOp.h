@@ -24,11 +24,13 @@ class FilterTransformOp : public TransformOp
 {
 public:
     FilterTransformOp(
+        PipelineExecutorStatus & exec_status_,
         const Block & input_header,
         const ExpressionActionsPtr & expression,
         const String & filter_column_name,
         const String & req_id)
-        : filter_transform_action(input_header, expression, filter_column_name)
+        : TransformOp(exec_status_)
+        , filter_transform_action(input_header, expression, filter_column_name)
         , log(Logger::get(req_id))
     {}
 
