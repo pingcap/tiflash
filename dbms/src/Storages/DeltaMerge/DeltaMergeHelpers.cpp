@@ -27,10 +27,10 @@ Digest hashSchema(const Block & schema)
 
     const auto & data = schema.getColumnsWithTypeAndName();
     for (const auto & column_with_type_and_name : data)
-    {   
-        // for type infos, we should use getName() instead of getTypeId(), 
+    {
+        // for type infos, we should use getName() instead of getTypeId(),
         // because for all nullable types, getTypeId() will always return TypeIndex::Nullable in getTypeId()
-        // but getName() will return the real type name, e.g. Nullable(UInt64), Nullable(datetime(6)) 
+        // but getName() will return the real type name, e.g. Nullable(UInt64), Nullable(datetime(6))
         const auto & type = column_with_type_and_name.type->getName();
         SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(type.c_str()), type.size());
 

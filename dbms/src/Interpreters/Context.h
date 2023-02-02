@@ -513,7 +513,7 @@ public:
 
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas();
-    
+
     // todo: remove after AutoScaler is stable.
     void setUseAutoScaler(bool use)
     {
