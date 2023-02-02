@@ -24,7 +24,7 @@
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
-#include <Flash/Executor/ARU.h>
+#include <Flash/Executor/RU.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -152,16 +152,16 @@ try
         }
     }
 
-    auto aru = toARU(streams.in->estimateCPUTimeNs());
+    auto ru = toRU(streams.in->estimateCPUTimeNs());
     if constexpr (!batch)
     {
-        LOG_INFO(log, "cop finish with aru: {}", aru);
-        GET_METRIC(tiflash_aru, type_cop).Increment(aru);
+        LOG_INFO(log, "cop finish with ru: {}", ru);
+        GET_METRIC(tiflash_compute_ru, type_cop).Increment(ru);
     }
     else
     {
-        LOG_INFO(log, "batch cop finish with aru: {}", aru);
-        GET_METRIC(tiflash_aru, type_batch).Increment(aru);
+        LOG_INFO(log, "batch cop finish with ru: {}", ru);
+        GET_METRIC(tiflash_compute_ru, type_batch).Increment(ru);
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)

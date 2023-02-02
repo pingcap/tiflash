@@ -410,9 +410,9 @@ void MPPTask::runImpl()
         {
             err_msg = result.err_msg;
         }
-        auto aru = query_executor_holder->collectARU();
-        LOG_INFO(log, "mpp finish with aru: {}", aru);
-        GET_METRIC(tiflash_aru, type_mpp).Increment(aru);
+        auto ru = query_executor_holder->collectRU();
+        LOG_INFO(log, "mpp finish with ru: {}", ru);
+        GET_METRIC(tiflash_compute_ru, type_mpp).Increment(ru);
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(

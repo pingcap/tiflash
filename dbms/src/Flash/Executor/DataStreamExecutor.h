@@ -34,7 +34,7 @@ public:
 
     int estimateNewThreadCount() override;
 
-    ARU collectARU() override;
+    RU collectRU() override;
 
 protected:
     ExecutionResult execute(ResultHandler result_handler) override;

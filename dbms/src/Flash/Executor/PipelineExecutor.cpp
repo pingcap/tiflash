@@ -81,9 +81,9 @@ int PipelineExecutor::estimateNewThreadCount()
     return 0;
 }
 
-ARU PipelineExecutor::collectARU()
+RU PipelineExecutor::collectRU()
 {
-    // TODO support collectARU
+    // TODO support collectRU
     return 0;
 }
 } // namespace DB
