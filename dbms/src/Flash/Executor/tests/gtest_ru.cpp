@@ -24,6 +24,9 @@ class TestRU : public ::testing::Test
 TEST_F(TestRU, base)
 {
     constexpr auto one_second = 1000'000'000;
+
+    ASSERT_EQ(0, toRU(0));
+
     auto base_ru = toRU(1);
     ASSERT_TRUE(base_ru > 0);
     ASSERT_EQ(base_ru, toRU(0.1 * one_second));

@@ -18,6 +18,7 @@
 
 namespace DB
 {
+// Resource Unit
 using RU = UInt64;
 
 RU toRU(UInt64 cpu_time_ns);
