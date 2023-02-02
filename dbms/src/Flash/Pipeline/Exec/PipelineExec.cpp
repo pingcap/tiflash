@@ -12,16 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB
 {
-#define CHECK_IS_CANCELLED                   \
-    if (unlikely(exec_status.isCancelled())) \
-        return OperatorStatus::CANCELLED;
-
 OperatorStatus PipelineExec::execute()
 {
     auto op_status = executeImpl();
@@ -50,13 +45,11 @@ OperatorStatus PipelineExec::executeImpl()
     // start from the next transform op after fetched block transform op.
     for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
     {
-        CHECK_IS_CANCELLED;
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
         if (op_status != OperatorStatus::HAS_OUTPUT)
             return op_status;
     }
-    CHECK_IS_CANCELLED;
     op_status = sink_op->write(std::move(block));
     return op_status;
 }
@@ -66,13 +59,11 @@ OperatorStatus PipelineExec::fetchBlock(
     Block & block,
     size_t & start_transform_op_index)
 {
-    CHECK_IS_CANCELLED;
     auto op_status = sink_op->prepare();
     if (op_status != OperatorStatus::NEED_INPUT)
         return op_status;
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
-        CHECK_IS_CANCELLED;
         const auto & transform_op = transform_ops[index];
         op_status = transform_op->tryOutput(block);
         if (op_status != OperatorStatus::NEED_INPUT)
@@ -82,7 +73,6 @@ OperatorStatus PipelineExec::fetchBlock(
             return op_status;
         }
     }
-    CHECK_IS_CANCELLED;
     start_transform_op_index = 0;
     op_status = source_op->read(block);
     return op_status;
@@ -99,8 +89,6 @@ OperatorStatus PipelineExec::await()
 }
 OperatorStatus PipelineExec::awaitImpl()
 {
-    CHECK_IS_CANCELLED;
-
     auto op_status = sink_op->await();
     if (op_status != OperatorStatus::NEED_INPUT)
         return op_status;
@@ -115,7 +103,4 @@ OperatorStatus PipelineExec::awaitImpl()
     op_status = source_op->await();
     return op_status;
 }
-
-#undef CHECK_IS_CANCELLED
-
 } // namespace DB

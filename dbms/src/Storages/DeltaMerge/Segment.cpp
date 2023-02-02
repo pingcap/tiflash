@@ -2279,7 +2279,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
                                                  size_t expected_block_size)
 {
     Stopwatch sw_total;
-    static ColumnDefines columns_to_read{
+    ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
     auto stream = getInputStreamModeNormal(
@@ -2418,7 +2418,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     {
         return bitmap_filter;
     }
-    static ColumnDefines columns_to_read{
+    ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
         getVersionColumnDefine(),
         getTagColumnDefine(),
@@ -2435,7 +2435,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                                       /*read_packs*/ some_packs,
                                                                       /*need_row_id*/ true);
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
-    static ColumnDefines read_columns{
+    ColumnDefines read_columns{
         getExtraHandleColumnDefine(is_common_handle),
     };
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(

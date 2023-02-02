@@ -26,9 +26,11 @@ class ExpressionTransformOp : public TransformOp
 {
 public:
     ExpressionTransformOp(
+        PipelineExecutorStatus & exec_status_,
         const ExpressionActionsPtr & expression_,
         const String & req_id)
-        : expression(expression_)
+        : TransformOp(exec_status_)
+        , expression(expression_)
         , log(Logger::get(req_id))
     {}
 
