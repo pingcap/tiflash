@@ -62,4 +62,5 @@ private:
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.
 using PipelineExecGroup = std::vector<PipelineExecPtr>;
+using PipelineExecGroups = std::vector<PipelineExecGroup>;
 } // namespace DB

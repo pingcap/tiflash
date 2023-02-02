@@ -59,26 +59,44 @@ Block PipelineExecBuilder::getCurrentHeader() const
     }
 }
 
-void PipelineExecGroupBuilder::init(size_t init_concurrency)
+void PipelineExecGroupBuilder::addGroup(size_t init_concurrency)
 {
-    assert(concurrency == 0);
     assert(init_concurrency > 0);
-    concurrency = init_concurrency;
-    group.resize(concurrency);
+    ++cur_group_index;
+    assert(cur_group_index >= 0);
+    BuilderGroup group;
+    group.resize(init_concurrency);
+    groups.push_back(std::move(group));
 }
 
-PipelineExecGroup PipelineExecGroupBuilder::build(PipelineExecutorStatus & exec_status)
+PipelineExecGroups PipelineExecGroupBuilder::build(PipelineExecutorStatus & exec_status)
 {
-    assert(concurrency > 0);
-    PipelineExecGroup pipeline_exec_group;
-    for (auto & builder : group)
-        pipeline_exec_group.push_back(builder.build(exec_status));
-    return pipeline_exec_group;
+    assert(!groups.empty());
+    PipelineExecGroups pipeline_exec_groups;
+    for (auto & group : groups)
+    {
+        assert(!group.empty());
+        PipelineExecGroup pipeline_exec_group;
+        for (auto & builder : group)
+            pipeline_exec_group.push_back(builder.build(exec_status));
+        pipeline_exec_groups.push_back(std::move(pipeline_exec_group));
+    }
+    return pipeline_exec_groups;
 }
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
+    assert(cur_group_index >= 0 && groups.size() > static_cast<size_t>(cur_group_index));
+    const auto & group = groups[cur_group_index];
     assert(!group.empty());
     return group.back().getCurrentHeader();
+}
+
+size_t PipelineExecGroupBuilder::getCurrentConcurrency() const
+{
+    assert(cur_group_index >= 0 && groups.size() > static_cast<size_t>(cur_group_index));
+    const auto & group = groups[cur_group_index];
+    assert(!group.empty());
+    return group.size();
 }
 } // namespace DB

@@ -70,11 +70,11 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 void Pipeline::addGetResultSink(ResultHandler result_handler)
 {
     assert(!plan_nodes.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.back());
+    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 
-PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
+PipelineExecGroups Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;

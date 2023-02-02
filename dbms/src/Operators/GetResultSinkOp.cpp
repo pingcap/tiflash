@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Operators/GetResultSinkOp.h>
 
 namespace DB
@@ -22,8 +21,7 @@ OperatorStatus GetResultSinkOp::writeImpl(Block && block)
     if (!block)
         return OperatorStatus::FINISHED;
 
-    std::lock_guard lock(physical_sink.mu);
-    physical_sink.result_handler(block);
+    result_handler(block);
     return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB

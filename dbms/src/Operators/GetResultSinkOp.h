@@ -19,14 +19,13 @@
 
 namespace DB
 {
-class PhysicalGetResultSink;
 // The sink operator for getting the execution results.
 // Now it is used in unit tests.
 class GetResultSinkOp : public SinkOp
 {
 public:
-    explicit GetResultSinkOp(PhysicalGetResultSink & physical_sink_)
-        : physical_sink(physical_sink_)
+    explicit GetResultSinkOp(ResultHandler && result_handler_)
+        : result_handler(std::move(result_handler_))
     {
     }
 
@@ -38,6 +37,6 @@ public:
     OperatorStatus writeImpl(Block && block) override;
 
 private:
-    PhysicalGetResultSink & physical_sink;
+    ResultHandler result_handler;
 };
 } // namespace DB

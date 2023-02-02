@@ -39,25 +39,30 @@ struct PipelineExecGroupBuilder
 {
     // A Group generates a set of pipeline_execs running in parallel.
     using BuilderGroup = std::vector<PipelineExecBuilder>;
-    BuilderGroup group;
+    using BuilderGroups = std::vector<BuilderGroup>;
+    BuilderGroups groups;
 
-    size_t concurrency = 0;
+    int32_t cur_group_index = -1;
 
-    void init(size_t init_concurrency);
+    void addGroup(size_t init_concurrency);
 
     /// ff: [](PipelineExecBuilder & builder) {}
     template <typename FF>
     void transform(FF && ff)
     {
-        assert(concurrency > 0);
+        assert(cur_group_index >= 0 && groups.size() > static_cast<size_t>(cur_group_index));
+        auto & group = groups[cur_group_index];
+        assert(!group.empty());
         for (auto & builder : group)
         {
             ff(builder);
         }
     }
 
-    PipelineExecGroup build(PipelineExecutorStatus & exec_status);
+    PipelineExecGroups build(PipelineExecutorStatus & exec_status);
 
     Block getCurrentHeader();
+
+    size_t getCurrentConcurrency() const;
 };
 } // namespace DB

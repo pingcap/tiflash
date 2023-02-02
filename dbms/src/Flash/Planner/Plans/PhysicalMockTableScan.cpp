@@ -111,7 +111,7 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
 
 void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    group_builder.init(mock_streams.size());
+    group_builder.addGroup(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(mock_streams[i++]));
