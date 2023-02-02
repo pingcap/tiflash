@@ -176,6 +176,11 @@ struct RowKeyValue
         HandleValuePtr next_value = std::make_shared<String>(value->begin(), value->end());
         next_value->push_back(0x0);
 
+        // This is a hack, for int handle, let's build a "next key" which is not identical to INT_MAX.
+        // In this way, it will be still < next_key.
+        if (!is_common_handle && int_value == std::numeric_limits<Int64>::max())
+            next_value->push_back(0x0);
+
         Int64 next_int_value = int_value;
         if (!is_common_handle && next_int_value != std::numeric_limits<Int64>::max())
             next_int_value++;
