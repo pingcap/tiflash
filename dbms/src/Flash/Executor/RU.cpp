@@ -17,11 +17,6 @@
 
 namespace DB
 {
-namespace
-{
-static constexpr double aru_rate = 1.0;
-}
-
 /**
  * Resource Unit used by tiflash compute = vcores * second * aru_rate
  */
@@ -30,6 +25,7 @@ UInt64 toRU(UInt64 cpu_time_ns)
     if (unlikely(cpu_time_ns == 0))
         return 0;
 
+    static constexpr double aru_rate = 1.0;
     double cpu_time_second = static_cast<double>(cpu_time_ns) / 1000'000'000L;
     auto ceil_cpu_time_second = ceil(cpu_time_second);
     return ceil_cpu_time_second * aru_rate;
