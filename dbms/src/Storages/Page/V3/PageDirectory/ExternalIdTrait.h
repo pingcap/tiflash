@@ -64,6 +64,7 @@ struct ExternalIdTrait
     }
     static inline Prefix getPrefix(const PageId & page_id)
     {
+        assert(page_id.size() >= sizeof(UInt64));
         return page_id.substr(0, page_id.size() - sizeof(UInt64)).toStr();
     }
     static inline PageId getPageMapKey(const PageId & page_id)
