@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 class Context;
 
 // Find the last occurence of `key` in log file and extract the first number follow the key.
@@ -32,5 +31,8 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
 // Usage:
 //   ./storage-client.sh "DBGInvoke trigger_global_storage_pool_gc()"
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Get active threads in dynamic thread pool, if dynamic thread pool is disabled, return 0
+void dbgFuncActiveThreadsInDynamicThreadPool(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/);
 
 } // namespace DB
