@@ -23,6 +23,18 @@
 
 namespace DB
 {
+// Only lower the 'a', 'b', 'c'...
+inline void lowerEnglishWords(Block & block, const ColumnNumbers & arguments)
+{
+    MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
+    MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
+
+    const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
+    const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
+
+
+}
+
 /** Search and replace functions in strings:
   *
   * position(haystack, needle)     - the normal search for a substring in a string, returns the position (in bytes) of the found substring starting with 1, or 0 if no substring is found.
@@ -56,6 +68,11 @@ extern const int ILLEGAL_COLUMN;
 }
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
+
+struct NameIlike3Args
+{
+    static constexpr auto name = "ilike3Args";
+};
 
 template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction
@@ -125,6 +142,9 @@ public:
 
         const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
+
+        if constexpr (name == NameIlike3Args::name)
+            lowerEnglishWords(block, arguments);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
         String match_type;

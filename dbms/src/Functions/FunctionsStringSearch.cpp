@@ -1514,7 +1514,6 @@ struct NameMatch
 {
     static constexpr auto name = "match";
 };
-
 struct NameLike3Args
 {
     static constexpr auto name = "like3Args";
@@ -1545,6 +1544,7 @@ using FunctionPositionCaseInsensitiveUTF8
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
 using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args>;
+using FunctionIlike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameIlike3Args>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
