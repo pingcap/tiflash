@@ -177,3 +177,6 @@ if (ARCH_AARCH64 AND OS_LINUX)
 endif ()
 
 add_subdirectory(magic_enum)
+
+add_subdirectory (aws-cmake)
+
