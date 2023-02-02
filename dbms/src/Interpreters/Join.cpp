@@ -1737,10 +1737,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
         for (const Block & block_right : blocks)
         {
             size_t rows_right = block_right.rows();
-            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-            {
-                rows_right = std::min(rows_right, 1);
-            }
             total_rows += rows_right;
         }
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
