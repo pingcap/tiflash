@@ -65,6 +65,7 @@ struct PipelineExecGroupBuilder
         }
     }
 
+    // Multiple groups returned are run in parallel.
     PipelineExecGroups build();
 
     Block getCurrentHeader();

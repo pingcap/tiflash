@@ -35,7 +35,7 @@ void PhysicalGetResultSink::buildPipelineExecImpl(PipelineExecGroupBuilder & gro
     if (cur_concurrency == 1)
     {
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<GetResultSinkOp>(std::move(result_handler)));
+            builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, std::move(result_handler)));
         });
     }
     else

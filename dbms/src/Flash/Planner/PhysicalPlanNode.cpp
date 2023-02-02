@@ -100,15 +100,21 @@ void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & group_builde
         auto final_concurrency = context.getDAGContext()->final_concurrency;
         if (final_concurrency > 1 && cur_concurrency == 1)
         {
+            /**
+             * Use SharedQueue to restore concurrency.
+             * 1 sink <-- 1 transform <-- 1 source
+             *             v
+             * n sink <-- n shared queue source <-- 1 shared queue sink <-- 1 transform <-- 1 source
+             */
             auto shared_queue = SharedQueue::build(cur_concurrency, final_concurrency);
             // sink op of builder must be empty.
             group_builder.transform([&](auto & builder) {
-                builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(shared_queue));
+                builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(group_builder.exec_status, shared_queue));
             });
             auto cur_header = group_builder.getCurrentHeader();
             group_builder.addGroup(final_concurrency);
             group_builder.transform([&](auto & builder) {
-                builder.setSourceOp(std::make_unique<SharedQueueSourceOp>(cur_header, shared_queue));
+                builder.setSourceOp(std::make_unique<SharedQueueSourceOp>(group_builder.exec_status, cur_header, shared_queue));
             });
         }
     }
