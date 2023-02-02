@@ -15,6 +15,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Operators/GetResultSinkOp.h>
+#include <Operators/SharedQueue.h>
 
 namespace DB
 {
