@@ -39,8 +39,6 @@ void computeHash(size_t rows,
                  std::vector<String> & partition_key_containers,
                  WeakHash32 & hash);
 
-DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num);
-
 void scatterColumns(const Block & input_block,
                     const std::vector<Int64> & partition_col_ids,
                     const TiDB::TiDBCollators & collators,
@@ -57,4 +55,12 @@ void scatterColumnsForFineGrainedShuffle(const Block & block,
                                          WeakHash32 & hash,
                                          IColumn::Selector & selector,
                                          std::vector<IColumn::ScatterColumns> & scattered);
+
+// Used to hold expected types for codec
+struct HashPartitionWriterHelperV1
+{
+    DataTypes expected_types;
+    explicit HashPartitionWriterHelperV1(const std::vector<tipb::FieldType> & field_types);
+    void checkBlock(const Block & block) const;
+};
 } // namespace DB::HashBaseWriterHelper

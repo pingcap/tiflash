@@ -1869,8 +1869,6 @@ size_t Context::getMaxStreams() const
             max_streams = 1;
         }
     }
-    if (max_streams > 1)
-        max_streams *= settings.max_streams_to_max_threads_ratio;
     if (max_streams == 0)
         max_streams = 1;
     if (unlikely(max_streams != 1 && is_cop_request))

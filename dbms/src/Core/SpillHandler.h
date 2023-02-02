@@ -18,6 +18,7 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/VarInt.h>
 
 namespace DB
 {
@@ -36,17 +37,18 @@ public:
     void finish();
 
 private:
-    struct SpillWriter
+    class SpillWriter
     {
-        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header)
-            : file_buf(file_provider, file_name, EncryptionPath(file_name, ""))
-            , compressed_buf(file_buf)
-            , out(std::make_unique<NativeBlockOutputStream>(compressed_buf, 0, header))
-        {
-        }
+    public:
+        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header, size_t spill_version);
+        SpillDetails finishWrite();
+        void write(const Block & block);
+
+    private:
         WriteBufferFromFileProvider file_buf;
         CompressedWriteBuffer<> compressed_buf;
         std::unique_ptr<IBlockOutputStream> out;
+        size_t written_rows = 0;
     };
     Spiller * spiller;
     std::vector<std::unique_ptr<SpilledFile>> spilled_files;
@@ -54,6 +56,7 @@ private:
     Int64 current_spilled_file_index;
     String current_spill_file_name;
     std::unique_ptr<SpillWriter> writer;
+    double time_cost = 0;
 };
 
 } // namespace DB

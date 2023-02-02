@@ -174,7 +174,7 @@ private:
     QueryProcessingStage::Enum executeFetchColumns(Pipeline & pipeline, bool dry_run);
 
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression);
-    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool final);
+    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool final);
     void executeMergeAggregated(Pipeline & pipeline, bool final);
     void executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression);
     void executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression);

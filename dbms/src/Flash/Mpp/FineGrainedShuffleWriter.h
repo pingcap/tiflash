@@ -19,9 +19,16 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
+namespace DB::HashBaseWriterHelper
+{
+struct HashPartitionWriterHelperV1;
+}
+
 namespace DB
 {
 class DAGContext;
+enum class CompressionMethod;
+enum MPPDataPacketVersion : int64_t;
 
 template <class ExchangeWriterPtr>
 class FineGrainedShuffleWriter : public DAGResponseWriter
@@ -33,17 +40,18 @@ public:
         TiDB::TiDBCollators collators_,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
-        UInt64 fine_grained_shuffle_batch_size);
+        UInt64 fine_grained_shuffle_batch_size,
+        MPPDataPacketVersion data_codec_version_,
+        tipb::CompressionMode compression_mode_);
     void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
     void flush() override;
 
 private:
     void batchWriteFineGrainedShuffle();
-
-    void writePackets(TrackedMppDataPacketPtrs & packets);
-
     void initScatterColumns();
+    template <MPPDataPacketVersion version>
+    void batchWriteFineGrainedShuffleImpl();
 
 private:
     ExchangeWriterPtr writer;
@@ -52,7 +60,6 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks = 0;
     uint16_t partition_num;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
 
@@ -63,6 +70,10 @@ private:
     WeakHash32 hash;
     IColumn::Selector selector;
     std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
+    // support data compression
+    DataTypes expected_types;
+    MPPDataPacketVersion data_codec_version;
+    CompressionMethod compression_method{};
 };
 
 } // namespace DB

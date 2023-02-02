@@ -269,7 +269,7 @@ size_t Block::rows() const
         if (elem.column)
             return elem.column->size();
 
-    return 0;
+    return segment_row_id_col != nullptr ? segment_row_id_col->size() : 0;
 }
 
 
@@ -553,6 +553,17 @@ Block mergeBlocks(Blocks && blocks)
         }
     }
     return first_block.cloneWithColumns(std::move(dst_columns));
+}
+
+Block popBlocksListFront(BlocksList & blocks)
+{
+    if (!blocks.empty())
+    {
+        Block out_block = blocks.front();
+        blocks.pop_front();
+        return out_block;
+    }
+    return {};
 }
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)

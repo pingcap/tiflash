@@ -83,19 +83,27 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    // if join finished, return {} directly.
-    if (squashing_transform.isJoinFinished())
+    try
     {
-        return Block{};
-    }
+        // if join finished, return {} directly.
+        if (squashing_transform.isJoinFinished())
+        {
+            return Block{};
+        }
 
-    while (squashing_transform.needAppendBlock())
-    {
-        Block result_block = getOutputBlock();
-        squashing_transform.appendBlock(result_block);
+        while (squashing_transform.needAppendBlock())
+        {
+            Block result_block = getOutputBlock();
+            squashing_transform.appendBlock(result_block);
+        }
+        auto ret = squashing_transform.getFinalOutputBlock();
+        return ret;
     }
-    auto ret = squashing_transform.getFinalOutputBlock();
-    return ret;
+    catch (...)
+    {
+        join->meetError();
+        throw;
+    }
 }
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
