@@ -42,14 +42,14 @@ void PhysicalGetResultSink::buildPipelineExecImpl(PipelineExecGroupBuilder & gro
     {
         auto shared_queue = SharedQueue::build(cur_concurrency, 1);
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(shared_queue));
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(group_builder.exec_status, shared_queue));
         });
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup(1);
         assert(1 == group_builder.getCurrentConcurrency());
         group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<SharedQueueSourceOp>(cur_header, shared_queue));
-            builder.setSinkOp(std::make_unique<GetResultSinkOp>(std::move(result_handler)));
+            builder.setSourceOp(std::make_unique<SharedQueueSourceOp>(group_builder.exec_status, cur_header, shared_queue));
+            builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, std::move(result_handler)));
         });
     }
 }

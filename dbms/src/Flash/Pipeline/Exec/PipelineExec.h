@@ -20,8 +20,6 @@
 
 namespace DB
 {
-class PipelineExecutorStatus;
-
 // The executor for push model operator.
 // A pipeline will generate multiple pipeline_execs.
 // data flow: source --> transform --> .. --> transform --> sink
@@ -29,12 +27,10 @@ class PipelineExec
 {
 public:
     PipelineExec(
-        PipelineExecutorStatus & exec_status_,
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
         SinkOpPtr && sink_op_)
-        : exec_status(exec_status_)
-        , source_op(std::move(source_op_))
+        : source_op(std::move(source_op_))
         , transform_ops(std::move(transform_ops_))
         , sink_op(std::move(sink_op_))
     {}
@@ -53,8 +49,6 @@ private:
         size_t & start_transform_op_index);
 
 private:
-    PipelineExecutorStatus & exec_status;
-
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;

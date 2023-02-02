@@ -32,7 +32,7 @@ struct PipelineExecBuilder
 
     Block getCurrentHeader() const;
 
-    PipelineExecPtr build(PipelineExecutorStatus & exec_status);
+    PipelineExecPtr build();
 };
 
 struct PipelineExecGroupBuilder
@@ -41,6 +41,12 @@ struct PipelineExecGroupBuilder
     using BuilderGroup = std::vector<PipelineExecBuilder>;
     using BuilderGroups = std::vector<BuilderGroup>;
     BuilderGroups groups;
+
+    explicit PipelineExecGroupBuilder(PipelineExecutorStatus & exec_status_)
+        : exec_status(exec_status_)
+    {}
+
+    PipelineExecutorStatus & exec_status;
 
     int32_t cur_group_index = -1;
 
@@ -59,7 +65,7 @@ struct PipelineExecGroupBuilder
         }
     }
 
-    PipelineExecGroups build(PipelineExecutorStatus & exec_status);
+    PipelineExecGroups build();
 
     Block getCurrentHeader();
 

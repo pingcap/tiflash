@@ -24,8 +24,11 @@ namespace DB
 class GetResultSinkOp : public SinkOp
 {
 public:
-    explicit GetResultSinkOp(ResultHandler && result_handler_)
-        : result_handler(std::move(result_handler_))
+    GetResultSinkOp(
+        PipelineExecutorStatus & exec_status_,
+        ResultHandler && result_handler_)
+        : SinkOp(exec_status_)
+        , result_handler(std::move(result_handler_))
     {
     }
 
