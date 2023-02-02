@@ -1544,6 +1544,7 @@ using FunctionPositionCaseInsensitiveUTF8
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
 using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args>;
+using FunctionIlike = FunctionsStringSearch<MatchImpl<true, false, true>, NameIlike>;
 using FunctionIlike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameIlike3Args>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
@@ -1561,6 +1562,8 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionMatch>();
     factory.registerFunction<FunctionLike>();
     factory.registerFunction<FunctionLike3Args>();
+    factory.registerFunction<FunctionIlike>();
+    factory.registerFunction<FunctionIlike3Args>();
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionExtract>();
 }

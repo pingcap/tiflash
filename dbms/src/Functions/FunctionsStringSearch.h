@@ -20,19 +20,87 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
+
+#include <string_view>
 
 namespace DB
 {
-// Only lower the 'a', 'b', 'c'...
+using Chars_t = ColumnString::Chars_t;
+using Offsets = ColumnString::Offsets;
+
+inline void lowerOneString(Chars_t & str_container, size_t pos, size_t size)
+{
+    size_t i = 0;
+    while (i < size)
+    {
+        if (isASCII(str_container[pos + i]))
+        {
+            if (isAlphaASCII(str_container[pos + i]))
+                toLowerIfAlphaASCII(str_container[pos + i]);
+            ++i;
+        }
+        else
+        {
+            size_t utf8_len = getUtf8Length(str_container[pos + i]);
+            i += utf8_len;
+        }
+    }
+}
+
+inline void lowerColumnConst(ColumnConst * lowered_col_const)
+{
+    auto * col_data = typeid_cast<ColumnString *>(&lowered_col_const->getDataColumn());
+    RUNTIME_ASSERT(col_data != nullptr, "Invalid column type, should be ColumnString");
+
+    auto & str_container = col_data->getChars();
+    auto str_size = col_data->getOffsets()[0];
+
+    lowerOneString(str_container, 0, str_size);
+}
+
+inline size_t offsetAt(size_t idx, const Offsets & offsets)
+{
+    return idx == 0 ? 0 : offsets[idx - 1];
+}
+
+inline size_t sizeAt(size_t i, const Offsets & offsets)
+{
+    return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
+}
+
+inline void lowerColumnString(MutableColumnPtr & col)
+{
+    auto * col_vector = typeid_cast<ColumnString *>(&*col);
+    RUNTIME_ASSERT(col_vector != nullptr, "Invalid column type, should be ColumnString");
+
+    auto & str_container = col_vector->getChars();
+    const auto & str_offsets = col_vector->getOffsets();
+
+    size_t str_num = str_container.size();
+    for (size_t i = 0; i < str_num; ++i)
+        lowerOneString(str_container, offsetAt(i, str_offsets), sizeAt(i, str_offsets));
+}
+
+// Only lower the 'A', 'B', 'C'...
 inline void lowerEnglishWords(Block & block, const ColumnNumbers & arguments)
 {
     MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
     MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
 
-    const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
-    const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
+    auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_haystack);
+    auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_needle);
 
+    if (col_haystack_const != nullptr)
+        lowerColumnConst(col_haystack_const);
+    else
+        lowerColumnString(column_haystack);
 
+    if (col_needle_const != nullptr)
+        lowerColumnConst(col_needle_const);
+    else
+        lowerColumnString(column_needle);
 }
 
 /** Search and replace functions in strings:
@@ -69,6 +137,10 @@ extern const int ILLEGAL_COLUMN;
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
+struct NameIlike
+{
+    static constexpr auto name = "ilike";
+};
 struct NameIlike3Args
 {
     static constexpr auto name = "ilike3Args";
@@ -143,7 +215,8 @@ public:
         const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
-        if constexpr (name == NameIlike3Args::name)
+        // if constexpr (name == NameIlike3Args::name || name == NameIlike::name)
+        if constexpr (name == std::string_view(NameIlike3Args::name) || name == std::string_view(NameIlike::name))
             lowerEnglishWords(block, arguments);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
