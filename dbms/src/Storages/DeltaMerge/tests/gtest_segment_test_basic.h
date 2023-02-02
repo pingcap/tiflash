@@ -121,7 +121,7 @@ protected:
      */
     void reloadDMContext();
 
-    std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageId segment_id);
+    std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageIdU64 segment_id);
 
 protected:
     inline static constexpr PageIdU64 NAMESPACE_ID = 100;
