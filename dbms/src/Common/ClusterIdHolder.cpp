@@ -22,12 +22,14 @@ namespace DB
 void ClusterIdHolder::set(const std::string & cluster_id_)
 {
     std::lock_guard lock(mu);
+    RUNTIME_CHECK_MSG(!cluster_id_got, "Cann't set cluster id after cluster id got");
     cluster_id = cluster_id_;
 }
 
-std::string ClusterIdHolder::get() const
+std::string ClusterIdHolder::get()
 {
     std::lock_guard lock(mu);
+    cluster_id_got = true;
     LOG_INFO(Logger::get(), "get cluster id: {}", cluster_id);
     return cluster_id;
 }

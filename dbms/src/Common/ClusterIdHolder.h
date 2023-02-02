@@ -28,10 +28,11 @@ public:
 public:
     void set(const std::string & cluster_id_);
 
-    std::string get() const;
+    std::string get();
 
 private:
-    mutable std::mutex mu;
+    std::mutex mu;
+    bool cluster_id_got = false;
     std::string cluster_id{"unknown"};
 };
 } // namespace DB

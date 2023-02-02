@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Flash/Executor/RU.h>
 #include <Flash/Executor/ExecutionResult.h>
+#include <Flash/Executor/RU.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <common/types.h>
 
