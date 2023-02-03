@@ -24,5 +24,3 @@ using PageIdSet = PageIdU64Set;
 static constexpr PageId INVALID_PAGE_ID = INVALID_PAGE_U64_ID;
 
 } // namespace DB::PS::V2
-
-
