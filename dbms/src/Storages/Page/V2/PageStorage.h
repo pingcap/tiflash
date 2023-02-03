@@ -101,7 +101,7 @@ public:
                 const FileProviderPtr & file_provider_,
                 BackgroundProcessingPool & ver_compact_pool_,
                 bool no_more_insert_ = false);
-    ~PageStorage() override { shutdown(); }
+    ~PageStorage() override { shutdown(); } // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
 
     void restore() override;
 
