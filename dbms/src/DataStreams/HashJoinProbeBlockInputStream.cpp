@@ -73,12 +73,24 @@ void HashJoinProbeBlockInputStream::finishOneProbe()
 {
     bool expect = false;
     if likely (probe_finished.compare_exchange_strong(expect, true))
-        join->finishOneProbe();
+    {
+        try
+        {
+            join->finishOneProbe();
+        }
+        catch (...)
+        {
+            join->meetError();
+            throw;
+        }
+    }
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
+    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
+    /// and expects these meaningless blocks won't be used to produce meaningful result.
     finishOneProbe();
     if (non_joined_stream != nullptr)
     {
