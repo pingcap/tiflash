@@ -738,7 +738,9 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         {
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id_v3), Page::invalidPage());
+            Page page;
+            page.page_id = Trait::ExternalIdTrait::getU64ID(page_id_v3);
+            page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id_v3), page);
         }
         return page_map;
     }
@@ -825,7 +827,9 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     if (buf_size == 0)
     {
         LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-        return Page{};
+        Page page;
+        page.page_id = Trait::ExternalIdTrait::getU64ID(page_id_v3);
+        return page;
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
