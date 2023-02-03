@@ -148,7 +148,7 @@ void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_buil
     if (project_actions && !project_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(project_actions, log->identifier()));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, project_actions, log->identifier()));
         });
     }
 }

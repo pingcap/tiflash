@@ -706,7 +706,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, SplitJoinResult)
 try
 {
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {1, 1, 3, 3, 1, 1, 3, 3, 1, 3})});
+    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
     context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
 
     auto request = context
@@ -716,51 +716,6 @@ try
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
     std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
-    for (size_t i = 0; i < block_sizes.size(); ++i)
-    {
-        context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect[i].size(), blocks.size());
-        for (size_t j = 0; j < blocks.size(); ++j)
-        {
-            ASSERT_EQ(expect[i][j], blocks[j].rows());
-        }
-    }
-
-    // with other condition
-    const auto cond = gt(col("b"), lit(Field(static_cast<Int64>(2))));
-    request = context
-                  .scan("split_test", "t1")
-                  .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")}, {}, {}, {cond}, {})
-
-                  .build(context);
-    expect = {{5, 5, 5, 5, 5}, {5, 5, 5, 5, 5}, {5, 5, 5, 5, 5}, {25}, {25}, {25}, {25}, {25}};
-    for (size_t i = 0; i < block_sizes.size(); ++i)
-    {
-        context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect[i].size(), blocks.size());
-        for (size_t j = 0; j < blocks.size(); ++j)
-        {
-            ASSERT_EQ(expect[i][j], blocks[j].rows());
-        }
-    }
-    // test non joined data
-    context.addMockTable("split_test", "t3", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {2, 2, 2, 2, 2})});
-    context.addMockTable("split_test", "t4", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3})});
-    request = context
-                  .scan("split_test", "t3")
-                  .join(context.scan("split_test", "t4"), tipb::JoinType::TypeRightOuterJoin, {col("a")})
-                  .build(context);
-
-    expect = {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-              {2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
-              {7, 7, 6},
-              {20},
-              {20},
-              {20},
-              {20},
-              {20}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));

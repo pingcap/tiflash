@@ -41,9 +41,15 @@ enum class OperatorStatus
 
 // TODO support operator profile info like `BlockStreamProfileInfo`.
 
+class PipelineExecutorStatus;
+
 class Operator
 {
 public:
+    explicit Operator(PipelineExecutorStatus & exec_status_)
+        : exec_status(exec_status_)
+    {}
+
     virtual ~Operator() = default;
     // running status may return are
     // - `NEED_INPUT` means that the data that the operator is waiting for has been prepared.
@@ -67,6 +73,7 @@ public:
     }
 
 protected:
+    PipelineExecutorStatus & exec_status;
     Block header;
 };
 
@@ -74,6 +81,9 @@ protected:
 class SourceOp : public Operator
 {
 public:
+    explicit SourceOp(PipelineExecutorStatus & exec_status_)
+        : Operator(exec_status_)
+    {}
     // read will inplace the block when return status is HAS_OUTPUT;
     // Even after source has finished, source op still needs to return an empty block and HAS_OUTPUT,
     // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
@@ -87,6 +97,9 @@ using SourceOpPtr = std::unique_ptr<SourceOp>;
 class TransformOp : public Operator
 {
 public:
+    explicit TransformOp(PipelineExecutorStatus & exec_status_)
+        : Operator(exec_status_)
+    {}
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
     OperatorStatus tryOutput(Block &);
@@ -115,6 +128,9 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
+    explicit SinkOp(PipelineExecutorStatus & exec_status_)
+        : Operator(exec_status_)
+    {}
     OperatorStatus prepare();
     virtual OperatorStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }
 
