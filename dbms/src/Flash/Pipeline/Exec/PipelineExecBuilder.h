@@ -32,7 +32,7 @@ struct PipelineExecBuilder
 
     Block getCurrentHeader() const;
 
-    PipelineExecPtr build(PipelineExecutorStatus & exec_status);
+    PipelineExecPtr build();
 };
 
 struct PipelineExecGroupBuilder
@@ -40,6 +40,12 @@ struct PipelineExecGroupBuilder
     // A Group generates a set of pipeline_execs running in parallel.
     using BuilderGroup = std::vector<PipelineExecBuilder>;
     BuilderGroup group;
+
+    explicit PipelineExecGroupBuilder(PipelineExecutorStatus & exec_status_)
+        : exec_status(exec_status_)
+    {}
+
+    PipelineExecutorStatus & exec_status;
 
     size_t concurrency = 0;
 
@@ -56,7 +62,7 @@ struct PipelineExecGroupBuilder
         }
     }
 
-    PipelineExecGroup build(PipelineExecutorStatus & exec_status);
+    PipelineExecGroup build();
 
     Block getCurrentHeader();
 };

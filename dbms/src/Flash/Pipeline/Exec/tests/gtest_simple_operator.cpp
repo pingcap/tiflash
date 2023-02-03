@@ -61,12 +61,12 @@ public:
         assert(!result_handler.isIgnored());
         auto plan_tree = PhysicalGetResultSink::build(result_handler, physical_plan.outputAndOptimize());
 
-        PipelineExecGroupBuilder group_builder;
+        PipelineExecGroupBuilder group_builder{exec_status};
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
             plan->buildPipelineExec(group_builder, context.context, /*concurrency=*/1);
         });
-        auto result = group_builder.build(exec_status);
+        auto result = group_builder.build();
         assert(result.size() == 1);
         return {std::move(plan_tree), std::move(result.back())};
     }
