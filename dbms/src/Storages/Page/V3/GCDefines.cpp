@@ -105,10 +105,8 @@ void ExternalPageCallbacksManager<Trait>::registerExternalPagesCallbacks(const E
 template <typename Trait>
 void ExternalPageCallbacksManager<Trait>::unregisterExternalPagesCallbacks(const Prefix & prefix)
 {
-    {
-        std::scoped_lock lock{callbacks_mutex};
-        callbacks_container.erase(prefix);
-    }
+    std::scoped_lock lock{callbacks_mutex};
+    callbacks_container.erase(prefix);
 }
 
 template <typename Trait>
