@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/InstanceLabelHolder.h>
-#include <Common/Logger.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -44,7 +43,7 @@ std::pair<std::string, std::string> InstanceLabelHolder::getClusterIdLabel()
 {
     std::lock_guard lock(mu);
     label_got = true;
-    LOG_INFO(Logger::get(), "get cluster id: {}", cluster_id);
+    LOG_INFO(log, "get cluster id: {}", cluster_id);
     return {"cluster_id", cluster_id};
 }
 
@@ -52,7 +51,7 @@ std::pair<std::string, std::string> InstanceLabelHolder::getInstanceIdLabel()
 {
     std::lock_guard lock(mu);
     label_got = true;
-    LOG_INFO(Logger::get(), "get instance id: {}", instance_id);
+    LOG_INFO(log, "get instance id: {}", instance_id);
     return {"instance_id", instance_id};
 }
 

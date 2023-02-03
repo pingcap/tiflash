@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
 #include <ext/singleton.h>
@@ -35,5 +36,7 @@ private:
     bool label_got = false;
     std::string cluster_id{"unknown"};
     std::string instance_id{"unknown"};
+
+    LoggerPtr log = Logger::get();
 };
 } // namespace DB
