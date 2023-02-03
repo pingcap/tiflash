@@ -72,7 +72,7 @@ using ChecksumClass = Digest::CRC64;
   *********************/
 
 template <typename Trait>
-BlobStore<Trait>::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_)
+BlobStore<Trait>::BlobStore(const String & storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_)
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
@@ -734,11 +734,11 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
     if (buf_size == 0)
     {
         PageMap page_map;
-        for (const auto & [page_id, entry] : entries)
+        for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
-            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id);
-            page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id), Page::invalidPage());
+            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id_v3), Page::invalidPage());
         }
         return page_map;
     }
@@ -750,9 +750,9 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
 
     char * pos = data_buf;
     PageMap page_map;
-    for (const auto & [page_id, entry] : entries)
+    for (const auto & [page_id_v3, entry] : entries)
     {
-        auto blob_file = read(page_id, entry.file_id, entry.offset, pos, entry.size, read_limiter);
+        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -763,7 +763,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
             {
                 throw Exception(
                     fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                                page_id,
+                                page_id_v3,
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
@@ -773,7 +773,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         }
 
         Page page;
-        page.page_id = Trait::ExternalIdTrait::getU64ID(page_id);
+        page.page_id = Trait::ExternalIdTrait::getU64ID(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
 
@@ -784,7 +784,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
             page.field_offsets.emplace(index, offset);
         }
 
-        page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id), std::move(page));
+        page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id_v3), std::move(page));
 
         pos += entry.size;
     }
@@ -812,7 +812,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
 template <typename Trait>
 Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    const auto & [page_id, entry] = id_entry;
+    const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 
     if (!entry.isValid())
@@ -824,7 +824,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id);
+        LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
         return Page{};
     }
 
@@ -833,7 +833,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
         free(p, buf_size);
     });
 
-    auto blob_file = read(page_id, entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+    auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
     if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
     {
         ChecksumClass digest;
@@ -843,7 +843,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
         {
             throw Exception(
                 fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                            page_id,
+                            page_id_v3,
                             entry.checksum,
                             checksum,
                             toDebugString(entry),
@@ -853,7 +853,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     }
 
     Page page;
-    page.page_id = Trait::ExternalIdTrait::getU64ID(page_id);
+    page.page_id = Trait::ExternalIdTrait::getU64ID(page_id_v3);
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
@@ -868,7 +868,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
 }
 
 template <typename Trait>
-BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & page_id, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
+BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     assert(buffers != nullptr);
     BlobFilePtr blob_file = getBlobFile(blob_id);
@@ -879,7 +879,7 @@ BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & pag
     catch (DB::Exception & e)
     {
         // add debug message
-        e.addMessage(fmt::format("(error while reading page data [page_id={}] [blob_id={}] [offset={}] [size={}] [background={}])", page_id, blob_id, offset, size, background));
+        e.addMessage(fmt::format("(error while reading page data [page_id={}] [blob_id={}] [offset={}] [size={}] [background={}])", page_id_v3, blob_id, offset, size, background));
         e.rethrow();
     }
     return blob_file;

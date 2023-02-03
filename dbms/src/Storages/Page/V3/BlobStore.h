@@ -56,7 +56,7 @@ public:
     using PageMap = typename Trait::PageMap;
 
 public:
-    BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config);
+    BlobStore(const String & storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config);
 
     void registerPaths();
 
@@ -100,7 +100,7 @@ private:
 
     PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    BlobFilePtr read(const PageId & page_id, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
+    BlobFilePtr read(const PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.
