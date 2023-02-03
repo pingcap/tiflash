@@ -52,7 +52,6 @@ public:
 
         double avg_size_hint;
         MarksInCompressedFilePtr marks;
-        MarkWithSizesInCompressedFilePtr mark_with_sizes;
 
         size_t getOffsetInFile(size_t i) const
         {

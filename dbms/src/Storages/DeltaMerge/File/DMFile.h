@@ -306,16 +306,16 @@ private:
     String configurationPath() const { return subFilePath(configurationFileName()); }
 
     using FileNameBase = String;
+    size_t colIndexSize(const FileNameBase & file_name_base) { return Poco::File(colIndexPath(file_name_base)).getSize(); }
+    size_t colMarkSize(const FileNameBase & file_name_base) { return Poco::File(colMarkPath(file_name_base)).getSize(); }
+    size_t colDataSize(const FileNameBase & file_name_base) { return Poco::File(colDataPath(file_name_base)).getSize(); }
+
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
     String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
     String colMarkPath(const FileNameBase & file_name_base) const { return subFilePath(colMarkFileName(file_name_base)); }
 
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
-
-    static size_t colIndexSize(const FileNameBase & file_name_base) { return Poco::File(colIndexFileName(file_name_base)).getSize(); }
-    static size_t colMarkSize(const FileNameBase & file_name_base) { return Poco::File(colMarkFileName(file_name_base)).getSize(); }
-    static size_t colDataSize(const FileNameBase & file_name_base) { return Poco::File(colDataFileName(file_name_base)).getSize(); }
 
     bool isColIndexExist(const ColId & col_id) const;
 

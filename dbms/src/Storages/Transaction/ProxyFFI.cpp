@@ -379,19 +379,11 @@ RawCppPtr PreHandleSnapshot(
         }
 #endif
 
-        switch (kvstore->applyMethod())
-        {
-        case TiDB::SnapshotApplyMethod::DTFile_Directory:
-        case TiDB::SnapshotApplyMethod::DTFile_Single:
-        {
-            // Pre-decode and save as DTFiles
-            auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
-            auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
-            return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
-        }
-        default:
-            throw Exception("Unknow Region apply method: " + applyMethodToString(kvstore->applyMethod()));
-        }
+
+        // Pre-decode and save as DTFiles
+        auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+        auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
+        return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
     }
     catch (...)
     {
