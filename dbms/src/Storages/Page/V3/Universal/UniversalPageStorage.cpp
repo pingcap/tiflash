@@ -131,7 +131,23 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
 Page UniversalPageStorage::read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     UNUSED(page_field, read_limiter, snapshot, throw_on_not_exist);
-    throw Exception("Not support read single filed on Universal", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception("Not support read single field on Universal", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void UniversalPageStorage::traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    // TODO: This could hold the read lock of `page_directory` for a long time
+    const auto page_ids = page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
+    for (const auto & page_id : page_ids)
+    {
+        const auto page_id_and_entry = page_directory->getByID(page_id, snapshot);
+        acceptor(page_id_and_entry.first, blob_store->read(page_id_and_entry));
+    }
 }
 
 UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist)

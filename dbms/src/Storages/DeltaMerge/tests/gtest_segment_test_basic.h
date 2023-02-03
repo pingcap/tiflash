@@ -92,10 +92,10 @@ public:
 
     void printFinishedOperations() const;
 
-    std::vector<Block> readSegment(PageId segment_id, bool need_row_id, const RowKeyRanges & ranges);
-    ColumnPtr getSegmentRowId(PageId segment_id, const RowKeyRanges & ranges);
-    ColumnPtr getSegmentHandle(PageId segment_id, const RowKeyRanges & ranges);
-    void writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end);
+    std::vector<Block> readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
+    void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
     RowKeyValue buildRowKeyValue(Int64 key);
     RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
 

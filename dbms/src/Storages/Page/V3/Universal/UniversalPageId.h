@@ -25,7 +25,7 @@ namespace DB
 class UniversalPageId final
 {
 public:
-    static inline UniversalPageId toFullUniversalPageId(const String & prefix, PageIdU64 page_id)
+    static inline UniversalPageId toFullPageId(const String & prefix, PageIdU64 page_id)
     {
         WriteBufferFromOwnString buff;
         writeString(prefix, buff);
@@ -73,6 +73,7 @@ public:
     bool empty() const { return id.empty(); }
     UniversalPageId substr(size_t pos, size_t npos) const { return id.substr(pos, npos); }
     bool operator<(const UniversalPageId & rhs) const { return id < rhs.id; }
+    bool isPrefix(const String & str) const { return startsWith(id, str); }
 
     String toStr() const { return id; }
     const String & asStr() const { return id; }

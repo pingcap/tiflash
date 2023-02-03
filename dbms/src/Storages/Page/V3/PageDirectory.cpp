@@ -1168,6 +1168,33 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIds()
 }
 
 template <typename Trait>
+typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWithPrefix(const String & prefix, const DB::PageStorageSnapshotPtr & snap_)
+{
+    UNUSED(snap_);
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        PageIdSet page_ids;
+        auto seq = toConcreteSnapshot(snap_)->sequence;
+        std::shared_lock read_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.lower_bound(prefix);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            if (!iter->first.isPrefix(prefix))
+                break;
+            // Only return the page_id that is visible
+            if (iter->second->isVisible(seq))
+                page_ids.insert(iter->first);
+        }
+        return page_ids;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+template <typename Trait>
 void PageDirectory<Trait>::applyRefEditRecord(
     MVCCMapType & mvcc_table_directory,
     const VersionedPageEntriesPtr & version_list,

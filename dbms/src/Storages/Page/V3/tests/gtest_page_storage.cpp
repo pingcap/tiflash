@@ -717,13 +717,13 @@ TEST_F(PageStorageTest, IngestFile)
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(100), 0);
     };
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 1);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 2);
-    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
+    page_storage->unregisterExternalPagesCallbacks(callbacks.prefix);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 2);
 }
@@ -1213,7 +1213,7 @@ try
         }
         }
     };
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("fist gc");
@@ -1280,7 +1280,7 @@ try
 
     auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = ns_id1;
+    callbacks.prefix = ns_id1;
     callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
@@ -1308,7 +1308,7 @@ try
     // mock table created while gc is running
     {
         ExternalPageCallbacks new_callbacks;
-        new_callbacks.ns_id = ns_id2;
+        new_callbacks.prefix = ns_id2;
         new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)
@@ -1339,7 +1339,7 @@ try
 {
     auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = TEST_NAMESPACE_ID;
     callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
