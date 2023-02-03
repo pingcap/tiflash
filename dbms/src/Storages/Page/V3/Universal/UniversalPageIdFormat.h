@@ -19,8 +19,16 @@
 
 namespace DB
 {
-// General UniversalPageId Format: Prefix + PageIdU64
+// General UniversalPageId Format: Prefix + PageIdU64.
+// So normally the size of page id should be larger than 8 bytes(size of PageIdU64).
+// If the size of page id is smaller than 8 bytes, it will be regraded as a whole.(Its Prefix is empty, while PageIdU64 is INVALID_PAGE_U64_ID)
 //
+// Currently, if the PageIdU64 is 0(which is INVALID_PAGE_U64_ID), it may have some special meaning in some cases,
+// so please avoid it in the following case:
+//  1. if there are ref operations in your workload
+//
+//
+// The main key format types:
 // Raft related key
 //  Format: https://github.com/tikv/tikv/blob/9c0df6d68c72d30021b36d24275fdceca9864235/components/keys/src/lib.rs#L24
 //

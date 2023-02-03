@@ -177,7 +177,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     // that callbacks is called after the `DeltaMergeStore` shutdown or dropped,
     // we must make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = storage_pool->getNamespaceId();
+    callbacks.prefix = storage_pool->getNamespaceId();
     callbacks.scanner = LocalDMFileGcScanner(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider());
     callbacks.remover = LocalDMFileGcRemover(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider(), log);
     // remember to unregister it when shutdown

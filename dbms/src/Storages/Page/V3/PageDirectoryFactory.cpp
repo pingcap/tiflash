@@ -213,7 +213,6 @@ void PageDirectoryFactory<Trait>::applyRecord(
         case EditRecordType::UPSERT:
         {
             auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
-            // TODO: check `INVALID_PAGE_U64_ID` is respected in all kinds of workloads
             if (Trait::ExternalIdTrait::getU64ID(id_to_deref) != INVALID_PAGE_U64_ID)
             {
                 // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page

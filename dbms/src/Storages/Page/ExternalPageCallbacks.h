@@ -20,8 +20,8 @@
 
 namespace DB
 {
-
-struct ExternalPageCallbacks
+template <typename Prefix>
+struct ExternalPageCallbacksT
 {
     // `scanner` for scanning available external page ids on disks.
     // `remover` will be called with living normal page ids after gc run a round, user should remove those
@@ -32,7 +32,9 @@ struct ExternalPageCallbacks
         = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageIdU64> & valid_normal_pages)>;
     ExternalPagesScanner scanner = nullptr;
     ExternalPagesRemover remover = nullptr;
-    NamespaceId ns_id = MAX_NAMESPACE_ID;
+    Prefix prefix{};
 };
 
+using ExternalPageCallbacks = ExternalPageCallbacksT<NamespaceId>;
+using UniversalExternalPageCallbacks = ExternalPageCallbacksT<String>;
 } // namespace DB

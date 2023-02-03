@@ -368,7 +368,7 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         // the external pages on disks.
         auto pending_external_pages = ns_callbacks->scanner();
         statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
-        auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->ns_id);
+        auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->prefix);
         statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
         if (alive_external_ids)
         {
@@ -381,7 +381,7 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         {
             std::scoped_lock lock{callbacks_mutex};
             // next ns_id that is greater than `ns_id`
-            auto iter = callbacks_container.upper_bound(ns_callbacks->ns_id);
+            auto iter = callbacks_container.upper_bound(ns_callbacks->prefix);
             if (iter == callbacks_container.end())
                 break;
             ns_callbacks = iter->second;
@@ -495,14 +495,14 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     std::scoped_lock lock{callbacks_mutex};
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
-    assert(callbacks.ns_id != MAX_NAMESPACE_ID);
+    assert(callbacks.prefix != 0);
     // NamespaceId(TableID) should not be reuse
     RUNTIME_CHECK_MSG(
-        callbacks_container.count(callbacks.ns_id) == 0,
+        callbacks_container.count(callbacks.prefix) == 0,
         "Try to create callbacks for duplicated namespace id {}",
-        callbacks.ns_id);
+        callbacks.prefix);
     // `emplace` won't invalid other iterator
-    callbacks_container.emplace(callbacks.ns_id, std::make_shared<ExternalPageCallbacks>(callbacks));
+    callbacks_container.emplace(callbacks.prefix, std::make_shared<ExternalPageCallbacks>(callbacks));
 }
 
 void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)

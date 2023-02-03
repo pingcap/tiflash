@@ -1086,7 +1086,7 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::gc(typename BlobStore<Trait>::GcEntriesMap & entries_need_gc,
+BlobStore<Trait>::gc(GcEntriesMap & entries_need_gc,
                      const PageSize & total_page_size,
                      const WriteLimiterPtr & write_limiter,
                      const ReadLimiterPtr & read_limiter)

@@ -47,20 +47,6 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 using UniversalPageMap = std::map<UniversalPageId, Page>;
 
-struct UniversalExternalPageCallbacks
-{
-    // `scanner` for scanning available external page ids on disks.
-    // `remover` will be called with living normal page ids after gc run a round, user should remove those
-    //           external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
-    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageIdU64>>>;
-    using ExternalPagesScanner = std::function<PathAndIdsVec()>;
-    using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageIdU64> & valid_normal_pages)>;
-    ExternalPagesScanner scanner = nullptr;
-    ExternalPagesRemover remover = nullptr;
-    String prefix;
-};
-
 class UniversalPageStorage final
 {
 public:
