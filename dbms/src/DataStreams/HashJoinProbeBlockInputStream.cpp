@@ -69,9 +69,27 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     return join->joinBlock(header_probe_process_info);
 }
 
+void HashJoinProbeBlockInputStream::finishOneProbe()
+{
+    bool expect = false;
+    if likely (probe_finished.compare_exchange_strong(expect, true))
+        join->finishOneProbe();
+}
+
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
+    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
+    /// and expects these meaningless blocks won't be used to produce meaningful result.
+    try
+    {
+        finishOneProbe();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "finishOneProbe failed in cancel() ");
+        join->meetError();
+    }
     if (non_joined_stream != nullptr)
     {
         auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
@@ -112,7 +130,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 Block block = children.back()->read();
                 if (!block)
                 {
-                    join->finishOneProbe();
+                    finishOneProbe();
                     if (join->needReturnNonJoinedData())
                         status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
                     else
