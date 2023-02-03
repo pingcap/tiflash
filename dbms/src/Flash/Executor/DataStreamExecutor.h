@@ -34,7 +34,7 @@ public:
 
     int estimateNewThreadCount() override;
 
-    RU collectRU() override;
+    UInt64 collectCPUTimeSecond() override;
 
 protected:
     ExecutionResult execute(ResultHandler result_handler) override;

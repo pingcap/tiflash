@@ -12,25 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ClusterIdHolder.h>
-#include <Common/Exception.h>
-#include <Common/Logger.h>
-#include <common/logger_useful.h>
+#pragma once
+
+#include <Poco/Util/LayeredConfiguration.h>
+#include <ext/singleton.h>
+#include <mutex>
+#include <string>
 
 namespace DB
 {
-void ClusterIdHolder::set(const std::string & cluster_id_)
+class InstanceLabelHolder : public ext::Singleton<InstanceLabelHolder>
 {
-    std::lock_guard lock(mu);
-    RUNTIME_CHECK_MSG(!cluster_id_got, "Cann't set cluster id after cluster id got");
-    cluster_id = cluster_id_;
-}
+public:
+    void init(const Poco::Util::LayeredConfiguration & conf);
 
-std::string ClusterIdHolder::get()
-{
-    std::lock_guard lock(mu);
-    cluster_id_got = true;
-    LOG_INFO(Logger::get(), "get cluster id: {}", cluster_id);
-    return cluster_id;
-}
+    std::pair<std::string, std::string> getClusterIdLabel();
+    std::pair<std::string, std::string> getInstanceIdLabel();
+
+private:
+    std::mutex mu;
+    bool label_got = false;
+    std::string cluster_id{"unknown"};
+    std::string instance_id{"unknown"};
+};
 } // namespace DB

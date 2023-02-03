@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,27 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <ext/singleton.h>
-#include <mutex>
-#include <string>
+#include <Flash/Executor/toCPUTimeSecond.h>
+#include <common/likely.h>
 
 namespace DB
 {
-class ClusterIdHolder : public ext::Singleton<ClusterIdHolder>
+/**
+ * cpu time second used by tiflash compute = vcores * second
+ */
+UInt64 toCPUTimeSecond(UInt64 cpu_time_ns)
 {
-public:
-    static constexpr auto cluster_id_key = "cluster.cluster_id";
+    if (unlikely(cpu_time_ns == 0))
+        return 0;
 
-public:
-    void set(const std::string & cluster_id_);
-
-    std::string get();
-
-private:
-    std::mutex mu;
-    bool cluster_id_got = false;
-    std::string cluster_id{"unknown"};
-};
+    static constexpr double aru_rate = 1.0;
+    double cpu_time_second = static_cast<double>(cpu_time_ns) / 1000'000'000L;
+    auto ceil_cpu_time_second = ceil(cpu_time_second);
+    return ceil_cpu_time_second * aru_rate;
+}
 } // namespace DB

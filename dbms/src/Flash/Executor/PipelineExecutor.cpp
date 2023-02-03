@@ -81,9 +81,9 @@ int PipelineExecutor::estimateNewThreadCount()
     return 0;
 }
 
-RU PipelineExecutor::collectRU()
+UInt64 PipelineExecutor::collectCPUTimeSecond()
 {
-    // TODO support collectRU
+    // TODO support collectCPUTimeSecond
     return 0;
 }
 } // namespace DB

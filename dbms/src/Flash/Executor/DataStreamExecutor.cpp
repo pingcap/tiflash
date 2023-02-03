@@ -16,6 +16,7 @@
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Executor/DataStreamExecutor.h>
+#include <Flash/Executor/toCPUTimeSecond.h>
 
 namespace DB
 {
@@ -68,8 +69,8 @@ int DataStreamExecutor::estimateNewThreadCount()
     return data_stream->estimateNewThreadCount();
 }
 
-RU DataStreamExecutor::collectRU()
+UInt64 DataStreamExecutor::collectCPUTimeSecond()
 {
-    return toRU(data_stream->estimateCPUTimeNs());
+    return toCPUTimeSecond(data_stream->estimateCPUTimeNs());
 }
 } // namespace DB

@@ -50,11 +50,6 @@ std::string getHostName()
     }
     return hostname;
 }
-
-auto microsecondsUTC()
-{
-    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-}
 } // namespace
 
 class MetricHandler : public Poco::Net::HTTPRequestHandler
@@ -204,7 +199,7 @@ MetricsPrometheus::MetricsPrometheus(
             std::string job_name = service_addr;
             std::replace(job_name.begin(), job_name.end(), ':', '_');
             std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = fmt::format("tiflash_{}_{}", job_name, microsecondsUTC());
+            job_name = "tiflash_" + job_name;
 
             const auto & labels = prometheus::Gateway::GetInstanceLabel(getHostName());
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);

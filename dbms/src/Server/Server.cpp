@@ -15,11 +15,11 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
-#include <Common/ClusterIdHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
 #include <Common/FailPoint.h>
+#include <Common/InstanceLabelHolder.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -1077,9 +1077,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
-    /// Initialize the cluster id of tiflash server.
-    auto cluster_id = config().getString(ClusterIdHolder::cluster_id_key, "default");
-    ClusterIdHolder::instance().set(cluster_id);
+    /// Initialize the instance labels of tiflash server.
+    InstanceLabelHolder::instance().init(config());
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
