@@ -36,6 +36,7 @@
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/Remote/DeltaIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -113,11 +114,13 @@ namespace DM
 
 dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(
     PageId segment_id,
+    UInt64 segment_epoch,
     const RowKeyRange & segment_range,
     const RowKeyRanges & read_ranges) const
 {
     dtpb::DisaggregatedSegment remote;
     remote.set_segment_id(segment_id);
+    remote.set_segment_epoch(segment_epoch);
 
     WriteBufferFromOwnString wb;
     {
@@ -174,7 +177,11 @@ SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
         write_node_id,
         table_id,
         segment_range);
-    delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
+    delta_snap->shared_delta_index = remote_manager->getDeltaIndexCache()->getDeltaIndex({
+        .write_node_id = write_node_id,
+        .segment_id = proto.segment_id(),
+        .segment_epoch = proto.segment_epoch(),
+    });
 
     auto data_store = remote_manager->getDataStore();
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);

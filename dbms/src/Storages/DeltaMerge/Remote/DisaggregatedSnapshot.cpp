@@ -18,6 +18,7 @@ DisaggregatedTableReadSnapshot::toRemote(const DisaggregatedTaskId & task_id) co
     {
         auto remote_seg = seg_task->read_snapshot->serializeToRemoteProtocol(
             seg_task->segment->segmentId(),
+            seg_task->segment->segmentEpoch(),
             seg_task->segment->getRowKeyRange(),
             /*read_ranges*/ seg_task->ranges);
         remote_table.mutable_segments()->Add(std::move(remote_seg));

@@ -14,6 +14,8 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreNFS.h>
+#include <Storages/DeltaMerge/Remote/DeltaIndexCache.h>
+#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/Manager.h>
 
 namespace DB::DM::Remote
@@ -26,6 +28,7 @@ Manager::Manager(const Context & global_context, String nfs_directory)
               .base_directory = nfs_directory,
           },
           global_context.getFileProvider()))
+    , delta_index_cache(std::make_shared<DeltaIndexCache>())
 {}
 
 } // namespace DB::DM::Remote

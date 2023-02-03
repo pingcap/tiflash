@@ -14,9 +14,6 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
-#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
-
 #include <boost/noncopyable.hpp>
 
 namespace DB::DM::Remote
@@ -24,6 +21,15 @@ namespace DB::DM::Remote
 
 class Manager;
 using ManagerPtr = std::shared_ptr<Manager>;
+
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
+
+class LocalPageCache;
+using LocalPageCachePtr = std::shared_ptr<LocalPageCache>;
+
+class DeltaIndexCache;
+using DeltaIndexCachePtr = std::shared_ptr<DeltaIndexCache>;
 
 class Manager : private boost::noncopyable
 {
@@ -40,9 +46,15 @@ public:
         return data_store;
     }
 
+    DeltaIndexCachePtr getDeltaIndexCache() const
+    {
+        return delta_index_cache;
+    }
+
 private:
     LocalPageCachePtr page_cache;
     IDataStorePtr data_store;
+    DeltaIndexCachePtr delta_index_cache;
 };
 
 } // namespace DB::DM::Remote

@@ -15,18 +15,13 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/Manager.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
 namespace DB::DM
 {
-
-namespace Remote
-{
-class Manager;
-using ManagerPtr = std::shared_ptr<Manager>;
-} // namespace Remote
 
 class IColumnFileSetStorageReader
 {
