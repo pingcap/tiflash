@@ -19,6 +19,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -78,10 +79,6 @@ public:
 
     void unregisterExternalPagesCallbacks(NamespaceId ns_id) override;
 
-    static bool isManifestsFileExists(const String & path);
-
-    static void createManifestsFileIfNeed(const String & path);
-
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     // clang-format off
@@ -100,64 +97,13 @@ public:
 private:
 #endif
 
-    enum class GCStageType
-    {
-        Unknown,
-        OnlyInMem,
-        FullGCNothingMoved,
-        FullGC,
-    };
-    struct GCTimeStatistics
-    {
-        GCStageType stage = GCStageType::Unknown;
-        bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
-
-        UInt64 total_cost_ms = 0;
-
-        UInt64 compact_wal_ms = 0;
-        UInt64 compact_directory_ms = 0;
-        UInt64 compact_spacemap_ms = 0;
-        // Full GC
-        UInt64 full_gc_prepare_ms = 0;
-        UInt64 full_gc_get_entries_ms = 0;
-        UInt64 full_gc_blobstore_copy_ms = 0;
-        UInt64 full_gc_apply_ms = 0;
-
-        // GC external page
-        UInt64 num_external_callbacks = 0;
-        // Breakdown the duration for cleaning external pages
-        // ms is usually too big for these operation, store by ns (10^-9)
-        UInt64 external_page_scan_ns = 0;
-        UInt64 external_page_get_alive_ns = 0;
-        UInt64 external_page_remove_ns = 0;
-
-    private:
-        // Total time of cleaning external pages
-        UInt64 clean_external_page_ms = 0;
-
-    public:
-        void finishCleanExternalPage(UInt64 clean_cost_ms);
-
-        String toLogging() const;
-    };
-
-    GCTimeStatistics doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
-    void cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics);
-
     LoggerPtr log;
 
     u128::PageDirectoryPtr page_directory;
 
     u128::BlobStoreType blob_store;
 
-    std::atomic<bool> gc_is_running = false;
-
-    const static String manifests_file_name;
-
-    std::mutex callbacks_mutex;
-    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
-    using ExternalPageCallbacksContainer = std::map<NamespaceId, std::shared_ptr<ExternalPageCallbacks>>;
-    ExternalPageCallbacksContainer callbacks_container;
+    u128::ExternalPageCallbacksManager manager;
 };
 
 } // namespace PS::V3

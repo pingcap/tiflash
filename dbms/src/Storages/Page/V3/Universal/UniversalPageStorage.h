@@ -22,6 +22,7 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
@@ -73,41 +74,6 @@ public:
     {
     }
 
-    enum class GCStageType
-    {
-        Unknown,
-        OnlyInMem,
-        FullGCNothingMoved,
-        FullGC,
-    };
-
-    struct GCTimeStatistics
-    {
-        GCStageType stage = GCStageType::Unknown;
-        bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
-
-        UInt64 total_cost_ms = 0;
-
-        UInt64 dump_snapshots_ms = 0;
-        UInt64 gc_in_mem_entries_ms = 0;
-        UInt64 blobstore_remove_entries_ms = 0;
-        UInt64 blobstore_get_gc_stats_ms = 0;
-        // Full GC
-        UInt64 full_gc_get_entries_ms = 0;
-        UInt64 full_gc_blobstore_copy_ms = 0;
-        UInt64 full_gc_apply_ms = 0;
-
-        // GC external page
-        UInt64 clean_external_page_ms = 0;
-        UInt64 num_external_callbacks = 0;
-        // ms is usually too big for these operation, store by ns (10^-9)
-        UInt64 external_page_scan_ns = 0;
-        UInt64 external_page_get_alive_ns = 0;
-        UInt64 external_page_remove_ns = 0;
-
-        String toLogging() const;
-    };
-
     ~UniversalPageStorage() = default;
 
     void restore();
@@ -152,9 +118,6 @@ public:
     // We may skip the GC to reduce useless reading by default.
     bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
-    GCTimeStatistics doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
-    void cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics);
-
     bool isEmpty() const
     {
         return page_directory->numPages() == 0;
@@ -175,12 +138,7 @@ public:
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
 
-    std::atomic<bool> gc_is_running = false;
-
-    std::mutex callbacks_mutex;
-    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
-    using UniversalExternalPageCallbacksContainer = std::map<String, std::shared_ptr<UniversalExternalPageCallbacks>>;
-    UniversalExternalPageCallbacksContainer callbacks_container;
+    PS::V3::universal::ExternalPageCallbacksManager manager;
 
     LoggerPtr log;
 };
