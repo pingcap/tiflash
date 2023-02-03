@@ -272,7 +272,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
-                throw Exception(fmt::format("write batch have a invalid total size while page data size is 0 [write_type={}]", static_cast<Int32>(write.type)),
+                throw Exception(fmt::format("write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
