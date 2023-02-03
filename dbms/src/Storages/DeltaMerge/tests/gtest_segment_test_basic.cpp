@@ -170,7 +170,7 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(PageIdU64 segment_id, 
     return right->segmentId();
 }
 
-void SegmentTestBasic::mergeSegment(const std::vector<PageIdU64> & segments_id, bool check_rows)
+void SegmentTestBasic::mergeSegment(const PageIdU64s & segments_id, bool check_rows)
 {
     LOG_INFO(logger_op, "mergeSegment, segments=[{}]", fmt::join(segments_id, ","));
 
