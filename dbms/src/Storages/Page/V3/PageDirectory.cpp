@@ -655,7 +655,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     auto iter = MapUtils::findLess(entries, PageVersion(lowest_seq + 1));
     // If we can't find any seq lower than `lowest_seq` then
     // all version in this list don't need gc.
-    if (iter == entries.begin() || iter == entries.end())
+    if (iter == entries.begin() || iter == entries.end()) // NOLINT(misc-redundant-expression)
     {
         return false;
     }

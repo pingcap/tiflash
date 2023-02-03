@@ -58,7 +58,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
     page_directory->apply(std::move(edit), write_limiter);
 }
 
-Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
     if (!snapshot)
     {
@@ -69,7 +69,7 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
     return blob_store->read(page_entry, read_limiter);
 }
 
-UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
     if (!snapshot)
     {
@@ -93,7 +93,7 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
     }
 }
 
-UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
     if (!snapshot)
     {
@@ -128,13 +128,7 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
     return page_map;
 }
 
-Page UniversalPageStorage::read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
-{
-    UNUSED(page_field, read_limiter, snapshot, throw_on_not_exist);
-    throw Exception("Not support read single field on Universal", ErrorCodes::NOT_IMPLEMENTED);
-}
-
-void UniversalPageStorage::traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void UniversalPageStorage::traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) const
 {
     if (!snapshot)
     {
@@ -150,7 +144,7 @@ void UniversalPageStorage::traverse(const String & prefix, const std::function<v
     }
 }
 
-UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
+UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
     if (!snapshot)
     {
