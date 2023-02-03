@@ -24,16 +24,16 @@ namespace DB
 // Raft related key
 //  Format: https://github.com/tikv/tikv/blob/9c0df6d68c72d30021b36d24275fdceca9864235/components/keys/src/lib.rs#L24
 //
-// KVstore related key
-//  Prefix = [optional prefix] + b'rgn'
+// KVStore related key
+//  Prefix = [optional prefix] + "kvs"
 //
 // Storage key
 //  Meta
-//      Prefix = [optional prefix] + b'tm' + NamespaceId
+//      Prefix = [optional prefix] + "tm" + NamespaceId
 //  Log
-//      Prefix = [optional prefix] + b'tl' + NamespaceId
+//      Prefix = [optional prefix] + "tl" + NamespaceId
 //  Data
-//      Prefix = [optional prefix] + b'td' + NamespaceId
+//      Prefix = [optional prefix] + "td" + NamespaceId
 
 struct UniversalPageIdFormat
 {

@@ -14,14 +14,9 @@
 
 #pragma once
 
-#include <IO/ReadBuffer.h>
 #include <IO/ReadBufferFromString.h>
-#include <IO/WriteHelpers.h>
-#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/WriteBatch.h>
-
-#include <vector>
 
 namespace DB
 {
@@ -45,15 +40,6 @@ private:
         UniversalPageId ori_page_id;
         // Fields' offset inside Page's data
         PageFieldOffsetChecksums offsets;
-
-        /// The meta and data may not be the same PageFile, (read_buffer == nullptr)
-        /// use `target_file_id`, `page_offset`, `page_checksum` to indicate where
-        /// data is actually store in.
-        /// Should only use by `UPSERT` now.
-
-        UInt64 page_offset;
-        UInt64 page_checksum;
-        PageFileIdAndLevel target_file_id;
     };
     using Writes = std::vector<Write>;
 
@@ -65,7 +51,7 @@ public:
         , total_data_size(rhs.total_data_size)
     {}
 
-    void putPage(UniversalPageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    void putPage(const UniversalPageId & page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         // Convert from data_sizes to the offset of each field
         PageFieldOffsetChecksums offsets;
@@ -87,34 +73,34 @@ public:
                             ErrorCodes::LOGICAL_ERROR);
         }
 
-        Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets), 0, 0, {}};
+        Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets)};
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }
 
-    void putPage(UniversalPageId page_id, UInt64 tag, std::string_view data)
+    void putPage(const UniversalPageId & page_id, UInt64 tag, std::string_view data)
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
         putPage(page_id, tag, buffer_ptr, data.size());
     }
 
-    void putExternal(UniversalPageId page_id, UInt64 tag)
+    void putExternal(const UniversalPageId & page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
-        Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}, 0, 0, {}};
+        Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}};
         writes.emplace_back(std::move(w));
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
-    void putRefPage(UniversalPageId ref_id, UniversalPageId page_id)
+    void putRefPage(const UniversalPageId & ref_id, const UniversalPageId & page_id)
     {
-        Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}, 0, 0, {}};
+        Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}};
         writes.emplace_back(std::move(w));
     }
 
-    void delPage(UniversalPageId page_id)
+    void delPage(const UniversalPageId & page_id)
     {
-        Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, "", {}, 0, 0, {}};
+        Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, "", {}};
         writes.emplace_back(std::move(w));
     }
 
