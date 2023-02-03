@@ -272,7 +272,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
-                throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
+                throw Exception(fmt::format("write batch have a invalid total size while page data size is 0 [write_type={}]", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
@@ -582,7 +582,15 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     // Read with `FieldReadInfos`, buf_size must not be 0.
     if (buf_size == 0)
     {
-        throw Exception("Reading with fields but entry size is 0.", ErrorCodes::LOGICAL_ERROR);
+        FmtBuffer buf;
+        buf.joinStr(
+            to_read.begin(),
+            to_read.end(),
+            [](const FieldReadInfo & info, FmtBuffer & fb) {
+                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+            },
+            ",");
+        throw Exception(fmt::format("Reading with fields but entry size is 0, read_info=[{}]", buf.toString()), ErrorCodes::LOGICAL_ERROR);
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));

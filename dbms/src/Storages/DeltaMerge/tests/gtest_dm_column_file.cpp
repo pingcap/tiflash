@@ -191,6 +191,23 @@ try
 }
 CATCH
 
+TEST_F(ColumnFileTest, SerializeEmptyBlock)
+try
+{
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 0, false);
+    ColumnFileTinyPtr cf;
+    {
+        WriteBatches wbs(dmContext().storage_pool);
+        cf = ColumnFileTiny::writeColumnFile(dmContext(), DMTestEnv::prepareSimpleWriteBlock(0, 10, false), 0, 10, wbs);
+        cf = ColumnFileTiny::writeColumnFile(dmContext(), block, 0, 0, wbs);
+        wbs.writeAll();
+    }
+    auto storage_snap = std::make_shared<StorageSnapshot>(dmContext().storage_pool, nullptr, "", true);
+    auto reader = cf->getReader(dmContext(), storage_snap, std::make_shared<ColumnDefines>(getColumnDefinesFromBlock(block)));
+    auto block_read = reader->readNextBlock();
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB
