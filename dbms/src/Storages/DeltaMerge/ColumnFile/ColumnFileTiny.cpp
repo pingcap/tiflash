@@ -77,6 +77,11 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
         }
     }
 
+    // All columns to be read are not exist in this CFTiny, we can skip reading from disk
+    if (fields.second.empty())
+        return columns;
+
+    // Read the columns from disk and apply DDL cast if need
     auto page_map = page_reader.read({fields});
     Page page = page_map[data_page_id];
     for (size_t index = col_start; index < col_end; ++index)
