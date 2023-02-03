@@ -37,8 +37,8 @@ inline void lowerOneString(Chars_t & str_container, size_t pos, size_t size)
     {
         if (isASCII(str_container[pos + i]))
         {
-            if (isAlphaASCII(str_container[pos + i]))
-                toLowerIfAlphaASCII(str_container[pos + i]);
+            if (isUpperAlphaASCII(str_container[pos + i]))
+                str_container[pos + i] = toLowerIfAlphaASCII(str_container[pos + i]);
             ++i;
         }
         else
@@ -78,9 +78,9 @@ inline void lowerColumnString(MutableColumnPtr & col)
     auto & str_container = col_vector->getChars();
     const auto & str_offsets = col_vector->getOffsets();
 
-    size_t str_num = str_container.size();
+    size_t str_num = col_vector->size();
     for (size_t i = 0; i < str_num; ++i)
-        lowerOneString(str_container, offsetAt(i, str_offsets), sizeAt(i, str_offsets));
+        lowerOneString(str_container, offsetAt(i, str_offsets), sizeAt(i, str_offsets) - 1);
 }
 
 // Only lower the 'A', 'B', 'C'...
@@ -215,7 +215,6 @@ public:
         const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
-        // if constexpr (name == NameIlike3Args::name || name == NameIlike::name)
         if constexpr (name == std::string_view(NameIlike3Args::name) || name == std::string_view(NameIlike::name))
             lowerEnglishWords(block, arguments);
 

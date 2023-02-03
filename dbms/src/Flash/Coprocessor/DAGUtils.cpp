@@ -430,8 +430,9 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::IsIPv6, "cast"},
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
-    {tipb::ScalarFuncSig::LikeSig, "like3Args"},
-    {tipb::ScalarFuncSig::RegexpSig, "regexp"},
+    // {tipb::ScalarFuncSig::LikeSig, "like3Args"},
+    {tipb::ScalarFuncSig::LikeSig, "ilike3Args"},
+    {tipb::ScalarFuncSig::RegexpSig, "like3Args"},
     {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
     {tipb::ScalarFuncSig::RegexpLikeSig, "regexp_like"},
     {tipb::ScalarFuncSig::RegexpInStrSig, "regexp_instr"},
