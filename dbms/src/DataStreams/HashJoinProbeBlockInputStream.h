@@ -60,6 +60,7 @@ private:
         FINISHED,
     };
     void readSuffixImpl() override;
+    void finishOneProbe();
 
     const LoggerPtr log;
     JoinPtr join;
@@ -69,6 +70,7 @@ private:
     ProbeStatus status{ProbeStatus::PROBE};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
+    std::atomic<bool> probe_finished = false;
 };
 
 } // namespace DB
