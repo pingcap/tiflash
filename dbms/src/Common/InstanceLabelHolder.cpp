@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/InstanceLabelHolder.h>
 #include <Common/Exception.h>
+#include <Common/InstanceLabelHolder.h>
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
 
@@ -27,7 +27,7 @@ auto microsecondsUTC()
 {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
-}
+} // namespace
 
 void InstanceLabelHolder::init(const Poco::Util::LayeredConfiguration & conf)
 {

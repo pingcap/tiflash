@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Poco/Util/LayeredConfiguration.h>
+
 #include <ext/singleton.h>
 #include <mutex>
 #include <string>
