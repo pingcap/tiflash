@@ -85,6 +85,14 @@ struct PageStorageConfig
 
     MVCC::VersionSetConfig version_set_config;
 
+    // Use a more easy gc config for v2 when all of its data will be transformed to v3.
+    static PageStorageConfig getEasyGCConfig()
+    {
+        PageStorageConfig gc_config;
+        gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
+        return gc_config;
+    }
+
     //==========================================================================================
     // V3 config
     //==========================================================================================

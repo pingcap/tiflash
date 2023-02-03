@@ -86,15 +86,6 @@ public:
     };
 
 public:
-    // Use a more easy gc config for v2 when all of its data will be transformed to v3.
-    static PageStorageConfig getEasyGCConfig()
-    {
-        PageStorageConfig gc_config;
-        gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
-        return gc_config;
-    }
-
-public:
     PageStorage(String name,
                 PSDiskDelegatorPtr delegator, //
                 const PageStorageConfig & config_,
