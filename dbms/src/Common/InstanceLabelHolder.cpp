@@ -31,7 +31,7 @@ auto microsecondsUTC()
 void InstanceLabelHolder::init(const Poco::Util::LayeredConfiguration & conf)
 {
     std::lock_guard lock(mu);
-    RUNTIME_ASSERT(!label_got, "Can't init after label_got got");
+    RUNTIME_ASSERT(!label_got, "Can't init after label got");
     cluster_id = conf.getString(cluster_id_key, "unknown");
     auto service_addr = conf.getString("flash.service_addr", "unknown");
     std::replace(service_addr.begin(), service_addr.end(), ':', '_');
