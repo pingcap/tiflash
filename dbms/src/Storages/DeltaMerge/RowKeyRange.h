@@ -173,8 +173,7 @@ struct RowKeyValue
      */
     RowKeyValue toNext() const
     {
-        // We want to always ensure that x.toNext().value > x.value.
-        // So for int value, let's build a nice next key.
+        // We want to always ensure that the IntHandle.stringValue == IntHandle.intValue.
         if (!is_common_handle)
             return toPrefixNext();
 
