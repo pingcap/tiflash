@@ -114,7 +114,7 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(mock_streams[i++]));
+        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]));
     });
 }
 

@@ -18,8 +18,10 @@
 namespace DB
 {
 BlockInputStreamSourceOp::BlockInputStreamSourceOp(
+    PipelineExecutorStatus & exec_status_,
     const BlockInputStreamPtr & impl_)
-    : impl(impl_)
+    : SourceOp(exec_status_)
+    , impl(impl_)
 {
     impl->readPrefix();
     setHeader(impl->getHeader());
