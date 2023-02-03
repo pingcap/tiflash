@@ -73,17 +73,7 @@ void HashJoinProbeBlockInputStream::finishOneProbe()
 {
     bool expect = false;
     if likely (probe_finished.compare_exchange_strong(expect, true))
-    {
-        try
-        {
-            join->finishOneProbe();
-        }
-        catch (...)
-        {
-            join->meetError();
-            throw;
-        }
-    }
+        join->finishOneProbe();
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
