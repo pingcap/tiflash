@@ -195,13 +195,8 @@ MetricsPrometheus::MetricsPrometheus(
             auto host = metrics_addr.substr(0, pos);
             auto port = metrics_addr.substr(pos + 1, metrics_addr.size());
 
-            auto service_addr = conf.getString("flash.service_addr");
-            std::string job_name = service_addr;
-            std::replace(job_name.begin(), job_name.end(), ':', '_');
-            std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = "tiflash_" + job_name;
-
-            const auto & labels = prometheus::Gateway::GetInstanceLabel(getHostName());
+            const String & job_name = "tiflash";
+            const auto & labels = prometheus::Gateway::GetInstanceLabel(conf.getString("flash.service_addr", getHostName()));
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
 
