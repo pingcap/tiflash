@@ -88,6 +88,11 @@ inline bool isASCII(char c)
     return static_cast<unsigned char>(c) < 0x80;
 }
 
+inline bool isUpperAlphaASCII(char c)
+{
+    return c >= 'A' && c <= 'Z';
+}
+
 inline bool isAlphaASCII(char c)
 {
     return (c >= 'a' && c <= 'z')
