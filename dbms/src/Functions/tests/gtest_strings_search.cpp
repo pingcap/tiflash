@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsStringSearch.h>
+#include <Functions/FunctionsStringSearch.cpp>
 #include <Functions/registerFunctions.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 
 namespace DB
@@ -369,6 +370,79 @@ TEST_F(StringMatch, LikeConstWithConst)
             toConst("我爱tiflash"),
             toConst("%不爱tif%"),
             escape));
+}
+
+TEST_F(StringMatch, ilikeVectorWithVector)
+{
+    // using ColStringType = typename TypeTraits<String>::FieldType;
+    // using ColUInt8Type = typename TypeTraits<UInt8>::FieldType;
+
+    std::vector<std::optional<String>> v1(3, "aaaaaaaaaaaaaaaaa");
+    std::vector<std::optional<String>> v2(3, "AAAAAAAAAAAAAAAAA");
+    std::vector<std::optional<String>> v3(3, "aAaAaAaAaAaAaAaAa");
+    std::vector<std::optional<String>> v4(3, "嗯嗯嗯嗯嗯嗯嗯嗯嗯嗯");
+    std::vector<std::optional<String>> v5(3, "a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯");
+    ColumnsWithTypeAndName data1{
+        toVec(v1),
+        toVec(v1),
+        escape};
+    ColumnsWithTypeAndName data2{
+        toVec(v2),
+        toVec(v2),
+        escape};
+    ColumnsWithTypeAndName data3{
+        toVec(v3),
+        toVec(v3),
+        escape};
+    ColumnsWithTypeAndName data4{
+        toVec(v4),
+        toVec(v4),
+        escape};
+    ColumnsWithTypeAndName data5{
+        toVec(v5),
+        toVec(v5),
+        escape};
+
+    FunctionIlike function_ilike;
+    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
+    function_ilike.setCollator(collator);
+    std::vector<Block> blocks{Block(data1), Block(data2), Block(data3), Block(data4), Block(data5)};
+    ColumnNumbers arguments{0, 1, 2};
+    for (auto & block : blocks)
+    {
+        block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
+        function_ilike.executeImpl(block, arguments, 3);
+    }
+
+    // std::vector<std::optional<String>> haystack = {"我爱tiflash", "我爱tiflash", "", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab", "abcdefghijklmn", "a", long_str};
+    // std::vector<std::optional<String>> needle = {"我_tif%", "%爱ti%", "", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_", "a%", "abcdefghijklmn%", long_pattern};
+    // std::vector<std::optional<UInt64>> expect = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1};
+    // ASSERT_COLUMN_EQ(
+    //     toNullableVec(expect),
+    //     executeFunction(
+    //         "ilike3Args",
+    //         toNullableVec(haystack),
+    //         toNullableVec(needle),
+    //         escape));
+
+    // ASSERT_COLUMN_EQ(
+    //     toVec(expect),
+    //     executeFunction(
+    //         "ilike3Args",
+    //         toVec(haystack),
+    //         toVec(needle),
+    //         escape));
+
+    // std::vector<std::optional<String>> haystack_null = {{}, "a"};
+    // std::vector<std::optional<String>> needle_null = {"我_tif%", {}};
+    // std::vector<std::optional<UInt64>> expect_null = {{}, {}};
+    // ASSERT_COLUMN_EQ(
+    //     toNullableVec(expect_null),
+    //     executeFunction(
+    //         "ilike3Args",
+    //         toNullableVec(haystack_null),
+    //         toNullableVec(needle_null),
+    //         escape));
 }
 
 } // namespace tests

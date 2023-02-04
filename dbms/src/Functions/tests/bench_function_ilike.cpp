@@ -58,11 +58,13 @@ try
     TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
     function_ilike.setCollator(collator);
     std::vector<Block> blocks{Block(data1), Block(data2), Block(data3), Block(data4), Block(data5)};
-    ColumnNumbers arguments{0, 1};
+    for (auto & block : blocks)
+        block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
+    ColumnNumbers arguments{0, 1, 2};
     for (auto _ : state)
     {
         for (auto & block : blocks)
-            function_ilike.executeImpl(block, arguments, 2);
+            function_ilike.executeImpl(block, arguments, 3);
     }
 }
 CATCH
@@ -76,11 +78,13 @@ try
     TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
     function_like.setCollator(collator);
     std::vector<Block> blocks{Block(data1), Block(data2), Block(data3), Block(data4), Block(data5)};
-    ColumnNumbers arguments{0, 1};
+    for (auto & block : blocks)
+        block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
+    ColumnNumbers arguments{0, 1, 2};
     for (auto _ : state)
     {
         for (auto & block : blocks)
-            function_like.executeImpl(block, arguments, 2);
+            function_like.executeImpl(block, arguments, 3);
     }
 }
 CATCH
