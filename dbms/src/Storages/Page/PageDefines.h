@@ -78,9 +78,12 @@ using PageFileIdAndLevel = std::pair<PageFileId, PageFileLevel>;
 using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
+using PageSizeTight = UInt32;
 
 using BlobFileId = UInt64;
+using BlobFileIdTight = UInt32;
 using BlobFileOffset = UInt64;
+using BlobFileOffsetTight = UInt32;
 static constexpr BlobFileId INVALID_BLOBFILE_ID = 0;
 static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
 

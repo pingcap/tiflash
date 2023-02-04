@@ -37,14 +37,12 @@ namespace DB
 {
 namespace PS::V3::tests
 {
-
-
-#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                               \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                                                          \
+    auto entry_v##VERSION = makePageEntry(/* file_id */ (BLOBID), /* size */ (VERSION), /* padded_size */ 0, /* tag */ 0, /* offset */ 0x123, /* checksum */ 0x4567); \
     entries.createNewEntry(PageVersion(VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
-#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                          \
-    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .padded_size = 0, .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
+#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                                                     \
+    auto entry_gc_v##VERSION##_##EPOCH = makePageEntry(/* file_id */ 2, /* size */ 100 * (VERSION) + (EPOCH), /* padded_size */ 0, /* tag */ 0, /* offset */ 0x234, /* checksum */ 0x5678); \
     (void)entries.createUpsertEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 
 class VersionedEntriesTest : public ::testing::Test
@@ -78,64 +76,64 @@ TEST_F(VersionedEntriesTest, InsertGet)
     INSERT_ENTRY(10);
 
     // Insert some entries with version
-    ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_v2);
-    ASSERT_SAME_ENTRY(*entries.getEntry(3), entry_v2);
-    ASSERT_SAME_ENTRY(*entries.getEntry(4), entry_v2);
+    ASSERT_FALSE(entries.getEntry(1));
+    ASSERT_SAME_ENTRY(entries.getEntry(2), entry_v2);
+    ASSERT_SAME_ENTRY(entries.getEntry(3), entry_v2);
+    ASSERT_SAME_ENTRY(entries.getEntry(4), entry_v2);
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_SAME_ENTRY(*entries.getEntry(seq), entry_v5);
+        ASSERT_SAME_ENTRY(entries.getEntry(seq), entry_v5);
     }
     for (UInt64 seq = 10; seq < 20; ++seq)
     {
-        ASSERT_SAME_ENTRY(*entries.getEntry(seq), entry_v10);
+        ASSERT_SAME_ENTRY(entries.getEntry(seq), entry_v10);
     }
 
     // Insert some entries with version && gc epoch
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(5, 1);
     INSERT_GC_ENTRY(5, 2);
-    ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_gc_v2_1);
-    ASSERT_SAME_ENTRY(*entries.getEntry(3), entry_gc_v2_1);
-    ASSERT_SAME_ENTRY(*entries.getEntry(4), entry_gc_v2_1);
+    ASSERT_FALSE(entries.getEntry(1));
+    ASSERT_SAME_ENTRY(entries.getEntry(2), entry_gc_v2_1);
+    ASSERT_SAME_ENTRY(entries.getEntry(3), entry_gc_v2_1);
+    ASSERT_SAME_ENTRY(entries.getEntry(4), entry_gc_v2_1);
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_SAME_ENTRY(*entries.getEntry(seq), entry_gc_v5_2);
+        ASSERT_SAME_ENTRY(entries.getEntry(seq), entry_gc_v5_2);
     }
     for (UInt64 seq = 10; seq < 20; ++seq)
     {
-        ASSERT_SAME_ENTRY(*entries.getEntry(seq), entry_v10);
+        ASSERT_SAME_ENTRY(entries.getEntry(seq), entry_v10);
     }
 
     // Insert delete. Can not get entry with seq >= delete_version.
     // But it won't affect reading with old seq.
     entries.createDelete(PageVersion(15));
-    ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_gc_v2_1);
-    ASSERT_SAME_ENTRY(*entries.getEntry(3), entry_gc_v2_1);
-    ASSERT_SAME_ENTRY(*entries.getEntry(4), entry_gc_v2_1);
+    ASSERT_FALSE(entries.getEntry(1));
+    ASSERT_SAME_ENTRY(entries.getEntry(2), entry_gc_v2_1);
+    ASSERT_SAME_ENTRY(entries.getEntry(3), entry_gc_v2_1);
+    ASSERT_SAME_ENTRY(entries.getEntry(4), entry_gc_v2_1);
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_SAME_ENTRY(*entries.getEntry(seq), entry_gc_v5_2);
+        ASSERT_SAME_ENTRY(entries.getEntry(seq), entry_gc_v5_2);
     }
     for (UInt64 seq = 10; seq < 15; ++seq)
     {
-        ASSERT_SAME_ENTRY(*entries.getEntry(seq), entry_v10);
+        ASSERT_SAME_ENTRY(entries.getEntry(seq), entry_v10);
     }
     for (UInt64 seq = 15; seq < 20; ++seq)
     {
-        ASSERT_FALSE(entries.getEntry(seq).has_value());
+        ASSERT_FALSE(entries.getEntry(seq));
     }
 }
 
 TEST_F(VersionedEntriesTest, InsertWithLowerVersion)
 {
     INSERT_ENTRY(5);
-    ASSERT_SAME_ENTRY(*entries.getEntry(5), entry_v5);
-    ASSERT_FALSE(entries.getEntry(2).has_value());
+    ASSERT_SAME_ENTRY(entries.getEntry(5), entry_v5);
+    ASSERT_FALSE(entries.getEntry(2));
     INSERT_ENTRY(2);
-    ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_v2);
+    ASSERT_SAME_ENTRY(entries.getEntry(2), entry_v2);
 }
 
 TEST_F(VersionedEntriesTest, EntryIsVisible)
@@ -284,14 +282,14 @@ try
     ASSERT_EQ(removed_entries.size(), 1);
     auto iter = removed_entries.begin();
     ASSERT_SAME_ENTRY(entry_v2, *iter);
-    ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(2));
+    ASSERT_SAME_ENTRY(entry_gc_v2_1, entries.getEntry(2));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // nothing get removed.
     std::tie(all_removed, removed_entries, deref_counter) = runClean(4);
     ASSERT_FALSE(all_removed);
     ASSERT_EQ(removed_entries.size(), 0);
-    ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_gc_v2_1, entries.getEntry(4));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // <2,1>, <5,0>, <5,1>, <5,2>, <10,0> get removed.
@@ -308,7 +306,7 @@ try
     ASSERT_SAME_ENTRY(entry_v5, *iter);
     iter++;
     ASSERT_SAME_ENTRY(entry_gc_v2_1, *iter);
-    ASSERT_SAME_ENTRY(entry_v11, *entries.getEntry(11));
+    ASSERT_SAME_ENTRY(entry_v11, entries.getEntry(11));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // <11,0> get removed, all cleared.
@@ -340,7 +338,7 @@ try
     ASSERT_EQ(removed_entries.size(), 1);
     auto iter = removed_entries.begin();
     ASSERT_SAME_ENTRY(entry_v2, *iter);
-    ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(2));
+    ASSERT_SAME_ENTRY(entry_gc_v2_1, entries.getEntry(2));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
@@ -365,7 +363,7 @@ try
     entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
-    ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_v2, entries.getEntry(4));
     ASSERT_FALSE(entries.getEntry(5));
 
     // <2, 0> is not removed since it's being ref
@@ -403,7 +401,7 @@ try
     entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
-    ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_v2, entries.getEntry(4));
     ASSERT_FALSE(entries.getEntry(5));
 
     // <2, 0> is not removed since it's being ref
@@ -436,7 +434,7 @@ try
     INSERT_GC_ENTRY(2, 2);
 
     // <2, 2>
-    ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_gc_v2_2, entries.getEntry(4));
 
     // <2, 2> is not removed since it's being ref, but <2,0> <2,1> is removed since they are replaced by newer version
     std::tie(all_removed, removed_entries, deref_counter) = runClean(5);
@@ -444,14 +442,14 @@ try
     ASSERT_EQ(removed_entries.size(), 2);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_gc_v2_1);
     ASSERT_SAME_ENTRY(removed_entries[1], entry_v2);
-    ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_gc_v2_2, entries.getEntry(4));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
     std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(all_removed); // should not remove this chain
-    ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_gc_v2_2, entries.getEntry(4));
 }
 CATCH
 
@@ -470,7 +468,7 @@ try
     entries.createDelete(PageVersion(5));
 
     // <2, 2> is not available after seq=5, but not get removed
-    ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
+    ASSERT_SAME_ENTRY(entry_gc_v2_2, entries.getEntry(4));
     ASSERT_FALSE(entries.getEntry(5));
 
     // <2, 2> is not removed since it's being ref, but <2,0> <2,1> is removed since they are replaced by newer version
@@ -503,13 +501,13 @@ try
     INSERT_ENTRY(5);
 
     // Read with snapshot seq=2
-    ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(2));
+    ASSERT_SAME_ENTRY(entry_v2, entries.getEntry(2));
 
     // Mock that gc applied and insert <2, 1>
     INSERT_GC_ENTRY(2, 1);
 
     // Now we should read the entry <2, 1> with seq=2
-    ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(2));
+    ASSERT_SAME_ENTRY(entry_gc_v2_1, entries.getEntry(2));
 
     // <2,0> get removed
     std::tie(all_removed, removed_entries, deref_counter) = runClean(2);
