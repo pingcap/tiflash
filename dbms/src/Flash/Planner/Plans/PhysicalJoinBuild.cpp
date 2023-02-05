@@ -39,5 +39,6 @@ void PhysicalJoinBuild::buildPipelineExec(PipelineExecGroupBuilder & group_build
         builder.setSinkOp(std::make_unique<HashJoinBuildSink>(group_builder.exec_status, join_ptr, build_index++, log->identifier()));
     });
     join_ptr->init(group_builder.getCurrentHeader(), group_builder.concurrency);
+    join_ptr->setInitActiveBuildConcurrency();
 }
 } // namespace DB

@@ -37,6 +37,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
         non_joined_stream = join_ptr->createStreamWithNonJoinedRows(input_header, probe_index, join_ptr->getProbeConcurrency(), max_block_size);
 }
 
+// `join->meetError()` is useless for push model operator.
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     switch (probe_status)

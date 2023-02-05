@@ -17,6 +17,7 @@
 
 namespace DB
 {
+// `join->meetError()` is useless for push model operator.
 OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     if (!block)
