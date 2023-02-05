@@ -16,6 +16,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingHashJoinBlockTransform.h>
+#include <DataStreams/ProbeStatus.h>
 #include <Interpreters/Join.h>
 
 namespace DB
@@ -52,13 +53,6 @@ protected:
     Block getOutputBlock();
 
 private:
-    enum class ProbeStatus
-    {
-        PROBE,
-        WAIT_FOR_READ_NON_JOINED_DATA,
-        READ_NON_JOINED_DATA,
-        FINISHED,
-    };
     void readSuffixImpl() override;
     void finishOneProbe();
 

@@ -2030,6 +2030,12 @@ void Join::waitUntilAllProbeFinished() const
         throw Exception("Join meet error before all probe finished!");
 }
 
+void Join::isAllProbeFinished() const
+{
+    std::unique_lock lock(build_probe_mutex);
+    return active_probe_concurrency == 0;
+}
+
 void Join::waitUntilAllBuildFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
