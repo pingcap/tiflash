@@ -38,6 +38,7 @@ public:
         return "GetResultSinkOp";
     }
 
+protected:
     OperatorStatus writeImpl(Block && block) override;
 
 private:

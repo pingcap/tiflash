@@ -37,6 +37,7 @@ public:
         return "HashJoinProbeTransformOp";
     }
 
+protected:
     OperatorStatus transformImpl(Block & block) override;
 
     OperatorStatus tryOutputImpl(Block & block) override;
@@ -46,6 +47,9 @@ public:
     void transformHeaderImpl(Block & header_) override;
 
 private:
+    void logOnFinish();
+
+private:
     JoinPtr join_ptr;
     size_t probe_index;
     ProbeProcessInfo probe_process_info;
@@ -53,5 +57,7 @@ private:
     const LoggerPtr log;
 
     ProbeStatus probe_status{ProbeStatus::PROBE};
+    size_t joined_rows = 0;
+    size_t non_joined_rows = 0;
 };
 } // namespace DB

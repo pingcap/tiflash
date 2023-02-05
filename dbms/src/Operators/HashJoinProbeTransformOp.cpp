@@ -61,6 +61,7 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
             }
             else
             {
+                logOnFinish();
                 probe_status = ProbeStatus::FINISHED;
                 return OperatorStatus::HAS_OUTPUT;
             }
@@ -87,14 +88,17 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
         if (probe_process_info.all_rows_joined_finish)
             return OperatorStatus::NEED_INPUT;
         block = join_ptr->joinBlock(probe_process_info);
+        joined_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     }
     case ProbeStatus::READ_NON_JOINED_DATA:
     {
         assert(non_joined_stream);
         block = non_joined_stream->read();
+        non_joined_rows += block.rows();
         if (!block)
         {
+            logOnFinish();
             non_joined_stream->readSuffix();
             probe_status = ProbeStatus::FINISHED;
         }
@@ -135,5 +139,10 @@ void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
     ProbeProcessInfo header_probe_process_info(0);
     header_probe_process_info.resetBlock(std::move(header_));
     header_ = join_ptr->joinBlock(header_probe_process_info);
+}
+
+void HashJoinProbeTransformOp::logOnFinish()
+{
+    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
 }
 } // namespace DB

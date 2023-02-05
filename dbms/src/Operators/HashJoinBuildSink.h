@@ -42,6 +42,7 @@ public:
         return "HashJoinBuildSink";
     }
 
+protected:
     OperatorStatus writeImpl(Block && block) override;
 
 private:
