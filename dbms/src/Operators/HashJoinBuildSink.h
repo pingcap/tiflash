@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Operators/Operator.h>
 #include <Common/Logger.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {

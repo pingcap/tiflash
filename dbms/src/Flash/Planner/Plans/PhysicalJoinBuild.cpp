@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/HashJoinBuildSink.h>
 
@@ -24,7 +24,7 @@ const Block & PhysicalJoinBuild::getSampleBlock() const
     return prepare_actions->getSampleBlock();
 }
 
-void PhysicalJoinBuild::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+void PhysicalJoinBuild::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     if (!prepare_actions->getActions().empty())
     {
@@ -38,6 +38,6 @@ void PhysicalJoinBuild::buildPipelineExec(PipelineExecGroupBuilder & group_build
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<HashJoinBuildSink>(group_builder.exec_status, join_ptr, build_index++, log->identifier()));
     });
-    join_ptr->init(group_builder->getCurrentHeader(), group_builder.concurrency);
+    join_ptr->init(group_builder.getCurrentHeader(), group_builder.concurrency);
 }
 } // namespace DB

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Planner/Plans/PhysicalJoinProbe.h>
+#include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/HashJoinProbeTransformOp.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -25,9 +25,9 @@ const Block & PhysicalJoinProbe::getSampleBlock() const
     return sample_block;
 }
 
-void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
-    if (prepare_actions && !prepare_actions->getActions().empty())
+    if (!prepare_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, prepare_actions, log->identifier()));
@@ -40,9 +40,9 @@ void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_build
     const auto & input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
-            group_builder.exec_status, 
-            join_ptr, 
-            probe_index++, 
+            group_builder.exec_status,
+            join_ptr,
+            probe_index++,
             max_block_size,
             input_header,
             log->identifier()));

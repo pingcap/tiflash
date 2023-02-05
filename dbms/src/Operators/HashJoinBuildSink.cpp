@@ -19,21 +19,13 @@ namespace DB
 {
 OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
-    try
+    if (!block)
     {
-        if (!block)
-        {
-            join->finishOneBuild();
-            return OperatorStatus::FINISHED;
-        }
-        join->insertFromBlock(block, concurrency_build_index);
-        block.clear();
-        return OperatorStatus::NEED_INPUT;
+        join_ptr->finishOneBuild();
+        return OperatorStatus::FINISHED;
     }
-    catch (...)
-    {
-        join->meetError();
-        throw;
-    }
+    join_ptr->insertFromBlock(block, concurrency_build_index);
+    block.clear();
+    return OperatorStatus::NEED_INPUT;
 }
-}
+} // namespace DB

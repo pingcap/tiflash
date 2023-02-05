@@ -49,7 +49,7 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency) override;
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
@@ -59,9 +59,7 @@ private:
 
 private:
     JoinPtr join_ptr;
-
     ExpressionActionsPtr prepare_actions;
-
     Block sample_block;
 };
 } // namespace DB

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Join.h>
 #include <Operators/HashJoinProbeTransformOp.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -27,6 +28,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     : TransformOp(exec_status_)
     , join_ptr(join_ptr_)
     , probe_index(probe_index_)
+    , probe_process_info(max_block_size)
     , log(Logger::get(req_id))
 {
     RUNTIME_CHECK_MSG(join_ptr != nullptr, "join ptr should not be null.");
@@ -37,7 +39,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
-    switch (status)
+    switch (probe_status)
     {
     case ProbeStatus::PROBE:
     {
@@ -47,18 +49,18 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
             join_ptr->finishOneProbe();
             if (join_ptr->needReturnNonJoinedData())
             {
-                if (!join->allProbeFinished())
+                if (!join_ptr->isAllProbeFinished())
                 {
-                    status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
+                    probe_status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
                     return OperatorStatus::WAITING;
                 }
                 assert(non_joined_stream);
-                status = ProbeStatus::READ_NON_JOINED_DATA;
+                probe_status = ProbeStatus::READ_NON_JOINED_DATA;
                 non_joined_stream->readPrefix();
             }
             else
             {
-                status = ProbeStatus::FINISHED;
+                probe_status = ProbeStatus::FINISHED;
                 return OperatorStatus::HAS_OUTPUT;
             }
         }
@@ -71,22 +73,22 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
         assert(!block);
         return tryOutputImpl(block);
     }
-    case ProbeStatus::FINISHED:
-        block.clear();
-        return OperatorStatus::HAS_OUTPUT;
+    default:
+        // probe status can only be PROBE here.
+        RUNTIME_ASSERT(false, "Unexpected probe status: {} in transform", magic_enum::enum_name(probe_status));
     }
 }
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
-    switch (status)
+    switch (probe_status)
     {
     case ProbeStatus::PROBE:
     {
         if (probe_process_info.all_rows_joined_finish)
             return OperatorStatus::NEED_INPUT;
         block = join_ptr->joinBlock(probe_process_info);
-        return ProbeStatus::HAS_OUTPUT;
+        return OperatorStatus::HAS_OUTPUT;
     }
     case ProbeStatus::READ_NON_JOINED_DATA:
     {
@@ -95,24 +97,36 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
         if (!block)
         {
             non_joined_stream->readSuffix();
-            status = ProbeStatus::FINISHED;
+            probe_status = ProbeStatus::FINISHED;
         }
         return OperatorStatus::HAS_OUTPUT;
     }
     case ProbeStatus::FINISHED:
-        block.clear();
         return OperatorStatus::HAS_OUTPUT;
+    default:
+        // probe status can not be WAIT_FOR_READ_NON_JOINED_DATA here.
+        RUNTIME_ASSERT(false, "Unexpected probe status: {} in tryOutput", magic_enum::enum_name(probe_status));
     }
 }
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
-    switch (status)
+    switch (probe_status)
     {
     case ProbeStatus::PROBE:
         return OperatorStatus::NEED_INPUT;
     case ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA:
-        return join->allProbeFinished() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
+    {
+        if (join_ptr->isAllProbeFinished())
+        {
+            probe_status = ProbeStatus::READ_NON_JOINED_DATA;
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        return OperatorStatus::WAITING;
+    }
+    default:
+        // probe status can not be READ_NON_JOINED_DATA/FINISHED here.
+        RUNTIME_ASSERT(false, "Unexpected probe status: {} in await", magic_enum::enum_name(probe_status));
     }
 }
 

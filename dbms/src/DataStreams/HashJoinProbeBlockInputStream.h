@@ -15,8 +15,8 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SquashingHashJoinBlockTransform.h>
 #include <DataStreams/ProbeStatus.h>
+#include <DataStreams/SquashingHashJoinBlockTransform.h>
 #include <Interpreters/Join.h>
 
 namespace DB

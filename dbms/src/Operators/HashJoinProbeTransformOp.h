@@ -15,14 +15,12 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Operators/Operator.h>
 #include <DataStreams/ProbeStatus.h>
+#include <Interpreters/Join.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
-
 class HashJoinProbeTransformOp : public TransformOp
 {
 public:
@@ -48,12 +46,12 @@ public:
     void transformHeaderImpl(Block & header_) override;
 
 private:
-    JoinPtr join;
+    JoinPtr join_ptr;
     size_t probe_index;
-    const LoggerPtr log;
-
     ProbeProcessInfo probe_process_info;
     BlockInputStreamPtr non_joined_stream;
-    ProbeStatus status{ProbeStatus::PROBE};
+    const LoggerPtr log;
+
+    ProbeStatus probe_status{ProbeStatus::PROBE};
 };
 } // namespace DB

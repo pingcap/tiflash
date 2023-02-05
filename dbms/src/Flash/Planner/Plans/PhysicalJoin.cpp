@@ -238,6 +238,8 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
 
 void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
 {
+    // TODO support fine grained shuffle.
+    assert(!fine_grained_shuffle.enable());
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
         executor_id,
@@ -245,8 +247,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
         log->identifier(),
         build(),
         join_ptr,
-        build_side_prepare_actions,
-        fine_grained_shuffle);
+        build_side_prepare_actions);
     auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
     build()->buildPipeline(join_build_builder);

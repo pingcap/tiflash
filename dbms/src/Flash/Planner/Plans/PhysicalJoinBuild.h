@@ -29,16 +29,11 @@ public:
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const JoinPtr & join_ptr_,
-        const ExpressionActionsPtr & prepare_actions_,
-        const FineGrainedShuffle & fine_grained_shuffle_)
+        const ExpressionActionsPtr & prepare_actions_)
         : PhysicalUnary(executor_id_, PlanType::JoinBuild, schema_, req_id, child_)
         , join_ptr(join_ptr_)
         , prepare_actions(prepare_actions_)
-        , fine_grained_shuffle(fine_grained_shuffle_)
-    {
-        // TODO support fine grained shuffle.
-        RUNTIME_CHECK(!fine_grained_shuffle.enable());
-    }
+    {}
 
     void buildPipeline(PipelineBuilder &) override
     {
@@ -52,7 +47,7 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency) override;
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
@@ -62,10 +57,6 @@ private:
 
 private:
     JoinPtr join_ptr;
-
     ExpressionActionsPtr prepare_actions;
-
-    Block sample_block;
-    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

@@ -167,7 +167,7 @@ public:
     }
     void finishOneProbe();
     void waitUntilAllProbeFinished() const;
-    void isAllProbeFinished() const;
+    bool isAllProbeFinished() const;
 
     size_t getBuildConcurrency() const
     {
