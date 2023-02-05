@@ -20,11 +20,6 @@
 
 namespace DB
 {
-const Block & PhysicalJoinProbe::getSampleBlock() const
-{
-    return sample_block;
-}
-
 void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     if (!prepare_actions->getActions().empty())
@@ -37,7 +32,7 @@ void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_build
     size_t probe_index = 0;
     join_ptr->setProbeConcurrency(group_builder.concurrency);
     const auto & max_block_size = context.getSettingsRef().max_block_size;
-    const auto & input_header = group_builder.getCurrentHeader();
+    auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
             group_builder.exec_status,
@@ -46,6 +41,23 @@ void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_build
             max_block_size,
             input_header,
             log->identifier()));
+    });
+
+    input_header = group_builder.getCurrentHeader();
+    ExpressionActionsPtr schema_project = std::make_shared<ExpressionActions>(input_header.getColumnsWithTypeAndName());
+    /// add a project to remove all the useless column
+    NamesWithAliases schema_project_cols;
+    for (auto & c : schema)
+    {
+        /// do not need to care about duplicated column names because
+        /// it is guaranteed by its children physical plan nodes
+        schema_project_cols.emplace_back(c.name, c.name);
+    }
+    assert(!schema_project_cols.empty());
+    schema_project->add(ExpressionAction::project(schema_project_cols));
+    assert(schema_project && !schema_project->getActions().empty());
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, schema_project, log->identifier()));
     });
 }
 } // namespace DB

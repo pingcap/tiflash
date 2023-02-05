@@ -19,11 +19,6 @@
 
 namespace DB
 {
-const Block & PhysicalJoinBuild::getSampleBlock() const
-{
-    return prepare_actions->getSampleBlock();
-}
-
 void PhysicalJoinBuild::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     if (!prepare_actions->getActions().empty())

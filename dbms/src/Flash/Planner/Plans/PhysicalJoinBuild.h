@@ -45,7 +45,10 @@ public:
         throw Exception("Unsupport");
     }
 
-    const Block & getSampleBlock() const override;
+    const Block & getSampleBlock() const override
+    {
+        throw Exception("Unsupport");
+    }
 
     void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
 

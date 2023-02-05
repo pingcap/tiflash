@@ -29,12 +29,10 @@ public:
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const JoinPtr & join_ptr_,
-        const ExpressionActionsPtr & prepare_actions_,
-        const Block & sample_block_)
+        const ExpressionActionsPtr & prepare_actions_)
         : PhysicalUnary(executor_id_, PlanType::JoinProbe, schema_, req_id, child_)
         , join_ptr(join_ptr_)
         , prepare_actions(prepare_actions_)
-        , sample_block(sample_block_)
     {}
 
     void buildPipeline(PipelineBuilder &) override
@@ -47,7 +45,10 @@ public:
         throw Exception("Unsupport");
     }
 
-    const Block & getSampleBlock() const override;
+    const Block & getSampleBlock() const override
+    {
+        throw Exception("Unsupport");
+    }
 
     void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
 

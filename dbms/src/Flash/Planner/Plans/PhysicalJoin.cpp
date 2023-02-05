@@ -243,7 +243,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
         executor_id,
-        schema,
+        build()->getSchema(),
         log->identifier(),
         build(),
         join_ptr,
@@ -261,8 +261,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
         log->identifier(),
         probe(),
         join_ptr,
-        probe_side_prepare_actions,
-        sample_block);
+        probe_side_prepare_actions);
     builder.addPlanNode(join_probe);
 }
 
