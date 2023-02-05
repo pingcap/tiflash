@@ -148,7 +148,7 @@ public:
 
     void setInitActiveBuildConcurrency()
     {
-        std::unique_lock lock(build_probe_mutex);
+        std::lock_guard lock(build_probe_mutex);
         active_build_concurrency = getBuildConcurrencyInternal();
     }
     void finishOneBuild();
@@ -412,7 +412,6 @@ private:
 };
 
 using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
 
 struct ProbeProcessInfo
 {

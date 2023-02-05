@@ -69,7 +69,6 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
         {
             join_ptr->checkTypes(block);
             probe_process_info.resetBlock(std::move(block));
-            block.clear();
         }
         assert(!block);
         return tryOutputImpl(block);
