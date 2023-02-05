@@ -43,9 +43,8 @@ void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_build
             log->identifier()));
     });
 
-    input_header = group_builder.getCurrentHeader();
-    ExpressionActionsPtr schema_project = std::make_shared<ExpressionActions>(input_header.getColumnsWithTypeAndName());
     /// add a project to remove all the useless column
+    ExpressionActionsPtr schema_project = std::make_shared<ExpressionActions>(group_builder.getCurrentHeader().getColumnsWithTypeAndName());
     NamesWithAliases schema_project_cols;
     for (auto & c : schema)
     {

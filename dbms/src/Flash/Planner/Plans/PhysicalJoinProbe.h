@@ -61,6 +61,5 @@ private:
 private:
     JoinPtr join_ptr;
     ExpressionActionsPtr prepare_actions;
-    Block sample_block;
 };
 } // namespace DB
