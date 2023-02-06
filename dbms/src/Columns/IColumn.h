@@ -216,7 +216,7 @@ public:
       * Is used in WHERE and HAVING operations.
       * If result_size_hint > 0, then makes advance reserve(result_size_hint) for the result column;
       *  if 0, then don't makes reserve(),
-      *  otherwise (i.e. < 0), makes reserve() using size of column after being filtered.
+      *  otherwise (i.e. < 0), makes reserve() using size of filtered column.
       */
     using Filter = PaddedPODArray<UInt8>;
     virtual Ptr filter(const Filter & filt, ssize_t result_size_hint) const = 0;
