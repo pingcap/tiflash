@@ -48,6 +48,11 @@ Digest hashSchema(const Block & schema)
     return *(reinterpret_cast<Digest *>(&digest_bytes));
 }
 
+std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context)
+{
+    return context.db_context.getSharedBlockSchemas();
+}
+
 void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context)
 {
     const IDataType * to_type_ptr = to_type.get();

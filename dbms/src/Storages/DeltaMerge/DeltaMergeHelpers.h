@@ -247,6 +247,7 @@ inline bool isSameSchema(const Block & a, const Block & b)
 }
 
 Digest hashSchema(const Block & schema);
+std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context);
 
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)

@@ -194,7 +194,7 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
     if (!success)
     {
         auto new_digest = hashSchema(block);
-        auto schema = context.db_context.getSharedBlockSchemas()->getOrCreate(new_digest, block);
+        auto schema = getSharedBlockSchemas(context)->getOrCreate(new_digest, block);
 
         // Create a new column file.
         std::shared_ptr<ColumnFileInMemory> new_column_file;
