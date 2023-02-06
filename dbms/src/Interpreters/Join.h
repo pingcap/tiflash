@@ -88,6 +88,7 @@ struct ProbeProcessInfo;
 // TODO optimize Join for pipeline model(use template)
 // - remove useless lock and condition_cv for build/probe dependency.
 // - replace blocking-lock with spin-lock in probe stage.
+// - etc
 class Join
 {
 public:
