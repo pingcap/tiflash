@@ -111,7 +111,7 @@ BENCHMARK_DEFINE_F(IlikeBench, ilike)
 (benchmark::State & state)
 try
 {
-    FunctionIlike function_ilike;
+    FunctionIlike3Args function_ilike;
     TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
     function_ilike.setCollator(collator);
     std::vector<Block> blocks{Block(data1), Block(data2), Block(data3), Block(data4), Block(data5)};
