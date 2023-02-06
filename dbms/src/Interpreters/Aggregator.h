@@ -1047,6 +1047,7 @@ public:
     BlockInputStreams restoreSpilledData();
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
+    void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1099,6 +1100,10 @@ protected:
 
     /// Returns true if you can abort the current task.
     CancellationHook is_cancelled;
+
+    size_t group_by_two_level_threshold = 0;
+    size_t group_by_two_level_threshold_bytes = 0;
+    size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.
     std::unique_ptr<Spiller> spiller;

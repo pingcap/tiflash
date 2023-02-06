@@ -1447,13 +1447,4 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
 }
-
-size_t getAverageThreshold(size_t threshold, size_t concurrency)
-{
-    assert(concurrency > 0);
-    if (threshold == 0)
-        return 0;
-    return std::max(1, threshold / concurrency);
-}
-
 } // namespace DB

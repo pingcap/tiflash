@@ -172,6 +172,7 @@ void ParallelAggregatingBlockInputStream::execute()
 
     for (size_t i = 0; i < max_threads; ++i)
         threads_data.emplace_back(keys_size, aggregates_size);
+    aggregator.initThresholdByAggregatedDataVariantsSize(many_data.size());
 
     LOG_TRACE(log, "Aggregating");
 

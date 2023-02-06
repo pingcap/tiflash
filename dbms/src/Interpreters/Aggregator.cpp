@@ -15,17 +15,12 @@
 #include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
-#include <Columns/ColumnTuple.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/FailPoint.h>
-#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/typeid_cast.h>
-#include <Common/wrapInvocable.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAndConvertingBlockInputStream.h>
-#include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
@@ -34,14 +29,10 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/Transaction/CollatorUtils.h>
-#include <common/demangle.h>
 
 #include <array>
 #include <cassert>
-#include <cstddef>
 #include <future>
-#include <iomanip>
-#include <thread>
 
 namespace DB
 {
@@ -817,8 +808,8 @@ bool Aggregator::executeOnBlock(
     /// 1. some other threads already convert to two level
     /// 2. the result size exceeds threshold
     bool worth_convert_to_two_level
-        = use_two_level_hash_table || (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
-        || (params.group_by_two_level_threshold_bytes && result_size_bytes >= params.group_by_two_level_threshold_bytes);
+        = use_two_level_hash_table || (group_by_two_level_threshold && result_size >= group_by_two_level_threshold)
+        || (group_by_two_level_threshold_bytes && result_size_bytes >= group_by_two_level_threshold_bytes);
 
     /** Converting to a two-level data structure.
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
@@ -829,9 +820,9 @@ bool Aggregator::executeOnBlock(
     /** Flush data to disk if too much RAM is consumed.
       * Data can only be flushed to disk if a two-level aggregation is supported.
       */
-    if (params.max_bytes_before_external_group_by
+    if (max_bytes_before_external_group_by
         && (result.isTwoLevel() || result.isConvertibleToTwoLevel())
-        && result_size_bytes > params.max_bytes_before_external_group_by)
+        && result_size_bytes > max_bytes_before_external_group_by)
     {
         if (!result.isTwoLevel())
             result.convertToTwoLevel();
@@ -852,6 +843,13 @@ BlockInputStreams Aggregator::restoreSpilledData()
 {
     assert(spiller != nullptr);
     return spiller->restoreBlocks(0);
+}
+
+void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
+{
+    group_by_two_level_threshold = params.group_by_two_level_threshold;
+    group_by_two_level_threshold_bytes = getAverageThreshold(params.group_by_two_level_threshold_bytes, aggregated_data_variants_size);
+    max_bytes_before_external_group_by = getAverageThreshold(params.max_bytes_before_external_group_by, aggregated_data_variants_size);
 }
 
 void Aggregator::spill(AggregatedDataVariants & data_variants)

@@ -105,7 +105,4 @@ public:
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
-
-size_t getAverageThreshold(size_t threshold, size_t concurrency);
-
 } // namespace DB
