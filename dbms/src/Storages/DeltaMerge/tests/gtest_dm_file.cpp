@@ -42,24 +42,8 @@ namespace DM
 {
 namespace tests
 {
-TEST(DMFileWriterFlagsTest, SetClearFlags)
-{
-    using Flags = DMFileWriter::Flags;
-
-    Flags flags;
-
-    bool f = false;
-    flags.setSingleFile(f);
-    EXPECT_FALSE(flags.isSingleFile());
-
-    f = true;
-    flags.setSingleFile(f);
-    EXPECT_TRUE(flags.isSingleFile());
-}
-
 enum class DMFileMode
 {
-    SingleFile,
     DirectoryLegacy,
     DirectoryChecksum
 };
@@ -71,9 +55,6 @@ String paramToString(const ::testing::TestParamInfo<DMFileMode> & info)
     String name;
     switch (mode)
     {
-    case DMFileMode::SingleFile:
-        name = "single_file";
-        break;
     case DMFileMode::DirectoryLegacy:
         name = "folder";
         break;
@@ -103,13 +84,12 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         auto mode = GetParam();
-        bool single_file_mode = (mode == DMFileMode::SingleFile);
         auto configuration = (mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt);
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFileTest", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
-        dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
+        dm_file = DMFile::create(1, parent_path, std::move(configuration));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 
@@ -252,10 +232,9 @@ try
     dm_file.reset();
 
     auto mode = GetParam();
-    bool single_file_mode = mode == DMFileMode::SingleFile;
     auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
-    dm_file = DMFile::create(id, parent_path, single_file_mode, std::move(configuration));
+    dm_file = DMFile::create(id, parent_path, std::move(configuration));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -903,7 +882,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFileTest,
-                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 
@@ -923,12 +902,11 @@ public:
         path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        bool single_file_mode = mode == DMFileMode::SingleFile;
         auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *path_pool, "test.t1");
-        dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
+        dm_file = DMFile::create(0, path, std::move(configuration));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 
@@ -1126,12 +1104,6 @@ try
     }
 }
 CATCH
-
-INSTANTIATE_TEST_CASE_P(DTFileMode, //
-                        DMFileClusteredIndexTest,
-                        testing::Values(DMFile::Mode::FOLDER, DMFile::Mode::SINGLE_FILE),
-                        paramToString);
-
 
 /// DDL test cases
 class DMFileDDLTest : public DMFileTest
@@ -1339,7 +1311,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFileDDLTest,
-                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 } // namespace tests
