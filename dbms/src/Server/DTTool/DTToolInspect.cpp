@@ -36,8 +36,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 
     // black_hole is used to consume data manually.
     // we use SCOPE_EXIT to ensure the release of memory area.
-    auto * black_hole = reinterpret_cast<char *>(::operator new(DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
-    SCOPE_EXIT({ ::operator delete(black_hole, std::align_val_t{64}); });
+    auto * black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
+    SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
     };
@@ -80,8 +80,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     if (args.check)
     {
         // for directory mode file, we can consume each file to check its integrity.
-
-        auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
+        auto prefix = fmt::format("{}/dmf_{}", args.workdir, args.file_id);
         auto file = Poco::File{prefix};
         std::vector<std::string> sub;
         file.list(sub);
@@ -89,10 +88,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         {
             if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
             {
-                auto full_path = prefix;
-                full_path += "/";
-                full_path += i;
-                LOG_INFO(logger, "checking {}: ", i);
+                auto full_path = fmt::format("{}/{}", prefix, i);
+                LOG_INFO(logger, "checking full_path is {}: ", full_path);
                 if (dmfile->getConfiguration())
                 {
                     consume(*DB::createReadBufferFromFileBaseByFileProvider(
