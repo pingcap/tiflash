@@ -27,7 +27,7 @@ using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 class BlockInputStreamSourceOp : public SourceOp
 {
 public:
-    explicit BlockInputStreamSourceOp(const BlockInputStreamPtr & impl_);
+    BlockInputStreamSourceOp(PipelineExecutorStatus & exec_status_, const BlockInputStreamPtr & impl_);
 
     String getName() const override
     {
