@@ -268,8 +268,9 @@ struct StringOperationImpl
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
     {
+        c_data.clear();
+        c_offsets.clear();
         size_t size = a_offsets.size();
-        c_data.reserve(std::max(a_data.size(), b_data.size()));
         c_data.resize(std::max(a_data.size(), b_data.size()));
         if (size == 0)
             return;
@@ -286,8 +287,9 @@ struct StringOperationImpl
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
     {
+        c_data.clear();
+        c_offsets.clear();
         size_t size = a_offsets.size();
-        c_data.reserve(std::max(a_data.size(), b.size() * size));
         c_data.resize(std::max(a_data.size(), b.size() * size));
 
         const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
@@ -296,17 +298,6 @@ struct StringOperationImpl
         LeastGreatestStringImpl<least, use_collator>::processImpl(collator, a_offsets[0] - 1, b.size(), &a_data[0], &b_data[0], c_data, c_offsets);
         for (size_t i = 1; i < size; ++i)
             LeastGreatestStringImpl<least, use_collator>::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
-    }
-
-    static void constantStringVector(
-        const std::string & a,
-        const ColumnString::Chars_t & b_data,
-        const ColumnString::Offsets & b_offsets,
-        const TiDB::TiDBCollatorPtr & collator,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets)
-    {
-        StringOperationImpl::stringVectorConstant(b_data, b_offsets, a, collator, c_data, c_offsets);
     }
 
     static void constantConstant(
@@ -380,7 +371,6 @@ public:
 
         using impl = StringOperationImpl<least, use_collator>;
 
-        auto c_res = ColumnString::create();
         std::vector<const ColumnConst *> const_columns;
         std::vector<const ColumnString *> string_columns;
         for (size_t i = 0; i < num_arguments; ++i)
@@ -394,15 +384,13 @@ public:
                 string_columns.emplace_back(c_string);
         }
 
-        MutableColumnPtr const_res;
-        // cal for const columns
+        String const_res;
+        // for const columns
         if (!const_columns.empty())
         {
             if (const_columns.size() == 1)
             {
-                auto col_str = ColumnString::create();
-                col_str->insert(Field(const_columns[0]->getValue<String>()));
-                const_res = ColumnConst::create(col_str->getPtr(), const_columns[0]->size());
+                const_res = const_columns[0]->getValue<String>();
             }
             else
             {
@@ -416,120 +404,104 @@ public:
                 }
                 else
                 {
-                    MutableColumnPtr col_str = ColumnString::create();
-                    col_str->insert(Field(res));
-                    const_res = ColumnConst::create(col_str->getPtr(), const_columns[0]->size());
+                    const_res = res;
                 }
             }
         }
 
-        // cal for vector columns
-        MutableColumnPtr string_res_1;
-        MutableColumnPtr string_res_2 = ColumnString::create();
+        // for vector columns
+        auto string_res_1 = ColumnString::create();
+        auto string_res_2 = ColumnString::create();
 
-        if (!string_columns.empty())
+        if (string_columns.size() == 1)
+            string_res_1 = ColumnString::create(*string_columns[0]);
+        else if (string_columns.size() >= 2)
         {
-            string_res_1 = block.getByPosition(arguments[0]).column->assumeMutable();
             for (size_t i = 1; i < string_columns.size(); ++i)
             {
+                const DB::ColumnString * c0_string;
+                if (i == 1)
+                    c0_string = checkAndGetColumn<ColumnString>(string_columns[0]);
+                else if (i % 2 == 0)
+                    c0_string = checkAndGetColumn<ColumnString>(string_res_2.get());
+                else if (i % 2 == 1)
+                    c0_string = checkAndGetColumn<ColumnString>(string_res_1.get());
                 const auto * c1_string = string_columns[i];
-
-                // use string 2 to store res
                 if (i % 2)
                 {
-                    const auto * c0_string = checkAndGetColumn<ColumnString>(string_res_1.get());
-                    const auto * c_res = checkAndGetColumn<ColumnString>(string_res_2.get()); // how to be mutable?
-
                     impl::stringVectorStringVector(
                         c0_string->getChars(),
                         c0_string->getOffsets(),
                         c1_string->getChars(),
                         c1_string->getOffsets(),
                         collator,
-                        c_res->getChars(),
-                        c_res->getOffsets());
+                        string_res_2->getChars(),
+                        string_res_2->getOffsets());
                 }
                 else
-                { // use string 1 to store res
-                    const auto * c0_string = checkAndGetColumn<ColumnString>(string_res_2.get());
-                    auto c_res = checkAndGetColumn<ColumnString>(string_res_1.get())->assumeMutable();
-
+                {
                     impl::stringVectorStringVector(
                         c0_string->getChars(),
                         c0_string->getOffsets(),
                         c1_string->getChars(),
                         c1_string->getOffsets(),
                         collator,
-                        c_res->getChars(),
-                        c_res->getOffsets());
+                        string_res_1->getChars(),
+                        string_res_1->getOffsets());
                 }
             }
             if (const_columns.empty())
             {
                 if (string_columns.size() % 2 == 0)
+                {
                     block.getByPosition(result).column = std::move(string_res_2);
+                    return;
+                }
                 else
-                 block.getByPosition(result).column = std::move(string_res_1);
+                {
+                    block.getByPosition(result).column = std::move(string_res_1);
+                    return;
+                }
             }
         }
         else
         {
-            block.getByPosition(result).column = std::move(const_res);
+            auto col_str = ColumnString::create();
+            col_str->insert(Field(const_res));
+            auto const_res_col = ColumnConst::create(col_str->getPtr(), const_columns[0]->size());
+            block.getByPosition(result).column = std::move(const_res_col);
+            return;
         }
 
+        // merge result column of const columns and vector columns
+        if (!string_columns.empty() && !const_columns.empty())
+        {
+            if (string_columns.size() % 2)
+            {
+                impl::stringVectorConstant(
+                    string_res_1->getChars(),
+                    string_res_1->getOffsets(),
+                    const_res,
+                    collator,
+                    string_res_2->getChars(),
+                    string_res_2->getOffsets());
 
-        // merge res columns with const and vector res
-
-
-        // for (size_t i = 1; i < num_arguments; ++i)
-        // {
-        //     if (i > 1)
-        //     {
-        //         c_res = ColumnString::create();
-        //         c0 = block.getByPosition(result).column.get();
-        //     }
-        //     const auto * const c1 = block.getByPosition(arguments[i]).column.get();
-        //     const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
-        //     const auto * c1_string = checkAndGetColumn<ColumnString>(c1);
-        //     const ColumnConst * c0_const = checkAndGetColumnConstStringOrFixedString(c0);
-        //     const ColumnConst * c1_const = checkAndGetColumnConstStringOrFixedString(c1);
-        //     if (c0_const && c1_const)
-        //     {
-        //         String res;
-        //         impl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
-        //         block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
-        //     }
-        //     else
-        //     {
-        //         if (c0_string && c1_string)
-        //             impl::stringVectorStringVector(
-        //                 c0_string->getChars(),
-        //                 c0_string->getOffsets(),
-        //                 c1_string->getChars(),
-        //                 c1_string->getOffsets(),
-        //                 collator,
-        //                 c_res->getChars(),
-        //                 c_res->getOffsets());
-        //         else if (c0_string && c1_const)
-        //             impl::stringVectorConstant(
-        //                 c0_string->getChars(),
-        //                 c0_string->getOffsets(),
-        //                 c1_const->getValue<String>(),
-        //                 collator,
-        //                 c_res->getChars(),
-        //                 c_res->getOffsets());
-        //         else if (c0_const && c1_string)
-        //             impl::constantStringVector(
-        //                 c0_const->getValue<String>(),
-        //                 c1_string->getChars(),
-        //                 c1_string->getOffsets(),
-        //                 collator,
-        //                 c_res->getChars(),
-        //                 c_res->getOffsets());
-
-        //         block.getByPosition(result).column = std::move(c_res);
-        //     }
-        // }
+                block.getByPosition(result).column = std::move(string_res_2);
+                return;
+            }
+            else
+            {
+                impl::stringVectorConstant(
+                    string_res_2->getChars(),
+                    string_res_2->getOffsets(),
+                    const_res,
+                    collator,
+                    string_res_1->getChars(),
+                    string_res_1->getOffsets());
+                block.getByPosition(result).column = std::move(string_res_1);
+                return;
+            }
+        }
     }
 
 private:
