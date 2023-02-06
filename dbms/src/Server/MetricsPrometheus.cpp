@@ -126,8 +126,15 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+    Poco::Net::SocketAddress addr;
 
-    Poco::Net::SocketAddress addr("0.0.0.0", std::stoi(metrics_port));
+    auto trimed_metrics_port = Poco::trim(metrics_port);
+
+    if (trimed_metrics_port[0] == '[') // In IPv6 mode, metrics_port contains IPv6 host addr.
+        addr = Poco::Net::SocketAddress(Poco::Net::SocketAddress::IPv6, metrics_port);
+    else // IPv4 mode
+        addr = Poco::Net::SocketAddress("0.0.0.0", std::stoi(metrics_port));
+
     socket.bind(addr, true);
     socket.listen();
     auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
