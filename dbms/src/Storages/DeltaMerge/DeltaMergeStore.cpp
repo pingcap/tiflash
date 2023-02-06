@@ -561,8 +561,20 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // The [offset, rows - offset] can be exceeding the Segment's rowkey_range. Cut the range
             // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
+<<<<<<< HEAD
             if (unlikely(cur_offset != offset))
                 throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
+=======
+            RUNTIME_CHECK_MSG(cur_offset == offset && cur_limit != 0,
+                              "invalid cur_offset or cur_limit. is_common_handle={} start_key={} cur_offset={} cur_limit={} rows={} offset={} rowkey_range={}",
+                              is_common_handle,
+                              start_key.toRowKeyValue().toString(),
+                              cur_offset,
+                              cur_limit,
+                              rows,
+                              offset,
+                              rowkey_range.toDebugString());
+>>>>>>> 817b5d0d0d (Fix an exception thrown while reading from ColumnFileTiny after add column (#6729))
 
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
