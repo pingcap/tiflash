@@ -159,9 +159,9 @@ public:
 
     bool initStoreIfDataDirExist() override;
 
-    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file) const
+    DM::DMConfigurationOpt createChecksumConfig() const
     {
-        return DM::DMChecksumConfig::fromDBContext(global_context, is_single_file);
+        return DM::DMChecksumConfig::fromDBContext(global_context);
     }
 
 #ifndef DBMS_PUBLIC_GTEST

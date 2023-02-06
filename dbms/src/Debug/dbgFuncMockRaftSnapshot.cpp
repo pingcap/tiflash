@@ -46,7 +46,6 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
-extern const char force_set_sst_decode_rand[];
 extern const char force_set_safepoint_when_decode_block[];
 } // namespace FailPoints
 
@@ -422,7 +421,6 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
 
-    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_decode_rand);
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore.get(), region);
 

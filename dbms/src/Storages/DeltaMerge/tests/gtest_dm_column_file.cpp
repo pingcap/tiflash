@@ -86,7 +86,7 @@ TEST_F(ColumnFileTest, ColumnFileBigRead)
 try
 {
     auto table_columns = DMTestEnv::getDefaultColumns();
-    auto dm_file = DMFile::create(1, parent_path, false, std::make_optional<DMChecksumConfig>());
+    auto dm_file = DMFile::create(1, parent_path, std::make_optional<DMChecksumConfig>());
     const size_t num_rows_write_per_batch = 8192;
     const size_t batch_num = 3;
     const UInt64 tso_value = 100;
