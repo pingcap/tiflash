@@ -126,9 +126,9 @@ struct ResultOffsetsBuilder
         : res_offsets(*res_offsets_)
     {}
 
-    void reserve(ssize_t result_size_hint, size_t src_size)
+    void reserve(size_t result_size_hint)
     {
-        res_offsets.reserve(result_size_hint > 0 ? result_size_hint : src_size);
+        res_offsets.reserve(result_size_hint);
     }
 
     void insertOne(size_t array_size)
@@ -169,7 +169,7 @@ struct ResultOffsetsBuilder
 struct NoResultOffsetsBuilder
 {
     explicit NoResultOffsetsBuilder(IColumn::Offsets *) {}
-    void reserve(ssize_t, size_t) {}
+    void reserve(size_t) {}
     void insertOne(size_t) {}
 
     template <size_t SIMD_BYTES>
@@ -200,11 +200,12 @@ void filterArraysImplGeneric(
 
     if (result_size_hint)
     {
-        result_offsets_builder.reserve(result_size_hint, size);
-
         if (result_size_hint < 0)
-            res_elems.reserve(src_elems.size());
-        else if (result_size_hint < 1000000000 && src_elems.size() < 1000000000) /// Avoid overflow.
+            result_size_hint = countBytesInFilter(filt);
+
+        result_offsets_builder.reserve(result_size_hint);
+
+        if (result_size_hint < 1000000000 && src_elems.size() < 1000000000) /// Avoid overflow.
             res_elems.reserve((result_size_hint * src_elems.size() + size - 1) / size);
     }
 
