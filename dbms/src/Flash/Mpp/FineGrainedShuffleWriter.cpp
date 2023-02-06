@@ -143,17 +143,17 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleIm
         assert(fine_grained_shuffle_stream_count <= 1024);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
-        while (!blocks.empty())
+        for (auto & block : blocks)
         {
-            const auto & block = blocks.back();
             if constexpr (version != MPPDataPacketV0)
             {
                 // check schema
                 assertBlockSchema(expected_types, block, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
             }
             HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
-            blocks.pop_back();
+            block.clear();
         }
+        blocks.clear();
 
         // serialize each partitioned block and write it to its destination
         size_t part_id = 0;

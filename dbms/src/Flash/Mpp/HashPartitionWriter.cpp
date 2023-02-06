@@ -154,16 +154,15 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
     std::vector<std::vector<MutableColumns>> dest_columns(partition_num);
     size_t total_rows = 0;
 
-    while (!blocks.empty())
+    for (auto & block : blocks)
     {
-        const auto & block = blocks.back();
         {
             // check schema
             assertBlockSchema(expected_types, block, HashPartitionWriterLabels[MPPDataPacketV1]);
         }
         auto && dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
         HashBaseWriterHelper::scatterColumns(block, partition_col_ids, collators, partition_key_containers, partition_num, dest_tbl_cols);
-        blocks.pop_back();
+        block.clear();
 
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
         {
@@ -175,6 +174,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
             dest_columns[part_id].emplace_back(std::move(columns));
         }
     }
+    blocks.clear();
     RUNTIME_CHECK(rows_in_blocks, total_rows);
 
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
