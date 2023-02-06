@@ -108,13 +108,22 @@ public:
         return cnt;
     }
 
+    /** Estimate the cpu time nanoseconds used by block input stream dag.
+      * In this method, streams are divided into two categories:
+      * - thread-runner: Called directly by a thread
+      * - non-thread-runner: Called by a thread-runner
+      * Here we should count the execution time of each thread-runner.
+      * Note: Because more threads than vcore, and blocking relationships between streams,
+      * the result may not be 100% identical to the actual cpu time nanoseconds.
+      */
     uint64_t estimateCPUTimeNs()
     {
         resetCPUTimeCompute();
-        return collectCPUTimeNs(true);
+        // The first stream of stream dag is thread-runner.
+        return collectCPUTimeNs(/*is_thread_runner=*/true);
     }
 
-    uint64_t collectCPUTimeNs(bool is_root);
+    uint64_t collectCPUTimeNs(bool is_thread_runner);
 
     virtual ~IBlockInputStream() = default;
 
@@ -175,7 +184,7 @@ public:
     virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
 protected:
-    virtual uint64_t collectCPUTimeNsImpl(bool /*is_root*/) { return 0; }
+    virtual uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) { return 0; }
 
     void resetNewThreadCountCompute()
     {

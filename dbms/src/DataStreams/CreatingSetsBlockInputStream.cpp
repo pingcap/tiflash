@@ -291,8 +291,10 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
 }
 
-uint64_t CreatingSetsBlockInputStream::collectCPUTimeNsImpl(bool /*is_root*/)
+uint64_t CreatingSetsBlockInputStream::collectCPUTimeNsImpl(bool /*is_thread_runner*/)
 {
+    // CreatingSetsBlockInputStream isn't a thread-runner, so is_thread_runner is ignored here.
+    // But each of CreatingSetsBlockInputStream's children is a thread-runner.
     uint64_t cpu_time_ns = 0;
     forEachChild([&](IBlockInputStream & child) {
         cpu_time_ns += child.collectCPUTimeNs(true);

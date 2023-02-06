@@ -431,9 +431,9 @@ Block IProfilingBlockInputStream::getExtremes()
     return res;
 }
 
-uint64_t IProfilingBlockInputStream::collectCPUTimeNsImpl(bool is_root)
+uint64_t IProfilingBlockInputStream::collectCPUTimeNsImpl(bool is_thread_runner)
 {
-    uint64_t cpu_time_ns = is_root ? info.execution_time : 0;
+    uint64_t cpu_time_ns = is_thread_runner ? info.execution_time : 0;
     forEachChild([&](IBlockInputStream & child) {
         cpu_time_ns += child.collectCPUTimeNs(false);
         return false;

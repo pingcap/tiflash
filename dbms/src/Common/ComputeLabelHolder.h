@@ -23,19 +23,23 @@
 
 namespace DB
 {
-class InstanceLabelHolder : public ext::Singleton<InstanceLabelHolder>
+// Holds the labels for tiflash compute node metrics.
+class ComputeLabelHolder : public ext::Singleton<ComputeLabelHolder>
 {
 public:
     void init(const Poco::Util::LayeredConfiguration & conf);
 
     std::pair<std::string, std::string> getClusterIdLabel();
-    std::pair<std::string, std::string> getInstanceIdLabel();
+    std::pair<std::string, std::string> getProcessIdLabel();
 
 private:
     std::mutex mu;
     bool label_got = false;
+    // the id of tiflash compute cluster
     std::string cluster_id{"unknown"};
-    std::string instance_id{"unknown"};
+    // the id of tiflash compute process, used to distinguish between processes that have been started multiple times.
+    // Format: `compute_${host_name}_${start_time_second_utc}`
+    std::string process_id{"unknown"};
 
     LoggerPtr log = Logger::get();
 };

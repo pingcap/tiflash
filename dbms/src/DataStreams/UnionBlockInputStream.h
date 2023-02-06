@@ -255,8 +255,10 @@ protected:
             children[i]->readSuffix();
     }
 
-    uint64_t collectCPUTimeNsImpl(bool /*is_root*/) override
+    uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) override
     {
+        // UnionBlockInputStream isn't a thread-runner, so is_thread_runner is ignored here.
+        // But each of UnionBlockInputStream's children is a thread-runner.
         uint64_t cpu_time_ns = 0;
         forEachChild([&](IBlockInputStream & child) {
             cpu_time_ns += child.collectCPUTimeNs(true);

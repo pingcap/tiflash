@@ -18,5 +18,6 @@
 
 namespace DB
 {
+// Convert cpu time nanoseconds to cpu time seconds, and round up.
 UInt64 toCPUTimeSecond(UInt64 cpu_time_ns);
 } // namespace DB

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/InstanceLabelHolder.h>
+#include <Common/ComputeLabelHolder.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -28,18 +28,18 @@ auto microsecondsUTC()
 }
 } // namespace
 
-void InstanceLabelHolder::init(const Poco::Util::LayeredConfiguration & conf)
+void ComputeLabelHolder::init(const Poco::Util::LayeredConfiguration & conf)
 {
     std::lock_guard lock(mu);
-    RUNTIME_ASSERT(!label_got, "Can't init after label got");
+    RUNTIME_ASSERT(!label_got, log, "Can't init after label got");
     cluster_id = conf.getString(cluster_id_key, "unknown");
     auto service_addr = conf.getString("flash.service_addr", "unknown");
     std::replace(service_addr.begin(), service_addr.end(), ':', '_');
     std::replace(service_addr.begin(), service_addr.end(), '.', '_');
-    instance_id = fmt::format("tiflash_{}_{}", service_addr, microsecondsUTC());
+    process_id = fmt::format("compute_{}_{}", service_addr, microsecondsUTC());
 }
 
-std::pair<std::string, std::string> InstanceLabelHolder::getClusterIdLabel()
+std::pair<std::string, std::string> ComputeLabelHolder::getClusterIdLabel()
 {
     std::lock_guard lock(mu);
     label_got = true;
@@ -47,12 +47,12 @@ std::pair<std::string, std::string> InstanceLabelHolder::getClusterIdLabel()
     return {"cluster_id", cluster_id};
 }
 
-std::pair<std::string, std::string> InstanceLabelHolder::getInstanceIdLabel()
+std::pair<std::string, std::string> ComputeLabelHolder::getProcessIdLabel()
 {
     std::lock_guard lock(mu);
     label_got = true;
-    LOG_INFO(log, "get instance id: {}", instance_id);
-    return {"instance_id", instance_id};
+    LOG_INFO(log, "get process id: {}", process_id);
+    return {"process_id", process_id};
 }
 
 } // namespace DB
