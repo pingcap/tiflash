@@ -285,7 +285,7 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
-    tunnel->connectLocal(source_index, local_request_handler, is_fine_grained);
+    tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained);
 }
 
 // TODO remove it in the future
@@ -303,7 +303,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnecti
     {
         return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
     }
-    tunnel->connectUnrefinedLocal(nullptr);
+    tunnel->connectLocalV1(nullptr);
     return std::make_tuple(tunnel, grpc::Status::OK);
 }
 
