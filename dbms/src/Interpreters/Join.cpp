@@ -1641,14 +1641,17 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-    MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add);
 
     std::vector<size_t> right_table_column_indexes;
+    right_table_column_indexes.reserve(num_columns_to_add);
+
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         right_table_column_indexes.push_back(i + existing_columns);
     }
+
+    MutableColumns added_columns;
+    added_columns.reserve(num_columns_to_add);
 
     std::vector<size_t> right_indexes;
     right_indexes.reserve(num_columns_to_add);
