@@ -33,8 +33,6 @@
 #include <ext/scope_guard.h>
 #include <vector>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
 namespace DB
 {
 namespace DM

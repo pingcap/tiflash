@@ -55,25 +55,11 @@ private:
     ColIdToOffset colid_to_offset;
 
 public:
-    explicit ColumnFileSchema(const Block & block)
-        : schema(block.cloneEmpty())
-    {
-        for (size_t i = 0; i < schema.columns(); ++i)
-            colid_to_offset.emplace(schema.getByPosition(i).column_id, i);
-    }
+    explicit ColumnFileSchema(const Block & block);
 
-    const DataTypePtr & getDataType(ColId column_id) const
-    {
-        /// Returns the data type of a column.
-        /// The specified column id must exist, otherwise something unexpected will happen.
-        auto index = colid_to_offset.at(column_id);
-        return schema.getByPosition(index).type;
-    }
+    const DataTypePtr & getDataType(ColId column_id) const;
 
-    String toString() const
-    {
-        return "{schema:" + (schema ? schema.dumpJsonStructure() : "none") + "}";
-    }
+    String toString() const;
 
     const Block & getSchema() const { return schema; }
     const ColIdToOffset & getColIdToOffset() const { return colid_to_offset; }
@@ -94,59 +80,12 @@ private:
     BackgroundProcessingPool & background_pool;
 
 public:
-    explicit SharedBlockSchemas(DB::Context & context)
-        : background_pool(context.getBackgroundPool())
-    {
-        handle = background_pool.addTask([&, this] {
-            std::lock_guard<std::mutex> lock(mutex);
-            for (auto iter = column_file_schemas.begin(); iter != column_file_schemas.end();)
-            {
-                if (iter->second.expired())
-                {
-                    iter = column_file_schemas.erase(iter);
-                }
-                else
-                {
-                    ++iter;
-                }
-            }
-            return true;
-        },
-                                         /*multi*/ false,
-                                         /*interval_ms*/ 60000);
-    }
+    explicit SharedBlockSchemas(DB::Context & context);
+    ~SharedBlockSchemas();
 
-    ~SharedBlockSchemas()
-    {
-        if (handle)
-        {
-            background_pool.removeTask(handle);
-        }
-    }
+    ColumnFileSchemaPtr find(const Digest & digest);
 
-    ColumnFileSchemaPtr find(const Digest & digest)
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        auto it = column_file_schemas.find(digest);
-        if (it == column_file_schemas.end())
-            return nullptr;
-        return it->second.lock();
-    }
-
-    ColumnFileSchemaPtr getOrCreate(const Block & block)
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        Digest digest = hashSchema(block);
-        auto it = column_file_schemas.find(digest);
-        if (it == column_file_schemas.end() || it->second.expired())
-        {
-            auto schema = std::make_shared<ColumnFileSchema>(block);
-            column_file_schemas.emplace(digest, schema);
-            return schema;
-        }
-        else
-            return it->second.lock();
-    }
+    ColumnFileSchemaPtr getOrCreate(const Block & block);
 };
 
 std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context);
