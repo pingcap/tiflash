@@ -743,6 +743,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     {                                                                                                      \
         const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
         bytes_count = ptr->data.getBufferSizeInBytes();                                                    \
+        break;                                                                                             \
     }
 
             APPLY_FOR_AGGREGATED_VARIANTS(M)
