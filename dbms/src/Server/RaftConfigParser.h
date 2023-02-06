@@ -47,7 +47,6 @@ struct TiFlashRaftConfig
 
     static constexpr TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
-    TiDB::SnapshotApplyMethod snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
 
 public:
     TiFlashRaftConfig() = default;
