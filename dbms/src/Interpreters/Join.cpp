@@ -2032,7 +2032,7 @@ void Join::waitUntilAllProbeFinished() const
 
 bool Join::isAllProbeFinished() const
 {
-    std::unique_lock lock(build_probe_mutex);
+    std::lock_guard lock(build_probe_mutex);
     return active_probe_concurrency == 0;
 }
 
