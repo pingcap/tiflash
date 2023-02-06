@@ -98,7 +98,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
-        std::min(max_streams, pipeline.streams.size()),
+        pipeline.streams.size(),
+        fine_grained_shuffle.enable() ? pipeline.streams.size() : 1,
         aggregation_keys,
         aggregation_collators,
         aggregate_descriptions,
