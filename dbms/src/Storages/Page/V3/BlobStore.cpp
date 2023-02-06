@@ -794,7 +794,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         buf.joinStr(
             entries.begin(),
             entries.end(),
-            [](const PageIDAndEntryV3 & id_entry, FmtBuffer & fb) {
+            [](const PageIdAndEntry & id_entry, FmtBuffer & fb) {
                 fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, toDebugString(id_entry.second));
             },
             ",");
