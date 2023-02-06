@@ -203,7 +203,7 @@ PageMapU64 PageStorageImpl::readImpl(NamespaceId ns_id, const PageIdU64s & page_
         PageMapU64 page_map = blob_store.read(page_entries, read_limiter);
         for (const auto & page_id_not_found : page_ids_not_found)
         {
-            page_map[page_id_not_found.low] = Page::invalidPage();
+            page_map.emplace(page_id_not_found.low, Page::invalidPage());
         }
         return page_map;
     }
@@ -239,7 +239,7 @@ PageMapU64 PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageRe
     PageMapU64 page_map = blob_store.read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
-        page_map[page_id_not_found] = Page::invalidPage();
+        page_map.emplace(page_id_not_found, Page::invalidPage());
     }
     return page_map;
 }

@@ -89,7 +89,7 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
 
     // Read the columns from disk and apply DDL cast if need
     auto page_map = page_reader.read({fields});
-    Page page = page_map[data_page_id];
+    Page page = page_map.at(data_page_id);
     for (size_t index = col_start; index < col_end; ++index)
     {
         const size_t index_in_read_columns = index - col_start;

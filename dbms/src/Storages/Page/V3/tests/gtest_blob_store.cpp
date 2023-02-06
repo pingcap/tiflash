@@ -1121,7 +1121,7 @@ try
     for (size_t i = 0; i < buff_nums; ++i)
     {
         PageIdU64 reading_id = fixed_page_id + i;
-        Page page = page_map[reading_id];
+        Page page = page_map.at(reading_id);
         ASSERT_EQ(page.fieldSize(), 5);
     }
 }

@@ -54,14 +54,13 @@ struct Page
 public:
     static Page invalidPage()
     {
-        Page page;
-        page.page_id = INVALID_PAGE_U64_ID;
+        Page page{INVALID_PAGE_U64_ID};
         page.is_valid = false;
         return page;
     }
 
-    Page()
-        : page_id(INVALID_PAGE_U64_ID)
+    explicit Page(PageIdU64 page_id_)
+        : page_id(page_id_)
         , is_valid(true)
     {}
 

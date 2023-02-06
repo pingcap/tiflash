@@ -87,7 +87,7 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
         UniversalPageMap page_map = blob_store->read(page_entries, read_limiter);
         for (const auto & page_id_not_found : page_ids_not_found)
         {
-            page_map[page_id_not_found] = Page::invalidPage();
+            page_map.emplace(page_id_not_found, Page::invalidPage());
         }
         return page_map;
     }
@@ -123,7 +123,7 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
     UniversalPageMap page_map = blob_store->read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
-        page_map[page_id_not_found] = Page::invalidPage();
+        page_map.emplace(page_id_not_found, Page::invalidPage());
     }
     return page_map;
 }

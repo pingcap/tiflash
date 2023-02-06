@@ -653,7 +653,7 @@ DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const Read
     const auto file_id_level = page_entry->fileIdLevel();
     PageIdAndEntries to_read = {{page_id, *page_entry}};
     auto file_reader = getReader(file_id_level);
-    return file_reader->read(to_read, read_limiter)[page_id];
+    return file_reader->read(to_read, read_limiter).at(page_id);
 }
 
 PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)

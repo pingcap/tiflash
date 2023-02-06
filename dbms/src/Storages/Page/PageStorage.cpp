@@ -206,7 +206,7 @@ public:
             const auto & page_maps_from_v2 = storage_v2->read(ns_id, invalid_page_ids, read_limiter, toConcreteV2Snapshot());
             for (const auto & [page_id_, page_] : page_maps_from_v2)
             {
-                page_maps[page_id_] = page_;
+                page_maps.at(page_id_) = page_;
             }
         }
 
@@ -222,7 +222,7 @@ public:
 
         for (const auto & page_field : page_fields)
         {
-            if (!page_maps[page_field.first].isValid())
+            if (!page_maps.at(page_field.first).isValid())
             {
                 invalid_page_fields.emplace_back(page_field);
             }
@@ -233,7 +233,7 @@ public:
             auto page_maps_from_v2 = storage_v2->read(ns_id, invalid_page_fields, read_limiter, toConcreteV2Snapshot());
             for (const auto & page_field : invalid_page_fields)
             {
-                page_maps[page_field.first] = page_maps_from_v2[page_field.first];
+                page_maps.at(page_field.first) = page_maps_from_v2.at(page_field.first);
             }
         }
 

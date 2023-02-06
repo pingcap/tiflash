@@ -397,9 +397,9 @@ try
         std::vector<PageIdU64> page_ids = {1, 2, 5};
         // readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true);
         auto page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
-        ASSERT_EQ(page_maps[1].page_id, 1);
-        ASSERT_FALSE(page_maps[2].isValid());
-        ASSERT_FALSE(page_maps[5].isValid());
+        ASSERT_EQ(page_maps.at(1).page_id, 1);
+        ASSERT_FALSE(page_maps.at(2).isValid());
+        ASSERT_FALSE(page_maps.at(5).isValid());
 
         const auto & page1 = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
         ASSERT_EQ(page1.page_id, 1);
@@ -415,16 +415,16 @@ try
         };
 
         page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
-        ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_EQ(page_maps[4].fieldSize(), 3);
-        ASSERT_EQ(page_maps[4].data.size(), 20 + 20 + 30);
+        ASSERT_EQ(page_maps.at(4).page_id, 4);
+        ASSERT_EQ(page_maps.at(4).fieldSize(), 3);
+        ASSERT_EQ(page_maps.at(4).data.size(), 20 + 20 + 30);
         // the invalid page ids in input param are returned with INVALID_ID
         ASSERT_GT(page_maps.count(6), 0);
-        ASSERT_EQ(page_maps[6].isValid(), false);
+        ASSERT_EQ(page_maps.at(6).isValid(), false);
         ASSERT_GT(page_maps.count(2), 0);
-        ASSERT_EQ(page_maps[2].isValid(), false);
+        ASSERT_EQ(page_maps.at(2).isValid(), false);
         ASSERT_GT(page_maps.count(5), 0);
-        ASSERT_EQ(page_maps[5].isValid(), false);
+        ASSERT_EQ(page_maps.at(5).isValid(), false);
     }
     {
         // Read with id can also fetch the fieldOffsets
@@ -441,7 +441,7 @@ try
         auto pages = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
         ASSERT_EQ(pages.size(), 1);
         ASSERT_GT(pages.count(4), 0);
-        auto page_4 = pages[4];
+        auto page_4 = pages.at(4);
         ASSERT_EQ(page_4.fieldSize(), 4);
         ASSERT_EQ(page_4.getFieldData(0).size(), 20);
         ASSERT_EQ(page_4.getFieldData(1).size(), 20);

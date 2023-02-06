@@ -259,18 +259,18 @@ try
         std::vector<PageIdU64> page_ids = {1, 2, 3, 4};
         auto page_maps = page_reader_mix->read(page_ids);
         ASSERT_EQ(page_maps.size(), 4);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
-        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page_maps[3], 3);
-        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page_maps[4], 4);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(2), 2);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page_maps.at(3), 3);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page_maps.at(4), 4);
 
         // Read page ids which only exited in V2
         page_ids = {1, 2, 7};
         page_maps = page_reader_mix->read(page_ids);
         ASSERT_EQ(page_maps.size(), 3);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[7], 7);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(2), 2);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(7), 7);
     }
 
     {
@@ -280,12 +280,12 @@ try
         read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(7, {0, 1, 2}));
         PageMapU64 page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 3);
-        ASSERT_EQ(page_maps[2].page_id, 2);
-        ASSERT_EQ(page_maps[2].field_offsets.size(), 3);
-        ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_EQ(page_maps[4].field_offsets.size(), 5);
-        ASSERT_EQ(page_maps[7].page_id, 7);
-        ASSERT_EQ(page_maps[7].field_offsets.size(), 3);
+        ASSERT_EQ(page_maps.at(2).page_id, 2);
+        ASSERT_EQ(page_maps.at(2).field_offsets.size(), 3);
+        ASSERT_EQ(page_maps.at(4).page_id, 4);
+        ASSERT_EQ(page_maps.at(4).field_offsets.size(), 5);
+        ASSERT_EQ(page_maps.at(7).page_id, 7);
+        ASSERT_EQ(page_maps.at(7).field_offsets.size(), 3);
     }
 
     {
@@ -466,11 +466,11 @@ try
 
         PageMapU64 page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 1);
-        ASSERT_EQ(page_maps[10].page_id, 10);
-        ASSERT_EQ(page_maps[10].field_offsets.size(), 4);
-        ASSERT_EQ(page_maps[10].data.size(), 710);
+        ASSERT_EQ(page_maps.at(10).page_id, 10);
+        ASSERT_EQ(page_maps.at(10).field_offsets.size(), 4);
+        ASSERT_EQ(page_maps.at(10).data.size(), 710);
 
-        auto field_offset = page_maps[10].field_offsets;
+        auto field_offset = page_maps.at(10).field_offsets;
         auto it = field_offset.begin();
         ASSERT_EQ(it->offset, 0);
         ++it;
@@ -1119,8 +1119,8 @@ try
         auto page_maps = newMixedPageReader(snapshot_mix).read({1, 2});
         ASSERT_EQ(page_maps.size(), 2);
 
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(2), 2);
     }
 }
 CATCH
@@ -1186,8 +1186,8 @@ try
         auto page_maps = newMixedPageReader(snapshot_mix).read({1, 2});
         ASSERT_EQ(page_maps.size(), 2);
 
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(2), 2);
     }
 }
 CATCH
