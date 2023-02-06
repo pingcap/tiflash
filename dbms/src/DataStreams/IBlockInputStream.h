@@ -111,9 +111,9 @@ public:
     /** Estimate the cpu time nanoseconds used by block input stream dag.
       * In this method, streams are divided into two categories:
       * - thread-runner: Called directly by a thread
-      * - non-thread-runner: Called by a thread-runner
+      * - non-thread-runner: Called by a thread-runner or non-thread-runner
       * Here we should count the execution time of each thread-runner.
-      * Note: Because more threads than vcore, and blocking relationships between streams,
+      * Note: Because of more threads than vcore, and blocking relationships between streams,
       * the result may not be 100% identical to the actual cpu time nanoseconds.
       */
     uint64_t estimateCPUTimeNs()
@@ -201,9 +201,9 @@ protected:
 
     void resetCPUTimeCompute()
     {
-        if (cpu_time_collected)
+        if (cpu_time_ns_collected)
         {
-            cpu_time_collected = false;
+            cpu_time_ns_collected = false;
             for (auto & child : children)
             {
                 if (child)
@@ -215,9 +215,9 @@ protected:
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
-    // flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
+    // flags to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
     bool thread_cnt_collected = false;
-    bool cpu_time_collected = false;
+    bool cpu_time_ns_collected = false;
 
 private:
     TableLockHolders table_locks;

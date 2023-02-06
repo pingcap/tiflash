@@ -111,10 +111,10 @@ void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multi
 
 uint64_t IBlockInputStream::collectCPUTimeNs(bool is_thread_runner)
 {
-    if (cpu_time_collected)
+    if (cpu_time_ns_collected)
         return 0;
 
-    cpu_time_collected = true;
+    cpu_time_ns_collected = true;
     return collectCPUTimeNsImpl(is_thread_runner);
 }
 } // namespace DB
