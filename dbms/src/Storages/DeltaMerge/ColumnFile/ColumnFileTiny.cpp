@@ -72,12 +72,13 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
         }
         else
         {
-            // New column after ddl is not exist in this pack, fill with default value
+            // New column after ddl is not exist in this CFTiny, fill with default value
             columns[index - col_start] = createColumnWithDefaultValue(cd, rows);
         }
     }
 
-    // All columns to be read are not exist in this CFTiny, we can skip reading from disk
+    // All columns to be read are not exist in this CFTiny and filled with default value,
+    // we can skip reading from disk
     if (fields.second.empty())
         return columns;
 

@@ -582,7 +582,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     PageMap page_map;
     if (unlikely(buf_size == 0))
     {
-        // We should not persist an empty column inside a block. If if the buf size is 0
+        // We should never persist an empty column inside a block. If the buf size is 0
         // then this read with `FieldReadInfos` could be completely eliminated in the upper
         // layer. Log a warning to check if it happens.
         {
