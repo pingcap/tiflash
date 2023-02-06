@@ -302,13 +302,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
-<<<<<<< HEAD
-    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                                     \
-    M(SettingBool, enable_refined_local_tunnel, true, "Enable refined local tunnel")
-=======
     M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.") \
     M(SettingUInt64, local_tunnel_version, 1, "1: not refined, 2: refined")
->>>>>>> d7358a551174901d7197476b022204f165e17e1e
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
