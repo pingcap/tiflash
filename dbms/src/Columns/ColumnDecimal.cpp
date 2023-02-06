@@ -305,10 +305,12 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_
     auto res = this->create(0, scale);
     Container & res_data = res->getData();
 
-    if (result_size_hint < 0)
-        res_data.reserve(countBytesInFilter(filt));
-    else if (result_size_hint > 0)
+    if (result_size_hint)
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
         res_data.reserve(result_size_hint);
+    }
 
     const UInt8 * filt_pos = filt.data();
     const UInt8 * filt_end = filt_pos + size;
