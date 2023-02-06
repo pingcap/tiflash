@@ -137,10 +137,6 @@ extern const int ILLEGAL_COLUMN;
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
-struct NameIlike
-{
-    static constexpr auto name = "ilike";
-};
 struct NameIlike3Args
 {
     static constexpr auto name = "ilike3Args";
@@ -215,7 +211,7 @@ public:
         const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
-        if constexpr (name == std::string_view(NameIlike3Args::name) || name == std::string_view(NameIlike::name))
+        if constexpr (name == std::string_view(NameIlike3Args::name))
             lowerEnglishWords(block, arguments);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;

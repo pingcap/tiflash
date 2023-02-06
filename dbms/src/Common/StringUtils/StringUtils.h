@@ -163,11 +163,11 @@ inline bool isPunctuation(char c)
 inline size_t getUtf8Length(uint8_t c)
 {
     size_t size = 0;
-    while (c != 0)
+    while (c >= 128)
     {
-        if ((c & 1) == 1)
+        if ((c & 128) == 128)
             ++size;
-        c >>= 1;
+        c <<= 1;
     };
     return size;
 }
