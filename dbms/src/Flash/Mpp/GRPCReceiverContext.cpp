@@ -291,7 +291,7 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
 // TODO remove it in the future
 std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocalV1(
     const ::mpp::EstablishMPPConnectionRequest * request,
-    const std::shared_ptr<MPPTaskManager> & task_manager) 
+    const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
