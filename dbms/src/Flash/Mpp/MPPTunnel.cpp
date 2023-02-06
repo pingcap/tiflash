@@ -214,13 +214,13 @@ void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_re
         LOG_TRACE(log, "ready to connect local");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender = std::make_shared<LocalTunnelSender<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
-            tunnel_sender = local_tunnel_fine_grained_sender;
+            local_tunnel_fine_grained_sender_v2 = std::make_shared<LocalTunnelSenderV2<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
+            tunnel_sender = local_tunnel_fine_grained_sender_v2;
         }
         else
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
-            tunnel_sender = local_tunnel_sender;
+            local_tunnel_sender_v2 = std::make_shared<LocalTunnelSenderV2<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
+            tunnel_sender = local_tunnel_sender_v2;
         }
 
         status = TunnelStatus::Connected;
@@ -404,8 +404,8 @@ void MPPTunnel::connectUnrefinedLocal(PacketWriter * writer)
         LOG_TRACE(log, "ready to connect");
 
         RUNTIME_ASSERT(writer == nullptr, log);
-        local_tunnel_sender_unrefined = std::make_shared<LocalTunnelSenderUnrefined>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
-        tunnel_sender = local_tunnel_sender_unrefined;
+        local_tunnel_sender_v1 = std::make_shared<LocalTunnelSenderV1>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
+        tunnel_sender = local_tunnel_sender_v1;
 
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
@@ -413,7 +413,7 @@ void MPPTunnel::connectUnrefinedLocal(PacketWriter * writer)
     LOG_DEBUG(log, "connected");
 }
 
-std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSenderUnrefined::readForLocal()
+std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSenderV1::readForLocal()
 {
     TrackedMppDataPacketPtr res;
     auto result = send_queue.pop(res);

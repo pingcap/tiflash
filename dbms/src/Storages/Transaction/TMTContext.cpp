@@ -67,7 +67,7 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
-    , kvstore(context_.isDisaggregatedComputeMode() ? nullptr : std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
+    , kvstore(context_.isDisaggregatedComputeMode() && context_.useAutoScaler() ? nullptr : std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
@@ -97,7 +97,7 @@ void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, con
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
     // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
-    if (context.isDisaggregatedComputeMode())
+    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
         return;
 
     kvstore->restore(path_pool, proxy_helper);
@@ -204,7 +204,7 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    if (context.isDisaggregatedComputeMode())
+    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
         return;
 
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";

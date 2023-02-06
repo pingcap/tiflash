@@ -275,7 +275,7 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
     return enable_async_grpc && !request.is_local;
 }
 
-void GRPCReceiverContext::establishMPPConnectionLocal(
+void GRPCReceiverContext::establishMPPConnectionLocalV2(
     const ExchangeRecvRequest & request,
     size_t source_index,
     LocalRequestHandler & local_request_handler,
@@ -289,7 +289,7 @@ void GRPCReceiverContext::establishMPPConnectionLocal(
 }
 
 // TODO remove it in the future
-std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocalUnrefined(
+std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocalV1(
     const ::mpp::EstablishMPPConnectionRequest * request,
     const std::shared_ptr<MPPTaskManager> & task_manager) const
 {
@@ -310,9 +310,9 @@ std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnecti
 // TODO remove it in the future
 struct LocalExchangePacketReader : public ExchangePacketReader
 {
-    LocalTunnelSenderUnrefinedPtr local_tunnel_sender;
+    LocalTunnelSenderV1Ptr local_tunnel_sender;
 
-    explicit LocalExchangePacketReader(const LocalTunnelSenderUnrefinedPtr & local_tunnel_sender_)
+    explicit LocalExchangePacketReader(const LocalTunnelSenderV1Ptr & local_tunnel_sender_)
         : local_tunnel_sender(local_tunnel_sender_)
     {}
 
@@ -362,12 +362,12 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 {
     if (request.is_local)
     {
-        auto [tunnel, status] = establishMPPConnectionLocalUnrefined(request.req.get(), task_manager);
+        auto [tunnel, status] = establishMPPConnectionLocalV1(request.req.get(), task_manager);
         if (!status.ok())
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderUnrefined());
+        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderV1());
     }
     else
     {
