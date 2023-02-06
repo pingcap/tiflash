@@ -105,7 +105,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
     }
 }
 
-ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
@@ -117,7 +117,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
         // V1 and V2 share the same deserializer.
     case DeltaFormat::V1:
     case DeltaFormat::V2:
-        column_files = deserializeSavedColumnFilesInV2Format(buf, version);
+        column_files = deserializeSavedColumnFilesInV2Format(context, buf, version);
         break;
     case DeltaFormat::V3:
         column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);

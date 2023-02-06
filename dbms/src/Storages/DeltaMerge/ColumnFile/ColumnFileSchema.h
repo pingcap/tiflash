@@ -18,9 +18,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <common/types.h>
-#include <openssl/base.h>
-#include <openssl/sha.h>
 
 #include <boost/container_hash/hash_fwd.hpp>
 
@@ -119,7 +118,10 @@ public:
 
     ~SharedBlockSchemas()
     {
-        background_pool.removeTask(handle);
+        if (handle)
+        {
+            background_pool.removeTask(handle);
+        }
     }
 
     ColumnFileSchemaPtr find(const Digest & digest)
@@ -131,11 +133,12 @@ public:
         return it->second.lock();
     }
 
-    ColumnFileSchemaPtr getOrCreate(const Digest & digest, const Block & block)
+    ColumnFileSchemaPtr getOrCreate(const Block & block)
     {
         std::lock_guard<std::mutex> lock(mutex);
+        Digest digest = hashSchema(block);
         auto it = column_file_schemas.find(digest);
-        if (it == column_file_schemas.end())
+        if (it == column_file_schemas.end() || it->second.expired())
         {
             auto schema = std::make_shared<ColumnFileSchema>(block);
             column_file_schemas.emplace(digest, schema);
@@ -145,5 +148,7 @@ public:
             return it->second.lock();
     }
 };
+
+std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context);
 } // namespace DM
 } // namespace DB

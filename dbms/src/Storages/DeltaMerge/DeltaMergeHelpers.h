@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/DeltaMerge/DMContext.h>
+
 #include <utility>
 
 #pragma once
@@ -25,7 +27,6 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -246,8 +247,8 @@ inline bool isSameSchema(const Block & a, const Block & b)
     return true;
 }
 
+using Digest = UInt256;
 Digest hashSchema(const Block & schema);
-std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context);
 
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)

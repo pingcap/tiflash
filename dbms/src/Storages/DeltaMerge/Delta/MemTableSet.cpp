@@ -193,12 +193,10 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
 
     if (!success)
     {
-        auto new_digest = hashSchema(block);
-        auto schema = getSharedBlockSchemas(context)->getOrCreate(new_digest, block);
+        auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
 
         // Create a new column file.
-        std::shared_ptr<ColumnFileInMemory> new_column_file;
-        new_column_file = std::make_shared<ColumnFileInMemory>(schema);
+        auto new_column_file = std::make_shared<ColumnFileInMemory>(schema);
         // Must append the empty `new_column_file` to `column_files` before appending data to it,
         // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);

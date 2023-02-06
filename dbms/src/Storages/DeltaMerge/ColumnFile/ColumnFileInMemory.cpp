@@ -62,7 +62,7 @@ ColumnFileInMemory::getReader(const DMContext & /*context*/, const StorageSnapsh
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
 
-bool ColumnFileInMemory::append(DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
+bool ColumnFileInMemory::append(const DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
 {
     if (disable_append)
         return false;

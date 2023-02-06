@@ -14,11 +14,13 @@
 
 #include <Functions/FunctionsConversion.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <openssl/sha.h>
 
 namespace DB
 {
 namespace DM
 {
+using Digest = UInt256;
 Digest hashSchema(const Block & schema)
 {
     SHA256_CTX ctx;
@@ -46,11 +48,6 @@ Digest hashSchema(const Block & schema)
 
     SHA256_Final(digest_bytes, &ctx);
     return *(reinterpret_cast<Digest *>(&digest_bytes));
-}
-
-std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context)
-{
-    return context.db_context.getSharedBlockSchemas();
 }
 
 void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context)

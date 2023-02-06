@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
@@ -76,11 +77,17 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
         }
         else
         {
-            // New column after ddl is not exist in this pack, fill with default value
+            // New column after ddl is not exist in this CFTiny, fill with default value
             columns[index - col_start] = createColumnWithDefaultValue(cd, rows);
         }
     }
 
+    // All columns to be read are not exist in this CFTiny and filled with default value,
+    // we can skip reading from disk
+    if (fields.second.empty())
+        return columns;
+
+    // Read the columns from disk and apply DDL cast if need
     auto page_map = page_reader.read({fields});
     Page page = page_map[data_page_id];
     for (size_t index = col_start; index < col_end; ++index)
@@ -137,19 +144,16 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
+ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
 {
     auto schema_block = deserializeSchema(buf);
     std::shared_ptr<ColumnFileSchema> schema;
 
     if (!schema_block)
-    {
         schema = last_schema;
-    }
     else
     {
-        auto new_digest = hashSchema(*schema_block);
-        schema = getSharedBlockSchemas(context)->getOrCreate(new_digest, *schema_block);
+        schema = getSharedBlockSchemas(context)->getOrCreate(*schema_block);
         last_schema = schema;
     }
 
@@ -199,18 +203,17 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
     }
 }
 
-ColumnTinyFilePtr ColumnFileTiny::writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache)
+ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache)
 {
     auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
 
-    auto new_digest = hashSchema(block);
-    auto schema = getSharedBlockSchemas(context)->getOrCreate(new_digest, block);
+    auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
 
     auto bytes = block.bytes(offset, limit);
     return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, cache);
 }
 
-PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
+PageId ColumnFileTiny::writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
     auto page_id = context.storage_pool.newLogPageId();
 
@@ -220,7 +223,9 @@ PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & bl
     {
         auto last_buf_size = write_buf.count();
         serializeColumn(write_buf, *col.column, col.type, offset, limit, context.db_context.getSettingsRef().dt_compression_method, context.db_context.getSettingsRef().dt_compression_level);
-        col_data_sizes.push_back(write_buf.count() - last_buf_size);
+        size_t serialized_size = write_buf.count() - last_buf_size;
+        RUNTIME_CHECK_MSG(serialized_size != 0, "try to persist a block with empty column, colname={} colid={} block={}", col.name, col.column_id, block.dumpJsonStructure());
+        col_data_sizes.push_back(serialized_size);
     }
 
     auto data_size = write_buf.count();
