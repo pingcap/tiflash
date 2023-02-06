@@ -56,7 +56,7 @@ String PhysicalPlanNode::toString()
 
 String PhysicalPlanNode::toSimpleString()
 {
-    return fmt::format("{}|{}", type.toString(), isTiDBOperator() ? executor_id : "NonTiDBOperator");
+    return fmt::format("{}|{}|{}", type.toString(), executor_id, isTiDBOperator() ? "is_tidb_op" : "non_tidb_op");
 }
 
 void PhysicalPlanNode::finalize()
