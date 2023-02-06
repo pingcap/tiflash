@@ -110,8 +110,8 @@ std::string getCurrentExceptionMessage(bool with_stacktrace,
         try
         {
             buffer.fmtAppend(
-                "Poco::Exception. Code: {}, e.code() = {}, e.displayText() = {}, e.what() = {}", 
-                ErrorCodes::POCO_EXCEPTION, 
+                "Poco::Exception. Code: {}, e.code() = {}, e.displayText() = {}, e.what() = {}",
+                ErrorCodes::POCO_EXCEPTION,
                 e.code(),
                 e.displayText(),
                 e.what());
