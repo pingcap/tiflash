@@ -619,9 +619,9 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
         for (const auto & [page_id, entry, fields] : to_read)
         {
             UNUSED(entry, fields);
-            Page page(page_id);
+            Page page(Trait::ExternalIdTrait::getU64ID(page_id));
             page.data = ByteBuffer(nullptr, nullptr);
-            page_map.emplace(page_id.low, std::move(page));
+            page_map.emplace(Trait::ExternalIdTrait::getPageMapKey(page_id), std::move(page));
         }
         return page_map;
     }
