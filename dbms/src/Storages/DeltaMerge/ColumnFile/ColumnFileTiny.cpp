@@ -149,13 +149,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(DMContext & context, 
     else
     {
         auto new_digest = hashSchema(*schema_block);
-        schema = context.db_context.getSharedBlockSchemas()->find(new_digest);
-
-        if (schema == nullptr)
-        {
-            schema = std::make_shared<ColumnFileSchema>(*schema_block);
-            context.db_context.getSharedBlockSchemas()->insert(new_digest, schema);
-        }
+        schema = context.db_context.getSharedBlockSchemas()->getOrCreate(new_digest, *schema_block);
         last_schema = schema;
     }
 
@@ -210,15 +204,7 @@ ColumnTinyFilePtr ColumnFileTiny::writeColumnFile(DMContext & context, const Blo
     auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
 
     auto new_digest = hashSchema(block);
-    auto schema = context.db_context.getSharedBlockSchemas()->find(new_digest);
-
-    std::shared_ptr<ColumnFileInMemory> new_column_file;
-    // Create a new column file.
-    if (schema == nullptr)
-    {
-        schema = std::make_shared<ColumnFileSchema>(block.cloneEmpty());
-        context.db_context.getSharedBlockSchemas()->insert(new_digest, schema);
-    }
+    auto schema = context.db_context.getSharedBlockSchemas()->getOrCreate(new_digest, block);
 
     auto bytes = block.bytes(offset, limit);
     return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, cache);

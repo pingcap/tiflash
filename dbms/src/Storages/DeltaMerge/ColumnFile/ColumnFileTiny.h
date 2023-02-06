@@ -35,7 +35,6 @@ class ColumnFileTiny : public ColumnFilePersisted
 
 private:
     ColumnFileSchemaPtr schema;
-    //BlockPtr schema;
 
     UInt64 rows = 0;
     UInt64 bytes = 0;

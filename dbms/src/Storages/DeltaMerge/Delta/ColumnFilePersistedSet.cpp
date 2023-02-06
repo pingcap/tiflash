@@ -107,17 +107,6 @@ void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) co
         file->removeData(wbs);
 }
 
-ColumnFileSchemaPtr ColumnFilePersistedSet::getLastSchema()
-{
-    for (auto it = persisted_files.rbegin(); it != persisted_files.rend(); ++it)
-    {
-        if (auto * t_file = (*it)->tryToTinyFile(); t_file)
-            return t_file->getSchema();
-    }
-    return {};
-}
-
-
 ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles & previous_column_files) const
 {
     // It should not be not possible that files in the snapshots are removed when calling this

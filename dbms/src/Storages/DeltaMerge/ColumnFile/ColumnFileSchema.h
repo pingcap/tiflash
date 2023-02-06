@@ -56,8 +56,8 @@ private:
     ColIdToOffset colid_to_offset;
 
 public:
-    explicit ColumnFileSchema(const Block & schema_)
-        : schema(schema_)
+    explicit ColumnFileSchema(const Block & block)
+        : schema(block.cloneEmpty())
     {
         for (size_t i = 0; i < schema.columns(); ++i)
             colid_to_offset.emplace(schema.getByPosition(i).column_id, i);
@@ -73,7 +73,7 @@ public:
 
     String toString() const
     {
-        return "{schema:" + (schema ? schema.dumpStructure() : "none") + "}";
+        return "{schema:" + (schema ? schema.dumpJsonStructure() : "none") + "}";
     }
 
     const Block & getSchema() const { return schema; }
@@ -113,7 +113,8 @@ public:
             }
             return true;
         },
-                                         false);
+                                         /*multi*/ false,
+                                         /*interval_ms*/ 60000);
     }
 
     ~SharedBlockSchemas()
@@ -130,10 +131,18 @@ public:
         return it->second.lock();
     }
 
-    void insert(const Digest & digest, const ColumnFileSchemaPtr & schema)
+    ColumnFileSchemaPtr getOrCreate(const Digest & digest, const Block & block)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        column_file_schemas.emplace(digest, schema);
+        auto it = column_file_schemas.find(digest);
+        if (it == column_file_schemas.end())
+        {
+            auto schema = std::make_shared<ColumnFileSchema>(block);
+            column_file_schemas.emplace(digest, schema);
+            return schema;
+        }
+        else
+            return it->second.lock();
     }
 };
 } // namespace DM

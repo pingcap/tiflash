@@ -36,9 +36,6 @@
 #include <Storages/Page/PageDefines.h>
 #include <fmt/format.h>
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h"
-
-
 namespace DB
 {
 namespace DM
@@ -109,8 +106,6 @@ public:
     void saveMeta(WriteBatches & wbs) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
-
-    ColumnFileSchemaPtr getLastSchema();
 
     /**
      * Return newly appended column files compared to `previous_column_files`.
