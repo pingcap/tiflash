@@ -835,7 +835,7 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
-#define ASSERT_BLOCK_EQ(expected, actual) ASSERT_TRUE(DB::tests::blockEqual((expected), (actual)))
+#define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
 
 /// restrictly checking columns equality, both data set and each row's offset should be the same
 #define ASSERT_COLUMNS_EQ_R(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), true))
