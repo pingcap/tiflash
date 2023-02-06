@@ -38,7 +38,7 @@ private:
     // the id of tiflash compute cluster
     std::string cluster_id{"unknown"};
     // the id of tiflash compute process, used to distinguish between processes that have been started multiple times.
-    // Format: `compute_${host_name}_${start_time_second_utc}`
+    // Format: `compute_${service_addr}_${start_time_second_utc}`
     std::string process_id{"unknown"};
 
     LoggerPtr log = Logger::get();
