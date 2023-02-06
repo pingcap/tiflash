@@ -96,7 +96,7 @@ void ExternalPageCallbacksManager<Trait>::registerExternalPagesCallbacks(const E
     // NamespaceId(TableID) should not be reuse
     RUNTIME_CHECK_MSG(
         callbacks_container.count(callbacks.prefix) == 0,
-        "Try to create callbacks for duplicated namespace id {}",
+        "Try to create callbacks for duplicated prefix {}",
         callbacks.prefix);
     // `emplace` won't invalid other iterator
     callbacks_container.emplace(callbacks.prefix, std::make_shared<ExternalPageCallbacks>(callbacks));
