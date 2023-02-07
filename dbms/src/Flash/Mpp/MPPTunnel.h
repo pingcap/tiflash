@@ -439,12 +439,12 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
 
-    void connectUnrefinedLocal(PacketWriter * writer);
+    void connectLocalV1(PacketWriter * writer);
 
     // wait until all the data has been transferred.
     void waitForFinish();

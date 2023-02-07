@@ -204,14 +204,14 @@ void MPPTunnel::connectSync(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained)
+void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained)
 {
     {
         std::unique_lock lk(mu);
         RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
         RUNTIME_CHECK_MSG(mode == TunnelSenderMode::LOCAL, "This should be a local tunnel");
 
-        LOG_TRACE(log, "ready to connect local");
+        LOG_TRACE(log, "ready to connect local tunnel version 2");
         if (is_fine_grained)
         {
             local_tunnel_fine_grained_sender_v2 = std::make_shared<LocalTunnelSenderV2<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
@@ -226,7 +226,7 @@ void MPPTunnel::connectLocal(size_t source_index, LocalRequestHandler & local_re
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_DEBUG(log, "Local tunnel connected");
+    LOG_DEBUG(log, "Local tunnel version 2 is connected");
 }
 
 void MPPTunnel::connectAsync(IAsyncCallData * call_data)
@@ -394,14 +394,14 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
 }
 
 // TODO remove it in the future
-void MPPTunnel::connectUnrefinedLocal(PacketWriter * writer)
+void MPPTunnel::connectLocalV1(PacketWriter * writer)
 {
     {
         std::unique_lock lk(mu);
         if (status != TunnelStatus::Unconnected)
             throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
 
-        LOG_TRACE(log, "ready to connect");
+        LOG_TRACE(log, "ready to connect local tunnel version 1");
 
         RUNTIME_ASSERT(writer == nullptr, log);
         local_tunnel_sender_v1 = std::make_shared<LocalTunnelSenderV1>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
@@ -410,7 +410,7 @@ void MPPTunnel::connectUnrefinedLocal(PacketWriter * writer)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_DEBUG(log, "connected");
+    LOG_DEBUG(log, "Local tunnel version 1 is connected");
 }
 
 std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSenderV1::readForLocal()

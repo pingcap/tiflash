@@ -41,8 +41,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 namespace tests
 {
 void assertBlocksEqual(const Blocks & blocks1, const Blocks & blocks2)
@@ -153,7 +152,7 @@ Block appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefinesPtr
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile
-        = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*column_defines), input_stream, file_id, store_path, {});
+        = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*column_defines), input_stream, file_id, store_path);
     delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
     auto & pk_column = block.getByPosition(0).column;

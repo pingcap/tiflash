@@ -26,11 +26,13 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <grpcpp/support/status.h>
 #include <gtest/gtest.h>
 
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
+#include <utility>
 
 
 namespace DB
@@ -247,7 +249,15 @@ struct MockReceiverContext
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
-    void establishMPPConnectionLocal(const MockReceiverContext::Request &, size_t, LocalRequestHandler &, bool) {}
+    static ExchangePacketReaderPtr makeReader(const Request &) { return nullptr; }
+
+    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest *, const std::shared_ptr<MPPTaskManager> &)
+    {
+        // Useless, just for compilation
+        return std::make_pair(MPPTunnelPtr(), grpc::Status::CANCELLED);
+    }
+
+    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
@@ -440,7 +450,8 @@ public:
             1,
             "mock_req_id",
             "mock_exchange_receiver_id",
-            0);
+            0,
+            2);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",
