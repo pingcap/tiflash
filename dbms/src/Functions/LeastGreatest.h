@@ -30,15 +30,13 @@
 #include <DataTypes/IDataType.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
 #include <Interpreters/Context.h>
 #include <common/types.h>
 #include <fmt/core.h>
 
-#include <cstddef>
 #include <type_traits>
-
-#include "StringUtil.h"
 
 namespace DB
 {
