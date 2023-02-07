@@ -56,12 +56,10 @@ void PipelineExecutorStatus::onEventSchedule()
 
 void PipelineExecutorStatus::onEventFinish()
 {
-    bool notify = false;
-    {
-        std::lock_guard lock(mu);
-        notify = (0 == --active_event_count);
-    }
-    if (notify)
+    std::lock_guard lock(mu);
+    assert(active_event_count > 0);
+    --active_event_count;
+    if (0 == active_event_count)
         cv.notify_all();
 }
 
