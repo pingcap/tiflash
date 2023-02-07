@@ -110,11 +110,10 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                              const ColumnDefinesPtr & schema_snap,
                              const BlockInputStreamPtr & input_stream,
                              UInt64 file_id,
-                             const String & parent_path,
-                             DMFileBlockOutputStream::Flags flags)
+                             const String & parent_path)
 {
-    auto dmfile = DMFile::create(file_id, parent_path, flags.isSingleFile(), dm_context.createChecksumConfig(flags.isSingleFile()));
-    auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
+    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig());
+    auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap);
     const auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
@@ -175,11 +174,8 @@ StableValueSpacePtr createNewStable( //
     auto delegator = context.path_pool.getStableDiskDelegator();
     auto store_path = delegator.choosePath();
 
-    DMFileBlockOutputStream::Flags flags;
-    flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
-
     PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-    auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
+    auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
 
     auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
@@ -2279,7 +2275,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
                                                  size_t expected_block_size)
 {
     Stopwatch sw_total;
-    static ColumnDefines columns_to_read{
+    ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
     auto stream = getInputStreamModeNormal(
@@ -2418,7 +2414,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     {
         return bitmap_filter;
     }
-    static ColumnDefines columns_to_read{
+    ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
         getVersionColumnDefine(),
         getTagColumnDefine(),
@@ -2435,7 +2431,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                                       /*read_packs*/ some_packs,
                                                                       /*need_row_id*/ true);
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
-    static ColumnDefines read_columns{
+    ColumnDefines read_columns{
         getExtraHandleColumnDefine(is_common_handle),
     };
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(

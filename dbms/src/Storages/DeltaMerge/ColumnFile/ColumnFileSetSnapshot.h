@@ -39,12 +39,13 @@ public:
         , block_offset(offset_)
     {}
     explicit BlockOrDelete(const RowKeyRange & delete_range_)
-        : delete_range(delete_range_)
+        : block_offset(0)
+        , delete_range(delete_range_)
     {}
 
-    bool isBlock() { return (bool)block; }
+    bool isBlock() { return static_cast<bool>(block); }
     auto & getBlock() { return block; };
-    auto getBlockOffset() { return block_offset; }
+    auto getBlockOffset() const { return block_offset; }
     auto & getDeleteRange() { return delete_range; }
 };
 
@@ -60,12 +61,12 @@ private:
     StorageSnapshotPtr storage_snap;
 
     ColumnFiles column_files;
-    size_t rows;
-    size_t bytes;
-    size_t deletes;
+    size_t rows{0};
+    size_t bytes{0};
+    size_t deletes{0};
 
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    bool is_common_handle{false};
+    size_t rowkey_column_size{0};
 
 public:
     explicit ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)

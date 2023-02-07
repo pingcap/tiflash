@@ -50,14 +50,14 @@ TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::Fiel
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-    while (!blocks.empty())
+    for (auto & block : blocks)
     {
-        const auto & block = blocks.back();
         codec_stream->encode(block, 0, block.rows());
-        blocks.pop_back();
+        block.clear();
         tracked_packet->addChunk(codec_stream->getString());
         codec_stream->clear();
     }
+    blocks.clear();
     return tracked_packet;
 }
 

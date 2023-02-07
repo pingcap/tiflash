@@ -33,8 +33,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 
 namespace tests
 {
@@ -314,8 +313,7 @@ ExternalDTFileInfo genDMFile(DeltaMergeStorePtr store, DMContext & context, cons
         std::make_shared<ColumnDefines>(store->getTableColumns()),
         input_stream,
         file_id,
-        store_path,
-        /* flags */ {});
+        store_path);
 
     store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 

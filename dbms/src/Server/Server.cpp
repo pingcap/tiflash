@@ -67,6 +67,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
@@ -1199,6 +1200,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
+
+    global_context->initializeSharedBlockSchemas();
 
     {
         // Note that this must do before initialize schema sync service.
