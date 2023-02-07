@@ -44,23 +44,23 @@ public:
 
     void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
-        uwb.putPage(UniversalPageId::toFullUniversalPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
+        uwb.putPage(UniversalPageId::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
     }
 
     void putExternal(PageIdU64 page_id, UInt64 tag)
     {
-        uwb.putExternal(UniversalPageId::toFullUniversalPageId(prefix, page_id), tag);
+        uwb.putExternal(UniversalPageId::toFullPageId(prefix, page_id), tag);
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
     {
-        uwb.putRefPage(UniversalPageId::toFullUniversalPageId(prefix, ref_id), UniversalPageId::toFullUniversalPageId(prefix, page_id));
+        uwb.putRefPage(UniversalPageId::toFullPageId(prefix, ref_id), UniversalPageId::toFullPageId(prefix, page_id));
     }
 
     void delPage(PageIdU64 page_id)
     {
-        uwb.delPage(UniversalPageId::toFullUniversalPageId(prefix, page_id));
+        uwb.delPage(UniversalPageId::toFullPageId(prefix, page_id));
     }
 
     bool empty() const

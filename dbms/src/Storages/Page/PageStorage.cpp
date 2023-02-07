@@ -366,7 +366,7 @@ public:
 
     DB::Page read(PageIdU64 page_id) const override
     {
-        return storage->read(UniversalPageId::toFullUniversalPageId(prefix, page_id), read_limiter, snap);
+        return storage->read(UniversalPageId::toFullPageId(prefix, page_id), read_limiter, snap);
     }
 
     static inline PageMapU64 toPageMap(UniversalPageMap && us_page_map)
@@ -374,7 +374,7 @@ public:
         PageMapU64 page_map;
         for (auto iter = us_page_map.begin(); iter != us_page_map.end(); iter++)
         {
-            page_map.emplace(PS::V3::universal::ExternalIdTrait::getU64ID(iter->first), std::move(iter->second));
+            page_map.emplace(PS::V3::universal::PageIdTrait::getU64ID(iter->first), std::move(iter->second));
         }
         return page_map;
     }
@@ -384,7 +384,7 @@ public:
         UniversalPageIds us_page_ids;
         for (const auto & page_id : page_ids)
         {
-            us_page_ids.emplace_back(UniversalPageId::toFullUniversalPageId(prefix, page_id));
+            us_page_ids.emplace_back(UniversalPageId::toFullPageId(prefix, page_id));
         }
         return PageReaderImplUniversal::toPageMap(storage->read(us_page_ids, read_limiter, snap));
     }
@@ -395,19 +395,19 @@ public:
         std::vector<UniversalPageStorage::PageReadFields> us_page_fields;
         for (const auto & f : page_fields)
         {
-            us_page_fields.emplace_back(UniversalPageId::toFullUniversalPageId(prefix, f.first), f.second);
+            us_page_fields.emplace_back(UniversalPageId::toFullPageId(prefix, f.first), f.second);
         }
         return PageReaderImplUniversal::toPageMap(storage->read(us_page_fields, read_limiter, snap));
     }
 
     PageIdU64 getNormalPageId(PageIdU64 page_id) const override
     {
-        return PS::V3::universal::ExternalIdTrait::getU64ID(storage->getNormalPageId(UniversalPageId::toFullUniversalPageId(prefix, page_id), snap));
+        return PS::V3::universal::PageIdTrait::getU64ID(storage->getNormalPageId(UniversalPageId::toFullPageId(prefix, page_id), snap));
     }
 
     PageEntry getPageEntry(PageIdU64 page_id) const override
     {
-        return storage->getEntry(UniversalPageId::toFullUniversalPageId(prefix, page_id), snap);
+        return storage->getEntry(UniversalPageId::toFullPageId(prefix, page_id), snap);
     }
 
     PageStorageSnapshotPtr getSnapshot(const String & tracing_id) const override
@@ -424,8 +424,7 @@ public:
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
         auto snapshot = storage->getSnapshot(fmt::format("scan_{}", prefix));
-        // FIXME: use snapshot when getAllPageIdsWithPrefix
-        const auto page_ids = storage->page_directory->getAllPageIdsWithPrefix(prefix);
+        const auto page_ids = storage->page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = storage->page_directory->getByID(page_id, snapshot);

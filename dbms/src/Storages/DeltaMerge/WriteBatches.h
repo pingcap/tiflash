@@ -119,8 +119,7 @@ struct WriteBatches : private boost::noncopyable
         {
             if constexpr (DM_RUN_CHECK)
             {
-                Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
-                auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
+                auto check = [](const WriteBatch & wb, const String & what) {
                     if (wb.empty())
                         return;
                     for (const auto & w : wb.getWrites())
@@ -128,11 +127,11 @@ struct WriteBatches : private boost::noncopyable
                         if (unlikely(w.type == WriteBatchWriteType::DEL))
                             throw Exception("Unexpected deletes in " + what);
                     }
-                    LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
+                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
                 };
 
-                check(log.getWriteBatch(), "log", logger);
-                check(data.getWriteBatch(), "data", logger);
+                check(log.getWriteBatch(), "log");
+                check(data.getWriteBatch(), "data");
             }
 
             for (const auto & w : log.getWriteBatch().getWrites())
@@ -290,8 +289,6 @@ struct WriteBatches : private boost::noncopyable
         {
             if constexpr (DM_RUN_CHECK)
             {
-                Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
-
                 auto check = [](const WriteBatch & wb, const String & what) {
                     if (wb.empty())
                         return;

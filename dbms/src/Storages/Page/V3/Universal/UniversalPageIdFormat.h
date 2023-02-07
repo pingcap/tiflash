@@ -16,8 +16,6 @@
 
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
 
 namespace DB
 {
