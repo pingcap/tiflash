@@ -917,17 +917,6 @@ public:
         size_t keys_size;
         size_t aggregates_size;
 
-        /// Two-level aggregation settings (used for a large number of keys).
-        /** With how many keys or the size of the aggregation state in bytes,
-          *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
-          * 0 - the corresponding threshold is not specified.
-          */
-        const size_t group_by_two_level_threshold;
-        const size_t group_by_two_level_threshold_bytes;
-
-        /// Settings to flush temporary data to the filesystem (external aggregation).
-        const size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
-
         /// Return empty result when aggregating without keys on empty set.
         bool empty_result_for_aggregation_by_empty_set;
 
@@ -952,13 +941,13 @@ public:
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
-            , group_by_two_level_threshold(group_by_two_level_threshold_)
-            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
-            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
             , spill_config(spill_config_)
             , max_block_size(max_block_size_)
             , collators(collators_)
+            , group_by_two_level_threshold(group_by_two_level_threshold_)
+            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
+            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
         {
         }
 
@@ -988,6 +977,17 @@ public:
 
         /// Calculate the column numbers in `keys` and `aggregates`.
         void calculateColumnNumbers(const Block & block);
+
+        size_t getGroupByTwoLevelThreshold() const { return group_by_two_level_threshold; }
+        size_t getGroupByTwoLevelThresholdBytes() const { return group_by_two_level_threshold_bytes; }
+        size_t getMaxBytesBeforeExternalGroupBy() const { return max_bytes_before_external_group_by; }
+
+    private:
+        /// Note these thresholds should not be used directly, they are only used to
+        /// init the threshold in Aggregator
+        const size_t group_by_two_level_threshold;
+        const size_t group_by_two_level_threshold_bytes;
+        const size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
     };
 
 
@@ -1101,8 +1101,14 @@ protected:
     /// Returns true if you can abort the current task.
     CancellationHook is_cancelled;
 
+    /// Two-level aggregation settings (used for a large number of keys).
+    /** With how many keys or the size of the aggregation state in bytes,
+          *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
+          * 0 - the corresponding threshold is not specified.
+          */
     size_t group_by_two_level_threshold = 0;
     size_t group_by_two_level_threshold_bytes = 0;
+    /// Settings to flush temporary data to the filesystem (external aggregation).
     size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.

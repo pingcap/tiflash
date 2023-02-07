@@ -847,9 +847,9 @@ BlockInputStreams Aggregator::restoreSpilledData()
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
 {
-    group_by_two_level_threshold = params.group_by_two_level_threshold;
-    group_by_two_level_threshold_bytes = getAverageThreshold(params.group_by_two_level_threshold_bytes, aggregated_data_variants_size);
-    max_bytes_before_external_group_by = getAverageThreshold(params.max_bytes_before_external_group_by, aggregated_data_variants_size);
+    group_by_two_level_threshold = params.getGroupByTwoLevelThreshold();
+    group_by_two_level_threshold_bytes = getAverageThreshold(params.getGroupByTwoLevelThresholdBytes(), aggregated_data_variants_size);
+    max_bytes_before_external_group_by = getAverageThreshold(params.getMaxBytesBeforeExternalGroupBy(), aggregated_data_variants_size);
 }
 
 void Aggregator::spill(AggregatedDataVariants & data_variants)
