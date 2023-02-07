@@ -22,6 +22,8 @@
 namespace DB
 {
 class DAGContext;
+enum class CompressionMethod;
+enum MPPDataPacketVersion : int64_t;
 
 template <class ExchangeWriterPtr>
 class HashPartitionWriter : public DAGResponseWriter
@@ -32,12 +34,17 @@ public:
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 batch_send_min_limit_,
-        DAGContext & dag_context_);
+        DAGContext & dag_context_,
+        MPPDataPacketVersion data_codec_version_,
+        tipb::CompressionMode compression_mode_);
     void write(const Block & block) override;
     void flush() override;
 
 private:
+    void writeImpl(const Block & block);
+    void writeImplV1(const Block & block);
     void partitionAndWriteBlocks();
+    void partitionAndWriteBlocksV1();
 
     void writePartitionBlocks(std::vector<Blocks> & partition_blocks);
 
@@ -49,6 +56,11 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
+    // support data compression
+    int64_t mem_size_in_blocks{};
+    DataTypes expected_types;
+    MPPDataPacketVersion data_codec_version;
+    CompressionMethod compression_method{};
 };
 
 } // namespace DB

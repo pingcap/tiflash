@@ -58,7 +58,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
-    M(force_set_sst_decode_rand)                                  \
     M(exception_before_page_file_write_sync)                      \
     M(force_set_segment_ingest_packs_fail)                        \
     M(segment_merge_after_ingest_packs)                           \
@@ -67,6 +66,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_in_creating_set_input_stream)                     \
     M(exception_when_read_from_log)                               \
     M(exception_mpp_hash_build)                                   \
+    M(exception_mpp_hash_probe)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
     M(exception_between_schema_change_in_the_same_diff)           \
@@ -95,6 +95,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_ingest_via_replace)                              \
     M(unblock_query_init_after_write)                        \
     M(exception_in_merged_task_init)                         \
+    M(invalid_mpp_version)                                   \
     M(force_fail_in_flush_region_data)
 
 

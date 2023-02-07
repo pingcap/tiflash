@@ -58,9 +58,10 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
+    , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
-    , live_connections(0)
     , live_local_connections(0)
+    , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
@@ -80,6 +81,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     {
         try
         {
+            handleConnectionAfterException();
             cancel();
             thread_manager->wait();
         }
@@ -109,6 +111,16 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
+{
+    std::lock_guard lock(mu);
+    live_connections -= connection_uncreated_num;
+
+    // some cv may have been blocked, wake them up and recheck the condition.
+    cv.notify_all();
 }
 
 template <typename RPCContext>
@@ -169,23 +181,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
-    ++live_connections;
     ++live_local_connections;
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::addSyncConnectionNum()
-{
-    std::lock_guard lock(mu);
-    ++live_connections;
-    ++thread_count;
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::addAsyncConnectionNum()
-{
-    std::lock_guard lock(mu);
-    ++live_connections;
 }
 
 template <typename RPCContext>
@@ -318,7 +314,6 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
-    addAsyncConnectionNum(alive_async_connections);
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
 
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
@@ -351,8 +346,6 @@ template <typename RPCContext>
 template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
-    addSyncConnectionNum();
-
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Decrement();
@@ -376,7 +369,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
+                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
                 bool success = reader->read(packet);
                 if (!success)
                     break;
@@ -449,20 +442,45 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     if (recv_msg->chunks.empty())
         return detail;
-    auto & packet = recv_msg->packet->packet;
+    auto & packet = recv_msg->packet->getPacket();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
-    for (const String * chunk : recv_msg->chunks)
+
+    switch (auto version = packet.version(); version)
     {
-        auto result = decoder_ptr->decodeAndSquash(*chunk);
-        if (!result)
-            continue;
-        detail.rows += result->rows();
-        if likely (result->rows() > 0)
+    case DB::MPPDataPacketV0:
+    {
+        for (const auto * chunk : recv_msg->chunks)
         {
-            block_queue.push(std::move(result.value()));
+            auto result = decoder_ptr->decodeAndSquash(*chunk);
+            if (!result)
+                continue;
+            detail.rows += result->rows();
+            if likely (result->rows() > 0)
+            {
+                block_queue.push(std::move(result.value()));
+            }
         }
+        return detail;
+    }
+    case DB::MPPDataPacketV1:
+    {
+        for (const auto * chunk : recv_msg->chunks)
+        {
+            auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
+            if (!result || !result->rows())
+                continue;
+            detail.rows += result->rows();
+            block_queue.push(std::move(*result));
+        }
+        return detail;
+    }
+    default:
+    {
+        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
+        break;
+    }
     }
     return detail;
 }
@@ -594,7 +612,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    Int32 copy_live_conn = -1;
+    Int32 copy_live_connections;
     {
         std::lock_guard lock(mu);
 
@@ -605,7 +623,8 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
             if (err_msg.empty())
                 err_msg = local_err_msg;
         }
-        copy_live_conn = --live_connections;
+
+        copy_live_connections = --live_connections;
     }
 
     LOG_DEBUG(
@@ -613,18 +632,21 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
         meet_error,
         local_err_msg,
-        copy_live_conn);
+        copy_live_connections);
 
-    if (copy_live_conn == 0)
+    if (copy_live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (copy_live_conn < 0)
-        throw Exception("live_connections should not be less than 0!");
+    else if (copy_live_connections < 0)
+        throw Exception("alive_connection_num should not be less than 0!");
 
-    if (meet_error || copy_live_conn == 0)
+    if (meet_error || copy_live_connections == 0)
+    {
+        LOG_INFO(exc_log, "receiver channels finished");
         finishAllMsgChannels();
+    }
 }
 
 template <typename RPCContext>

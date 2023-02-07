@@ -30,9 +30,8 @@
 #include <common/ThreadPool.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
-#include <fmt/format.h>
+#include <fmt/chrono.h>
 
-#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -165,6 +164,7 @@ LearnerReadSnapshot doLearnerRead(
     const LoggerPtr & log)
 {
     assert(log != nullptr);
+    RUNTIME_ASSERT(!(context.isDisaggregatedComputeMode() && context.useAutoScaler()));
 
     auto & tmt = context.getTMTContext();
 
@@ -442,8 +442,8 @@ LearnerReadSnapshot doLearnerRead(
     auto end_time = Clock::now();
     LOG_DEBUG(
         log,
-        "[Learner Read] batch read index | wait index cost {} ms totally, regions_num={}, concurrency={}",
-        std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count(),
+        "[Learner Read] batch read index | wait index cost {} totally, regions_num={}, concurrency={}",
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time),
         num_regions,
         concurrent_num);
 

@@ -28,11 +28,10 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.cpp>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
-#include <memory>
+
 
 namespace DB
 {
@@ -80,13 +79,18 @@ struct MockWriter
         summary.scan_context->total_dmfile_rough_set_index_load_time_ns = 10;
         summary.scan_context->total_dmfile_read_time_ns = 200;
         summary.scan_context->total_create_snapshot_time_ns = 5;
+        summary.scan_context->total_local_region_num = 10;
+        summary.scan_context->total_remote_region_num = 5;
         return summary;
     }
 
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        auto packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types);
+        auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
         ++total_packets;
+        if (!packet)
+            return;
+
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
@@ -118,6 +122,10 @@ struct MockWriter
         write(tmp);
     }
     uint16_t getPartitionNum() const { return 1; }
+    bool isLocal(size_t index) const
+    {
+        return index == 0;
+    }
 
     std::vector<tipb::FieldType> result_field_types;
 

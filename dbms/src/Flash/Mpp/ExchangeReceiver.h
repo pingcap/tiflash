@@ -161,11 +161,8 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
-    void addLocalConnectionNum();
-    void addSyncConnectionNum();
-    void addAsyncConnectionNum();
-
     void prepareMsgChannels();
+    void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
     void destructAllAsyncRequestHandler();
 
@@ -174,6 +171,7 @@ private:
     void setUpAsyncConnection(std::vector<Request> && async_requests);
 
     void connectionLocalDone();
+    void handleConnectionAfterException();
 
     bool isReceiverForTiFlashStorage()
     {
@@ -189,6 +187,7 @@ private:
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;
+    Int32 connection_uncreated_num;
 
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
@@ -201,8 +200,8 @@ private:
     std::mutex mu;
     std::condition_variable cv;
     /// should lock `mu` when visit these members
-    Int32 live_connections;
     Int32 live_local_connections;
+    Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
 

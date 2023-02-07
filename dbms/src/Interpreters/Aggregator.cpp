@@ -836,10 +836,6 @@ bool Aggregator::executeOnBlock(
     if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
         result.convertToTwoLevel();
 
-    /// Checking the constraints.
-    if (!checkLimits(result_size))
-        return false;
-
     /** Flush data to disk if too much RAM is consumed.
       * Data can only be flushed to disk if a two-level aggregation structure is used.
       */
@@ -969,25 +965,6 @@ void Aggregator::spillImpl(
     data_variants.aggregator = nullptr;
 
     LOG_TRACE(log, "Max size of temporary bucket blocks: {} rows, {:.3f} MiB.", max_temporary_block_size_rows, (max_temporary_block_size_bytes / 1048576.0));
-}
-
-
-bool Aggregator::checkLimits(size_t result_size) const
-{
-    if (params.max_rows_to_group_by && result_size > params.max_rows_to_group_by)
-    {
-        switch (params.group_by_overflow_mode)
-        {
-        case OverflowMode::THROW:
-            throw Exception("Limit for rows to GROUP BY exceeded: has " + toString(result_size)
-                                + " rows, maximum: " + toString(params.max_rows_to_group_by),
-                            ErrorCodes::TOO_MANY_ROWS);
-
-        case OverflowMode::BREAK:
-            return false;
-        }
-    }
-    return true;
 }
 
 
@@ -1899,9 +1876,6 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
     /// We merge all aggregation results to the first.
     for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
     {
-        if (!checkLimits(res->size()))
-            break;
-
         AggregatedDataVariants & current = *non_empty_data[result_num];
 
         mergeDataImpl<Method>(
@@ -2264,9 +2238,6 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
                 result.invalidate();
                 return;
             }
-
-            if (!checkLimits(result.size()))
-                break;
 
             if (result.type == AggregatedDataVariants::Type::without_key)
                 mergeWithoutKeyStreamsImpl(block, result);

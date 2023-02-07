@@ -41,6 +41,16 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
     return mode;
 }
 
+// todo: remove this after AutoScaler is stable.
+bool useAutoScaler(const Poco::Util::LayeredConfiguration & config)
+{
+    static const std::string autoscaler_config_key = "flash.use_autoscaler";
+    bool use_autoscaler = true;
+    if (config.has(autoscaler_config_key))
+        use_autoscaler = config.getBool(autoscaler_config_key);
+    return use_autoscaler;
+}
+
 std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)
 {
     switch (mode)

@@ -209,7 +209,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         }
 
         LOG_INFO(logger, "creating new dtfile");
-        auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
+        auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), std::move(option));
 
         LOG_INFO(logger, "creating input stream");
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);

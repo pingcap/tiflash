@@ -40,8 +40,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 
 namespace tests
 {
@@ -399,7 +398,7 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::o
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
 {
     LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -420,8 +419,8 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_row
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
+
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
@@ -431,7 +430,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_row
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
-        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ true));
+        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ clear));
 
         ingest_wbs.rollbackWrittenLogAndData();
     }
@@ -461,8 +460,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_row
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
@@ -543,7 +541,7 @@ void SegmentTestBasic::replaceSegmentData(PageId segment_id, const Block & block
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
-    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, {});
+    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();
