@@ -79,7 +79,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         ("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
 
-    static_assert(sizeof(DB::PageId) == sizeof(UInt64));
+    static_assert(sizeof(DB::PageIdU64) == sizeof(UInt64));
     static_assert(sizeof(DB::BlobFileId) == sizeof(UInt64));
 
     po::variables_map options;
@@ -195,7 +195,7 @@ private:
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
             // Only restore the PageDirectory
-            PageDirectoryFactory factory;
+            PageDirectoryFactory<u128::FactoryTrait> factory;
             factory.dump_entries = true;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
             return 0;
@@ -204,7 +204,7 @@ private:
         // Other display mode need to restore ps instance
         PageStorageImpl ps(String(NAME), delegator, config, provider);
         ps.restore();
-        PageDirectory::MVCCMapType & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
+        PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
 
         switch (options.mode)
         {
@@ -242,7 +242,7 @@ private:
         return 0;
     }
 
-    static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(BlobStore<u128::BlobStoreTrait> & blob_store, UInt32 blob_id)
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -292,9 +292,9 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
     {
-        auto page_info = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
+        auto page_info = [](UInt128 page_internal_id_, const u128::VersionedPageEntriesPtr & versioned_entries) {
             FmtBuffer page_str;
             page_str.fmtAppend("    page id {}\n", page_internal_id_);
             page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
@@ -357,7 +357,7 @@ private:
         return directory_info.toString();
     }
 
-    static String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
+    static String getSummaryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store)
     {
         UInt64 longest_version_chaim = 0;
         UInt64 shortest_version_chaim = UINT64_MAX;
@@ -404,7 +404,7 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, UInt64 ns_id, UInt64 page_id)
     {
         const auto & page_internal_id = buildV3Id(ns_id, page_id);
         const auto & it = mvcc_table_directory.find(page_internal_id);
@@ -436,8 +436,8 @@ private:
                         DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                         std::iota(std::begin(indices), std::end(indices), 0);
 
-                        BlobStore::FieldReadInfos infos;
-                        BlobStore::FieldReadInfo info(page_internal_id, entry, indices);
+                        BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
+                        BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(page_internal_id, entry, indices);
                         infos.emplace_back(info);
                         blob_store.read(infos);
                     }
@@ -460,7 +460,7 @@ private:
         return error_msg.toString();
     }
 
-    static String checkAllDataCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
+    static String checkAllDataCrc(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, bool enable_fo_check)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;
@@ -498,8 +498,8 @@ private:
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);
 
-                            BlobStore::FieldReadInfos infos;
-                            BlobStore::FieldReadInfo info(internal_id, entry, indices);
+                            BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
+                            BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(internal_id, entry, indices);
                             infos.emplace_back(info);
                             blob_store.read(infos);
                         }

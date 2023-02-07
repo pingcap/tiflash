@@ -31,7 +31,7 @@ namespace DM
 // ================================================
 // Public methods
 // ================================================
-DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
+DeltaValueSpace::DeltaValueSpace(PageIdU64 id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
     : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(id_, persisted_files))
     , mem_table_set(std::make_shared<MemTableSet>(in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
@@ -55,7 +55,7 @@ void DeltaValueSpace::abandon(DMContext & context)
         manager->deleteRef(delta_index);
 }
 
-DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
+DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id)
 {
     auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
@@ -114,7 +114,7 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
         else if (auto * t = column_file->tryToTinyFile(); t)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.storage_pool.newLogPageId();
+            PageIdU64 new_data_page_id = context.storage_pool.newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
             auto new_column_file = t->cloneWith(new_data_page_id);
             cloned.push_back(new_column_file);

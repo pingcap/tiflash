@@ -84,7 +84,7 @@ try
     storage_pool->data_storage_v3->gc(/* not_skip */ true);
     ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
     ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1); // 1 DMFile
-    PageId replaced_stable_id{};
+    PageIdU64 replaced_stable_id{};
     {
         auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
         ASSERT_EQ(1, stable_page_ids.size());

@@ -17,7 +17,7 @@
 #include <Common/Exception.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/Config.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/WALRecoveryMode.h>
 
 namespace DB::PS::V3
@@ -42,7 +42,7 @@ public:
         wal_recover_mode = recover_mode;
     }
 
-    WALRecoveryMode getRecoverMode()
+    WALRecoveryMode getRecoverMode() const
     {
         return static_cast<WALRecoveryMode>(wal_recover_mode.get());
     }
