@@ -198,7 +198,7 @@ try
 {
     const auto * utf8mb4_general_ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
 
-    // const const
+    // constant constant
     ASSERT_COLUMN_EQ(createConstColumn<String>(4, "11"),
                      executeFunction(
                          "tidbLeastString",
@@ -431,7 +431,7 @@ try
             {createConstColumn<Nullable<String>>(4, "22222"),
              createColumn<Nullable<String>>({"11", "33", "22", "11111111"})}));
 
-    // const const
+    // constant constant
     ASSERT_COLUMN_EQ(createConstColumn<String>(4, "1111"),
                      executeFunction(
                          "tidbGreatestString",

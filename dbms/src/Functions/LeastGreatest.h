@@ -410,7 +410,7 @@ public:
             }
         }
 
-        // for vector columns
+        // for string columns
         std::vector<ColumnString::MutablePtr> results;
         results.emplace_back(ColumnString::create());
         results.emplace_back(ColumnString::create());
