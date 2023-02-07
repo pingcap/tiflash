@@ -74,7 +74,6 @@ public:
         ChildStream child_,
         StorageDeltaMergePtr storage_,
         DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-        TiDB::SnapshotApplyMethod method_,
         FileConvertJobType job_type_,
         UInt64 split_after_rows_,
         UInt64 split_after_size_,
@@ -112,7 +111,6 @@ private:
     ChildStream child;
     StorageDeltaMergePtr storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
-    const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
     const UInt64 split_after_rows;
     const UInt64 split_after_size;

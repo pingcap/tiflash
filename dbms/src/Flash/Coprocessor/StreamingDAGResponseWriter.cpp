@@ -96,21 +96,20 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         /// passthrough data to a non-TiFlash node, like sending data to TiSpark
-        while (!blocks.empty())
+        for (auto & block : blocks)
         {
-            const auto & block = blocks.back();
             chunk_codec_stream->encode(block, 0, block.rows());
-            blocks.pop_back();
+            block.clear();
             response.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
+        blocks.clear();
     }
     else /// passthrough data to a TiDB node
     {
         Int64 current_records_num = 0;
-        while (!blocks.empty())
+        for (auto & block : blocks)
         {
-            const auto & block = blocks.back();
             size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows;)
             {
@@ -125,8 +124,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
                 current_records_num += (upper - row_index);
                 row_index = upper;
             }
-            blocks.pop_back();
+            block.clear();
         }
+        blocks.clear();
 
         if (current_records_num > 0)
         {
