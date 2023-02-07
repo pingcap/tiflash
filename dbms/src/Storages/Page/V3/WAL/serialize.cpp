@@ -300,54 +300,8 @@ void deserializeFrom(ReadBuffer & buf, EditType & edit)
     }
 }
 
-namespace u128
-{
-String Serializer::serializeTo(const PageEntriesEdit & edit)
-{
-    WriteBufferFromOwnString buf;
-    UInt32 version = 1;
-    writeIntBinary(version, buf);
-    for (const auto & record : edit.getRecords())
-    {
-        switch (record.type)
-        {
-        case EditRecordType::PUT:
-        case EditRecordType::UPSERT:
-        case EditRecordType::VAR_ENTRY:
-            serializePutTo(record, buf);
-            break;
-        case EditRecordType::REF:
-        case EditRecordType::VAR_REF:
-            serializeRefTo(record, buf);
-            break;
-        case EditRecordType::VAR_DELETE:
-        case EditRecordType::DEL:
-            serializeDelTo(record, buf);
-            break;
-        case EditRecordType::PUT_EXTERNAL:
-        case EditRecordType::VAR_EXTERNAL:
-            serializePutExternalTo(record, buf);
-            break;
-        }
-    }
-    return buf.releaseStr();
-}
-u128::PageEntriesEdit Serializer::deserializeFrom(std::string_view record)
-{
-    u128::PageEntriesEdit edit;
-    ReadBufferFromMemory buf(record.data(), record.size());
-    UInt32 version = 0;
-    readIntBinary(version, buf);
-    if (version != 1)
-        throw Exception(fmt::format("Unknown version for PageEntriesEdit deser [version={}]", version), ErrorCodes::LOGICAL_ERROR);
-
-    DB::PS::V3::deserializeFrom(buf, edit);
-    return edit;
-}
-} // namespace u128
-namespace universal
-{
-String Serializer::serializeTo(const PageEntriesEdit & edit)
+template <typename PageEntriesEdit>
+String Serializer<PageEntriesEdit>::serializeTo(const PageEntriesEdit & edit)
 {
     WriteBufferFromOwnString buf;
     UInt32 version = 1;
@@ -376,10 +330,12 @@ String Serializer::serializeTo(const PageEntriesEdit & edit)
         }
     }
     return buf.releaseStr();
-}
-universal::PageEntriesEdit Serializer::deserializeFrom(std::string_view record)
+};
+
+template <typename PageEntriesEdit>
+PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view record)
 {
-    universal::PageEntriesEdit edit;
+    PageEntriesEdit edit;
     ReadBufferFromMemory buf(record.data(), record.size());
     UInt32 version = 0;
     readIntBinary(version, buf);
@@ -388,7 +344,8 @@ universal::PageEntriesEdit Serializer::deserializeFrom(std::string_view record)
 
     DB::PS::V3::deserializeFrom(buf, edit);
     return edit;
-}
-} // namespace universal
+};
 
+template struct Serializer<u128::PageEntriesEdit>;
+template struct Serializer<universal::PageEntriesEdit>;
 } // namespace DB::PS::V3

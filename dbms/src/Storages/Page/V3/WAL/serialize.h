@@ -20,20 +20,19 @@
 
 namespace DB::PS::V3
 {
-namespace u128
-{
+template <typename PageEntriesEdit>
 struct Serializer
 {
     static String serializeTo(const PageEntriesEdit & edit);
     static PageEntriesEdit deserializeFrom(std::string_view record);
 };
+
+namespace u128
+{
+using Serializer = Serializer<PageEntriesEdit>;
 } // namespace u128
 namespace universal
 {
-struct Serializer
-{
-    static String serializeTo(const PageEntriesEdit & edit);
-    static PageEntriesEdit deserializeFrom(std::string_view record);
-};
+using Serializer = Serializer<PageEntriesEdit>;
 } // namespace universal
 } // namespace DB::PS::V3
