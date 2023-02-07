@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <assert.h>
+
 #include <algorithm>
 
 inline size_t getAverageThreshold(size_t threshold, size_t concurrency)
