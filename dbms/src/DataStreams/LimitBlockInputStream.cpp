@@ -23,12 +23,19 @@ LimitBlockInputStream::LimitBlockInputStream(
     const BlockInputStreamPtr & input,
     size_t limit_,
     size_t offset_,
+<<<<<<< HEAD
     const String & req_id,
     bool always_read_till_end_)
     : limit(limit_)
     , offset(offset_)
     , always_read_till_end(always_read_till_end_)
     , log(Logger::get(req_id))
+=======
+    const String & req_id)
+    : log(Logger::get(req_id))
+    , limit(limit_)
+    , offset(offset_)
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
 {
     children.push_back(input);
 }
@@ -39,8 +46,11 @@ Block LimitBlockInputStream::readImpl()
     Block res;
     size_t rows = 0;
 
+<<<<<<< HEAD
     /// pos - how many lines were read, including the last read block
 
+=======
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
     if (pos >= offset + limit)
     {
         if (!always_read_till_end)
@@ -65,6 +75,7 @@ Block LimitBlockInputStream::readImpl()
     /// give away the whole block
     if (pos >= offset + rows && pos <= offset + limit)
         return res;
+<<<<<<< HEAD
 
     /// give away a piece of the block
     size_t start = std::max(
@@ -72,6 +83,29 @@ Block LimitBlockInputStream::readImpl()
         static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows));
 
     size_t length = std::min(
+=======
+    }
+
+    do
+    {
+        res = children.back()->read();
+        if (!res)
+            return res;
+        rows = res.rows();
+        pos += rows;
+    } while (pos <= offset);
+
+    /// give away the whole block
+    if (pos >= offset + rows && pos <= offset + limit)
+        return res;
+
+    /// give away a piece of the block
+    UInt64 start = std::max(
+        static_cast<Int64>(0),
+        static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows));
+
+    UInt64 length = std::min(
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
         static_cast<Int64>(limit),
         std::min(
             static_cast<Int64>(pos) - static_cast<Int64>(offset),

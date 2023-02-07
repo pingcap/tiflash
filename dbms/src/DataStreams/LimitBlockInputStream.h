@@ -34,8 +34,12 @@ public:
         const BlockInputStreamPtr & input,
         size_t limit_,
         size_t offset_,
+<<<<<<< HEAD
         const String & req_id,
         bool always_read_till_end_ = false);
+=======
+        const String & req_id);
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
 
     String getName() const override { return NAME; }
 
@@ -51,6 +55,13 @@ private:
     size_t pos = 0;
     bool always_read_till_end;
     LoggerPtr log;
+<<<<<<< HEAD
+=======
+    size_t limit;
+    size_t offset;
+    /// how many lines were read, including the last read block
+    size_t pos = 0;
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
 };
 
 } // namespace DB
