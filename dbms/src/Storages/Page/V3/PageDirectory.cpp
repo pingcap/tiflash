@@ -1544,8 +1544,8 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     auto collapsed_dir = [&]() {
         // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
         // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
-        //        static_assert(std::is_same_v<Trait, u128::PageDirectoryTrait> || std::is_same_v<Trait, universal::PageDirectoryTrait>,
-        //                      "unknown impl");
+        static_assert(std::is_same_v<Trait, u128::PageDirectoryTrait> || std::is_same_v<Trait, universal::PageDirectoryTrait>,
+                      "unknown impl");
         if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
         {
             u128::PageDirectoryFactory factory;
