@@ -62,7 +62,7 @@ void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
     writeIntBinary(valid_bytes, buf);
 }
 
-ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, //
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & context, //
                                                           const RowKeyRange & segment_range,
                                                           ReadBuffer & buf)
 {
