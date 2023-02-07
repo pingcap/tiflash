@@ -1245,11 +1245,16 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     getLimitLengthAndOffset(query, limit_length, limit_offset);
 
     /// If there is LIMIT
-    if (query.limit_length)
+    if (limit_length)
     {
+<<<<<<< HEAD
         pipeline.transform([&](auto & stream)
         {
             stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, 0, false);
+=======
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, /* offset */ 0, /*req_id=*/"");
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
         });
     }
 }
@@ -1305,8 +1310,9 @@ void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
     getLimitLengthAndOffset(query, limit_length, limit_offset);
 
     /// If there is LIMIT
-    if (query.limit_length)
+    if (limit_length)
     {
+<<<<<<< HEAD
         /** Rare case:
           *  if there is no WITH TOTALS and there is a subquery in FROM, and there is WITH TOTALS on one of the levels,
           *  then when using LIMIT, you should read the data to the end, rather than cancel the query earlier,
@@ -1327,6 +1333,11 @@ void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
         pipeline.transform([&](auto & stream)
         {
             stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, limit_offset, always_read_till_end);
+=======
+        RUNTIME_CHECK_MSG(pipeline.streams.size() == 1, "Cannot executeLimit with multiple streams");
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, limit_offset, /*req_id=*/"");
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
         });
     }
 }
