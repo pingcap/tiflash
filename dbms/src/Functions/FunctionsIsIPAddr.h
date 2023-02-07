@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Columns/ColumnString.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <arpa/inet.h>
@@ -39,16 +39,20 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 static inline UInt8 isIPv4(String input_address)
 {
     char str[INET_ADDRSTRLEN];
-    if(input_address.empty()) return 0;
-    if(inet_pton(AF_INET, input_address.c_str(), str) == 1) return 1;
+    if (input_address.empty())
+        return 0;
+    if (inet_pton(AF_INET, input_address.c_str(), str) == 1)
+        return 1;
     return 0;
 }
 
 static inline UInt8 isIPv6(String input_address)
 {
     char str[INET6_ADDRSTRLEN];
-    if(input_address.empty()) return 0;
-    if(inet_pton(AF_INET6, input_address.c_str(), str) == 1) return 1;
+    if (input_address.empty())
+        return 0;
+    if (inet_pton(AF_INET6, input_address.c_str(), str) == 1)
+        return 1;
     return 0;
 }
 
@@ -90,6 +94,7 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
+
 private:
 };
 
@@ -131,6 +136,7 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
+
 private:
 };
 } // namespace DB
