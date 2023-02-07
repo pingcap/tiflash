@@ -86,7 +86,7 @@ TEST_F(ColumnFileTest, ColumnFileBigRead)
 try
 {
     auto table_columns = DMTestEnv::getDefaultColumns();
-    auto dm_file = DMFile::create(1, parent_path, false, std::make_optional<DMChecksumConfig>());
+    auto dm_file = DMFile::create(1, parent_path, std::make_optional<DMChecksumConfig>());
     const size_t num_rows_write_per_batch = 8192;
     const size_t batch_num = 3;
     const UInt64 tso_value = 100;
@@ -177,12 +177,11 @@ try
         ColumnFilePersisteds column_file_persisteds;
         size_t rows = 100; // arbitrary value
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, rows, false);
-        auto schema = std::make_shared<Block>(block.cloneEmpty());
-        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs));
         column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
-        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs));
         column_file_persisteds.emplace_back(std::make_shared<ColumnFileDeleteRange>(RowKeyRange::newAll(false, 1)));
-        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs, schema));
+        column_file_persisteds.push_back(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, rows, wbs));
         serializeSavedColumnFilesInV3Format(buff, column_file_persisteds);
     }
 

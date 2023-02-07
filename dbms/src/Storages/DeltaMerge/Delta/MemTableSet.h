@@ -34,9 +34,6 @@ class MemTableSet : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
 private:
-    /// To avoid serialize the same schema between continuous ColumnFileInMemory and ColumnFileTiny instance.
-    BlockPtr last_schema;
-
     // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
     // TODO: check the proper memory_order when use this atomic variable
@@ -52,9 +49,8 @@ private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    explicit MemTableSet(const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
-        : last_schema(last_schema_)
-        , column_files(in_memory_files)
+    explicit MemTableSet(const ColumnFiles & in_memory_files = {})
+        : column_files(in_memory_files)
         , log(Logger::get())
     {
         column_files_count = column_files.size();
@@ -63,14 +59,6 @@ public:
             rows += file->getRows();
             bytes += file->getBytes();
             deletes += file->getDeletes();
-            if (auto * m_file = file->tryToInMemoryFile(); m_file)
-            {
-                last_schema = m_file->getSchema();
-            }
-            else if (auto * t_file = file->tryToTinyFile(); t_file)
-            {
-                last_schema = t_file->getSchema();
-            }
         }
     }
 
