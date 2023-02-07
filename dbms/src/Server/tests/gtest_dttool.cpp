@@ -85,7 +85,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             db_context->getSettingsRef());
         // Write
         {
-            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), false, std::nullopt);
+            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), std::nullopt);
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
                 stream.writePrefix();

@@ -18,7 +18,7 @@
 #include <Core/SortDescription.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB
@@ -45,7 +45,6 @@ void executeUnion(
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
-    const Context & context,
     const NamesWithAliases & project_cols);
 
 void executeExpression(
@@ -70,12 +69,12 @@ void executeCreatingSets(
     const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const PushDownFilter & push_down_filter,
+    const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
     size_t remote_read_streams_start_index,
-    const PushDownFilter & push_down_filter,
+    const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline);

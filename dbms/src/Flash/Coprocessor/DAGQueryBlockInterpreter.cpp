@@ -33,16 +33,15 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -190,17 +189,17 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    const auto push_down_filter = PushDownFilter::pushDownFilterFrom(query_block.selection_name, query_block.selection);
+    const auto filter_conditions = FilterConditions::filterConditionsFrom(query_block.selection_name, query_block.selection);
 
     if (context.isDisaggregatedComputeMode())
     {
-        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, push_down_filter, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
         analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
     }
     else
     {
-        DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
+        DAGStorageInterpreter storage_interpreter(context, table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
 
         analyzer = std::move(storage_interpreter.analyzer);
@@ -266,7 +265,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
-        true,
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
@@ -703,7 +701,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 {
     if (project_cols.empty())
         return;
-    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
+    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), project_cols);
     executeExpression(pipeline, project, log, extra_info);
 }
 
@@ -743,7 +741,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            context.getDAGContext()->tunnel_set,
+            dagContext().tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_sender.tp(),
@@ -752,7 +750,9 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             dagContext(),
             enable_fine_grained_shuffle,
             stream_count,
-            batch_size);
+            batch_size,
+            exchange_sender.compression(),
+            context.getSettingsRef().batch_send_min_limit_compression);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });

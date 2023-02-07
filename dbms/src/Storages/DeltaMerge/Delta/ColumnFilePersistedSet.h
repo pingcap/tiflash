@@ -36,7 +36,6 @@
 #include <Storages/Page/PageDefines.h>
 #include <fmt/format.h>
 
-
 namespace DB
 {
 namespace DM
@@ -107,8 +106,6 @@ public:
     void saveMeta(WriteBatches & wbs) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
-
-    BlockPtr getLastSchema();
 
     /**
      * Return newly appended column files compared to `previous_column_files`.

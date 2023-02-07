@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,6 +58,19 @@ public:
                               toNullableVec<Int64>("s2", {1, 1, 1, 1, 1}),
                               toNullableVec<Int64>("s3", {1, 1, 1, 1, 1}),
                               toNullableVec<Int64>("s4", {1, 1, 1, 1, 1})});
+
+        // with 200 rows.
+        std::vector<std::optional<TypeTraits<Int64>::FieldType>> key(200);
+        std::vector<std::optional<String>> value(200);
+        for (size_t i = 0; i < 200; ++i)
+        {
+            key[i] = i % 15;
+            value[i] = {fmt::format("val_{}", i)};
+        }
+        context.addMockTable(
+            {"test_db", "big_table"},
+            {{"key", TiDB::TP::TypeLongLong}, {"value", TiDB::TP::TypeString}},
+            {toNullableVec<Int64>("key", key), toNullableVec<String>("value", value)});
     }
 
     template <typename T>
@@ -418,6 +431,18 @@ try
                                   toVec<UInt64>({5}),
                                   toNullableVec<Int64>({1}),
                                   toNullableVec<Int64>({1})});
+}
+CATCH
+
+TEST_F(ProjectionExecutorTestRunner, BigTable)
+try
+{
+    auto request = context
+                       .scan("test_db", "big_table")
+                       .project({plusInt(col("key"), lit(Field(static_cast<UInt64>(7)))), concat(col("value"), col("value"))})
+                       .build(context);
+    auto expect = executeStreams(request, 1);
+    executeAndAssertColumnsEqual(request, expect);
 }
 CATCH
 
