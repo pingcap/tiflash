@@ -133,7 +133,7 @@ public:
     /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
-    virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
+    virtual bool append(const DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
