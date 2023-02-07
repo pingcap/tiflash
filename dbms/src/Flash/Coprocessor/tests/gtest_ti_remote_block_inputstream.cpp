@@ -249,7 +249,10 @@ struct MockReceiverContext
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
-    static ExchangePacketReaderPtr makeReader(const Request &) { return nullptr; }
+    std::shared_ptr<Reader> makeReader(const Request &)
+    {
+        return std::make_shared<Reader>(queue);
+    }
 
     static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest *, const std::shared_ptr<MPPTaskManager> &)
     {
