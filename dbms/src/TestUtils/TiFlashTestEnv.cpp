@@ -48,6 +48,20 @@ String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool g
         return poco_path.toString();
 }
 
+void TiFlashTestEnv::tryCreatePath(const std::string & path)
+{
+    try
+    {
+        Poco::File p(path);
+        if (!p.exists())
+            p.createDirectories();
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
 void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
 {
     try
