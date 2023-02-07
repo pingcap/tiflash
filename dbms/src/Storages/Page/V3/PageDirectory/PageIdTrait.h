@@ -21,7 +21,7 @@ namespace DB::PS::V3
 {
 namespace u128
 {
-struct ExternalIdTrait
+struct PageIdTrait
 {
     using PageId = PageIdV3Internal;
     using Prefix = NamespaceId;
@@ -46,7 +46,7 @@ struct ExternalIdTrait
 } // namespace u128
 namespace universal
 {
-struct ExternalIdTrait
+struct PageIdTrait
 {
     using PageId = UniversalPageId;
     using Prefix = String;

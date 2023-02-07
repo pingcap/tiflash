@@ -164,7 +164,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
         }
     }
 
-    dir->max_page_id = std::max(dir->max_page_id, Trait::ExternalIdTrait::getU64ID(r.page_id));
+    dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;
@@ -213,7 +213,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
         case EditRecordType::UPSERT:
         {
             auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
-            if (Trait::ExternalIdTrait::getU64ID(id_to_deref) != INVALID_PAGE_U64_ID)
+            if (Trait::PageIdTrait::getU64ID(id_to_deref) != INVALID_PAGE_U64_ID)
             {
                 // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page
                 auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);

@@ -78,6 +78,6 @@ void ExternalIdsByNamespace<Trait>::unregisterNamespace(const Prefix & ns_id)
     ids_by_ns.erase(ns_id);
 }
 
-template class ExternalIdsByNamespace<u128::ExternalIdTrait>;
-template class ExternalIdsByNamespace<universal::ExternalIdTrait>;
+template class ExternalIdsByNamespace<u128::PageIdTrait>;
+template class ExternalIdsByNamespace<universal::PageIdTrait>;
 } // namespace DB::PS::V3

@@ -86,7 +86,7 @@ struct FactoryTrait
     using PageId = PageIdV3Internal;
     using PageDirectory = PageDirectoryType;
     using BlobStore = BlobStoreType;
-    using ExternalIdTrait = ExternalIdTrait;
+    using PageIdTrait = PageIdTrait;
     using Serializer = Serializer;
 };
 using PageDirectoryFactory = DB::PS::V3::PageDirectoryFactory<FactoryTrait>;
@@ -98,7 +98,7 @@ struct FactoryTrait
     using PageId = UniversalPageId;
     using PageDirectory = PageDirectoryType;
     using BlobStore = BlobStoreType;
-    using ExternalIdTrait = ExternalIdTrait;
+    using PageIdTrait = PageIdTrait;
     using Serializer = Serializer;
 };
 using PageDirectoryFactory = DB::PS::V3::PageDirectoryFactory<FactoryTrait>;

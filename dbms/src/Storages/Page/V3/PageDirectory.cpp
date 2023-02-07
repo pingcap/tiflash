@@ -161,7 +161,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
             // create a new version that inherit the `being_ref_count` of the last entry
             entries.emplace(ver, EntryOrDelete::newReplacingEntry(last_iter->second, entry));
         }
-        return Trait::ExternalIdTrait::getInvalidID();
+        return Trait::PageIdTrait::getInvalidID();
     }
 
     if (type == EditRecordType::VAR_REF)
@@ -400,7 +400,7 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
             if (!ignore_delete && iter->second.isDelete())
             {
                 // the page is not visible
-                return {ResolveResult::FAIL, Trait::ExternalIdTrait::getInvalidID(), PageVersion(0)};
+                return {ResolveResult::FAIL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
             }
 
             // If `ignore_delete` is true, we need the page entry even if it is logical deleted.
@@ -417,7 +417,7 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
                 // copy and return the entry
                 if (entry != nullptr)
                     *entry = iter->second.entry;
-                return {ResolveResult::TO_NORMAL, Trait::ExternalIdTrait::getInvalidID(), PageVersion(0)};
+                return {ResolveResult::TO_NORMAL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
             }
             // else fallthrough to FAIL
         } // else fallthrough to FAIL
@@ -429,7 +429,7 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
         bool ok = ignore_delete || (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
-            return {ResolveResult::TO_NORMAL, Trait::ExternalIdTrait::getInvalidID(), PageVersion(0)};
+            return {ResolveResult::TO_NORMAL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
         }
     }
     else if (type == EditRecordType::VAR_REF)
@@ -445,7 +445,7 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
         LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", static_cast<Int32>(type));
     }
 
-    return {ResolveResult::FAIL, Trait::ExternalIdTrait::getInvalidID(), PageVersion(0)};
+    return {ResolveResult::FAIL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
 }
 
 template <typename Trait>
@@ -1103,7 +1103,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
                 }
                 else
                 {
-                    return Trait::ExternalIdTrait::getInvalidID();
+                    return Trait::PageIdTrait::getInvalidID();
                 }
             }
         }
@@ -1140,7 +1140,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
     }
     else
     {
-        return Trait::ExternalIdTrait::getInvalidID();
+        return Trait::PageIdTrait::getInvalidID();
     }
 }
 
@@ -1238,7 +1238,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
         {
             auto resolve_ver_iter = mvcc_table_directory.find(id_to_resolve);
             if (resolve_ver_iter == mvcc_table_directory.end())
-                return {false, Trait::ExternalIdTrait::getInvalidID(), PageVersion(0)};
+                return {false, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
 
             const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
             auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(
@@ -1340,7 +1340,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         for (const auto & r : edit.getRecords())
         {
             // Protected in write_lock
-            max_page_id = std::max(max_page_id, Trait::ExternalIdTrait::getU64ID(r.page_id));
+            max_page_id = std::max(max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
 
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)
@@ -1418,7 +1418,7 @@ void PageDirectory<Trait>::gcApply(PageEntriesEdit && migrated_edit, const Write
         // Append the gc version to version list
         const auto & versioned_entries = iter->second;
         auto id_to_deref = versioned_entries->createUpsertEntry(record.version, record.entry);
-        if (id_to_deref != Trait::ExternalIdTrait::getInvalidID())
+        if (id_to_deref != Trait::PageIdTrait::getInvalidID())
         {
             // The ref-page is rewritten into a normal page, we need to decrease the ref-count of original page
             typename MVCCMapType::const_iterator deref_iter;

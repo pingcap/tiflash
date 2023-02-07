@@ -233,14 +233,14 @@ TEST(UniPageStorageIdTest, UniversalPageId)
 {
     {
         auto u_id = UniversalPageId::toFullPageId("aaa", 100);
-        ASSERT_EQ(DB::PS::V3::universal::ExternalIdTrait::getU64ID(u_id), 100);
-        ASSERT_EQ(DB::PS::V3::universal::ExternalIdTrait::getPrefix(u_id), "aaa");
+        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getU64ID(u_id), 100);
+        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getPrefix(u_id), "aaa");
     }
 
     {
         auto u_id = "z";
-        ASSERT_EQ(DB::PS::V3::universal::ExternalIdTrait::getU64ID(u_id), 0);
-        ASSERT_EQ(DB::PS::V3::universal::ExternalIdTrait::getPrefix(u_id), "");
+        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getU64ID(u_id), 0);
+        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getPrefix(u_id), "");
     }
 }
 } // namespace PS::universal::tests

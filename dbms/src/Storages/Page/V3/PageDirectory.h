@@ -361,7 +361,7 @@ public:
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.
-    std::optional<std::set<PageIdU64>> getAliveExternalIds(const typename Trait::ExternalIdTrait::Prefix & ns_id) const
+    std::optional<std::set<PageIdU64>> getAliveExternalIds(const typename Trait::PageIdTrait::Prefix & ns_id) const
     {
         return external_ids_by_ns.getAliveIds(ns_id);
     }
@@ -369,7 +369,7 @@ public:
     // After table dropped, the `getAliveIds` with specified
     // `ns_id` will not be cleaned. We need this method to
     // cleanup all external id ptrs.
-    void unregisterNamespace(const typename Trait::ExternalIdTrait::Prefix & ns_id)
+    void unregisterNamespace(const typename Trait::PageIdTrait::Prefix & ns_id)
     {
         external_ids_by_ns.unregisterNamespace(ns_id);
     }
@@ -435,7 +435,7 @@ private:
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
-    mutable ExternalIdsByNamespace<typename Trait::ExternalIdTrait> external_ids_by_ns;
+    mutable ExternalIdsByNamespace<typename Trait::PageIdTrait> external_ids_by_ns;
 
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;
@@ -447,7 +447,7 @@ namespace u128
 struct PageDirectoryTrait
 {
     using PageId = PageIdV3Internal;
-    using ExternalIdTrait = ExternalIdTrait;
+    using PageIdTrait = PageIdTrait;
     using Serializer = Serializer;
 };
 using PageDirectoryType = PageDirectory<DB::PS::V3::u128::PageDirectoryTrait>;
@@ -460,7 +460,7 @@ namespace universal
 struct PageDirectoryTrait
 {
     using PageId = UniversalPageId;
-    using ExternalIdTrait = ExternalIdTrait;
+    using PageIdTrait = PageIdTrait;
     using Serializer = Serializer;
 };
 using PageDirectoryType = PageDirectory<DB::PS::V3::universal::PageDirectoryTrait>;

@@ -22,7 +22,7 @@
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
 #include <Storages/Page/V3/PageDefines.h>
-#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
+#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
@@ -145,7 +145,7 @@ struct BlobStoreTrait
 {
     using PageId = PageIdV3Internal;
     using PageMap = std::map<PageIdU64, Page>;
-    using ExternalIdTrait = ExternalIdTrait;
+    using PageIdTrait = PageIdTrait;
     using WriteBatch = DB::WriteBatch;
 };
 using BlobStoreType = BlobStore<BlobStoreTrait>;
@@ -156,7 +156,7 @@ struct BlobStoreTrait
 {
     using PageId = UniversalPageId;
     using PageMap = std::map<PageId, Page>;
-    using ExternalIdTrait = ExternalIdTrait;
+    using PageIdTrait = PageIdTrait;
     using WriteBatch = UniversalWriteBatch;
 };
 using BlobStoreType = BlobStore<BlobStoreTrait>;

@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Page/V3/PageDefines.h>
-#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
+#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 
 #include <list>
 #include <memory>

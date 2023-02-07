@@ -52,7 +52,7 @@ using u128::PageEntriesEdit;
 TEST(ExternalIdsByNamespaceTest, Simple)
 {
     NamespaceId ns_id = 100;
-    ExternalIdsByNamespace<typename u128::ExternalIdTrait> external_ids_by_ns;
+    ExternalIdsByNamespace<typename u128::PageIdTrait> external_ids_by_ns;
 
     {
         ASSERT_FALSE(external_ids_by_ns.existNamespace(ns_id));
