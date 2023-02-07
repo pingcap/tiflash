@@ -39,7 +39,7 @@ add_executable (gtests_libcommon
     gtest_crc64.cpp
     gtest_logger.cpp
     gtest_arithmetic_overflow.cpp
-    )
+)
 
 add_sources_compile_flag_avx2 (gtest_mem_utils_opt.cpp)
 
@@ -60,9 +60,6 @@ add_executable(bench_libcommon
 )
 
 target_link_libraries(bench_libcommon benchmark::benchmark_main common m memcpy)
-
-add_executable (dump_variable dump_variable.cpp)
-target_link_libraries (dump_variable clickhouse_common_io)
 
 if (ARCH_AMD64)
     set_source_files_properties(

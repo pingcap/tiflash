@@ -124,13 +124,14 @@ Block WindowBlockInputStream::readImpl()
 // Judge whether current_partition_row is end row of partition in current block
 bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partition_row)
 {
-    const auto reference_columns = inputAt(prev_frame_start);
-    const auto compared_columns = inputAt(partition_end);
+    const Columns & reference_columns = inputAt(prev_frame_start);
+    const Columns & compared_columns = inputAt(partition_end);
 
     for (size_t i = 0; i < partition_column_indices.size(); ++i)
     {
-        const auto reference_column = reference_columns[partition_column_indices[i]];
-        const auto * compared_column = compared_columns[partition_column_indices[i]].get();
+        const ColumnPtr & reference_column = reference_columns[partition_column_indices[i]];
+        const ColumnPtr & compared_column = compared_columns[partition_column_indices[i]];
+
         if (window_description.partition_by[i].collator)
         {
             if (compared_column->compareAt(current_partition_row,
@@ -240,9 +241,20 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     Int64 left = partition_end.row;
     Int64 right = block_rows - 1;
 
+    // Compare two times first.
+    // It will speed up the case that the partition end is very close.
+    Int64 end = std::min(left + 1, right);
+    for (; left <= end; ++left)
+    {
+        if (isDifferentFromPrevPartition(left))
+        {
+            return left;
+        }
+    }
+
     while (left <= right)
     {
-        Int64 middle = left + (right - left) / 2;
+        Int64 middle = (left + right) >> 1;
         if (isDifferentFromPrevPartition(middle))
         {
             right = middle - 1;

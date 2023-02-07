@@ -20,6 +20,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -82,6 +83,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
+    global_context->setTemporaryPath(getTemporaryPath());
 
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
@@ -136,6 +138,8 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
+
+    global_context->initializeSharedBlockSchemas();
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
@@ -176,5 +180,24 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
+}
+
+void TiFlashTestEnv::setUpTestContext(Context & context, DAGContext * dag_context, MockStorage * mock_storage, const TestType & test_type)
+{
+    switch (test_type)
+    {
+    case TestType::EXECUTOR_TEST:
+        context.setExecutorTest();
+        break;
+    case TestType::INTERPRETER_TEST:
+        context.setInterpreterTest();
+        break;
+    }
+    context.setMockStorage(mock_storage);
+    context.setDAGContext(dag_context);
+    context.getTimezoneInfo().resetByDAGRequest(*dag_context->dag_request);
+    /// by default non-mpp task will do collation insensitive group by, let the test do
+    /// collation sensitive group by setting `group_by_collation_sensitive` to true
+    context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
 }
 } // namespace DB::tests

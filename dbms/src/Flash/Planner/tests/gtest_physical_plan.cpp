@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-
-        context.context.setExecutorTest();
 
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
@@ -99,8 +97,7 @@ public:
         size_t max_streams = 1;
 
         DAGContext dag_context(*request, "executor_test", max_streams);
-        context.context.setDAGContext(&dag_context);
-        context.context.setMockStorage(context.mockStorage());
+        TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
 
         PhysicalPlan physical_plan{context.context, log->identifier()};
         assert(request);
@@ -112,7 +109,7 @@ public:
         BlockInputStreamPtr final_stream;
         {
             DAGPipeline pipeline;
-            physical_plan.transform(pipeline, context.context, max_streams);
+            physical_plan.buildBlockInputStream(pipeline, context.context, max_streams);
             executeCreatingSets(pipeline, context.context, max_streams, log);
             final_stream = pipeline.firstStream();
             FmtBuffer fb;
@@ -216,8 +213,7 @@ try
 Expression: <final projection>
  Expression: <expr after aggregation>
   Aggregating
-   Concat
-    MockExchangeReceiver)",
+   MockExchangeReceiver)",
         {toNullableVec<String>({{}, "banana"}),
          toNullableVec<String>({{}, "banana"})});
 }

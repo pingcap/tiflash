@@ -129,6 +129,8 @@ enum class ReadMode
      * are just returned.
      */
     Raw,
+
+    Bitmap,
 };
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,

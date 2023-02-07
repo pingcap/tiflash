@@ -28,25 +28,6 @@ namespace DM
 {
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
-    // If this column file's schema is identical to last_schema, then use the last_schema instance (instead of the one in `column_file`),
-    // so that we don't have to serialize my_schema instance.
-    if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
-    {
-        auto my_schema = m_file->getSchema();
-        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
-            m_file->resetIdenticalSchema(last_schema);
-        else
-            last_schema = my_schema;
-    }
-    else if (auto * t_file = column_file->tryToTinyFile(); t_file)
-    {
-        auto my_schema = t_file->getSchema();
-        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
-            t_file->resetIdenticalSchema(last_schema);
-        else
-            last_schema = my_schema;
-    }
-
     if (!column_files.empty())
     {
         // As we are now appending a new column file (which can be used for new appends),
@@ -212,9 +193,10 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
 
     if (!success)
     {
+        auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
+
         // Create a new column file.
-        auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
-        auto new_column_file = std::make_shared<ColumnFileInMemory>(my_schema);
+        auto new_column_file = std::make_shared<ColumnFileInMemory>(schema);
         // Must append the empty `new_column_file` to `column_files` before appending data to it,
         // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);

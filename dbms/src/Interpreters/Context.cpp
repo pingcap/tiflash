@@ -53,6 +53,7 @@
 #include <Server/RaftConfigParser.h>
 #include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -205,6 +206,8 @@ struct ContextShared
     pcg64 rng{randomSeed()};
 
     Context::ConfigReloadCallback config_reload_callback;
+
+    std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
     explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
@@ -1843,6 +1846,16 @@ SharedQueriesPtr Context::getSharedQueries()
     return shared->shared_queries;
 }
 
+const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchemas() const
+{
+    return shared->shared_block_schemas;
+}
+
+void Context::initializeSharedBlockSchemas()
+{
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(*this);
+}
+
 size_t Context::getMaxStreams() const
 {
     size_t max_streams = settings.max_threads;
@@ -1857,8 +1870,6 @@ size_t Context::getMaxStreams() const
             max_streams = 1;
         }
     }
-    if (max_streams > 1)
-        max_streams *= settings.max_streams_to_max_threads_ratio;
     if (max_streams == 0)
         max_streams = 1;
     if (unlikely(max_streams != 1 && is_cop_request))

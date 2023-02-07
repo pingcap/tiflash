@@ -1,0 +1,463 @@
+~test_suite_name: SingleQueryBlock
+~result_index: 0
+~result:
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      Expression: <before order and select>
+       Filter: <execute having>
+        SharedQuery: <restore concurrency>
+         ParallelAggregating, max_threads: 10, final: true
+          Expression x 10: <before aggregation>
+           Filter: <execute where>
+            MockTableScan
+@
+~test_suite_name: SingleQueryBlock
+~result_index: 1
+~result:
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Limit, limit = 10
+   Union: <for partial limit>
+    Limit x 10, limit = 10
+     Expression: <final projection>
+      Expression: <before order and select>
+       Filter: <execute having>
+        SharedQuery: <restore concurrency>
+         ParallelAggregating, max_threads: 10, final: true
+          Expression x 10: <before aggregation>
+           Filter: <execute where>
+            MockTableScan
+@
+~test_suite_name: MultipleQueryBlockWithSource
+~result_index: 0
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <final projection>
+    Expression: <projection>
+     Expression: <final projection>
+      Expression: <projection>
+       Expression: <final projection>
+        MockTableScan
+@
+~test_suite_name: MultipleQueryBlockWithSource
+~result_index: 1
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   SharedQuery: <restore concurrency>
+    Expression: <final projection>
+     MergeSorting, limit = 10
+      Union: <for partial order>
+       PartialSorting x 10: limit = 10
+        Expression: <projection>
+         Expression: <final projection>
+          MockTableScan
+@
+~test_suite_name: MultipleQueryBlockWithSource
+~result_index: 2
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <final projection>
+    SharedQuery: <restore concurrency>
+     ParallelAggregating, max_threads: 10, final: true
+      Expression x 10: <projection>
+       SharedQuery: <restore concurrency>
+        Expression: <final projection>
+         MergeSorting, limit = 10
+          Union: <for partial order>
+           PartialSorting x 10: limit = 10
+            Expression: <projection>
+             Expression: <final projection>
+              MockTableScan
+@
+~test_suite_name: MultipleQueryBlockWithSource
+~result_index: 3
+~result:
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Limit, limit = 10
+   Union: <for partial limit>
+    Limit x 10, limit = 10
+     Expression: <final projection>
+      Expression: <projection>
+       Expression: <final projection>
+        Expression: <before order and select>
+         Filter: <execute where>
+          Expression: <projection>
+           Expression: <final projection>
+            SharedQuery: <restore concurrency>
+             ParallelAggregating, max_threads: 10, final: true
+              Expression x 10: <projection>
+               SharedQuery: <restore concurrency>
+                Expression: <final projection>
+                 MergeSorting, limit = 10
+                  Union: <for partial order>
+                   PartialSorting x 10: limit = 10
+                    Expression: <projection>
+                     Expression: <final projection>
+                      MockTableScan
+@
+~test_suite_name: MultipleQueryBlockWithSource
+~result_index: 4
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <final projection>
+    Expression: <projection>
+     Expression: <final projection>
+      Expression: <projection>
+       Expression: <final projection>
+        MockExchangeReceiver
+@
+~test_suite_name: MultipleQueryBlockWithSource
+~result_index: 5
+~result:
+Union: <for test>
+ MockExchangeSender x 10
+  Expression: <final projection>
+   Expression: <projection>
+    Expression: <final projection>
+     Expression: <projection>
+      Expression: <final projection>
+       Expression: <projection>
+        Expression: <final projection>
+         MockExchangeReceiver
+@
+~test_suite_name: Window
+~result_index: 0
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockTableScan
+@
+~test_suite_name: Window
+~result_index: 1
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
+      Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+       Expression: <final projection>
+        MergeSorting, limit = 0
+         Union: <for partial order>
+          PartialSorting x 10: limit = 0
+           Expression: <final projection>
+            MockTableScan
+@
+~test_suite_name: Window
+~result_index: 2
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
+      Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+       Union: <merge into one for window input>
+        Expression x 10: <final projection>
+         Expression: <projection>
+          SharedQuery: <restore concurrency>
+           Expression: <final projection>
+            MergeSorting, limit = 0
+             Union: <for partial order>
+              PartialSorting x 10: limit = 0
+               Expression: <final projection>
+                MockTableScan
+@
+~test_suite_name: FineGrainedShuffle
+~result_index: 0
+~result:
+Union: <for test>
+ Expression x 8: <final projection>
+  Expression: <before order and select>
+   Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+    Expression: <final projection>
+     MergeSorting: <enable fine grained shuffle>, limit = 0
+      PartialSorting: <enable fine grained shuffle>: limit = 0
+       Expression: <final projection>
+        MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffle
+~result_index: 1
+~result:
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffle
+~result_index: 2
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffle
+~result_index: 3
+~result:
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffleJoin
+~result_index: 0
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffleJoin
+~result_index: 1
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 5: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockTableScan
+@
+~test_suite_name: FineGrainedShuffleJoin
+~result_index: 2
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffleAgg
+~result_index: 0
+~result:
+Union: <for test>
+ Expression x 8: <final projection>
+  Aggregating: <enable fine grained shuffle>
+   MockExchangeReceiver
+@
+~test_suite_name: FineGrainedShuffleAgg
+~result_index: 1
+~result:
+Union: <for test>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   ParallelAggregating, max_threads: 10, final: true
+    MockExchangeReceiver x 10
+@
+~test_suite_name: Join
+~result_index: 0
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockTableScan
+ Union x 2: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
+       Expression: <final projection>
+        MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+     Expression: <final projection>
+      MockTableScan
+@
+~test_suite_name: Join
+~result_index: 1
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union x 2: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
+       Expression: <final projection>
+        MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+     Expression: <final projection>
+      MockExchangeReceiver
+@
+~test_suite_name: Join
+~result_index: 2
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union x 2: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
+       Expression: <final projection>
+        MockExchangeReceiver
+ Union: <for test>
+  MockExchangeSender x 10
+   Expression: <final projection>
+    Expression: <remove useless column after join>
+     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+      Expression: <final projection>
+       MockExchangeReceiver
+@
+~test_suite_name: JoinThenAgg
+~result_index: 0
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+       Expression: <final projection>
+        MockTableScan
+@
+~test_suite_name: JoinThenAgg
+~result_index: 1
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
+       Expression: <append join key and join filters for probe side>
+        Expression: <final projection>
+         MockTableScan
+@
+~test_suite_name: JoinThenAgg
+~result_index: 2
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  MockExchangeSender x 20
+   SharedQuery: <restore concurrency>
+    Limit, limit = 10
+     Union: <for partial limit>
+      Limit x 20, limit = 10
+       Expression: <final projection>
+        Expression: <before order and select>
+         SharedQuery: <restore concurrency>
+          ParallelAggregating, max_threads: 20, final: true
+           Expression x 20: <remove useless column after join>
+            HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
+             Expression: <append join key and join filters for probe side>
+              Expression: <final projection>
+               MockExchangeReceiver
+@
+~test_suite_name: ListBase
+~result_index: 0
+~result:
+Limit, limit = 10
+ Expression: <final projection>
+  Aggregating
+   Expression: <before aggregation>
+    Filter: <execute where>
+     MockTableScan
+@
+~test_suite_name: ListBase
+~result_index: 1
+~result:
+Union: <for test>
+ SharedQuery x 20: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      SharedQuery: <restore concurrency>
+       ParallelAggregating, max_threads: 20, final: true
+        Expression x 20: <before aggregation>
+         Filter: <execute where>
+          MockTableScan
+@

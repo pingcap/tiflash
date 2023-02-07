@@ -22,3 +22,4 @@
 void setThreadName(const char * name);
 
 std::string getThreadName();
+std::string getThreadNameAndID();
