@@ -125,17 +125,17 @@ public:
     template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryReWrite();
 
-private:
-    bool splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
-
     // We must call this function before calling tryWrite().
     template <typename AsyncReader>
     void enableTryWriteMode(const std::shared_ptr<AsyncReader> & reader, void * tag_)
     {
         tag = tag_;
         for (auto & channel_ptr : *msg_channels)
-            grpc_recv_queues.push_back(new GRPCReceiveQueue<ReceivedMessage>(channel_ptr, reader->client_context.c_call(), log));
+            grpc_recv_queues.push_back(new GRPCReceiveQueue<ReceivedMessage>(channel_ptr, reader->getClientContext()->c_call(), log));
     }
+
+private:
+    bool splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
 
     static const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
     {

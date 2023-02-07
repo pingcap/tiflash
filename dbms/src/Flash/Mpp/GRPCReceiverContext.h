@@ -52,6 +52,7 @@ public:
     virtual void init(UnaryCallback<bool> * callback) = 0;
     virtual void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
     virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
+    virtual grpc::ClientContext * getClientContext() = 0;
 };
 using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
 

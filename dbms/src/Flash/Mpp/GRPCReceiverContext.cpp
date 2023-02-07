@@ -120,6 +120,11 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     {
         reader->Finish(&status, callback);
     }
+
+    grpc::ClientContext * getClientContext() override
+    {
+        return &client_context;
+    }
 };
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)

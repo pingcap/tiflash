@@ -243,9 +243,6 @@ void ExchangeReceiverBase<RPCContext>::setUpSyncConnection(Request && req)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request> && async_requests)
 {
-    if (async_requests.empty())
-        return;
-
     for (auto & request : async_requests)
         createAsyncRequestHandler(std::move(request));
 }
@@ -262,9 +259,6 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
                 std::move(request),
                 exc_log->identifier(),
                 &data_size_in_queue,
-                [this]() {
-                    this->addAsyncConnectionNum();
-                },
                 [this](bool meet_error, const String & local_err_msg, const LoggerPtr &log) {
                     this->connectionDone(meet_error, local_err_msg, log);
                 })
@@ -279,9 +273,6 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
                 std::move(request),
                 exc_log->identifier(),
                 &data_size_in_queue,
-                [this]() {
-                    this->addAsyncConnectionNum();
-                },
                 [this](bool meet_error, const String & local_err_msg, const LoggerPtr &log) {
                     this->connectionDone(meet_error, local_err_msg, log);
                 })

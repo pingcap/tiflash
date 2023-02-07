@@ -21,6 +21,7 @@
 #include <grpcpp/completion_queue.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <common/defines.h>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -55,7 +56,6 @@ public:
         Request && req,
         const String & req_id,
         std::atomic<Int64> * data_size_in_queue,
-        std::function<void()> && add_live_conn,
         std::function<void(bool, const String &, const LoggerPtr &)> && close_conn_)
         : cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , rpc_context(context)
@@ -69,9 +69,6 @@ public:
         , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ReceiverMode::Async)
         , close_conn(std::move(close_conn_))
     {
-        // TODO create ReceiverChannelWriter
-        // TODO handle the full situation
-        add_live_conn();
         start();
     }
 
@@ -195,7 +192,7 @@ private:
 
     void startAsyncRead()
     {
-        packet = std::make_shared<TrackedMppDataPacket>();
+        packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         reader->read(packet, thisAsUnaryCallback());
     }
 
@@ -229,6 +226,7 @@ private:
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
         rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
+        channel_writer.enableTryWriteMode<AsyncReader>(reader, thisAsUnaryCallback());
     }
 
     bool retryOrDone(String done_msg)
