@@ -160,7 +160,8 @@ inline bool isPunctuation(char c)
     return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
 }
 
-inline size_t getUtf8Length(uint8_t c)
+// return how many bytes the utf8 character occupies
+inline size_t getUTF8Length(uint8_t c)
 {
     size_t size = 0;
     while (c >= 128)
