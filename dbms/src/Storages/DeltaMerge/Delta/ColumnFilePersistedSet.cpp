@@ -15,6 +15,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
@@ -105,17 +106,6 @@ void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) co
     for (const auto & file : persisted_files)
         file->removeData(wbs);
 }
-
-BlockPtr ColumnFilePersistedSet::getLastSchema()
-{
-    for (auto it = persisted_files.rbegin(); it != persisted_files.rend(); ++it)
-    {
-        if (auto * t_file = (*it)->tryToTinyFile(); t_file)
-            return t_file->getSchema();
-    }
-    return {};
-}
-
 
 ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles & previous_column_files) const
 {

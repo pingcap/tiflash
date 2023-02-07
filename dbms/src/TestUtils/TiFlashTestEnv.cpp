@@ -20,6 +20,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -137,6 +138,8 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
+
+    global_context->initializeSharedBlockSchemas();
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)

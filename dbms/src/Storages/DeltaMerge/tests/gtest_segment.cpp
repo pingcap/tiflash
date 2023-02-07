@@ -392,7 +392,7 @@ try
         auto [memory_cf, persisted_cf] = delta->cloneAllColumnFiles(lock, *dm_context, segment->getRowKeyRange(), wbs);
         ASSERT_FALSE(memory_cf.empty());
         ASSERT_TRUE(persisted_cf.empty());
-        BlockPtr last_schema;
+        ColumnFileSchemaPtr last_schema;
         for (const auto & column_file : memory_cf)
         {
             if (auto * t_file = column_file->tryToTinyFile(); t_file)
