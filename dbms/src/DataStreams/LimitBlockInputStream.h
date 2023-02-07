@@ -34,6 +34,7 @@ public:
     LimitBlockInputStream(
         const BlockInputStreamPtr & input,
         size_t limit_,
+        size_t offset_,
         const String & req_id);
 
     String getName() const override { return NAME; }
@@ -46,7 +47,10 @@ protected:
 
 private:
     LoggerPtr log;
-    LocalLimitTransformAction action;
+    size_t limit;
+    size_t offset;
+    /// how many lines were read, including the last read block
+    size_t pos = 0;
 };
 
 } // namespace DB
