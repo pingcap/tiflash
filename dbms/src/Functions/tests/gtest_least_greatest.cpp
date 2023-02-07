@@ -205,14 +205,12 @@ try
                          {createConstColumn<Nullable<String>>(4, "1111"),
                           createConstColumn<Nullable<String>>(4, "11")}));
 
-    std::cout << "here1" << std::endl;
     ASSERT_COLUMN_EQ(createConstColumn<String>(4, "11"),
                      executeFunction(
                          "tidbLeastString",
                          {createConstColumn<Nullable<String>>(4, "11"),
                           createConstColumn<Nullable<String>>(4, "1111")}));
 
-    std::cout << "here2" << std::endl;
 
     ASSERT_COLUMN_EQ(createConstColumn<String>(4, "11"),
                      executeFunction(
@@ -220,7 +218,6 @@ try
                          {createConstColumn<Nullable<String>>(4, "11"),
                           createConstColumn<Nullable<String>>(4, "111"),
                           createConstColumn<Nullable<String>>(4, "1111")}));
-
 
     /// without collator
     // string string
