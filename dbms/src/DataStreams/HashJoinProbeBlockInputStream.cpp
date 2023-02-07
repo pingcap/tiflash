@@ -87,8 +87,9 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     }
     catch (...)
     {
-        tryLogCurrentException(log, "finishOneProbe failed in cancel() ");
-        join->meetError();
+        auto error_message = getCurrentExceptionMessage(false, true);
+        LOG_WARNING(log, error_message);
+        join->meetError(error_message);
     }
     if (non_joined_stream != nullptr)
     {
@@ -107,8 +108,9 @@ Block HashJoinProbeBlockInputStream::readImpl()
     }
     catch (...)
     {
-        join->meetError();
-        throw;
+        auto error_message = getCurrentExceptionMessage(false, true);
+        join->meetError(error_message);
+        throw Exception(error_message);
     }
 }
 
