@@ -1,7 +1,11 @@
 #include <Columns/ColumnAggregateFunction.h>
+<<<<<<< HEAD
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBufferFromArena.h>
+=======
+#include <Columns/ColumnsCommon.h>
+>>>>>>> dba70f9da8 (Use size of filtered column to reserve memory for filter when result_size_hint < 0 (#6746))
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
@@ -127,7 +131,11 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
     auto & res_data = res->getData();
 
     if (result_size_hint)
-        res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filter);
+        res_data.reserve(result_size_hint);
+    }
 
     for (size_t i = 0; i < size; ++i)
         if (filter[i])
