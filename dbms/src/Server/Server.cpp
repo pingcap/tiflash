@@ -1363,8 +1363,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            // tiflash-proxy will not start until the first region generate,
-            // to avoid first region of the cluster is generated in tiflash.
+            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
+            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
             LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
             while (!tmt_context.getPDClient()->isClusterBootstrapped())
             {
