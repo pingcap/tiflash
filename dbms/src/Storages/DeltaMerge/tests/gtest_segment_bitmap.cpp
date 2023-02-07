@@ -93,6 +93,7 @@ std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges)
     boost::split(ranges, str_ranges, boost::is_any_of("|"));
     RUNTIME_CHECK(!ranges.empty(), str_ranges);
     std::vector<std::pair<T, T>> vector_ranges;
+    vector_ranges.reserve(ranges.size());
     for (auto & r : ranges)
     {
         vector_ranges.emplace_back(parseRange<T>(r));
@@ -154,6 +155,7 @@ std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
     boost::split(str_seg_data_units, seg_data, boost::is_any_of("|"));
     RUNTIME_CHECK(!str_seg_data_units.empty(), seg_data);
     std::vector<SegDataUnit> seg_data_units;
+    seg_data_units.reserve(str_seg_data_units.size());
     for (auto & s : str_seg_data_units)
     {
         seg_data_units.emplace_back(parseSegDataUnit(s));
@@ -287,7 +289,7 @@ protected:
     }
 };
 
-TEST_F(SegmentBitmapFilterTest, InMemory_1)
+TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCase(TestCase(
@@ -298,7 +300,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_2)
+TEST_F(SegmentBitmapFilterTest, InMemory2)
 try
 {
     runTestCase(TestCase{
@@ -309,7 +311,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_3)
+TEST_F(SegmentBitmapFilterTest, InMemory3)
 try
 {
     runTestCase(TestCase{
@@ -320,7 +322,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_4)
+TEST_F(SegmentBitmapFilterTest, InMemory4)
 try
 {
     runTestCase(TestCase{
@@ -331,7 +333,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_5)
+TEST_F(SegmentBitmapFilterTest, InMemory5)
 try
 {
     runTestCase(TestCase{
@@ -342,7 +344,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_6)
+TEST_F(SegmentBitmapFilterTest, InMemory6)
 try
 {
     runTestCase(TestCase{
@@ -353,7 +355,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_7)
+TEST_F(SegmentBitmapFilterTest, InMemory7)
 try
 {
     runTestCase(TestCase{
@@ -364,7 +366,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Tiny_1)
+TEST_F(SegmentBitmapFilterTest, Tiny1)
 try
 {
     runTestCase(TestCase{
@@ -375,7 +377,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, TinyDel_1)
+TEST_F(SegmentBitmapFilterTest, TinyDel1)
 try
 {
     runTestCase(TestCase{
@@ -408,7 +410,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Stable_1)
+TEST_F(SegmentBitmapFilterTest, Stable1)
 try
 {
     runTestCase(TestCase{
@@ -419,7 +421,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Stable_2)
+TEST_F(SegmentBitmapFilterTest, Stable2)
 try
 {
     runTestCase(TestCase{
@@ -431,7 +433,7 @@ try
 CATCH
 
 
-TEST_F(SegmentBitmapFilterTest, Stable_3)
+TEST_F(SegmentBitmapFilterTest, Stable3)
 try
 {
     runTestCase(TestCase{
