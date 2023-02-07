@@ -20,28 +20,6 @@
 
 namespace DB
 {
-struct LocalLimitTransformAction
-{
-public:
-    LocalLimitTransformAction(
-        const Block & header_,
-        size_t limit_)
-        : header(header_)
-        , limit(limit_)
-    {
-    }
-
-    bool transform(Block & block);
-
-    Block getHeader() const { return header; }
-    size_t getLimit() const { return limit; }
-
-private:
-    const Block header;
-    const size_t limit;
-    size_t pos = 0;
-};
-
 struct GlobalLimitTransformAction
 {
 public:
