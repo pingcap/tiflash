@@ -969,13 +969,6 @@ TEST_F(RegionKVStoreTest, KVStore)
         testRaftChangePeer(kvs, ctx.getTMTContext());
     }
     {
-        auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
-        kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-        SCOPE_EXIT({
-            kvs.snapshot_apply_method = ori_snapshot_apply_method;
-        });
-
-
         auto region_id = 19;
         auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
         auto region_id_str = std::to_string(19);

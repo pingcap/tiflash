@@ -36,6 +36,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/File.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -960,7 +961,29 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     {
         if (cache_blocks.empty())
         {
-            return std::make_pair(decoding_schema_snapshot, std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot)));
+            BlockUPtr block = std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot));
+            auto digest = hashSchema(*block);
+            auto schema = global_context.getSharedBlockSchemas()->find(digest);
+            if (schema)
+            {
+                // Because we use sha256 to calculate the hash of schema, so schemas has extremely low probability of collision
+                // while we can't guarantee that there will be no collision forever,
+                // so (when schema changes) we will check if this schema causes a hash collision, i.e.
+                // the two different schemas have the same digest.
+                // Considering there is extremely low probability for same digest but different schema,
+                // we choose just throw exception when this happens.
+                // If unfortunately it happens,
+                // we can rename some columns in this table and then restart tiflash to workaround.
+                RUNTIME_CHECK_MSG(
+                    isSameSchema(*block, schema->getSchema()),
+                    "new table's schema's digest is the same as one previous table schemas' digest, \
+                    but schema info is not the same .So please change the new tables' schema, \
+                    whose table_info is {}. The collisioned schema is {}",
+                    tidb_table_info.serialize(),
+                    schema->toString());
+            }
+
+            return std::make_pair(decoding_schema_snapshot, std::move(block));
         }
         else
         {

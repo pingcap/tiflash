@@ -129,9 +129,9 @@ public:
 
     WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
     ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
-    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file) const
+    DM::DMConfigurationOpt createChecksumConfig() const
     {
-        return DMChecksumConfig::fromDBContext(db_context, is_single_file);
+        return DMChecksumConfig::fromDBContext(db_context);
     }
 };
 

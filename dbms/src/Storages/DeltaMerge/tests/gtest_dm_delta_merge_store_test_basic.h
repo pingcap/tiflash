@@ -37,8 +37,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 namespace tests
 {
 // Simple test suit for DeltaMergeStore.
@@ -157,16 +156,12 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
 
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
         auto dmfile = writeIntoNewDMFile(
             context,
             std::make_shared<ColumnDefines>(store->getTableColumns()),
             input_stream,
             file_id,
-            store_path,
-            flags);
+            store_path);
 
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 

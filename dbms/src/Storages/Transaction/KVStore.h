@@ -78,7 +78,7 @@ class RegionPersister;
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_);
+    KVStore(Context & context);
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
@@ -134,8 +134,6 @@ public:
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
     // Exported only for tests.
     TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
-
-    TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
 
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
     Int64 getReadIndexEvent() const { return read_index_event_flag; }
@@ -255,8 +253,6 @@ private:
 
     // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
     std::unique_ptr<RaftCommandResult> raft_cmd_res;
-
-    TiDB::SnapshotApplyMethod snapshot_apply_method;
 
     LoggerPtr log;
 
