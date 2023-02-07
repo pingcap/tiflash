@@ -106,10 +106,26 @@ namespace
     /// Implementation details of filterArraysImpl function, used as template parameter.
     /// Allow to build or not to build offsets array.
 
+<<<<<<< HEAD
     struct ResultOffsetsBuilder
     {
         IColumn::Offsets & res_offsets;
         IColumn::Offset current_src_offset = 0;
+=======
+struct ResultOffsetsBuilder
+{
+    IColumn::Offsets & res_offsets;
+    IColumn::Offset current_src_offset = 0;
+
+    explicit ResultOffsetsBuilder(IColumn::Offsets * res_offsets_)
+        : res_offsets(*res_offsets_)
+    {}
+
+    void reserve(size_t result_size_hint)
+    {
+        res_offsets.reserve(result_size_hint);
+    }
+>>>>>>> dba70f9da8 (Use size of filtered column to reserve memory for filter when result_size_hint < 0 (#6746))
 
         explicit ResultOffsetsBuilder(IColumn::Offsets * res_offsets_) : res_offsets(*res_offsets_) {}
 
@@ -118,11 +134,19 @@ namespace
             res_offsets.reserve(result_size_hint > 0 ? result_size_hint : src_size);
         }
 
+<<<<<<< HEAD
         void insertOne(size_t array_size)
         {
             current_src_offset += array_size;
             res_offsets.push_back(current_src_offset);
         }
+=======
+struct NoResultOffsetsBuilder
+{
+    explicit NoResultOffsetsBuilder(IColumn::Offsets *) {}
+    void reserve(size_t) {}
+    void insertOne(size_t) {}
+>>>>>>> dba70f9da8 (Use size of filtered column to reserve memory for filter when result_size_hint < 0 (#6746))
 
         template <size_t SIMD_BYTES>
         void insertChunk(
@@ -144,6 +168,7 @@ namespace
                 {
                     const auto res_offsets_pos = &res_offsets[offsets_size_old];
 
+<<<<<<< HEAD
                     /// adjust offsets
                     for (size_t i = 0; i < SIMD_BYTES; ++i)
                         res_offsets_pos[i] -= diff_offset;
@@ -151,6 +176,35 @@ namespace
             }
             current_src_offset += chunk_size;
         }
+=======
+    if (result_size_hint)
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+
+        result_offsets_builder.reserve(result_size_hint);
+
+        if (result_size_hint < 1000000000 && src_elems.size() < 1000000000) /// Avoid overflow.
+            res_elems.reserve((result_size_hint * src_elems.size() + size - 1) / size);
+    }
+
+    const UInt8 * filt_pos = filt.data();
+    const auto * filt_end = filt_pos + size;
+
+    const auto * offsets_pos = src_offsets.data();
+    const auto * offsets_begin = offsets_pos;
+
+    /// copy array ending at *end_offset_ptr
+    const auto copy_array = [&](const IColumn::Offset * offset_ptr) {
+        const auto arr_offset = offset_ptr == offsets_begin ? 0 : offset_ptr[-1];
+        const auto arr_size = *offset_ptr - arr_offset;
+
+        result_offsets_builder.insertOne(arr_size);
+
+        const auto elems_size_old = res_elems.size();
+        res_elems.resize(elems_size_old + arr_size);
+        inline_memcpy(&res_elems[elems_size_old], &src_elems[arr_offset], arr_size * sizeof(T));
+>>>>>>> dba70f9da8 (Use size of filtered column to reserve memory for filter when result_size_hint < 0 (#6746))
     };
 
     struct NoResultOffsetsBuilder
