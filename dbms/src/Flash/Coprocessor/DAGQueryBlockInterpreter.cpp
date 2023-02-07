@@ -1187,12 +1187,21 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     if (query_block.limitOrTopN->tp() == tipb::TypeLimit)
         limit = query_block.limitOrTopN->limit().limit();
     else
+<<<<<<< HEAD
         limit = query_block.limitOrTopN->topn().limit();
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log, false); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline, max_streams, log);
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log, false); });
+=======
+        limit = query_block.limit_or_topn->topn().limit();
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
+    if (pipeline.hasMoreThanOneStream())
+    {
+        executeUnion(pipeline, max_streams, log, false, "for partial limit");
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
+>>>>>>> 3f0dae0d3f (fix the problem that offset in limit query for tiflash system tables doesn't take effect (#6745))
     }
 }
 
