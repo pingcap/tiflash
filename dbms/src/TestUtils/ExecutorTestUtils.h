@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,22 +31,28 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
-#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
-    std::vector<bool> bools{false, true}; \
-    for (auto enable_planner : bools)     \
-    {                                     \
-        enablePlanner(enable_planner);
+#define WRAP_FOR_TEST_BEGIN                         \
+    std::vector<bool> planner_bools{false, true};   \
+    for (auto enable_planner : planner_bools)       \
+    {                                               \
+        enablePlanner(enable_planner);              \
+        std::vector<bool> pipeline_bools{false};    \
+        if (enable_planner)                         \
+            pipeline_bools.push_back(true);         \
+        for (auto enable_pipeline : pipeline_bools) \
+        {                                           \
+            enablePipeline(enable_pipeline);
 
-#define WRAP_FOR_DIS_ENABLE_PLANNER_END }
+#define WRAP_FOR_TEST_END \
+    }                     \
+    }
 
 class ExecutorTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        initializeContext();
-        initializeClientInfo();
-    }
+    void SetUp() override;
+
+    void TearDown() override;
 
 public:
     ExecutorTest()
@@ -62,6 +68,8 @@ public:
     DAGContext & getDAGContext();
 
     void enablePlanner(bool is_enable);
+
+    void enablePipeline(bool is_enable);
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 

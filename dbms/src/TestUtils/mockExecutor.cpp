@@ -164,7 +164,7 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     return query_tasks;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns [[maybe_unused]])
 {
     assert(!columns.empty());
     root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false);
@@ -551,7 +551,7 @@ void MockDAGRequestContext::initMockStorage()
     mock_storage = std::make_unique<MockStorage>();
 }
 
-void MockDAGRequestContext::assertMockInput(const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
+void MockDAGRequestContext::assertMockInput(const MockColumnInfoVec & columnInfos [[maybe_unused]], ColumnsWithTypeAndName columns)
 {
     assert(columnInfos.size() == columns.size());
     for (size_t i = 0; i < columns.size(); ++i)

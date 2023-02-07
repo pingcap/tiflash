@@ -346,11 +346,15 @@ StableValueSpace::Snapshot::getInputStream(
     size_t expected_block_size,
     bool enable_handle_clean_read,
     bool is_fast_scan,
-    bool enable_del_clean_read)
+    bool enable_del_clean_read,
+    const std::vector<IdSetPtr> & read_packs,
+    bool need_row_id)
 {
     LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
-
+    std::vector<size_t> rows;
+    streams.reserve(stable->files.size());
+    rows.reserve(stable->files.size());
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
@@ -359,10 +363,19 @@ StableValueSpace::Snapshot::getInputStream(
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
-            .setRowsThreshold(expected_block_size);
+            .setRowsThreshold(expected_block_size)
+            .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr);
         streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        rows.push_back(stable->files[i]->getRows());
     }
-    return std::make_shared<ConcatSkippableBlockInputStream>(streams);
+    if (need_row_id)
+    {
+        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(streams, std::move(rows));
+    }
+    else
+    {
+        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ false>>(streams, std::move(rows));
+    }
 }
 
 RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const

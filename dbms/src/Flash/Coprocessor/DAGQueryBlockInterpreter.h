@@ -22,7 +22,6 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
 #pragma GCC diagnostic push

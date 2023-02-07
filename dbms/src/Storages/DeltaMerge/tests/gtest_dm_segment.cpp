@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -51,8 +52,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 namespace tests
 {
 class SegmentTest : public DB::base::TiFlashStorageTestBasic
@@ -1044,11 +1044,8 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path);
 
         delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 

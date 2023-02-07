@@ -40,8 +40,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 
 namespace tests
 {
@@ -176,8 +175,7 @@ try
         table_columns,
         input_stream,
         file_id,
-        delegator.choosePath(),
-        DMFileBlockOutputStream::Flags{});
+        delegator.choosePath());
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();

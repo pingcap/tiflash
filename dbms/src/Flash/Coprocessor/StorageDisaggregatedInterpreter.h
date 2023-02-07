@@ -16,7 +16,7 @@
 
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/FilterConditions.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDisaggregated.h>
 
@@ -32,10 +32,10 @@ public:
     StorageDisaggregatedInterpreter(
         Context & context_,
         const TiDBTableScan & table_scan_,
-        const PushDownFilter & push_down_filter_,
+        const FilterConditions & filter_conditions_,
         size_t max_streams_)
         : context(context_)
-        , storage(std::make_unique<StorageDisaggregated>(context_, table_scan_, push_down_filter_))
+        , storage(std::make_unique<StorageDisaggregated>(context_, table_scan_, filter_conditions_))
         , max_streams(max_streams_)
     {}
 

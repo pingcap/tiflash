@@ -706,7 +706,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, SplitJoinResult)
 try
 {
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {1, 1, 3, 3, 1, 1, 3, 3, 1, 3})});
+    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
     context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
 
     auto request = context
@@ -716,25 +716,6 @@ try
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
     std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
-    for (size_t i = 0; i < block_sizes.size(); ++i)
-    {
-        context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect[i].size(), blocks.size());
-        for (size_t j = 0; j < blocks.size(); ++j)
-        {
-            ASSERT_EQ(expect[i][j], blocks[j].rows());
-        }
-    }
-
-    // with other condition
-    const auto cond = gt(col("b"), lit(Field(static_cast<Int64>(2))));
-    request = context
-                  .scan("split_test", "t1")
-                  .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")}, {}, {}, {cond}, {})
-
-                  .build(context);
-    expect = {{5, 5, 5, 5, 5}, {5, 5, 5, 5, 5}, {5, 5, 5, 5, 5}, {25}, {25}, {25}, {25}, {25}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
@@ -815,36 +796,34 @@ try
 
     /// case 1, right join without right condition
     auto request = context
-                       .scan("outer_join_test", left_table_names[0])
-                       .join(context.scan("outer_join_test", right_table_names[0]), tipb::JoinType::TypeRightOuterJoin, {col("a")})
+                       .scan("outer_join_test", right_table_names[0])
+                       .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
+                       .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                        .build(context);
     context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    /// use 1 build concurrency join 1 probe concurrency as the reference
+    /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
     /// case 1.1 table scan join table scan
-    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
+    for (auto & left_table_name : left_table_names)
     {
-        for (size_t right_index = 0; right_index < right_table_names.size(); ++right_index)
+        for (auto & right_table_name : right_table_names)
         {
-            if (left_index == 0 && right_index == 0)
-                continue;
             request = context
-                          .scan("outer_join_test", left_table_names[left_index])
-                          .join(context.scan("outer_join_test", right_table_names[right_index]), tipb::JoinType::TypeRightOuterJoin, {col("a")})
+                          .scan("outer_join_test", left_table_name)
+                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
         }
     }
     /// case 1.2 table scan join fine grained exchange receiver
-    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
+    for (auto & left_table_name : left_table_names)
     {
-        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); ++right_index)
+        for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
         {
-            size_t exchange_concurrency = right_exchange_receiver_concurrency[right_index];
             request = context
-                          .scan("outer_join_test", left_table_names[left_index])
+                          .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
@@ -853,36 +832,34 @@ try
     }
     /// case 2, right join with right condition
     request = context
-                  .scan("outer_join_test", left_table_names[0])
-                  .join(context.scan("outer_join_test", right_table_names[0]), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
+                  .scan("outer_join_test", right_table_names[0])
+                  .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
+                  .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                   .build(context);
     context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    /// use 1 build concurrency join 1 probe concurrency as the reference
+    /// use right_table left join left_table as the reference
     ref_columns = executeStreams(request, original_max_streams);
     /// case 2.1 table scan join table scan
-    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
+    for (auto & left_table_name : left_table_names)
     {
-        for (size_t right_index = 0; right_index < right_table_names.size(); ++right_index)
+        for (auto & right_table_name : right_table_names)
         {
-            if (left_index == 0 && right_index == 0)
-                continue;
             request = context
-                          .scan("outer_join_test", left_table_names[left_index])
-                          .join(context.scan("outer_join_test", right_table_names[right_index]), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_names[right_index] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
+                          .scan("outer_join_test", left_table_name)
+                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
         }
     }
     /// case 2.2 table scan join fine grained exchange receiver
-    for (size_t left_index = 0; left_index < left_table_names.size(); ++left_index)
+    for (auto & left_table_name : left_table_names)
     {
-        for (size_t right_index = 0; right_index < right_exchange_receiver_concurrency.size(); ++right_index)
+        for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
         {
-            size_t exchange_concurrency = right_exchange_receiver_concurrency[right_index];
             String exchange_name = fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency);
             request = context
-                          .scan("outer_join_test", left_table_names[left_index])
+                          .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);

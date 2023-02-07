@@ -21,7 +21,7 @@ namespace DB
 namespace DM
 {
 class ColumnFileTiny;
-using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
+using ColumnFileTinyPtr = std::shared_ptr<ColumnFileTiny>;
 
 /// A column file which data is stored in PageStorage.
 /// It may be created in two ways:
@@ -88,7 +88,7 @@ public:
     /// Replace the schema with a new schema, and the new schema instance should be exactly the same as the previous one.
     void resetIdenticalSchema(BlockPtr schema_) { schema = schema_; }
 
-    ColumnTinyFilePtr cloneWith(PageId new_data_page_id)
+    ColumnFileTinyPtr cloneWith(PageId new_data_page_id)
     {
         auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
         new_tiny_file->data_page_id = new_data_page_id;
@@ -109,7 +109,7 @@ public:
 
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
-    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema = nullptr, const CachePtr & cache = nullptr);
+    static ColumnFileTinyPtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema = nullptr, const CachePtr & cache = nullptr);
 
     static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
@@ -174,7 +174,7 @@ public:
     ColumnPtr getPKColumn();
     ColumnPtr getVersionColumn();
 
-    size_t readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
+    std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
 

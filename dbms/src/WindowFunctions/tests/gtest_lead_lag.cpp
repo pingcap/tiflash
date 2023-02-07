@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ public:
 
     void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
@@ -44,7 +43,6 @@ public:
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));
         }
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     void executeFunctionAndAssert(

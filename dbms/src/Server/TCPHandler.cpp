@@ -177,29 +177,7 @@ void TCPHandler::runImpl()
             state.maybe_compressed_in.reset(); /// For more accurate accounting by MemoryTracker.
 
             /// Processing Query
-            const Settings & settings = query_context.getSettingsRef();
-            if (settings.shared_query_clients && !state.query_id.empty())
-            {
-                LOG_DEBUG(log, "shared query");
-
-                state.io = query_context.getSharedQueries()->getOrCreateBlockIO(
-                    state.query_id,
-                    settings.shared_query_clients,
-                    [&]() {
-                        return executeQuery(state.query, query_context, false, state.stage);
-                    });
-
-                /// As getOrCreateBlockIO could produce exception, this line must be put after.
-                shared_query_id = state.query_id;
-
-                if (state.io.out)
-                    throw Exception("Insert query is not supported in shared query mode");
-            }
-            else
-            {
-                state.io = executeQuery(state.query, query_context, false, state.stage);
-            }
-
+            state.io = executeQuery(state.query, query_context, false, state.stage);
             if (state.io.out)
                 state.need_receive_data_for_insert = true;
 

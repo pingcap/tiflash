@@ -98,6 +98,87 @@ TEST(RowKeyRange_test, RedactRangeFromCommonHandle)
     Redact::setRedactLog(false); // restore flags
 }
 
+TEST(RowKey, ToNextKeyIntHandle)
+{
+    const auto key = RowKeyValue::fromHandle(20);
+    const auto next = key.toNext();
+    EXPECT_EQ("21", next.toDebugString());
+
+    {
+        const auto expected_next_int = RowKeyValue::fromHandle(21);
+        EXPECT_EQ(0, compare(next.toRowKeyValueRef(), expected_next_int.toRowKeyValueRef()));
+    }
+    {
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(1, 0),
+            RecordKVFormat::genKey(1, 21));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ 1,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(0, compare(next.toRowKeyValueRef(), range.getEnd()));
+    }
+    // Note: The following does not work, because {20,00} will be regarded as Key=20 in RowKeyRange::fromRegionRange.
+    // {
+    //     auto key_end = RecordKVFormat::genRawKey(1, 20);
+    //     key_end.push_back(0);
+    //     auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
+    //     const auto range_keys = std::make_shared<RegionRangeKeys>(
+    //         RecordKVFormat::genKey(1, 0),
+    //         std::move(tikv_key_end));
+    //     const auto range = RowKeyRange::fromRegionRange(
+    //         range_keys,
+    //         /* table_id */ 1,
+    //         /* is_common_handle */ false,
+    //         /* row_key_column_size */ 1);
+    //     EXPECT_EQ(0, compare(next.toRowKeyValueRef(), range.getEnd()));
+    // }
+}
+
+TEST(RowKey, ToNextKeyCommonHandle)
+{
+    using namespace std::literals::string_literals;
+
+    const auto key = RowKeyValue(/* is_common_handle */ true, std::make_shared<String>("\xcc\xab"s), 0);
+    const auto next = key.toNext();
+    EXPECT_EQ("CCAB00", next.toDebugString());
+
+    const auto my_next = RowKeyValue(/* is_common_handle */ true, std::make_shared<String>("\xcc\xab\x00"s), 0);
+    EXPECT_EQ(0, compare(my_next.toRowKeyValueRef(), next.toRowKeyValueRef()));
+}
+
+TEST(RowKey, NextIntHandleCompare)
+{
+    auto int_max = RowKeyValue::INT_HANDLE_MAX_KEY;
+    auto int_max_i64 = RowKeyValue::fromHandle(Handle(std::numeric_limits<HandleID>::max()));
+
+    EXPECT_EQ(1, compare(int_max.toRowKeyValueRef(), int_max_i64.toRowKeyValueRef()));
+
+    auto int_max_i64_pnext = int_max_i64.toPrefixNext();
+    EXPECT_EQ(int_max, int_max_i64_pnext);
+    EXPECT_EQ(0, compare(int_max.toRowKeyValueRef(), int_max_i64_pnext.toRowKeyValueRef()));
+    EXPECT_EQ(0, compare(int_max_i64_pnext.toRowKeyValueRef(), int_max.toRowKeyValueRef()));
+
+    auto int_max_i64_next = int_max_i64.toNext();
+    EXPECT_EQ(int_max, int_max_i64_next);
+    EXPECT_EQ(0, compare(int_max.toRowKeyValueRef(), int_max_i64_next.toRowKeyValueRef()));
+    EXPECT_EQ(0, compare(int_max_i64_next.toRowKeyValueRef(), int_max.toRowKeyValueRef()));
+}
+
+TEST(RowKey, NextIntHandleMinMax)
+{
+    auto v0 = RowKeyValue::fromHandle(Handle(1178400));
+    auto v0_next = v0.toNext();
+    auto v1 = RowKeyValue::fromHandle(Handle(1178401));
+
+    EXPECT_EQ(v0, min(v0, v1));
+    EXPECT_EQ(v0, min(v0, v0_next));
+
+    EXPECT_EQ(v1, max(v0, v1));
+    EXPECT_EQ(v1, max(v0, v0_next));
+}
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

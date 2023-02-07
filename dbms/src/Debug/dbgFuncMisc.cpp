@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/DynamicThreadPool.h>
 #include <Common/typeid_cast.h>
 #include <Debug/dbgFuncMisc.h>
 #include <Interpreters/Context.h>
@@ -128,6 +129,19 @@ void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/,
     if (global_storage_pool)
     {
         global_storage_pool->gc();
+    }
+}
+
+void dbgFuncActiveThreadsInDynamicThreadPool(Context &, const ASTs &, DBGInvoker::Printer output)
+{
+    if (DynamicThreadPool::global_instance)
+    {
+        auto value = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();
+        output(std::to_string(static_cast<Int64>(value)));
+    }
+    else
+    {
+        output("0");
     }
 }
 } // namespace DB
