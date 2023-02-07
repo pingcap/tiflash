@@ -140,11 +140,32 @@ struct LeastGreatestStringImpl
         StringRef s_ra(&a_data[0], a_size);
         StringRef s_rb(&b_data[0], b_size);
         auto pre_offset = StringUtil::offsetAt(c_offsets, i);
-        if constexpr (!use_collator)
-            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
-        else
+        if constexpr (use_collator)
             res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
-        if constexpr (!least)
+
+        else
+            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
+
+        if constexpr (least)
+        {
+            if (res < 0)
+            {
+                memcpy(&c_data[pre_offset], &a_data[0], a_size);
+                c_offsets[i] = pre_offset + a_size + 1;
+            }
+            else if (res == 0)
+            {
+                size_t size = std::min(a_size, b_size);
+                memcpy(&c_data[pre_offset], &b_data[0], size);
+                c_offsets[i] = pre_offset + size + 1;
+            }
+            else
+            {
+                memcpy(&c_data[pre_offset], &b_data[0], b_size);
+                c_offsets[i] = pre_offset + b_size + 1;
+            }
+        }
+        else
         {
             if (res < 0)
             {
@@ -165,25 +186,6 @@ struct LeastGreatestStringImpl
             {
                 memcpy(&c_data[pre_offset], &a_data[0], a_size);
                 c_offsets[i] = pre_offset + a_size + 1;
-            }
-        }
-        else
-        {
-            if (res < 0)
-            {
-                memcpy(&c_data[pre_offset], &a_data[0], a_size);
-                c_offsets[i] = pre_offset + a_size + 1;
-            }
-            else if (res == 0)
-            {
-                size_t size = std::min(a_size, b_size);
-                memcpy(&c_data[pre_offset], &b_data[0], size);
-                c_offsets[i] = pre_offset + size + 1;
-            }
-            else
-            {
-                memcpy(&c_data[pre_offset], &b_data[0], b_size);
-                c_offsets[i] = pre_offset + b_size + 1;
             }
         }
     }
@@ -227,11 +229,24 @@ struct LeastGreatestStringImpl
         std::string & c)
     {
         int res = 0;
-        if constexpr (!use_collator)
-            res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
-        else
+        if constexpr (use_collator)
             res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
-        if constexpr (!least)
+        else
+            res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
+
+        if constexpr (least)
+        {
+            if (res < 0)
+                c = a;
+            else if (res == 0)
+            {
+                size_t size = std::min(a.size(), b.size());
+                c = b.substr(0, size);
+            }
+            else
+                c = b;
+        }
+        else
         {
             if (res < 0)
                 c = b;
@@ -244,18 +259,6 @@ struct LeastGreatestStringImpl
             }
             else
                 c = a;
-        }
-        else
-        {
-            if (res < 0)
-                c = a;
-            else if (res == 0)
-            {
-                size_t size = std::min(a.size(), b.size());
-                c = b.substr(0, size);
-            }
-            else
-                c = b;
         }
     }
 };
