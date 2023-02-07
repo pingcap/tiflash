@@ -19,7 +19,9 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
+#include <Functions/divide.cpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -102,6 +104,37 @@ protected:
         }
     }
 };
+
+TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRoundInternal)
+try
+{
+    using TYPE = Int32;
+    auto apply = static_cast<TYPE (*)(TYPE, TYPE)>(&TiDBDivideFloatingImpl<TYPE, TYPE, false>::apply);
+
+    constexpr auto max = std::numeric_limits<TYPE>::max();
+    //    constexpr auto min = std::numeric_limits<TYPE>::min();
+    // clang-format off
+    const std::vector<std::array<TYPE, 3>> cases = {
+        {1, 2, 1}, {1, -2, -1}, {-1, 2, -1}, {-1, -2, 1},
+
+        {0, 3, 0}, {0, -3, 0}, {0, 3, 0}, {0, -3, 0},
+        {1, 3, 0}, {1, -3, 0}, {-1, 3, 0}, {-1, -3, 0},
+        {2, 3, 1}, {2, -3, -1}, {-2, 3, -1}, {-2, -3, 1},
+        {3, 3, 1}, {3, -3, -1}, {-3, 3, -1}, {-3, -3, 1},
+        {4, 3, 1}, {4, -3, -1}, {-4, 3, -1}, {-4, -3, 1},
+        {5, 3, 2}, {5, -3, -2}, {-5, 3, -2}, {-5, -3, 2},
+
+        {max, max, 1}, {max-1, max, 1}, {max/2, max, 1}, {max/2-1, max, 0}, {0, max, 0}
+    };
+    // clang-format on
+
+    for (const auto & c : cases)
+    {
+        std::array<TYPE, 3> res = {c[0], c[1], apply(c[0], c[1])};
+        ASSERT_EQ(res, c);
+    }
+}
+CATCH
 
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRound)
 try

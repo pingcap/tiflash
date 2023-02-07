@@ -64,7 +64,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
     {
         // round for decimal floating number dividing
         if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256>)
-            return (static_cast<Result>(a) + b / 2) / b;
+            return (a < 0) != (b < 0) ? (a - (b / 2)) / b : (a + (b / 2)) / b;
         else
             return static_cast<Result>(a) / b;
     }
