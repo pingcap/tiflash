@@ -507,7 +507,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(ExchangeRecvRequest && req)
+void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && req)
 {
     thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
         if (enable_fine_grained_shuffle_flag)

@@ -165,7 +165,7 @@ private:
     void connectionLocalDone();
     void handleConnectionAfterException();
 
-    void setUpConnectionWithReadLoop(ExchangeRecvRequest && req);
+    void setUpConnectionWithReadLoop(Request && req);
 
     bool isReceiverForTiFlashStorage()
     {
