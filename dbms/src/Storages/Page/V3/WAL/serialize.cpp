@@ -335,7 +335,7 @@ String Serializer<PageEntriesEdit>::serializeTo(const PageEntriesEdit & edit)
 template <typename PageEntriesEdit>
 PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view record)
 {
-    PageEntriesEdit edit;
+    u128::PageEntriesEdit edit;
     ReadBufferFromMemory buf(record.data(), record.size());
     UInt32 version = 0;
     readIntBinary(version, buf);

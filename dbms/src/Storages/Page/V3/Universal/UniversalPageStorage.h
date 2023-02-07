@@ -56,7 +56,7 @@ public:
 public:
     static UniversalPageStoragePtr
     create(
-        String name,
+        const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
         const FileProviderPtr & file_provider);

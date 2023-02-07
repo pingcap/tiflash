@@ -60,6 +60,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -164,6 +165,10 @@ struct ContextShared
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
+
+    /// The PS instance available on Write Node.
+    UniversalPageStorageServicePtr ps_write;
+
     TiFlashSecurityConfigPtr security_config;
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -1594,6 +1599,11 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
         shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
         return;
     }
+    case PageFormat::V4:
+    {
+        shared->storage_run_mode = PageStorageRunMode::UNI_PS;
+        return;
+    }
     default:
         throw Exception(fmt::format("Can't detect the format version of Page [page_version={}]", storage_page_format_version),
                         ErrorCodes::LOGICAL_ERROR);
@@ -1646,6 +1656,41 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool, const FileProviderPtr & file_provider)
+{
+    auto lock = getLock();
+    if (shared->storage_run_mode == PageStorageRunMode::UNI_PS)
+    {
+        if (shared->ps_write)
+        {
+            // GlobalStoragePool may be initialized many times in some test cases for restore.
+            LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
+        }
+        PageStorageConfig config;
+        shared->ps_write = UniversalPageStorageService::create( //
+            *this,
+            "write",
+            path_pool.getPSDiskDelegatorGlobalMulti("write"),
+            config,
+            file_provider);
+        shared->ps_write->restore();
+        LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
+    }
+}
+
+UniversalPageStoragePtr Context::getWriteNodePageStorage() const
+{
+    auto lock = getLock();
+    if (shared->ps_write)
+    {
+        return shared->ps_write->getUniversalPageStorage();
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UInt16 Context::getTCPPort() const

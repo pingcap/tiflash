@@ -75,6 +75,7 @@ private:
 #endif
 
     Context & global_context;
+    PageStorageRunMode run_mode;
     PageWriterPtr page_writer;
     PageReaderPtr page_reader;
 
