@@ -43,10 +43,9 @@ namespace FailPoints
 extern const char force_fail_in_flush_region_data[];
 } // namespace FailPoints
 
-KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
+KVStore::KVStore(Context & context)
     : region_persister(std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
-    , snapshot_apply_method(snapshot_apply_method_)
     , log(Logger::get())
     , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)

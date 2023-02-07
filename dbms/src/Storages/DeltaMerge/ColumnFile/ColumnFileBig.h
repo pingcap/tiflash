@@ -85,7 +85,7 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
+    static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, //
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
 
