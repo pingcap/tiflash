@@ -451,7 +451,7 @@ public:
             "mock_req_id",
             "mock_exchange_receiver_id",
             0,
-            1);
+            2);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",
