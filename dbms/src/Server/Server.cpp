@@ -1363,6 +1363,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
+            // tiflash-proxy will not start until the first region generate,
+            // to avoid first region of the cluster is generated in tiflash.
+            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
+            while (!tmt_context.getPDClient()->isClusterBootstrapped())
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
+
             tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
