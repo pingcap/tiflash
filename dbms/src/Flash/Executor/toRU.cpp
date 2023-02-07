@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/toCPUTimeSecond.h>
+#include <Flash/Executor/toRU.h>
 #include <common/likely.h>
 
 namespace DB
 {
-//
+namespace
+{
+// Convert cpu time nanoseconds to cpu time seconds, and round up.
 UInt64 toCPUTimeSecond(UInt64 cpu_time_ns)
 {
     if (unlikely(cpu_time_ns == 0))
@@ -26,5 +28,17 @@ UInt64 toCPUTimeSecond(UInt64 cpu_time_ns)
     double cpu_time_second = static_cast<double>(cpu_time_ns) / 1000'000'000L;
     auto ceil_cpu_time_second = ceil(cpu_time_second);
     return ceil_cpu_time_second;
+}
+} // namespace
+
+// ru = cpu time second * ru_ratio
+RU toRU(UInt64 cpu_time_ns)
+{
+    if (unlikely(cpu_time_ns == 0))
+        return 0;
+
+    auto cpu_time_second = toCPUTimeSecond(cpu_time_ns);
+    static constexpr double ru_ratio = 1.0;
+    return cpu_time_second * ru_ratio;
 }
 } // namespace DB

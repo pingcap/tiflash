@@ -410,9 +410,9 @@ void MPPTask::runImpl()
         {
             err_msg = result.err_msg;
         }
-        auto cpu_time_second = query_executor_holder->collectCPUTimeSecond();
-        LOG_INFO(log, "mpp finish with cpu time second: {}", cpu_time_second);
-        GET_METRIC(tiflash_compute_cpu_time_second, type_mpp).Increment(cpu_time_second);
+        auto ru = query_executor_holder->collectRequestUnit();
+        LOG_INFO(log, "mpp finish with request unit: {}", ru);
+        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(

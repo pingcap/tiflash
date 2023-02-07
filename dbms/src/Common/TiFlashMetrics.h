@@ -273,7 +273,7 @@ namespace DB
     M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                                    \
         F(type_send, {{"type", "send_queue"}}),                                                                                                     \
         F(type_receive, {{"type", "recv_queue"}}))                                                                                                  \
-    M(tiflash_compute_cpu_time_second, "cpu time second used by tiflash compute", Counter,                                                          \
+    M(tiflash_compute_request_unit, "Request Unit used by tiflash compute", Counter,                                                                \
         F(type_mpp, {{"type", "mpp"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_cop, {{"type", "cop"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \

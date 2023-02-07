@@ -18,6 +18,7 @@
 
 namespace DB
 {
-// Convert cpu time nanoseconds to cpu time seconds, and round up.
-UInt64 toCPUTimeSecond(UInt64 cpu_time_ns);
+using RU = UInt64;
+// Convert cpu time nanoseconds to Request Unit.
+RU toRU(UInt64 cpu_time_ns);
 } // namespace DB
