@@ -185,10 +185,12 @@ protected:
 
     uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) override
     {
-        // SharedQueryBlockInputStream isn't a thread-runner, so is_thread_runner is ignored here.
-        // But each of SharedQueryBlockInputStream's children is a thread-runner.
+        // `SharedQueryBlockInputStream` does not count its own execute time,
+        // whether `SharedQueryBlockInputStream` is `thread-runner` or not,
+        // because `SharedQueryBlockInputStream` basically does not use cpu, only `condition_cv.wait`.
         uint64_t cpu_time_ns = 0;
         forEachChild([&](IBlockInputStream & child) {
+            // Each of SharedQueryBlockInputStream's children is a thread-runner.
             cpu_time_ns += child.collectCPUTimeNs(true);
             return false;
         });

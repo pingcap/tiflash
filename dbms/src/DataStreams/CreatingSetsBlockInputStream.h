@@ -83,7 +83,7 @@ protected:
     Block readImpl() override;
     void readPrefixImpl() override;
 
-    uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) override;
+    uint64_t collectCPUTimeNsImpl(bool is_thread_runner) override;
 
 private:
     void init(const BlockInputStreamPtr & input);
