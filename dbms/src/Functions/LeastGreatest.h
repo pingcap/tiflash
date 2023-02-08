@@ -495,7 +495,7 @@ public:
                 string_columns.emplace_back(c_string);
         }
 
-        // 1. calcualte result column for const columns
+        // 1. calculate result column for const columns
         StringRef const_res;
         if (!const_columns.empty())
         {
@@ -516,9 +516,8 @@ public:
             return;
         }
 
-        // 2. calcualte result column for string columns
+        // 2. calculate result column for string columns
         auto string_columns_size = string_columns.size();
-
         std::vector<StringRef> result_string_refs;
         result_string_refs.resize(string_columns[0]->size());
         ColumnString * result_col = nullptr;
@@ -526,7 +525,7 @@ public:
             result_col = const_cast<ColumnString *>(string_columns[0]);
         else if (string_columns_size >= 2)
         {
-            for (size_t i = 1; i < string_columns.size(); ++i)
+            for (size_t i = 1; i < string_columns_size; ++i)
             {
                 const DB::ColumnString * c0_string;
                 const auto * c1_string = string_columns[i];
@@ -562,8 +561,8 @@ public:
             }
         }
 
-        // 3. merge result column of const columns and vector columns
-        if (string_columns.size() > 1 && !const_columns.empty())
+        // 3. merge result columns of const columns and vector columns
+        if (string_columns_size > 1 && !const_columns.empty())
         {
             auto col_str = ColumnString::create();
             impl::stringRefVectorConstant(
@@ -575,7 +574,7 @@ public:
             block.getByPosition(result).column = std::move(col_str);
             return;
         }
-        else if (string_columns.size() == 1 && !const_columns.empty())
+        else if (string_columns_size == 1 && !const_columns.empty())
         {
             auto col_str = ColumnString::create();
             impl::stringVectorConstant(
