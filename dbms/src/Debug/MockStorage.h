@@ -72,9 +72,9 @@ public:
     bool tableExists(Int64 table_id);
 
     /// for storage delta merge table scan
-    void addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos);
+    Int64 addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos);
 
-    void addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns);
+    Int64 addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns);
 
     MockColumnInfoVec getTableSchemaForDeltaMerge(const String & name);
 
