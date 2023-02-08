@@ -81,6 +81,12 @@ public:
 
     const Strings & listGlobalPagePaths() const { return global_page_paths; }
 
+    static const String log_path_prefix;
+    static const String data_path_prefix;
+    static const String meta_path_prefix;
+    static const String kvstore_path_prefix;
+    static const String write_uni_path_prefix;
+
 public:
     // A thread safe wrapper for storing a map of <page data file id, path index>
     class PageFilePathMap

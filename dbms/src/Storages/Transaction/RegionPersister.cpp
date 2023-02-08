@@ -268,7 +268,7 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
 
             auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
                 "RegionPersister",
-                path_pool.getPSDiskDelegatorGlobalMulti("kvstore"),
+                path_pool.getPSDiskDelegatorGlobalMulti(PathPool::kvstore_path_prefix),
                 config,
                 provider);
             page_storage_v3->restore();
@@ -290,7 +290,7 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
             // Because V2 will delete all invalid(unrecognized) file when it restore
             auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
                 "RegionPersister",
-                path_pool.getPSDiskDelegatorGlobalMulti("kvstore"),
+                path_pool.getPSDiskDelegatorGlobalMulti(PathPool::kvstore_path_prefix),
                 config,
                 provider);
 

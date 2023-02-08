@@ -83,19 +83,19 @@ PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
 
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
     : log_storage(PageStorage::create("__global__.log",
-                                      path_pool.getPSDiskDelegatorGlobalMulti("log"),
+                                      path_pool.getPSDiskDelegatorGlobalMulti(PathPool::log_path_prefix),
                                       extractConfig(settings, StorageType::Log),
                                       global_ctx.getFileProvider(),
                                       global_ctx,
                                       true))
     , data_storage(PageStorage::create("__global__.data",
-                                       path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                       path_pool.getPSDiskDelegatorGlobalMulti(PathPool::data_path_prefix),
                                        extractConfig(settings, StorageType::Data),
                                        global_ctx.getFileProvider(),
                                        global_ctx,
                                        true))
     , meta_storage(PageStorage::create("__global__.meta",
-                                       path_pool.getPSDiskDelegatorGlobalMulti("meta"),
+                                       path_pool.getPSDiskDelegatorGlobalMulti(PathPool::meta_path_prefix),
                                        extractConfig(settings, StorageType::Meta),
                                        global_ctx.getFileProvider(),
                                        global_ctx,
