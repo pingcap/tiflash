@@ -140,9 +140,9 @@ namespace
 {
 inline bool isIPv6(const String & input_address)
 {
-    char str[INET6_ADDRSTRLEN];
     if (input_address.empty())
         return false;
+    char str[INET6_ADDRSTRLEN];
     return inet_pton(AF_INET6, input_address.c_str(), str) == 1;
 }
 } // namespace
