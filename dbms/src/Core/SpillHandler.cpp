@@ -64,7 +64,8 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
     {
         Stopwatch watch;
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
-        LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", blocks.size(), current_spill_file_name);
+        auto block_size = blocks.size();
+        LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", block_size, current_spill_file_name);
         size_t total_rows = 0;
         if (unlikely(writer == nullptr))
         {
@@ -77,7 +78,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         }
         double cost = watch.elapsedSeconds();
         time_cost += cost;
-        LOG_INFO(spiller->logger, "Spilled blocks into temporary file, {} rows, time cost: {:.3f} sec.", total_rows, cost);
+        LOG_INFO(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
         RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;

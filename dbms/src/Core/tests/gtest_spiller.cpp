@@ -262,13 +262,13 @@ try
 {
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 1, spiller_test_header, logger, 1, false));
-    auto new_spill_dir = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "release_file_on_restore_test", rand());
-    SpillConfig new_spill_config(new_spill_dir, spill_config_ptr->spill_id, spill_config_ptr->max_spilled_size_per_spill, spill_config_ptr->file_provider);
-    Poco::File spiller_dir(new_spill_config.spill_dir);
+    auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "release_file_on_restore_test", rand());
+    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_spilled_size_per_spill, spill_config_ptr->file_provider);
+    Poco::File new_spiller_dir(new_spill_config.spill_dir);
     /// remove spiller dir if exists
-    if (spiller_dir.exists())
-        spiller_dir.remove(true);
-    spiller_dir.createDirectories();
+    if (new_spiller_dir.exists())
+        new_spiller_dir.remove(true);
+    new_spiller_dir.createDirectories();
     spillers.push_back(std::make_unique<Spiller>(new_spill_config, false, 1, spiller_test_header, logger));
 
     Blocks blocks = generateBlocks(50);
@@ -282,7 +282,7 @@ try
         else
         {
             std::vector<String> files;
-            spiller_dir.list(files);
+            new_spiller_dir.list(files);
             GTEST_ASSERT_EQ(files.size(), 0);
         }
     }
