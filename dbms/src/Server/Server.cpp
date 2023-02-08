@@ -967,7 +967,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_data_paths, //
         storage_config.latest_data_paths, //
         storage_config.kvstore_data_path, //
-        raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
