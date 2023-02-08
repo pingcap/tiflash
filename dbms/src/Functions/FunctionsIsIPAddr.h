@@ -85,7 +85,7 @@ public:
         auto col_res = ColumnUInt8::create();
         col_res->reserve(val_num);
 
-        for (int i = 0; i < val_num; i++)
+        for (int i = 0; i < val_num; ++i)
         {
             c0_col->get(i, res_field);
             String handled_str = res_field.get<String>();
