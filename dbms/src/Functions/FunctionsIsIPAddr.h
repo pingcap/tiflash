@@ -30,9 +30,9 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 
 /** Helper functions
   *
-  * isIPV4(x) - Judge whether the input string is an IPv4 address.
+  * isIPv4(x) - Judge whether the input string is an IPv4 address.
   *
-  * isIPV6(x) - Judge whether the input string is an IPv6 address
+  * isIPv6(x) - Judge whether the input string is an IPv6 address
   *
   */
 
