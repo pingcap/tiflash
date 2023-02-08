@@ -16,7 +16,6 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 #include <Storages/Page/WriteBatchWrapper.h>
 
 namespace DB
@@ -88,52 +87,46 @@ struct WriteBatches : private boost::noncopyable
 
     void writeLogAndData()
     {
+        if constexpr (DM_RUN_CHECK)
+        {
+            auto check = [](const auto & wb, const String & what) {
+                if (wb.empty())
+                    return;
+                for (const auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type == WriteBatchWriteType::DEL))
+                        throw Exception("Unexpected deletes in " + what);
+                }
+                LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
+            };
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
+                check(log.getUniversalWriteBatch(), "log");
+                check(data.getUniversalWriteBatch(), "data");
+            }
+            default:
+            {
+                check(log.getWriteBatch(), "log");
+                check(data.getWriteBatch(), "data");
+            }
+            }
+        }
+
         PageIdU64s log_write_pages, data_write_pages;
         switch (run_mode)
         {
         case PageStorageRunMode::UNI_PS:
         {
-            if constexpr (DM_RUN_CHECK)
-            {
-                auto check = [](const UniversalWriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type == WriteBatchWriteType::DEL))
-                            throw Exception("Unexpected deletes in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
-                };
-
-                check(log.getUniversalWriteBatch(), "log");
-                check(data.getUniversalWriteBatch(), "data");
-            }
             for (const auto & w : log.getUniversalWriteBatch().getWrites())
-                log_write_pages.push_back(PS::V3::universal::PageIdTrait::getU64ID(w.page_id));
+                log_write_pages.push_back(UniversalPageIdFormat::getU64ID(w.page_id));
             for (const auto & w : data.getUniversalWriteBatch().getWrites())
-                data_write_pages.push_back(PS::V3::universal::PageIdTrait::getU64ID(w.page_id));
+                data_write_pages.push_back(UniversalPageIdFormat::getU64ID(w.page_id));
             break;
         }
         default:
         {
-            if constexpr (DM_RUN_CHECK)
-            {
-                auto check = [](const WriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type == WriteBatchWriteType::DEL))
-                            throw Exception("Unexpected deletes in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
-                };
-
-                check(log.getWriteBatch(), "log");
-                check(data.getWriteBatch(), "data");
-            }
-
             for (const auto & w : log.getWriteBatch().getWrites())
                 log_write_pages.push_back(w.page_id);
             for (const auto & w : data.getWriteBatch().getWrites())
@@ -163,48 +156,34 @@ struct WriteBatches : private boost::noncopyable
         for (auto p : written_data)
             data_wb.delPage(p);
 
-        switch (run_mode)
+        if constexpr (DM_RUN_CHECK)
         {
-        case PageStorageRunMode::UNI_PS:
-        {
-            if constexpr (DM_RUN_CHECK)
-            {
-                auto check = [](const UniversalWriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type != WriteBatchWriteType::DEL))
-                            throw Exception("Expected deletes in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Rollback remove from {} : {}", what, wb.toString());
-                };
+            auto check = [](const auto & wb, const String & what) {
+                if (wb.empty())
+                    return;
+                for (const auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type != WriteBatchWriteType::DEL))
+                        throw Exception("Expected deletes in " + what);
+                }
+                LOG_TRACE(Logger::get(), "Rollback remove from {} : {}", what, wb.toString());
+            };
 
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
                 check(log_wb.getUniversalWriteBatch(), "log_wb");
                 check(data_wb.getUniversalWriteBatch(), "data_wb");
+                break;
             }
-            break;
-        }
-        default:
-        {
-            if constexpr (DM_RUN_CHECK)
+            default:
             {
-                auto check = [](const WriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type != WriteBatchWriteType::DEL))
-                            throw Exception("Expected deletes in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Rollback remove from {} : {}", what, wb.toString());
-                };
-
                 check(log_wb.getWriteBatch(), "log_wb");
                 check(data_wb.getWriteBatch(), "data_wb");
+                break;
             }
-            break;
-        }
+            }
         }
 
         storage_pool.logWriter()->write(std::move(log_wb), write_limiter);
@@ -216,45 +195,30 @@ struct WriteBatches : private boost::noncopyable
 
     void writeMeta()
     {
-        switch (run_mode)
+        if constexpr (DM_RUN_CHECK)
         {
-        case PageStorageRunMode::UNI_PS:
-        {
-            if constexpr (DM_RUN_CHECK)
+            auto check = [](const auto & wb, const String & what) {
+                if (wb.empty())
+                    return;
+                for (const auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type != WriteBatchWriteType::PUT))
+                        throw Exception("Expected puts in " + what);
+                }
+                LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
+            };
+            switch (run_mode)
             {
-                auto check = [](const UniversalWriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type != WriteBatchWriteType::PUT))
-                            throw Exception("Expected puts in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
-                };
-
+            case PageStorageRunMode::UNI_PS:
+            {
                 check(meta.getUniversalWriteBatch(), "meta");
+                break;
             }
-            break;
-        }
-        default:
-        {
-            if constexpr (DM_RUN_CHECK)
+            default:
             {
-                auto check = [](const WriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type != WriteBatchWriteType::PUT))
-                            throw Exception("Expected puts in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
-                };
-
                 check(meta.getWriteBatch(), "meta");
             }
-        }
+            }
         }
 
         storage_pool.metaWriter()->write(std::move(meta), write_limiter);
@@ -263,48 +227,34 @@ struct WriteBatches : private boost::noncopyable
 
     void writeRemoves()
     {
-        switch (run_mode)
+        if constexpr (DM_RUN_CHECK)
         {
-        case PageStorageRunMode::UNI_PS:
-        {
-            if constexpr (DM_RUN_CHECK)
-            {
-                auto check = [](const UniversalWriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type != WriteBatchWriteType::DEL))
-                            throw Exception("Expected deletes in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
-                };
+            auto check = [](const auto & wb, const String & what) {
+                if (wb.empty())
+                    return;
+                for (const auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type != WriteBatchWriteType::DEL))
+                        throw Exception("Expected deletes in " + what);
+                }
+                LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
+            };
 
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
                 check(removed_log.getUniversalWriteBatch(), "removed_log");
                 check(removed_data.getUniversalWriteBatch(), "removed_data");
                 check(removed_meta.getUniversalWriteBatch(), "removed_meta");
             }
-        }
-        default:
-        {
-            if constexpr (DM_RUN_CHECK)
+            default:
             {
-                auto check = [](const WriteBatch & wb, const String & what) {
-                    if (wb.empty())
-                        return;
-                    for (const auto & w : wb.getWrites())
-                    {
-                        if (unlikely(w.type != WriteBatchWriteType::DEL))
-                            throw Exception("Expected deletes in " + what);
-                    }
-                    LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
-                };
-
                 check(removed_log.getWriteBatch(), "removed_log");
                 check(removed_data.getWriteBatch(), "removed_data");
                 check(removed_meta.getWriteBatch(), "removed_meta");
             }
-        }
+            }
         }
 
         storage_pool.logWriter()->write(std::move(removed_log), write_limiter);

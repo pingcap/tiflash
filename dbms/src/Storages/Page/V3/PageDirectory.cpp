@@ -1365,11 +1365,11 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
             if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
             {
                 // TODO: the value is just used at restart, if it slows down the performance, we can avoid calculating it at run time.
-                for (auto iter = max_page_id_by_prefix.begin(); iter != max_page_id_by_prefix.end(); ++iter)
+                for (auto & item : max_page_id_by_prefix)
                 {
-                    if (r.page_id.hasPrefix(iter->first))
+                    if (r.page_id.hasPrefix(item.first))
                     {
-                        iter->second = std::max(iter->second, Trait::PageIdTrait::getU64ID(r.page_id));
+                        item.second = std::max(item.second, Trait::PageIdTrait::getU64ID(r.page_id));
                         break;
                     }
                 }

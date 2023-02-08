@@ -30,6 +30,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+// Adapt UniversalWriteBatch to WriteBatch interface
 class UniversalWriteBatchAdaptor : private boost::noncopyable
 {
 public:

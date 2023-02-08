@@ -69,7 +69,7 @@ inline static constexpr Version V2 = 2;
 // - If we already have V2 data in disk. It will turn PageStorage into MIX_MODE
 // - If we don't have any v2 data in disk. It will turn PageStorage into ONLY_V3
 inline static constexpr Version V3 = 3;
-// Store all data in one instance.
+// Store all data in one ps instance.
 inline static constexpr Version V4 = 4;
 } // namespace PageFormat
 

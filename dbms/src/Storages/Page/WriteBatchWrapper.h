@@ -38,6 +38,7 @@ enum class PageStorageRunMode : UInt8
     UNI_PS = 4,
 };
 
+// It contains either an UniversalWriteBatchAdaptor or a WriteBatch.
 class WriteBatchWrapper : private boost::noncopyable
 {
 public:

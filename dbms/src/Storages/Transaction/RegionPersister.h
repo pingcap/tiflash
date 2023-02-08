@@ -70,8 +70,22 @@ private:
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
+private:
+    inline std::variant<String, NamespaceId> getWriteBatchPrefix() const
+    {
+        switch (run_mode)
+        {
+        case PageStorageRunMode::UNI_PS:
+            return UniversalPageIdFormat::toStorageSubPrefix(StorageType::KVStore);
+        default:
+            return ns_id;
+        }
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;

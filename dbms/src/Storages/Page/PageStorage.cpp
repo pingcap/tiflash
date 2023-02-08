@@ -393,6 +393,7 @@ public:
     PageMapU64 read(const std::vector<PageReadFields> & page_fields) const override
     {
         std::vector<UniversalPageStorage::PageReadFields> us_page_fields;
+        us_page_fields.reserve(page_fields.size());
         for (const auto & f : page_fields)
         {
             us_page_fields.emplace_back(UniversalPageIdFormat::toFullPageId(prefix, f.first), f.second);
@@ -402,7 +403,7 @@ public:
 
     PageIdU64 getNormalPageId(PageIdU64 page_id) const override
     {
-        return PS::V3::universal::PageIdTrait::getU64ID(storage->getNormalPageId(UniversalPageIdFormat::toFullPageId(prefix, page_id), snap));
+        return UniversalPageIdFormat::getU64ID(storage->getNormalPageId(UniversalPageIdFormat::toFullPageId(prefix, page_id), snap));
     }
 
     PageEntry getPageEntry(PageIdU64 page_id) const override
@@ -808,7 +809,7 @@ bool PageWriter::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const 
     }
     case PageStorageRunMode::UNI_PS:
     {
-        return uni_ps->gc(not_skip, write_limiter, read_limiter);
+        return false;
     }
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);

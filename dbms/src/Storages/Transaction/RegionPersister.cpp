@@ -51,8 +51,7 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
     if (page_writer)
     {
-        std::variant<String, NamespaceId> prefix = ns_id;
-        DB::WriteBatchWrapper wb_v2{run_mode, std::move(prefix)};
+        DB::WriteBatchWrapper wb_v2{run_mode, getWriteBatchPrefix()};
         wb_v2.delPage(region_id);
         page_writer->write(std::move(wb_v2), global_context.getWriteLimiter());
     }
@@ -131,8 +130,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     auto read_buf = buffer.tryGetReadBuffer();
     if (page_writer)
     {
-        std::variant<String, NamespaceId> prefix = ns_id;
-        DB::WriteBatchWrapper wb{run_mode, std::move(prefix)};
+        DB::WriteBatchWrapper wb{run_mode, getWriteBatchPrefix()};
         wb.putPage(region_id, applied_index, read_buf, region_size);
         page_writer->write(std::move(wb), global_context.getWriteLimiter());
     }
