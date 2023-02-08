@@ -52,15 +52,15 @@ static constexpr NamespaceId KVSTORE_NAMESPACE_ID = 1000000UL;
 // just a random namespace id for test, the value doesn't matter
 static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 
-using PageId = UInt64;
-using PageIds = std::vector<PageId>;
-using PageIdSet = std::unordered_set<PageId>;
-static constexpr PageId INVALID_PAGE_ID = 0;
+using PageIdU64 = UInt64;
+using PageIdU64s = std::vector<PageIdU64>;
+using PageIdU64Set = std::unordered_set<PageIdU64>;
+static constexpr PageIdU64 INVALID_PAGE_U64_ID = 0;
 
 using PageIdV3Internal = UInt128;
 using PageIdV3Internals = std::vector<PageIdV3Internal>;
 
-inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
+inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageIdU64 p_id)
 {
     // low bits first
     return PageIdV3Internal(p_id, n_id);
@@ -78,11 +78,6 @@ using PageFileIdAndLevel = std::pair<PageFileId, PageFileLevel>;
 using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
-
-using BlobFileId = UInt64;
-using BlobFileOffset = UInt64;
-static constexpr BlobFileId INVALID_BLOBFILE_ID = 0;
-static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
 
 struct ByteBuffer
 {
@@ -135,6 +130,7 @@ struct fmt::formatter<DB::PageIdV3Internal>
         return format_to(ctx.out(), "{}.{}", value.high, value.low);
     }
 };
+
 template <>
 struct fmt::formatter<DB::PageFileIdAndLevel>
 {

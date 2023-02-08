@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V1/Page.h>
 #include <Storages/Page/V1/WriteBatch.h>
 
