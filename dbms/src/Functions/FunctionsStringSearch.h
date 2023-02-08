@@ -22,13 +22,42 @@
 #include <Functions/IFunction.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Functions/StringUtil.h>
+#include <Common/UTF8Helpers.h>
 
+#include <cstring>
 #include <string_view>
+#include "Common/typeid_cast.h"
 
 namespace DB
 {
 using Chars_t = ColumnString::Chars_t;
 using Offsets = ColumnString::Offsets;
+
+void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString * src_col)
+{
+    auto & dst_data = dst_col->getChars();
+    auto & dst_offsets = dst_col->getOffsets();
+
+    const auto & src_data = src_col->getChars();
+    const auto & src_offsets = src_col->getOffsets();
+
+    dst_data.resize(src_data.size());
+    dst_offsets.resize(src_offsets.size());
+
+    memcpy(&dst_data[0], &src_data[0], src_data.size());
+    memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size());
+}
+
+void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & src_col, const ColumnConst * src_col_const)
+{
+    if (src_col_const != nullptr)
+    {
+        // TODO
+    }
+    else
+        copyColumnStringDataImpl(typeid_cast<ColumnString *>(&*dst_col), typeid_cast<const ColumnString *>(&*src_col));
+}
 
 inline void lowerOneString(Chars_t & str_container, size_t pos, size_t size)
 {
@@ -43,7 +72,7 @@ inline void lowerOneString(Chars_t & str_container, size_t pos, size_t size)
         }
         else
         {
-            size_t utf8_len = getUtf8Length(str_container[pos + i]);
+            size_t utf8_len = UTF8::seqLength(str_container[pos + i]);
             i += utf8_len;
         }
     }
@@ -60,16 +89,6 @@ inline void lowerColumnConst(ColumnConst * lowered_col_const)
     lowerOneString(str_container, 0, str_size);
 }
 
-inline size_t offsetAt(size_t idx, const Offsets & offsets)
-{
-    return idx == 0 ? 0 : offsets[idx - 1];
-}
-
-inline size_t sizeAt(size_t i, const Offsets & offsets)
-{
-    return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
-}
-
 inline void lowerColumnString(MutableColumnPtr & col)
 {
     auto * col_vector = typeid_cast<ColumnString *>(&*col);
@@ -80,7 +99,7 @@ inline void lowerColumnString(MutableColumnPtr & col)
 
     size_t str_num = col_vector->size();
     for (size_t i = 0; i < str_num; ++i)
-        lowerOneString(str_container, offsetAt(i, str_offsets), sizeAt(i, str_offsets) - 1);
+        lowerOneString(str_container, StringUtil::offsetAt(str_offsets, i), StringUtil::sizeAt(str_offsets, i) - 1);
 }
 
 // Only lower the 'A', 'B', 'C'...
@@ -211,8 +230,18 @@ public:
         const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
+        MutableColumnPtr ilike_col0_copy_ptr;
+        MutableColumnPtr ilike_col1_copy_ptr;
+
         if constexpr (name == std::string_view(NameIlike3Args::name))
+        {
+            ilike_col0_copy_ptr = ColumnString::create();
+            ilike_col1_copy_ptr = ColumnString::create();
+            copyColumnStringData(ilike_col0_copy_ptr, column_haystack, col_haystack_const);
+            copyColumnStringData(ilike_col1_copy_ptr, column_needle, col_needle_const);
+
             lowerEnglishWords(block, arguments);
+        }
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
         String match_type;
@@ -259,6 +288,8 @@ public:
             auto needle_string = col_needle_const->getValue<String>();
             Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
+            if constexpr (name == std::string_view(NameIlike3Args::name))
+                restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col0_copy_ptr));
             return;
         }
 
@@ -299,9 +330,18 @@ public:
                             ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(col_res);
+        if constexpr (name == std::string_view(NameIlike3Args::name))
+            restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col0_copy_ptr));
     }
 
 private:
+    // We lower the character in place for ilike function, and we should restore them with cloned data.
+    void restoreData(Block & block, const ColumnNumbers & arguments, ColumnPtr && col0, ColumnPtr && col1) const
+    {
+        block.getByPosition(arguments[0]).column = std::move(col0);
+        block.getByPosition(arguments[1]).column = std::move(col1);
+    }
+
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
