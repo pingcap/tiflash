@@ -65,20 +65,19 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         Stopwatch watch;
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", blocks.size(), current_spill_file_name);
-        size_t spilled_data_size = 0;
+        size_t total_rows = 0;
         if (unlikely(writer == nullptr))
         {
             writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, blocks[0].cloneEmpty(), spiller->spill_version);
         }
         for (const auto & block : blocks)
         {
-            auto block_bytes_size = block.bytes();
+            total_rows += block.rows();
             writer->write(block);
-            spilled_data_size += block_bytes_size;
         }
         double cost = watch.elapsedSeconds();
         time_cost += cost;
-        LOG_INFO(spiller->logger, "Spilled blocks into temporary file, data size: {:.3f} MiB, time cost: {:.3f} sec.", spilled_data_size / (1048576.0), cost);
+        LOG_INFO(spiller->logger, "Spilled blocks into temporary file, {} rows, time cost: {:.3f} sec.", total_rows, cost);
         RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;
