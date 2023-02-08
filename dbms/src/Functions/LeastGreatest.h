@@ -332,15 +332,8 @@ struct LeastGreatestStringImpl
 
         if constexpr (least)
         {
-            if (res > 0)
+            if (res > 0 || (res == 0 && a.size > b.size))
                 a = b;
-            else if (res == 0)
-            {
-                if (a.size > b.size)
-                    a = b;
-                else
-                    a = StringRef(b.data, a.size);
-            }
         }
         else
         {

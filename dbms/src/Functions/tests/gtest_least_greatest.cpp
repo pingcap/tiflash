@@ -409,6 +409,17 @@ try
              createConstColumn<Nullable<String>>(4, "22222")},
             utf8mb4_general_ci_collator));
 
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(4, "111"),
+        executeFunction(
+            func_name,
+            {
+                createConstColumn<Nullable<String>>(4, "1111"),
+                createConstColumn<Nullable<String>>(4, "22222"),
+                createConstColumn<Nullable<String>>(4, "111"),
+            },
+            utf8mb4_general_ci_collator));
+
     const auto * bin_col = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({{}, {}}),
                      executeFunction(
@@ -628,6 +639,17 @@ try
             func_name,
             {createConstColumn<Nullable<String>>(4, {}),
              createConstColumn<Nullable<String>>(4, "22222")},
+            utf8mb4_general_ci_collator));
+
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(4, "33"),
+        executeFunction(
+            func_name,
+            {
+                createConstColumn<Nullable<String>>(4, "1111"),
+                createConstColumn<Nullable<String>>(4, "22222"),
+                createConstColumn<Nullable<String>>(4, "33"),
+            },
             utf8mb4_general_ci_collator));
 
     const auto * bin_col = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
