@@ -111,7 +111,9 @@ void doTest()
     auto apply = static_cast<TYPE (*)(TYPE, TYPE)>(&TiDBDivideFloatingImpl<TYPE, TYPE, false>::apply);
 
     constexpr TYPE max = std::numeric_limits<TYPE>::max();
-    constexpr TYPE min = std::numeric_limits<TYPE>::min(); // note: Int256's min is not equal to -max-1
+    constexpr TYPE min = std::numeric_limits<TYPE>::min();
+    // note: Int256's min is not equal to -max-1
+    // according to https://www.boost.org/doc/libs/1_60_0/libs/multiprecision/doc/html/boost_multiprecision/tut/ints/cpp_int.html
 
     // clang-format off
     const std::vector<std::array<TYPE, 3>> cases = {

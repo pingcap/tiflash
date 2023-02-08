@@ -73,7 +73,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
             Result abs_h = half < 0 ? -half : half;
             if (abs_m >= abs_h)
             {
-                if ((x < 0) == (d < 0)) // same_sign
+                if ((x < 0) == (d < 0)) // same_sign, i.e., quotient >= 0
                     quotient = quotient + 1;
                 else
                     quotient = quotient - 1;
