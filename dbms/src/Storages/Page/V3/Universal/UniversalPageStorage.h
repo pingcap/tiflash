@@ -24,8 +24,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
-#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
-#include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
 #include <common/defines.h>
 

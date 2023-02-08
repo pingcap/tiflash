@@ -372,9 +372,9 @@ public:
     static inline PageMapU64 toPageMap(UniversalPageMap && us_page_map)
     {
         PageMapU64 page_map;
-        for (auto iter = us_page_map.begin(); iter != us_page_map.end(); iter++)
+        for (auto & id_and_page : us_page_map)
         {
-            page_map.emplace(PS::V3::universal::PageIdTrait::getU64ID(iter->first), std::move(iter->second));
+            page_map.emplace(UniversalPageIdFormat::getU64ID(id_and_page.first), std::move(id_and_page.second));
         }
         return page_map;
     }
