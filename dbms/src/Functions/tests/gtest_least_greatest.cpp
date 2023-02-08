@@ -200,7 +200,7 @@ try
     const auto * utf8mb4_general_ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
 
     /// without collator
-    // string string
+    // vector vector
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11"}),
                      executeFunction(
                          func_name,
@@ -223,7 +223,7 @@ try
                          {createColumn<Nullable<String>>({"1111", "2222"}),
                           createColumn<Nullable<String>>({"11", "2"}),
                           createColumn<Nullable<String>>({"111", "22"})}));
-    // string constant
+    // vector constant
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"11", "22222", "22", "11111111"}),
         executeFunction(
@@ -247,7 +247,7 @@ try
              createColumn<Nullable<String>>({"33", "03", "11", "2333"}),
              createConstColumn<Nullable<String>>(4, "22222")}));
 
-    // constant string
+    // constant vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"11", "22222", "22", "11111111"}),
         executeFunction(
@@ -277,7 +277,7 @@ try
                           createConstColumn<Nullable<String>>(4, "1111")}));
 
     /// with collator
-    // string string
+    // vector vector
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"11"}),
                      executeFunction(
                          func_name,
@@ -360,7 +360,7 @@ try
                           createColumn<Nullable<String>>({{}, {}})},
                          utf8mb4_general_ci_collator));
 
-    // string constant
+    // vector constant
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"11", "22222", "22", "11111111"}),
         executeFunction(
@@ -383,7 +383,7 @@ try
              createConstColumn<Nullable<String>>(4, "44444")},
             utf8mb4_general_ci_collator));
 
-    // constant string
+    // constant vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"11", "22222", "22", "11111111"}),
         executeFunction(
@@ -428,7 +428,7 @@ try
     const auto * utf8mb4_general_ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
 
     /// without collator
-    // string string
+    // vector vector
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"111111"}),
                      executeFunction(
                          func_name,
@@ -451,7 +451,7 @@ try
                          {createColumn<Nullable<String>>({"1111", "2222"}),
                           createColumn<Nullable<String>>({"11", "2"}),
                           createColumn<Nullable<String>>({"111", "22"})}));
-    // string constant
+    // vector constant
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"22222", "33", "22222", "22222"}),
         executeFunction(
@@ -475,7 +475,7 @@ try
              createColumn<Nullable<String>>({"33", "33", "11", "2333"}),
              createConstColumn<Nullable<String>>(4, "22222")}));
 
-    // constant string
+    // constant vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"22222", "33", "22222", "22222"}),
         executeFunction(
@@ -498,7 +498,7 @@ try
                           createConstColumn<Nullable<String>>(4, "1111")}));
 
     /// with collator
-    // string string
+    // vector vector
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({"1111"}),
                      executeFunction(
                          func_name,
@@ -581,7 +581,7 @@ try
                           createColumn<Nullable<String>>({{}, {}})},
                          utf8mb4_general_ci_collator));
 
-    // string constant
+    // vector constant
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"22222", "33", "22222", "22222"}),
         executeFunction(
@@ -604,7 +604,7 @@ try
              createConstColumn<Nullable<String>>(4, "44444")},
             utf8mb4_general_ci_collator));
 
-    // constant string
+    // constant vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"22222", "33", "22222", "22222"}),
         executeFunction(

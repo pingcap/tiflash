@@ -140,7 +140,7 @@ struct LeastGreatestStringImpl
         if constexpr (use_collator)
             res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
         else
-            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
+            res = mem_utils::CompareStrView({reinterpret_cast<const char *>(&a_data[0]), a_size}, {reinterpret_cast<const char *>(&b_data[0]), b_size});
 
         if constexpr (least)
         {
@@ -203,7 +203,7 @@ struct LeastGreatestStringImpl
         if constexpr (use_collator)
             res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
         else
-            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
+            res = mem_utils::CompareStrView({reinterpret_cast<const char *>(&a_data[0]), a_size}, {reinterpret_cast<const char *>(&b_data[0]), b_size});
 
         if constexpr (least)
         {
@@ -328,7 +328,7 @@ struct LeastGreatestStringImpl
         if constexpr (use_collator)
             res = collator->compare(reinterpret_cast<const char *>(a.data), a.size, reinterpret_cast<const char *>(b.data), b.size);
         else
-            res = memcmp(a.data, b.data, std::min(a.size, b.size));
+            res = a.compare(b);
 
         if constexpr (least)
         {
@@ -560,14 +560,6 @@ public:
                 block.getByPosition(result).column = std::move(res_column);
                 return;
             }
-        }
-        else // no string columns, use const columns result
-        {
-            auto col_str = ColumnString::create();
-            col_str->insert(Field(const_res.toString()));
-            auto const_res_col = ColumnConst::create(col_str->getPtr(), const_columns[0]->size());
-            block.getByPosition(result).column = std::move(const_res_col);
-            return;
         }
 
         // 3. merge result column of const columns and vector columns
