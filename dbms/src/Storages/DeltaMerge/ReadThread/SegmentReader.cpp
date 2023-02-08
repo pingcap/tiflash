@@ -31,7 +31,7 @@ public:
     SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_, const std::vector<int> & cpus_)
         : task_queue(task_queue_)
         , stop(false)
-        , log(Logger::get(name))
+        , log(Logger::get())
         , cpus(cpus_)
     {
         t = std::thread(&SegmentReader::run, this);

@@ -974,7 +974,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
 
     // Use pd address to define which default_database we use by default.
-    // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
+    // For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", "system");
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
