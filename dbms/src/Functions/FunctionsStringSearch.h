@@ -47,7 +47,7 @@ inline void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString 
     dst_offsets.resize(src_offsets.size());
 
     memcpy(&dst_data[0], &src_data[0], src_data.size());
-    memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size());
+    memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size() * sizeof(ColumnString::Offsets));
 }
 
 inline void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & src_col, const ColumnConst * src_col_const)
@@ -296,7 +296,7 @@ public:
             Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             if constexpr (name == std::string_view(NameIlike3Args::name))
-                restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col0_copy_ptr));
+                restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col1_copy_ptr));
             return;
         }
 
@@ -338,7 +338,7 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
         if constexpr (name == std::string_view(NameIlike3Args::name))
-            restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col0_copy_ptr));
+            restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col1_copy_ptr));
     }
 
 private:
