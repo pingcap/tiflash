@@ -17,7 +17,7 @@
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Poco/Logger.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>

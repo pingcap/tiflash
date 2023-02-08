@@ -175,7 +175,7 @@ public:
         return build_concurrency;
     }
 
-    void meetError();
+    void meetError(const String & error_message);
 
     /// Reference to the row in block.
     struct RowRef
@@ -304,6 +304,7 @@ private:
     size_t active_probe_concurrency;
 
     bool meet_error = false;
+    String error_message;
 
 private:
     /// collators for the join key

@@ -40,8 +40,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 
 namespace tests
 {
@@ -85,7 +84,7 @@ try
     storage_pool->data_storage_v3->gc(/* not_skip */ true);
     ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
     ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1); // 1 DMFile
-    PageId replaced_stable_id{};
+    PageIdU64 replaced_stable_id{};
     {
         auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
         ASSERT_EQ(1, stable_page_ids.size());
@@ -176,8 +175,7 @@ try
         table_columns,
         input_stream,
         file_id,
-        delegator.choosePath(),
-        DMFileBlockOutputStream::Flags{});
+        delegator.choosePath());
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();

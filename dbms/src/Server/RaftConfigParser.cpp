@@ -88,40 +88,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfigura
         res.enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
     }
 
-    if (config.has("raft.snapshot.method"))
-    {
-        String snapshot_method = config.getString("raft.snapshot.method");
-        std::transform(snapshot_method.begin(), snapshot_method.end(), snapshot_method.begin(), [](char ch) { return std::tolower(ch); });
-        if (snapshot_method == "file1")
-        {
-            res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
-        }
-#if 0
-        // Not generally available for this file format
-        else if (snapshot_method == "file2")
-        {
-            res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-        }
-#endif
-    }
-    switch (res.snapshot_apply_method)
-    {
-    case TiDB::SnapshotApplyMethod::DTFile_Directory:
-    case TiDB::SnapshotApplyMethod::DTFile_Single:
-        if (res.engine != TiDB::StorageEngine::DT)
-        {
-            throw Exception(
-                fmt::format("Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine={}] [snapshot method={}]",
-                            static_cast<Int32>(res.engine),
-                            applyMethodToString(res.snapshot_apply_method)),
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
-        break;
-    default:
-        break;
-    }
-
-    LOG_INFO(log, "Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method));
+    LOG_INFO(log, "Default storage engine [type={}]", static_cast<Int64>(res.engine));
 
     return res;
 }

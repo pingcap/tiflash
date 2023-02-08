@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <fmt/core.h>
 
 namespace DB::DM
@@ -26,7 +26,7 @@ struct ExternalDTFileInfo
     /**
      * The allocated PageId of the file.
      */
-    PageId id;
+    PageIdU64 id;
 
     /**
      * The handle range of contained data.

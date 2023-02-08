@@ -28,7 +28,7 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
 void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<GetResultSinkOp>(*this));
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, *this));
     });
 }
 } // namespace DB
