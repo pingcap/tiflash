@@ -133,7 +133,6 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
         paths.first,
         paths.second,
         Strings{},
-        /*enable_raft_compatible_mode=*/true,
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
@@ -171,7 +170,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
         testdata_path.push_back(root_path);
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
-    context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
