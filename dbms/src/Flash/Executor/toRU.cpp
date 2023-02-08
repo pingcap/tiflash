@@ -31,7 +31,7 @@ UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
 }
 } // namespace
 
-// 3 ru = 1 millisecond cpu time
+// 1 ru = 3 millisecond cpu time
 RU toRU(UInt64 cpu_time_ns)
 {
     if (unlikely(cpu_time_ns == 0))
