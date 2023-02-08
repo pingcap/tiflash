@@ -308,6 +308,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
+    Int32 local_tunnel_version_,
     const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
@@ -321,6 +322,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
+    , local_tunnel_version(local_tunnel_version_)
     , data_size_in_queue(0)
     , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
@@ -452,39 +454,39 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             async_requests.push_back(std::move(req));
         else if (req.is_local)
         {
-            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            if (local_tunnel_version == 1)
+            {
+                setUpConnectionWithReadLoop(std::move(req));
+            }
+            else
+            {
+                LOG_INFO(exc_log, "refined local tunnel is enabled");
+                String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
-            LocalRequestHandler local_request_handler(
-                getMemoryTracker(),
-                [this](bool meet_error, const String & local_err_msg) {
-                    this->connectionDone(meet_error, local_err_msg, exc_log);
-                },
-                [this]() {
-                    this->connectionLocalDone();
-                },
-                [this]() {
-                    this->addLocalConnectionNum();
-                },
-                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+                LocalRequestHandler local_request_handler(
+                    getMemoryTracker(),
+                    [this](bool meet_error, const String & local_err_msg) {
+                        this->connectionDone(meet_error, local_err_msg, exc_log);
+                    },
+                    [this]() {
+                        this->connectionLocalDone();
+                    },
+                    [this]() {
+                        this->addLocalConnectionNum();
+                    },
+                    ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
-            rpc_context->establishMPPConnectionLocal(
-                req,
-                req.source_index,
-                local_request_handler,
-                enable_fine_grained_shuffle_flag);
-            --connection_uncreated_num;
+                rpc_context->establishMPPConnectionLocalV2(
+                    req,
+                    req.source_index,
+                    local_request_handler,
+                    enable_fine_grained_shuffle_flag);
+                --connection_uncreated_num;
+            }
         }
         else
         {
-            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
-                if (enable_fine_grained_shuffle_flag)
-                    readLoop<true>(req);
-                else
-                    readLoop<false>(req);
-            });
-
-            ++thread_count;
-            --connection_uncreated_num;
+            setUpConnectionWithReadLoop(std::move(req));
         }
     }
 
@@ -502,6 +504,20 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         ++thread_count;
         connection_uncreated_num -= async_conn_num;
     }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && req)
+{
+    thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
+        if (enable_fine_grained_shuffle_flag)
+            readLoop<true>(req);
+        else
+            readLoop<false>(req);
+    });
+
+    ++thread_count;
+    --connection_uncreated_num;
 }
 
 template <typename RPCContext>
@@ -565,10 +581,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, ReceiverMode::Sync);
+        ReceiverMode recv_mode = req.is_local ? ReceiverMode::Local : ReceiverMode::Sync;
+        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, recv_mode);
         for (int i = 0; i < max_retry_times; ++i)
         {
-            auto reader = rpc_context->makeSyncReader(req);
+            auto reader = rpc_context->makeReader(req);
             bool has_data = false;
             for (;;)
             {

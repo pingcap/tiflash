@@ -53,6 +53,7 @@
 #include <Server/RaftConfigParser.h>
 #include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -205,6 +206,8 @@ struct ContextShared
     pcg64 rng{randomSeed()};
 
     Context::ConfigReloadCallback config_reload_callback;
+
+    std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
     explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
@@ -551,7 +554,6 @@ void Context::setPathPool(
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
-    bool enable_raft_compatible_mode,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
 {
@@ -561,8 +563,7 @@ void Context::setPathPool(
         latest_data_paths,
         kvstore_paths,
         global_capacity_,
-        file_provider_,
-        enable_raft_compatible_mode);
+        file_provider_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -1841,6 +1842,16 @@ SharedQueriesPtr Context::getSharedQueries()
     if (!shared->shared_queries)
         shared->shared_queries = std::make_shared<SharedQueries>();
     return shared->shared_queries;
+}
+
+const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchemas() const
+{
+    return shared->shared_block_schemas;
+}
+
+void Context::initializeSharedBlockSchemas()
+{
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(*this);
 }
 
 size_t Context::getMaxStreams() const

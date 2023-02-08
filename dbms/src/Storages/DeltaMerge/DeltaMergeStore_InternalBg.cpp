@@ -77,7 +77,7 @@ public:
         options.only_list_can_gc = true;
         for (auto & root_path : delegate.listPaths())
         {
-            std::set<PageId> ids_under_path;
+            std::set<PageIdU64> ids_under_path;
             auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
             path_and_ids_vec.emplace_back(root_path, std::move(file_ids_in_current_path));
         }
@@ -104,7 +104,7 @@ public:
         , logger(std::move(log))
     {}
 
-    void operator()(const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids)
+    void operator()(const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageIdU64> & valid_ids)
     {
         // If the StoragePathPool is invalid or shutdown flag is set,
         // meaning we call `remover` after shutdowning or dropping the table,
@@ -177,7 +177,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     // that callbacks is called after the `DeltaMergeStore` shutdown or dropped,
     // we must make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = storage_pool->getNamespaceId();
+    callbacks.prefix = storage_pool->getNamespaceId();
     callbacks.scanner = LocalDMFileGcScanner(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider());
     callbacks.remover = LocalDMFileGcRemover(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider(), log);
     // remember to unregister it when shutdown
@@ -595,7 +595,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
-        checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
     }
 
     return new_segment;
@@ -718,7 +718,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
     }
 
     segment_snap = {};
-    checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
 
     return new_segment;
 }

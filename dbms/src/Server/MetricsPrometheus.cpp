@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -141,7 +141,7 @@ private:
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Context & global_context,
     const std::weak_ptr<prometheus::Collectable> & collectable,
-    const String & metrics_port)
+    const String & address)
 {
     auto security_config = global_context.getSecurityConfig();
     auto [ca_path, cert_path, key_path] = security_config->getPaths();
@@ -163,8 +163,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
-
-    Poco::Net::SocketAddress addr("0.0.0.0", std::stoi(metrics_port));
+    Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
     socket.bind(addr, true);
     socket.listen();
     auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
@@ -173,6 +172,17 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
 
 constexpr Int64 MILLISECOND = 1000;
 constexpr Int64 INIT_DELAY = 5;
+
+namespace
+{
+inline bool isIPv6(const String & input_address)
+{
+    if (input_address.empty())
+        return false;
+    char str[INET6_ADDRSTRLEN];
+    return inet_pton(AF_INET6, input_address.c_str(), str) == 1;
+}
+} // namespace
 
 MetricsPrometheus::MetricsPrometheus(
     Context & context,
@@ -232,18 +242,23 @@ MetricsPrometheus::MetricsPrometheus(
     if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
         auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
-
+        auto listen_host = conf.getString("listen_host", "0.0.0.0");
+        String addr;
+        if (isIPv6(listen_host))
+            addr = "[" + listen_host + "]:" + metrics_port;
+        else
+            addr = listen_host + ":" + metrics_port;
         if (context.getSecurityConfig()->hasTlsConfig())
         {
-            server = getHTTPServer(context, tiflash_metrics.registry, metrics_port);
+            server = getHTTPServer(context, tiflash_metrics.registry, addr);
             server->start();
-            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = {}", metrics_port);
+            LOG_INFO(log, "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
         else
         {
-            exposer = std::make_shared<prometheus::Exposer>(metrics_port);
+            exposer = std::make_shared<prometheus::Exposer>(addr);
             exposer->RegisterCollectable(tiflash_metrics.registry);
-            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = {}", metrics_port);
+            LOG_INFO(log, "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
     }
     else
