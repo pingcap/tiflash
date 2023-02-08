@@ -60,13 +60,28 @@ struct TiDBDivideFloatingImpl<A, B, false>
     using ResultType = typename NumberTraits::ResultOfFloatingPointDivision<A, B>::Type;
 
     template <typename Result = ResultType>
-    static Result apply(A a, B b)
+    static Result apply(A x, B d)
     {
         // round for decimal floating number dividing
         if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256>)
-            return (a < 0) != (b < 0) ? (a - (b / 2)) / b : (a + (b / 2)) / b;
+        {
+            Result quotient = x / d;
+            Result mod = x % d;
+            Result half = (d / 2) + (d % 2);
+
+            Result abs_m = mod < 0 ? -mod : mod;
+            Result abs_h = half < 0 ? -half : half;
+            if (abs_m >= abs_h)
+            {
+                if ((x < 0) == (d < 0)) // same_sign
+                    quotient = quotient + 1;
+                else
+                    quotient = quotient - 1;
+            }
+            return quotient;
+        }
         else
-            return static_cast<Result>(a) / b;
+            return static_cast<Result>(x) / d;
     }
     template <typename Result = ResultType>
     static Result apply(A a, B b, UInt8 & res_null)

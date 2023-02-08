@@ -105,14 +105,14 @@ protected:
     }
 };
 
-TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRoundInternal)
-try
+template <typename TYPE>
+void doTest()
 {
-    using TYPE = Int32;
     auto apply = static_cast<TYPE (*)(TYPE, TYPE)>(&TiDBDivideFloatingImpl<TYPE, TYPE, false>::apply);
 
-    constexpr auto max = std::numeric_limits<TYPE>::max();
-    //    constexpr auto min = std::numeric_limits<TYPE>::min();
+    constexpr TYPE max = std::numeric_limits<TYPE>::max();
+    constexpr TYPE min = std::numeric_limits<TYPE>::min(); // note: Int256's min is not equal to -max-1
+
     // clang-format off
     const std::vector<std::array<TYPE, 3>> cases = {
         {1, 2, 1}, {1, -2, -1}, {-1, 2, -1}, {-1, -2, 1},
@@ -124,15 +124,32 @@ try
         {4, 3, 1}, {4, -3, -1}, {-4, 3, -1}, {-4, -3, 1},
         {5, 3, 2}, {5, -3, -2}, {-5, 3, -2}, {-5, -3, 2},
 
-        {max, max, 1}, {max-1, max, 1}, {max/2, max, 1}, {max/2-1, max, 0}, {0, max, 0}
+        // max as divisor
+        {0, max, 0}, {max/2-1, max, 0}, {max/2, max, 0}, {max/2+1, max, 1}, {max-1, max, 1}, {max, max, 1},
+        {-1, max, 0}, {-max/2+1, max, 0},  {-max/2, max, 0}, {-max/2-1, max, -1}, {-max+1, max, -1}, {-max, max, -1}, {min, max, -1},
+
+        // max as dividend
+        {max, 1, max}, {max, 2, max/2+1}, {max, max/2-1, 2}, {max, max/2, 2}, {max, max/2+1, 2}, {max, max-1, 1},
+        {max, -1, -max}, {max, -2, -max/2-1}, {max, -max/2+1, -2}, {max, -max/2, -2}, {max, -max/2-1, -2}, {max, -max+1, -1},
+        {-max, 1, -max}, {-max, 2, -max/2-1}, {-max, max/2+1, -2}, {-max, max/2, -2}, {-max, max/2-1, -2}, {-max, max-1, -1},
+        {-max, -1, max}, {-max, -2, max/2+1}, {-max, -max/2-1, 2}, {-max, -max/2, 2}, {-max, -max/2+1, 2}, {-max, -max+1, 1},
     };
     // clang-format on
 
-    for (const auto & c : cases)
+    for (const auto & expect : cases)
     {
-        std::array<TYPE, 3> res = {c[0], c[1], apply(c[0], c[1])};
-        ASSERT_EQ(res, c);
+        std::array<TYPE, 3> actual = {expect[0], expect[1], apply(expect[0], expect[1])};
+        ASSERT_EQ(expect, actual);
     }
+}
+
+TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRoundInternal)
+try
+{
+    doTest<Int32>();
+    doTest<Int64>();
+    doTest<Int128>();
+    doTest<Int256>();
 }
 CATCH
 
