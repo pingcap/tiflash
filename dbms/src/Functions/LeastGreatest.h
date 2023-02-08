@@ -550,7 +550,7 @@ public:
                 // materialize string columns result
                 auto res_column = ColumnString::create();
                 for (auto & ref : result_string_refs)
-                    res_column->insert(Field(ref.toString()));
+                    res_column->insertData(ref.data, ref.size);
                 block.getByPosition(result).column = std::move(res_column);
                 return;
             }
