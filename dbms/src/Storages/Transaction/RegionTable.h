@@ -85,7 +85,7 @@ public:
         Timepoint last_flush_time = Clock::now();
     };
 
-    using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
+    using InternalRegions = robin_hood::unordered_map<RegionID, InternalRegion>;
 
     struct Table : boost::noncopyable
     {
@@ -96,8 +96,8 @@ public:
         InternalRegions regions;
     };
 
-    using TableMap = std::unordered_map<TableID, Table>;
-    using RegionInfoMap = std::unordered_map<RegionID, TableID>;
+    using TableMap = robin_hood::unordered_map<TableID, Table>;
+    using RegionInfoMap = robin_hood::unordered_map<RegionID, TableID>;
 
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
     // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
@@ -112,10 +112,10 @@ public:
         std::atomic<UInt64> self_safe_ts;
     };
     using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
-    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
+    using SafeTsMap = robin_hood::unordered_map<RegionID, SafeTsEntryPtr>;
 
-    using DirtyRegions = std::unordered_set<RegionID>;
-    using TableToOptimize = std::unordered_set<TableID>;
+    using DirtyRegions = robin_hood::unordered_set<RegionID>;
+    using TableToOptimize = robin_hood::unordered_set<TableID>;
 
     struct FlushThresholds
     {
@@ -181,7 +181,7 @@ public:
                                                                     const TiDB::TableID table_id,
                                                                     const RegionPtr & region,
                                                                     const Timestamp start_ts,
-                                                                    const std::unordered_set<UInt64> * bypass_lock_ts,
+                                                                    const robin_hood::unordered_set<UInt64> * bypass_lock_ts,
                                                                     RegionVersion region_version,
                                                                     RegionVersion conf_version,
                                                                     const LoggerPtr & log);

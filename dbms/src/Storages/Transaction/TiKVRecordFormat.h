@@ -155,7 +155,7 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     WriteBufferFromOwnString ss;
 
-    std::unordered_map<String, size_t> column_name_columns_index_map;
+    robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
         column_name_columns_index_map.emplace(table_info.columns[i].name, i);

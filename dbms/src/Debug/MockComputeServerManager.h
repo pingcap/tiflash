@@ -44,7 +44,7 @@ public:
 
     MockMPPServerInfo getMockMPPServerInfo(size_t partition_id);
 
-    std::unordered_map<size_t, MockServerConfig> & getServerConfigMap();
+    robin_hood::unordered_map<size_t, MockServerConfig> & getServerConfigMap();
 
     void resetMockMPPServerInfo(size_t partition_num);
 
@@ -57,8 +57,8 @@ private:
     void prepareMockMPPServerInfo();
 
 private:
-    std::unordered_map<size_t, std::unique_ptr<FlashGrpcServerHolder>> server_map;
-    std::unordered_map<size_t, MockServerConfig> server_config_map;
+    robin_hood::unordered_map<size_t, std::unique_ptr<FlashGrpcServerHolder>> server_map;
+    robin_hood::unordered_map<size_t, MockServerConfig> server_config_map;
 };
 } // namespace tests
 } // namespace DB

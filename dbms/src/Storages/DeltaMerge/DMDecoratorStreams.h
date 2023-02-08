@@ -19,8 +19,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <common/logger_useful.h>
-
-#include <unordered_set>
+#include <common/robin_hood.h>
 
 namespace DB
 {

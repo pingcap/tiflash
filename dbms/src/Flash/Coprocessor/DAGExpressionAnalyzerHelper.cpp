@@ -42,10 +42,10 @@ String getUniqueName(const Block & block, const String & prefix)
 struct DateAdd
 {
     static constexpr auto name = "date_add";
-    static const std::unordered_map<String, String> unit_to_func_name_map;
+    static const robin_hood::unordered_map<String, String> unit_to_func_name_map;
 };
 
-const std::unordered_map<String, String> DateAdd::unit_to_func_name_map
+const robin_hood::unordered_map<String, String> DateAdd::unit_to_func_name_map
     = {
         {"DAY", "addDays"},
         {"WEEK", "addWeeks"},
@@ -58,10 +58,10 @@ const std::unordered_map<String, String> DateAdd::unit_to_func_name_map
 struct DateSub
 {
     static constexpr auto name = "date_sub";
-    static const std::unordered_map<String, String> unit_to_func_name_map;
+    static const robin_hood::unordered_map<String, String> unit_to_func_name_map;
 };
 
-const std::unordered_map<String, String> DateSub::unit_to_func_name_map
+const robin_hood::unordered_map<String, String> DateSub::unit_to_func_name_map
     = {
         {"DAY", "subtractDays"},
         {"WEEK", "subtractWeeks"},

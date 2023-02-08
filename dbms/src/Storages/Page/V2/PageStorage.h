@@ -22,6 +22,7 @@
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/robin_hood.h>
 
 #include <condition_variable>
 #include <functional>
@@ -30,7 +31,6 @@
 #include <set>
 #include <shared_mutex>
 #include <type_traits>
-#include <unordered_map>
 
 namespace DB
 {

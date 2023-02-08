@@ -14,6 +14,7 @@
 
 #include <benchmark/benchmark.h>
 #include <common/memcpy.h>
+#include <common/robin_hood.h>
 #include <unistd.h>
 
 #include <cassert>
@@ -26,7 +27,6 @@
 #include <random>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 
 #include "../../libmemcpy/folly/FollyMemcpy.h"
 #include "../../libmemcpy/memcpy.h"

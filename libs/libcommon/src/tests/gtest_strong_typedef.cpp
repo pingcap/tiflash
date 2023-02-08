@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <common/robin_hood.h>
 #include <common/strong_typedef.h>
-#include <set>
-#include <unordered_set>
-#include <memory>
-#include <type_traits>
-
 #include <gtest/gtest.h>
+
+#include <memory>
+#include <set>
+#include <type_traits>
 
 
 TEST(StrongTypedefSuite, TypedefsOfTheSameType)
@@ -37,7 +37,7 @@ TEST(StrongTypedefSuite, Map)
     /// check that this code compiles
     std::set<Int> int_set;
     int_set.insert(Int(1));
-    std::unordered_set<Int> int_unorderd_set;
+    robin_hood::unordered_set<Int> int_unorderd_set;
     int_unorderd_set.insert(Int(2));
 }
 

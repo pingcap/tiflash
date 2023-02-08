@@ -29,13 +29,13 @@ struct SchemaBuilder
 
     Context & context;
 
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
+    robin_hood::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
 
     Int64 target_version;
 
     Poco::Logger * log;
 
-    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, Int64 version)
+    SchemaBuilder(Getter & getter_, Context & context_, robin_hood::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, Int64 version)
         : getter(getter_)
         , context(context_)
         , databases(dbs_)

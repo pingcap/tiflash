@@ -16,10 +16,10 @@
 
 #include <Common/SyncPoint/ScopeGuard.h>
 #include <Poco/Logger.h>
+#include <common/robin_hood.h>
 
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -86,7 +86,7 @@ private:
 
     static std::pair<SyncChannelPtr, SyncChannelPtr> mustGetChannel(const char * name);
 
-    inline static std::unordered_map<std::string, std::pair<SyncChannelPtr, SyncChannelPtr>>
+    inline static robin_hood::unordered_map<std::string, std::pair<SyncChannelPtr, SyncChannelPtr>>
         channels{};
     inline static std::mutex mu{};
 };

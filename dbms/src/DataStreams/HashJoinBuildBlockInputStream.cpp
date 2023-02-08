@@ -40,7 +40,7 @@ Block HashJoinBuildBlockInputStream::readImpl()
 
 void HashJoinBuildBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    static const std::unordered_map<ASTTableJoin::Kind, String> join_type_map{
+    static const robin_hood::unordered_map<ASTTableJoin::Kind, String> join_type_map{
         {ASTTableJoin::Kind::Inner, "Inner"},
         {ASTTableJoin::Kind::Left, "Left"},
         {ASTTableJoin::Kind::Right, "Right"},

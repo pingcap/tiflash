@@ -19,9 +19,8 @@
 #include <Core/NamesAndTypes.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Interpreters/ExpressionActions.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
-
-#include <unordered_map>
 
 namespace DB::FinalizeHelper
 {

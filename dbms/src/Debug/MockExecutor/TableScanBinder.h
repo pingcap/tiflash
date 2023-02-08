@@ -28,12 +28,12 @@ public:
         , table_info(table_info_)
     {}
 
-    void columnPrune(std::unordered_set<String> & used_columns) override;
+    void columnPrune(robin_hood::unordered_set<String> & used_columns) override;
 
 
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &) override;
 
-    void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> &) override
+    void toMPPSubPlan(size_t &, const DAGProperties &, robin_hood::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> &) override
     {}
 
     TableID getTableId() const;

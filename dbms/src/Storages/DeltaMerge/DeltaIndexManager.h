@@ -17,6 +17,8 @@
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <common/logger_useful.h>
 
+#include <unordered_map>
+
 namespace DB
 {
 namespace DM
@@ -64,9 +66,9 @@ public:
     {}
 
     /// Note that if isLimit() is false, than this method always return 0.
-    size_t currentSize() { return current_size; }
+    size_t currentSize() const { return current_size; }
 
-    bool isLimit() { return max_size != 0; }
+    bool isLimit() const { return max_size != 0; }
 
     /// Put the reference of DeltaIndex into this manager.
     void refreshRef(const DeltaIndexPtr & index);

@@ -16,11 +16,11 @@
 
 #include <Common/Exception.h>
 #include <Parsers/IAST.h>
+#include <common/robin_hood.h>
 
 #include <functional>
 #include <iostream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace DB
@@ -52,8 +52,8 @@ public:
     static BlockInputStreamPtr invokeSchemaful(Context & context, const std::string & name, const SchemafulDBGFunc & func, const ASTs & args);
 
 private:
-    std::unordered_map<std::string, SchemalessDBGFunc> schemaless_funcs;
-    std::unordered_map<std::string, SchemafulDBGFunc> schemaful_funcs;
+    robin_hood::unordered_map<std::string, SchemalessDBGFunc> schemaless_funcs;
+    robin_hood::unordered_map<std::string, SchemafulDBGFunc> schemaful_funcs;
 };
 
 } // namespace DB

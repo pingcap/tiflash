@@ -15,10 +15,10 @@
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunctionCombinator.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
 #include <string>
-#include <unordered_map>
 
 
 namespace DB
@@ -35,7 +35,7 @@ public:
     AggregateFunctionCombinatorPtr tryFindSuffix(const std::string & name) const;
 
 private:
-    std::unordered_map<std::string, AggregateFunctionCombinatorPtr> dict;
+    robin_hood::unordered_map<std::string, AggregateFunctionCombinatorPtr> dict;
 };
 
 } // namespace DB

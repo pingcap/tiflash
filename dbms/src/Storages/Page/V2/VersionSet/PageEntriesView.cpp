@@ -54,7 +54,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     return entry;
 }
 
-const PageEntry PageEntriesView::at(const PageId page_id) const
+PageEntry PageEntriesView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
     if (!entry)
@@ -168,7 +168,7 @@ PageId PageEntriesView::maxId() const
 
 size_t PageEntriesView::numPages() const
 {
-    std::unordered_set<PageId> page_ids;
+    robin_hood::unordered_set<PageId> page_ids;
     std::vector<PageEntriesForDeltaPtr> nodes;
     for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         nodes.emplace_back(node);

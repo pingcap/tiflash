@@ -24,6 +24,7 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
+#include <common/robin_hood.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -31,7 +32,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-#include <unordered_set>
 
 namespace pingcap
 {
@@ -554,7 +554,7 @@ class DDLGuard
 {
 public:
     /// Element name -> message.
-    /// NOTE: using std::map here (and not std::unordered_map) to avoid iterator invalidation on insertion.
+    /// NOTE: using std::map here (and not robin_hood::unordered_map) to avoid iterator invalidation on insertion.
     using Map = std::map<String, String>;
 
     DDLGuard(Map & map_, std::mutex & mutex_, std::unique_lock<std::mutex> && lock, const String & elem, const String & message);

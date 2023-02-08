@@ -15,9 +15,8 @@
 #pragma once
 
 #include <Flash/Coprocessor/ExecutionSummary.h>
+#include <common/robin_hood.h>
 #include <tipb/select.pb.h>
-
-#include <unordered_map>
 
 namespace DB
 {
@@ -28,6 +27,6 @@ struct RemoteExecutionSummary
     void add(tipb::SelectResponse & resp);
 
     // <executor_id, ExecutionSummary>
-    std::unordered_map<String, ExecutionSummary> execution_summaries;
+    robin_hood::unordered_map<String, ExecutionSummary> execution_summaries;
 };
 } // namespace DB

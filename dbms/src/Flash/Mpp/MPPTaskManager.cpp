@@ -16,11 +16,11 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <common/robin_hood.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
 #include <string>
-#include <unordered_map>
 
 namespace DB
 {
@@ -113,7 +113,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
 {
     const auto & meta = request->sender_meta();
     MPPTaskId id{meta};
-    std::unordered_map<MPPTaskId, MPPTaskPtr>::iterator it;
+    robin_hood::unordered_map<MPPTaskId, MPPTaskPtr>::iterator it;
     bool cancelled = false;
     String error_message;
     std::unique_lock lock(mu);

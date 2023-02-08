@@ -16,8 +16,7 @@
 #include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
-
-#include <unordered_set>
+#include <common/robin_hood.h>
 
 namespace Poco
 {
@@ -35,7 +34,7 @@ struct TiFlashRaftConfig
     const std::string engine_key = "engine";
     const std::string engine_value = "tiflash";
     Strings pd_addrs;
-    std::unordered_set<std::string> ignore_databases{"system"};
+    robin_hood::unordered_set<std::string> ignore_databases{"system"};
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
 

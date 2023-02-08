@@ -94,7 +94,7 @@ grpc::Status CoprocessorHandler::execute()
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
-            const std::unordered_set<UInt64> bypass_lock_ts(
+            const robin_hood::unordered_set<UInt64> bypass_lock_ts(
                 cop_context.kv_context.resolved_locks().begin(),
                 cop_context.kv_context.resolved_locks().end());
             table_regions_info.local_regions.emplace(

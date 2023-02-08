@@ -20,7 +20,7 @@
 
 namespace DB
 {
-using DAGColumnInfo = std::pair<String, ColumnInfo>;
+using DAGColumnInfo = robin_hood::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
 class ChunkCodecStream

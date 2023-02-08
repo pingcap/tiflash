@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <Storages/ColumnDefault.h>
+#include <common/robin_hood.h>
+
 #include <string>
-#include <unordered_map>
 
 
 namespace DB
@@ -27,7 +29,7 @@ struct ColumnDefault;
 
 void evaluateMissingDefaults(Block & block,
                              const NamesAndTypesList & required_columns,
-                             const std::unordered_map<std::string, ColumnDefault> & column_defaults,
+                             const robin_hood::unordered_map<std::string, ColumnDefault> & column_defaults,
                              const Context & context);
 
 } // namespace DB

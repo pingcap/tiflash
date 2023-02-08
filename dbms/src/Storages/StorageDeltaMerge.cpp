@@ -122,7 +122,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
     table_column_defines.clear();
     pk_column_names.clear();
 
-    std::unordered_set<String> pks;
+    robin_hood::unordered_set<String> pks;
     if (!tidb_table_info.columns.empty())
     {
         if (pk_is_handle)
@@ -529,7 +529,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
     store->write(global_context, settings, block);
 }
 
-std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
+robin_hood::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
 {
     if (!ast)
         return {};
@@ -562,7 +562,7 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
     const auto * partition_function = typeid_cast<const ASTFunction *>(partition_ast.value.get());
     if (partition_function && partition_function->name == "tuple")
     {
-        std::unordered_set<UInt64> ids;
+        robin_hood::unordered_set<UInt64> ids;
         bool ok = true;
         for (const auto & item : partition_function->arguments->children)
         {
@@ -1089,7 +1089,7 @@ void StorageDeltaMerge::alterImpl(
     const Context & context)
 try
 {
-    std::unordered_set<String> cols_drop_forbidden;
+    robin_hood::unordered_set<String> cols_drop_forbidden;
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);

@@ -26,6 +26,7 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesView.h>
+#include <common/robin_hood.h>
 
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
@@ -34,7 +35,6 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <unordered_set>
 #include <utility>
 
 namespace CurrentMetrics

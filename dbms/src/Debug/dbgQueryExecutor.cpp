@@ -258,7 +258,7 @@ BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, co
     return func_wrap_output_stream(outputDAGResponse(context, task.result_schema, dag_response));
 }
 
-std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, robin_hood::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;

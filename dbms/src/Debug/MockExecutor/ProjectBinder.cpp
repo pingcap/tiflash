@@ -51,11 +51,11 @@ bool ProjectBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t colla
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-void ProjectBinder::columnPrune(std::unordered_set<String> & used_columns)
+void ProjectBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
     output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
                         output_schema.end());
-    std::unordered_set<String> used_input_columns;
+    robin_hood::unordered_set<String> used_input_columns;
     for (auto & expr : exprs)
     {
         if (typeid_cast<ASTAsterisk *>(expr.get()))

@@ -97,7 +97,7 @@ public:
 
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-    const std::unordered_set<std::string> & getIgnoreDatabases() const;
+    const robin_hood::unordered_set<std::string> & getIgnoreDatabases() const;
 
     ::TiDB::StorageEngine getEngineType() const { return engine; }
 
@@ -135,7 +135,7 @@ private:
 
     std::atomic<StoreStatus> store_status{StoreStatus::Idle};
 
-    const std::unordered_set<std::string> ignore_databases;
+    const robin_hood::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
     MPPTaskManagerPtr mpp_task_manager;
 

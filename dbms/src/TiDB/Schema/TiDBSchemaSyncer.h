@@ -48,7 +48,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::mutex schema_mutex;
 
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
+    robin_hood::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     Poco::Logger * log;
 

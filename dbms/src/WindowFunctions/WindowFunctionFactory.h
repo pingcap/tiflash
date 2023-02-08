@@ -17,12 +17,12 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <WindowFunctions/IWindowFunction.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace DB
@@ -72,7 +72,7 @@ private:
         const DataTypes & argument_types) const;
 
 private:
-    using WindowFunctions = std::unordered_map<String, Creator>;
+    using WindowFunctions = robin_hood::unordered_map<String, Creator>;
 
     WindowFunctions window_functions;
 };

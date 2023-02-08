@@ -65,9 +65,9 @@ struct QueryFragment
     TableID table_id;
     bool is_top_fragment;
     std::vector<Int64> sender_target_task_ids;
-    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    robin_hood::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     std::vector<Int64> task_ids;
-    QueryFragment(ExecutorBinderPtr root_executor_, TableID table_id_, bool is_top_fragment_, std::vector<Int64> && sender_target_task_ids_ = {}, std::unordered_map<String, std::vector<Int64>> && receiver_source_task_ids_map_ = {}, std::vector<Int64> && task_ids_ = {})
+    QueryFragment(ExecutorBinderPtr root_executor_, TableID table_id_, bool is_top_fragment_, std::vector<Int64> && sender_target_task_ids_ = {}, robin_hood::unordered_map<String, std::vector<Int64>> && receiver_source_task_ids_map_ = {}, std::vector<Int64> && task_ids_ = {})
         : root_executor(std::move(root_executor_))
         , table_id(table_id_)
         , is_top_fragment(is_top_fragment_)

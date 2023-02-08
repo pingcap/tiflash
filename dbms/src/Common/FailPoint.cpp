@@ -26,7 +26,7 @@
 
 namespace DB
 {
-std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
+robin_hood::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
     M(exception_between_alter_data_and_meta)                      \

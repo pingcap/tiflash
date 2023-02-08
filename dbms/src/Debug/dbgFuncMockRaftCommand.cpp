@@ -60,7 +60,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         std::vector<Field> end_keys1;
         std::vector<Field> end_keys2;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
+        robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             column_name_columns_index_map.emplace(table_info.columns[i].name, i);

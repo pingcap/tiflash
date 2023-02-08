@@ -73,7 +73,7 @@ public:
 private:
     SegmentReaderPoolManager();
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
-    std::unordered_set<std::thread::id> reader_ids;
+    robin_hood::unordered_set<std::thread::id> reader_ids;
     Poco::Logger * log;
 };
 

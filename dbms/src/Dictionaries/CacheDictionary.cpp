@@ -378,7 +378,7 @@ CacheDictionary::FindResult CacheDictionary::findCellIdx(const Key & id, const C
 void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8> & out) const
 {
     /// Mapping: <id> -> { all indices `i` of `ids` such that `ids[i]` = <id> }
-    std::unordered_map<Key, std::vector<size_t>> outdated_ids;
+    robin_hood::unordered_map<Key, std::vector<size_t>> outdated_ids;
 
     const auto rows = ext::size(ids);
     {
@@ -557,7 +557,7 @@ void CacheDictionary::getItemsNumberImpl(
     DefaultGetter && get_default) const
 {
     /// Mapping: <id> -> { all indices `i` of `ids` such that `ids[i]` = <id> }
-    std::unordered_map<Key, std::vector<size_t>> outdated_ids;
+    robin_hood::unordered_map<Key, std::vector<size_t>> outdated_ids;
     auto & attribute_array = std::get<ContainerPtrType<AttributeType>>(attribute.arrays);
     const auto rows = ext::size(ids);
 
@@ -664,9 +664,9 @@ void CacheDictionary::getItemsString(
     out->getOffsets().resize_assume_reserved(0);
 
     /// Mapping: <id> -> { all indices `i` of `ids` such that `ids[i]` = <id> }
-    std::unordered_map<Key, std::vector<size_t>> outdated_ids;
+    robin_hood::unordered_map<Key, std::vector<size_t>> outdated_ids;
     /// we are going to store every string separately
-    std::unordered_map<Key, String> map;
+    robin_hood::unordered_map<Key, String> map;
 
     size_t total_length = 0;
     {
@@ -735,7 +735,7 @@ void CacheDictionary::update(
     PresentIdHandler && on_cell_updated,
     AbsentIdHandler && on_id_not_found) const
 {
-    std::unordered_map<Key, UInt8> remaining_ids{requested_ids.size()};
+    robin_hood::unordered_map<Key, UInt8> remaining_ids{requested_ids.size()};
     for (const auto id : requested_ids)
         remaining_ids.insert({id, 0});
 

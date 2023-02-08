@@ -47,8 +47,8 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
-using NotCompress = std::unordered_set<ColId>;
-using SegmentIdSet = std::unordered_set<UInt64>;
+using NotCompress = robin_hood::unordered_set<ColId>;
+using SegmentIdSet = robin_hood::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
 struct GCOptions;
 
@@ -168,7 +168,7 @@ public:
     static Settings EMPTY_SETTINGS;
 
     using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
-    using SegmentMap = std::unordered_map<PageIdU64, SegmentPtr>;
+    using SegmentMap = robin_hood::unordered_map<PageIdU64, SegmentPtr>;
 
     enum ThreadType
     {

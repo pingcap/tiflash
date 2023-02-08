@@ -173,7 +173,7 @@ struct MockWriter : public PacketWriter
 };
 
 using MockWriterPtr = std::shared_ptr<MockWriter>;
-using MockTunnel = MPPTunnelBase<MockWriter>;
+using MockTunnel = MPPTunnelSetBase<MockWriter>;
 using MockTunnelPtr = std::shared_ptr<MockTunnel>;
 using MockTunnelSet = MPPTunnelSetBase<MockTunnel>;
 using MockTunnelSetPtr = std::shared_ptr<MockTunnelSet>;

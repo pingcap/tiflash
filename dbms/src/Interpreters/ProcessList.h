@@ -24,13 +24,13 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/QueryPriorities.h>
 #include <Server/ServerInfo.h>
+#include <common/robin_hood.h>
 
 #include <condition_variable>
 #include <list>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -270,7 +270,7 @@ public:
     using Container = std::list<Element>;
     using Info = std::vector<ProcessInfo>;
     /// User -> queries
-    using UserToQueries = std::unordered_map<String, ProcessListForUser>;
+    using UserToQueries = robin_hood::unordered_map<String, ProcessListForUser>;
 
 private:
     mutable std::mutex mutex;

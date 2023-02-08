@@ -18,9 +18,9 @@
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <common/robin_hood.h>
 
 #include <mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -120,7 +120,7 @@ public:
                 return std::hash<PageFileId>()(id_lvl.first) ^ std::hash<PageFileLevel>()(id_lvl.second);
             }
         };
-        std::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher> page_id_to_index;
+        robin_hood::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher> page_id_to_index;
     };
 
     friend class PSDiskDelegatorRaft;
@@ -465,12 +465,12 @@ private:
     String getPSV2DeleteMarkFilePath() const;
 
 private:
-    using DMFilePathMap = std::unordered_map<UInt64, UInt32>;
+    using DMFilePathMap = robin_hood::unordered_map<UInt64, UInt32>;
     struct MainPathInfo
     {
         String path;
         // DMFileID -> file size
-        std::unordered_map<UInt64, size_t> file_size_map;
+        robin_hood::unordered_map<UInt64, size_t> file_size_map;
     };
     using MainPathInfos = std::vector<MainPathInfo>;
     struct LatestPathInfo

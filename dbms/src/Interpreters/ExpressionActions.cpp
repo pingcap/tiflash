@@ -23,6 +23,7 @@
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
+#include <common/robin_hood.h>
 
 #include <optional>
 #include <set>
@@ -203,7 +204,7 @@ void ExpressionAction::prepare(Block & sample_block)
         if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
         {
             /// update the column type for left block
-            std::unordered_set<String> keys;
+            robin_hood::unordered_set<String> keys;
             for (const auto & n : join->getLeftJoinKeys())
             {
                 keys.insert(n);

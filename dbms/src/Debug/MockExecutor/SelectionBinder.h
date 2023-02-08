@@ -28,7 +28,7 @@ public:
 
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
-    void columnPrune(std::unordered_set<String> & used_columns) override;
+    void columnPrune(robin_hood::unordered_set<String> & used_columns) override;
 
 protected:
     std::vector<ASTPtr> conditions;

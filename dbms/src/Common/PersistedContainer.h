@@ -23,11 +23,10 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <common/robin_hood.h>
 
 #include <ext/range.h>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace DB
 {
@@ -185,7 +184,7 @@ struct UInt64Read
         return v;
     }
 };
-using PersistedUnorderedUInt64Set = PersistedContainerSet<UInt64, std::unordered_set, UInt64Write, UInt64Read>;
+using PersistedUnorderedUInt64Set = PersistedContainerSet<UInt64, robin_hood::unordered_set, UInt64Write, UInt64Read>;
 
 struct UInt64StringWrite
 {
@@ -207,6 +206,6 @@ struct UInt64StringRead
     }
 };
 using PersistedUnorderedUInt64ToStringMap
-    = PersistedContainerMap<UInt64, std::string, std::unordered_map, UInt64StringWrite, UInt64StringRead>;
+    = PersistedContainerMap<UInt64, std::string, robin_hood::unordered_map, UInt64StringWrite, UInt64StringRead>;
 
 } // namespace DB

@@ -286,7 +286,7 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     if (!context.isExecutorTest())
     {
         /// finalize
-        std::unordered_set<String> used_columns;
+        robin_hood::unordered_set<String> used_columns;
         for (auto & schema : root_executor->output_schema)
             used_columns.emplace(schema.first);
 
@@ -333,11 +333,11 @@ QueryFragments mppQueryToQueryFragments(
     MPPCtxPtr mpp_ctx)
 {
     QueryFragments fragments;
-    std::unordered_map<String, std::pair<std::shared_ptr<mock::ExchangeReceiverBinder>, std::shared_ptr<mock::ExchangeSenderBinder>>> exchange_map;
+    robin_hood::unordered_map<String, std::pair<std::shared_ptr<mock::ExchangeReceiverBinder>, std::shared_ptr<mock::ExchangeSenderBinder>>> exchange_map;
     root_executor->toMPPSubPlan(executor_index, properties, exchange_map);
     TableID table_id = findTableIdForQueryFragment(root_executor, exchange_map.empty());
     std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
-    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    robin_hood::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     size_t current_task_num = properties.mpp_partition_num;
     for (auto & exchange : exchange_map)
     {

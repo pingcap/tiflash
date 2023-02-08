@@ -11,12 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <common/robin_hood.h>
 #include <common/types.h>
 #include <tipb/expression.pb.h>
 
 namespace DB::tests
 {
-std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
+robin_hood::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"plusint", tipb::ScalarFuncSig::PlusInt},
     {"minusint", tipb::ScalarFuncSig::MinusInt},
     {"equals", tipb::ScalarFuncSig::EQInt},
@@ -80,7 +81,7 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"round_with_frac_real", tipb::ScalarFuncSig::RoundWithFracReal},
 });
 
-std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
+robin_hood::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"min", tipb::ExprType::Min},
     {"max", tipb::ExprType::Max},
     {"count", tipb::ExprType::Count},
@@ -90,7 +91,7 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"group_concat", tipb::ExprType::GroupConcat},
 });
 
-std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
+robin_hood::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
     {"RowNumber", tipb::ExprType::RowNumber},
     {"Rank", tipb::ExprType::Rank},
     {"DenseRank", tipb::ExprType::DenseRank},

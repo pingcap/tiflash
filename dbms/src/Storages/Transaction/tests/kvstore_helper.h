@@ -44,7 +44,7 @@ extern void GenMockSSTData(const TiDB::TableInfo & table_info,
                            UInt64 start_handle,
                            UInt64 end_handle,
                            UInt64 num_fields = 1,
-                           const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default});
+                           const robin_hood::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default});
 
 namespace FailPoints
 {

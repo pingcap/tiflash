@@ -137,7 +137,7 @@ TEST_F(DTToolTest, MigrationSuccess)
 }
 
 
-void getHash(std::unordered_map<std::string, std::string> & records, const std::string & path)
+void getHash(robin_hood::unordered_map<std::string, std::string> & records, const std::string & path)
 {
     std::fstream file{path};
     auto digest = DB::UnifiedDigest<DB::Digest::CRC64>{};
@@ -149,7 +149,7 @@ void getHash(std::unordered_map<std::string, std::string> & records, const std::
     records[path] = digest.raw();
 }
 
-void compareHash(std::unordered_map<std::string, std::string> & records)
+void compareHash(robin_hood::unordered_map<std::string, std::string> & records)
 {
     for (const auto & i : records)
     {
@@ -180,7 +180,7 @@ TEST_F(DTToolTest, ConsecutiveMigration)
 
     EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
     auto logger = DB::Logger::get("DTToolTest");
-    std::unordered_map<std::string, std::string> records;
+    robin_hood::unordered_map<std::string, std::string> records;
     {
         Poco::File file{dmfile->path()};
         std::vector<std::string> subfiles;

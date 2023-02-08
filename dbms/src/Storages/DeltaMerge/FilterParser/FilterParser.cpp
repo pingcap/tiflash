@@ -414,7 +414,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
     return op;
 }
 
-std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{
+robin_hood::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{
     /*
     {tipb::ScalarFuncSig::CastIntAsInt, "cast"},
     {tipb::ScalarFuncSig::CastIntAsReal, "cast"},

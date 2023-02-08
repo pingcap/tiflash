@@ -26,12 +26,12 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
+#include <common/robin_hood.h>
 #include <fmt/core.h>
 
 #include <mutex>
 #include <random>
 #include <set>
-#include <unordered_map>
 
 namespace DB
 {

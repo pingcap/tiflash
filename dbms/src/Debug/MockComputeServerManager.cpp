@@ -91,7 +91,7 @@ MockMPPServerInfo MockComputeServerManager::getMockMPPServerInfo(size_t partitio
     return {server_config_map[partition_id].partition_id, server_config_map.size()};
 }
 
-std::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServerConfigMap()
+robin_hood::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServerConfigMap()
 {
     return server_config_map;
 }

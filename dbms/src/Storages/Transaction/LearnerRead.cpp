@@ -204,7 +204,7 @@ LearnerReadSnapshot doLearnerRead(
 
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         const size_t ori_batch_region_size = region_end_idx - region_begin_idx;
-        std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> batch_read_index_result;
+        robin_hood::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> batch_read_index_result;
 
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
         batch_read_index_req.reserve(ori_batch_region_size);

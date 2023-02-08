@@ -180,7 +180,7 @@ public:
 
     void assignRegion(Region && new_region);
 
-    using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
+    using HandleMap = robin_hood::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
     /// Only can be used for applying snapshot. only can be called by single thread.
     /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.

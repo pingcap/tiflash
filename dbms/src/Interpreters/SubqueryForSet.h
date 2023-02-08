@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <common/robin_hood.h>
 #include <common/types.h>
 
 #include <memory>
-#include <unordered_map>
 
 namespace DB
 {
@@ -53,5 +53,5 @@ struct SubqueryForSet
 };
 
 /// ID of subquery -> what to do with it.
-using SubqueriesForSets = std::unordered_map<String, SubqueryForSet>;
+using SubqueriesForSets = robin_hood::unordered_map<String, SubqueryForSet>;
 } // namespace DB

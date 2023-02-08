@@ -181,7 +181,7 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
     bool has_pk = false;
     bool has_non_int_pk = false;
     Poco::StringTokenizer string_tokens(handle_pk_name, ",");
-    std::unordered_map<String, size_t> pk_column_pos_map;
+    robin_hood::unordered_map<String, size_t> pk_column_pos_map;
     int i = 1;
     for (auto & column : columns.getAllPhysical())
     {

@@ -156,7 +156,7 @@ inline SchemaChanges detectSchemaChanges(
     // add drop commands
     {
         AlterCommands drop_commands;
-        std::unordered_set<ColumnID> column_ids_to_drop;
+        robin_hood::unordered_set<ColumnID> column_ids_to_drop;
         /// Detect dropped columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -248,7 +248,7 @@ inline SchemaChanges detectSchemaChanges(
     // alter commands
     {
         AlterCommands alter_commands;
-        std::unordered_map<ColumnID, ColumnInfo> alter_map;
+        robin_hood::unordered_map<ColumnID, ColumnInfo> alter_map;
         /// Detect type changed columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -611,7 +611,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     const auto & orig_defs = orig_table_info.partition.definitions;
     const auto & new_defs = table_info->partition.definitions;
 
-    std::unordered_set<TableID> orig_part_id_set, new_part_id_set;
+    robin_hood::unordered_set<TableID> orig_part_id_set, new_part_id_set;
     std::vector<String> orig_part_ids, new_part_ids;
     std::for_each(orig_defs.begin(), orig_defs.end(), [&orig_part_id_set, &orig_part_ids](const auto & def) {
         orig_part_id_set.emplace(def.id);
@@ -1273,7 +1273,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     auto & tmt_context = context.getTMTContext();
 
     /// Create all databases.
-    std::unordered_set<String> db_set;
+    robin_hood::unordered_set<String> db_set;
     std::vector<DBInfoPtr> all_schemas = getter.listDBs();
     for (const auto & db : all_schemas)
     {
@@ -1286,7 +1286,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     }
 
     /// Load all tables in each database.
-    std::unordered_set<TableID> table_set;
+    robin_hood::unordered_set<TableID> table_set;
     for (const auto & db : all_schemas)
     {
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);

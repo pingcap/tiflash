@@ -236,7 +236,7 @@ struct TiFlashProxyConfig
 {
     static const std::string config_prefix;
     std::vector<const char *> args;
-    std::unordered_map<std::string, std::string> val_map;
+    robin_hood::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
@@ -262,7 +262,7 @@ struct TiFlashProxyConfig
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys(config_prefix, keys);
         {
-            std::unordered_map<std::string, std::string> args_map;
+            robin_hood::unordered_map<std::string, std::string> args_map;
             for (const auto & key : keys)
             {
                 const auto k = config_prefix + "." + key;

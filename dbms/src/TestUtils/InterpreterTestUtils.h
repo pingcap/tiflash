@@ -15,8 +15,8 @@
 #pragma once
 
 #include <TestUtils/ExecutorTestUtils.h>
+#include <common/robin_hood.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace DB::tests
@@ -45,7 +45,7 @@ private:
     bool just_record = false;
 
     // <func_name, vector<result>>
-    std::unordered_map<String, std::vector<String>> case_expect_results;
+    robin_hood::unordered_map<String, std::vector<String>> case_expect_results;
     size_t expect_result_index = 0;
 };
 

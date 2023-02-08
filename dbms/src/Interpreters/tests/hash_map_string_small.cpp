@@ -12,37 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
+#include <Common/Stopwatch.h>
+#include <common/robin_hood.h>
+
 #include <iomanip>
-#include <vector>
-
-#include <unordered_map>
-
+#include <iostream>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/sparse_hash_map>
-
-#include <Common/Stopwatch.h>
+#include <vector>
 
 //#define DBMS_HASH_MAP_COUNT_COLLISIONS
 #define DBMS_HASH_MAP_DEBUG_RESIZES
 
+#include <Common/HashTable/HashMap.h>
 #include <Core/Types.h>
+#include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
-#include <IO/CompressedReadBuffer.h>
-#include <common/StringRef.h>
-#include <Common/HashTable/HashMap.h>
 #include <Interpreters/AggregationCommon.h>
+#include <common/StringRef.h>
 
 
 struct SmallStringRef
 {
-    UInt32 size;
+    UInt32 size{};
 
     union
     {
-        const char * data_big;
-        char data_small[12];
+        const char * data_big{};
+        char data_small[12]{};
     };
 
     bool isSmall() const { return size <= 12; }
@@ -62,9 +60,13 @@ struct SmallStringRef
             data_big = data_;
     }
 
-    SmallStringRef(const unsigned char * data_, size_t size_) : SmallStringRef(reinterpret_cast<const char *>(data_), size_) {}
-    explicit SmallStringRef(const std::string & s) : SmallStringRef(s.data(), s.size()) {}
-    SmallStringRef() {}
+    SmallStringRef(const unsigned char * data_, size_t size_)
+        : SmallStringRef(reinterpret_cast<const char *>(data_), size_)
+    {}
+    explicit SmallStringRef(const std::string & s)
+        : SmallStringRef(s.data(), s.size())
+    {}
+    SmallStringRef() = default;
 
     std::string toString() const { return std::string(data(), size); }
 };
@@ -88,17 +90,23 @@ inline bool operator==(SmallStringRef lhs, SmallStringRef rhs)
 
 namespace ZeroTraits
 {
-    template <>
-    inline bool check<SmallStringRef>(SmallStringRef x) { return x.size == 0; }
+template <>
+inline bool check<SmallStringRef>(SmallStringRef x)
+{
+    return x.size == 0;
+}
 
-    template <>
-    inline void set<SmallStringRef>(SmallStringRef & x) { x.size = 0; }
-};
+template <>
+inline void set<SmallStringRef>(SmallStringRef & x)
+{
+    x.size = 0;
+}
+}; // namespace ZeroTraits
 
 template <>
 struct DefaultHash<SmallStringRef>
 {
-    size_t operator() (SmallStringRef x) const
+    size_t operator()(SmallStringRef x) const
     {
         return DefaultHash<StringRef>()(StringRef(x.data(), x.size));
     }
@@ -138,10 +146,10 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "Vector. Size: " << n
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "Vector. Size: " << n
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
     }
 
     if (!m || m == 1)
@@ -164,13 +172,13 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap (StringRef). Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << "HashMap (StringRef). Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            << ", collisions: " << map.getCollisions()
+                  << ", collisions: " << map.getCollisions()
 #endif
-            << std::endl;
+                  << std::endl;
     }
 
     if (!m || m == 2)
@@ -193,13 +201,13 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap (SmallStringRef). Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << "HashMap (SmallStringRef). Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            << ", collisions: " << map.getCollisions()
+                  << ", collisions: " << map.getCollisions()
 #endif
-            << std::endl;
+                  << std::endl;
     }
 
     return 0;

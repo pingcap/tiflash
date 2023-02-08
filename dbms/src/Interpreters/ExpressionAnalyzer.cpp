@@ -88,7 +88,7 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 /** Calls to these functions in the GROUP BY statement would be
   * replaced by their immediate argument.
   */
-const std::unordered_set<String> injective_function_names{
+const robin_hood::unordered_set<String> injective_function_names{
     "negate",
     "bitNot",
     "reverse",
@@ -106,7 +106,7 @@ const std::unordered_set<String> injective_function_names{
     "concatAssumeInjective",
 };
 
-const std::unordered_set<String> possibly_injective_function_names{
+const robin_hood::unordered_set<String> possibly_injective_function_names{
     "dictGetString",
     "dictGetUInt8",
     "dictGetUInt16",

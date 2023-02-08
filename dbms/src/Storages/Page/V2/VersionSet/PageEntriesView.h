@@ -36,7 +36,7 @@ public:
 
     std::optional<PageEntry> find(PageId page_id) const;
 
-    const PageEntry at(PageId page_id) const;
+    PageEntry at(PageId page_id) const;
 
     std::pair<bool, PageId> isRefId(PageId page_id) const;
 

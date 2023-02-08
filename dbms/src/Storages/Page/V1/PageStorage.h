@@ -21,13 +21,13 @@
 #include <Storages/Page/V1/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V1/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/V1/WriteBatch.h>
+#include <common/robin_hood.h>
 
 #include <functional>
 #include <optional>
 #include <set>
 #include <shared_mutex>
 #include <type_traits>
-#include <unordered_map>
 
 namespace DB::PS::V1
 {

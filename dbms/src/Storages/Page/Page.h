@@ -18,10 +18,10 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <common/robin_hood.h>
 
 #include <map>
 #include <set>
-#include <unordered_map>
 
 
 namespace DB

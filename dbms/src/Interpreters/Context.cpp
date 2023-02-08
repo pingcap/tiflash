@@ -67,13 +67,13 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 #include <fiu.h>
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <pcg_random.hpp>
 #include <set>
-#include <unordered_map>
 
 
 namespace ProfileEvents
@@ -180,7 +180,7 @@ struct ContextShared
         }
     };
 
-    using Sessions = std::unordered_map<Context::SessionKey, std::shared_ptr<Context>, SessionKeyHash>;
+    using Sessions = robin_hood::unordered_map<Context::SessionKey, std::shared_ptr<Context>, SessionKeyHash>;
     using CloseTimes = std::deque<std::vector<Context::SessionKey>>;
     mutable Sessions sessions;
     mutable CloseTimes close_times;
@@ -194,7 +194,7 @@ struct ContextShared
     /// database -> table -> exception_message
     /// For the duration of the operation, an element is placed here, and an object is returned, which deletes the element in the destructor.
     /// In case the element already exists, an exception is thrown. See class DDLGuard below.
-    using DDLGuards = std::unordered_map<String, DDLGuard::Map>;
+    using DDLGuards = robin_hood::unordered_map<String, DDLGuard::Map>;
     DDLGuards ddl_guards;
     /// If you capture mutex and ddl_guards_mutex, then you need to grab them strictly in this order.
     mutable std::mutex ddl_guards_mutex;
@@ -391,7 +391,7 @@ std::shared_ptr<Context> Context::acquireSession(const String & session_id, std:
 
         new_session->scheduleCloseSession(key, timeout);
 
-        it = shared->sessions.insert(std::make_pair(key, std::move(new_session))).first;
+        it = shared->sessions.insert({key, std::move(new_session)}).first;
     }
     else if (it->second->client_info.current_user != client_info.current_user)
     {

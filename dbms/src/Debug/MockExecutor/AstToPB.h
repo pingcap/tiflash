@@ -52,7 +52,7 @@ struct MPPInfo
     Int64 partition_id;
     Int64 task_id;
     const std::vector<Int64> sender_target_task_ids;
-    const std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    const robin_hood::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
 
     MPPInfo(
         Timestamp start_ts_,
@@ -62,7 +62,7 @@ struct MPPInfo
         Int64 partition_id_,
         Int64 task_id_,
         const std::vector<Int64> & sender_target_task_ids_,
-        const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
+        const robin_hood::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
         : start_ts(start_ts_)
         , query_ts(query_ts_)
         , server_id(server_id_)
@@ -89,7 +89,7 @@ void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & contex
 void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context);
 void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id);
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context);
-void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns);
+void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, robin_hood::unordered_set<String> & used_columns);
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast);
 void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions);
 

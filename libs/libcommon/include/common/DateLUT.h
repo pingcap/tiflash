@@ -14,16 +14,14 @@
 
 #pragma once
 
-#include "DateLUTImpl.h"
-
-#include "defines.h"
-
-#include <boost/noncopyable.hpp>
-
 #include <atomic>
+#include <boost/noncopyable.hpp>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
+
+#include "DateLUTImpl.h"
+#include "defines.h"
+#include "robin_hood.h"
 
 
 /// This class provides lazy initialization and lookup of singleton DateLUTImpl objects for a given timezone.
@@ -64,7 +62,7 @@ private:
     using DateLUTImplPtr = std::unique_ptr<DateLUTImpl>;
 
     /// Time zone name -> implementation.
-    mutable std::unordered_map<std::string, DateLUTImplPtr> impls;
+    mutable robin_hood::unordered_map<std::string, DateLUTImplPtr> impls;
     mutable std::mutex mutex;
 
     std::atomic<const DateLUTImpl *> default_impl;

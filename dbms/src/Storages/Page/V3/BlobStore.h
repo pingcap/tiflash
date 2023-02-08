@@ -29,9 +29,9 @@
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
+#include <common/robin_hood.h>
 
 #include <mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -137,7 +137,7 @@ private:
     BlobStats blob_stats;
 
     std::mutex mtx_blob_files;
-    std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
+    robin_hood::unordered_map<BlobFileId, BlobFilePtr> blob_files;
 };
 namespace u128
 {

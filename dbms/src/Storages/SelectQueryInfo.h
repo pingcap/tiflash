@@ -14,9 +14,10 @@
 
 #pragma once
 
+#include <common/robin_hood.h>
+
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 namespace DB
 {
@@ -28,7 +29,7 @@ class Set;
 using SetPtr = std::shared_ptr<Set>;
 
 /// Information about calculated sets in right hand side of IN.
-using PreparedSets = std::unordered_map<IAST *, SetPtr>;
+using PreparedSets = robin_hood::unordered_map<IAST *, SetPtr>;
 
 struct MvccQueryInfo;
 struct DAGQueryInfo;

@@ -21,8 +21,8 @@
 #include <Storages/Page/V2/PageEntries.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/robin_hood.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace Poco

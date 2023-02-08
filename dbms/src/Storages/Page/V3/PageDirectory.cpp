@@ -562,7 +562,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & ver)
 
 template <typename Trait>
 PageSize VersionedPageEntries<Trait>::getEntriesByBlobIds(
-    const std::unordered_set<BlobFileId> & blob_ids,
+    const robin_hood::unordered_set<BlobFileId> & blob_ids,
     const PageId & page_id,
     GcEntriesMap & blob_versioned_entries,
     std::map<PageId, std::tuple<PageId, PageVersion>> & ref_ids_maybe_rewrite)
@@ -1439,7 +1439,7 @@ template <typename Trait>
 std::pair<typename PageDirectory<Trait>::GcEntriesMap, PageSize>
 PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const
 {
-    std::unordered_set<BlobFileId> blob_id_set;
+    robin_hood::unordered_set<BlobFileId> blob_id_set;
     for (const auto blob_id : blob_ids)
         blob_id_set.insert(blob_id);
     assert(blob_id_set.size() == blob_ids.size());

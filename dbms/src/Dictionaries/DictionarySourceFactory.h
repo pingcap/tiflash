@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Dictionaries/IDictionarySource.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
-#include <unordered_map>
 
 namespace Poco
 {
@@ -57,7 +57,7 @@ public:
         Context & context) const;
 
 private:
-    using SourceRegistry = std::unordered_map<std::string, Creator>;
+    using SourceRegistry = robin_hood::unordered_map<std::string, Creator>;
     SourceRegistry registered_sources;
 
     Poco::Logger * log;

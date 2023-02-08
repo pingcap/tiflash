@@ -28,7 +28,7 @@ class Context;
 class PathPool;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
-using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+using RegionMap = robin_hood::unordered_map<RegionID, RegionPtr>;
 
 class RegionTaskLock;
 struct RegionManager;

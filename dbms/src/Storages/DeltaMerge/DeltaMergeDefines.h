@@ -100,10 +100,10 @@ struct ColumnDefine
 
 using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
+using ColumnDefineMap = robin_hood::unordered_map<ColId, ColumnDefine>;
 
-using ColumnMap = std::unordered_map<ColId, ColumnPtr>;
-using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;
+using ColumnMap = robin_hood::unordered_map<ColId, ColumnPtr>;
+using MutableColumnMap = robin_hood::unordered_map<ColId, MutableColumnPtr>;
 using LockGuard = std::lock_guard<std::mutex>;
 
 inline static const UInt64 INITIAL_EPOCH = 0;

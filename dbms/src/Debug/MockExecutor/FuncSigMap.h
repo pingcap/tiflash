@@ -19,7 +19,7 @@
 
 namespace DB::tests
 {
-extern std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig;
-extern std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig;
-extern std::unordered_map<String, tipb::ExprType> window_func_name_to_sig;
+extern robin_hood::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig;
+extern robin_hood::unordered_map<String, tipb::ExprType> agg_func_name_to_sig;
+extern robin_hood::unordered_map<String, tipb::ExprType> window_func_name_to_sig;
 } // namespace DB::tests

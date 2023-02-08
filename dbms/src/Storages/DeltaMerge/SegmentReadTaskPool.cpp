@@ -141,7 +141,7 @@ SegmentReadTaskPtr SegmentReadTasksWrapper::getTask(UInt64 seg_id)
     return t;
 }
 
-const std::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTasksWrapper::getTasks() const
+const robin_hood::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTasksWrapper::getTasks() const
 {
     RUNTIME_CHECK(enable_read_thread);
     return unordered_tasks;
@@ -193,7 +193,7 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(UInt64 seg_id)
     return t;
 }
 
-const std::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
+const robin_hood::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
 {
     std::lock_guard lock(mutex);
     return tasks_wrapper.getTasks();
@@ -201,7 +201,7 @@ const std::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTaskPool::getT
 
 // Choose a segment to read.
 // Returns <segment_id, pool_ids>.
-std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadTaskPool::scheduleSegment(const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments, uint64_t expected_merge_count)
+robin_hood::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadTaskPool::scheduleSegment(const robin_hood::unordered_map<uint64_t, std::vector<uint64_t>> & segments, uint64_t expected_merge_count)
 {
     auto target = segments.end();
     std::lock_guard lock(mutex);

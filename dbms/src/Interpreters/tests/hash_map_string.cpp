@@ -12,27 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
+#include <Common/Stopwatch.h>
+#include <common/robin_hood.h>
+
 #include <iomanip>
-#include <vector>
-
-#include <unordered_map>
-
+#include <iostream>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/sparse_hash_map>
-
-#include <Common/Stopwatch.h>
+#include <vector>
 
 //#define DBMS_HASH_MAP_COUNT_COLLISIONS
 #define DBMS_HASH_MAP_DEBUG_RESIZES
 
+#include <Common/HashTable/HashMap.h>
 #include <Core/Types.h>
+#include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
-#include <IO/CompressedReadBuffer.h>
-#include <common/StringRef.h>
-#include <Common/HashTable/HashMap.h>
 #include <Interpreters/AggregationCommon.h>
+#include <common/StringRef.h>
 
 
 struct CompactStringRef
@@ -42,8 +40,8 @@ struct CompactStringRef
         const char * data_mixed = nullptr;
         struct
         {
-            char dummy[6];
-            UInt16 size;
+            char dummy[6]{}{};
+            UInt16 size{};
         };
     };
 
@@ -53,9 +51,13 @@ struct CompactStringRef
         size = size_;
     }
 
-    CompactStringRef(const unsigned char * data_, size_t size_) : CompactStringRef(reinterpret_cast<const char *>(data_), size_) {}
-    explicit CompactStringRef(const std::string & s) : CompactStringRef(s.data(), s.size()) {}
-    CompactStringRef() {}
+    CompactStringRef(const unsigned char * data_, size_t size_)
+        : CompactStringRef(reinterpret_cast<const char *>(data_), size_)
+    {}
+    explicit CompactStringRef(const std::string & s)
+        : CompactStringRef(s.data(), s.size())
+    {}
+    CompactStringRef() = default;
 
     const char * data() const { return reinterpret_cast<const char *>(reinterpret_cast<intptr_t>(data_mixed) & 0x0000FFFFFFFFFFFFULL); }
 
@@ -78,17 +80,23 @@ inline bool operator==(CompactStringRef lhs, CompactStringRef rhs)
 
 namespace ZeroTraits
 {
-    template <>
-    inline bool check<CompactStringRef>(CompactStringRef x) { return nullptr == x.data_mixed; }
+template <>
+inline bool check<CompactStringRef>(CompactStringRef x)
+{
+    return nullptr == x.data_mixed;
+}
 
-    template <>
-    inline void set<CompactStringRef>(CompactStringRef & x) { x.data_mixed = nullptr; }
-};
+template <>
+inline void set<CompactStringRef>(CompactStringRef & x)
+{
+    x.data_mixed = nullptr;
+}
+}; // namespace ZeroTraits
 
 template <>
 struct DefaultHash<CompactStringRef>
 {
-    size_t operator() (CompactStringRef x) const
+    size_t operator()(CompactStringRef x) const
     {
         return CityHash_v1_0_2::CityHash64(x.data(), x.size);
     }
@@ -102,15 +110,15 @@ struct DefaultHash<CompactStringRef>
 
 struct FastHash64
 {
-    size_t operator() (CompactStringRef x) const
+    size_t operator()(CompactStringRef x) const
     {
         const char * buf = x.data();
         size_t len = x.size;
 
-        const UInt64    m = 0x880355f21e6d1965ULL;
-        const UInt64 *pos = reinterpret_cast<const UInt64 *>(buf);
-        const UInt64 *end = pos + (len / 8);
-        const unsigned char *pos2;
+        const UInt64 m = 0x880355f21e6d1965ULL;
+        const auto * pos = reinterpret_cast<const UInt64 *>(buf);
+        const UInt64 * end = pos + (len / 8);
+        const unsigned char * pos2;
         UInt64 h = len * m;
         UInt64 v;
 
@@ -121,20 +129,33 @@ struct FastHash64
             h *= m;
         }
 
-        pos2 = reinterpret_cast<const unsigned char*>(pos);
+        pos2 = reinterpret_cast<const unsigned char *>(pos);
         v = 0;
 
         switch (len & 7)
         {
-            case 7: v ^= static_cast<UInt64>(pos2[6]) << 48; [[fallthrough]];
-            case 6: v ^= static_cast<UInt64>(pos2[5]) << 40; [[fallthrough]];
-            case 5: v ^= static_cast<UInt64>(pos2[4]) << 32; [[fallthrough]];
-            case 4: v ^= static_cast<UInt64>(pos2[3]) << 24; [[fallthrough]];
-            case 3: v ^= static_cast<UInt64>(pos2[2]) << 16; [[fallthrough]];
-            case 2: v ^= static_cast<UInt64>(pos2[1]) << 8; [[fallthrough]];
-            case 1: v ^= static_cast<UInt64>(pos2[0]);
-                h ^= mix(v);
-                h *= m;
+        case 7:
+            v ^= static_cast<UInt64>(pos2[6]) << 48;
+            [[fallthrough]];
+        case 6:
+            v ^= static_cast<UInt64>(pos2[5]) << 40;
+            [[fallthrough]];
+        case 5:
+            v ^= static_cast<UInt64>(pos2[4]) << 32;
+            [[fallthrough]];
+        case 4:
+            v ^= static_cast<UInt64>(pos2[3]) << 24;
+            [[fallthrough]];
+        case 3:
+            v ^= static_cast<UInt64>(pos2[2]) << 16;
+            [[fallthrough]];
+        case 2:
+            v ^= static_cast<UInt64>(pos2[1]) << 8;
+            [[fallthrough]];
+        case 1:
+            v ^= static_cast<UInt64>(pos2[0]);
+            h ^= mix(v);
+            h *= m;
         }
 
         return mix(h);
@@ -144,7 +165,7 @@ struct FastHash64
 
 struct CrapWow
 {
-    size_t operator() (CompactStringRef x) const
+    size_t operator()(CompactStringRef x) const
     {
 #if __x86_64__
         const char * key = x.data();
@@ -166,7 +187,7 @@ struct CrapWow
             "jz QW%=\n"
             "addq %%rcx, %%r14\n\n"
             "negq %%rcx\n"
-        "XW%=:\n"
+            "XW%=:\n"
             "movq %4, %%rax\n"
             "mulq (%%r14,%%rcx)\n"
             "xorq %%rax, %%r12\n"
@@ -177,7 +198,7 @@ struct CrapWow
             "xorq %%rax, %%r13\n"
             "addq $16, %%rcx\n"
             "jnz XW%=\n"
-        "QW%=:\n"
+            "QW%=:\n"
             "movq %%r15, %%rcx\n"
             "andq $8, %%r15\n"
             "jz B%=\n"
@@ -186,7 +207,7 @@ struct CrapWow
             "addq $8, %%r14\n"
             "xorq %%rax, %%r12\n"
             "xorq %%rdx, %%r13\n"
-        "B%=:\n"
+            "B%=:\n"
             "andq $7, %%rcx\n"
             "jz F%=\n"
             "movq $1, %%rdx\n"
@@ -198,7 +219,7 @@ struct CrapWow
             "mulq %%rdx\n"
             "xorq %%rdx, %%r12\n"
             "xorq %%rax, %%r13\n"
-        "F%=:\n"
+            "F%=:\n"
             "leaq (%%r13,%4), %%rax\n"
             "xorq %%r12, %%rax\n"
             "mulq %4\n"
@@ -207,8 +228,7 @@ struct CrapWow
             "xorq %%r13, %%rax\n"
             : "=a"(hash), "=c"(key), "=d"(key)
             : "r"(m), "r"(n), "a"(seed), "c"(len), "d"(key)
-            : "%r12", "%r13", "%r14", "%r15", "cc"
-        );
+            : "%r12", "%r13", "%r14", "%r15", "cc");
         return hash;
 #else
         return 0;
@@ -219,7 +239,7 @@ struct CrapWow
 
 struct SimpleHash
 {
-    size_t operator() (CompactStringRef x) const
+    size_t operator()(CompactStringRef x) const
     {
         const char * pos = x.data();
         size_t size = x.size;
@@ -268,19 +288,23 @@ struct Grower : public HashTableGrower<>
     size_t max_fill = (1ULL << initial_size_degree) * 0.9;
 
     /// The size of the hash table in the cells.
-    size_t bufSize() const               { return 1ULL << size_degree; }
+    size_t bufSize() const { return 1ULL << size_degree; }
 
-    size_t maxFill() const               { return max_fill /*1 << (size_degree - 1)*/; }
-    size_t mask() const                  { return bufSize() - 1; }
+    size_t maxFill() const { return max_fill /*1 << (size_degree - 1)*/; }
+    size_t mask() const { return bufSize() - 1; }
 
     /// From the hash value, get the cell number in the hash table.
-    size_t place(size_t x) const         { return x & mask(); }
+    size_t place(size_t x) const { return x & mask(); }
 
     /// The next cell in the collision resolution chain.
-    size_t next(size_t pos) const        { ++pos; return pos & mask(); }
+    size_t next(size_t pos) const
+    {
+        ++pos;
+        return pos & mask();
+    }
 
     /// Whether the hash table is sufficiently full. You need to increase the size of the hash table, or remove something unnecessary from it.
-    bool overflow(size_t elems) const    { return elems > maxFill(); }
+    bool overflow(size_t elems) const { return elems > maxFill(); }
 
     /// Increase the size of the hash table.
     void increaseSize()
@@ -290,7 +314,7 @@ struct Grower : public HashTableGrower<>
     }
 
     /// Set the buffer size by the number of elements in the hash table. Used when deserializing a hash table.
-    void set(size_t /*num_elems*/)
+    static void set(size_t /*num_elems*/)
     {
         throw Poco::Exception(__PRETTY_FUNCTION__);
     }
@@ -327,10 +351,10 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "Vector. Size: " << n
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "Vector. Size: " << n
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
     }
 
     if (!m || m == 1)
@@ -356,13 +380,13 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap (CityHash64). Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << "HashMap (CityHash64). Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            << ", collisions: " << map.getCollisions()
+                  << ", collisions: " << map.getCollisions()
 #endif
-            << std::endl;
+                  << std::endl;
     }
 
     if (!m || m == 2)
@@ -385,13 +409,13 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap (FastHash64). Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << "HashMap (FastHash64). Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            << ", collisions: " << map.getCollisions()
+                  << ", collisions: " << map.getCollisions()
 #endif
-            << std::endl;
+                  << std::endl;
     }
 
     if (!m || m == 3)
@@ -414,13 +438,13 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap (CrapWow). Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << "HashMap (CrapWow). Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            << ", collisions: " << map.getCollisions()
+                  << ", collisions: " << map.getCollisions()
 #endif
-            << std::endl;
+                  << std::endl;
     }
 
     if (!m || m == 4)
@@ -443,29 +467,29 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap (SimpleHash). Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << "HashMap (SimpleHash). Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            << ", collisions: " << map.getCollisions()
+                  << ", collisions: " << map.getCollisions()
 #endif
-            << std::endl;
+                  << std::endl;
     }
 
     if (!m || m == 5)
     {
         Stopwatch watch;
 
-        std::unordered_map<Key, Value, DefaultHash<Key>> map;
+        robin_hood::unordered_map<Key, Value, DefaultHash<Key>> map;
         for (size_t i = 0; i < n; ++i)
             ++map[data[i]];
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "std::unordered_map. Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "robin_hood::unordered_map. Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
     }
 
     if (!m || m == 6)
@@ -475,14 +499,14 @@ int main(int argc, char ** argv)
         google::dense_hash_map<Key, Value, DefaultHash<Key>> map;
         map.set_empty_key(Key("\0", 1));
         for (size_t i = 0; i < n; ++i)
-              ++map[data[i]];
+            ++map[data[i]];
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "google::dense_hash_map. Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "google::dense_hash_map. Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
     }
 
     if (!m || m == 7)
@@ -495,10 +519,10 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "google::sparse_hash_map. Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "google::sparse_hash_map. Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
     }
 
     return 0;

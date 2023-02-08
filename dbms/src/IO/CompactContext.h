@@ -40,7 +40,7 @@ struct CompactWriteCtx : public CompactCtxBase
         size_t begin;
         size_t end;
     };
-    std::unordered_map<std::string, FilePosition> mark_map;
+    robin_hood::unordered_map<std::string, FilePosition> mark_map;
 
     std::string file_name;
     int fd;
@@ -80,7 +80,7 @@ struct CompactReadCtx : public CompactCtxBase
         size_t begin;
         size_t end;
     };
-    std::unordered_map<std::string, FilePosition> mark_map;
+    robin_hood::unordered_map<std::string, FilePosition> mark_map;
 
     CompactReadCtx(std::string compact_path_);
 

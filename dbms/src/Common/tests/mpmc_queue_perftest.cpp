@@ -14,13 +14,13 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/MPMCQueue.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
 #include <fmt/core.h>
 
 #include <memory>
 #include <random>
 #include <thread>
-#include <unordered_map>
 
 namespace DB::tests
 {
@@ -136,11 +136,13 @@ void test(int capacity [[maybe_unused]], int reader_cnt [[maybe_unused]], int wr
     };
 
     std::vector<std::thread> readers;
-    for (int i = 0; i < reader_cnt; ++i)
+    readers.reserve(reader_cnt);
+for (int i = 0; i < reader_cnt; ++i)
         readers.emplace_back(read_func);
 
     std::vector<std::thread> writers;
-    for (int i = 0; i < writer_cnt; ++i)
+    writers.reserve(writer_cnt);
+for (int i = 0; i < writer_cnt; ++i)
         writers.emplace_back(write_func);
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -208,9 +210,9 @@ int main(int argc, char ** argv)
     int seconds = argc >= 7 ? atoi(argv[6]) : 10;
 
     using TestHandler = std::function<void(int capacity, int reader_cnt, int writer_cnt, int seconds)>;
-    static const std::unordered_map<
+    static const robin_hood::unordered_map<
         String,
-        std::unordered_map<String, TestHandler>>
+        robin_hood::unordered_map<String, TestHandler>>
         handlers = {
             {"MPMCQueue",
              {{"Int", DB::tests::test<DB::MPMCQueue, int>},

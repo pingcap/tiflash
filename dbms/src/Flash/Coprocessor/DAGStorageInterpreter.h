@@ -34,7 +34,7 @@
 namespace DB
 {
 class TMTContext;
-using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
+using TablesRegionInfoMap = robin_hood::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
 /// It's only intended to be used by DAGQueryBlockInterpreter.
 /// After DAGStorageInterpreter::execute some of its members will be transferred to DAGQueryBlockInterpreter.
@@ -77,7 +77,7 @@ private:
         size_t max_block_size);
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
-    std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
+    robin_hood::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
     std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
 
@@ -85,7 +85,7 @@ private:
 
     TableLockHolders releaseAlterLocks();
 
-    std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
+    robin_hood::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
     DAGContext & dagContext() const;
 
@@ -130,7 +130,7 @@ private:
     /// We need an immutable structure to build the TableScan operator and create snapshot input streams
     /// of storage. After the input streams created, the `alter_lock` can be released so that reading
     /// won't block DDL operations.
-    std::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
+    robin_hood::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
     ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;

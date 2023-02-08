@@ -451,7 +451,7 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
     expr->set_val(ss.releaseStr());
 }
 
-void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns)
+void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, robin_hood::unordered_set<String> & used_columns)
 {
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {

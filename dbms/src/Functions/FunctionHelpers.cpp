@@ -33,7 +33,7 @@ const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * co
     if (!column->isColumnConst())
         return {};
 
-    const ColumnConst * res = static_cast<const ColumnConst *>(column);
+    const auto * res = static_cast<const ColumnConst *>(column);
 
     if (checkColumn<ColumnString>(&res->getDataColumn()) || checkColumn<ColumnFixedString>(&res->getDataColumn()))
         return res;
@@ -44,7 +44,7 @@ const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * co
 
 Columns convertConstTupleToConstantElements(const ColumnConst & column)
 {
-    const ColumnTuple & src_tuple = static_cast<const ColumnTuple &>(column.getDataColumn());
+    const auto & src_tuple = static_cast<const ColumnTuple &>(column.getDataColumn());
     const Columns & src_tuple_columns = src_tuple.getColumns();
     size_t tuple_size = src_tuple_columns.size();
     size_t rows = column.size();
@@ -57,7 +57,7 @@ Columns convertConstTupleToConstantElements(const ColumnConst & column)
 }
 
 
-static Block createBlockWithNestedColumnsImpl(const Block & block, const std::unordered_set<size_t> & args)
+static Block createBlockWithNestedColumnsImpl(const Block & block, const robin_hood::unordered_set<size_t> & args)
 {
     Block res;
     size_t rows = block.rows();
@@ -107,13 +107,13 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
 
 Block createBlockWithNestedColumns(const Block & block, const ColumnNumbers & args)
 {
-    std::unordered_set<size_t> args_set(args.begin(), args.end());
+    robin_hood::unordered_set<size_t> args_set(args.begin(), args.end());
     return createBlockWithNestedColumnsImpl(block, args_set);
 }
 
 Block createBlockWithNestedColumns(const Block & block, const ColumnNumbers & args, size_t result)
 {
-    std::unordered_set<size_t> args_set(args.begin(), args.end());
+    robin_hood::unordered_set<size_t> args_set(args.begin(), args.end());
     args_set.insert(result);
     return createBlockWithNestedColumnsImpl(block, args_set);
 }

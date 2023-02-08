@@ -70,7 +70,7 @@ void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subqu
     subqueries.push_back(std::move(subqueries_for_sets));
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
+robin_hood::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
 }
@@ -105,17 +105,17 @@ void DAGContext::initExecutorIdToJoinIdMap()
     });
 }
 
-std::unordered_map<String, std::vector<String>> & DAGContext::getExecutorIdToJoinIdMap()
+robin_hood::unordered_map<String, std::vector<String>> & DAGContext::getExecutorIdToJoinIdMap()
 {
     return executor_id_to_join_id_map;
 }
 
-std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
+robin_hood::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
 {
     return join_execute_info_map;
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
+robin_hood::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
 {
     return inbound_io_input_streams_map;
 }

@@ -203,7 +203,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
-    const std::unordered_set<UInt64> * bypass_lock_ts,
+    const robin_hood::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
     bool resolve_locks,
@@ -368,7 +368,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
                                                                                    const TiDB::TableID table_id,
                                                                                    const RegionPtr & region,
                                                                                    const Timestamp start_ts,
-                                                                                   const std::unordered_set<UInt64> * bypass_lock_ts,
+                                                                                   const robin_hood::unordered_set<UInt64> * bypass_lock_ts,
                                                                                    RegionVersion region_version,
                                                                                    RegionVersion conf_version,
                                                                                    const LoggerPtr & log)

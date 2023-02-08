@@ -30,13 +30,13 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <common/defines.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
 
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <unordered_map>
 
 namespace CurrentMetrics
 {
@@ -201,7 +201,7 @@ public:
      * Return the total size of entries in this version list.
      */
     PageSize getEntriesByBlobIds(
-        const std::unordered_set<BlobFileId> & blob_ids,
+        const robin_hood::unordered_set<BlobFileId> & blob_ids,
         const PageId & page_id,
         GcEntriesMap & blob_versioned_entries,
         std::map<PageId, std::tuple<PageId, PageVersion>> & ref_ids_maybe_rewrite);

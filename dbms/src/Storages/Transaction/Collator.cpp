@@ -16,9 +16,9 @@
 #include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/CollatorUtils.h>
+#include <common/robin_hood.h>
 
 #include <cassert>
-#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -596,7 +596,7 @@ struct TiDBCollatorTypeIDMap
     }
 
 private:
-    std::unordered_map<int32_t, ITiDBCollator::CollatorType> id_to_type;
+    robin_hood::unordered_map<int32_t, ITiDBCollator::CollatorType> id_to_type;
 };
 
 static const TiDBCollatorTypeIDMap tidb_collator_type_id_map;
@@ -613,10 +613,10 @@ struct TiDBCollatorPtrMap
 {
     // static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
 
-    std::unordered_map<int32_t, TiDBCollatorPtr> id_map{};
+    robin_hood::unordered_map<int32_t, TiDBCollatorPtr> id_map{};
     // std::array<TiDBCollatorPtr, MAX_TYPE_CNT> type_map{};
-    std::unordered_map<std::string, TiDBCollatorPtr> name_map;
-    std::unordered_map<const void *, ITiDBCollator::CollatorType> addr_to_type;
+    robin_hood::unordered_map<std::string, TiDBCollatorPtr> name_map;
+    robin_hood::unordered_map<const void *, ITiDBCollator::CollatorType> addr_to_type;
 
     TiDBCollatorPtrMap()
     {

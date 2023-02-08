@@ -30,7 +30,7 @@ bool SelectionBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t col
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-void SelectionBinder::columnPrune(std::unordered_set<String> & used_columns)
+void SelectionBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
     for (auto & expr : conditions)
         collectUsedColumnsFromExpr(children[0]->output_schema, expr, used_columns);

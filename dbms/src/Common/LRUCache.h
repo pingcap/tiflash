@@ -17,12 +17,12 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 
 #include <atomic>
 #include <list>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 
 namespace DB
@@ -203,7 +203,7 @@ private:
         size_t refcount = 0; /// Protected by the cache mutex
     };
 
-    using InsertTokenById = std::unordered_map<Key, std::shared_ptr<InsertToken>, HashFunction>;
+    using InsertTokenById = robin_hood::unordered_map<Key, std::shared_ptr<InsertToken>, HashFunction>;
 
     /// This class is responsible for removing used insert tokens from the insert_tokens map.
     /// Among several concurrent threads the first successful one is responsible for removal. But if they all
@@ -266,7 +266,7 @@ private:
         LRUQueueIterator queue_iterator;
     };
 
-    using Cells = std::unordered_map<Key, Cell, HashFunction>;
+    using Cells = robin_hood::unordered_map<Key, Cell, HashFunction>;
 
     InsertTokenById insert_tokens;
 

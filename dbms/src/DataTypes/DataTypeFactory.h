@@ -15,12 +15,12 @@
 #pragma once
 
 #include <DataTypes/IDataType.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
 #include <shared_mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -39,9 +39,9 @@ private:
     using Creator = std::function<DataTypePtr(const ASTPtr & parameters)>;
     using SimpleCreator = std::function<DataTypePtr()>;
     // family_name -> Creator
-    using DataTypesDictionary = std::unordered_map<String, Creator>;
+    using DataTypesDictionary = robin_hood::unordered_map<String, Creator>;
     // full_name -> DataTypePtr
-    using FullnameTypes = std::unordered_map<String, DataTypePtr>;
+    using FullnameTypes = robin_hood::unordered_map<String, DataTypePtr>;
 
 public:
     DataTypePtr get(const String & full_name) const;

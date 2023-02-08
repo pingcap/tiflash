@@ -24,10 +24,10 @@
 
 namespace DB::mock
 {
-void JoinBinder::columnPrune(std::unordered_set<String> & used_columns)
+void JoinBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
-    std::unordered_set<String> left_columns;
-    std::unordered_set<String> right_columns;
+    robin_hood::unordered_set<String> left_columns;
+    robin_hood::unordered_set<String> right_columns;
 
     for (auto & field : children[0]->output_schema)
     {
@@ -40,8 +40,8 @@ void JoinBinder::columnPrune(std::unordered_set<String> & used_columns)
         auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
         right_columns.emplace(table_name + "." + column_name);
     }
-    std::unordered_set<String> left_used_columns;
-    std::unordered_set<String> right_used_columns;
+    robin_hood::unordered_set<String> left_used_columns;
+    robin_hood::unordered_set<String> right_used_columns;
 
     for (const auto & s : used_columns)
     {
@@ -187,7 +187,7 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     return children[1]->toTiPBExecutor(right_child_executor, collator_id, mpp_info, context);
 }
 
-void JoinBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+void JoinBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, robin_hood::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
 {
     if (properties.use_broadcast_join)
     {
@@ -266,7 +266,7 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
         field_type.set_flag(0);
         field_type.set_flen(-1);
         field_type.set_decimal(-1);
-        schema.push_back(std::make_pair("", TiDB::fieldTypeToColumnInfo(field_type)));
+        schema.push_back({"", TiDB::fieldTypeToColumnInfo(field_type)});
     }
     else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
     {

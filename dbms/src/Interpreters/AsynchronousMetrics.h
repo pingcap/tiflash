@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Storages/Page/FileUsage.h>
+#include <common/robin_hood.h>
 
 #include <condition_variable>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_map>
 
 
 namespace DB
@@ -44,7 +44,7 @@ public:
     ~AsynchronousMetrics();
 
     using Value = double;
-    using Container = std::unordered_map<std::string, Value>;
+    using Container = robin_hood::unordered_map<std::string, Value>;
 
     /// Returns copy of all values.
     Container getValues() const;

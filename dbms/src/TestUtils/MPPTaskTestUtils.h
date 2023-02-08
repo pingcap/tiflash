@@ -78,7 +78,7 @@ public:
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
     std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
-    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, robin_hood::unordered_map<size_t, MockServerConfig> & server_config_map);
     ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);

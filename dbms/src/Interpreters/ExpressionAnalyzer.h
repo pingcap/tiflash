@@ -27,7 +27,7 @@ class Context;
 class ExpressionActions;
 struct ExpressionActionsChain;
 
-using PreparedSets = std::unordered_map<IAST *, SetPtr>;
+using PreparedSets = robin_hood::unordered_map<IAST *, SetPtr>;
 
 using Tables = std::map<String, StoragePtr>;
 
@@ -167,7 +167,7 @@ private:
 
     NamesAndTypesList columns_added_by_join;
 
-    using Aliases = std::unordered_map<String, ASTPtr>;
+    using Aliases = robin_hood::unordered_map<String, ASTPtr>;
     Aliases aliases;
 
     using SetOfASTs = std::set<const IAST *>;

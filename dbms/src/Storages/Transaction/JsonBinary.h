@@ -21,8 +21,7 @@
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
-
-#include <unordered_set>
+#include <common/robin_hood.h>
 
 namespace DB
 {
@@ -100,7 +99,7 @@ class JsonBinary
 {
 public:
     using JsonType = UInt8;
-    using DupCheckSet = std::unique_ptr<std::unordered_set<const char *>>;
+    using DupCheckSet = std::unique_ptr<robin_hood::unordered_set<const char *>>;
     using JsonBinaryWriteBuffer = WriteBufferFromVector<ColumnString::Chars_t>;
     static constexpr JsonType TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
     static constexpr JsonType TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.

@@ -15,14 +15,14 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <common/robin_hood.h>
 
 #include <chrono>
-#include <unordered_set>
 
 namespace DB
 {
 using TableID = Int64;
-using TableIDSet = std::unordered_set<TableID>;
+using TableIDSet = robin_hood::unordered_set<TableID>;
 
 enum : TableID
 {

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <common/robin_hood.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -22,7 +23,6 @@
 #include <map>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 
@@ -90,7 +90,7 @@ private:
     };
 
     using GroupsContainer = std::list<Group>;
-    using OwnerQueryIds = std::unordered_map<String, size_t>;
+    using OwnerQueryIds = robin_hood::unordered_map<String, size_t>;
 
 private:
     mutable std::mutex internal_state_mtx;

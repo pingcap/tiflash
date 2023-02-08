@@ -205,7 +205,7 @@ private:
                            get_total > 0 ? get_cached * 1.0 / get_total : 0);
     }
     std::string dmfile_name;
-    std::unordered_map<int64_t, ColumnSharingCache> cols;
+    robin_hood::unordered_map<int64_t, ColumnSharingCache> cols;
     std::vector<std::atomic<int64_t>> stats;
     LoggerPtr log;
 };
@@ -232,7 +232,7 @@ private:
 
 private:
     std::mutex mtx;
-    std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
+    robin_hood::unordered_map<std::string, robin_hood::unordered_set<DMFileReader *>> readers;
 };
 
 } // namespace DB::DM

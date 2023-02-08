@@ -33,6 +33,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -40,8 +41,6 @@
 #include <iterator>
 #include <memory>
 #include <random>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace DB
 {
@@ -724,7 +723,7 @@ try
         dir->apply(std::move(edit));
     }
 
-    std::unordered_set<PageIdU64> visible_page_ids{
+    robin_hood::unordered_set<PageIdU64> visible_page_ids{
         id,
     };
 
@@ -742,7 +741,7 @@ try
 
         // Generate new ref operations to the visible pages
         const size_t num_ref_page = distrib(gen) + 1;
-        std::unordered_map<PageIdU64, PageIdU64> new_ref_page_ids;
+        robin_hood::unordered_map<PageIdU64, PageIdU64> new_ref_page_ids;
         std::uniform_int_distribution<> rand_visible_ids(0, visible_page_ids.size() - 1);
         for (size_t j = 0; j < num_ref_page; ++j)
         {
@@ -756,7 +755,7 @@ try
         // Delete 1 page at least, delete until 1 page left at most
         std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
         const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
-        std::unordered_set<PageIdU64> delete_ref_page_ids;
+        robin_hood::unordered_set<PageIdU64> delete_ref_page_ids;
         for (size_t j = 0; j < num_del_page; ++j)
         {
             // Random choose a id from all visible id and new-generated ref pages.
@@ -831,7 +830,7 @@ try
         dir->apply(std::move(edit));
     }
 
-    std::unordered_set<PageIdU64> visible_page_ids{
+    robin_hood::unordered_set<PageIdU64> visible_page_ids{
         id,
     };
 
@@ -848,7 +847,7 @@ try
         LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
 
         const size_t num_ref_page = distrib(gen) + 1;
-        std::unordered_map<PageIdU64, PageIdU64> new_ref_page_ids;
+        robin_hood::unordered_map<PageIdU64, PageIdU64> new_ref_page_ids;
         std::uniform_int_distribution<> rand_visible_ids(0, visible_page_ids.size() - 1);
         for (size_t j = 0; j < num_ref_page; ++j)
         {
@@ -861,7 +860,7 @@ try
         // Delete 1 page at least, delete until 1 page left at most
         std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
         const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
-        std::unordered_set<PageIdU64> delete_ref_page_ids;
+        robin_hood::unordered_set<PageIdU64> delete_ref_page_ids;
         for (size_t j = 0; j < num_del_page; ++j)
         {
             auto r = rand_delete_ids(gen);

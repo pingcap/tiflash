@@ -43,7 +43,7 @@ struct RegionQueryInfo
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
-    const std::unordered_set<UInt64> * bypass_lock_ts{nullptr};
+    const robin_hood::unordered_set<UInt64> * bypass_lock_ts{nullptr};
 
     bool operator<(const RegionQueryInfo & o) const
     {
@@ -63,7 +63,7 @@ struct MvccQueryInfo
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
-    using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
+    using ReadIndexRes = robin_hood::unordered_map<RegionID, UInt64>;
     ReadIndexRes read_index_res;
 
     DM::ScanContextPtr scan_context;

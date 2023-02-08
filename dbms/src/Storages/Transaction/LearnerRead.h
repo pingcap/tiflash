@@ -18,8 +18,8 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/Types.h>
+#include <common/robin_hood.h>
 
-#include <unordered_map>
 #include <vector>
 
 
@@ -36,7 +36,7 @@ struct RegionLearnerReadSnapshot : RegionPtr
     {}
     bool operator!=(const RegionPtr & rhs) const { return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag()); }
 };
-using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
+using LearnerReadSnapshot = robin_hood::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 
 [[nodiscard]] LearnerReadSnapshot
 doLearnerRead(

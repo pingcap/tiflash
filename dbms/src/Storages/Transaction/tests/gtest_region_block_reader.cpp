@@ -49,7 +49,7 @@ protected:
     size_t rows = 3;
 
     RegionDataReadInfoList data_list_read;
-    std::unordered_map<ColumnID, Field> fields_map;
+    robin_hood::unordered_map<ColumnID, Field> fields_map;
 
     LoggerPtr logger;
 
@@ -71,7 +71,7 @@ protected:
     void encodeColumns(const TableInfo & table_info, const std::vector<Field> & fields, RowEncodeVersion row_version)
     {
         // for later check
-        std::unordered_map<String, size_t> column_name_columns_index_map;
+        robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             fields_map.emplace(table_info.columns[i].id, fields[i]);

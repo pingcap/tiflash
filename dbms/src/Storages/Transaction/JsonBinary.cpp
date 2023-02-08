@@ -558,7 +558,7 @@ bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_co
     std::vector<JsonBinary> extracted_json_binary_vec;
     for (auto & path_expr_container : path_expr_container_vec)
     {
-        DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
+        DupCheckSet dup_check_set = std::make_unique<robin_hood::unordered_set<const char *>>();
         const auto * first_path_ref = path_expr_container->firstRef();
         extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
     }

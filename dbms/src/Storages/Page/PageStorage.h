@@ -26,6 +26,7 @@
 #include <Storages/Page/WALRecoveryMode.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 #include <fmt/format.h>
 
 #include <condition_variable>
@@ -36,7 +37,6 @@
 #include <set>
 #include <shared_mutex>
 #include <type_traits>
-#include <unordered_map>
 
 
 namespace DB

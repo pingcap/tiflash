@@ -419,9 +419,9 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentPtr & 
     return check_result;
 }
 
-std::unordered_set<UInt64> getDMFileIDs(const SegmentPtr & seg)
+robin_hood::unordered_set<UInt64> getDMFileIDs(const SegmentPtr & seg)
 {
-    std::unordered_set<UInt64> file_ids;
+    robin_hood::unordered_set<UInt64> file_ids;
     // We get the file ids in the segment no matter it is abandoned or not,
     // because even it is abandoned, we don't know whether the new segment will ref the old dtfiles.
     // So we just be conservative here to return the old file ids.
@@ -466,8 +466,8 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
         return false;
     }
 
-    std::unordered_set<UInt64> prev_segment_file_ids = getDMFileIDs(prev_seg);
-    std::unordered_set<UInt64> next_segment_file_ids = getDMFileIDs(next_seg);
+    robin_hood::unordered_set<UInt64> prev_segment_file_ids = getDMFileIDs(prev_seg);
+    robin_hood::unordered_set<UInt64> next_segment_file_ids = getDMFileIDs(next_seg);
 
     // Only try to compact the segment when there is data out of this segment range and is also not shared by neighbor segments.
     bool contains_invalid_data = false;

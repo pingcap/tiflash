@@ -22,7 +22,7 @@
 namespace DB
 {
 
-using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
+using DAGColumnInfo = robin_hood::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
 // We use qualified format like "db_name.table_name.column_name"

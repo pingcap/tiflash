@@ -162,7 +162,7 @@ using ReadIndexNotifyCtrlPtr = std::shared_ptr<ReadIndexNotifyCtrl>;
 
 struct RegionNotifyMap : MutexLockWrap
 {
-    using Data = std::unordered_set<RegionID>;
+    using Data = robin_hood::unordered_set<RegionID>;
 
     bool empty() const
     {
@@ -289,11 +289,11 @@ struct ReadIndexWorker
 
         ReadIndexDataNodePtr getDataNode(RegionID region_id) const;
 
-        void invoke(std::function<void(std::unordered_map<RegionID, ReadIndexDataNodePtr> &)> &&);
+        void invoke(std::function<void(robin_hood::unordered_map<RegionID, ReadIndexDataNodePtr> &)> &&);
 
         void removeRegion(RegionID);
 
-        mutable std::unordered_map<RegionID, ReadIndexDataNodePtr> region_map;
+        mutable robin_hood::unordered_map<RegionID, ReadIndexDataNodePtr> region_map;
     };
 
     void consumeReadIndexNotifyCtrl();

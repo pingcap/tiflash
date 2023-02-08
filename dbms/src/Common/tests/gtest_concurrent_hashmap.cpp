@@ -33,7 +33,7 @@ size_t TestConcurrentHashMap::test_loop = 1;
 
 struct MapType
 {
-    std::atomic_int value;
+    std::atomic_int value{};
     MapType() { value.store(0); }
 };
 
@@ -117,7 +117,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
     {
         size_t test_concurrency = 8;
         using ConcurrentMap = ConcurrentHashMap<UInt64, MapType, HashCRC32<UInt64>>;
-        using Map = std::unordered_map<UInt64, Int64>;
+        using Map = robin_hood::unordered_map<UInt64, Int64>;
         ConcurrentMap concurrent_map(test_concurrency);
         std::vector<Map> maps;
         maps.resize(test_concurrency);
@@ -152,15 +152,15 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
         for (size_t i = 1; i < test_concurrency; i++)
         {
             Map current_map = maps[i];
-            for (auto it = current_map.begin(); it != current_map.end(); it++)
+            for (auto & it : current_map)
             {
-                if (final_map.count(it->first))
+                if (final_map.count(it.first))
                 {
-                    final_map[it->first] = final_map[it->first] + it->second;
+                    final_map[it.first] = final_map[it.first] + it.second;
                 }
                 else
                 {
-                    final_map.insert({it->first, it->second});
+                    final_map.insert({it.first, it.second});
                 }
             }
         }
@@ -180,7 +180,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
     {
         size_t test_concurrency = 8;
         using ConcurrentMap = ConcurrentHashMap<UInt64, MapType, HashCRC32<UInt64>>;
-        using Map = std::unordered_map<UInt64, Int64>;
+        using Map = robin_hood::unordered_map<UInt64, Int64>;
         ConcurrentMap concurrent_map(test_concurrency);
         std::vector<Map> maps;
         maps.resize(test_concurrency);
@@ -224,15 +224,15 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
         for (size_t i = 1; i < test_concurrency; i++)
         {
             Map current_map = maps[i];
-            for (auto it = current_map.begin(); it != current_map.end(); it++)
+            for (auto & it : current_map)
             {
-                if (final_map.count(it->first))
+                if (final_map.count(it.first))
                 {
-                    final_map[it->first] += it->second;
+                    final_map[it.first] += it.second;
                 }
                 else
                 {
-                    final_map.insert({it->first, it->second});
+                    final_map.insert({it.first, it.second});
                 }
             }
         }

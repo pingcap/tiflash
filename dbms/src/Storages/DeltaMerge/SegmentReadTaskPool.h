@@ -133,7 +133,7 @@ enum class ReadMode
     Bitmap,
 };
 
-// If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
+// If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `robin_hood::unordered_map` to index `SegmentReadTask` by segment id,
 // else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
 // `SegmeneReadTasksWrapper` is not thread-safe.
 class SegmentReadTasksWrapper
@@ -146,14 +146,14 @@ public:
 
     // `getTask` and `getTasks` are used when `enable_read_thread` is true.
     SegmentReadTaskPtr getTask(UInt64 seg_id);
-    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
+    const robin_hood::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
 
     bool empty() const;
 
 private:
     bool enable_read_thread;
     SegmentReadTasks ordered_tasks;
-    std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
+    robin_hood::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
 };
 
 class SegmentReadTaskPool : private boost::noncopyable
@@ -217,7 +217,7 @@ public:
     }
 
     SegmentReadTaskPtr nextTask();
-    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
+    const robin_hood::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
     SegmentReadTaskPtr getTask(UInt64 seg_id);
 
     uint64_t poolId() const { return pool_id; }
@@ -229,8 +229,8 @@ public:
     bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
     void popBlock(Block & block);
 
-    std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
-        const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
+    robin_hood::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
+        const robin_hood::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
 
     Int64 increaseUnorderedInputStreamRefCount();
@@ -267,7 +267,7 @@ private:
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
-    std::unordered_set<uint64_t> active_segment_ids;
+    robin_hood::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
     LoggerPtr log;

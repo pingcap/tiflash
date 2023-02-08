@@ -18,6 +18,7 @@
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/V1/mvcc/VersionSet.h>
+#include <common/robin_hood.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -26,7 +27,6 @@
 #include <mutex>
 #include <shared_mutex>
 #include <stack>
-#include <unordered_set>
 
 namespace ProfileEvents
 {

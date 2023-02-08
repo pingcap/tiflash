@@ -77,8 +77,8 @@ struct DecodingStorageSchemaSnapshot
         , is_common_handle{table_info_.is_common_handle}
         , decoding_schema_version{decoding_schema_version_}
     {
-        std::unordered_map<ColumnID, size_t> column_lut;
-        std::unordered_map<String, ColumnID> column_name_id_map;
+        robin_hood::unordered_map<ColumnID, size_t> column_lut;
+        robin_hood::unordered_map<String, ColumnID> column_name_id_map;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
         {
             const auto & ci = table_info_.columns[i];

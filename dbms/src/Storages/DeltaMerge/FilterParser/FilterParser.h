@@ -16,11 +16,11 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/Types.h>
+#include <common/robin_hood.h>
 #include <tipb/expression.pb.h>
 
 #include <functional>
 #include <memory>
-#include <unordered_map>
 
 namespace Poco
 {
@@ -76,7 +76,7 @@ public:
         IsNull,
     };
 
-    static std::unordered_map<tipb::ScalarFuncSig, RSFilterType> scalar_func_rs_filter_map;
+    static robin_hood::unordered_map<tipb::ScalarFuncSig, RSFilterType> scalar_func_rs_filter_map;
 };
 
 } // namespace DM

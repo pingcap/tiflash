@@ -29,7 +29,7 @@ bool TableScanBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, co
     return true;
 }
 
-void TableScanBinder::columnPrune(std::unordered_set<String> & used_columns)
+void TableScanBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
     DAGSchema new_schema;
     for (const auto & col : output_schema)

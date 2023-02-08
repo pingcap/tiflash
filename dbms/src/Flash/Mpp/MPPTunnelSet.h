@@ -88,7 +88,7 @@ private:
 
 private:
     std::vector<TunnelPtr> tunnels;
-    std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
+    robin_hood::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
     const LoggerPtr log;
 
     std::vector<tipb::FieldType> result_field_types;

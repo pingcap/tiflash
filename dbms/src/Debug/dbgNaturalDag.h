@@ -91,7 +91,7 @@ private:
         std::vector<LoadedRegionInfo> regions;
     };
 
-    using LoadedTableMap = std::unordered_map<TableID, LoadedTableData>;
+    using LoadedTableMap = robin_hood::unordered_map<TableID, LoadedTableData>;
     using TableIDVec = std::vector<TableID>;
     using JSONObjectPtr = Poco::JSON::Object::Ptr;
 

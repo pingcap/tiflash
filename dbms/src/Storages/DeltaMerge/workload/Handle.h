@@ -17,11 +17,11 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Storages/DeltaMerge/workload/TableGenerator.h>
+#include <common/robin_hood.h>
 #include <fcntl.h>
 
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -183,7 +183,7 @@ private:
         uint64_t ts;
     };
     std::mutex mtx;
-    std::unordered_map<uint64_t, uint64_t> handle_to_ts;
+    robin_hood::unordered_map<uint64_t, uint64_t> handle_to_ts;
     std::unique_ptr<PosixWritableFile> wal;
 };
 

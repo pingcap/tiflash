@@ -100,9 +100,9 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
     }
 
     using TestHandler = std::function<void(int rows, int columns, int seconds)>;
-    static const std::unordered_map<
+    static const robin_hood::unordered_map<
         String,
-        std::unordered_map<String, TestHandler>>
+        robin_hood::unordered_map<String, TestHandler>>
         handlers = {
             {"int",
              {{"scatter", DB::tests::testScatter<Int32>}}},

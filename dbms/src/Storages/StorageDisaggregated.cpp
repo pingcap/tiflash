@@ -62,7 +62,7 @@ BlockInputStreams StorageDisaggregated::read(
 
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
 {
-    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
+    robin_hood::unordered_map<Int64, RegionRetryList> all_remote_regions;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);

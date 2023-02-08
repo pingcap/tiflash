@@ -32,7 +32,7 @@ class StoragePathPool;
 namespace DM
 {
 class StoragePool;
-using NotCompress = std::unordered_set<ColId>;
+using NotCompress = robin_hood::unordered_set<ColId>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
 

@@ -62,7 +62,7 @@ TEST(CircularScanListTest, Normal)
         ASSERT_EQ(lst.get(1), nullptr);
     }
 
-    std::unordered_map<uint64_t, std::shared_ptr<Node>> nodes;
+    robin_hood::unordered_map<uint64_t, std::shared_ptr<Node>> nodes;
     for (uint64_t i = 0; i < 10; i++)
     {
         auto p = std::make_shared<Node>(i);

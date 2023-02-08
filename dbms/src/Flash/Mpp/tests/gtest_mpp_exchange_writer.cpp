@@ -228,7 +228,7 @@ try
     auto block = prepareUniformBlock(block_rows);
 
     // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
+    robin_hood::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed.
@@ -295,7 +295,7 @@ try
     for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+        robin_hood::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
         auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
@@ -379,7 +379,7 @@ try
     Block header = blocks.back();
 
     // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+    robin_hood::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
@@ -443,7 +443,7 @@ try
     Block header = blocks.back();
 
     // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+    robin_hood::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
@@ -565,7 +565,7 @@ try
     for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+        robin_hood::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
         auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
             write_report[part_id].emplace_back(packet);
         };

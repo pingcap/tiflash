@@ -255,8 +255,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         table_id = 1;
     }
 
-    std::unordered_set<uint64_t> region_id_to_drop;
-    std::unordered_set<uint64_t> region_id_to_error;
+    robin_hood::unordered_set<uint64_t> region_id_to_drop;
+    robin_hood::unordered_set<uint64_t> region_id_to_error;
     std::map<uint64_t, MockProxyRegionPtr> regions;
     std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
     AsyncWaker::Notifier notifier;
@@ -280,7 +280,7 @@ struct GCMonitor : MutexLockWrap
 
     bool empty();
 
-    std::unordered_map<RawObjType, int64_t> data;
+    robin_hood::unordered_map<RawObjType, int64_t> data;
 
     static GCMonitor global_gc_monitor;
 };

@@ -141,9 +141,9 @@ public:
 
     std::optional<SchemaDiff> getSchemaDiff(Int64 version);
 
-    std::unordered_map<String, DatabaseID> getDatabases() { return databases; }
+    robin_hood::unordered_map<String, DatabaseID> getDatabases() { return databases; }
 
-    std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
+    robin_hood::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
 
     Int64 getVersion() const { return version; }
 
@@ -158,11 +158,11 @@ private:
 private:
     std::mutex tables_mutex;
 
-    std::unordered_map<String, DatabaseID> databases;
-    std::unordered_map<String, TablePtr> tables_by_name;
-    std::unordered_map<TableID, TablePtr> tables_by_id;
+    robin_hood::unordered_map<String, DatabaseID> databases;
+    robin_hood::unordered_map<String, TablePtr> tables_by_name;
+    robin_hood::unordered_map<TableID, TablePtr> tables_by_id;
 
-    std::unordered_map<Int64, SchemaDiff> version_diff;
+    robin_hood::unordered_map<Int64, SchemaDiff> version_diff;
 
     std::atomic<TableID> table_id_allocator = 30;
 

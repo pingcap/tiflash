@@ -42,7 +42,7 @@ class MPPTunnelSet;
 class ExchangeReceiver;
 using ExchangeReceiverPtr = std::shared_ptr<ExchangeReceiver>;
 /// key: executor_id of ExchangeReceiver nodes in dag.
-using ExchangeReceiverMap = std::unordered_map<String, ExchangeReceiverPtr>;
+using ExchangeReceiverMap = robin_hood::unordered_map<String, ExchangeReceiverPtr>;
 class MPPReceiverSet;
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
@@ -209,12 +209,12 @@ public:
         initOutputInfo();
     }
 
-    std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
+    robin_hood::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
-    std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
+    robin_hood::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
-    std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
-    std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
+    robin_hood::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
+    robin_hood::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -377,7 +377,7 @@ public:
     /// Currently, max(scan_context_map.size()) == 1, because one mpp task only have do one table scan
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
-    std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+    robin_hood::unordered_map<String, DM::ScanContextPtr> scan_context_map;
 
 private:
     void initExecutorIdToJoinIdMap();
@@ -389,15 +389,15 @@ private:
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
-    std::unordered_map<String, BlockInputStreams> profile_streams_map;
+    robin_hood::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
-    std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
+    robin_hood::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
-    std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
+    robin_hood::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
     /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
-    std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
+    robin_hood::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;

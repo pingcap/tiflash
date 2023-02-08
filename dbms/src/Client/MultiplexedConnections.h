@@ -14,9 +14,10 @@
 
 #pragma once
 
-#include <Common/Throttler.h>
 #include <Client/Connection.h>
 #include <Client/ConnectionPoolWithFailover.h>
+#include <Common/Throttler.h>
+
 #include <mutex>
 
 namespace DB
@@ -39,8 +40,10 @@ public:
       * If the append_extra_info flag is set, additional information appended to each received block.
       */
     MultiplexedConnections(
-            std::vector<IConnectionPool::Entry> && connections,
-            const Settings & settings_, const ThrottlerPtr & throttler_, bool append_extra_info);
+        std::vector<IConnectionPool::Entry> && connections,
+        const Settings & settings_,
+        const ThrottlerPtr & throttler_,
+        bool append_extra_info);
 
     /// Send all content of external tables to replicas.
     void sendExternalTablesData(std::vector<ExternalTablesData> & data);
@@ -109,7 +112,7 @@ private:
     size_t active_connection_count = 0;
 
     std::vector<ReplicaState> replica_states;
-    std::unordered_map<int, size_t> fd_to_replica_state_idx;
+    robin_hood::unordered_map<int, size_t> fd_to_replica_state_idx;
 
     /// Connection that received last block.
     Connection * current_connection = nullptr;
@@ -125,4 +128,4 @@ private:
     mutable std::mutex cancel_mutex;
 };
 
-}
+} // namespace DB

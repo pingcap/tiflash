@@ -17,9 +17,9 @@
 #include <Columns/Collator.h>
 #include <Storages/Transaction/CollatorCompare.h>
 #include <common/StringRef.h>
+#include <common/robin_hood.h>
 
 #include <memory>
-#include <unordered_map>
 
 namespace TiDB
 {

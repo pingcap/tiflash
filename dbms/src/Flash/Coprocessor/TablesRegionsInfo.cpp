@@ -59,7 +59,7 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     return meta_snap.ver != region_info.region_version;
 }
 
-static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions, Int64 table_id, TablesRegionsInfo & tables_region_infos, std::unordered_set<RegionID> & local_region_id_set, const TMTContext & tmt_context)
+static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions, Int64 table_id, TablesRegionsInfo & tables_region_infos, robin_hood::unordered_set<RegionID> & local_region_id_set, const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (const auto & r : regions)
@@ -86,7 +86,7 @@ static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedP
             table_region_info.remote_regions.push_back(region_info);
         else
         {
-            table_region_info.local_regions.insert(std::make_pair(region_info.region_id, region_info));
+            table_region_info.local_regions.insert({region_info.region_id, region_info});
             local_region_id_set.emplace(region_info.region_id);
         }
     }
@@ -99,7 +99,7 @@ TablesRegionsInfo TablesRegionsInfo::create(
 {
     assert(regions.empty() || table_regions.empty());
     TablesRegionsInfo tables_regions_info(!regions.empty());
-    std::unordered_set<RegionID> local_region_id_set;
+    robin_hood::unordered_set<RegionID> local_region_id_set;
     if (!regions.empty())
         insertRegionInfoToTablesRegionInfo(regions, InvalidTableID, tables_regions_info, local_region_id_set, tmt_context);
     else

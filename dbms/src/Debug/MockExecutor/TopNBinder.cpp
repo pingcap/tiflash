@@ -40,7 +40,7 @@ bool TopNBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-void TopNBinder::columnPrune(std::unordered_set<String> & used_columns)
+void TopNBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
     for (auto & expr : order_columns)
         collectUsedColumnsFromExpr(children[0]->output_schema, expr, used_columns);

@@ -18,8 +18,8 @@
 #include <Columns/ColumnVector.h>
 #include <Common/HashTable/HashMap.h>
 #include <DataTypes/IDataType.h>
+#include <common/robin_hood.h>
 
-#include <unordered_map>
 #include <vector>
 
 
@@ -59,7 +59,7 @@ public:
     using Value = std::pair<std::string, FieldType>;
     using Values = std::vector<Value>;
     using NameToValueMap = HashMap<StringRef, FieldType, StringRefHash>;
-    using ValueToNameMap = std::unordered_map<FieldType, StringRef>;
+    using ValueToNameMap = robin_hood::unordered_map<FieldType, StringRef>;
 
     static constexpr bool is_parametric = true;
 

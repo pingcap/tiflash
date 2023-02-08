@@ -15,12 +15,12 @@
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 
@@ -84,7 +84,7 @@ private:
         int recursion_level) const;
 
 private:
-    using AggregateFunctions = std::unordered_map<String, Creator>;
+    using AggregateFunctions = robin_hood::unordered_map<String, Creator>;
 
     AggregateFunctions aggregate_functions;
 

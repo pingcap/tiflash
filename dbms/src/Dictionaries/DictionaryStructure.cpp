@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Dictionaries/DictionaryStructure.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <Columns/IColumn.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <Dictionaries/DictionaryStructure.h>
 #include <IO/WriteHelpers.h>
+#include <common/robin_hood.h>
 
 #include <ext/range.h>
 #include <numeric>
-#include <unordered_set>
-#include <unordered_map>
 
 
 namespace DB
@@ -29,11 +28,11 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TYPE;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int TYPE_MISMATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int UNKNOWN_TYPE;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int TYPE_MISMATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 bool isAttributeTypeConvertibleTo(AttributeUnderlyingType from, AttributeUnderlyingType to)
@@ -45,27 +44,27 @@ bool isAttributeTypeConvertibleTo(AttributeUnderlyingType from, AttributeUnderly
       * (for example, because integers can not be converted to floats)
       * This is normal for a limited usage scope.
       */
-    if (    (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::UInt16)
-        ||    (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::UInt32)
-        ||    (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::UInt64)
-        ||    (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::UInt32)
-        ||    (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::UInt64)
-        ||    (from == AttributeUnderlyingType::UInt32 && to == AttributeUnderlyingType::UInt64)
-        ||    (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::Int16)
-        ||    (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::Int32)
-        ||    (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::Int64)
-        ||    (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::Int32)
-        ||    (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::Int64)
-        ||    (from == AttributeUnderlyingType::UInt32 && to == AttributeUnderlyingType::Int64)
+    if ((from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::UInt16)
+        || (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::UInt32)
+        || (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::UInt64)
+        || (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::UInt32)
+        || (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::UInt64)
+        || (from == AttributeUnderlyingType::UInt32 && to == AttributeUnderlyingType::UInt64)
+        || (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::Int16)
+        || (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::Int32)
+        || (from == AttributeUnderlyingType::UInt8 && to == AttributeUnderlyingType::Int64)
+        || (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::Int32)
+        || (from == AttributeUnderlyingType::UInt16 && to == AttributeUnderlyingType::Int64)
+        || (from == AttributeUnderlyingType::UInt32 && to == AttributeUnderlyingType::Int64)
 
-        ||    (from == AttributeUnderlyingType::Int8 && to == AttributeUnderlyingType::Int16)
-        ||    (from == AttributeUnderlyingType::Int8 && to == AttributeUnderlyingType::Int32)
-        ||    (from == AttributeUnderlyingType::Int8 && to == AttributeUnderlyingType::Int64)
-        ||    (from == AttributeUnderlyingType::Int16 && to == AttributeUnderlyingType::Int32)
-        ||    (from == AttributeUnderlyingType::Int16 && to == AttributeUnderlyingType::Int64)
-        ||    (from == AttributeUnderlyingType::Int32 && to == AttributeUnderlyingType::Int64)
+        || (from == AttributeUnderlyingType::Int8 && to == AttributeUnderlyingType::Int16)
+        || (from == AttributeUnderlyingType::Int8 && to == AttributeUnderlyingType::Int32)
+        || (from == AttributeUnderlyingType::Int8 && to == AttributeUnderlyingType::Int64)
+        || (from == AttributeUnderlyingType::Int16 && to == AttributeUnderlyingType::Int32)
+        || (from == AttributeUnderlyingType::Int16 && to == AttributeUnderlyingType::Int64)
+        || (from == AttributeUnderlyingType::Int32 && to == AttributeUnderlyingType::Int64)
 
-        ||    (from == AttributeUnderlyingType::Float32 && to == AttributeUnderlyingType::Float64))
+        || (from == AttributeUnderlyingType::Float32 && to == AttributeUnderlyingType::Float64))
     {
         return true;
     }
@@ -76,21 +75,21 @@ bool isAttributeTypeConvertibleTo(AttributeUnderlyingType from, AttributeUnderly
 
 AttributeUnderlyingType getAttributeUnderlyingType(const std::string & type)
 {
-    static const std::unordered_map<std::string, AttributeUnderlyingType> dictionary{
-        { "UInt8", AttributeUnderlyingType::UInt8 },
-        { "UInt16", AttributeUnderlyingType::UInt16 },
-        { "UInt32", AttributeUnderlyingType::UInt32 },
-        { "UInt64", AttributeUnderlyingType::UInt64 },
-        { "UUID", AttributeUnderlyingType::UInt128 },
-        { "Int8", AttributeUnderlyingType::Int8 },
-        { "Int16", AttributeUnderlyingType::Int16 },
-        { "Int32", AttributeUnderlyingType::Int32 },
-        { "Int64", AttributeUnderlyingType::Int64 },
-        { "Float32", AttributeUnderlyingType::Float32 },
-        { "Float64", AttributeUnderlyingType::Float64 },
-        { "String", AttributeUnderlyingType::String },
-        { "Date", AttributeUnderlyingType::UInt16 },
-        { "DateTime", AttributeUnderlyingType::UInt32 },
+    static const robin_hood::unordered_map<std::string, AttributeUnderlyingType> dictionary{
+        {"UInt8", AttributeUnderlyingType::UInt8},
+        {"UInt16", AttributeUnderlyingType::UInt16},
+        {"UInt32", AttributeUnderlyingType::UInt32},
+        {"UInt64", AttributeUnderlyingType::UInt64},
+        {"UUID", AttributeUnderlyingType::UInt128},
+        {"Int8", AttributeUnderlyingType::Int8},
+        {"Int16", AttributeUnderlyingType::Int16},
+        {"Int32", AttributeUnderlyingType::Int32},
+        {"Int64", AttributeUnderlyingType::Int64},
+        {"Float32", AttributeUnderlyingType::Float32},
+        {"Float64", AttributeUnderlyingType::Float64},
+        {"String", AttributeUnderlyingType::String},
+        {"Date", AttributeUnderlyingType::UInt16},
+        {"DateTime", AttributeUnderlyingType::UInt32},
     };
 
     const auto it = dictionary.find(type);
@@ -107,18 +106,30 @@ std::string toString(const AttributeUnderlyingType type)
 {
     switch (type)
     {
-        case AttributeUnderlyingType::UInt8: return "UInt8";
-        case AttributeUnderlyingType::UInt16: return "UInt16";
-        case AttributeUnderlyingType::UInt32: return "UInt32";
-        case AttributeUnderlyingType::UInt64: return "UInt64";
-        case AttributeUnderlyingType::UInt128: return "UUID";
-        case AttributeUnderlyingType::Int8: return "Int8";
-        case AttributeUnderlyingType::Int16: return "Int16";
-        case AttributeUnderlyingType::Int32: return "Int32";
-        case AttributeUnderlyingType::Int64: return "Int64";
-        case AttributeUnderlyingType::Float32: return "Float32";
-        case AttributeUnderlyingType::Float64: return "Float64";
-        case AttributeUnderlyingType::String: return "String";
+    case AttributeUnderlyingType::UInt8:
+        return "UInt8";
+    case AttributeUnderlyingType::UInt16:
+        return "UInt16";
+    case AttributeUnderlyingType::UInt32:
+        return "UInt32";
+    case AttributeUnderlyingType::UInt64:
+        return "UInt64";
+    case AttributeUnderlyingType::UInt128:
+        return "UUID";
+    case AttributeUnderlyingType::Int8:
+        return "Int8";
+    case AttributeUnderlyingType::Int16:
+        return "Int16";
+    case AttributeUnderlyingType::Int32:
+        return "Int32";
+    case AttributeUnderlyingType::Int64:
+        return "Int64";
+    case AttributeUnderlyingType::Float32:
+        return "Float32";
+    case AttributeUnderlyingType::Float64:
+        return "Float64";
+    case AttributeUnderlyingType::String:
+        return "String";
     }
 
     throw Exception{
@@ -128,8 +139,8 @@ std::string toString(const AttributeUnderlyingType type)
 
 
 DictionarySpecialAttribute::DictionarySpecialAttribute(const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix)
-    : name{config.getString(config_prefix + ".name", "")},
-      expression{config.getString(config_prefix + ".expression", "")}
+    : name{config.getString(config_prefix + ".name", "")}
+    , expression{config.getString(config_prefix + ".expression", "")}
 {
     if (name.empty() && !expression.empty())
         throw Exception{
@@ -168,9 +179,7 @@ DictionaryStructure::DictionaryStructure(const Poco::Util::AbstractConfiguration
         if (config.has(config_prefix + ".range_max"))
             range_max.emplace(config, config_prefix + ".range_max");
 
-        if (!id->expression.empty() ||
-            (range_min && !range_min->expression.empty()) ||
-            (range_max && !range_max->expression.empty()))
+        if (!id->expression.empty() || (range_min && !range_min->expression.empty()) || (range_max && !range_max->expression.empty()))
             has_expressions = true;
     }
 
@@ -194,8 +203,7 @@ void DictionaryStructure::validateKeyTypes(const DataTypes & key_types) const
 
         if (expected_type != actual_type)
             throw Exception{
-                "Key type at position " + std::to_string(i) + " does not match, expected " + expected_type +
-                    ", found " + actual_type,
+                "Key type at position " + std::to_string(i) + " does not match, expected " + expected_type + ", found " + actual_type,
                 ErrorCodes::TYPE_MISMATCH};
     }
 }
@@ -241,15 +249,13 @@ bool DictionaryStructure::isKeySizeFixed() const
 
 size_t DictionaryStructure::getKeySize() const
 {
-    return std::accumulate(std::begin(*key), std::end(*key), size_t{},
-        [] (const auto running_size, const auto & key_i) {return running_size + key_i.type->getSizeOfValueInMemory(); });
+    return std::accumulate(std::begin(*key), std::end(*key), size_t{}, [](const auto running_size, const auto & key_i) { return running_size + key_i.type->getSizeOfValueInMemory(); });
 }
 
 
 static void CheckAttributeKeys(const Poco::Util::AbstractConfiguration::Keys & keys)
 {
-    static const std::unordered_set<std::string> valid_keys =
-        { "name", "type", "expression", "null_value", "hierarchical", "injective", "is_object_id" };
+    static const robin_hood::unordered_set<std::string> valid_keys = {"name", "type", "expression", "null_value", "hierarchical", "injective", "is_object_id"};
 
     for (const auto & key : keys)
     {
@@ -261,8 +267,10 @@ static void CheckAttributeKeys(const Poco::Util::AbstractConfiguration::Keys & k
 }
 
 std::vector<DictionaryAttribute> DictionaryStructure::getAttributes(
-    const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix,
-    const bool hierarchy_allowed, const bool allow_null_values)
+    const Poco::Util::AbstractConfiguration & config,
+    const std::string & config_prefix,
+    const bool hierarchy_allowed,
+    const bool allow_null_values)
 {
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_prefix, keys);
@@ -272,7 +280,7 @@ std::vector<DictionaryAttribute> DictionaryStructure::getAttributes(
 
     for (const auto & key : keys)
     {
-        if (!startsWith(key.data(), "attribute"))
+        if (!startsWith(key, "attribute"))
             continue;
 
         const auto prefix = config_prefix + '.' + key + '.';
@@ -329,11 +337,17 @@ std::vector<DictionaryAttribute> DictionaryStructure::getAttributes(
         has_hierarchy = has_hierarchy || hierarchical;
 
         attributes.emplace_back(DictionaryAttribute{
-            name, underlying_type, type, expression, null_value, hierarchical, injective, is_object_id
-        });
+            name,
+            underlying_type,
+            type,
+            expression,
+            null_value,
+            hierarchical,
+            injective,
+            is_object_id});
     }
 
     return attributes;
 }
 
-}
+} // namespace DB

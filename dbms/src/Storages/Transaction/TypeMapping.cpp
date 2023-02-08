@@ -42,7 +42,7 @@ class TypeMapping : public ext::Singleton<TypeMapping>
 {
 public:
     using Creator = std::function<DataTypePtr(const ColumnInfo & column_info)>;
-    using TypeMap = std::unordered_map<TiDB::TP, Creator>;
+    using TypeMap = robin_hood::unordered_map<TiDB::TP, Creator>;
 
     DataTypePtr getDataType(const ColumnInfo & column_info);
 
@@ -243,7 +243,7 @@ void fillTiDBColumnInfo(const String & family_name, const ASTPtr & parameters, C
         return;
     }
 
-    const static std::unordered_map<String, TiDB::TP> tidb_type_map({
+    const static robin_hood::unordered_map<String, TiDB::TP> tidb_type_map({
         {"timestamp", TiDB::TypeTimestamp},
         {"time", TiDB::TypeTime},
         {"set", TiDB::TypeSet},

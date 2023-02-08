@@ -92,7 +92,7 @@ class SharedQueries
 {
 public:
     using BlockIOCreator = std::function<BlockIO()>;
-    using Queries = std::unordered_map<String, SharedQueryPtr>;
+    using Queries = robin_hood::unordered_map<String, SharedQueryPtr>;
 
     BlockIO getOrCreateBlockIO(String query_id, size_t clients, BlockIOCreator creator)
     {

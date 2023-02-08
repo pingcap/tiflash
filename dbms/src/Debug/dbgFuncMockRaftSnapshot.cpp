@@ -68,7 +68,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     size_t handle_column_size = is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     RegionPtr region;
 
-    std::unordered_map<String, size_t> column_name_columns_index_map;
+    robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
         column_name_columns_index_map.emplace(table_info.columns[i].name, i);
@@ -206,7 +206,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         std::vector<Field> start_keys;
         std::vector<Field> end_keys;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
+        robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             column_name_columns_index_map.emplace(table_info.columns[i].name, i);
@@ -280,7 +280,7 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
                     UInt64 start_handle,
                     UInt64 end_handle,
                     UInt64 num_fields = 1,
-                    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+                    const robin_hood::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = end_handle - start_handle;
@@ -341,7 +341,7 @@ void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
                              const String & store_key,
                              const std::vector<UInt64> & handles,
                              UInt64 num_fields = 1,
-                             const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+                             const robin_hood::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = handles.size();
@@ -458,9 +458,9 @@ struct GlobalRegionMap
 {
     using Key = std::string;
     using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
-    std::unordered_map<Key, BlockVal> regions_block;
+    robin_hood::unordered_map<Key, BlockVal> regions_block;
     using SnapPath = std::pair<RegionPtr, std::vector<DM::ExternalDTFileInfo>>;
-    std::unordered_map<Key, SnapPath> regions_snap_files;
+    robin_hood::unordered_map<Key, SnapPath> regions_snap_files;
     std::mutex mutex;
 
     void insertRegionCache(const Key & name, BlockVal && val)
@@ -558,7 +558,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     UInt64 test_fields = 1;
     if (args.size() > 7)
         test_fields = static_cast<UInt64>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[7]).value));
-    std::unordered_set<ColumnFamilyType> cfs;
+    robin_hood::unordered_set<ColumnFamilyType> cfs;
     {
         String cfs_str = "write,default";
         if (args.size() > 8)
@@ -660,7 +660,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
     }
 
     UInt64 test_fields = 1;
-    std::unordered_set<ColumnFamilyType> cfs;
+    robin_hood::unordered_set<ColumnFamilyType> cfs;
     cfs.insert(ColumnFamilyType::Write);
     cfs.insert(ColumnFamilyType::Default);
 

@@ -65,7 +65,7 @@ void ExecutionSummaryCollector::fillLocalExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
     const BlockInputStreams & streams,
-    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
+    const robin_hood::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
     ExecutionSummary current;
     /// part 1: local execution info

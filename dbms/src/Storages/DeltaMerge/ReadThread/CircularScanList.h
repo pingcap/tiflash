@@ -13,9 +13,10 @@
 // limitations under the License.
 #pragma once
 
+#include <common/robin_hood.h>
+
 #include <list>
 #include <memory>
-#include <unordered_map>
 
 namespace DB::DM
 {
@@ -107,7 +108,7 @@ private:
 
     std::list<ElemPtr> l;
     Iter last_itr;
-    std::unordered_map<uint64_t, Iter> m;
+    robin_hood::unordered_map<uint64_t, Iter> m;
 };
 
 } // namespace DB::DM

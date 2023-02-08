@@ -49,7 +49,7 @@ struct RSIndex
     }
 };
 
-using ColumnIndexes = std::unordered_map<ColId, RSIndex>;
+using ColumnIndexes = robin_hood::unordered_map<ColId, RSIndex>;
 
 } // namespace DM
 

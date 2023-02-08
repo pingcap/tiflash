@@ -46,7 +46,7 @@ private:
     tipb::SelectResponse * dag_response;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     Int64 current_records_num;
-    std::unordered_map<String, std::tuple<UInt64, UInt64, UInt64>> previous_execute_stats;
+    robin_hood::unordered_map<String, std::tuple<UInt64, UInt64, UInt64>> previous_execute_stats;
 };
 
 } // namespace DB

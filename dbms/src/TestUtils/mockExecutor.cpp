@@ -36,10 +36,10 @@
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
+#include <common/robin_hood.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>
-#include <unordered_set>
 
 namespace DB::tests
 {
@@ -59,7 +59,7 @@ ASTPtr buildOrderByItemVec(MockOrderByItemVec order_by_items)
 {
     std::vector<ASTPtr> vec(order_by_items.size());
     size_t i = 0;
-    for (auto item : order_by_items)
+    for (const auto& item : order_by_items)
     {
         int direction = item.second ? -1 : 1;
         ASTPtr locale_node;
@@ -132,7 +132,7 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
 // TODO: support columnPrume for Sort and Window.
 void columnPrune(mock::ExecutorBinderPtr executor)
 {
-    std::unordered_set<String> used_columns;
+    robin_hood::unordered_set<String> used_columns;
     for (auto & schema : executor->output_schema)
         used_columns.emplace(schema.first);
     executor->columnPrune(used_columns);

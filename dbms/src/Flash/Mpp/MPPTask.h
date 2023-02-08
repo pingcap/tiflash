@@ -27,13 +27,13 @@
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
 
 #include <atomic>
 #include <boost/noncopyable.hpp>
 #include <memory>
-#include <unordered_map>
 
 namespace DB
 {
@@ -148,6 +148,6 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-using MPPTaskMap = std::unordered_map<MPPTaskId, MPPTaskPtr>;
+using MPPTaskMap = robin_hood::unordered_map<MPPTaskId, MPPTaskPtr>;
 
 } // namespace DB

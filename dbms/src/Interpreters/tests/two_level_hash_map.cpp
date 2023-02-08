@@ -12,25 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
+#include <common/robin_hood.h>
+
 #include <iomanip>
-#include <vector>
-
-#include <unordered_map>
-
+#include <iostream>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/sparse_hash_map>
+#include <vector>
 
 //#define DBMS_HASH_MAP_DEBUG_RESIZES
 
-#include <Common/Stopwatch.h>
 #include <AggregateFunctions/UniquesHashSet.h>
-
-#include <Core/Types.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/CompressedReadBuffer.h>
-#include <Common/HashTable/TwoLevelHashTable.h>
 #include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/TwoLevelHashTable.h>
+#include <Common/Stopwatch.h>
+#include <Core/Types.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/ReadBufferFromFile.h>
 
 
 using Key = UInt64;
@@ -56,14 +54,14 @@ int main(int argc, char ** argv)
         DB::ReadBufferFromFileDescriptor in1(STDIN_FILENO);
         DB::CompressedReadBuffer in2(in1);
 
-        in2.readStrict(reinterpret_cast<char*>(&data[0]), sizeof(data[0]) * n);
+        in2.readStrict(reinterpret_cast<char *>(&data[0]), sizeof(data[0]) * n);
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "Vector. Size: " << n
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "Vector. Size: " << n
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
     }
 
     {
@@ -87,10 +85,10 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap. Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "HashMap. Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
 
         size_t sum_counts = 0;
         size_t elems = 0;
@@ -123,10 +121,10 @@ int main(int argc, char ** argv)
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "HashMap. Size: " << map.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl;
+                  << "HashMap. Size: " << map.size()
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl;
 
         size_t sum_counts = 0;
         size_t elems = 0;

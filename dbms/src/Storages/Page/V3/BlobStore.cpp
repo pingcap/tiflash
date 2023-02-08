@@ -32,12 +32,12 @@
 #include <Storages/Page/WriteBatch.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
-#include <unordered_map>
 
 namespace ProfileEvents
 {

@@ -20,9 +20,9 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/robin_hood.h>
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 

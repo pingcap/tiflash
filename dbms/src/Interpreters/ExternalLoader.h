@@ -20,13 +20,13 @@
 #include <Interpreters/IExternalLoaderConfigRepository.h>
 #include <Poco/Event.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 
 #include <chrono>
 #include <mutex>
 #include <pcg_random.hpp>
 #include <thread>
 #include <tuple>
-#include <unordered_map>
 
 
 namespace DB
@@ -102,7 +102,7 @@ private:
 
 public:
     using Configuration = Poco::Util::AbstractConfiguration;
-    using ObjectsMap = std::unordered_map<std::string, LoadableInfo>;
+    using ObjectsMap = robin_hood::unordered_map<std::string, LoadableInfo>;
 
     /// Objects will be loaded immediately and then will be updated in separate thread, each 'reload_period' seconds.
     ExternalLoader(const Configuration & config,
@@ -159,10 +159,10 @@ private:
 
     /// Here are loadable objects, that has been never loaded successfully.
     /// They are also in 'loadable_objects', but with nullptr as 'loadable'.
-    std::unordered_map<std::string, FailedLoadableInfo> failed_loadable_objects;
+    robin_hood::unordered_map<std::string, FailedLoadableInfo> failed_loadable_objects;
 
     /// Both for loadable_objects and failed_loadable_objects.
-    std::unordered_map<std::string, std::chrono::system_clock::time_point> update_times;
+    robin_hood::unordered_map<std::string, std::chrono::system_clock::time_point> update_times;
 
     pcg64 rnd_engine{randomSeed()};
 
@@ -179,7 +179,7 @@ private:
     /// Loadable object name to use in log messages.
     std::string object_name;
 
-    std::unordered_map<std::string, Poco::Timestamp> last_modification_times;
+    robin_hood::unordered_map<std::string, Poco::Timestamp> last_modification_times;
 
     /// Check objects definitions in config files and reload or/and add new ones if the definition is changed
     /// If loadable_name is not empty, load only loadable object with name loadable_name

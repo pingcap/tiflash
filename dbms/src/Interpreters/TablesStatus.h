@@ -16,9 +16,7 @@
 
 #include <Core/QualifiedTableName.h>
 #include <Core/Types.h>
-
-#include <unordered_map>
-#include <unordered_set>
+#include <common/robin_hood.h>
 
 namespace DB
 {
@@ -50,7 +48,7 @@ struct TableStatus
 
 struct TablesStatusRequest
 {
-    std::unordered_set<QualifiedTableName> tables;
+    robin_hood::unordered_set<QualifiedTableName> tables;
 
     void write(WriteBuffer & out, UInt64 server_protocol_revision) const;
     void read(ReadBuffer & in, UInt64 client_protocol_revision);
@@ -58,7 +56,7 @@ struct TablesStatusRequest
 
 struct TablesStatusResponse
 {
-    std::unordered_map<QualifiedTableName, TableStatus> table_states_by_id;
+    robin_hood::unordered_map<QualifiedTableName, TableStatus> table_states_by_id;
 
     void write(WriteBuffer & out, UInt64 client_protocol_revision) const;
     void read(ReadBuffer & in, UInt64 server_protocol_revision);

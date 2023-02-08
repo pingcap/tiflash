@@ -15,12 +15,12 @@
 #pragma once
 
 #include <TableFunctions/ITableFunction.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 
 namespace DB
@@ -53,7 +53,7 @@ public:
         const Context & context) const;
 
 private:
-    using TableFunctions = std::unordered_map<std::string, Creator>;
+    using TableFunctions = robin_hood::unordered_map<std::string, Creator>;
 
     TableFunctions functions;
 };

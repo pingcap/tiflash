@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Storages/IStorage.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
-#include <unordered_map>
 
 
 namespace DB
@@ -70,7 +70,7 @@ public:
     void registerStorage(const std::string & name, Creator creator);
 
 private:
-    using Storages = std::unordered_map<std::string, Creator>;
+    using Storages = robin_hood::unordered_map<std::string, Creator>;
     Storages storages;
 };
 

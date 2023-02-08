@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <common/robin_hood.h>
 
 #include <memory>
-#include <unordered_set>
 #include <vector>
 
 
@@ -74,7 +74,7 @@ struct User
     AddressPatterns addresses;
 
     /// List of allowed databases.
-    using DatabaseSet = std::unordered_set<std::string>;
+    using DatabaseSet = robin_hood::unordered_set<std::string>;
     DatabaseSet databases;
 
     User(const String & name_);

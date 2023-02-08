@@ -16,10 +16,10 @@
 
 #include <Common/nocopyable.h>
 #include <common/defines.h>
+#include <common/robin_hood.h>
 
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 namespace Poco
@@ -117,7 +117,7 @@ private:
     static std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set);
 
 
-    std::unordered_map<pid_t, std::string> getThreads(pid_t pid) const;
+    robin_hood::unordered_map<pid_t, std::string> getThreads(pid_t pid) const;
     std::vector<pid_t> getThreadIDs(const std::string & dir) const;
     static std::string getThreadName(const std::string & fname);
     static std::string getShortFilename(const std::string & path);

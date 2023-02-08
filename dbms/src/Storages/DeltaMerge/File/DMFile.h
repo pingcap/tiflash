@@ -140,7 +140,7 @@ public:
         UInt64 offset;
         UInt64 size;
     };
-    using SubFileStats = std::unordered_map<String, SubFileStat>;
+    using SubFileStats = robin_hood::unordered_map<String, SubFileStat>;
 
     struct MetaPackInfo
     {
@@ -382,7 +382,7 @@ private:
     PackStats pack_stats;
     PackProperties pack_properties;
     ColumnStats column_stats;
-    std::unordered_set<ColId> column_indices;
+    robin_hood::unordered_set<ColId> column_indices;
 
     Status status;
     DMConfigurationOpt configuration; // configuration

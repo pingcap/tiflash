@@ -16,8 +16,7 @@
 
 #include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-
-#include <unordered_map>
+#include <common/robin_hood.h>
 
 namespace DB
 {
@@ -26,7 +25,7 @@ namespace DM
 class OrderColumnCache
 {
 private:
-    using ColumnMap = std::unordered_map<UInt64, ColumnPtr>;
+    using ColumnMap = robin_hood::unordered_map<UInt64, ColumnPtr>;
     ColumnMap column_map;
 
 public:

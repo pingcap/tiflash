@@ -684,7 +684,7 @@ ReadIndexDataNodePtr ReadIndexWorker::DataMap::getDataNode(RegionID region_id) c
     return upsertDataNode(region_id);
 }
 
-void ReadIndexWorker::DataMap::invoke(std::function<void(std::unordered_map<RegionID, ReadIndexDataNodePtr> &)> && cb)
+void ReadIndexWorker::DataMap::invoke(std::function<void(robin_hood::unordered_map<RegionID, ReadIndexDataNodePtr> &)> && cb)
 {
     auto _ = genWriteLockGuard();
     cb(region_map);

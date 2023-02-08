@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <common/robin_hood.h>
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -29,6 +31,4 @@
 #include <random>
 #include <shared_mutex>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>

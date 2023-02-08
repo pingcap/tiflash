@@ -70,10 +70,6 @@ target_link_libraries (array_cache clickhouse_common_io)
 add_executable (space_saving space_saving.cpp)
 target_link_libraries (space_saving clickhouse_common_io)
 
-add_executable (integer_hash_tables_and_hashes integer_hash_tables_and_hashes.cpp)
-target_include_directories (integer_hash_tables_and_hashes BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-target_link_libraries (integer_hash_tables_and_hashes clickhouse_common_io)
-
 add_executable (cow_columns cow_columns.cpp)
 target_link_libraries (cow_columns clickhouse_common_io)
 

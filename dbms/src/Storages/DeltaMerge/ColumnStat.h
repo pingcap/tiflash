@@ -32,7 +32,7 @@ struct ColumnStat
     size_t serialized_bytes = 0;
 };
 
-using ColumnStats = std::unordered_map<ColId, ColumnStat>;
+using ColumnStats = robin_hood::unordered_map<ColId, ColumnStat>;
 
 inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
 {

@@ -53,6 +53,7 @@
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/find_symbols.h>
 #include <common/readline_use.h>
+#include <common/robin_hood.h>
 #include <fcntl.h>
 #include <port/unistd.h>
 #include <signal.h>
@@ -66,7 +67,6 @@
 #include <iostream>
 #include <map>
 #include <optional>
-#include <unordered_set>
 
 #include "InterruptListener.h"
 
@@ -108,7 +108,7 @@ public:
     Client() = default;
 
 private:
-    using StringSet = std::unordered_set<String>;
+    using StringSet = robin_hood::unordered_set<String>;
     StringSet exit_strings{
         "exit",
         "quit",
@@ -242,7 +242,7 @@ private:
     ConnectionParameters connection_parameters;
 
 
-    void initialize(Poco::Util::Application & self)
+    void initialize(Poco::Util::Application & self) override
     {
         Poco::Util::Application::initialize(self);
 
@@ -272,7 +272,7 @@ private:
     }
 
 
-    int main(const std::vector<std::string> & /*args*/)
+    int main(const std::vector<std::string> & /*args*/) override
     {
         try
         {
@@ -691,7 +691,7 @@ private:
                     return true;
                 }
 
-                ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(&*ast);
+                auto * insert = typeid_cast<ASTInsertQuery *>(&*ast);
 
                 if (insert && insert->data)
                 {
@@ -773,10 +773,10 @@ private:
         written_progress_chars = 0;
         written_first_block = false;
 
-        const ASTSetQuery * set_query = typeid_cast<const ASTSetQuery *>(&*parsed_query);
-        const ASTUseQuery * use_query = typeid_cast<const ASTUseQuery *>(&*parsed_query);
+        const auto * set_query = typeid_cast<const ASTSetQuery *>(&*parsed_query);
+        const auto * use_query = typeid_cast<const ASTUseQuery *>(&*parsed_query);
         /// INSERT query for which data transfer is needed (not an INSERT SELECT) is processed separately.
-        const ASTInsertQuery * insert = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
+        const auto * insert = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
 
         connection->forceConnected();
 
@@ -919,7 +919,7 @@ private:
     void sendData(Block & sample)
     {
         /// If INSERT data must be sent.
-        const ASTInsertQuery * parsed_insert_query = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
+        const auto * parsed_insert_query = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
         if (!parsed_insert_query)
             return;
 
@@ -944,7 +944,7 @@ private:
         String current_format = insert_format;
 
         /// Data format can be specified in the INSERT query.
-        if (ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(&*parsed_query))
+        if (auto * insert = typeid_cast<ASTInsertQuery *>(&*parsed_query))
             if (!insert->format.empty())
                 current_format = insert->format;
 
@@ -1115,7 +1115,7 @@ private:
             String current_format = format;
 
             /// The query can specify output format or output file.
-            if (ASTQueryWithOutput * query_with_output = dynamic_cast<ASTQueryWithOutput *>(&*parsed_query))
+            if (auto * query_with_output = dynamic_cast<ASTQueryWithOutput *>(&*parsed_query))
             {
                 if (query_with_output->out_file != nullptr)
                 {

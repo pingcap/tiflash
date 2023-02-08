@@ -123,7 +123,7 @@ public:
     {
         const auto & all_arguments = expression_actions->getRequiredColumnsWithTypes();
 
-        std::unordered_map<std::string, DataTypePtr> arguments_map;
+        robin_hood::unordered_map<std::string, DataTypePtr> arguments_map;
         for (const auto & arg : all_arguments)
             arguments_map[arg.name] = arg.type;
 

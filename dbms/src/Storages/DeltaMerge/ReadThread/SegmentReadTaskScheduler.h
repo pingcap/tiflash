@@ -65,13 +65,13 @@ private:
     bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
     SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids);
     // <seg_id, pool_ids>
-    std::optional<std::pair<uint64_t, std::vector<uint64_t>>> scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool);
+    std::optional<robin_hood::pair<uint64_t, std::vector<uint64_t>>> scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool);
     SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock();
 
     std::mutex mtx;
     SegmentReadTaskPoolList read_pools;
     // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
-    std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
+    robin_hood::unordered_map<int64_t, robin_hood::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
 
     MergedTaskPool merged_task_pool;
 

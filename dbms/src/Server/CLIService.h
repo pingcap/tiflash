@@ -40,7 +40,7 @@ struct CLIService : public BaseDaemon
     {
         static const std::string config_prefix;
         std::vector<const char *> args;
-        std::unordered_map<std::string, std::string> val_map;
+        robin_hood::unordered_map<std::string, std::string> val_map;
         bool is_proxy_runnable = false;
 
         static constexpr char ENGINE_STORE_VERSION[] = "engine-version";
@@ -99,7 +99,7 @@ CLIService<Func, Args>::TiFlashProxyConfig::TiFlashProxyConfig(Poco::Util::Layer
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_prefix, keys);
     {
-        std::unordered_map<std::string, std::string> args_map;
+        robin_hood::unordered_map<std::string, std::string> args_map;
         for (const auto & key : keys)
         {
             const auto k = config_prefix + "." + key;

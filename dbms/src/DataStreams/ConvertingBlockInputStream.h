@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <common/robin_hood.h>
 
 
 namespace DB
@@ -65,4 +65,4 @@ private:
     Conversion conversion;
 };
 
-}
+} // namespace DB

@@ -100,7 +100,7 @@ private:
     std::atomic<bool> gc_is_running = false;
 
     std::mutex callbacks_mutex;
-    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
+    // Only std::map not robin_hood::unordered_map. We need insert/erase do not invalid other iterators.
     using ExternalPageCallbacksContainer = std::map<Prefix, std::shared_ptr<ExternalPageCallbacks>>;
     ExternalPageCallbacksContainer callbacks_container;
 };

@@ -216,7 +216,7 @@ RWLock::LockHolder RWLock::getLock(
         }
         catch (...)
         {
-            /// Methods std::list<>::emplace_back() and std::unordered_map<>::emplace() provide strong exception safety
+            /// Methods std::list<>::emplace_back() and robin_hood::unordered_map<>::emplace() provide strong exception safety
             /// We only need to roll back the changes to these objects: owner_queries and the readers/writers queue
             if (it_group->requests == 0)
                 dropOwnerGroupAndPassOwnership(it_group); /// Rollback(SM1): nothrow

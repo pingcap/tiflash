@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <Common/randomSeed.h>
+#include <common/robin_hood.h>
 #include <sys/mman.h>
 
 #include <atomic>
@@ -29,7 +30,6 @@
 #include <mutex>
 #include <pcg_random.hpp>
 #include <random>
-#include <unordered_map>
 
 /// Required for older Darwin builds, that lack definition of MAP_ANONYMOUS
 #ifndef MAP_ANONYMOUS
@@ -295,7 +295,7 @@ private:
         size_t refcount = 0; /// Protected by the cache mutex
     };
 
-    using InsertTokens = std::unordered_map<Key, std::shared_ptr<InsertToken>>;
+    using InsertTokens = robin_hood::unordered_map<Key, std::shared_ptr<InsertToken>>;
     InsertTokens insert_tokens;
 
     /// This class is responsible for removing used insert tokens from the insert_tokens map.

@@ -445,7 +445,7 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
 //   IDAsPathUpgrader
 // ================================================
 
-IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, std::unordered_set<std::string> reserved_databases_)
+IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, robin_hood::unordered_set<std::string> reserved_databases_)
     : global_context(global_ctx_)
     , root_path{global_context.getPath()}
     , is_mock(is_mock_)
@@ -720,7 +720,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
 
 void IDAsPathUpgrader::resolveConflictDirectories()
 {
-    std::unordered_set<String> conflict_databases;
+    robin_hood::unordered_set<String> conflict_databases;
     for (const auto & [db_name, db_info] : databases)
     {
         // In theory, user can create database naming "t_xx" and there is cyclic renaming between table and database.

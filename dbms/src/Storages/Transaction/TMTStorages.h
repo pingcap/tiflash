@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Storages/Transaction/Types.h>
+#include <common/robin_hood.h>
 
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -33,14 +33,14 @@ public:
     void put(ManageableStoragePtr storage);
 
     ManageableStoragePtr get(TableID table_id) const;
-    std::unordered_map<TableID, ManageableStoragePtr> getAllStorage() const;
+    robin_hood::unordered_map<TableID, ManageableStoragePtr> getAllStorage() const;
 
     ManageableStoragePtr getByName(const std::string & db, const std::string & table, bool include_tombstone) const;
 
     void remove(TableID table_id);
 
 private:
-    std::unordered_map<TableID, ManageableStoragePtr> storages;
+    robin_hood::unordered_map<TableID, ManageableStoragePtr> storages;
     mutable std::mutex mutex;
 };
 

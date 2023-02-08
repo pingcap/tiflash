@@ -17,8 +17,7 @@
 #include <Storages/Transaction/RegionsRangeIndex.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
-
-#include <unordered_map>
+#include <common/robin_hood.h>
 
 namespace DB
 {
@@ -35,7 +34,7 @@ struct RegionTaskCtrl : MutexLockWrap
     RegionTaskLock genRegionTaskLock(RegionID region_id) const;
 
 private:
-    mutable std::unordered_map<RegionID, RegionTaskElement> regions;
+    mutable robin_hood::unordered_map<RegionID, RegionTaskElement> regions;
 };
 
 /// RegionManager is used to store region instance and mutex for region to execute raft cmd/task.

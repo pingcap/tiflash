@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <common/robin_hood.h>
 #include <stdint.h>
 
 #include <iostream>
 #include <map>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -62,7 +62,7 @@ int main(int argc, char ** argv)
     }
 
     printf("inserting to %s with size: %zu\n", mode.c_str(), num_entries);
-    std::unordered_map<PageId, PageEntry> entries_map;
+    robin_hood::unordered_map<PageId, PageEntry> entries_map;
     std::map<PageId, PageEntry> entries_tree_map;
     std::vector<std::pair<PageId, PageEntry>> entries_vec;
     for (size_t i = 0; i < num_entries; ++i)

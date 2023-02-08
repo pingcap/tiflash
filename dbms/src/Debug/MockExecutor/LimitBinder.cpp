@@ -28,7 +28,7 @@ bool LimitBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collato
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-void LimitBinder::columnPrune(std::unordered_set<String> & used_columns)
+void LimitBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
     children[0]->columnPrune(used_columns);
     /// update output schema after column prune

@@ -31,7 +31,7 @@ public:
 
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
-    void columnPrune(std::unordered_set<String> &) override {}
+    void columnPrune(robin_hood::unordered_set<String> &) override {}
 
     tipb::ExchangeType getType() const;
 

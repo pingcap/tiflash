@@ -28,7 +28,7 @@ using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 struct RegionLockReadQuery
 {
     const UInt64 read_tso;
-    const std::unordered_set<UInt64> * bypass_lock_ts;
+    const robin_hood::unordered_set<UInt64> * bypass_lock_ts;
 };
 
 } // namespace DB

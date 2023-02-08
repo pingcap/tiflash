@@ -17,8 +17,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-
-#include <unordered_map>
+#include <common/robin_hood.h>
 
 namespace DB
 {

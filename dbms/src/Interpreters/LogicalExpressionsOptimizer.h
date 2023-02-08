@@ -16,11 +16,10 @@
 
 #include <Common/nocopyable.h>
 #include <Parsers/IAST.h>
+#include <common/robin_hood.h>
 
 #include <map>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 
@@ -84,7 +83,7 @@ private:
     bool mayOptimizeDisjunctiveEqualityChain(const DisjunctiveEqualityChain & chain) const;
 
     /// Insert the IN expression into the OR chain.
-    void addInExpression(const DisjunctiveEqualityChain & chain);
+    static void addInExpression(const DisjunctiveEqualityChain & chain);
 
     /// Delete the equalities that were replaced by the IN expressions.
     void cleanupOrExpressions();
@@ -97,8 +96,8 @@ private:
 
 private:
     using ParentNodes = std::vector<IAST *>;
-    using FunctionParentMap = std::unordered_map<IAST *, ParentNodes>;
-    using ColumnToPosition = std::unordered_map<IAST *, size_t>;
+    using FunctionParentMap = robin_hood::unordered_map<IAST *, ParentNodes>;
+    using ColumnToPosition = robin_hood::unordered_map<IAST *, size_t>;
 
 private:
     ASTSelectQuery * select_query;
@@ -112,7 +111,7 @@ private:
     /// The position of each column.
     ColumnToPosition column_to_position;
     /// Set of nodes, that was visited.
-    std::unordered_set<void *> visited_nodes;
+    robin_hood::unordered_set<void *> visited_nodes;
 };
 
 } // namespace DB

@@ -31,7 +31,7 @@ protected:
     UInt64 version_value = 100;
 
     RegionDataReadInfoList data_list_read;
-    std::unordered_map<ColumnID, Field> fields_map;
+    robin_hood::unordered_map<ColumnID, Field> fields_map;
 
     enum RowEncodeVersion
     {
@@ -49,7 +49,7 @@ protected:
     void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version, size_t num_rows)
     {
         // for later check
-        std::unordered_map<String, size_t> column_name_columns_index_map;
+        robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             fields_map.emplace(table_info.columns[i].id, fields[i]);

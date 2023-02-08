@@ -32,7 +32,7 @@ namespace DB
 {
 class Set;
 using DAGSetPtr = std::shared_ptr<DAGSet>;
-using DAGPreparedSets = std::unordered_map<const tipb::Expr *, DAGSetPtr>;
+using DAGPreparedSets = robin_hood::unordered_map<const tipb::Expr *, DAGSetPtr>;
 
 enum class ExtraCastAfterTSMode
 {
@@ -185,7 +185,7 @@ public:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
-        std::unordered_set<String> & agg_key_set,
+        robin_hood::unordered_set<String> & agg_key_set,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 

@@ -52,7 +52,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     {
-        std::unordered_set<String> agg_key_set;
+        robin_hood::unordered_set<String> agg_key_set;
         analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
         analyzer.buildAggGroupBy(
             aggregation.group_by(),

@@ -25,7 +25,7 @@ ExpressionActionsPtr newActions(const Block & input_block)
 ExpressionActionsPtr newActions(const NamesAndTypes & input_columns)
 {
     NamesAndTypesList actions_input_column;
-    std::unordered_set<String> column_name_set;
+    robin_hood::unordered_set<String> column_name_set;
     for (const auto & col : input_columns)
     {
         if (column_name_set.find(col.name) == column_name_set.end())
@@ -47,7 +47,7 @@ NamesAndTypes addSchemaProjectAction(
 
     NamesAndTypes after_schema = before_schema;
     NamesWithAliases project_aliases;
-    std::unordered_set<String> column_name_set;
+    robin_hood::unordered_set<String> column_name_set;
     for (size_t i = 0; i < before_schema.size(); ++i)
     {
         const auto & before_column_name = before_schema[i].name;
@@ -71,7 +71,7 @@ void addParentRequireProjectAction(
     assert(expr_actions);
     NamesWithAliases project_aliases;
     {
-        std::unordered_set<String> column_name_set;
+        robin_hood::unordered_set<String> column_name_set;
         for (const auto & col : parent_require)
         {
             /// Duplicate columns don't need to project.

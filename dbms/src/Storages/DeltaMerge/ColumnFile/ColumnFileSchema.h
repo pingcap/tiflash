@@ -51,7 +51,7 @@ class ColumnFileSchema
 private:
     Block schema;
 
-    using ColIdToOffset = std::unordered_map<ColId, size_t>;
+    using ColIdToOffset = robin_hood::unordered_map<ColId, size_t>;
     ColIdToOffset colid_to_offset;
 
 public:
@@ -74,7 +74,7 @@ private:
     // to minimize the possibility of two different schemas having the same key in column_file_schemas.
     // Besides, we use weak_ptr to ensure we can remove the ColumnFileSchema,
     // when no one use it, to avoid too much memory usage.
-    std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
+    robin_hood::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
     std::mutex mutex;
     BackgroundProcessingPool::TaskHandle handle;
     BackgroundProcessingPool & background_pool;

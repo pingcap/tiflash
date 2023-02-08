@@ -55,7 +55,7 @@ RowKeyValue RowKeyValueRef::toRowKeyValue() const
     }
 }
 
-std::unordered_map<TableID, RowKeyRange::TableRangeMinMax> RowKeyRange::table_min_max_data;
+robin_hood::unordered_map<TableID, RowKeyRange::TableRangeMinMax> RowKeyRange::table_min_max_data;
 std::shared_mutex RowKeyRange::table_mutex;
 
 const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(TableID table_id, bool is_common_handle)

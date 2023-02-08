@@ -197,7 +197,7 @@ MPPTaskManagerPtr TMTContext::getMPPTaskManager()
     return mpp_task_manager;
 }
 
-const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
+const robin_hood::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 {
     return ignore_databases;
 }

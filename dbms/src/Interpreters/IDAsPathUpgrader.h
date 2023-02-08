@@ -16,10 +16,10 @@
 
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
+#include <common/robin_hood.h>
 
 #include <map>
 #include <memory>
-#include <unordered_set>
 
 namespace Poco
 {
@@ -156,7 +156,7 @@ public:
     /// Upgrader
     // If some database can not find in TiDB, they will be dropped
     // if theirs name is not in reserved_databases
-    IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, std::unordered_set<std::string> reserved_databases_);
+    IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, robin_hood::unordered_set<std::string> reserved_databases_);
 
     bool needUpgrade();
 
@@ -194,7 +194,7 @@ private:
 
     std::shared_ptr<SchemaNameMapper> mapper;
 
-    const std::unordered_set<std::string> reserved_databases;
+    const robin_hood::unordered_set<std::string> reserved_databases;
 
     Poco::Logger * log;
 };

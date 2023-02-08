@@ -437,7 +437,7 @@ struct RowKeyRange
     };
 
     /// maybe use a LRU cache in case there are massive tables
-    static std::unordered_map<TableID, TableRangeMinMax> table_min_max_data;
+    static robin_hood::unordered_map<TableID, TableRangeMinMax> table_min_max_data;
     static std::shared_mutex table_mutex;
     static const TableRangeMinMax & getTableMinMaxData(TableID table_id, bool is_common_handle);
 

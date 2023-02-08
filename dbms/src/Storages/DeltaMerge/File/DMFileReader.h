@@ -170,7 +170,7 @@ private:
     LoggerPtr log;
 
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
-    std::unordered_map<ColId, bool> last_read_from_cache{};
+    robin_hood::unordered_map<ColId, bool> last_read_from_cache{};
 };
 
 } // namespace DM

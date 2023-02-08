@@ -25,8 +25,7 @@
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-
-#include <unordered_map>
+#include <common/robin_hood.h>
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -35,7 +34,7 @@ extern const String uniq_raw_res_name;
 
 namespace
 {
-const std::unordered_map<tipb::ExprType, String> window_func_map({
+const robin_hood::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::Rank, "rank"},
     {tipb::ExprType::DenseRank, "dense_rank"},
     {tipb::ExprType::RowNumber, "row_number"},
@@ -43,7 +42,7 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::Lag, "lag"},
 });
 
-const std::unordered_map<tipb::ExprType, String> agg_func_map({
+const robin_hood::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
     {tipb::ExprType::Min, "min"},
@@ -66,12 +65,12 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     //{tipb::ExprType::JsonObjectAgg, ""},
 });
 
-const std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
+const robin_hood::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
     {tipb::ExprType::Count, "countDistinct"},
     {tipb::ExprType::GroupConcat, "groupUniqArray"},
 });
 
-const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
+const robin_hood::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsString, "tidb_cast"},
@@ -714,9 +713,9 @@ void assertBlockSchema(
     }
 }
 /// used by test
-std::unordered_map<String, tipb::ScalarFuncSig> getFuncNameToSigMap()
+robin_hood::unordered_map<String, tipb::ScalarFuncSig> getFuncNameToSigMap()
 {
-    std::unordered_map<String, tipb::ScalarFuncSig> ret;
+    robin_hood::unordered_map<String, tipb::ScalarFuncSig> ret;
     for (const auto & element : scalar_func_map)
     {
         ret[element.second] = element.first;
@@ -1165,7 +1164,7 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
 {
-    const static std::unordered_map<tipb::EncodeType, std::unordered_set<Int32>> unsupported_types_map({
+    const static robin_hood::unordered_map<tipb::EncodeType, robin_hood::unordered_set<Int32>> unsupported_types_map({
         {tipb::EncodeType::TypeCHBlock, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull, TiDB::TypeEnum, TiDB::TypeJSON, TiDB::TypeBit}},
         {tipb::EncodeType::TypeChunk, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
     });
@@ -1442,7 +1441,7 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
 
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
 {
-    static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
+    static robin_hood::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
     if (func_name_sig_map.find(name) == func_name_sig_map.end())
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];

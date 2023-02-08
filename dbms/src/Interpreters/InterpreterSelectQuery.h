@@ -188,7 +188,7 @@ private:
     void executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeDistinct(Pipeline & pipeline, bool before_order, Names columns);
     void executeExtremes(Pipeline & pipeline);
-    void executeSubqueriesInSetsAndJoins(Pipeline & pipeline, std::unordered_map<String, SubqueryForSet> & subqueries_for_sets);
+    void executeSubqueriesInSetsAndJoins(Pipeline & pipeline, robin_hood::unordered_map<String, SubqueryForSet> & subqueries_for_sets);
 
     /** If there is a SETTINGS section in the SELECT query, then apply settings from it.
       *

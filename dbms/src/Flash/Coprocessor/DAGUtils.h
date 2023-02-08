@@ -25,7 +25,6 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
-#include <unordered_map>
 
 namespace DB
 {
@@ -84,7 +83,7 @@ void assertBlockSchema(
 class UniqueNameGenerator
 {
 private:
-    std::unordered_map<String, Int32> existing_name_map;
+    robin_hood::unordered_map<String, Int32> existing_name_map;
 
 public:
     String toUniqueName(const String & orig_name)

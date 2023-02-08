@@ -22,11 +22,10 @@
 #include <Storages/Page/V1/mvcc/VersionSetWithDelta.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+#include <common/robin_hood.h>
 
 #include <cassert>
 #include <optional>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace DB
 {
@@ -147,16 +146,16 @@ public:
     PageId maxId() const { return max_page_id; }
 
 public:
-    using const_normal_page_iterator = std::unordered_map<PageId, PageEntry>::const_iterator;
+    using const_normal_page_iterator = robin_hood::unordered_map<PageId, PageEntry>::const_iterator;
     // only scan over normal Pages, excluding RefPages
     inline const_normal_page_iterator pages_cbegin() const { return normal_pages.cbegin(); }
     inline const_normal_page_iterator pages_cend() const { return normal_pages.cend(); }
 
 protected:
-    std::unordered_map<PageId, PageEntry> normal_pages;
-    std::unordered_map<PageId, PageId> page_ref; // RefPageId -> PageId
+    robin_hood::unordered_map<PageId, PageEntry> normal_pages;
+    robin_hood::unordered_map<PageId, PageId> page_ref; // RefPageId -> PageId
     // RefPageId deletions
-    std::unordered_set<PageId> ref_deletions;
+    robin_hood::unordered_set<PageId> ref_deletions;
 
     PageId max_page_id;
     bool is_base;
@@ -371,7 +370,7 @@ public:
     class iterator
     {
     public:
-        iterator(const std::unordered_map<PageId, PageId>::iterator & iter, std::unordered_map<PageId, PageEntry> & normal_pages)
+        iterator(const robin_hood::unordered_map<PageId, PageId>::iterator & iter, robin_hood::unordered_map<PageId, PageEntry> & normal_pages)
             : _iter(iter)
             , _normal_pages(normal_pages)
         {
@@ -407,18 +406,18 @@ public:
         }
 
     private:
-        std::unordered_map<PageId, PageId>::iterator _iter;
-        std::unordered_map<PageId, PageEntry> & _normal_pages;
+        robin_hood::unordered_map<PageId, PageId>::iterator _iter;
+        robin_hood::unordered_map<PageId, PageEntry> & _normal_pages;
         friend class PageEntriesView;
     };
 
     class const_iterator
     {
     public:
-        const_iterator(const std::unordered_map<PageId, PageId>::const_iterator & iter,
-                       const std::unordered_map<PageId, PageEntry> & normal_pages)
+        const_iterator(const robin_hood::unordered_map<PageId, PageId>::const_iterator & iter,
+                       const robin_hood::unordered_map<PageId, PageEntry> & normal_pages)
             : _iter(iter)
-            , _normal_pages(const_cast<std::unordered_map<PageId, PageEntry> &>(normal_pages))
+            , _normal_pages(const_cast<robin_hood::unordered_map<PageId, PageEntry> &>(normal_pages))
         {
         }
         bool operator==(const const_iterator & rhs) const { return _iter == rhs._iter; }
@@ -452,8 +451,8 @@ public:
         }
 
     private:
-        std::unordered_map<PageId, PageId>::const_iterator _iter;
-        std::unordered_map<PageId, PageEntry> & _normal_pages;
+        robin_hood::unordered_map<PageId, PageId>::const_iterator _iter;
+        robin_hood::unordered_map<PageId, PageEntry> & _normal_pages;
         friend class PageEntriesView;
     };
 

@@ -23,9 +23,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Join.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/robin_hood.h>
 #include <fmt/format.h>
-
-#include <unordered_map>
 
 namespace DB
 {
@@ -40,7 +39,7 @@ namespace
 {
 std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
 {
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
+    static const robin_hood::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
@@ -48,7 +47,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
         {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi},
         {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftAnti}};
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
+    static const robin_hood::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
@@ -269,7 +268,7 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     /// Extra columns are appended to prevent extra columns from being repeatedly generated.
 
     NamesAndTypes columns_for_other_join_filter;
-    std::unordered_set<String> column_set_for_origin_columns;
+    robin_hood::unordered_set<String> column_set_for_origin_columns;
 
     auto append_origin_columns = [&columns_for_other_join_filter, &column_set_for_origin_columns](const Block & header, bool make_nullable) {
         for (const auto & p : header)

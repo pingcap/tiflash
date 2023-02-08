@@ -17,11 +17,11 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
 
 #include <atomic>
 #include <memory>
-#include <unordered_map>
 
 namespace DB
 {
@@ -119,24 +119,24 @@ public:
 
 private:
     /// for mock table scan
-    std::unordered_map<String, Int64> name_to_id_map; /// <table_name, table_id>
-    std::unordered_map<Int64, MockColumnInfoVec> table_schema; /// <table_id, columnInfo>
-    std::unordered_map<Int64, ColumnsWithTypeAndName> table_columns; /// <table_id, columns>
-    std::unordered_map<String, TableInfo> table_infos; /// <table_name, table_info>
-    std::unordered_map<Int64, size_t> table_scan_concurrency_hint; /// <table_id, concurrency_hint>
+    robin_hood::unordered_map<String, Int64> name_to_id_map; /// <table_name, table_id>
+    robin_hood::unordered_map<Int64, MockColumnInfoVec> table_schema; /// <table_id, columnInfo>
+    robin_hood::unordered_map<Int64, ColumnsWithTypeAndName> table_columns; /// <table_id, columns>
+    robin_hood::unordered_map<String, TableInfo> table_infos; /// <table_name, table_info>
+    robin_hood::unordered_map<Int64, size_t> table_scan_concurrency_hint; /// <table_id, concurrency_hint>
 
     /// for mock exchange receiver
-    std::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
-    std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
-    std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
-    std::unordered_map<String, std::vector<ColumnsWithTypeAndName>> fine_grained_exchange_columns; /// <exchange_name, vector<columns>>
+    robin_hood::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
+    robin_hood::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
+    robin_hood::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
+    robin_hood::unordered_map<String, std::vector<ColumnsWithTypeAndName>> fine_grained_exchange_columns; /// <exchange_name, vector<columns>>
 
     /// for mock storage delta merge
-    std::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>
-    std::unordered_map<Int64, MockColumnInfoVec> table_schema_for_delta_merge; /// <table_id, columnInfo>
-    std::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_id, StorageDeltaMerge>
-    std::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
-    std::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
+    robin_hood::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>
+    robin_hood::unordered_map<Int64, MockColumnInfoVec> table_schema_for_delta_merge; /// <table_id, columnInfo>
+    robin_hood::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_id, StorageDeltaMerge>
+    robin_hood::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
+    robin_hood::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
 
     // storage delta merge can be used in executor ut test only.
     bool use_storage_delta_merge = false;

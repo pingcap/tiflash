@@ -15,12 +15,12 @@
 #include <Common/Exception.h>
 #include <Storages/ITableDeclaration.h>
 #include <Storages/MutableSupport.h>
+#include <common/robin_hood.h>
 
 #include <boost/range/join.hpp>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
 #include <sstream>
-#include <unordered_set>
 
 
 namespace DB
@@ -259,7 +259,7 @@ void ITableDeclaration::check(const Block & block, bool need_all) const
     const NamesAndTypesList & available_columns = getColumns().getAllPhysical();
     const auto columns_map = getColumnsMap(available_columns);
 
-    using NameSet = std::unordered_set<String>;
+    using NameSet = robin_hood::unordered_set<String>;
     NameSet names_in_block;
 
     block.checkNumberOfRows();

@@ -119,7 +119,7 @@ void columnsToTiPBExprForTiDBCast(
         expr->mutable_field_type()->set_collate(-collator->getCollatorId());
 }
 
-const std::unordered_map<String, String> date_add_sub_map({
+const robin_hood::unordered_map<String, String> date_add_sub_map({
     {"addDays", "DAY"},
     {"addWeeks", "WEEK"},
     {"addMonths", "MONTH"},

@@ -169,7 +169,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
         src/Dictionaries/HashedDictionary.cpp
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/RangeHashedDictionary.cpp
         src/Dictionaries/ComplexKeyHashedDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp

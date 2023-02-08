@@ -16,11 +16,10 @@
 
 #include <Common/TiFlashException.h>
 #include <common/likely.h>
+#include <common/robin_hood.h>
 #include <common/types.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
-
-#include <unordered_set>
 
 namespace DB
 {
@@ -75,6 +74,6 @@ private:
 
     UInt32 current_id = 0;
 
-    std::unordered_set<String> ids;
+    robin_hood::unordered_set<String> ids;
 };
 } // namespace DB

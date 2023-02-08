@@ -32,7 +32,7 @@
 namespace DB
 {
 using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
-using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
+using DAGColumnInfo = robin_hood::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
 struct RemoteRequest

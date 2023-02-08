@@ -16,6 +16,7 @@
 
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <common/robin_hood.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -398,7 +399,7 @@ private:
 
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
-    std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
+    robin_hood::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

@@ -40,7 +40,7 @@ public:
     static constexpr int not_check_rows = -1;
     // <rows, concurrency>
     using ProfileInfo = std::pair<int, size_t>;
-    using Expect = std::unordered_map<String, ProfileInfo>;
+    using Expect = robin_hood::unordered_map<String, ProfileInfo>;
     void testForExecutionSummary(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const Expect & expect)

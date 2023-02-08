@@ -18,8 +18,7 @@
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
-
-#include <unordered_set>
+#include <common/robin_hood.h>
 
 namespace DB
 {
@@ -28,7 +27,7 @@ namespace ErrorCodes
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-extern const std::unordered_set<String> hacking_return_non_null_agg_func_names;
+extern const robin_hood::unordered_set<String> hacking_return_non_null_agg_func_names;
 
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {

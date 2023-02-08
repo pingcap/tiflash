@@ -29,7 +29,7 @@ class TMTContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
-using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+using RegionMap = robin_hood::unordered_map<RegionID, RegionPtr>;
 class BackgroundProcessingPool;
 
 class BackgroundService : boost::noncopyable

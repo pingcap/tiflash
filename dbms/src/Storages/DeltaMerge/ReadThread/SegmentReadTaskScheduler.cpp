@@ -148,7 +148,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
     return nullptr;
 }
 
-std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
+std::optional<robin_hood::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
 {
     auto expected_merge_seg_count = std::min(read_pools.size(), 2); // Not accurate.
     auto itr = merging_segments.find(pool->tableId());
@@ -157,7 +157,7 @@ std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskSchedul
         // No segment of tableId left.
         return std::nullopt;
     }
-    std::optional<std::pair<uint64_t, std::vector<uint64_t>>> result;
+    std::optional<robin_hood::pair<uint64_t, std::vector<uint64_t>>> result;
     auto & segments = itr->second;
     auto target = pool->scheduleSegment(segments, expected_merge_seg_count);
     if (target != segments.end())
@@ -173,7 +173,7 @@ std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskSchedul
         }
         else
         {
-            result = std::pair{target->first, std::vector<uint64_t>(1, pool->poolId())};
+            result = {target->first, std::vector<uint64_t>(1, pool->poolId())};
             auto mutable_target = segments.find(target->first);
             auto itr = std::find(mutable_target->second.begin(), mutable_target->second.end(), pool->poolId());
             *itr = mutable_target->second.back(); // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.

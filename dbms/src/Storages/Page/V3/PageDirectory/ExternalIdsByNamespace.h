@@ -17,12 +17,12 @@
 #include <Common/nocopyable.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
+#include <common/robin_hood.h>
 
 #include <list>
 #include <memory>
 #include <mutex>
 #include <set>
-#include <unordered_map>
 
 namespace DB::PS::V3
 {
@@ -71,7 +71,7 @@ private:
     // Only store weak_ptrs. The weak_ptrs will be invalid after the external id
     // in PageDirectory get removed.
     using ExternalIds = std::list<std::weak_ptr<PageId>>;
-    using NamespaceMap = std::unordered_map<Prefix, ExternalIds>;
+    using NamespaceMap = robin_hood::unordered_map<Prefix, ExternalIds>;
     mutable NamespaceMap ids_by_ns;
 };
 } // namespace DB::PS::V3

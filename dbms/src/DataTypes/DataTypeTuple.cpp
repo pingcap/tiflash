@@ -63,7 +63,7 @@ DataTypeTuple::DataTypeTuple(const DataTypes & elems_, const Strings & names_)
     if (names.size() != size)
         throw Exception("Wrong number of names passed to constructor of DataTypeTuple", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    std::unordered_set<String> names_set;
+    robin_hood::unordered_set<String> names_set;
     for (size_t i = 0; i < size; ++i)
     {
         if (names[i].empty())
@@ -374,7 +374,7 @@ bool DataTypeTuple::equals(const IDataType & rhs) const
     if (typeid(rhs) != typeid(*this))
         return false;
 
-    const DataTypeTuple & rhs_tuple = static_cast<const DataTypeTuple &>(rhs);
+    const auto & rhs_tuple = static_cast<const DataTypeTuple &>(rhs);
 
     size_t size = elems.size();
     if (size != rhs_tuple.elems.size())
@@ -443,7 +443,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
     for (const ASTPtr & child : arguments->children)
     {
-        if (const ASTNameTypePair * name_and_type_pair = typeid_cast<const ASTNameTypePair *>(child.get()))
+        if (const auto * name_and_type_pair = typeid_cast<const ASTNameTypePair *>(child.get()))
         {
             nested_types.emplace_back(DataTypeFactory::instance().get(name_and_type_pair->type));
             names.emplace_back(name_and_type_pair->name);

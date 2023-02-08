@@ -19,9 +19,9 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/robin_hood.h>
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #pragma GCC diagnostic push
@@ -90,7 +90,7 @@ protected:
         }
     };
 
-    void checkNullConstantResult(const ColumnWithTypeAndName & result, size_t size)
+    static void checkNullConstantResult(const ColumnWithTypeAndName & result, size_t size)
     {
         const IColumn * res_col = result.column.get();
         ASSERT_TRUE(size == res_col->size());
@@ -333,10 +333,10 @@ try
             if (col1_type->onlyNull() || col2_type->onlyNull())
                 continue;
             typename Decimal128::NativeType value = 1;
-            for (size_t i = 0; i < values.size(); i++)
+            for (Int64 i : values)
             {
-                if (values[i] != 0)
-                    value *= values[i];
+                if (i != 0)
+                    value *= i;
             }
             auto c1 = col1_type->createColumnConst(size, Field(DecimalField<Decimal128>(value * decimal_128_factor, 2)));
             auto c2 = col2_type->createColumn();
@@ -430,7 +430,7 @@ try
 
     std::vector<Field> null_or_zero_field;
     null_or_zero_field.push_back(Null());
-    null_or_zero_field.push_back(Field((Float64)0));
+    null_or_zero_field.push_back(Field(static_cast<Float64>(0)));
 
 
     std::vector<Int64> values{10, 2, 20, 8, 10, 0, 30, 8, 16, 4};
@@ -479,7 +479,7 @@ try
             if (col2_type->onlyNull())
                 continue;
             auto c1 = col1_type->createColumnConst(size, Null());
-            auto c2 = col2_type->createColumnConst(size, Field((Float64)2));
+            auto c2 = col2_type->createColumnConst(size, Field(static_cast<Float64>(2)));
             auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
 
@@ -501,7 +501,7 @@ try
                     continue;
                 if (!col2_value.isNull() && col2_type->onlyNull())
                     continue;
-                auto c1 = col1_type->createColumnConst(size, Field((Float64)1));
+                auto c1 = col1_type->createColumnConst(size, Field(static_cast<Float64>(1)));
                 auto c2 = col2_type->createColumnConst(size, col2_value);
                 auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
                 auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -520,8 +520,8 @@ try
         {
             if (col1_type->onlyNull() || col2_type->onlyNull())
                 continue;
-            auto c1 = col1_type->createColumnConst(size, Field((Float64)10));
-            auto c2 = col2_type->createColumnConst(size, Field((Float64)2));
+            auto c1 = col1_type->createColumnConst(size, Field(static_cast<Float64>(10)));
+            auto c2 = col2_type->createColumnConst(size, Field(static_cast<Float64>(2)));
             auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
             auto res_col = executeFunction(func_name, {col1, col2}).column;
@@ -555,7 +555,7 @@ try
                     if (col1_type->isNullable() && col1_null_map[i])
                         c1_mutable->insert(Null());
                     else
-                        c1_mutable->insert(Field((Float64)values[i]));
+                        c1_mutable->insert(Field(static_cast<Float64>(values[i])));
                 }
                 auto c2 = col2_type->createColumnConst(values.size(), col2_value);
 
@@ -580,9 +580,9 @@ try
                 if (col1_type->isNullable() && col1_null_map[i])
                     c1_mutable->insert(Null());
                 else
-                    c1_mutable->insert(Field((Float64)values[i]));
+                    c1_mutable->insert(Field(static_cast<Float64>(values[i])));
             }
-            auto c2 = col2_type->createColumnConst(values.size(), Field((Float64)2));
+            auto c2 = col2_type->createColumnConst(values.size(), Field(static_cast<Float64>(2)));
 
             auto col1 = ColumnWithTypeAndName(std::move(c1_mutable), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -620,7 +620,7 @@ try
                 if (col2_type->isNullable() && col2_null_map[i])
                     c2->insert(Null());
                 else
-                    c2->insert(Field((Float64)values[i]));
+                    c2->insert(Field(static_cast<Float64>(values[i])));
             }
             auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -637,19 +637,19 @@ try
             if (col1_type->onlyNull() || col2_type->onlyNull())
                 continue;
             Float64 value = 1;
-            for (size_t i = 0; i < values.size(); i++)
+            for (Int64 i : values)
             {
-                if (values[i] != 0)
-                    value *= values[i];
+                if (i != 0)
+                    value *= i;
             }
-            auto c1 = col1_type->createColumnConst(size, Field((Float64)value));
+            auto c1 = col1_type->createColumnConst(size, Field(value));
             auto c2 = col2_type->createColumn();
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col2_type->isNullable() && col2_null_map[i])
                     c2->insert(Null());
                 else
-                    c2->insert(Field((Float64)values[i]));
+                    c2->insert(Field(static_cast<Float64>(values[i])));
             }
             auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -684,12 +684,12 @@ try
                 if (col1_type->isNullable() && col1_null_map[i])
                     c1->insert(Null());
                 else
-                    c1->insert(Field((Float64)values[i]));
+                    c1->insert(Field(static_cast<Float64>(values[i])));
 
                 if (col2_type->isNullable() && col2_null_map[i])
                     c2->insert(Null());
                 else
-                    c2->insert(Field((Float64)values[i]));
+                    c2->insert(Field(static_cast<Float64>(values[i])));
             }
             auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -951,7 +951,7 @@ CATCH
 TEST_F(TestBinaryArithmeticFunctions, ModuloExtra)
 try
 {
-    std::unordered_map<String, DataTypePtr> data_type_map = {
+    robin_hood::unordered_map<String, DataTypePtr> data_type_map = {
         {"Int64", makeDataType<Nullable<Int64>>()},
         {"UInt64", makeDataType<Nullable<UInt64>>()},
         {"Float64", makeDataType<Nullable<Float64>>()},

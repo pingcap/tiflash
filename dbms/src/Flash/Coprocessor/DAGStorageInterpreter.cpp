@@ -83,7 +83,7 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus>
 MakeRegionQueryInfos(
     const TablesRegionInfoMap & dag_region_infos,
-    const std::unordered_set<RegionID> & region_force_retry,
+    const robin_hood::unordered_set<RegionID> & region_force_retry,
     TMTContext & tmt,
     MvccQueryInfo & mvcc_info,
     bool batch_cop [[maybe_unused]])
@@ -525,7 +525,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
     }
     if (regions_for_local_read.empty())
         return {};
-    std::unordered_set<RegionID> force_retry;
+    robin_hood::unordered_set<RegionID> force_retry;
     for (;;)
     {
         try
@@ -571,9 +571,9 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
     }
 }
 
-std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
+robin_hood::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
 {
-    std::unordered_map<TableID, SelectQueryInfo> ret;
+    robin_hood::unordered_map<TableID, SelectQueryInfo> ret;
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
@@ -763,9 +763,9 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     }
 }
 
-std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)
+robin_hood::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)
 {
-    std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> storages_with_lock;
+    robin_hood::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> storages_with_lock;
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
         auto logical_table_storage = tmt.getStorages().get(logical_table_id);
@@ -974,8 +974,8 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::ScanContextPtr & scan_context)
 {
     std::vector<RemoteRequest> remote_requests;
-    std::unordered_map<Int64, Int64> region_id_to_table_id_map;
-    std::unordered_map<Int64, RegionRetryList> retry_regions_map;
+    robin_hood::unordered_map<Int64, Int64> region_id_to_table_id_map;
+    robin_hood::unordered_map<Int64, RegionRetryList> retry_regions_map;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);

@@ -39,7 +39,7 @@ struct MPPQueryTaskSet
     State state = Normal;
     String error_message;
     MPPTaskMap task_map;
-    std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
+    robin_hood::unordered_map<Int64, robin_hood::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
     bool isInNormalState() const
@@ -57,7 +57,7 @@ using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 /// a map from the mpp query id to mpp query task set, we use
 /// the query_ts + local_query_id + serverID as the query id, because TiDB can't guarantee
 /// the uniqueness of the start ts when stale read or set snapshot
-using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryTaskSetPtr, MPPQueryIdHash>;
+using MPPQueryMap = robin_hood::unordered_map<MPPQueryId, MPPQueryTaskSetPtr, MPPQueryIdHash>;
 
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable

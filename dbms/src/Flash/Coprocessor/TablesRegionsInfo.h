@@ -60,7 +60,7 @@ public:
     }
     SingleTableRegions & getOrCreateTableRegionInfoByTableID(TableID table_id);
     const SingleTableRegions & getTableRegionInfoByTableID(TableID table_id) const;
-    const std::unordered_map<TableID, SingleTableRegions> & getTableRegionsInfoMap() const
+    const robin_hood::unordered_map<TableID, SingleTableRegions> & getTableRegionsInfoMap() const
     {
         return table_regions_info_map;
     }
@@ -85,7 +85,7 @@ public:
 
 private:
     bool is_single_table;
-    std::unordered_map<TableID, SingleTableRegions> table_regions_info_map;
+    robin_hood::unordered_map<TableID, SingleTableRegions> table_regions_info_map;
 };
 
 } // namespace DB

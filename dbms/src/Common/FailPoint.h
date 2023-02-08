@@ -15,11 +15,10 @@
 #pragma once
 #include <Common/Exception.h>
 #include <Core/Types.h>
+#include <common/robin_hood.h>
 #include <fiu-control.h>
 #include <fiu-local.h>
 #include <fiu.h>
-
-#include <unordered_map>
 
 namespace Poco
 {
@@ -67,6 +66,6 @@ public:
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
 
 private:
-    static std::unordered_map<String, std::shared_ptr<FailPointChannel>> fail_point_wait_channels;
+    static robin_hood::unordered_map<String, std::shared_ptr<FailPointChannel>> fail_point_wait_channels;
 };
 } // namespace DB

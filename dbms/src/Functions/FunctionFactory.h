@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Functions/IFunction.h>
+#include <common/robin_hood.h>
 
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 
 namespace DB
@@ -68,7 +68,7 @@ public:
     FunctionBuilderPtr tryGet(const std::string & name, const Context & context) const;
 
 private:
-    using Functions = std::unordered_map<std::string, Creator>;
+    using Functions = robin_hood::unordered_map<std::string, Creator>;
 
     Functions functions;
     Functions case_insensitive_functions;

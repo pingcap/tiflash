@@ -275,12 +275,12 @@ std::string CPUAffinityManager::getThreadName(const std::string & fname)
     return s;
 }
 
-std::unordered_map<pid_t, std::string> CPUAffinityManager::getThreads(pid_t pid) const
+robin_hood::unordered_map<pid_t, std::string> CPUAffinityManager::getThreads(pid_t pid) const
 {
     std::string task_dir = "/proc/" + std::to_string(pid) + "/task";
     auto tids = getThreadIDs(task_dir);
     LOG_DEBUG(log, "{} thread count {}", task_dir, tids.size());
-    std::unordered_map<pid_t, std::string> threads;
+    robin_hood::unordered_map<pid_t, std::string> threads;
     for (auto tid : tids)
     {
         std::string file = task_dir + "/" + std::to_string(tid) + "/comm";

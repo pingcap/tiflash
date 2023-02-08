@@ -36,13 +36,13 @@ bool AggregationBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t c
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-void AggregationBinder::columnPrune(std::unordered_set<String> & used_columns)
+void AggregationBinder::columnPrune(robin_hood::unordered_set<String> & used_columns)
 {
     /// output schema for partial agg is the original agg's output schema
     output_schema_for_partial_agg = output_schema;
     output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
                         output_schema.end());
-    std::unordered_set<String> used_input_columns;
+    robin_hood::unordered_set<String> used_input_columns;
     for (auto & func : agg_exprs)
     {
         if (used_columns.find(func->getColumnName()) != used_columns.end())
@@ -63,7 +63,7 @@ void AggregationBinder::columnPrune(std::unordered_set<String> & used_columns)
     children[0]->columnPrune(used_input_columns);
 }
 
-void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, robin_hood::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
 {
     if (!is_final_mode)
     {

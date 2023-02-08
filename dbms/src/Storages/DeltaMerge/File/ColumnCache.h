@@ -58,12 +58,12 @@ private:
 private:
     struct ColumnCacheEntry
     {
-        std::unordered_map<ColId, ColumnPtr> columns;
+        robin_hood::unordered_map<ColId, ColumnPtr> columns;
 
         size_t rows_offset;
         size_t rows_count;
     };
-    std::unordered_map<PackId, ColumnCacheEntry> column_caches;
+    robin_hood::unordered_map<PackId, ColumnCacheEntry> column_caches;
 };
 
 using ColumnCachePtr = std::shared_ptr<ColumnCache>;

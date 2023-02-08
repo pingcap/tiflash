@@ -14,17 +14,17 @@
 
 #pragma once
 
+#include <common/robin_hood.h>
+
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 
 namespace DB
 {
 using Names = std::vector<std::string>;
-using NameSet = std::unordered_set<std::string>;
-using NameToNameMap = std::unordered_map<std::string, std::string>;
+using NameSet = robin_hood::unordered_set<std::string>;
+using NameToNameMap = robin_hood::unordered_map<std::string, std::string>;
 
 /* TODO: only support a small number of names now
  */

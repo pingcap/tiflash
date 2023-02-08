@@ -176,8 +176,8 @@ public:
         return DAGRequestBuilder(index);
     }
     /// mock column table scan
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint = 0);
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
@@ -224,7 +224,7 @@ public:
     // Currently don't support task_id, so the following to structure is useless,
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
-    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    robin_hood::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     Context context;
     Int32 collation;
 };

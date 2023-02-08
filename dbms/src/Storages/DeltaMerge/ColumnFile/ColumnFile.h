@@ -86,7 +86,7 @@ public:
         Block block;
     };
     using CachePtr = std::shared_ptr<Cache>;
-    using ColIdToOffset = std::unordered_map<ColId, size_t>;
+    using ColIdToOffset = robin_hood::unordered_map<ColId, size_t>;
 
 public:
     /// This id is only used to to do equal check in isSame().

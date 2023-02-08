@@ -16,10 +16,10 @@
 
 #include <Core/Defines.h>
 #include <Core/Types.h>
+#include <common/robin_hood.h>
 #include <fmt/format.h>
 
 #include <chrono>
-#include <unordered_set>
 #include <vector>
 
 namespace DB
@@ -54,7 +54,7 @@ static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 
 using PageIdU64 = UInt64;
 using PageIdU64s = std::vector<PageIdU64>;
-using PageIdU64Set = std::unordered_set<PageIdU64>;
+using PageIdU64Set = robin_hood::unordered_set<PageIdU64>;
 static constexpr PageIdU64 INVALID_PAGE_U64_ID = 0;
 
 using PageIdV3Internal = UInt128;

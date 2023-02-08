@@ -674,8 +674,8 @@ void WaitCheckRegionReady(
              max_wait_tick_time,
              get_wait_region_ready_timeout_sec);
 
-    std::unordered_set<RegionID> remain_regions;
-    std::unordered_map<RegionID, uint64_t> regions_to_check;
+    robin_hood::unordered_set<RegionID> remain_regions;
+    robin_hood::unordered_map<RegionID, uint64_t> regions_to_check;
     Stopwatch region_check_watch;
     size_t total_regions_cnt = 0;
     {

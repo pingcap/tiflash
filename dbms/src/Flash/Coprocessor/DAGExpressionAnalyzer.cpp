@@ -354,7 +354,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
-    std::unordered_set<String> & agg_key_set,
+    robin_hood::unordered_set<String> & agg_key_set,
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
@@ -440,7 +440,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
-    std::unordered_set<String> agg_key_set;
+    robin_hood::unordered_set<String> agg_key_set;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(agg.group_by(), step.actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
     // set required output for agg funcs's arguments and group by keys.
@@ -1016,7 +1016,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
     if (ret)
     {
-        std::unordered_set<String> needed_columns;
+        robin_hood::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
         for (const auto & s : key_names)
@@ -1160,7 +1160,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     String tz_col;
     String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
     // <origin_column_name, offset>
-    std::unordered_map<String, size_t> had_casted_map;
+    robin_hood::unordered_map<String, size_t> had_casted_map;
 
     const auto & current_columns = getCurrentInputColumns();
     NamesAndTypes after_cast_columns = current_columns;
@@ -1303,7 +1303,7 @@ void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain) const
     {
         const auto & columns = getCurrentInputColumns();
         NamesAndTypesList column_list;
-        std::unordered_set<String> column_name_set;
+        robin_hood::unordered_set<String> column_name_set;
         for (const auto & col : columns)
         {
             if (column_name_set.find(col.name) == column_name_set.end())

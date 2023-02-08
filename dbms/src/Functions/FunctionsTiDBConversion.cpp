@@ -22,7 +22,7 @@ String trim(const StringRef & value)
     StringRef ret;
     ret.size = 0;
     size_t start = 0;
-    static std::unordered_set<char> spaces{'\t', '\n', '\v', '\f', '\r', ' '};
+    static robin_hood::unordered_set<char> spaces{'\t', '\n', '\v', '\f', '\r', ' '};
     for (; start < value.size; start++)
     {
         if (!spaces.count(value.data[start]))

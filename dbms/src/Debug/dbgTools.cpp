@@ -273,7 +273,7 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
                         ErrorCodes::LOGICAL_ERROR);
 
     std::vector<Field> flatten_fields;
-    std::unordered_set<String> pk_column_names;
+    robin_hood::unordered_set<String> pk_column_names;
     if (table_info.is_common_handle)
     {
         for (const auto & idx_col : table_info.getPrimaryIndexInfo().idx_cols)
@@ -331,7 +331,7 @@ void insert( //
     {
         std::vector<Field> keys;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
+        robin_hood::unordered_map<String, size_t> column_name_columns_index_map;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             column_name_columns_index_map.emplace(table_info.columns[i].name, i);

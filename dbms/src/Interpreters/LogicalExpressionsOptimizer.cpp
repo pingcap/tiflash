@@ -119,30 +119,30 @@ void LogicalExpressionsOptimizer::collectDisjunctiveEqualityChains()
     while (!to_visit.empty())
     {
         auto edge = to_visit.back();
-        auto from_node = edge.first;
-        auto to_node = edge.second;
+        auto *from_node = edge.first;
+        auto *to_node = edge.second;
 
         to_visit.pop_back();
 
         bool found_chain = false;
 
-        auto function = typeid_cast<ASTFunction *>(to_node);
+        auto *function = typeid_cast<ASTFunction *>(to_node);
         if ((function != nullptr) && (function->name == "or") && (function->children.size() == 1))
         {
-            auto expression_list = typeid_cast<ASTExpressionList *>(&*(function->children[0]));
+            auto *expression_list = typeid_cast<ASTExpressionList *>(&*(function->children[0]));
             if (expression_list != nullptr)
             {
                 /// The chain of elements of the OR expression.
                 for (auto & child : expression_list->children)
                 {
-                    auto equals = typeid_cast<ASTFunction *>(&*child);
+                    auto *equals = typeid_cast<ASTFunction *>(&*child);
                     if ((equals != nullptr) && (equals->name == "equals") && (equals->children.size() == 1))
                     {
-                        auto equals_expression_list = typeid_cast<ASTExpressionList *>(&*(equals->children[0]));
+                        auto *equals_expression_list = typeid_cast<ASTExpressionList *>(&*(equals->children[0]));
                         if ((equals_expression_list != nullptr) && (equals_expression_list->children.size() == 2))
                         {
                             /// Equality expr = xN.
-                            auto literal = typeid_cast<ASTLiteral *>(&*(equals_expression_list->children[1]));
+                            auto *literal = typeid_cast<ASTLiteral *>(&*(equals_expression_list->children[1]));
                             if (literal != nullptr)
                             {
                                 auto expr_lhs = equals_expression_list->children[0]->getTreeHash();
@@ -162,7 +162,7 @@ void LogicalExpressionsOptimizer::collectDisjunctiveEqualityChains()
         {
             if (from_node != nullptr)
             {
-                auto res = or_parent_map.insert(std::make_pair(function, ParentNodes{from_node}));
+                auto res = or_parent_map.insert({function, ParentNodes{from_node}});
                 if (!res.second)
                     throw Exception("LogicalExpressionsOptimizer: parent node information is corrupted",
                                     ErrorCodes::LOGICAL_ERROR);
@@ -203,7 +203,7 @@ namespace
 {
 inline ASTs & getFunctionOperands(ASTFunction * or_function)
 {
-    auto expression_list = static_cast<ASTExpressionList *>(&*(or_function->children[0]));
+    auto *expression_list = static_cast<ASTExpressionList *>(&*(or_function->children[0]));
     return expression_list->children;
 }
 
@@ -220,11 +220,11 @@ bool LogicalExpressionsOptimizer::mayOptimizeDisjunctiveEqualityChain(const Disj
 
     /// We check that the right-hand sides of all equalities have the same type.
     auto & first_operands = getFunctionOperands(equality_functions[0]);
-    auto first_literal = static_cast<ASTLiteral *>(&*first_operands[1]);
+    auto *first_literal = static_cast<ASTLiteral *>(&*first_operands[1]);
     for (size_t i = 1; i < equality_functions.size(); ++i)
     {
         auto & operands = getFunctionOperands(equality_functions[i]);
-        auto literal = static_cast<ASTLiteral *>(&*operands[1]);
+        auto *literal = static_cast<ASTLiteral *>(&*operands[1]);
 
         if (literal->value.getType() != first_literal->value.getType())
             return false;
@@ -242,7 +242,7 @@ void LogicalExpressionsOptimizer::addInExpression(const DisjunctiveEqualityChain
 
     /// Construct a list of literals `x1, ..., xN` from the string `expr = x1 OR ... OR expr = xN`
     ASTPtr value_list = std::make_shared<ASTExpressionList>();
-    for (const auto function : equality_functions)
+    for (auto *const function : equality_functions)
     {
         const auto & operands = getFunctionOperands(function);
         value_list->children.push_back(operands[1]);
@@ -251,15 +251,15 @@ void LogicalExpressionsOptimizer::addInExpression(const DisjunctiveEqualityChain
     /// Sort the literals so that they are specified in the same order in the IN expression.
     /// Otherwise, they would be specified in the order of the ASTLiteral addresses, which is nondeterministic.
     std::sort(value_list->children.begin(), value_list->children.end(), [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs) {
-        const auto val_lhs = static_cast<const ASTLiteral *>(&*lhs);
-        const auto val_rhs = static_cast<const ASTLiteral *>(&*rhs);
+        const auto *const val_lhs = static_cast<const ASTLiteral *>(&*lhs);
+        const auto *const val_rhs = static_cast<const ASTLiteral *>(&*rhs);
         return val_lhs->value < val_rhs->value;
     });
 
     /// Get the expression `expr` from the chain `expr = x1 OR ... OR expr = xN`
     ASTPtr equals_expr_lhs;
     {
-        auto function = equality_functions[0];
+        auto *function = equality_functions[0];
         const auto & operands = getFunctionOperands(function);
         equals_expr_lhs = operands[0];
     }
@@ -290,7 +290,7 @@ void LogicalExpressionsOptimizer::cleanupOrExpressions()
 {
     /// Saves for each optimized OR-chain the iterator on the first element
     /// list of operands to be deleted.
-    std::unordered_map<ASTFunction *, ASTs::iterator> garbage_map;
+    robin_hood::unordered_map<ASTFunction *, ASTs::iterator> garbage_map;
 
     /// Initialization.
     garbage_map.reserve(processed_count);
@@ -329,7 +329,7 @@ void LogicalExpressionsOptimizer::cleanupOrExpressions()
     /// Delete garbage.
     for (const auto & entry : garbage_map)
     {
-        auto function = entry.first;
+        auto *function = entry.first;
         auto first_erased = entry.second;
 
         auto & operands = getFunctionOperands(function);
@@ -346,7 +346,7 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
             continue;
 
         const auto & or_with_expression = chain.first;
-        auto or_function = or_with_expression.or_function;
+        auto *or_function = or_with_expression.or_function;
         auto & operands = getFunctionOperands(or_with_expression.or_function);
 
         if (operands.size() == 1)

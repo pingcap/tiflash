@@ -50,8 +50,8 @@ public:
 private:
     std::mutex mutex;
 
-    std::unordered_map<RegionID, UInt64> raft_index;
-    std::unordered_map<RegionID, UInt64> raft_term;
+    robin_hood::unordered_map<RegionID, UInt64> raft_index;
+    robin_hood::unordered_map<RegionID, UInt64> raft_term;
 };
 
 } // namespace DB
