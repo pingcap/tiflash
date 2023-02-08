@@ -105,6 +105,9 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
     case ProbeStatus::FINISHED:
+        assert(!block);
+        // After join probe ends, it still returns HAS_OUTPUT,
+        // because there are many operators that need an empty block as input.
         return OperatorStatus::HAS_OUTPUT;
     default:
         // probe status can not be WAIT_FOR_READ_NON_JOINED_DATA here.
