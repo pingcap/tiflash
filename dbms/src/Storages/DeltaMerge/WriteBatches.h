@@ -105,11 +105,13 @@ struct WriteBatches : private boost::noncopyable
             {
                 check(log.getUniversalWriteBatch(), "log");
                 check(data.getUniversalWriteBatch(), "data");
+                break;
             }
             default:
             {
                 check(log.getWriteBatch(), "log");
                 check(data.getWriteBatch(), "data");
+                break;
             }
             }
         }
@@ -217,6 +219,7 @@ struct WriteBatches : private boost::noncopyable
             default:
             {
                 check(meta.getWriteBatch(), "meta");
+                break;
             }
             }
         }
@@ -247,12 +250,14 @@ struct WriteBatches : private boost::noncopyable
                 check(removed_log.getUniversalWriteBatch(), "removed_log");
                 check(removed_data.getUniversalWriteBatch(), "removed_data");
                 check(removed_meta.getUniversalWriteBatch(), "removed_meta");
+                break;
             }
             default:
             {
                 check(removed_log.getWriteBatch(), "removed_log");
                 check(removed_data.getWriteBatch(), "removed_data");
                 check(removed_meta.getWriteBatch(), "removed_meta");
+                break;
             }
             }
         }
