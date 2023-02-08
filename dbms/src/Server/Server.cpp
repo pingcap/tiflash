@@ -1163,6 +1163,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
+    mark_cache_size = 0;
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
