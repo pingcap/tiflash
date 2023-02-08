@@ -44,7 +44,7 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
   *
   * isIPv4(x) - Judge whether the input string is an IPv4 address.
   *
-  * isIPv6(x) - Judge whether the input string is an IPv6 address
+  * isIPv6(x) - Judge whether the input string is an IPv6 address.
   *
   */
 
@@ -110,7 +110,6 @@ static inline UInt8 isIPv6(const char * src)
         return 0;
     static const char xdigits_l[] = "0123456789abcdef",
                       xdigits_u[] = "0123456789ABCDEF";
-    static const int INT16SZ = size_of(short);
     unsigned char tmp[16], *tp, *endp, *colonp;
     const char *xdigits, *curtok;
     int ch, saw_xdigit;
@@ -213,7 +212,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        const IColumn * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
+        const auto * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
         const ColumnUInt64::Container & vec_input = col_input->getData();
 
         Field res_field;
@@ -221,7 +220,7 @@ public:
         col_res->reserve(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
-        for (int i = 0; i < size; ++i)
+        for (size_t i = 0; i < size; ++i)
         {
             const char * input_address = static_cast<const char *>(vec_input[i]);
             vec_res[i] = static_cast<UInt8>(isIPv4(input_address));
@@ -256,7 +255,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        const IColumn * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
+        const auto * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
         const ColumnUInt64::Container & vec_input = col_input->getData();
 
         Field res_field;
@@ -264,7 +263,7 @@ public:
         col_res->reserve(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
-        for (int i = 0; i < size; ++i)
+        for (size_t i = 0; i < size; ++i)
         {
             const char * input_address = static_cast<const char *>(vec_input[i]);
             vec_res[i] = static_cast<UInt8>(isIPv6(input_address));
