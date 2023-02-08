@@ -229,11 +229,10 @@ struct LeastGreatestStringImpl
             }
             else if (res == 0)
             {
-                size_t size = std::max(a_size, b_size);
                 if (a_size > b_size)
-                    res_ref[i] = StringRef(&a_data[0], size);
+                    res_ref[i] = StringRef(&a_data[0], a_size);
                 else
-                    res_ref[i] = StringRef(&b_data[0], size);
+                    res_ref[i] = StringRef(&b_data[0], b_size);
             }
             else
             {
@@ -575,7 +574,7 @@ public:
                 block.getByPosition(result).column = std::move(col_str);
                 return;
             }
-        }  
+        }
     }
 
 private:
