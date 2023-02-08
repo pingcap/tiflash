@@ -22,9 +22,11 @@ namespace DB
 LimitBlockInputStream::LimitBlockInputStream(
     const BlockInputStreamPtr & input,
     size_t limit_,
+    size_t offset_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , action(input->getHeader(), limit_)
+    , limit(limit_)
+    , offset(offset_)
 {
     children.push_back(input);
 }
@@ -32,20 +34,46 @@ LimitBlockInputStream::LimitBlockInputStream(
 
 Block LimitBlockInputStream::readImpl()
 {
-    Block res = children.back()->read();
+    Block res;
+    size_t rows = 0;
 
-    if (action.transform(res))
+    if (pos >= offset + limit)
     {
         return res;
     }
-    else
+
+    do
     {
-        return {};
-    }
+        res = children.back()->read();
+        if (!res)
+            return res;
+        rows = res.rows();
+        pos += rows;
+    } while (pos <= offset);
+
+    /// give away the whole block
+    if (pos >= offset + rows && pos <= offset + limit)
+        return res;
+
+    /// give away a piece of the block
+    UInt64 start = std::max(
+        static_cast<Int64>(0),
+        static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows));
+
+    UInt64 length = std::min(
+        static_cast<Int64>(limit),
+        std::min(
+            static_cast<Int64>(pos) - static_cast<Int64>(offset),
+            static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
+
+    for (size_t i = 0; i < res.columns(); ++i)
+        res.safeGetByPosition(i).column = res.safeGetByPosition(i).column->cut(start, length);
+
+    return res;
 }
 
 void LimitBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    buffer.fmtAppend(", limit = {}", action.getLimit());
+    buffer.fmtAppend(", limit = {}", limit);
 }
 } // namespace DB
