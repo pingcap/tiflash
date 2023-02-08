@@ -21,6 +21,18 @@
 #include <Functions/IFunction.h>
 #include <arpa/inet.h>
 
+#ifndef IN6ADDRSZ
+#define IN6ADDRSZ 16
+#endif
+
+#ifndef INT16SZ
+#define INT16SZ sizeof(short)
+#endif
+
+#ifndef INADDRSZ
+#define INADDRSZ 4
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -48,7 +60,7 @@ static inline UInt8 isIPv4(const char * src)
 
     static const char digits[] = "0123456789";
     int saw_digit, octets, ch;
-    unsigned char tmp[4], *tp;
+    unsigned char tmp[INADDRSZ], *tp;
 
     saw_digit = 0;
     octets = 0;
@@ -59,11 +71,11 @@ static inline UInt8 isIPv4(const char * src)
 
         if ((pch = strchr(digits, ch)) != NULL)
         {
-            unsigned int new = *tp * 10 + (unsigned int)(pch - digits);
+            unsigned int num = *tp * 10 + (unsigned int)(pch - digits);
 
-            if (new > 255)
+            if (num > 255)
                 return 0;
-            *tp = new;
+            *tp = num;
             if (!saw_digit)
             {
                 if (++octets > 4)
@@ -98,7 +110,7 @@ static inline UInt8 isIPv6(const char * src)
         return 0;
     static const char xdigits_l[] = "0123456789abcdef",
                       xdigits_u[] = "0123456789ABCDEF";
-    static const int IN6ADDRSZ = 16;
+    static const int INT16SZ = size_of(short);
     unsigned char tmp[16], *tp, *endp, *colonp;
     const char *xdigits, *curtok;
     int ch, saw_xdigit;
@@ -200,16 +212,16 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * col_input = block.getByPosition(arguments[0]).column.get();
+        size_t size = block.getByPosition(arguments[0]).column->size();
+        const IColumn * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
         const ColumnUInt64::Container & vec_input = col_input->getData();
 
         Field res_field;
-        int val_num = col_input->size();
         auto col_res = ColumnUInt8::create();
-        col_res->reserve(val_num);
+        col_res->reserve(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
-        for (int i = 0; i < val_num; ++i)
+        for (int i = 0; i < size; ++i)
         {
             const char * input_address = static_cast<const char *>(vec_input[i]);
             vec_res[i] = static_cast<UInt8>(isIPv4(input_address));
@@ -243,16 +255,16 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * col_input = block.getByPosition(arguments[0]).column.get();
+        size_t size = block.getByPosition(arguments[0]).column->size();
+        const IColumn * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
         const ColumnUInt64::Container & vec_input = col_input->getData();
 
         Field res_field;
-        int val_num = col_input->size();
         auto col_res = ColumnUInt8::create();
-        col_res->reserve(val_num);
+        col_res->reserve(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
-        for (int i = 0; i < val_num; ++i)
+        for (int i = 0; i < size; ++i)
         {
             const char * input_address = static_cast<const char *>(vec_input[i]);
             vec_res[i] = static_cast<UInt8>(isIPv6(input_address));
