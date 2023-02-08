@@ -106,14 +106,14 @@ protected:
 };
 
 template <typename TYPE>
-void doTest()
+void doTiDBDivideDecimalRoundInternalTest()
 {
     auto apply = static_cast<TYPE (*)(TYPE, TYPE)>(&TiDBDivideFloatingImpl<TYPE, TYPE, false>::apply);
 
     constexpr TYPE max = std::numeric_limits<TYPE>::max();
-    constexpr TYPE min = std::numeric_limits<TYPE>::min();
     // note: Int256's min is not equal to -max-1
     // according to https://www.boost.org/doc/libs/1_60_0/libs/multiprecision/doc/html/boost_multiprecision/tut/ints/cpp_int.html
+    constexpr TYPE min = std::numeric_limits<TYPE>::min();
 
     // clang-format off
     const std::vector<std::array<TYPE, 3>> cases = {
@@ -126,11 +126,13 @@ void doTest()
         {4, 3, 1}, {4, -3, -1}, {-4, 3, -1}, {-4, -3, 1},
         {5, 3, 2}, {5, -3, -2}, {-5, 3, -2}, {-5, -3, 2},
 
-        // max as divisor
+        // ±max as divisor
         {0, max, 0}, {max/2-1, max, 0}, {max/2, max, 0}, {max/2+1, max, 1}, {max-1, max, 1}, {max, max, 1},
         {-1, max, 0}, {-max/2+1, max, 0},  {-max/2, max, 0}, {-max/2-1, max, -1}, {-max+1, max, -1}, {-max, max, -1}, {min, max, -1},
+        {0, -max, 0}, {max/2-1, -max, 0}, {max/2, -max, -1}, {max/2+1, -max, -1}, {max-1, -max, -1}, {max, -max, -1},
+        {-1, -max, 0}, {-max/2+1, -max, 0},  {-max/2, -max, 0}, {-max/2-1, -max, 1}, {-max+1, -max, 1}, {-max, -max, 1}, {min, -max, 1},
 
-        // max as dividend
+        // ±max as dividend
         {max, 1, max}, {max, 2, max/2+1}, {max, max/2-1, 2}, {max, max/2, 2}, {max, max/2+1, 2}, {max, max-1, 1},
         {max, -1, -max}, {max, -2, -max/2-1}, {max, -max/2+1, -2}, {max, -max/2, -2}, {max, -max/2-1, -2}, {max, -max+1, -1},
         {-max, 1, -max}, {-max, 2, -max/2-1}, {-max, max/2+1, -2}, {-max, max/2, -2}, {-max, max/2-1, -2}, {-max, max-1, -1},
@@ -148,10 +150,10 @@ void doTest()
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRoundInternal)
 try
 {
-    doTest<Int32>();
-    doTest<Int64>();
-    doTest<Int128>();
-    doTest<Int256>();
+    doTiDBDivideDecimalRoundInternalTest<Int32>();
+    doTiDBDivideDecimalRoundInternalTest<Int64>();
+    doTiDBDivideDecimalRoundInternalTest<Int128>();
+    doTiDBDivideDecimalRoundInternalTest<Int256>();
 }
 CATCH
 

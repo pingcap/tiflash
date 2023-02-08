@@ -62,7 +62,8 @@ struct TiDBDivideFloatingImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A x, B d)
     {
-        // round for decimal floating number dividing
+        /// ref https://github.com/pingcap/tiflash/issues/6462
+        /// For division of Decimal/Decimal or Int/Decimal or Decimal/Int, we should round the result to make compatible with TiDB.
         if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256>)
         {
             Result quotient = x / d;
